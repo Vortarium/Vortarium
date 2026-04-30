@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VOID RUN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@100;300;400;700;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#000; }
+canvas { display:block; position:absolute; top:0; left:0; }
+#c2d { z-index:1; pointer-events:none; }
+#c   { z-index:2; }
+#ui {
+  position:fixed; top:0; left:0; right:0; padding:24px 32px;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  pointer-events:none; z-index:10;
+}
+.ui-panel {
+  background:rgba(255,255,255,0.04); border:1px solid rgba(0,255,255,0.2);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  padding:10px 20px; border-radius:4px;
+  box-shadow:0 0 20px rgba(0,255,255,0.08),inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.ui-label { font-family:'Exo 2',sans-serif; font-weight:300; font-size:10px; letter-spacing:5px; color:rgba(0,255,255,0.5); text-transform:uppercase; }
+.ui-value { font-family:'Exo 2',sans-serif; font-weight:100; font-size:44px; color:#fff; letter-spacing:2px; line-height:1; text-shadow:0 0 30px rgba(0,255,255,0.6); }
+#best-panel { text-align:right; }
+#best-panel .ui-value { font-size:26px; color:rgba(180,120,255,0.9); text-shadow:0 0 20px rgba(160,80,255,0.5); }
+#state-bar { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); display:flex; gap:12px; pointer-events:none; z-index:10; }
+.state-pill { font-family:'Exo 2',sans-serif; font-weight:300; font-size:10px; letter-spacing:4px; text-transform:uppercase; padding:6px 16px; border-radius:2px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); backdrop-filter:blur(8px); color:rgba(255,255,255,0.25); transition:all 0.15s; }
+.state-pill.active { color:#00ffff; border-color:rgba(0,255,255,0.4); background:rgba(0,255,255,0.08); box-shadow:0 0 12px rgba(0,255,255,0.2); }
+.state-pill.sprint  { color:#ff9900; border-color:rgba(255,153,0,0.4); background:rgba(255,153,0,0.08); box-shadow:0 0 12px rgba(255,153,0,0.2); }
+.state-pill.crouch  { color:#a855f7; border-color:rgba(168,85,247,0.4); background:rgba(168,85,247,0.08); box-shadow:0 0 12px rgba(168,85,247,0.2); }
+#overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; }
+#overlay h1 { font-family:'Exo 2',sans-serif; font-weight:100; font-size:80px; letter-spacing:24px; color:#fff; text-shadow:0 0 40px rgba(0,255,255,0.5),0 0 80px rgba(0,255,255,0.2); margin-bottom:6px; }
+#overlay .tagline { font-family:'Exo 2',sans-serif; font-weight:300; font-size:11px; letter-spacing:8px; color:rgba(255,255,255,0.3); margin-bottom:48px; }
+#final-label { font-family:'Exo 2',sans-serif; font-weight:300; font-size:11px; letter-spacing:6px; color:rgba(168,85,247,0.7); display:none; margin-bottom:6px; }
+#final-num { font-family:'Exo 2',sans-serif; font-weight:100; font-size:72px; color:#fff; text-shadow:0 0 30px rgba(255,255,255,0.3); display:none; margin-bottom:40px; letter-spacing:4px; }
+#start-btn { font-family:'Exo 2',sans-serif; font-weight:300; font-size:12px; letter-spacing:8px; padding:14px 52px; background:rgba(255,255,255,0.03); border:1px solid rgba(0,255,255,0.4); color:rgba(0,255,255,0.9); cursor:pointer; text-transform:uppercase; transition:all 0.2s; border-radius:2px; box-shadow:0 0 30px rgba(0,255,255,0.1),inset 0 1px 0 rgba(255,255,255,0.05); backdrop-filter:blur(4px); }
+#start-btn:hover { background:rgba(0,255,255,0.08); box-shadow:0 0 50px rgba(0,255,255,0.25),inset 0 1px 0 rgba(255,255,255,0.1); border-color:rgba(0,255,255,0.7); }
+#crosshair { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:16px; height:16px; pointer-events:none; z-index:10; display:none; }
+#crosshair::before,#crosshair::after { content:''; position:absolute; background:rgba(0,255,255,0.7); border-radius:1px; }
+#crosshair::before { width:1px; height:100%; left:50%; transform:translateX(-50%); }
+#crosshair::after  { height:1px; width:100%; top:50%; transform:translateY(-50%); }
+#fall-msg { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); font-family:'Exo 2',sans-serif; font-weight:100; font-size:36px; letter-spacing:16px; color:rgba(255,60,60,0.9); text-shadow:0 0 30px rgba(255,60,60,0.6); opacity:0; pointer-events:none; z-index:15; transition:opacity 0.4s; }
+</style>
+</head>
+<body>
+<!-- 2D space scene behind WebGL -->
+<canvas id="c2d"></canvas>
+<!-- WebGL platforms -->
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="ui-panel"><div class="ui-label">Score</div><div class="ui-value" id="score">0</div></div>
+  <div class="ui-panel" id="best-panel"><div class="ui-label">Best</div><div class="ui-value" id="best">0</div></div>
+</div>
+<div id="state-bar">
+  <div class="state-pill" id="pill-crouch">Crouch</div>
+  <div class="state-pill" id="pill-walk">Walk</div>
+  <div class="state-pill" id="pill-sprint">Sprint</div>
+</div>
+<div id="crosshair"></div>
+<div id="fall-msg">VOID</div>
+<div id="overlay">
+  <h1>VOID RUN</h1>
+  <div class="tagline">Parkour Through The Cosmos</div>
+  <div id="final-label">Platforms Crossed</div>
+  <div id="final-num">0</div>
+  <button id="start-btn" onclick="startGame()">Launch</button>
+</div>
+<script>
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// 2D SPACE SCENE (canvas behind WebGL)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+const c2d = document.getElementById('c2d');
+const ctx = c2d.getContext('2d');
+
+function resize2d(){
+  c2d.width  = window.innerWidth;
+  c2d.height = window.innerHeight;
+}
+window.addEventListener('resize', resize2d);
+resize2d();
+
+// Parallax offset driven by yaw/pitch
+let parallaxX = 0, parallaxY = 0;
+
+// â”€â”€ Stars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const STAR_COUNT = 320;
+const stars = Array.from({length: STAR_COUNT}, () => ({
+  x: Math.random(),          // 0-1 normalised screen fraction
+  y: Math.random(),
+  r: 0.4 + Math.random() * 1.6,
+  speed: 0.2 + Math.random() * 0.8,  // parallax depth
+  blinkOffset: Math.random() * Math.PI * 2,
+  blinkSpeed:  0.5 + Math.random() * 2.5,
+  color: ['#ffffff','#cce8ff','#ffd6aa','#e8ccff'][Math.floor(Math.random()*4)],
+}));
+
+// â”€â”€ Shooting stars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const shootingStars = [];
+function spawnShootingStar(){
+  shootingStars.push({
+    x: Math.random() * c2d.width,
+    y: Math.random() * c2d.height * 0.5,
+    vx: 6 + Math.random() * 10,
+    vy: 2 + Math.random() * 5,
+    len: 80 + Math.random() * 120,
+    life: 1.0,
+    decay: 0.012 + Math.random() * 0.018,
+  });
+}
+setInterval(spawnShootingStar, 1800);
+
+// â”€â”€ Asteroids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const ASTEROID_COUNT = 14;
+const asteroids = Array.from({length: ASTEROID_COUNT}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: 6 + Math.random() * 18,
+  speed: 0.05 + Math.random() * 0.15,
+  vx: (Math.random() - 0.5) * 0.00015,
+  vy: (Math.random() - 0.5) * 0.00008,
+  rot: Math.random() * Math.PI * 2,
+  rotSpeed: (Math.random() - 0.5) * 0.008,
+  verts: Array.from({length: 8}, (_, i) => {
+    const a = (i / 8) * Math.PI * 2;
+    const rr = 0.7 + Math.random() * 0.3;
+    return [Math.cos(a) * rr, Math.sin(a) * rr];
+  }),
+  color: ['#8a7a6a','#9a8a7a','#7a6a5a','#aaa090'][Math.floor(Math.random()*4)],
+}));
+
+// â”€â”€ Comets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const comets = [];
+function spawnComet(){
+  comets.push({
+    x: -0.05,
+    y: 0.05 + Math.random() * 0.4,
+    vx: 0.0004 + Math.random() * 0.0003,
+    vy: 0.00005 + Math.random() * 0.0001,
+    tailLen: 0.12 + Math.random() * 0.1,
+    life: 1.0,
+  });
+}
+setInterval(spawnComet, 7000);
+
+// â”€â”€ Planets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const planets = [
+  { x:0.12, y:0.18, r:38, color:'#e8a060', ringColor:'#c8804040', hasRing:true,  speed:0.03, name:'saturn-like' },
+  { x:0.78, y:0.25, r:22, color:'#6090e0', ringColor:null,         hasRing:false, speed:0.05, name:'blue-giant' },
+  { x:0.55, y:0.08, r:14, color:'#d06050', ringColor:null,         hasRing:false, speed:0.07, name:'red-dwarf' },
+  { x:0.88, y:0.72, r:28, color:'#80c080', ringColor:'#60a06030',  hasRing:true,  speed:0.02, name:'green-gas' },
+  { x:0.30, y:0.82, r:18, color:'#c0a0e0', ringColor:null,         hasRing:false, speed:0.06, name:'purple' },
+];
+
+// â”€â”€ Moons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const moons = [
+  { parentIdx:0, orbitR:70, orbitSpeed:0.0004, angle:0.0, r:8,  color:'#c8c8c8' },
+  { parentIdx:1, orbitR:45, orbitSpeed:0.0007, angle:1.2, r:5,  color:'#d0c8b8' },
+  { parentIdx:3, orbitR:55, orbitSpeed:0.0005, angle:2.5, r:7,  color:'#b8c8b8' },
+  { parentIdx:3, orbitR:80, orbitSpeed:0.0003, angle:0.8, r:5,  color:'#c0b8a8' },
+];
+
+// â”€â”€ Sun â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const sun = { x:0.92, y:0.10, r:55, speed:0.01 };
+
+// â”€â”€ Black hole â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const blackHole = { x:0.45, y:0.60, r:30, speed:0.015, angle:0 };
+
+// â”€â”€ Nebula clouds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const nebulae = Array.from({length: 6}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  rx: 80 + Math.random() * 160,
+  ry: 50 + Math.random() * 100,
+  rot: Math.random() * Math.PI,
+  color: ['rgba(80,0,160,', 'rgba(0,80,160,', 'rgba(160,40,80,', 'rgba(0,120,80,'][Math.floor(Math.random()*4)],
+  alpha: 0.04 + Math.random() * 0.07,
+  speed: 0.005 + Math.random() * 0.01,
+}));
+
+// â”€â”€ Draw helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function screenPos(nx, ny, depth){
+  // nx,ny are 0-1 normalised; parallax shifts based on depth
+  const px = (nx * c2d.width)  + parallaxX * depth * c2d.width  * 0.04;
+  const py = (ny * c2d.height) + parallaxY * depth * c2d.height * 0.04;
+  return [px, py];
+}
+
+function drawSpaceScene(t){
+  ctx.clearRect(0, 0, c2d.width, c2d.height);
+
+  // Deep space gradient background
+  const bg = ctx.createRadialGradient(c2d.width*0.5, c2d.height*0.4, 0, c2d.width*0.5, c2d.height*0.5, c2d.width*0.8);
+  bg.addColorStop(0,   '#0a0520');
+  bg.addColorStop(0.4, '#050210');
+  bg.addColorStop(1,   '#000005');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, c2d.width, c2d.height);
+
+  // Nebulae
+  for(const n of nebulae){
+    const [sx, sy] = screenPos(n.x, n.y, n.speed * 10);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(n.rot + t * 0.00005);
+    const grad = ctx.createRadialGradient(0,0,0, 0,0, n.rx);
+    grad.addColorStop(0,   n.color + (n.alpha) + ')');
+    grad.addColorStop(0.5, n.color + (n.alpha * 0.4) + ')');
+    grad.addColorStop(1,   n.color + '0)');
+    ctx.fillStyle = grad;
+    ctx.scale(1, n.ry / n.rx);
+    ctx.beginPath(); ctx.arc(0, 0, n.rx, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Stars
+  for(const s of stars){
+    const blink = 0.5 + 0.5 * Math.sin(t * s.blinkSpeed * 0.001 + s.blinkOffset);
+    const alpha = 0.4 + 0.6 * blink;
+    const [sx, sy] = screenPos(s.x, s.y, s.speed);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = s.color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r * (0.8 + 0.2 * blink), 0, Math.PI*2);
+    ctx.fill();
+    // Bright stars get a cross flare
+    if(s.r > 1.3){
+      ctx.globalAlpha = alpha * 0.3;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(sx - s.r*3, sy); ctx.lineTo(sx + s.r*3, sy);
+      ctx.moveTo(sx, sy - s.r*3); ctx.lineTo(sx, sy + s.r*3);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Sun
+  {
+    const [sx, sy] = screenPos(sun.x, sun.y, sun.speed);
+    // Corona layers
+    for(let i=4; i>=1; i--){
+      const grad = ctx.createRadialGradient(sx,sy,sun.r*0.5, sx,sy, sun.r*i*1.2);
+      grad.addColorStop(0,   'rgba(255,220,80,0.15)');
+      grad.addColorStop(1,   'rgba(255,120,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(sx, sy, sun.r*i*1.2, 0, Math.PI*2); ctx.fill();
+    }
+    // Surface
+    const sunGrad = ctx.createRadialGradient(sx-sun.r*0.3, sy-sun.r*0.3, 0, sx, sy, sun.r);
+    sunGrad.addColorStop(0,   '#fff8c0');
+    sunGrad.addColorStop(0.4, '#ffdd44');
+    sunGrad.addColorStop(0.8, '#ff8800');
+    sunGrad.addColorStop(1,   '#cc4400');
+    ctx.fillStyle = sunGrad;
+    ctx.beginPath(); ctx.arc(sx, sy, sun.r, 0, Math.PI*2); ctx.fill();
+    // Solar flare pulse
+    const flare = 0.5 + 0.5 * Math.sin(t * 0.002);
+    ctx.globalAlpha = 0.15 * flare;
+    ctx.fillStyle = '#ffff80';
+    ctx.beginPath(); ctx.arc(sx, sy, sun.r * 1.3, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Planets + moons
+  for(let pi=0; pi<planets.length; pi++){
+    const p = planets[pi];
+    const [sx, sy] = screenPos(p.x, p.y, p.speed);
+
+    // Ring (behind planet)
+    if(p.hasRing){
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.scale(1, 0.28);
+      ctx.beginPath();
+      ctx.arc(0, 0, p.r * 2.2, 0, Math.PI*2);
+      ctx.strokeStyle = p.ringColor || 'rgba(200,160,80,0.4)';
+      ctx.lineWidth = p.r * 0.55;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Planet body
+    const pGrad = ctx.createRadialGradient(sx - p.r*0.3, sy - p.r*0.3, 0, sx, sy, p.r);
+    pGrad.addColorStop(0,   lighten(p.color, 60));
+    pGrad.addColorStop(0.6, p.color);
+    pGrad.addColorStop(1,   darken(p.color, 60));
+    ctx.fillStyle = pGrad;
+    ctx.beginPath(); ctx.arc(sx, sy, p.r, 0, Math.PI*2); ctx.fill();
+
+    // Atmosphere glow
+    const atmGrad = ctx.createRadialGradient(sx, sy, p.r*0.8, sx, sy, p.r*1.4);
+    atmGrad.addColorStop(0,   p.color.replace(')', ',0.15)').replace('rgb','rgba'));
+    atmGrad.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = atmGrad;
+    ctx.beginPath(); ctx.arc(sx, sy, p.r*1.4, 0, Math.PI*2); ctx.fill();
+
+    // Moons for this planet
+    for(const m of moons){
+      if(m.parentIdx !== pi) continue;
+      m.angle += m.orbitSpeed * 16; // approx per frame
+      const mx = sx + Math.cos(m.angle) * m.orbitR;
+      const my = sy + Math.sin(m.angle) * m.orbitR * 0.4;
+      const mGrad = ctx.createRadialGradient(mx - m.r*0.3, my - m.r*0.3, 0, mx, my, m.r);
+      mGrad.addColorStop(0, '#ffffff');
+      mGrad.addColorStop(1, m.color);
+      ctx.fillStyle = mGrad;
+      ctx.beginPath(); ctx.arc(mx, my, m.r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // Asteroids
+  for(const a of asteroids){
+    a.x += a.vx; a.y += a.vy;
+    if(a.x > 1.1) a.x = -0.1;
+    if(a.y > 1.1) a.y = -0.1;
+    a.rot += a.rotSpeed;
+    const [sx, sy] = screenPos(a.x, a.y, a.speed);
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(a.rot);
+    ctx.fillStyle = a.color;
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(a.verts[0][0]*a.r, a.verts[0][1]*a.r);
+    for(let i=1;i<a.verts.length;i++) ctx.lineTo(a.verts[i][0]*a.r, a.verts[i][1]*a.r);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Comets
+  for(let i=comets.length-1; i>=0; i--){
+    const c = comets[i];
+    c.x += c.vx; c.y += c.vy; c.life -= 0.003;
+    if(c.life <= 0 || c.x > 1.1){ comets.splice(i,1); continue; }
+    const sx = c.x * c2d.width  + parallaxX * 0.02 * c2d.width;
+    const sy = c.y * c2d.height + parallaxY * 0.02 * c2d.height;
+    const tailX = sx - c.vx / c.vx * c.tailLen * c2d.width;
+    const tailY = sy - c.vy / c.vx * c.tailLen * c2d.width;
+    const grad = ctx.createLinearGradient(sx, sy, tailX, tailY);
+    grad.addColorStop(0,   `rgba(200,240,255,${c.life * 0.9})`);
+    grad.addColorStop(0.3, `rgba(150,200,255,${c.life * 0.4})`);
+    grad.addColorStop(1,   'rgba(100,150,255,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(tailX, tailY); ctx.stroke();
+    // Head
+    ctx.fillStyle = `rgba(220,240,255,${c.life})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Shooting stars
+  for(let i=shootingStars.length-1; i>=0; i--){
+    const s = shootingStars[i];
+    s.x += s.vx; s.y += s.vy; s.life -= s.decay;
+    if(s.life <= 0){ shootingStars.splice(i,1); continue; }
+    const ex = s.x - (s.vx/Math.sqrt(s.vx*s.vx+s.vy*s.vy)) * s.len;
+    const ey = s.y - (s.vy/Math.sqrt(s.vx*s.vx+s.vy*s.vy)) * s.len;
+    const grad = ctx.createLinearGradient(s.x, s.y, ex, ey);
+    grad.addColorStop(0,   `rgba(255,255,255,${s.life})`);
+    grad.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(ex, ey); ctx.stroke();
+  }
+
+  // Black hole
+  {
+    blackHole.angle += 0.003;
+    const [bx, by] = screenPos(blackHole.x, blackHole.y, blackHole.speed);
+    const br = blackHole.r;
+    // Accretion disk
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.scale(1, 0.3);
+    for(let ring=5; ring>=1; ring--){
+      const rr = br * (1.2 + ring * 0.35);
+      const alpha = 0.12 / ring;
+      const hue = 20 + ring * 8;
+      ctx.strokeStyle = `hsla(${hue},90%,60%,${alpha * 3})`;
+      ctx.lineWidth = br * 0.3;
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+    // Gravitational lensing glow
+    const lensGrad = ctx.createRadialGradient(bx, by, br*0.5, bx, by, br*3);
+    lensGrad.addColorStop(0,   'rgba(0,0,0,0)');
+    lensGrad.addColorStop(0.4, 'rgba(80,20,120,0.15)');
+    lensGrad.addColorStop(0.7, 'rgba(40,10,80,0.08)');
+    lensGrad.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = lensGrad;
+    ctx.beginPath(); ctx.arc(bx, by, br*3, 0, Math.PI*2); ctx.fill();
+    // Event horizon
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI*2); ctx.fill();
+    // Photon ring
+    ctx.strokeStyle = 'rgba(255,180,80,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(bx, by, br*1.15, 0, Math.PI*2); ctx.stroke();
+    // Label
+    ctx.fillStyle = 'rgba(200,150,255,0.4)';
+    ctx.font = '10px "Exo 2", sans-serif';
+    ctx.letterSpacing = '3px';
+    ctx.fillText('SINGULARITY', bx - 38, by + br + 18);
+  }
+}
+
+// Color helpers
+function lighten(hex, amt){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgb(${Math.min(255,r+amt)},${Math.min(255,g+amt)},${Math.min(255,b+amt)})`;
+}
+function darken(hex, amt){
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgb(${Math.max(0,r-amt)},${Math.max(0,g-amt)},${Math.max(0,b-amt)})`;
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// WEBGL GAME
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl')||canvas.getContext('experimental-webgl');
+function resize(){
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=window.innerWidth*dpr; canvas.height=window.innerHeight*dpr;
+  canvas.style.width=window.innerWidth+'px'; canvas.style.height=window.innerHeight+'px';
+  gl.viewport(0,0,canvas.width,canvas.height);
+}
+window.addEventListener('resize',()=>{ resize2d(); resize(); });
+resize();
+
+// â”€â”€ Audio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const bgMusic=new Audio('void run_music.mp3'); bgMusic.loop=true; bgMusic.volume=0.4;
+const sndJump=new Audio('void run_jump.mp3');
+const sndWalk=new Audio('void run_walk.mp3'); sndWalk.loop=true; sndWalk.volume=0.4;
+function playJump(){ sndJump.currentTime=0; sndJump.play().catch(()=>{}); }
+function startWalk(){ if(sndWalk.paused) sndWalk.play().catch(()=>{}); }
+function stopWalk(){ sndWalk.pause(); sndWalk.currentTime=0; }
+
+// â”€â”€ Shaders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const vsSource=`
+  attribute vec3 aPos; attribute vec3 aNorm; attribute vec2 aUV;
+  uniform mat4 uMVP; uniform mat4 uModel;
+  varying vec3 vNorm; varying vec3 vWorldPos; varying vec2 vUV;
+  void main(){
+    vec4 wp=uModel*vec4(aPos,1.0); vWorldPos=wp.xyz;
+    vNorm=mat3(uModel)*aNorm; vUV=aUV;
+    gl_Position=uMVP*vec4(aPos,1.0);
+  }
+`;
+const fsSource=`
+  precision highp float;
+  varying vec3 vNorm; varying vec3 vWorldPos; varying vec2 vUV;
+  uniform vec3 uColor; uniform float uAlpha; uniform vec3 uCamPos; uniform float uMoving;
+  void main(){
+    vec3 norm=normalize(vNorm);
+    vec3 viewDir=normalize(uCamPos-vWorldPos);
+    vec3 ld1=normalize(vec3(0.5,1.0,0.4));  vec3 lc1=vec3(1.0,0.95,0.85);
+    vec3 ld2=normalize(vec3(-0.4,-0.6,-0.3)); vec3 lc2=vec3(0.2,0.4,0.8);
+    vec3 ld3=normalize(vec3(-0.3,0.5,-0.8)); vec3 lc3=vec3(0.5,0.9,1.0);
+    float d1=max(dot(norm,ld1),0.0);
+    float d2=max(dot(norm,-ld2),0.0)*0.4;
+    float d3=max(dot(norm,ld3),0.0)*0.3;
+    vec3 hv=normalize(ld1+viewDir);
+    float spec=pow(max(dot(norm,hv),0.0),128.0)*0.6;
+    float fresnel=pow(1.0-max(dot(norm,viewDir),0.0),3.0);
+    float ao=mix(1.0,0.55,max(-norm.y,0.0));
+    vec3 col=uColor*0.12;
+    col+=uColor*lc1*d1*ao+uColor*lc2*d2*ao+uColor*lc3*d3;
+    col+=lc1*spec+uColor*fresnel*1.4;
+    float a=uAlpha+fresnel*0.45;
+    vec3 em=uMoving>0.5?vec3(1.0,0.55,0.1):vec3(0.0,1.0,1.0);
+    vec2 g1=abs(fract(vUV*6.0)-0.5); float l1=1.0-smoothstep(0.0,0.04,min(g1.x,g1.y));
+    vec2 g2=abs(fract(vUV*1.5)-0.5); float l2=1.0-smoothstep(0.0,0.025,min(g2.x,g2.y));
+    col+=em*l1*0.35+em*l2*0.65; a+=l2*0.15;
+    gl_FragColor=vec4(col,clamp(a,0.0,1.0));
+  }
+`;
+// Transparent clear â€” lets 2D canvas show through
+const vsClear=`attribute vec2 aPos; void main(){ gl_Position=vec4(aPos,0.999,1.0); }`;
+const fsClear=`precision mediump float; void main(){ gl_FragColor=vec4(0.0,0.0,0.0,0.0); }`;
+
+function compileShader(type,src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function makeProgram(vs,fs){
+  const p=gl.createProgram();
+  gl.attachShader(p,compileShader(gl.VERTEX_SHADER,vs));
+  gl.attachShader(p,compileShader(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(p); return p;
+}
+const prog=makeProgram(vsSource,fsSource);
+
+// â”€â”€ Math â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function mat4(){ return new Float32Array(16); }
+function identity(m){
+  m[0]=1;m[1]=0;m[2]=0;m[3]=0; m[4]=0;m[5]=1;m[6]=0;m[7]=0;
+  m[8]=0;m[9]=0;m[10]=1;m[11]=0; m[12]=0;m[13]=0;m[14]=0;m[15]=1; return m;
+}
+function perspective(m,fov,aspect,near,far){
+  const f=1/Math.tan(fov/2);
+  m[0]=f/aspect;m[1]=0;m[2]=0;m[3]=0;
+  m[4]=0;m[5]=f;m[6]=0;m[7]=0;
+  m[8]=0;m[9]=0;m[10]=(far+near)/(near-far);m[11]=-1;
+  m[12]=0;m[13]=0;m[14]=(2*far*near)/(near-far);m[15]=0; return m;
+}
+function lookAt(m,eye,center,up){
+  let fx=center[0]-eye[0],fy=center[1]-eye[1],fz=center[2]-eye[2];
+  let fl=Math.sqrt(fx*fx+fy*fy+fz*fz); fx/=fl;fy/=fl;fz/=fl;
+  let rx=fy*up[2]-fz*up[1],ry=fz*up[0]-fx*up[2],rz=fx*up[1]-fy*up[0];
+  let rl=Math.sqrt(rx*rx+ry*ry+rz*rz); rx/=rl;ry/=rl;rz/=rl;
+  let ux=ry*fz-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy-ry*fx;
+  m[0]=rx;m[1]=ux;m[2]=-fx;m[3]=0;
+  m[4]=ry;m[5]=uy;m[6]=-fy;m[7]=0;
+  m[8]=rz;m[9]=uz;m[10]=-fz;m[11]=0;
+  m[12]=-(rx*eye[0]+ry*eye[1]+rz*eye[2]);
+  m[13]=-(ux*eye[0]+uy*eye[1]+uz*eye[2]);
+  m[14]= (fx*eye[0]+fy*eye[1]+fz*eye[2]);
+  m[15]=1; return m;
+}
+function multiply(out,a,b){
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++){
+    out[j*4+i]=0;
+    for(let k=0;k<4;k++) out[j*4+i]+=a[k*4+i]*b[j*4+k];
+  } return out;
+}
+function translate(m,tx,ty,tz){
+  const t=identity(mat4()); t[12]=tx;t[13]=ty;t[14]=tz;
+  return multiply(mat4(),m,t);
+}
+
+// â”€â”€ Box geometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function createBox(w,h,d){
+  const hw=w/2,hh=h/2,hd=d/2;
+  const pos=[
+    -hw,-hh,hd, hw,-hh,hd, hw,hh,hd, -hw,hh,hd,
+     hw,-hh,-hd,-hw,-hh,-hd,-hw,hh,-hd,hw,hh,-hd,
+    -hw,hh,hd, hw,hh,hd, hw,hh,-hd,-hw,hh,-hd,
+    -hw,-hh,-hd,hw,-hh,-hd,hw,-hh,hd,-hw,-hh,hd,
+     hw,-hh,hd, hw,-hh,-hd,hw,hh,-hd,hw,hh,hd,
+    -hw,-hh,-hd,-hw,-hh,hd,-hw,hh,hd,-hw,hh,-hd,
+  ];
+  const norms=[
+    0,0,1,0,0,1,0,0,1,0,0,1, 0,0,-1,0,0,-1,0,0,-1,0,0,-1,
+    0,1,0,0,1,0,0,1,0,0,1,0, 0,-1,0,0,-1,0,0,-1,0,0,-1,0,
+    1,0,0,1,0,0,1,0,0,1,0,0, -1,0,0,-1,0,0,-1,0,0,-1,0,0,
+  ];
+  const uvs=[]; for(let i=0;i<6;i++) uvs.push(0,0,1,0,1,1,0,1);
+  const idx=[]; for(let i=0;i<6;i++){const b=i*4;idx.push(b,b+1,b+2,b,b+2,b+3);}
+  return{pos:new Float32Array(pos),norms:new Float32Array(norms),uvs:new Float32Array(uvs),idx:new Uint16Array(idx)};
+}
+function uploadBox(geo){
+  const pb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,pb); gl.bufferData(gl.ARRAY_BUFFER,geo.pos,gl.STATIC_DRAW);
+  const nb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,nb); gl.bufferData(gl.ARRAY_BUFFER,geo.norms,gl.STATIC_DRAW);
+  const ub=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,ub); gl.bufferData(gl.ARRAY_BUFFER,geo.uvs,gl.STATIC_DRAW);
+  const ib=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,geo.idx,gl.STATIC_DRAW);
+  return{posBuf:pb,normBuf:nb,uvBuf:ub,idxBuf:ib,count:geo.idx.length};
+}
+const platformGeo=uploadBox(createBox(3,0.3,3));
+
+// Cache locations
+const aPos_p=gl.getAttribLocation(prog,'aPos');
+const aNorm_p=gl.getAttribLocation(prog,'aNorm');
+const aUV_p=gl.getAttribLocation(prog,'aUV');
+const uMVP=gl.getUniformLocation(prog,'uMVP');
+const uModel=gl.getUniformLocation(prog,'uModel');
+const uColor=gl.getUniformLocation(prog,'uColor');
+const uAlpha=gl.getUniformLocation(prog,'uAlpha');
+const uCamPos=gl.getUniformLocation(prog,'uCamPos');
+const uMoving=gl.getUniformLocation(prog,'uMoving');
+
+// â”€â”€ Platform generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const PLATFORM_COUNT=50;
+let totalGenerated=0;
+const platforms=[];
+function newPlatform(prev,index){
+  const moving=index>15&&Math.random()<0.35;
+  const dx=(Math.random()-0.5)*4.5, dy=(Math.random()-0.5)*3.0, dz=-(5+Math.random()*3);
+  return{
+    x:prev.x+dx,y:prev.y+dy,z:prev.z+dz,
+    baseX:prev.x+dx,baseY:prev.y+dy,
+    scored:false,moving,
+    moveAxis:Math.random()<0.5?'x':'y',
+    moveAmp:1.0+Math.random()*1.5,
+    moveSpeed:0.8+Math.random()*1.2,
+    movePhase:Math.random()*Math.PI*2,
+  };
+}
+function initPlatforms(){
+  platforms.length=0; totalGenerated=0;
+  platforms.push({x:0,y:0,z:0,baseX:0,baseY:0,scored:false,moving:false});
+  totalGenerated=1;
+  for(let i=1;i<PLATFORM_COUNT;i++){
+    platforms.push(newPlatform(platforms[platforms.length-1],totalGenerated));
+    totalGenerated++;
+  }
+}
+function extendPlatforms(time){
+  while(platforms.length>0&&platforms[0].z>player.z+25) platforms.shift();
+  while(platforms.length<PLATFORM_COUNT){
+    platforms.push(newPlatform(platforms[platforms.length-1],totalGenerated));
+    totalGenerated++;
+  }
+  for(const p of platforms){
+    if(!p.moving) continue;
+    const off=Math.sin(time*p.moveSpeed+p.movePhase)*p.moveAmp;
+    if(p.moveAxis==='x') p.x=p.baseX+off; else p.y=p.baseY+off;
+  }
+}
+
+// â”€â”€ Game state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let player={x:0,y:1.5,z:0,vx:0,vy:0,vz:0};
+let yaw=0, pitch=0;
+let onGround=false,score=0,best=0,running=false;
+let keys={},wasMoving=false,crouchHeight=0;
+
+const GRAVITY=-28, SPEED_WALK=7, SPEED_SPRINT=14, SPEED_CROUCH=3.5;
+const JUMP_FORCE=11, STAND_H=1.0, CROUCH_H=0.5;
+const ACCEL_GROUND=15, ACCEL_AIR=4, FRICTION_GROUND=10, FRICTION_AIR=1;
+
+// â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(['Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keys[e.code]=false; });
+document.addEventListener('mousemove',e=>{
+  if(!running) return;
+  // Direct â€” no smoothing, matches cursor exactly
+  yaw   += e.movementX * 0.0018;
+  pitch -= e.movementY * 0.0018;
+  pitch = Math.max(-1.3, Math.min(1.3, pitch));
+  // Drive parallax from yaw/pitch for 2D scene
+  parallaxX = -yaw;
+  parallaxY = -pitch;
+});
+canvas.addEventListener('click',()=>{ if(running) canvas.requestPointerLock(); });
+
+// â”€â”€ Start / Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function startGame(){
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('crosshair').style.display='block';
+  canvas.requestPointerLock();
+  initPlatforms();
+  player={x:0,y:1.5,z:0,vx:0,vy:0,vz:0};
+  yaw=0; pitch=0; parallaxX=0; parallaxY=0;
+  score=0; onGround=false; crouchHeight=0; running=true;
+  updateScoreUI();
+  bgMusic.currentTime=0; bgMusic.play().catch(()=>{});
+}
+function gameOver(){
+  running=false; document.exitPointerLock(); stopWalk(); bgMusic.pause();
+  if(score>best) best=score;
+  document.getElementById('best').textContent=best;
+  document.getElementById('final-label').style.display='block';
+  document.getElementById('final-num').style.display='block';
+  document.getElementById('final-num').textContent=score;
+  document.getElementById('start-btn').textContent='Retry';
+  document.getElementById('overlay').style.display='flex';
+  document.getElementById('crosshair').style.display='none';
+}
+function updateScoreUI(){
+  document.getElementById('score').textContent=score;
+  document.getElementById('best').textContent=best;
+}
+
+// â”€â”€ Collision â€” full hitbox (full 1.5 half-width, no footprint shrink) â”€â”€â”€â”€â”€â”€â”€â”€
+function checkCollision(px,py,pz,isCrouching){
+  const ph=isCrouching?CROUCH_H:STAND_H;
+  for(const p of platforms){
+    const hw=1.5, hh=0.15, hd=1.5;
+    if(px>p.x-hw && px<p.x+hw && pz>p.z-hd && pz<p.z+hd &&
+       py-ph >= p.y-hh-0.35 && py-ph <= p.y+hh+0.6)
+      return{platform:p, top:p.y+hh};
+  }
+  return null;
+}
+
+// â”€â”€ Update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let lastTime=0, gameTime=0;
+function update(dt){
+  if(!running) return;
+  gameTime+=dt;
+
+  const isCrouching=keys['ControlLeft']||keys['ControlRight'];
+  const isSprinting=!isCrouching&&(keys['ShiftLeft']||keys['ShiftRight']);
+  crouchHeight+=((isCrouching?1:0)-crouchHeight)*Math.min(dt*12,1);
+
+  const speed=isCrouching?SPEED_CROUCH:isSprinting?SPEED_SPRINT:SPEED_WALK;
+  const fwdX=Math.sin(yaw), fwdZ=-Math.cos(yaw);
+  const rgtX=Math.cos(yaw), rgtZ=Math.sin(yaw);
+  let mx=0,mz=0;
+  if(keys['KeyW']){mx+=fwdX;mz+=fwdZ;}
+  if(keys['KeyS']){mx-=fwdX;mz-=fwdZ;}
+  if(keys['KeyA']){mx-=rgtX;mz-=rgtZ;}
+  if(keys['KeyD']){mx+=rgtX;mz+=rgtZ;}
+  const ml=Math.sqrt(mx*mx+mz*mz);
+  if(ml>0){mx/=ml;mz/=ml;}
+
+  const accel=onGround?ACCEL_GROUND:ACCEL_AIR;
+  const friction=onGround?FRICTION_GROUND:FRICTION_AIR;
+  if(ml>0){
+    const t=Math.min(accel*dt,1);
+    player.vx+=(mx*speed-player.vx)*t;
+    player.vz+=(mz*speed-player.vz)*t;
+  } else {
+    const t=Math.min(friction*dt,1);
+    player.vx+=(0-player.vx)*t;
+    player.vz+=(0-player.vz)*t;
+  }
+
+  const isMoving=ml>0&&onGround;
+  if(isMoving&&!wasMoving) startWalk();
+  if(!isMoving&&wasMoving) stopWalk();
+  wasMoving=isMoving;
+
+  if(keys['Space']&&onGround){ player.vy=JUMP_FORCE; onGround=false; playJump(); }
+
+  player.vy+=GRAVITY*dt;
+  player.x+=player.vx*dt; player.y+=player.vy*dt; player.z+=player.vz*dt;
+
+  onGround=false;
+  const hit=checkCollision(player.x,player.y,player.z,isCrouching);
+  if(hit&&player.vy<=0){
+    player.y=hit.top+(isCrouching?CROUCH_H:STAND_H);
+    player.vy=0; onGround=true;
+    if(!hit.platform.scored&&hit.platform!==platforms[0]){
+      hit.platform.scored=true; score++; updateScoreUI();
+    }
+  }
+  if(player.y<-40){ showFall(); gameOver(); return; }
+  extendPlatforms(gameTime);
+
+  document.getElementById('pill-crouch').className='state-pill'+(isCrouching?' active crouch':'');
+  document.getElementById('pill-walk').className='state-pill'+(isMoving&&!isSprinting&&!isCrouching?' active':'');
+  document.getElementById('pill-sprint').className='state-pill'+(isSprinting&&isMoving?' active sprint':'');
+}
+function showFall(){
+  const el=document.getElementById('fall-msg');
+  el.style.opacity='1'; setTimeout(()=>{el.style.opacity='0';},1500);
+}
+
+// â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const proj=mat4(), view=mat4(), vp=mat4();
+
+function drawPlatform(p,camPos){
+  const m=translate(identity(mat4()),p.x,p.y,p.z);
+  const mv=multiply(mat4(),vp,m);
+  gl.uniformMatrix4fv(uMVP,false,mv);
+  gl.uniformMatrix4fv(uModel,false,m);
+  if(p.moving) gl.uniform3fv(uColor,[1.0,0.6,0.2]);
+  else         gl.uniform3fv(uColor,[0.25,0.85,1.0]);
+  gl.uniform1f(uAlpha,0.35);
+  gl.uniform3fv(uCamPos,camPos);
+  gl.uniform1f(uMoving,p.moving?1.0:0.0);
+  gl.drawElements(gl.TRIANGLES,platformGeo.count,gl.UNSIGNED_SHORT,0);
+}
+
+function render(ts){
+  requestAnimationFrame(render);
+  const dt=Math.min((ts-lastTime)/1000,0.05); lastTime=ts;
+  update(dt);
+
+  // Draw 2D space scene (parallax driven by yaw/pitch)
+  drawSpaceScene(ts);
+
+  // WebGL â€” transparent background so 2D shows through
+  gl.clearColor(0,0,0,0);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+
+  perspective(proj,Math.PI/2,canvas.width/canvas.height,0.1,600);
+  const ph=STAND_H-crouchHeight*(STAND_H-CROUCH_H);
+  const camX=player.x, camY=player.y+ph*0.6, camZ=player.z;
+  const lx=camX+Math.sin(yaw)*Math.cos(pitch);
+  const ly=camY+Math.sin(pitch);
+  const lz=camZ-Math.cos(yaw)*Math.cos(pitch);
+  lookAt(view,[camX,camY,camZ],[lx,ly,lz],[0,1,0]);
+  multiply(vp,proj,view);
+
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER,platformGeo.posBuf);
+  gl.enableVertexAttribArray(aPos_p); gl.vertexAttribPointer(aPos_p,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,platformGeo.normBuf);
+  gl.enableVertexAttribArray(aNorm_p); gl.vertexAttribPointer(aNorm_p,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,platformGeo.uvBuf);
+  gl.enableVertexAttribArray(aUV_p); gl.vertexAttribPointer(aUV_p,2,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,platformGeo.idxBuf);
+
+  const camPos=[camX,camY,camZ];
+  for(const p of platforms) drawPlatform(p,camPos);
+}
+
+requestAnimationFrame(ts=>{ lastTime=ts; requestAnimationFrame(render); });
+</script>
+</body>
+</html>

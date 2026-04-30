@@ -1,0 +1,3749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Mindscape</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"/>
+<style>
+/* ===== RESET & BASE ===== */
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Press Start 2P',monospace;background:#1a0a2e;color:#f0c040;overflow:hidden;width:100vw;height:100vh;}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px);pointer-events:none;z-index:9999;}
+
+/* ===== SCREENS ===== */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.hidden{display:none!important;}
+
+/* ===== PIXEL BUTTONS ===== */
+.px-btn{font-family:'Press Start 2P',monospace;font-size:12px;padding:12px 24px;border:3px solid #f0c040;background:#2d0a4e;color:#f0c040;cursor:pointer;image-rendering:pixelated;box-shadow:4px 4px 0 #7b2d8b;transition:transform .1s,box-shadow .1s;text-transform:uppercase;letter-spacing:2px;}
+.px-btn:hover{background:#7b2d8b;color:#fff;box-shadow:2px 2px 0 #f0c040;transform:translate(2px,2px);}
+.px-btn:active{transform:translate(4px,4px);box-shadow:0 0 0 #f0c040;}
+.px-btn.danger{border-color:#ff4444;color:#ff4444;box-shadow:4px 4px 0 #880000;}
+.px-btn.danger:hover{background:#880000;color:#fff;}
+.px-btn.small{font-size:8px;padding:6px 12px;}
+
+/* ===== SPINNING WHEEL ===== */
+@keyframes spinWheel{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+/* ===== TITLE SCREEN ===== */
+#titleScreen{background:url('mindscape_bg.gif') center/cover no-repeat;image-rendering:pixelated;}
+#titleOverlay{position:absolute;inset:0;background:#000;opacity:1;}
+#titleContent{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:24px;opacity:0;}
+#gameTitle{font-size:clamp(20px,4vw,40px);color:#f0c040;text-shadow:4px 4px #7b2d8b,0 0 20px #ff8c00;letter-spacing:4px;animation:flicker 3s infinite;}
+@keyframes flicker{0%,95%,100%{opacity:1;}96%{opacity:.7;}97%{opacity:1;}98%{opacity:.5;}}
+
+/* ===== RESET WARNING ===== */
+#resetWarning{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}
+#resetWarning p{font-size:11px;color:#ff4444;text-align:center;line-height:2;max-width:320px;border:2px solid #ff4444;padding:16px;background:#1a0000;}
+#resetWarning .btn-row{display:flex;gap:16px;}
+
+/* ===== TRANSITION OVERLAY ===== */
+#transOverlay{position:fixed;inset:0;background:#000;z-index:500;transform:translateX(100%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:24px;}
+#transTip{font-size:21px;color:rgba(240,192,64,.85);text-align:center;max-width:600px;line-height:2;letter-spacing:1px;}
+#transLoadRow{display:flex;align-items:center;gap:16px;}
+
+/* ===== WARNING SCREEN ===== */
+#warnScreen{position:fixed;inset:0;background:#000;z-index:490;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;opacity:0;transition:opacity .5s;}
+#warnSign{font-size:clamp(28px,6vw,56px);color:#ff2222;text-shadow:0 0 10px #ff0000,0 0 30px #ff0000;animation:glow 1s infinite alternate;}
+@keyframes glow{from{text-shadow:0 0 8px #ff2222;}to{text-shadow:0 0 24px #ff4444,0 0 40px #ff0000;}}
+#warnText{font-size:9px;color:#ff6666;text-align:center;line-height:2.2;max-width:340px;border:2px solid #ff2222;padding:16px;background:#0a0000;animation:warnPulse 1.5s infinite;}
+@keyframes warnPulse{0%,100%{border-color:#ff2222;}50%{border-color:#ff6666;}}
+#warnContinueBtn{opacity:0;margin-top:8px;}
+
+/* ===== GAME SCREEN ===== */
+#gameScreen{background:url('mindscape_bg.gif') center/cover no-repeat;image-rendering:pixelated;flex-direction:column;justify-content:space-between;}
+#gameHeader{width:100%;background:#1a0a2e;border-bottom:4px solid #f0c040;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 0 #7b2d8b;position:relative;z-index:10;}
+#headerTitle{font-size:10px;color:#ff8c00;letter-spacing:3px;}
+#headerBtns{display:flex;gap:10px;}
+#brainArea{flex:1;display:flex;align-items:center;justify-content:center;position:relative;}
+#brainSvg{width:clamp(280px,45vw,480px);filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00);animation:brainFloat 3s ease-in-out infinite;image-rendering:pixelated;}
+@keyframes brainFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+.brain-section{cursor:pointer;}
+#gameFooter{width:100%;background:#1a0a2e;border-top:4px solid #f0c040;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 -4px 0 #7b2d8b;gap:16px;flex-wrap:wrap;}
+#hpSection{display:flex;align-items:center;gap:8px;font-size:10px;color:#ff4444;}
+.heart{font-size:20px;color:#ff4444;animation:heartbeat .8s infinite;}
+@keyframes heartbeat{0%,100%{transform:scale(1);}50%{transform:scale(1.2);}}
+.heart.lost{color:#333;animation:none;}
+#saneSection{display:flex;align-items:center;gap:8px;font-size:10px;color:#f0c040;}
+#saneBar{width:180px;height:20px;border:2px solid #f0c040;background:#0a0a1a;position:relative;image-rendering:pixelated;}
+#saneFill{height:100%;background:repeating-linear-gradient(90deg,#7b2d8b 0px,#7b2d8b 6px,#9b3dab 6px,#9b3dab 8px);width:100%;transition:width .5s;}
+#saneLabel{font-size:10px;color:#f0c040;}
+
+/* ===== SAVE INDICATOR ===== */
+#saveIndicator{position:fixed;bottom:80px;left:16px;z-index:600;display:flex;align-items:center;gap:6px;background:#1a0a2e;border:2px solid #f0c040;padding:4px 8px;font-size:8px;color:#f0c040;}
+
+/* ===== SETTINGS PANEL ===== */
+#settingsPanel{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;}
+#settingsPanel h2{font-size:14px;color:#ff8c00;letter-spacing:3px;}
+.settings-row{display:flex;align-items:center;gap:12px;font-size:9px;color:#f0c040;}
+#muteToggle{width:40px;height:20px;background:#2d0a4e;border:2px solid #f0c040;cursor:pointer;position:relative;}
+#muteToggle::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:#f0c040;transition:left .2s;}
+#muteToggle.muted::after{left:22px;background:#ff4444;}
+#muteToggle.muted{border-color:#ff4444;}
+
+/* ===== SECTION SCREENS ===== */
+.section-screen{position:fixed;inset:0;flex-direction:column;background-size:cover;background-position:center;image-rendering:pixelated;}
+.section-header{width:100%;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:4px solid;position:relative;z-index:10;}
+.section-body{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;position:relative;overflow:hidden;}
+#northScreen{background:#3d2800 url('mindscape_north.gif') center/cover no-repeat;}
+#northScreen .section-header{background:rgba(61,40,0,.9);border-color:#f5c518;color:#f5c518;}
+#eastScreen{background:#001a3d url('mindscape_east.gif') center/cover no-repeat;}
+#eastScreen .section-header{background:rgba(0,26,61,.9);border-color:#4488ff;color:#4488ff;}
+#southScreen{background:#003d1a url('mindscape_south.gif') center/cover no-repeat;}
+#southScreen .section-header{background:rgba(0,61,26,.9);border-color:#44ff88;color:#44ff88;}
+#westScreen{background:#1a1a1a url('mindscape_west.gif') center/cover no-repeat;}
+#westScreen .section-header{background:rgba(26,26,26,.9);border-color:#aaaaaa;color:#aaaaaa;}
+
+/* ===== CRACK OVERLAY ===== */
+.crack-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:50;}
+.crack-overlay svg{width:100%;height:100%;position:absolute;inset:0;}
+
+/* ===== NORTH PUZZLE ===== */
+#simonGrid{display:grid;grid-template-columns:1fr 60px 1fr;grid-template-rows:1fr 60px 1fr;gap:8px;width:260px;height:260px;}
+.simon-btn{width:60px;height:60px;cursor:pointer;image-rendering:pixelated;shape-rendering:crispEdges;transition:filter .1s;}
+.simon-btn:hover{filter:brightness(1.4);}
+.simon-btn.lit{filter:brightness(2.5) drop-shadow(0 0 10px #fff);}
+#simonStart{width:36px;height:36px;cursor:pointer;transform:rotate(45deg);background:#555;border:2px solid #888;display:flex;align-items:center;justify-content:center;transition:filter .1s;}
+#simonStart:hover{filter:brightness(1.4);}
+#simonStatus{font-size:8px;color:#f5c518;text-align:center;min-height:20px;}
+
+/* ===== EAST PUZZLE ===== */
+#eastWheelWrap{position:relative;width:220px;height:220px;cursor:ew-resize;user-select:none;}
+#eastWheelSvg{width:220px;height:220px;image-rendering:pixelated;shape-rendering:crispEdges;}
+#eastStatus{font-size:8px;color:#4488ff;text-align:center;min-height:20px;display:none;}
+
+/* ===== SOUTH PUZZLE ===== */
+#southWheelWrap{position:relative;width:380px;height:380px;}
+#southWheelSvg{width:380px;height:380px;image-rendering:pixelated;shape-rendering:crispEdges;}
+#southIndicator{position:absolute;top:-36px;left:50%;transform:translateX(-50%);font-size:32px;color:#44ff88;}
+#southStatus{font-size:8px;color:#44ff88;text-align:center;min-height:20px;display:none;}
+#southProgress{font-size:10px;color:#44ff88;text-align:center;letter-spacing:2px;}
+
+/* ===== WEST PUZZLE ===== */
+#westPuzzle{display:flex;flex-direction:column;align-items:center;gap:12px;}
+#westEncoded{font-size:7px;color:#aaaaaa;word-break:break-all;max-width:280px;text-align:center;border:2px solid #555;padding:8px;background:#0a0a0a;}
+#westBlanks{font-size:12px;color:#fff;letter-spacing:6px;min-height:24px;}
+#westKeypad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:220px;}
+.west-key{font-family:'Press Start 2P',monospace;font-size:10px;padding:8px;border:2px solid #aaaaaa;background:#1a1a1a;color:#aaaaaa;cursor:pointer;text-align:center;}
+.west-key:hover{background:#333;color:#fff;}
+.west-key:active{transform:translate(2px,2px);}
+#westStatus{font-size:8px;color:#aaaaaa;text-align:center;min-height:20px;display:none;}
+
+/* ===== BRAIN CRACKS (lobby state) ===== */
+#brainCracks{position:absolute;pointer-events:none;width:100%;height:100%;top:0;left:0;}
+@keyframes brainShake{
+  0%,100%{transform:translateY(0) translateX(0);}
+  10%{transform:translateX(-3px) translateY(2px);}
+  20%{transform:translateX(3px) translateY(-2px);}
+  30%{transform:translateX(-4px) translateY(1px);}
+  40%{transform:translateX(4px) translateY(-1px);}
+  50%{transform:translateX(-2px) translateY(3px);}
+  60%{transform:translateX(2px) translateY(-3px);}
+  70%{transform:translateX(-3px) translateY(2px);}
+  80%{transform:translateX(3px) translateY(-2px);}
+  90%{transform:translateX(-1px) translateY(1px);}
+}
+@keyframes brainGlitch{
+  0%,90%,100%{filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00);}
+  91%{filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00) hue-rotate(90deg) brightness(1.5);}
+  93%{filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00);}
+  95%{filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00) hue-rotate(180deg) brightness(2);}
+  97%{filter:drop-shadow(0 0 12px #7b2d8b) drop-shadow(0 0 24px #ff8c00);}
+}
+.brain-all-solved #brainSvg{animation:brainFloat 3s ease-in-out infinite,brainShake 0.4s infinite,brainGlitch 3s infinite;}
+.brain-all-solved #brainSvg{cursor:pointer;}
+
+/* ===== JUMPSCARE OVERLAY ===== */
+#jumpscareOverlay{position:fixed;inset:0;z-index:9000;display:none;pointer-events:none;}
+#jumpscareStatic{position:absolute;inset:0;opacity:0.7;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:200px 200px;}
+#entityImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.25;display:none;}
+
+/* ===== VHS OVERLAY (permanent after anomaly) ===== */
+#vhsOverlay{position:fixed;inset:0;z-index:9998;pointer-events:none;display:none;}
+#vhsOverlay::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,0,.015) 3px,rgba(0,255,0,.015) 4px);}
+#vhsOverlay::after{content:'';position:absolute;inset:0;animation:vhsScan 8s linear infinite;background:linear-gradient(transparent 50%,rgba(0,0,0,.04) 50%);background-size:100% 4px;}
+@keyframes vhsScan{0%{transform:translateY(-100%);}100%{transform:translateY(100vh);}}
+@keyframes vhsGlitch{
+  0%,95%,100%{transform:translateX(0);}
+  96%{transform:translateX(-4px);}
+  97%{transform:translateX(4px);}
+  98%{transform:translateX(-2px);}
+  99%{transform:translateX(2px);}
+}
+body.vhs-mode{animation:vhsGlitch 4s infinite;}
+body.vhs-mode #vhsOverlay{display:block;}
+/* Static background for all screens in vhs mode */
+body.vhs-mode #titleScreen,
+body.vhs-mode #gameScreen,
+body.vhs-mode #northScreen,
+body.vhs-mode #eastScreen,
+body.vhs-mode #southScreen,
+body.vhs-mode #westScreen{background-image:url('mindscape_static.gif')!important;}
+/* Color inversion tint */
+body.vhs-mode{filter:saturate(0.7) contrast(1.1);}
+/* Disable brain SECTION navigation clicks in anomaly state */
+body.anomaly-locked .brain-section{pointer-events:none;cursor:default;}
+/* Brain SVG itself stays clickable when corrupted — sections still blocked */
+body.anomaly-locked #brainSvg.corrupted{pointer-events:all!important;cursor:pointer!important;}
+body.anomaly-locked #brainSvg.corrupted .brain-section{pointer-events:none!important;}
+/* ===== GLITCH BUTTON (???) ===== */
+@keyframes glitchBtnShake{
+  0%,100%{transform:translate(0,0) rotate(0deg);}
+  10%{transform:translate(-3px,2px) rotate(-1deg);}
+  20%{transform:translate(3px,-2px) rotate(1deg);}
+  30%{transform:translate(-4px,1px) rotate(-2deg);}
+  40%{transform:translate(4px,-1px) rotate(2deg);}
+  50%{transform:translate(-2px,3px) rotate(-1deg);}
+  60%{transform:translate(2px,-3px) rotate(1deg);}
+  70%{transform:translate(-3px,2px) rotate(-1deg);}
+  80%{transform:translate(3px,-2px) rotate(1deg);}
+  90%{transform:translate(-1px,1px) rotate(0deg);}
+}
+@keyframes glitchBtnFlash{
+  0%,100%{border-color:#ff00ff;color:#ff00ff;box-shadow:4px 4px 0 #880088;}
+  25%{border-color:#00ffff;color:#00ffff;box-shadow:4px 4px 0 #008888;}
+  50%{border-color:#ff4400;color:#ff4400;box-shadow:4px 4px 0 #882200;}
+  75%{border-color:#ffff00;color:#ffff00;box-shadow:4px 4px 0 #888800;}
+}
+#glitchBtn{
+  animation:glitchBtnShake 0.15s infinite,glitchBtnFlash 0.3s infinite;
+  position:relative;overflow:visible;
+}
+#glitchBtn.on-cooldown{opacity:0.5;pointer-events:none;}
+
+/* Electric particles */
+.elec-particle{
+  position:fixed;pointer-events:none;z-index:9100;
+  width:4px;height:4px;border-radius:50%;
+  animation:elecFly 0.6s forwards;
+}
+@keyframes elecFly{
+  0%{opacity:1;transform:translate(0,0) scale(1);}
+  100%{opacity:0;transform:translate(var(--ex),var(--ey)) scale(0);}
+}
+
+/* Settings crack SVG */
+#settingsCracks{position:fixed;inset:0;pointer-events:none;z-index:801;}
+#settingsCracks svg{width:100%;height:100%;}
+
+/* Void tentacles on corrupted buttons — large, visible, animated */
+.void-btn{
+  position:relative;overflow:visible;
+  animation:glitchBtnShake 0.1s infinite!important;
+  border-color:#000!important;color:#111!important;
+  background:#0a0a0a!important;box-shadow:none!important;
+  pointer-events:none!important;cursor:default!important;
+}
+/* Generate 6 large tentacles via multiple pseudo + sibling spans */
+.void-btn::before,.void-btn::after{
+  content:'';position:absolute;
+  background:linear-gradient(to top,#000,#1a001a);
+  border-radius:4px 4px 0 0;
+  animation:tentacleWave 0.25s infinite alternate;
+  pointer-events:none;
+}
+.void-btn::before{width:10px;height:60px;bottom:100%;left:20%;transform-origin:bottom center;}
+.void-btn::after{width:10px;height:80px;bottom:100%;left:55%;transform-origin:bottom center;animation-delay:.12s;animation-duration:.3s;}
+@keyframes tentacleWave{
+  0%{transform:rotate(-25deg) scaleY(1) skewX(-5deg);}
+  100%{transform:rotate(25deg) scaleY(1.4) skewX(5deg);}
+}
+/* Extra tentacle spans injected by JS */
+.void-tentacle-arm{
+  position:absolute;bottom:100%;
+  background:linear-gradient(to top,#000,#110011);
+  border-radius:4px 4px 0 0;
+  pointer-events:none;
+  transform-origin:bottom center;
+  animation:tentacleWave var(--td,0.3s) infinite alternate;
+  animation-delay:var(--tdelay,0s);
+}
+
+/* Ash particles */
+.ash-particle{
+  position:fixed;pointer-events:none;z-index:9050;
+  width:3px;height:3px;border-radius:50%;
+  background:rgba(180,180,180,0.7);
+  animation:ashFall var(--adur,4s) linear forwards;
+}
+@keyframes ashFall{
+  0%{transform:translateY(0) translateX(0) rotate(0deg);opacity:0.8;}
+  100%{transform:translateY(110vh) translateX(var(--ax,20px)) rotate(360deg);opacity:0;}
+}
+
+/* Settings fall-off animation */
+@keyframes fallOff{
+  0%{transform:translateY(0) rotate(0deg);opacity:1;}
+  100%{transform:translateY(120vh) rotate(var(--rot,20deg));opacity:0;}
+}
+.falling{animation:fallOff 1.2s forwards!important;}
+
+/* Corrupted settings btn in header */
+#settingsBtn.void-btn{animation:glitchBtnShake 0.1s infinite!important;}
+
+/* Title screen ??? button */
+#titleGlitchBtn{
+  animation:glitchBtnShake 0.15s infinite,glitchBtnFlash 0.3s infinite;
+  position:relative;overflow:visible;
+}
+#titleGlitchBtn.on-cooldown{opacity:0.5;pointer-events:none;}
+
+/* Title fall-off */
+#titleContent.falling-apart > *{animation:fallOff 1.2s forwards;}
+#titleContent.falling-apart > *:nth-child(1){animation-delay:0s;--rot:-15deg;}
+#titleContent.falling-apart > *:nth-child(2){animation-delay:.1s;--rot:10deg;}
+#titleContent.falling-apart > *:nth-child(3){animation-delay:.2s;--rot:-20deg;}
+#titleContent.falling-apart > *:nth-child(4){animation-delay:.3s;--rot:25deg;}
+
+/* Brain corruption state */
+#brainSvg.corrupted{cursor:pointer!important;}
+#brainSvg.corrupted{animation:brainFloat 3s ease-in-out infinite,brainCorruptShake 0.15s infinite,brainGlitch 1s infinite!important;}
+@keyframes brainCorruptShake{
+  0%,100%{transform:translate(0,0);}
+  10%{transform:translate(-6px,4px);}
+  20%{transform:translate(6px,-4px);}
+  30%{transform:translate(-8px,2px);}
+  40%{transform:translate(8px,-2px);}
+  50%{transform:translate(-4px,6px);}
+  60%{transform:translate(4px,-6px);}
+  70%{transform:translate(-6px,4px);}
+  80%{transform:translate(6px,-4px);}
+  90%{transform:translate(-2px,2px);}
+}
+#brainSvg.corrupted{animation:brainFloat 3s ease-in-out infinite,brainCorruptShake 0.15s infinite,brainGlitch 1s infinite!important;}
+
+/* Brain explosion chunks */
+.brain-chunk{
+  position:fixed;pointer-events:none;z-index:9200;
+  width:20px;height:20px;border-radius:2px;
+  background:#8b0000;
+  animation:chunkFly 1.5s forwards;
+}
+@keyframes chunkFly{
+  0%{opacity:1;transform:translate(0,0) rotate(0deg) scale(1);}
+  100%{opacity:0;transform:translate(var(--cx),var(--cy)) rotate(var(--cr)) scale(0.3);}
+}
+.blood-pool{
+  position:fixed;pointer-events:none;z-index:9150;
+  border-radius:50%;background:radial-gradient(circle,#8b0000,#3d0000);
+  animation:poolGrow 2s forwards;
+}
+@keyframes poolGrow{
+  0%{transform:scale(0);opacity:0.9;}
+  100%{transform:scale(1);opacity:0.7;}
+}
+.void-tentacle{
+  position:fixed;pointer-events:none;z-index:9180;
+  width:12px;background:#000;border-radius:6px;
+  transform-origin:bottom center;
+  animation:tentacleGrow 2s forwards;
+}
+@keyframes tentacleGrow{
+  0%{height:0;opacity:1;}
+  60%{height:var(--th,200px);opacity:1;}
+  100%{height:var(--th,200px);opacity:0.8;}
+}
+@keyframes tentacleDrift{
+  0%{transform:rotate(var(--trot,0deg)) skewX(-8deg);}
+  100%{transform:rotate(var(--trot,0deg)) skewX(8deg) scaleX(1.2);}
+}
+
+/* Chapter screen */
+#chapterScreen{
+  position:fixed;inset:0;background:#000;z-index:9500;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+  opacity:0;transition:opacity 1s;
+}
+#chapterTitle{font-size:clamp(24px,5vw,48px);color:#fff;letter-spacing:6px;}
+#chapterSub{font-size:clamp(8px,1.5vw,14px);color:rgba(255,255,255,0.6);letter-spacing:3px;}
+
+/* Chapter 1 mode — west.gif bg everywhere, gray/dark gray color theme */
+body.chapter1-mode #titleScreen,
+body.chapter1-mode #gameScreen,
+body.chapter1-mode #northScreen,
+body.chapter1-mode #eastScreen,
+body.chapter1-mode #southScreen,
+body.chapter1-mode #westScreen{background-image:url('mindscape_west.gif')!important;}
+/* West theme colors: gray/dark gray accents */
+body.chapter1-mode #gameTitle{color:#aaaaaa;text-shadow:4px 4px #333,0 0 20px #666;}
+body.chapter1-mode #gameHeader{background:#111;border-bottom-color:#aaaaaa;box-shadow:0 4px 0 #444;}
+body.chapter1-mode #gameFooter{background:#111;border-top-color:#aaaaaa;box-shadow:0 -4px 0 #444;}
+body.chapter1-mode #headerTitle{color:#888;}
+body.chapter1-mode #saneFill{background:repeating-linear-gradient(90deg,#444 0px,#444 6px,#666 6px,#666 8px);}
+body.chapter1-mode #saneBar{border-color:#aaaaaa;}
+body.chapter1-mode #saneSection{color:#aaaaaa;}
+body.chapter1-mode #saneLabel{color:#aaaaaa;}
+body.chapter1-mode .px-btn{border-color:#aaaaaa;color:#aaaaaa;box-shadow:4px 4px 0 #444;background:#1a1a1a;}
+body.chapter1-mode .px-btn:hover{background:#444;color:#fff;box-shadow:2px 2px 0 #aaa;}
+/* Chapter 1: hide brain, no shake, hide all cracks */
+body.chapter1-mode #brainArea{display:none;}
+body.chapter1-mode #brainCracks{display:none!important;}
+body.chapter1-mode #brainSpamCracks{display:none!important;}
+body.chapter1-mode{animation:none!important;}
+body.chapter1-mode #brainSvg{filter:drop-shadow(0 0 12px #555) drop-shadow(0 0 24px #333) grayscale(0.6);}
+
+/* Chapter 1 menu buttons */
+.ch1-menu-btn{
+  font-size:28px;background:rgba(0,0,0,.7);border:2px solid #555;
+  border-radius:8px;padding:10px 14px;cursor:pointer;
+  filter:grayscale(1);transition:filter .2s,transform .1s;
+}
+.ch1-menu-btn:hover{filter:grayscale(0);transform:scale(1.1);}
+/* Shop items */
+.shop-item{
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:'Press Start 2P',monospace;font-size:8px;color:#f0c040;
+  border:2px solid #555;padding:10px 14px;cursor:pointer;background:#111;
+  gap:8px;
+}
+.shop-item:hover{background:#222;border-color:#aaa;}
+/* Key locks */
+.key-lock{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  border:3px solid #555;padding:16px 20px;cursor:pointer;background:#111;
+  transition:transform .1s;
+}
+.key-lock:hover{transform:scale(1.05);}
+.key-lock.unlocked{opacity:0.4;pointer-events:none;}
+@keyframes lockShake{0%,100%{transform:translate(0,0);}20%{transform:translate(-6px,0);}40%{transform:translate(6px,0);}60%{transform:translate(-4px,0);}80%{transform:translate(4px,0);}}
+
+/* Stronger VHS grain in late stages */
+body.vhs-strong #vhsOverlay::before{
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,0,.04) 2px,rgba(0,255,0,.04) 3px);
+}
+body.vhs-strong{animation:vhsGlitch 1.5s infinite!important;}
+@keyframes scatterTL{to{transform:translate(-140px,-140px) rotate(-200deg);opacity:0;}}
+@keyframes scatterTR{to{transform:translate(140px,-140px) rotate(200deg);opacity:0;}}
+@keyframes scatterBL{to{transform:translate(-140px,140px) rotate(-200deg);opacity:0;}}
+@keyframes scatterBR{to{transform:translate(140px,140px) rotate(200deg);opacity:0;}}
+.scatter-tl{animation:scatterTL .8s forwards;}
+.scatter-tr{animation:scatterTR .8s forwards;}
+.scatter-bl{animation:scatterBL .8s forwards;}
+.scatter-br{animation:scatterBR .8s forwards;}
+@keyframes goldGlow{0%,100%{filter:drop-shadow(0 0 4px gold);}50%{filter:drop-shadow(0 0 20px gold) drop-shadow(0 0 40px #ff8c00);}}
+.gold-glow{animation:goldGlow .5s 4;}
+</style>
+</head>
+<body>
+
+<!-- TITLE SCREEN -->
+<div id="titleScreen" class="screen">
+  <div id="titleOverlay"></div>
+  <div id="titleContent">
+    <div id="gameTitle">MINDSCAPE</div>
+    <div style="font-size:8px;color:#ff8c00;letter-spacing:2px;margin-bottom:8px;">VORTARIUM PRODUCTIONS</div>
+    <button class="px-btn" id="startBtn" onclick="handleStart()">START</button>
+    <button class="px-btn danger" id="resetBtn" onclick="handleReset()">RESET</button>
+    <button class="px-btn hidden" id="titleGlitchBtn" onclick="titleGlitchBtnPress()">???</button>
+  </div>
+</div>
+
+<!-- CHAPTER SCREEN -->
+<div id="chapterScreen" class="hidden">
+  <div id="chapterTitle">CHAPTER I</div>
+  <div id="chapterSub">Welcome to the Mindscape</div>
+  <button class="px-btn" id="chapterContinueBtn" style="opacity:0;margin-top:16px;" onclick="chapterContinue()">CONTINUE</button>
+</div>
+
+<!-- RESET CONFIRM -->
+<div id="resetWarning" class="hidden">
+  <p>&#9888; WARNING &#9888;<br/><br/>THIS WILL PERMANENTLY DELETE<br/>ALL YOUR SAVED DATA.<br/><br/>ARE YOU SURE?</p>
+  <div class="btn-row">
+    <button class="px-btn danger" onclick="confirmReset()">YES, DELETE</button>
+    <button class="px-btn" onclick="cancelReset()">CANCEL</button>
+  </div>
+</div>
+
+<!-- TRANSITION OVERLAY -->
+<div id="transOverlay" class="hidden">
+  <div id="transTip"></div>
+  <div id="transLoadRow">
+    <svg width="64" height="64" viewBox="0 0 32 32" style="animation:spinWheel 1s linear infinite;image-rendering:pixelated;" shape-rendering="crispEdges">
+      <rect x="14" y="14" width="4" height="4" fill="#f0c040"/>
+      <rect x="15" y="2" width="2" height="10" fill="#f0c040"/>
+      <rect x="15" y="20" width="2" height="10" fill="#f0c040"/>
+      <rect x="2" y="15" width="10" height="2" fill="#f0c040"/>
+      <rect x="20" y="15" width="10" height="2" fill="#f0c040"/>
+      <rect x="5" y="5" width="2" height="7" fill="#f0c040" transform="rotate(45,6,8)"/>
+      <rect x="23" y="5" width="2" height="7" fill="#f0c040" transform="rotate(-45,24,8)"/>
+      <rect x="5" y="20" width="2" height="7" fill="#f0c040" transform="rotate(-45,6,24)"/>
+      <rect x="23" y="20" width="2" height="7" fill="#f0c040" transform="rotate(45,24,24)"/>
+    </svg>
+    <span style="font-size:18px;color:#f0c040;letter-spacing:4px;">LOADING</span>
+  </div>
+</div>
+
+<!-- WARNING SCREEN -->
+<div id="warnScreen" class="hidden">
+  <div id="warnSign">&#9888; WARNING &#9888;</div>
+  <div id="warnText">
+    THIS GAME INCLUDES SENSITIVE TOPICS OF<br/>
+    SELF HARM, MENTAL HEALTH AND SUICIDE.<br/><br/>
+    PLAY WITH CAUTION.
+  </div>
+  <button class="px-btn" id="warnContinueBtn" onclick="warnContinue()">CONTINUE</button>
+</div>
+
+<!-- MAIN GAME SCREEN -->
+<div id="gameScreen" class="screen hidden" style="justify-content:space-between;">
+  <div id="gameHeader">
+    <div id="headerTitle">MINDSCAPE</div>
+    <div id="headerBtns">
+      <button class="px-btn small" id="settingsBtn" onclick="openSettings()">&#9881; SETTINGS</button>
+      <button class="px-btn small" id="backBtn" onclick="goToTitle()">&#8592; BACK</button>
+    </div>
+  </div>
+  <div id="brainArea">
+    <!-- Invisible click overlay for phase 1 brain spam -->
+    <div id="brainClickOverlay" onclick="brainClick()" style="position:absolute;inset:0;z-index:20;cursor:pointer;display:none;"></div>
+    <svg id="brainSvg" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" onclick="brainClick()" style="cursor:default;">
+      <!-- NORTH group -->
+      <g class="brain-section" data-section="north" data-hover="#f5c518">
+        <rect x="20" y="10" width="24" height="4" fill="#c084fc"/>
+        <rect x="16" y="14" width="14" height="4" fill="#c084fc"/>
+        <rect x="34" y="14" width="14" height="4" fill="#c084fc"/>
+        <rect x="12" y="18" width="18" height="4" fill="#a855f7"/>
+        <rect x="34" y="18" width="18" height="4" fill="#a855f7"/>
+        <rect x="10" y="22" width="20" height="4" fill="#a855f7"/>
+        <rect x="34" y="22" width="20" height="4" fill="#a855f7"/>
+        <rect x="22" y="12" width="4" height="2" fill="#e9d5ff"/>
+        <rect x="18" y="16" width="4" height="2" fill="#e9d5ff"/>
+        <rect x="10" y="10" width="44" height="18" fill="transparent"/>
+      </g>
+      <!-- SOUTH group -->
+      <g class="brain-section" data-section="south" data-hover="#44ff88">
+        <rect x="10" y="26" width="20" height="4" fill="#9333ea"/>
+        <rect x="34" y="26" width="20" height="4" fill="#9333ea"/>
+        <rect x="12" y="30" width="18" height="4" fill="#9333ea"/>
+        <rect x="34" y="30" width="18" height="4" fill="#9333ea"/>
+        <rect x="14" y="34" width="16" height="4" fill="#a855f7"/>
+        <rect x="34" y="34" width="16" height="4" fill="#a855f7"/>
+        <rect x="16" y="38" width="14" height="4" fill="#c084fc"/>
+        <rect x="34" y="38" width="14" height="4" fill="#c084fc"/>
+        <rect x="20" y="42" width="10" height="4" fill="#c084fc"/>
+        <rect x="34" y="42" width="10" height="4" fill="#c084fc"/>
+        <rect x="28" y="46" width="8" height="4" fill="#9333ea"/>
+        <rect x="30" y="50" width="4" height="4" fill="#7b2d8b"/>
+        <rect x="10" y="26" width="44" height="28" fill="transparent"/>
+      </g>
+      <!-- EAST group -->
+      <g class="brain-section" data-section="east" data-hover="#4488ff">
+        <rect x="44" y="20" width="6" height="2" fill="#7b2d8b"/>
+        <rect x="44" y="26" width="8" height="2" fill="#7b2d8b"/>
+        <rect x="44" y="32" width="6" height="2" fill="#7b2d8b"/>
+        <rect x="40" y="24" width="4" height="4" fill="#ff8c00"/>
+        <rect x="41" y="25" width="2" height="2" fill="#fff"/>
+        <rect x="34" y="14" width="20" height="32" fill="transparent"/>
+      </g>
+      <!-- WEST group -->
+      <g class="brain-section" data-section="west" data-hover="#aaaaaa">
+        <rect x="14" y="20" width="6" height="2" fill="#7b2d8b"/>
+        <rect x="12" y="26" width="8" height="2" fill="#7b2d8b"/>
+        <rect x="14" y="32" width="6" height="2" fill="#7b2d8b"/>
+        <rect x="20" y="24" width="4" height="4" fill="#ff8c00"/>
+        <rect x="21" y="25" width="2" height="2" fill="#fff"/>
+        <rect x="10" y="14" width="20" height="32" fill="transparent"/>
+      </g>
+      <!-- Center divide -->
+      <rect x="30" y="14" width="4" height="28" fill="#7b2d8b" pointer-events="none"/>
+      <!-- Full-brain click target (invisible, used when corrupted) -->
+      <rect id="brainHitArea" x="8" y="8" width="48" height="48" fill="transparent" pointer-events="none"/>
+    </svg>
+    <!-- Brain cracks shown when all puzzles solved -->
+    <svg id="brainCracks" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="display:none;position:absolute;width:clamp(280px,45vw,480px);">
+      <polyline points="32,10 29,18 34,24 28,32 35,38 30,46" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="0.8"/>
+      <polyline points="32,24 24,28 20,34" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.6"/>
+      <polyline points="32,32 40,36 44,30" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.6"/>
+      <polyline points="20,20 16,26 18,32" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <polyline points="44,22 48,28 46,34" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div id="gameFooter">
+    <div id="hpSection">
+      <span style="font-size:10px;color:#f0c040;margin-right:4px;">HP</span>
+      <span class="heart" id="heart1">&#10084;</span>
+      <span class="heart" id="heart2">&#10084;</span>
+      <span class="heart" id="heart3">&#10084;</span>
+    </div>
+    <div id="coinSection" style="display:none;align-items:center;gap:6px;font-size:10px;color:#f0c040;">
+      <span>??</span><span id="coinCount">0</span>
+    </div>
+    <div id="saneSection">
+      <span>SANITY</span>
+      <div id="saneBar"><div id="saneFill"></div></div>
+      <span id="saneLabel">100%</span>
+    </div>
+  </div>
+</div>
+
+<!-- CHAPTER 1 MENU BUTTONS (shown in gameScreen during chapter1) -->
+<div id="ch1MenuBtns" style="display:none;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:15;display:none;gap:20px;flex-direction:row;">
+  <button class="ch1-menu-btn" id="btnBattle" onclick="openBattle()" title="Battle">&#9876;&#65039;</button>
+  <button class="ch1-menu-btn" id="btnShop" onclick="openShop()" title="Shop">&#128722;</button>
+  <button class="ch1-menu-btn" id="btnKeys" onclick="openKeys()" title="Keys">&#128273;</button>
+</div>
+
+<!-- SAVE INDICATOR -->
+<div id="saveIndicator" class="hidden">
+  <svg width="20" height="20" viewBox="0 0 32 32" style="animation:spinWheel 1s linear infinite;image-rendering:pixelated;" shape-rendering="crispEdges">
+    <rect x="14" y="14" width="4" height="4" fill="#f0c040"/>
+    <rect x="15" y="2" width="2" height="10" fill="#f0c040"/>
+    <rect x="15" y="20" width="2" height="10" fill="#f0c040"/>
+    <rect x="2" y="15" width="10" height="2" fill="#f0c040"/>
+    <rect x="20" y="15" width="10" height="2" fill="#f0c040"/>
+    <rect x="5" y="5" width="2" height="7" fill="#f0c040" transform="rotate(45,6,8)"/>
+    <rect x="23" y="5" width="2" height="7" fill="#f0c040" transform="rotate(-45,24,8)"/>
+    <rect x="5" y="20" width="2" height="7" fill="#f0c040" transform="rotate(-45,6,24)"/>
+    <rect x="23" y="20" width="2" height="7" fill="#f0c040" transform="rotate(45,24,24)"/>
+  </svg>
+  <span>SAVING</span>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div id="settingsPanel" class="hidden">
+  <h2>&#9881; SETTINGS</h2>
+  <div class="settings-row" id="settingsSoundRow">
+    <span>SOUND</span>
+    <div id="muteToggle" onclick="toggleMute()"></div>
+    <span id="muteLabel">ON</span>
+  </div>
+  <button class="px-btn" id="settingsSaveBtn" style="margin-top:8px;" onclick="manualSave()">&#128190; SAVE GAME</button>
+  <button class="px-btn" id="settingsCloseBtn" style="margin-top:8px;" onclick="closeSettings()">&#10005; CLOSE</button>
+  <button class="px-btn hidden" id="glitchBtn" onclick="glitchBtnPress()">???</button>
+</div>
+<!-- Settings crack overlay -->
+<div id="settingsCracks" class="hidden"><svg id="settingsCrackSvg" viewBox="0 0 800 600" preserveAspectRatio="none"></svg></div>
+
+<!-- NORTH SCREEN -->
+<div id="northScreen" class="screen section-screen hidden">
+  <div class="section-header">
+    <span style="font-size:9px;">NORTH &#8211; CREATIVITY &amp; IMAGINATION</span>
+    <button class="px-btn small" onclick="goBack()">&#8592; BACK</button>
+  </div>
+  <div class="section-body" id="northBody">
+    <div id="simonGrid">
+      <div></div>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <svg class="simon-btn" id="simonTop" viewBox="0 0 60 60" onclick="simonClick(0)">
+          <rect x="5" y="5" width="50" height="50" fill="#f5c518" stroke="#fff" stroke-width="3"/>
+        </svg>
+      </div>
+      <div></div>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <svg class="simon-btn" id="simonLeft" viewBox="0 0 60 60" onclick="simonClick(3)">
+          <rect x="5" y="5" width="50" height="50" fill="#44ff88" stroke="#fff" stroke-width="3"/>
+        </svg>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <div id="simonStart" onclick="startSimon()">
+          <span style="transform:rotate(-45deg);display:block;width:8px;height:8px;background:#888;"></span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <svg class="simon-btn" id="simonRight" viewBox="0 0 60 60" onclick="simonClick(1)">
+          <rect x="5" y="5" width="50" height="50" fill="#ff4444" stroke="#fff" stroke-width="3"/>
+        </svg>
+      </div>
+      <div></div>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <svg class="simon-btn" id="simonBottom" viewBox="0 0 60 60" onclick="simonClick(2)">
+          <rect x="5" y="5" width="50" height="50" fill="#4488ff" stroke="#fff" stroke-width="3"/>
+        </svg>
+      </div>
+      <div></div>
+    </div>
+    <div id="simonStatus"></div>
+    <div class="crack-overlay" id="northCrack" style="display:none;">
+      <svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="opacity:.9;" shape-rendering="crispEdges">
+        <rect width="400" height="600" fill="rgba(0,0,0,0.4)"/>
+        <polyline points="200,0 185,80 215,140 170,220 230,280 155,370 205,440 180,520 200,600" fill="none" stroke="#e8e8ff" stroke-width="6"/>
+        <polyline points="200,60 140,110 160,180 120,220" fill="none" stroke="#c0c0ee" stroke-width="4"/>
+        <polyline points="200,200 260,250 240,320 280,370" fill="none" stroke="#c0c0ee" stroke-width="4"/>
+        <polyline points="185,350 130,390 150,450 110,490" fill="none" stroke="#b0b0dd" stroke-width="3"/>
+        <polyline points="205,440 270,470 250,530" fill="none" stroke="#b0b0dd" stroke-width="3"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- EAST SCREEN -->
+<div id="eastScreen" class="screen section-screen hidden">
+  <div class="section-header">
+    <span style="font-size:9px;">EAST &#8211; PERCEPTION</span>
+    <button class="px-btn small" onclick="goBack()">&#8592; BACK</button>
+  </div>
+  <div class="section-body" id="eastBody">
+    <div id="eastStatus" style="display:none;"></div>
+    <div id="eastWheelWrap">
+      <svg id="eastWheelSvg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <g id="eastWheelGroup">
+          <rect x="80" y="10" width="40" height="10" fill="#4488ff"/>
+          <rect x="60" y="20" width="20" height="10" fill="#4488ff"/>
+          <rect x="120" y="20" width="20" height="10" fill="#4488ff"/>
+          <rect x="40" y="30" width="20" height="10" fill="#4488ff"/>
+          <rect x="140" y="30" width="20" height="10" fill="#4488ff"/>
+          <rect x="20" y="40" width="20" height="20" fill="#4488ff"/>
+          <rect x="160" y="40" width="20" height="20" fill="#4488ff"/>
+          <rect x="10" y="60" width="10" height="80" fill="#4488ff"/>
+          <rect x="180" y="60" width="10" height="80" fill="#4488ff"/>
+          <rect x="20" y="140" width="20" height="20" fill="#4488ff"/>
+          <rect x="160" y="140" width="20" height="20" fill="#4488ff"/>
+          <rect x="40" y="160" width="20" height="10" fill="#4488ff"/>
+          <rect x="140" y="160" width="20" height="10" fill="#4488ff"/>
+          <rect x="60" y="170" width="20" height="10" fill="#4488ff"/>
+          <rect x="120" y="170" width="20" height="10" fill="#4488ff"/>
+          <rect x="80" y="180" width="40" height="10" fill="#4488ff"/>
+          <!-- inner hole -->
+          <rect x="70" y="60" width="60" height="80" fill="#001a3d"/>
+          <rect x="60" y="70" width="80" height="60" fill="#001a3d"/>
+          <rect x="80" y="50" width="40" height="100" fill="#001a3d"/>
+          <!-- TOP: 1 dot -->
+          <rect x="96" y="22" width="8" height="8" fill="#fff"/>
+          <!-- RIGHT: 2 dots -->
+          <rect x="168" y="92" width="6" height="6" fill="#fff"/>
+          <rect x="168" y="102" width="6" height="6" fill="#fff"/>
+          <!-- BOTTOM: 3 dots -->
+          <rect x="90" y="168" width="6" height="6" fill="#fff"/>
+          <rect x="97" y="168" width="6" height="6" fill="#fff"/>
+          <rect x="104" y="168" width="6" height="6" fill="#fff"/>
+          <!-- LEFT: 4 dots -->
+          <rect x="26" y="88" width="6" height="6" fill="#fff"/>
+          <rect x="26" y="96" width="6" height="6" fill="#fff"/>
+          <rect x="26" y="104" width="6" height="6" fill="#fff"/>
+          <rect x="26" y="112" width="6" height="6" fill="#fff"/>
+        </g>
+        <!-- Fixed pointer -->
+        <polygon points="100,0 94,14 106,14" fill="#f0c040"/>
+      </svg>
+    </div>
+    <div id="eastProgress" style="font-size:8px;color:#4488ff;letter-spacing:2px;"></div>
+    <div class="crack-overlay" id="eastCrack" style="display:none;">
+      <svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="opacity:.9;" shape-rendering="crispEdges">
+        <rect width="400" height="600" fill="rgba(0,0,20,0.4)"/>
+        <polyline points="200,0 190,70 210,130 175,210 225,270 160,360 210,430 185,510 200,600" fill="none" stroke="#88aaff" stroke-width="6"/>
+        <polyline points="200,50 145,100 165,170 125,210" fill="none" stroke="#6688dd" stroke-width="4"/>
+        <polyline points="200,190 255,240 235,310 275,360" fill="none" stroke="#6688dd" stroke-width="4"/>
+        <polyline points="185,340 130,380 150,440 110,480" fill="none" stroke="#5577cc" stroke-width="3"/>
+        <polyline points="210,430 265,460 245,520" fill="none" stroke="#5577cc" stroke-width="3"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- SOUTH SCREEN -->
+<div id="southScreen" class="screen section-screen hidden">
+  <div class="section-header">
+    <span style="font-size:9px;">SOUTH &#8211; EMOTION</span>
+    <button class="px-btn small" onclick="goBack()">&#8592; BACK</button>
+  </div>
+  <div class="section-body" id="southBody">
+    <div style="position:relative;">
+      <div id="southIndicator">&#9660;</div>
+      <div id="southWheelWrap">
+        <svg id="southWheelSvg" viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+          <g id="southArrowsGroup"></g>
+        </svg>
+      </div>
+    </div>
+    <div id="southStatus" style="display:none;"></div>
+    <div id="southProgress" style="font-size:10px;color:#44ff88;text-align:center;letter-spacing:2px;"></div>
+    <div class="crack-overlay" id="southCrack" style="display:none;">
+      <svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="opacity:.9;" shape-rendering="crispEdges">
+        <rect width="400" height="600" fill="rgba(0,20,0,0.4)"/>
+        <polyline points="200,0 188,75 212,135 172,215 228,275 158,365 208,435 182,515 200,600" fill="none" stroke="#44ff88" stroke-width="6"/>
+        <polyline points="200,55 142,105 162,175 122,215" fill="none" stroke="#33cc66" stroke-width="4"/>
+        <polyline points="200,195 258,245 238,315 278,365" fill="none" stroke="#33cc66" stroke-width="4"/>
+        <polyline points="182,345 128,385 148,445 108,485" fill="none" stroke="#22aa44" stroke-width="3"/>
+        <polyline points="208,435 268,465 248,525" fill="none" stroke="#22aa44" stroke-width="3"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- WEST SCREEN -->
+<div id="westScreen" class="screen section-screen hidden">
+  <div class="section-header">
+    <span style="font-size:9px;">WEST &#8211; LOGIC</span>
+    <button class="px-btn small" onclick="goBack()">&#8592; BACK</button>
+  </div>
+  <div class="section-body" id="westBody">
+    <div id="westPuzzle">
+      <div id="westEncoded"></div>
+      <div id="westBlanks"></div>
+      <div id="westKeypad">
+        <button class="west-key" onclick="westKey(1)">1</button>
+        <button class="west-key" onclick="westKey(2)">2</button>
+        <button class="west-key" onclick="westKey(3)">3</button>
+        <button class="west-key" onclick="westKey(4)">4</button>
+        <button class="west-key" onclick="westKey(5)">5</button>
+        <button class="west-key" onclick="westKey(6)">6</button>
+        <button class="west-key" onclick="westKey(7)">7</button>
+        <button class="west-key" onclick="westKey(8)">8</button>
+        <button class="west-key" onclick="westKey(9)">9</button>
+        <button class="west-key" onclick="westKey(0)">0</button>
+      </div>
+      <div id="westStatus" style="display:none;"></div>
+    </div>
+    <div class="crack-overlay" id="westCrack" style="display:none;">
+      <svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="opacity:.9;" shape-rendering="crispEdges">
+        <rect width="400" height="600" fill="rgba(10,10,10,0.4)"/>
+        <polyline points="200,0 186,78 214,138 170,218 230,278 156,368 206,438 180,518 200,600" fill="none" stroke="#cccccc" stroke-width="6"/>
+        <polyline points="200,58 140,108 160,178 120,218" fill="none" stroke="#aaaaaa" stroke-width="4"/>
+        <polyline points="200,198 260,248 240,318 280,368" fill="none" stroke="#aaaaaa" stroke-width="4"/>
+        <polyline points="180,348 126,388 146,448 106,488" fill="none" stroke="#888888" stroke-width="3"/>
+        <polyline points="206,438 266,468 246,528" fill="none" stroke="#888888" stroke-width="3"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- JUMPSCARE OVERLAY -->
+<div id="jumpscareOverlay">
+  <div id="jumpscareStatic"></div>
+  <img id="entityImg" src="mindscape_entity.png" alt=""/>
+</div>
+
+<!-- VHS OVERLAY (permanent after anomaly) -->
+<div id="vhsOverlay"></div>
+
+<!-- CHAPTER 1 OVERLAYS -->
+<!-- Battle screen — sits over brainArea only, header/footer/bg visible -->
+<div id="battleScreen" class="hidden" style="position:fixed;top:60px;bottom:80px;left:0;right:0;background:rgba(0,0,0,.85);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div id="battleEnemyName" style="font-size:14px;color:#ff4444;letter-spacing:3px;"></div>
+  <div id="battleEnemyHp" style="font-size:10px;color:#ff6666;"></div>
+  <div id="battleLog" style="font-size:8px;color:#aaa;text-align:center;min-height:24px;max-width:320px;"></div>
+  <div style="display:flex;gap:12px;">
+    <button class="px-btn" id="btnAttack" onclick="battleAttack()">? ATTACK</button>
+    <button class="px-btn" id="btnEat" onclick="battleEat()">?? EAT</button>
+    <button class="px-btn danger" id="btnFlee" onclick="battleFlee()">?? FLEE</button>
+  </div>
+</div>
+<!-- Battle win screen -->
+<div id="battleWin" class="hidden" style="position:fixed;top:60px;bottom:80px;left:0;right:0;background:rgba(0,0,0,.85);z-index:51;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="font-size:14px;color:#f0c040;">VICTORY!</div>
+  <div id="battleReward" style="font-size:9px;color:#aaa;text-align:center;white-space:pre-line;"></div>
+  <button class="px-btn" onclick="closeBattleWin()">CONTINUE</button>
+</div>
+<!-- Shop screen -->
+<div id="shopScreen" class="hidden" style="position:fixed;top:60px;bottom:80px;left:0;right:0;background:rgba(0,0,0,.85);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="font-size:14px;color:#f0c040;letter-spacing:3px;">SHOP</div>
+  <div style="display:flex;flex-direction:column;gap:10px;width:300px;">
+    <div class="shop-item" onclick="buyItem('neurofiber')">
+      <span>? Neurofiber</span><span style="color:#aaa;font-size:8px;">+1 Heart</span><span style="color:#f0c040;">10??</span>
+    </div>
+    <div class="shop-item" onclick="buyItem('risperidone')">
+      <span>?? Risperidone</span><span style="color:#aaa;font-size:8px;">+10% Sanity</span><span style="color:#f0c040;">25??</span>
+    </div>
+    <div class="shop-item" id="shopBlueKeyItem" onclick="buyItem('bluekey')">
+      <span>?? Blue Key</span><span style="color:#aaa;font-size:8px;">Mysterious...</span><span style="color:#f0c040;">100??</span>
+    </div>
+  </div>
+  <div id="shopMsg" style="font-size:8px;color:#ff4444;min-height:16px;"></div>
+  <button class="px-btn" onclick="closeShop()">? CLOSE</button>
+</div>
+<!-- Keys screen -->
+<div id="keysScreen" class="hidden" style="position:fixed;top:60px;bottom:80px;left:0;right:0;background:rgba(0,0,0,.85);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;">
+  <div style="font-size:14px;color:#f0c040;letter-spacing:3px;">LOCKS</div>
+  <div style="display:flex;gap:32px;">
+    <div class="key-lock" id="lockRed" onclick="useLock('red')" style="border-color:#ff4444;">
+      <div style="font-size:28px;">??</div>
+      <div style="font-size:7px;color:#ff4444;">RED</div>
+    </div>
+    <div class="key-lock" id="lockBlue" onclick="useLock('blue')" style="border-color:#4488ff;">
+      <div style="font-size:28px;">??</div>
+      <div style="font-size:7px;color:#4488ff;">BLUE</div>
+    </div>
+    <div class="key-lock" id="lockGreen" onclick="useLock('green')" style="border-color:#44ff88;">
+      <div style="font-size:28px;">??</div>
+      <div style="font-size:7px;color:#44ff88;">GREEN</div>
+    </div>
+  </div>
+  <button class="px-btn" onclick="closeKeys()">? CLOSE</button>
+</div>
+<!-- CHAPTER 2 MAZE SCREEN -->
+<div id="mazeScreen" class="hidden" style="position:fixed;inset:0;z-index:200;background:#000;filter:grayscale(1);">
+  <canvas id="mazeCanvas" style="width:100%;height:100%;display:block;image-rendering:pixelated;"></canvas>
+  <!-- Crosshair -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:8px;height:8px;pointer-events:none;">
+    <div style="position:absolute;top:3px;left:0;width:8px;height:2px;background:rgba(255,255,255,0.6);"></div>
+    <div style="position:absolute;top:0;left:3px;width:2px;height:8px;background:rgba(255,255,255,0.6);"></div>
+  </div>
+  <!-- Floor indicator -->
+  <div id="mazeFloorLabel" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,0.5);pointer-events:none;"></div>
+  <!-- VHS overlay on maze -->
+  <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,0,.01) 3px,rgba(0,255,0,.01) 4px);"></div>
+</div>
+
+<!-- CHAPTER 3 SCREEN -->
+<div id="chapter3Screen" class="hidden" style="position:fixed;inset:0;z-index:9500;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;opacity:0;transition:opacity 1s;">
+  <div style="font-size:clamp(24px,5vw,48px);color:#fff;letter-spacing:6px;font-family:'Press Start 2P',monospace;">CHAPTER III</div>
+  <div style="font-size:clamp(8px,1.5vw,14px);color:rgba(255,255,255,0.6);letter-spacing:3px;font-family:'Press Start 2P',monospace;">Depths of the Mind</div>
+  <button class="px-btn" id="ch3ContinueBtn" style="margin-top:24px;opacity:0;transition:opacity 1s;" onclick="enterChapter3()">CONTINUE</button>
+</div>
+<div id="sanityStatic" style="position:fixed;inset:0;pointer-events:none;z-index:9990;opacity:0;background-image:url('mindscape_static.gif');background-size:cover;transition:opacity .5s;"></div>
+<!-- Entity flicker -->
+<img id="entityFlicker" src="mindscape_entity.png" style="position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none;z-index:9991;display:none;"/>
+
+<!-- GREEN KEY VOID REGION -->
+<div id="voidRegion" class="hidden" style="position:fixed;inset:0;z-index:8000;background:#000;display:flex;align-items:center;justify-content:center;">
+  <div id="voidStaticBg" style="position:absolute;inset:0;background-image:url('mindscape_static.gif');background-size:cover;opacity:1;"></div>
+  <button id="voidKeyBtn" onclick="voidKeyClick()" style="position:relative;z-index:1;font-size:48px;background:none;border:none;cursor:pointer;filter:drop-shadow(0 0 20px #fff);">??</button>
+</div>
+
+<!-- GREEN KEY CUTSCENE -->
+<div id="greenCutscene" class="hidden" style="position:fixed;inset:0;z-index:8100;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;">
+  <div id="gcTextBox" style="font-family:'Press Start 2P',monospace;font-size:11px;color:#fff;text-align:center;max-width:400px;line-height:2;border:2px solid #444;padding:20px;background:#0a0a0a;min-height:60px;"></div>
+  <input id="gcNameInput" type="text" maxlength="10" placeholder="Enter name..." style="display:none;font-family:'Press Start 2P',monospace;font-size:12px;background:#111;border:2px solid #aaa;color:#fff;padding:8px 12px;text-align:center;outline:none;"/>
+  <div id="gcChoices" style="display:none;flex-direction:row;gap:20px;">
+    <button id="gcCutBtn" class="px-btn" onclick="gcChooseCut()">Cut</button>
+    <button id="gcSpareBtn" class="px-btn" onclick="gcChooseSpare()">Spare</button>
+  </div>
+  <button id="gcNextBtn" class="px-btn" onclick="gcNext()" style="display:none;">NEXT</button>
+  <!-- Spare popup — injected over the spare button by JS -->
+  <div id="gcSparePopup" style="display:none;position:absolute;background:#0a0a0a;border:3px solid #ff4444;padding:20px 24px;font-family:'Press Start 2P',monospace;font-size:9px;color:#ff4444;text-align:center;min-width:200px;z-index:9999;pointer-events:all;">
+    <span id="gcSpareMsg"></span>
+    <button onclick="gcClosePopup()" style="position:absolute;top:4px;right:8px;background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;">?</button>
+  </div>
+</div>
+
+<!-- CHAPTER 2 SCREEN -->
+<div id="chapter2Screen" class="hidden" style="position:fixed;inset:0;z-index:9500;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;opacity:0;transition:opacity 1s;">
+  <div style="font-size:clamp(24px,5vw,48px);color:#fff;letter-spacing:6px;font-family:'Press Start 2P',monospace;">CHAPTER II</div>
+  <div style="font-size:clamp(8px,1.5vw,14px);color:rgba(255,255,255,0.6);letter-spacing:3px;font-family:'Press Start 2P',monospace;">The Tunnels</div>
+  <button class="px-btn" id="ch2ContinueBtn" style="margin-top:24px;opacity:0;transition:opacity 1s;" onclick="enterChapter2()">CONTINUE</button>
+</div>
+
+<!-- AUDIO -->
+<audio id="audioTitle" src="mindscape_title.mp3" loop></audio>
+<audio id="audioMusic" src="mindscape_music.mp3" loop></audio>
+<audio id="audioNorth" src="mindscape_north.mp3" loop></audio>
+<audio id="audioEast" src="mindscape_east.mp3" loop></audio>
+<audio id="audioSouth" src="mindscape_south.mp3" loop></audio>
+<audio id="audioWest" src="mindscape_west.mp3" loop></audio>
+<audio id="audioPhase1" src="mindscape_phase1.mp3" loop></audio>
+<audio id="audioPhase2" src="mindscape_phase2.mp3" loop></audio>
+<audio id="audioChapter1" src="mindscape_chapter1.mp3" loop></audio>
+<audio id="audioBattle" src="mindscape_battle.mp3" loop></audio>
+<audio id="audioCut" src="mindscape_cut.mp3"></audio>
+<audio id="audioCut2" src="mindscape_cut2.mp3"></audio>
+<audio id="audioPhase3" src="mindscape_phase3.mp3" loop></audio>
+<audio id="audioFootstep" src="mindscape_footstep.mp3"></audio>
+<audio id="audioButton" src="mindscape_button.mp3"></audio>
+<audio id="audioChime" src="mindscape_chime.mp3"></audio>
+<audio id="audioWoosh" src="mindscape_woosh.mp3"></audio>
+<audio id="audioDing" src="mindscape_ding.mp3"></audio>
+<audio id="audioExplode" src="mindscape_explode.mp3"></audio>
+<audio id="audioJumpscare" src="mindscape_jumpscare.mp3"></audio>
+<audio id="audioGlitch" src="mindscape_glitch.mp3"></audio>
+
+<script>
+/* ================================================================
+   MINDSCAPE – CORE ENGINE
+================================================================ */
+const SAVE_KEY = 'mindscape_save';
+let muted = false;
+let gameState = {
+  hp:3, sanity:100, day:1, started:false, warnSeen:false,
+  northSolved:false, eastSolved:false, southSolved:false, westSolved:false,
+  southArrows:[], eastProgress:[], simonRound:0, simonSequence:[],
+  anomalyTriggered:false,
+  settingsGlitchPresses:0, settingsCorrupted:false,
+  titleGlitchPresses:0, titleCorrupted:false,
+  brainSpamCount:0, brainCorrupted:false,
+  chapter1Started:false,
+  coins:0, redKey:false, blueKey:false, greenKey:false,
+  redKeyOpened:false, blueKeyOpened:false,
+  playerName:'', inCutscene:false, cutsceneStep:0, spareAttempts:0,
+  chapter2Started:false, mazeFloor:1, chapter3Started:false
+};
+
+// -- SAVE/LOAD --
+function saveGame(){localStorage.setItem(SAVE_KEY,JSON.stringify(gameState));showSaveIndicator();}
+function loadGame(){const r=localStorage.getItem(SAVE_KEY);if(r){try{gameState=JSON.parse(r);return true;}catch(e){}}return false;}
+function hasSave(){return!!localStorage.getItem(SAVE_KEY);}
+function showSaveIndicator(){const el=document.getElementById('saveIndicator');el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2500);}
+setInterval(()=>{if(gameState.started)saveGame();},5*60*1000);
+
+// -- AUDIO --
+function playSound(id){if(muted)return;const a=document.getElementById(id);if(!a)return;a.currentTime=0;a.play().catch(()=>{});}
+function fadeIn(el,dur=3000,vol=0.7){if(!el)return;if(muted){el.volume=0;return;}el.volume=0;el.play().catch(()=>{});const s=60,iv=dur/s;let i=0;const t=setInterval(()=>{i++;el.volume=Math.min(vol,(i/s)*vol);if(i>=s)clearInterval(t);},iv);}
+function fadeOut(el,dur=2000){if(!el)return;const s=40,iv=dur/s,sv=el.volume;let i=0;const t=setInterval(()=>{i++;el.volume=Math.max(0,sv*(1-i/s));if(i>=s){clearInterval(t);el.pause();}},iv);}
+
+// -- UTILS --
+function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+function rand(n){return Math.floor(Math.random()*n);}
+// Stubs — overridden by puzzle scripts
+function stopSimon(){}
+function westCleanupAntiCheat(){}
+
+const TRANS_TIPS=[
+  'Tired of sound? Mute it in the settings!',
+  'Scared of losing progress? Save manually in the settings!'
+];
+
+// -- TRANSITIONS --
+function slideIn(){
+  return new Promise(resolve=>{
+    const el=document.getElementById('transOverlay');
+    el.classList.remove('hidden');
+    el.style.transition='none';
+    el.style.transform='translateX(100%)';
+    void el.offsetWidth;
+    el.style.transition='transform 0.5s ease-in-out';
+    el.style.transform='translateX(0)';
+    setTimeout(resolve,520);
+  });
+}
+function slideOut(){
+  return new Promise(resolve=>{
+    const el=document.getElementById('transOverlay');
+    el.style.transition='transform 0.5s ease-in-out';
+    el.style.transform='translateX(-100%)';
+    setTimeout(()=>{
+      el.classList.add('hidden');
+      el.style.transition='none';
+      el.style.transform='translateX(100%)';
+      resolve();
+    },520);
+  });
+}
+
+// currentBgAudio = the audio element currently playing as background
+let currentBgAudio = null;
+
+async function doTransition(outAudio, inAudio){
+  // Pick a random tip
+  document.getElementById('transTip').textContent=TRANS_TIPS[rand(TRANS_TIPS.length)];
+  playSound('audioWoosh');
+  await slideIn();
+  // Fade out current bg audio during hold
+  if(outAudio) fadeOut(outAudio, 1200);
+  await wait(5000);
+  playSound('audioWoosh');
+  await slideOut();
+  // Fade in new bg audio after reveal
+  if(inAudio) fadeIn(inAudio, 2000, 0.7);
+}
+
+// -- SCREEN MANAGEMENT --
+const ALL_SCREENS=['titleScreen','gameScreen','northScreen','eastScreen','southScreen','westScreen'];
+function showOnly(id){
+  ALL_SCREENS.forEach(s=>{const el=document.getElementById(s);if(el)el.classList.add('hidden');});
+  if(id)document.getElementById(id).classList.remove('hidden');
+  // Keep chapter1 menu buttons only visible on gameScreen
+  if(typeof updateMenuBtnVisibility==='function') updateMenuBtnVisibility();
+}
+
+// -- INIT --
+window.addEventListener('load',()=>{
+  if(hasSave()){loadGame();document.getElementById('startBtn').textContent='RESUME';}
+  // Apply persistent states
+  if(gameState.anomalyTriggered){
+    document.body.classList.add('vhs-mode','anomaly-locked');
+  }
+  if(gameState.settingsCorrupted) applySettingsCorrupted(true);
+  if(gameState.titleCorrupted) applyTitleCorrupted(true);
+  // brainCorrupted=true means explosion already happened (chapter1 handles restore)
+  // titleCorrupted=true but brainCorrupted=false means brain is spammable
+  if(gameState.titleCorrupted&&!gameState.brainCorrupted&&!gameState.chapter1Started){
+    applyBrainCorrupted(true);
+  }
+  if(gameState.chapter1Started){
+    document.body.classList.add('chapter1-mode');
+    // Restore reset button, hide ??? button
+    document.getElementById('resetBtn').classList.remove('hidden');
+    document.getElementById('titleGlitchBtn').classList.add('hidden');
+    // Restore header buttons
+    const sb=document.getElementById('settingsBtn');
+    if(sb){sb.classList.remove('void-btn');sb.textContent='\u2699 SETTINGS';sb.style.cssText='';delete sb.dataset.tentacled;Array.from(sb.querySelectorAll('.void-tentacle-arm')).forEach(a=>a.remove());}
+    const bb=document.getElementById('backBtn');
+    if(bb){bb.classList.remove('void-btn');bb.textContent='\u2190 BACK';bb.style.cssText='';delete bb.dataset.tentacled;Array.from(bb.querySelectorAll('.void-tentacle-arm')).forEach(a=>a.remove());}
+    // Rebuild settings panel
+    const panel=document.getElementById('settingsPanel');
+    if(panel&&!panel.querySelector('#settingsSaveBtn')){
+      panel.innerHTML=`<h2>&#9881; SETTINGS</h2><div class="settings-row" id="settingsSoundRow"><span>SOUND</span><div id="muteToggle" onclick="toggleMute()"></div><span id="muteLabel">ON</span></div><button class="px-btn" id="settingsSaveBtn" style="margin-top:8px;" onclick="manualSave()">&#128190; SAVE GAME</button><button class="px-btn" id="settingsCloseBtn" style="margin-top:8px;" onclick="closeSettings()">&#10005; CLOSE</button>`;
+    }
+    // Apply chapter1 UI
+    applyChapter1UI();
+    // Resume cutscene if was in one
+    if(gameState.inCutscene){
+      setTimeout(()=>resumeCutscene(),500);
+    }
+  }
+  if(gameState.chapter2Started){
+    // Reload into chapter 2 — go straight to maze
+    setTimeout(()=>enterChapter2(),500);
+  }
+  // Ash particles persist from settings corruption onward
+  if(gameState.settingsCorrupted||gameState.titleCorrupted){
+    startAshParticles();
+  }
+  // Show glitch btn in settings if anomaly triggered but settings not yet corrupted
+  if(gameState.anomalyTriggered&&!gameState.settingsCorrupted){
+    document.getElementById('glitchBtn').classList.remove('hidden');
+  }
+  // Show glitch btn on title if settings corrupted but title not yet corrupted
+  if(gameState.settingsCorrupted&&!gameState.titleCorrupted){
+    document.getElementById('titleGlitchBtn').classList.remove('hidden');
+    document.getElementById('resetBtn').classList.add('hidden');
+  }
+
+  const overlay=document.getElementById('titleOverlay');
+  const content=document.getElementById('titleContent');
+  // Title screen always plays title music (even in chapter 1)
+  const shouldPlayTitle=!gameState.anomalyTriggered||gameState.chapter1Started;
+  setTimeout(()=>{
+    overlay.style.transition='opacity 3s';overlay.style.opacity='0';
+    content.style.transition='opacity 2s';content.style.opacity='1';
+    if(shouldPlayTitle) fadeIn(document.getElementById('audioTitle'),3000,0.6);
+    else fadeIn(document.getElementById('audioPhase1'),3000,0.6);
+  },300);
+  const unlock=()=>{
+    if(shouldPlayTitle){const t=document.getElementById('audioTitle');if(t.paused&&!muted)fadeIn(t,3000,0.6);}
+    else{const t=document.getElementById('audioPhase1');if(t.paused&&!muted)fadeIn(t,3000,0.6);}
+    document.removeEventListener('click',unlock);
+  };
+  document.addEventListener('click',unlock);
+
+  // Brain hover/click
+  document.querySelectorAll('.brain-section').forEach(g=>{
+    const hc=g.dataset.hover;
+    const rects=g.querySelectorAll('rect:not([fill="transparent"])');
+    const orig=[];rects.forEach(r=>orig.push(r.getAttribute('fill')));
+    g.addEventListener('mouseenter',()=>rects.forEach(r=>r.setAttribute('fill',hc)));
+    g.addEventListener('mouseleave',()=>rects.forEach((r,i)=>r.setAttribute('fill',orig[i])));
+    g.addEventListener('click',()=>navigateTo(g.dataset.section+'Screen'));
+  });
+
+  setupCheatCode();
+});
+
+// -- TITLE BUTTONS --
+function handleStart(){
+  playSound('audioButton');
+  const isResume=hasSave();
+  const titleAudio=document.getElementById('audioTitle');
+  if(!isResume){
+    playSound('audioChime');
+    (async()=>{
+      await doTransition(titleAudio, null);
+      showOnly(null);
+      const ws=document.getElementById('warnScreen');
+      ws.classList.remove('hidden');
+      await wait(100);
+      ws.style.opacity='1';
+      const cb=document.getElementById('warnContinueBtn');
+      cb.style.opacity='0';
+      await wait(2000);
+      cb.style.transition='opacity 1s';
+      cb.style.opacity='1';
+    })();
+  } else {
+    (async()=>{
+      const bgAudio=getActiveBgMusic();
+      await doTransition(currentBgAudio||titleAudio, bgAudio);
+      showOnly('gameScreen');
+      currentBgAudio=bgAudio;
+      gameState.started=true;
+      updateUI();
+    })();
+  }
+}
+
+function warnContinue(){
+  playSound('audioButton');
+  gameState.warnSeen=true;
+  const ws=document.getElementById('warnScreen');
+  const bgAudio=getActiveBgMusic();
+  (async()=>{
+    await doTransition(null, bgAudio);
+    ws.style.opacity='0';
+    setTimeout(()=>ws.classList.add('hidden'),500);
+    showOnly('gameScreen');
+    currentBgAudio=bgAudio;
+    gameState.started=true;
+    saveGame();
+    updateUI();
+  })();
+}
+
+function handleReset(){playSound('audioButton');document.getElementById('resetWarning').classList.remove('hidden');}
+function confirmReset(){
+  playSound('audioButton');
+  localStorage.removeItem(SAVE_KEY);
+  gameState={hp:3,sanity:100,day:1,started:false,warnSeen:false,northSolved:false,eastSolved:false,southSolved:false,westSolved:false,southArrows:[],eastProgress:[],simonRound:0,simonSequence:[],anomalyTriggered:false,settingsGlitchPresses:0,settingsCorrupted:false,titleGlitchPresses:0,titleCorrupted:false,brainSpamCount:0,brainCorrupted:false,chapter1Started:false,coins:0,redKey:false,blueKey:false,greenKey:false,redKeyOpened:false,blueKeyOpened:false,playerName:'',inCutscene:false,cutsceneStep:0,spareAttempts:0,chapter2Started:false,mazeFloor:1};
+  document.getElementById('startBtn').textContent='START';
+  document.getElementById('resetWarning').classList.add('hidden');
+  // Reload page to fully reset all state
+  window.location.reload();
+}
+function cancelReset(){playSound('audioButton');document.getElementById('resetWarning').classList.add('hidden');}
+
+// -- NAVIGATION --
+function getActiveBgMusic(){
+  if(gameState.chapter1Started) return document.getElementById('audioChapter1');
+  if(gameState.anomalyTriggered) return document.getElementById('audioPhase1');
+  return document.getElementById('audioMusic');
+}
+
+const SECTION_MUSIC={
+  northScreen:'audioNorth',
+  eastScreen:'audioEast',
+  southScreen:'audioSouth',
+  westScreen:'audioWest'
+};
+
+function goToTitle(){
+  playSound('audioButton');
+  stopSimon();
+  stopSouthWheel();
+  cleanupEast();
+  westCleanupAntiCheat();
+  const outAudio=currentBgAudio;
+  (async()=>{
+    await doTransition(outAudio, null);
+    // Stop all bg music
+    ['audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+      const a=document.getElementById(id);if(a&&!a.paused){a.pause();a.currentTime=0;}
+    });
+    showOnly('titleScreen');
+    // Title always gets title music
+    const titleAudio=document.getElementById('audioTitle');
+    currentBgAudio=titleAudio;
+    document.getElementById('startBtn').textContent='RESUME';
+    const overlay=document.getElementById('titleOverlay');
+    overlay.style.transition='none';overlay.style.opacity='1';
+    await wait(50);
+    overlay.style.transition='opacity 1.5s';overlay.style.opacity='0';
+    fadeIn(titleAudio,2000,0.6);
+  })();
+}
+
+function navigateTo(screenId){
+  playSound('audioButton');
+  stopSimon();
+  stopSouthWheel();
+  cleanupEast();
+  westCleanupAntiCheat();
+  const outAudio=currentBgAudio;
+  // In phase1/chapter1, keep playing that track everywhere — don't switch to section music
+  const inAudioId = (gameState.anomalyTriggered||gameState.chapter1Started)
+    ? (gameState.chapter1Started ? 'audioChapter1' : 'audioPhase1')
+    : (SECTION_MUSIC[screenId]||'audioMusic');
+  const inAudio=document.getElementById(inAudioId);
+  (async()=>{
+    await doTransition(outAudio, inAudio);
+    ['audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+      if(id!==inAudioId){const a=document.getElementById(id);if(a&&!a.paused){a.pause();a.currentTime=0;}}
+    });
+    currentBgAudio=inAudio;
+    showOnly(screenId);
+    initSection(screenId);
+  })();
+}
+
+function goBack(){
+  playSound('audioButton');
+  stopSimon();
+  stopSouthWheel();
+  cleanupEast();
+  westCleanupAntiCheat();
+  const outAudio=currentBgAudio;
+  const bgAudio=getActiveBgMusic();
+  (async()=>{
+    await doTransition(outAudio, bgAudio);
+    ['audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+      if(id!==bgAudio.id){const a=document.getElementById(id);if(a&&!a.paused){a.pause();a.currentTime=0;}}
+    });
+    currentBgAudio=bgAudio;
+    showOnly('gameScreen');
+    updateUI();
+  })();
+}
+
+function initSection(id){
+  if(id==='northScreen')initNorth();
+  else if(id==='eastScreen')initEast();
+  else if(id==='southScreen')initSouth();
+  else if(id==='westScreen')initWest();
+}
+
+// -- GAME UI --
+function updateUI(){
+  for(let i=1;i<=3;i++)document.getElementById('heart'+i).classList.toggle('lost',i>gameState.hp);
+  const pct=Math.max(0,Math.min(100,gameState.sanity));
+  document.getElementById('saneFill').style.width=pct+'%';
+  document.getElementById('saneLabel').textContent=pct+'%';
+  // Check all-solved state
+  const allSolved=gameState.northSolved&&gameState.eastSolved&&gameState.southSolved&&gameState.westSolved;
+  const brainArea=document.getElementById('brainArea');
+  const cracks=document.getElementById('brainCracks');
+  if(allSolved&&!gameState.anomalyTriggered){
+    brainArea.classList.add('brain-all-solved');
+    if(cracks)cracks.style.display='block';
+  } else {
+    brainArea.classList.remove('brain-all-solved');
+    if(cracks)cracks.style.display='none';
+  }
+  // Chapter 1 UI
+  if(gameState.chapter1Started){
+    const coinEl=document.getElementById('coinCount');
+    if(coinEl)coinEl.textContent=gameState.coins||0;
+    applySanityEffects(pct);
+    // Zero sanity: start heart drain
+    if(gameState.sanity<=0&&!zeroSanityInterval&&!phase2Active){
+      zeroSanityInterval=setInterval(()=>{
+        if(gameState.sanity>0||phase2Active){clearInterval(zeroSanityInterval);zeroSanityInterval=null;return;}
+        gameState.hp=Math.max(0,gameState.hp-1);
+        triggerHeartLoss();
+        updateUI();
+        if(gameState.hp<=0){
+          clearInterval(zeroSanityInterval);zeroSanityInterval=null;
+          chapter1Death();
+        }
+      },10000);
+    } else if(gameState.sanity>0&&zeroSanityInterval){
+      clearInterval(zeroSanityInterval);zeroSanityInterval=null;
+    }
+  }
+}
+
+// -- SETTINGS --
+function openSettings(){playSound('audioButton');document.getElementById('settingsPanel').classList.remove('hidden');}
+function closeSettings(){playSound('audioButton');document.getElementById('settingsPanel').classList.add('hidden');}
+function toggleMute(){
+  muted=!muted;
+  const mt=document.getElementById('muteToggle');
+  if(mt)mt.classList.toggle('muted',muted);
+  const ml=document.getElementById('muteLabel');
+  if(ml)ml.textContent=muted?'OFF':'ON';
+  // Mute/unmute every audio element in the game
+  document.querySelectorAll('audio').forEach(a=>{
+    if(muted){a.volume=0;}
+    else{
+      // Only restore volume on currently playing tracks
+      if(!a.paused)a.volume=0.7;
+    }
+  });
+}
+function manualSave(){playSound('audioButton');saveGame();closeSettings();}
+
+// -- HELPER: stop all audio --
+function stopAllAudio(){
+  ['audioTitle','audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+    const a=document.getElementById(id);if(a){a.pause();a.currentTime=0;a.volume=0;}
+  });
+}
+
+// -- SETTINGS GLITCH BUTTON --
+let glitchBtnPresses=0;
+let glitchCooldown=false;
+let settingsCrackLevel=0;
+
+function glitchBtnPress(){
+  if(glitchCooldown||gameState.settingsCorrupted)return;
+  playSound('audioGlitch');
+  glitchBtnPresses++;
+  gameState.settingsGlitchPresses=glitchBtnPresses;
+  glitchCooldown=true;
+  document.getElementById('glitchBtn').classList.add('on-cooldown');
+  setTimeout(()=>{
+    glitchCooldown=false;
+    if(!gameState.settingsCorrupted)document.getElementById('glitchBtn').classList.remove('on-cooldown');
+  },3000);
+
+  // Grow cracks
+  settingsCrackLevel=glitchBtnPresses;
+  growSettingsCracks(settingsCrackLevel);
+  spawnElectricParticles('glitchBtn',glitchBtnPresses*3);
+  shakeSettingsButtons(glitchBtnPresses);
+
+  if(glitchBtnPresses>=5){
+    setTimeout(()=>corruptSettings(),800);
+  }
+}
+
+function growSettingsCracks(level){
+  const svg=document.getElementById('settingsCrackSvg');
+  if(!svg)return;
+  document.getElementById('settingsCracks').classList.remove('hidden');
+  svg.innerHTML='';
+  const cx=400,cy=300;
+  const branches=level*3;
+  for(let i=0;i<branches;i++){
+    const angle=(i/branches)*Math.PI*2;
+    const len=60+level*30+Math.random()*40;
+    const pts=generateCrackPath(cx,cy,angle,len,level);
+    const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+    poly.setAttribute('points',pts);
+    poly.setAttribute('fill','none');
+    poly.setAttribute('stroke',`rgba(255,255,255,${0.3+level*0.1})`);
+    poly.setAttribute('stroke-width',String(1+level*0.4));
+    svg.appendChild(poly);
+  }
+}
+
+function generateCrackPath(x,y,angle,len,level){
+  let pts=`${x},${y}`;
+  let cx=x,cy=y,a=angle;
+  const steps=4+level;
+  const stepLen=len/steps;
+  for(let i=0;i<steps;i++){
+    a+=((Math.random()-0.5)*0.8);
+    cx+=Math.cos(a)*stepLen;cy+=Math.sin(a)*stepLen;
+    pts+=` ${cx.toFixed(1)},${cy.toFixed(1)}`;
+  }
+  return pts;
+}
+
+function spawnElectricParticles(btnId,count){
+  const btn=document.getElementById(btnId);
+  if(!btn)return;
+  const rect=btn.getBoundingClientRect();
+  const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+  for(let i=0;i<count;i++){
+    const p=document.createElement('div');
+    p.className='elec-particle';
+    const angle=Math.random()*Math.PI*2;
+    const dist=40+Math.random()*80;
+    p.style.setProperty('--ex',`${Math.cos(angle)*dist}px`);
+    p.style.setProperty('--ey',`${Math.sin(angle)*dist}px`);
+    p.style.left=cx+'px';p.style.top=cy+'px';
+    const colors=['#00ffff','#ff00ff','#ffff00','#ffffff','#ff4400'];
+    p.style.background=colors[Math.floor(Math.random()*colors.length)];
+    p.style.animationDuration=(0.3+Math.random()*0.4)+'s';
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),800);
+  }
+}
+
+function shakeSettingsButtons(level){
+  const btns=document.querySelectorAll('#settingsPanel .px-btn:not(#glitchBtn)');
+  btns.forEach((b,i)=>{
+    const intensity=level*2;
+    b.style.transform=`translate(${(Math.random()-0.5)*intensity}px,${(Math.random()-0.5)*intensity}px)`;
+    setTimeout(()=>b.style.transform='',300);
+  });
+}
+
+async function corruptSettings(){
+  // Flash colors fast
+  const overlay=document.getElementById('jumpscareOverlay');
+  overlay.style.display='block';
+  const fi=setInterval(()=>{
+    const r=rand(256),g=rand(256),b=rand(256);
+    overlay.style.backgroundColor=`rgb(${r},${g},${b})`;
+  },30);
+  await wait(600);
+  clearInterval(fi);overlay.style.backgroundColor='transparent';overlay.style.display='none';
+
+  // Fall off all settings elements
+  const panel=document.getElementById('settingsPanel');
+  const children=Array.from(panel.children);
+  children.forEach((el,i)=>{
+    el.style.setProperty('--rot',(Math.random()-0.5)*40+'deg');
+    el.style.animationDelay=(i*0.08)+'s';
+    el.classList.add('falling');
+  });
+  await wait(1400);
+
+  // Hide panel, corrupt settings button
+  closeSettings();
+  panel.innerHTML=''; // clear fallen elements
+  // Rebuild panel with just the void button
+  panel.innerHTML='<button class="px-btn void-btn" id="settingsBtnVoid" onclick="openSettings()">&#9608;&#9608;&#9608;</button>';
+
+  // Corrupt the settings button in header
+  const sb=document.getElementById('settingsBtn');
+  if(sb){sb.classList.add('void-btn');sb.textContent='???';addTentacleArms(sb);}
+
+  // Drop sanity 2%
+  gameState.sanity=Math.max(0,gameState.sanity-2);
+  gameState.settingsCorrupted=true;
+  gameState.settingsGlitchPresses=glitchBtnPresses;
+
+  // Start ash particles
+  startAshParticles();
+
+  // Show ??? on title screen (replace RESET)
+  document.getElementById('resetBtn').classList.add('hidden');
+  document.getElementById('titleGlitchBtn').classList.remove('hidden');
+
+  updateUI();
+  saveGame();
+}
+
+function applySettingsCorrupted(silent){
+  glitchBtnPresses=gameState.settingsGlitchPresses||5;
+  const sb=document.getElementById('settingsBtn');
+  if(sb){sb.classList.add('void-btn');sb.textContent='???';addTentacleArms(sb);}
+  const panel=document.getElementById('settingsPanel');
+  if(panel&&!silent){
+    panel.innerHTML='<button class="px-btn void-btn" id="settingsBtnVoid">&#9608;&#9608;&#9608;</button>';
+  }
+  document.getElementById('resetBtn').classList.add('hidden');
+  document.getElementById('titleGlitchBtn').classList.remove('hidden');
+}
+
+// -- TITLE GLITCH BUTTON --
+let titleGlitchPresses=0;
+let titleGlitchCooldown=false;
+let titleCrackLevel=0;
+
+function titleGlitchBtnPress(){
+  if(titleGlitchCooldown||gameState.titleCorrupted)return;
+  playSound('audioGlitch');
+  titleGlitchPresses++;
+  gameState.titleGlitchPresses=titleGlitchPresses;
+  titleGlitchCooldown=true;
+  document.getElementById('titleGlitchBtn').classList.add('on-cooldown');
+  setTimeout(()=>{
+    titleGlitchCooldown=false;
+    if(!gameState.titleCorrupted)document.getElementById('titleGlitchBtn').classList.remove('on-cooldown');
+  },3000);
+
+  titleCrackLevel=titleGlitchPresses;
+  spawnElectricParticles('titleGlitchBtn',titleGlitchPresses*3);
+  shakeTitleButtons(titleGlitchPresses);
+
+  if(titleGlitchPresses>=5){
+    setTimeout(()=>corruptTitle(),800);
+  }
+}
+
+function shakeTitleButtons(level){
+  const btns=document.querySelectorAll('#titleContent .px-btn:not(#titleGlitchBtn)');
+  btns.forEach(b=>{
+    const intensity=level*2;
+    b.style.transform=`translate(${(Math.random()-0.5)*intensity}px,${(Math.random()-0.5)*intensity}px)`;
+    setTimeout(()=>b.style.transform='',300);
+  });
+}
+
+async function corruptTitle(){
+  const overlay=document.getElementById('jumpscareOverlay');
+  overlay.style.display='block';
+  const fi=setInterval(()=>{
+    const r=rand(256),g=rand(256),b=rand(256);
+    overlay.style.backgroundColor=`rgb(${r},${g},${b})`;
+  },30);
+  await wait(600);
+  clearInterval(fi);overlay.style.backgroundColor='transparent';overlay.style.display='none';
+
+  // Fall off title content
+  const content=document.getElementById('titleContent');
+  Array.from(content.children).forEach((el,i)=>{
+    el.style.setProperty('--rot',(Math.random()-0.5)*40+'deg');
+    el.style.animationDelay=(i*0.1)+'s';
+    el.classList.add('falling');
+  });
+  await wait(1500);
+
+  // Corrupt back button
+  const bb=document.getElementById('backBtn');
+  if(bb){bb.classList.add('void-btn');bb.textContent='???';addTentacleArms(bb);}
+
+  gameState.titleCorrupted=true;
+  gameState.titleGlitchPresses=titleGlitchPresses;
+
+  // Strengthen VHS
+  document.body.classList.add('vhs-strong');
+
+  // Start ash particles
+  startAshParticles();
+
+  // Now brain is spammable — auto-navigate to game screen
+  applyBrainCorrupted(false);
+  updateUI();
+  saveGame();
+
+  // Auto-navigate to game screen so player isn't softlocked on title
+  await wait(800);
+  const bgAudio=getActiveBgMusic();
+  await doTransition(currentBgAudio, bgAudio);
+  showOnly('gameScreen');
+  currentBgAudio=bgAudio;
+  // Re-apply brain button activation after navigation (transition may reset styles)
+  applyBrainCorrupted(true);
+  updateUI();
+}
+
+function applyTitleCorrupted(silent){
+  titleGlitchPresses=gameState.titleGlitchPresses||5;
+  const bb=document.getElementById('backBtn');
+  if(bb){bb.classList.add('void-btn');bb.textContent='???';addTentacleArms(bb);}
+  document.body.classList.add('vhs-strong');
+  startAshParticles();
+  if(!silent)applyBrainCorrupted(false);
+}
+
+// -- BRAIN SPAM SEQUENCE --
+let brainSpamCount=0;
+let brainSpamActive=false;
+
+function applyBrainCorrupted(silent){
+  brainSpamCount=gameState.brainSpamCount||0;
+  brainSpamActive=true;
+  const svg=document.getElementById('brainSvg');
+  if(svg){svg.classList.add('corrupted');}
+  // Show the click overlay — completely bypasses all CSS pointer-events rules
+  const ov=document.getElementById('brainClickOverlay');
+  if(ov){ov.style.display='block';}
+  const hit=document.getElementById('brainHitArea');
+  if(hit)hit.style.pointerEvents='all';
+}
+
+// -- SWITCH ALL MUSIC --
+function switchAllMusicTo(audioId){
+  ['audioTitle','audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+    const a=document.getElementById(id);
+    if(a&&id!==audioId){a.pause();a.currentTime=0;a.volume=0;}
+  });
+  if(!muted){
+    const target=document.getElementById(audioId);
+    if(target&&target.paused)fadeIn(target,2000,0.7);
+  }
+}
+
+// -- TENTACLE ARMS --
+function addTentacleArms(btn){
+  if(!btn||btn.dataset.tentacled)return;
+  btn.dataset.tentacled='1';
+  const positions=[10,30,50,70];
+  const heights=[55,80,65,90];
+  const durations=[0.22,0.28,0.18,0.32];
+  const delays=[0,0.08,0.15,0.05];
+  positions.forEach((left,i)=>{
+    const arm=document.createElement('span');
+    arm.className='void-tentacle-arm';
+    arm.style.cssText=`width:10px;height:${heights[i]}px;left:${left}%;--td:${durations[i]}s;--tdelay:${delays[i]}s;`;
+    btn.appendChild(arm);
+  });
+}
+
+// -- ASH PARTICLES --
+let ashInterval=null;
+function startAshParticles(){
+  if(ashInterval)return;
+  ashInterval=setInterval(()=>{
+    const p=document.createElement('div');
+    p.className='ash-particle';
+    p.style.left=(Math.random()*100)+'vw';
+    p.style.top='-6px';
+    const dur=3+Math.random()*4;
+    const drift=(Math.random()-0.5)*80;
+    p.style.setProperty('--adur',dur+'s');
+    p.style.setProperty('--ax',drift+'px');
+    p.style.width=(2+Math.random()*3)+'px';
+    p.style.height=p.style.width;
+    p.style.opacity=String(0.3+Math.random()*0.5);
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),(dur+0.5)*1000);
+  },120);
+}
+
+// -- TRIGGER ANOMALY (brain click when all puzzles solved) --
+async function triggerAnomaly(){
+  gameState.anomalyTriggered=true;
+  ['audioTitle','audioMusic','audioNorth','audioEast','audioSouth','audioWest'].forEach(id=>{
+    const a=document.getElementById(id);if(a){a.pause();a.currentTime=0;a.volume=0;}
+  });
+  const js=document.getElementById('audioJumpscare');
+  if(js&&!muted){js.currentTime=0;js.play().catch(()=>{});}
+  setTimeout(()=>{if(js){js.pause();js.currentTime=0;}},1000);
+
+  const overlay=document.getElementById('jumpscareOverlay');
+  overlay.style.display='block';
+  const entity=document.getElementById('entityImg');
+  entity.style.display='block';
+
+  document.body.style.transition='none';
+  const shakeInterval=setInterval(()=>{
+    const x=(Math.random()-0.5)*40,y=(Math.random()-0.5)*40;
+    document.body.style.transform=`translate(${x}px,${y}px)`;
+  },16);
+  const flashInterval=setInterval(()=>{
+    const r=Math.floor(Math.random()*256),g=Math.floor(Math.random()*256),b=Math.floor(Math.random()*256);
+    overlay.style.backgroundColor=`rgb(${r},${g},${b})`;
+  },10);
+
+  await wait(1000);
+  clearInterval(shakeInterval);clearInterval(flashInterval);
+  document.body.style.transform='';
+  overlay.style.backgroundColor='transparent';
+  overlay.style.display='none';
+  entity.style.display='none';
+
+  document.body.classList.add('vhs-mode','anomaly-locked');
+  gameState.sanity=85;
+  switchAllMusicTo('audioPhase1');
+  currentBgAudio=document.getElementById('audioPhase1');
+  document.getElementById('glitchBtn').classList.remove('hidden');
+  updateUI();
+  saveGame();
+}
+
+function brainClick(){
+  // Phase 1 brain spam — titleCorrupted means both buttons broken, brain is now the target
+  if(brainSpamActive&&!gameState.brainCorrupted){
+    brainSpamClick();
+    return;
+  }
+  // Pre-anomaly: all puzzles solved, click triggers the jumpscare
+  const allSolved=gameState.northSolved&&gameState.eastSolved&&gameState.southSolved&&gameState.westSolved;
+  if(allSolved&&!gameState.anomalyTriggered&&!gameState.brainCorrupted){
+    triggerAnomaly();
+  }
+}
+
+function brainSpamClick(){
+  if(!brainSpamActive)return;
+  playSound('audioGlitch');
+  brainSpamCount++;
+  gameState.brainSpamCount=brainSpamCount;
+
+  // Shake screen harder each click
+  const intensity=brainSpamCount*3;
+  document.body.style.transform=`translate(${(Math.random()-0.5)*intensity}px,${(Math.random()-0.5)*intensity}px)`;
+  setTimeout(()=>document.body.style.transform='',100);
+
+  // Spawn cracks on screen
+  spawnScreenCrack(brainSpamCount);
+
+  if(brainSpamCount>=15){
+    brainSpamActive=false;
+    triggerBrainExplosion();
+  }
+}
+
+function spawnScreenCrack(level){
+  const existing=document.getElementById('brainSpamCracks');
+  let svg;
+  if(!existing){
+    const wrap=document.createElement('div');
+    wrap.id='brainSpamCracks';
+    wrap.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:8000;';
+    svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 100 100');
+    svg.setAttribute('preserveAspectRatio','none');
+    svg.style.cssText='width:100%;height:100%;';
+    wrap.appendChild(svg);document.body.appendChild(wrap);
+  } else {
+    svg=existing.querySelector('svg');
+  }
+  // Add a crack line
+  const cx=30+Math.random()*40,cy=30+Math.random()*40;
+  const angle=Math.random()*Math.PI*2;
+  const len=10+level*2;
+  let pts=`${cx},${cy}`;
+  let ax=cx,ay=cy,a=angle;
+  for(let i=0;i<5;i++){a+=(Math.random()-0.5)*0.8;ax+=Math.cos(a)*len/5;ay+=Math.sin(a)*len/5;pts+=` ${ax.toFixed(1)},${ay.toFixed(1)}`;}
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('points',pts);poly.setAttribute('fill','none');
+  poly.setAttribute('stroke',`rgba(255,255,255,${0.4+level*0.03})`);
+  poly.setAttribute('stroke-width','0.5');
+  svg.appendChild(poly);
+}
+
+async function triggerBrainExplosion(){
+  gameState.brainCorrupted=true;
+  const brainEl=document.getElementById('brainSvg');
+  const rect=brainEl?brainEl.getBoundingClientRect():{left:window.innerWidth/2,top:window.innerHeight/2,width:200,height:200};
+  const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+
+  // Hide brain
+  if(brainEl)brainEl.style.opacity='0';
+
+  const overlay=document.getElementById('jumpscareOverlay');
+  overlay.style.display='block';
+
+  // Escalating shake — gets worse over time
+  let shakeAmp=30;
+  const shakeI=setInterval(()=>{
+    shakeAmp=Math.min(120,shakeAmp+0.3);
+    const x=(Math.random()-0.5)*shakeAmp,y=(Math.random()-0.5)*shakeAmp;
+    document.body.style.transform=`translate(${x}px,${y}px) rotate(${(Math.random()-0.5)*shakeAmp*0.05}deg)`;
+  },16);
+
+  // Rapid color flashing — cycles through reds, then full RGB chaos
+  let flashPhase=0;
+  const flashI=setInterval(()=>{
+    flashPhase++;
+    let r,g,b,a;
+    if(flashPhase<60){// First 3s: blood reds
+      r=150+rand(105);g=rand(30);b=rand(20);a=0.3+Math.random()*0.3;
+    } else if(flashPhase<120){// 3-6s: reds + void blacks
+      r=rand(2)===0?150+rand(105):0;g=rand(20);b=rand(20);a=0.4+Math.random()*0.4;
+    } else {// 6s+: full RGB insanity
+      r=rand(256);g=rand(256);b=rand(256);a=0.5+Math.random()*0.4;
+    }
+    overlay.style.backgroundColor=`rgba(${r},${g},${b},${a})`;
+  },50);
+
+  // Red screen wash that pulses
+  const redWash=document.createElement('div');
+  redWash.style.cssText='position:fixed;inset:0;background:rgba(180,0,0,0);z-index:8900;pointer-events:none;transition:background 0.3s;';
+  document.body.appendChild(redWash);
+  let redPulse=0;
+  const redI=setInterval(()=>{
+    redPulse+=0.05;
+    const intensity=0.15+Math.abs(Math.sin(redPulse))*0.35;
+    redWash.style.background=`rgba(180,0,0,${intensity})`;
+  },50);
+
+  // Music chaos — speed oscillates wildly
+  const phase1=document.getElementById('audioPhase1');
+  const musicI=setInterval(()=>{
+    if(phase1){
+      phase1.playbackRate=0.2+Math.random()*2.8;
+    }
+  },300);
+
+  // Colorful blood chunks — multiple shades, shapes
+  const bloodColors=['#8b0000','#cc0000','#ff1a1a','#990033','#660000','#ff3300','#aa0044','#dd2200'];
+  for(let i=0;i<40;i++){
+    setTimeout(()=>{
+      const chunk=document.createElement('div');
+      chunk.className='brain-chunk';
+      const angle=Math.random()*Math.PI*2;
+      const dist=60+Math.random()*400;
+      chunk.style.setProperty('--cx',`${Math.cos(angle)*dist}px`);
+      chunk.style.setProperty('--cy',`${Math.sin(angle)*dist}px`);
+      chunk.style.setProperty('--cr',`${(Math.random()-0.5)*900}deg`);
+      chunk.style.left=cx+'px';chunk.style.top=cy+'px';
+      const size=6+Math.random()*28;
+      chunk.style.width=size+'px';
+      chunk.style.height=(size*(0.4+Math.random()*1.2))+'px';
+      chunk.style.borderRadius=rand(3)===0?'0':'50% '+rand(50)+'% '+rand(50)+'% '+rand(50)+'%';
+      chunk.style.background=bloodColors[rand(bloodColors.length)];
+      chunk.style.animationDuration=(0.4+Math.random()*1.2)+'s';
+      document.body.appendChild(chunk);
+      setTimeout(()=>chunk.remove(),4000);
+    },i*80);
+  }
+
+  // Blood pools — spreading, different reds
+  for(let i=0;i<12;i++){
+    setTimeout(()=>{
+      const pool=document.createElement('div');
+      pool.className='blood-pool';
+      const size=60+Math.random()*200;
+      pool.style.width=size+'px';pool.style.height=(size*0.35)+'px';
+      pool.style.left=(Math.random()*window.innerWidth)+'px';
+      pool.style.top=(Math.random()*window.innerHeight)+'px';
+      pool.style.background=`radial-gradient(circle,${bloodColors[rand(bloodColors.length)]},#1a0000)`;
+      pool.style.animationDuration=(1+Math.random()*1.5)+'s';
+      document.body.appendChild(pool);
+    },i*500);
+  }
+
+  // Void tentacles — spawn in waves, move around
+  const spawnTentacle=(delay,fromX,fromY,angle,h)=>{
+    setTimeout(()=>{
+      const t=document.createElement('div');
+      t.className='void-tentacle';
+      t.style.setProperty('--th',h+'px');
+      t.style.width=(10+Math.random()*16)+'px';
+      t.style.left=fromX+'px';t.style.top=fromY+'px';
+      t.style.transform=`rotate(${angle}rad)`;
+      t.style.transformOrigin='top center';
+      t.style.animationDuration=(1+Math.random()*2)+'s';
+      // Tentacles also drift sideways
+      t.style.animation=`tentacleGrow ${1+Math.random()*2}s forwards, tentacleDrift ${0.5+Math.random()}s infinite alternate`;
+      document.body.appendChild(t);
+    },delay);
+  };
+  // Wave 1: from brain
+  for(let i=0;i<16;i++){
+    const a=(i/16)*Math.PI*2+(Math.random()-0.5)*0.5;
+    spawnTentacle(i*200,cx+Math.cos(a)*15,cy+Math.sin(a)*15,a+Math.PI/2,180+Math.random()*250);
+  }
+  // Wave 2: from screen edges
+  for(let i=0;i<8;i++){
+    setTimeout(()=>{
+      const edge=rand(4);
+      let ex=Math.random()*window.innerWidth,ey=Math.random()*window.innerHeight;
+      if(edge===0)ey=0;else if(edge===1)ey=window.innerHeight;
+      else if(edge===2)ex=0;else ex=window.innerWidth;
+      spawnTentacle(0,ex,ey,Math.random()*Math.PI*2,200+Math.random()*300);
+    },3000+i*400);
+  }
+
+  // Screen bulge effect — CSS filter distortion
+  let bulgePhase=0;
+  const bulgeI=setInterval(()=>{
+    bulgePhase+=0.1;
+    const skewX=(Math.sin(bulgePhase)*3).toFixed(1);
+    const skewY=(Math.cos(bulgePhase*1.3)*2).toFixed(1);
+    const scale=(1+Math.abs(Math.sin(bulgePhase*0.7))*0.04).toFixed(3);
+    document.getElementById('gameScreen').style.transform=`skew(${skewX}deg,${skewY}deg) scale(${scale})`;
+  },30);
+
+  // Extra screen cracks
+  for(let i=0;i<20;i++){
+    setTimeout(()=>spawnScreenCrack(15+i),i*150);
+  }
+
+  // After 5s: black void splits screen
+  await wait(5000);
+  const voidSplit=document.createElement('div');
+  voidSplit.style.cssText='position:fixed;inset:0;background:#000;z-index:8500;clip-path:polygon(48% 0%,52% 0%,52% 100%,48% 100%);transition:clip-path 10s ease-in;pointer-events:none;';
+  document.body.appendChild(voidSplit);
+  await wait(100);
+  voidSplit.style.clipPath='polygon(0% 0%,100% 0%,100% 100%,0% 100%)';
+
+  await wait(10000); // total ~15s chaos
+
+  // Clean up everything
+  clearInterval(shakeI);clearInterval(flashI);clearInterval(redI);clearInterval(musicI);clearInterval(bulgeI);
+  document.body.style.transform='';
+  document.getElementById('gameScreen').style.transform='';
+  overlay.style.backgroundColor='transparent';overlay.style.display='none';
+  redWash.remove();
+  if(phase1){phase1.pause();phase1.currentTime=0;phase1.playbackRate=1;}
+  voidSplit.remove();
+  document.querySelectorAll('.brain-chunk,.blood-pool,.void-tentacle').forEach(e=>e.remove());
+
+  // Fade to black
+  await doTransition(null,null);
+  showOnly(null);
+
+  // Chapter screen
+  const cs=document.getElementById('chapterScreen');
+  cs.classList.remove('hidden');
+  await wait(100);
+  cs.style.opacity='1';
+
+  // Continue button fades in after 2s
+  const contBtn=document.getElementById('chapterContinueBtn');
+  contBtn.style.opacity='0';
+  await wait(2000);
+  contBtn.style.transition='opacity 1s';
+  contBtn.style.opacity='1';
+}
+
+function chapterContinue(){
+  playSound('audioButton');
+  const cs=document.getElementById('chapterScreen');
+  cs.style.opacity='0';
+  setTimeout(()=>{cs.classList.add('hidden');},1000);
+  enterChapter1();
+}
+
+async function enterChapter1(){
+  await doTransition(null, document.getElementById('audioChapter1'));
+
+  gameState.chapter1Started=true;
+  gameState.sanity=75;
+  document.body.classList.add('chapter1-mode');
+  // Remove phase1 classes but keep vhs-mode for atmosphere (weaker)
+  document.body.classList.remove('anomaly-locked','vhs-strong');
+
+  showOnly('gameScreen');
+
+  // Restore settings button in header
+  const sb=document.getElementById('settingsBtn');
+  if(sb){sb.classList.remove('void-btn');sb.textContent='\u2699 SETTINGS';sb.style.cssText='';delete sb.dataset.tentacled;
+    Array.from(sb.querySelectorAll('.void-tentacle-arm')).forEach(a=>a.remove());}
+
+  // Restore back button
+  const bb=document.getElementById('backBtn');
+  if(bb){bb.classList.remove('void-btn');bb.textContent='\u2190 BACK';bb.style.cssText='';delete bb.dataset.tentacled;
+    Array.from(bb.querySelectorAll('.void-tentacle-arm')).forEach(a=>a.remove());}
+
+  // Rebuild settings panel content
+  const panel=document.getElementById('settingsPanel');
+  if(panel){
+    panel.innerHTML=`
+      <h2>&#9881; SETTINGS</h2>
+      <div class="settings-row" id="settingsSoundRow">
+        <span>SOUND</span>
+        <div id="muteToggle" onclick="toggleMute()"></div>
+        <span id="muteLabel">ON</span>
+      </div>
+      <button class="px-btn" id="settingsSaveBtn" style="margin-top:8px;" onclick="manualSave()">&#128190; SAVE GAME</button>
+      <button class="px-btn" id="settingsCloseBtn" style="margin-top:8px;" onclick="closeSettings()">&#10005; CLOSE</button>`;
+    // Re-apply mute toggle state
+    if(muted){
+      const mt=document.getElementById('muteToggle');
+      if(mt)mt.classList.add('muted');
+      const ml=document.getElementById('muteLabel');
+      if(ml)ml.textContent='OFF';
+    }
+  }
+
+  // Remove all spam cracks
+  const bsc=document.getElementById('brainSpamCracks');if(bsc)bsc.remove();
+  document.querySelectorAll('.ash-particle,.blood-pool,.brain-chunk,.void-tentacle').forEach(e=>e.remove());
+
+  // Deactivate brain spam and restore SVG
+  brainSpamActive=false;
+  const ov=document.getElementById('brainClickOverlay');
+  if(ov){ov.style.display='none';}
+  const hit=document.getElementById('brainHitArea');
+  if(hit)hit.style.pointerEvents='none';
+  const brainEl2=document.getElementById('brainSvg');
+  if(brainEl2){
+    brainEl2.classList.remove('corrupted');
+    brainEl2.style.opacity='1';
+    brainEl2.style.animation='';
+    brainEl2.style.filter='';
+    brainEl2.style.transform='';
+    brainEl2.style.pointerEvents='';
+    brainEl2.style.cursor='default';
+  }
+
+  document.getElementById('brainArea').classList.remove('brain-all-solved');
+  document.getElementById('brainCracks').style.display='none';
+
+  // Stop ash
+  if(ashInterval){clearInterval(ashInterval);ashInterval=null;}
+
+  // Chapter 1 music everywhere EXCEPT title (title gets its own music back)
+  switchAllMusicTo('audioChapter1');
+  currentBgAudio=document.getElementById('audioChapter1');
+
+  updateUI();
+  applyChapter1UI();
+  saveGame();
+}
+
+
+
+// -- PUZZLE SANITY COST --
+function puzzleSanityHit(){
+  gameState.sanity=Math.max(0,Math.floor(gameState.sanity)-1);
+  updateUI();
+}
+
+// -- DUPLICATE brainClick stub removed — defined earlier --
+</script>
+
+<script>
+/* ================================================================
+   NORTH PUZZLE – SIMON SAYS
+================================================================ */
+let simonSeq=[],simonPlayerSeq=[],simonRound=0,simonPlaying=false,simonListening=false;
+let simonAborted=false;
+const SIMON_ROUNDS=[[4,1000,400],[8,1000,400],[16,1000,400],[32,1000,400]];
+const SIMON_FREQS=[220,261,330,392];
+const SIMON_IDS=['simonTop','simonRight','simonBottom','simonLeft'];
+let audioCtx=null;
+function getAudioCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function playTone(freq,dur=300){
+  if(muted)return;
+  try{
+    const ctx=getAudioCtx(),osc=ctx.createOscillator(),gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.type='sawtooth';osc.frequency.value=freq;
+    gain.gain.setValueAtTime(0.3,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur/1000);
+    osc.start(ctx.currentTime);osc.stop(ctx.currentTime+dur/1000);
+  }catch(e){}
+}
+
+function stopSimon(){
+  simonAborted=true;
+  simonPlaying=false;simonListening=false;
+  SIMON_IDS.forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('lit');});
+}
+
+function initNorth(){
+  simonAborted=false;
+  if(gameState.northSolved){
+    document.getElementById('northCrack').style.display='flex';
+    document.getElementById('simonGrid').style.display='none';
+    document.getElementById('simonStatus').textContent='';
+    return;
+  }
+  document.getElementById('northCrack').style.display='none';
+  document.getElementById('simonGrid').style.display='grid';
+  simonRound=0;simonSeq=[];simonPlayerSeq=[];simonPlaying=false;simonListening=false;
+  document.getElementById('simonStatus').textContent='';
+  document.getElementById('simonStart').style.display='flex';
+  SIMON_IDS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.classList.remove('lit','scatter-tl','scatter-tr','scatter-bl','scatter-br','shining');
+  });
+}
+
+function startSimon(){
+  if(simonPlaying)return;
+  playSound('audioButton');
+  simonAborted=false;
+  simonRound=1;simonSeq=[];simonPlayerSeq=[];
+  document.getElementById('simonStart').style.display='none';
+  runSimonRound();
+}
+
+async function runSimonRound(){
+  if(simonAborted)return;
+  const[seqLen,litDur,gap]=SIMON_ROUNDS[simonRound-1];
+  while(simonSeq.length<seqLen)simonSeq.push(rand(4));
+  simonPlayerSeq=[];simonPlaying=true;simonListening=false;
+  document.getElementById('simonStatus').textContent='';
+  await wait(600);
+  for(let i=0;i<seqLen;i++){
+    if(simonAborted)return;
+    await lightSimon(simonSeq[i],litDur);
+    if(simonAborted)return;
+    await wait(gap);
+  }
+  if(simonAborted)return;
+  simonPlaying=false;simonListening=true;
+}
+
+function lightSimon(idx,dur){
+  return new Promise(resolve=>{
+    const el=document.getElementById(SIMON_IDS[idx]);
+    el.classList.add('lit');playTone(SIMON_FREQS[idx],dur);
+    setTimeout(()=>{el.classList.remove('lit');resolve();},dur);
+  });
+}
+
+function simonClick(idx){
+  if(!simonListening)return;
+  playTone(SIMON_FREQS[idx],200);lightSimon(idx,200);
+  simonPlayerSeq.push(idx);
+  const pos=simonPlayerSeq.length-1;
+  if(simonPlayerSeq[pos]!==simonSeq[pos]){
+    simonListening=false;
+    document.getElementById('simonStatus').textContent='';
+    setTimeout(()=>{if(!simonAborted){simonRound=1;simonSeq=[];runSimonRound();}},1500);
+    return;
+  }
+  const[seqLen]=SIMON_ROUNDS[simonRound-1];
+  if(simonPlayerSeq.length===seqLen){
+    simonListening=false;
+    if(simonRound<3){simonRound++;setTimeout(()=>{if(!simonAborted)runSimonRound();},1200);}
+    else solveNorth();
+  }
+}
+
+async function solveNorth(){
+  document.getElementById('simonStatus').textContent='';
+  SIMON_IDS.forEach(id=>document.getElementById(id).classList.add('shining'));
+  playSound('audioChime');
+  await wait(1800);
+  playSound('audioExplode');
+  const sc=['scatter-tl','scatter-tr','scatter-bl','scatter-br'];
+  SIMON_IDS.forEach((id,i)=>{const el=document.getElementById(id);el.classList.remove('shining');el.classList.add(sc[i]);});
+  await wait(900);
+  document.getElementById('northCrack').style.display='flex';
+  gameState.northSolved=true;
+  puzzleSanityHit();
+  saveGame();
+}
+</script>
+
+<script>
+/* ================================================================
+   EAST PUZZLE – SPINNING WHEEL
+================================================================ */
+const EAST_SEQUENCE=[180,0,270,0,90,90];
+let eastAngle=0,eastDragStart=null,eastDragAngle=0,eastStepIdx=0;
+let eastDragBound=false;
+
+function initEast(){
+  if(gameState.eastSolved){
+    document.getElementById('eastCrack').style.display='flex';
+    document.getElementById('eastStatus').textContent='SOLVED';
+    document.getElementById('eastWheelWrap').style.pointerEvents='none';
+    return;
+  }
+  document.getElementById('eastCrack').style.display='none';
+  eastAngle=0;
+  eastStepIdx=gameState.eastProgress?gameState.eastProgress.length:0;
+  updateEastWheel();updateEastProgress();
+  if(!eastDragBound){
+    eastDragBound=true;
+    const wrap=document.getElementById('eastWheelWrap');
+    wrap.addEventListener('mousedown',eastDragBegin);
+    wrap.addEventListener('touchstart',eastDragBegin,{passive:true});
+    document.addEventListener('mousemove',eastDragMove);
+    document.addEventListener('touchmove',eastDragMove,{passive:true});
+    document.addEventListener('mouseup',eastDragEnd);
+    document.addEventListener('touchend',eastDragEnd);
+  }
+}
+
+function cleanupEast(){eastDragStart=null;}
+
+function eastDragBegin(e){const x=e.touches?e.touches[0].clientX:e.clientX;eastDragStart=x;eastDragAngle=eastAngle;}
+function eastDragMove(e){
+  if(eastDragStart===null)return;
+  const x=e.touches?e.touches[0].clientX:e.clientX;
+  eastAngle=eastDragAngle+(x-eastDragStart)*1.5;
+  updateEastWheel();
+}
+function eastDragEnd(){
+  if(eastDragStart===null)return;
+  eastDragStart=null;
+  eastAngle=Math.round(eastAngle/90)*90;
+  eastAngle=((eastAngle%360)+360)%360;
+  updateEastWheel();checkEastStep();
+}
+function updateEastWheel(){
+  const g=document.getElementById('eastWheelGroup');
+  if(g)g.setAttribute('transform',`rotate(${eastAngle},100,100)`);
+}
+function checkEastStep(){
+  if(eastStepIdx>=EAST_SEQUENCE.length)return;
+  if(eastAngle===EAST_SEQUENCE[eastStepIdx]){
+    playSound('audioDing');
+    eastStepIdx++;
+    if(!gameState.eastProgress)gameState.eastProgress=[];
+    gameState.eastProgress.push(eastAngle);
+    updateEastProgress();
+    if(eastStepIdx>=EAST_SEQUENCE.length)solveEast();
+  } else {
+    if(eastStepIdx>0){
+      eastStepIdx=0;
+      gameState.eastProgress=[];
+      updateEastProgress();
+    }
+  }
+}
+function updateEastProgress(){
+  let txt='';
+  for(let i=0;i<EAST_SEQUENCE.length;i++)txt+=(i<eastStepIdx?'&#9632;':'&#9633;')+'  ';
+  document.getElementById('eastProgress').innerHTML=txt.trim();
+}
+async function solveEast(){
+  const wrap=document.getElementById('eastWheelWrap');
+  wrap.classList.add('gold-glow');playSound('audioChime');
+  await wait(2000);playSound('audioExplode');
+  wrap.classList.remove('gold-glow');
+  await wait(500);
+  document.getElementById('eastCrack').style.display='flex';
+  gameState.eastSolved=true;gameState.eastProgress=[];
+  puzzleSanityHit();
+  saveGame();wrap.style.pointerEvents='none';
+}
+</script>
+
+<script>
+/* ================================================================
+   SOUTH PUZZLE – ARROW TIMING WHEEL
+================================================================ */
+const SOUTH_TOTAL=20;
+const SOUTH_DIRS=['up','down','left','right'];
+const SOUTH_KEYS={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};
+let southArrows=[],southHitCount=0,southCurrentIdx=0;
+let southSpeed=1000,southTimer=null,southRunning=false,southKeyHandler=null;
+let southStarted=false;
+let southWheelAngle=0,southWheelRaf=null,southLastTime=null;
+const r_south=140;
+
+function initSouth(){
+  if(gameState.southSolved){
+    document.getElementById('southCrack').style.display='flex';
+    document.getElementById('southProgress').textContent='10/10';
+    return;
+  }
+  document.getElementById('southCrack').style.display='none';
+  if(!gameState.southArrows||gameState.southArrows.length!==SOUTH_TOTAL){
+    gameState.southArrows=[];
+    for(let i=0;i<SOUTH_TOTAL;i++)gameState.southArrows.push(SOUTH_DIRS[rand(4)]);
+    saveGame();
+  }
+  southArrows=gameState.southArrows.slice();
+  southHitCount=0;southCurrentIdx=0;southSpeed=1000;southStarted=false;
+  southWheelAngle=0;
+  renderSouthArrows();
+  document.getElementById('southProgress').textContent='0/'+SOUTH_TOTAL;
+  if(southKeyHandler)document.removeEventListener('keydown',southKeyHandler);
+  southKeyHandler=(e)=>{
+    const dir=SOUTH_KEYS[e.key];
+    if(!dir)return;
+    e.preventDefault();
+    if(!southStarted){southStarted=true;startSouthWheel();}
+    if(southRunning)southHandleKey(dir);
+  };
+  document.addEventListener('keydown',southKeyHandler);
+  startSouthVisualSpin();
+}
+
+function startSouthVisualSpin(){
+  if(southWheelRaf)cancelAnimationFrame(southWheelRaf);
+  southLastTime=null;
+  const cx=190,cy=190;
+  function spin(ts){
+    if(!southLastTime)southLastTime=ts;
+    const dt=ts-southLastTime;southLastTime=ts;
+    const degsPerMs=360/(southSpeed*SOUTH_TOTAL*0.5);
+    southWheelAngle=(southWheelAngle+degsPerMs*dt)%360;
+    const g=document.getElementById('southArrowsGroup');
+    if(g)g.setAttribute('transform',`rotate(${southWheelAngle},${cx},${cy})`);
+    for(let i=0;i<SOUTH_TOTAL;i++){
+      const t=document.getElementById('sarrow'+i);
+      if(t){
+        const angle=(i/SOUTH_TOTAL)*2*Math.PI-Math.PI/2;
+        const x=cx+r_south*Math.cos(angle);
+        const y=cy+r_south*Math.sin(angle);
+        t.setAttribute('transform',`rotate(${-southWheelAngle},${x},${y})`);
+      }
+    }
+    southWheelRaf=requestAnimationFrame(spin);
+  }
+  southWheelRaf=requestAnimationFrame(spin);
+}
+
+function renderSouthArrows(){
+  const g=document.getElementById('southArrowsGroup');
+  if(!g)return;g.innerHTML='';
+  const cx=190,cy=190,r=r_south;
+  for(let i=0;i<SOUTH_TOTAL;i++){
+    const angle=(i/SOUTH_TOTAL)*2*Math.PI-Math.PI/2;
+    const x=cx+r*Math.cos(angle),y=cy+r*Math.sin(angle);
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x);t.setAttribute('y',y);
+    t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','middle');
+    t.setAttribute('font-size','18');t.setAttribute('fill','#44ff88');
+    t.setAttribute('id','sarrow'+i);
+    const chars={up:'?',down:'?',left:'?',right:'?'};
+    t.textContent=chars[southArrows[i]];
+    g.appendChild(t);
+  }
+}
+
+function startSouthWheel(){southRunning=true;southCurrentIdx=0;highlightCurrentArrow();scheduleSouthTick();}
+function scheduleSouthTick(){if(southTimer)clearTimeout(southTimer);southTimer=setTimeout(southTick,southSpeed);}
+function southTick(){
+  if(!southRunning)return;
+  southCurrentIdx=(southCurrentIdx+1)%SOUTH_TOTAL;
+  highlightCurrentArrow();
+  scheduleSouthTick();
+}
+function highlightCurrentArrow(){
+  for(let i=0;i<SOUTH_TOTAL;i++){const el=document.getElementById('sarrow'+i);if(el)el.setAttribute('fill','#44ff88');}
+  const cur=document.getElementById('sarrow'+southCurrentIdx);
+  if(cur)cur.setAttribute('fill','#ffffff');
+}
+function southHandleKey(dir){
+  if(dir===southArrows[southCurrentIdx]){
+    const el=document.getElementById('sarrow'+southCurrentIdx);
+    if(el)el.setAttribute('fill','#00ff44');
+    southHitCount++;
+    southSpeed=Math.max(100,southSpeed*0.95);
+    document.getElementById('southProgress').textContent=southHitCount+'/'+SOUTH_TOTAL;
+    if(southHitCount>=SOUTH_TOTAL){solveSouth();return;}
+  } else {
+    southHitCount=0;southSpeed=1000;
+    document.getElementById('southProgress').textContent='0/'+SOUTH_TOTAL;
+    for(let i=0;i<SOUTH_TOTAL;i++){const el=document.getElementById('sarrow'+i);if(el)el.setAttribute('fill','#44ff88');}
+    highlightCurrentArrow();
+  }
+}
+function stopSouthWheel(){
+  southRunning=false;southStarted=false;
+  if(southTimer){clearTimeout(southTimer);southTimer=null;}
+  if(southWheelRaf){cancelAnimationFrame(southWheelRaf);southWheelRaf=null;}
+  if(southKeyHandler){document.removeEventListener('keydown',southKeyHandler);southKeyHandler=null;}
+}
+async function solveSouth(){
+  stopSouthWheel();
+  const wrap=document.getElementById('southWheelWrap');
+  wrap.classList.add('gold-glow');playSound('audioChime');
+  await wait(2000);playSound('audioExplode');
+  wrap.classList.remove('gold-glow');await wait(500);
+  document.getElementById('southCrack').style.display='flex';
+  gameState.southSolved=true;
+  puzzleSanityHit();
+  saveGame();
+}
+</script>
+
+<script>
+/* ================================================================
+   WEST PUZZLE – BASE64 KEYPAD
+================================================================ */
+let westTarget='',westInput='';
+
+function initWest(){
+  if(gameState.westSolved){
+    document.getElementById('westCrack').style.display='flex';
+    document.getElementById('westEncoded').textContent='';
+    document.getElementById('westBlanks').textContent='? ? ? ? ? ? ? ? ? ?';
+    return;
+  }
+  document.getElementById('westCrack').style.display='none';
+  generateWestPuzzle();
+  document.addEventListener('keydown', westAntiCheatKey);
+  document.addEventListener('copy', westAntiCheatCopy);
+  document.addEventListener('selectionchange', westAntiCheatSelect);
+  document.addEventListener('visibilitychange', westAntiCheatVisibility);
+}
+
+function westCleanupAntiCheat(){
+  document.removeEventListener('keydown', westAntiCheatKey);
+  document.removeEventListener('copy', westAntiCheatCopy);
+  document.removeEventListener('selectionchange', westAntiCheatSelect);
+  document.removeEventListener('visibilitychange', westAntiCheatVisibility);
+}
+
+function westAntiCheatKey(e){
+  if(e.key==='PrintScreen'||(e.ctrlKey&&e.key==='c')) westCheatFail();
+}
+function westAntiCheatCopy(){
+  if(!document.getElementById('westScreen').classList.contains('hidden')) westCheatFail();
+}
+function westAntiCheatSelect(){
+  if(document.getElementById('westScreen').classList.contains('hidden'))return;
+  const sel=window.getSelection();
+  if(sel&&sel.toString().length>0) westCheatFail();
+}
+function westAntiCheatVisibility(){
+  if(document.hidden&&!document.getElementById('westScreen').classList.contains('hidden')) westCheatFail();
+}
+function westCheatFail(){westInput='';setTimeout(generateWestPuzzle,200);}
+
+function generateWestPuzzle(){
+  westTarget='';
+  for(let i=0;i<10;i++)westTarget+=rand(10).toString();
+  westInput='';
+  document.getElementById('westEncoded').textContent=btoa(westTarget);
+  updateWestBlanks();
+}
+
+function updateWestBlanks(){
+  let d='';
+  for(let i=0;i<10;i++){d+=(i<westInput.length?westInput[i]:'_');if(i<9)d+=' ';}
+  document.getElementById('westBlanks').textContent=d;
+}
+
+function westKey(digit){
+  playSound('audioButton');
+  if(gameState.westSolved)return;
+  const pos=westInput.length;if(pos>=10)return;
+  if(digit===parseInt(westTarget[pos])){
+    westInput+=digit.toString();updateWestBlanks();
+    if(westInput.length===10)solveWest();
+  } else {
+    westInput='';
+    setTimeout(generateWestPuzzle,400);
+  }
+}
+
+async function solveWest(){
+  westCleanupAntiCheat();
+  const puzzle=document.getElementById('westPuzzle');
+  puzzle.classList.add('gold-glow');playSound('audioChime');
+  await wait(2000);playSound('audioExplode');
+  puzzle.classList.remove('gold-glow');await wait(500);
+  document.getElementById('westCrack').style.display='flex';
+  gameState.westSolved=true;
+  puzzleSanityHit();
+  saveGame();
+}
+</script>
+
+<script>
+/* ================================================================
+   CHEAT CODE
+================================================================ */
+let cheatBuffer='';
+const CHEAT_CODE='vortarium';
+const RESET_CODE='reset';
+function setupCheatCode(){
+  document.addEventListener('keydown',(e)=>{
+    const key=e.key.toLowerCase();
+    if(key.length>1&&key!=='backspace')return;
+    cheatBuffer=(cheatBuffer+key).slice(-Math.max(CHEAT_CODE.length,RESET_CODE.length));
+    if(cheatBuffer.slice(-RESET_CODE.length)===RESET_CODE){
+      cheatBuffer='';
+      hardReset();
+      return;
+    }
+    const puzzleScreens=['northScreen','eastScreen','southScreen','westScreen'];
+    const active=puzzleScreens.find(s=>!document.getElementById(s).classList.contains('hidden'));
+    // Also trigger on gameScreen in chapter 1 and chapter 2
+    const onGameScreen=(gameState.chapter1Started||gameState.chapter2Started)&&!document.getElementById('gameScreen').classList.contains('hidden');
+    if((active||onGameScreen)&&cheatBuffer.slice(-CHEAT_CODE.length)===CHEAT_CODE){
+      cheatBuffer='';
+      cheatComplete(active);
+    }
+  });
+}
+function hardReset(){
+  localStorage.removeItem(SAVE_KEY);
+  ['audioTitle','audioMusic','audioNorth','audioEast','audioSouth','audioWest','audioPhase1','audioChapter1'].forEach(id=>{
+    const a=document.getElementById(id);if(a){a.pause();a.currentTime=0;a.volume=0;}
+  });
+  window.location.reload();
+}
+function cheatComplete(screenId){
+  // Solve all 4 puzzles at once (pre-chapter1)
+  if(!gameState.northSolved)solveNorth();
+  if(!gameState.eastSolved)solveEast();
+  if(!gameState.southSolved)solveSouth();
+  if(!gameState.westSolved)solveWest();
+
+  // Chapter 1: jump straight to phase2
+  if(gameState.chapter1Started&&!gameState.chapter2Started){
+    gameState.coins=(gameState.coins||0)+100;
+    gameState.redKey=true;gameState.blueKey=true;
+    gameState.redKeyOpened=true;gameState.blueKeyOpened=true;
+    gameState.sanity=0;gameState.hp=0;
+    updateUI();
+    saveGame();
+    // Trigger phase2 immediately
+    setTimeout(()=>enterVoidRegion(),300);
+    return;
+  }
+
+  // Chapter 2: unlock all 3 keys and open portal
+  if(gameState.chapter2Started){
+    gameState.redKey=true;gameState.blueKey=true;gameState.greenKey=true;
+    gameState.redKeyOpened=true;gameState.blueKeyOpened=true;
+    // Give green key and open portal
+    gameState.greenKeyOpened=false; // reset so it can be used
+    updateCh2Lobby();
+    saveGame();
+  }
+}
+</script>
+
+<script>
+/* ================================================================
+   CHAPTER 1 SYSTEM
+================================================================ */
+
+// -- APPLY CHAPTER 1 UI --
+function applyChapter1UI(){
+  const cs=document.getElementById('coinSection');
+  if(cs)cs.style.display='flex';
+  const mb=document.getElementById('ch1MenuBtns');
+  if(mb)mb.style.display='flex';
+  const coinEl=document.getElementById('coinCount');
+  if(coinEl)coinEl.textContent=gameState.coins||0;
+  // Hide menu buttons on title screen
+  updateMenuBtnVisibility();
+  startSanityEffects();
+}
+
+function updateMenuBtnVisibility(){
+  const mb=document.getElementById('ch1MenuBtns');
+  if(!mb)return;
+  const onGame=!document.getElementById('gameScreen').classList.contains('hidden');
+  mb.style.display=(gameState.chapter1Started&&onGame)?'flex':'none';
+}
+
+// -- SANITY EFFECTS --
+let sanityEffectInterval=null;
+let entityFlickerInterval=null;
+let zeroSanityInterval=null;
+let musicPitchInterval=null;
+let phase2Active=false;
+
+function applySanityEffects(pct){
+  const staticEl=document.getElementById('sanityStatic');
+  const chapter1Audio=document.getElementById('audioChapter1');
+
+  // Grayscale entire screen below 50%
+  document.body.style.filter=pct<50?'grayscale(1)':'';
+
+  // Below 50% but >=25%: random pitch changes
+  if(pct<50&&pct>=25&&!phase2Active){
+    if(staticEl)staticEl.style.opacity=String((50-pct)/50*0.15);
+    if(!musicPitchInterval){
+      musicPitchInterval=setInterval(()=>{
+        if(chapter1Audio&&!chapter1Audio.paused){
+          const pitches=[0.5,0.7,1.0,1.3,1.8];
+          chapter1Audio.playbackRate=pitches[rand(pitches.length)];
+        }
+      },100+rand(900));
+    }
+  }
+
+  // Below 25% but >=10%: slow music 2x-4x
+  if(pct<25&&pct>=10&&!phase2Active){
+    if(musicPitchInterval){clearInterval(musicPitchInterval);musicPitchInterval=null;}
+    if(!musicPitchInterval){
+      musicPitchInterval=setInterval(()=>{
+        if(chapter1Audio&&!chapter1Audio.paused){
+          chapter1Audio.playbackRate=0.25+Math.random()*0.25;
+        }
+      },100+rand(900));
+    }
+    if(staticEl)staticEl.style.opacity=String((25-pct)/25*0.4);
+  }
+
+  // Restore pitch/static above 50%
+  if(pct>=50){
+    if(musicPitchInterval){clearInterval(musicPitchInterval);musicPitchInterval=null;}
+    if(chapter1Audio&&!phase2Active)chapter1Audio.playbackRate=1;
+    if(staticEl)staticEl.style.opacity='0';
+  }
+
+  // Below 10%: switch to phase2 once (don't restart if already playing)
+  if(pct<10&&!phase2Active){
+    phase2Active=true;
+    if(musicPitchInterval){clearInterval(musicPitchInterval);musicPitchInterval=null;}
+    // Mute ALL other music
+    ['audioChapter1','audioBattle','audioMusic','audioNorth','audioEast','audioSouth','audioWest'].forEach(id=>{
+      const a=document.getElementById(id);if(a){a.pause();a.volume=0;}
+    });
+    const p2=document.getElementById('audioPhase2');
+    if(p2&&!muted&&p2.paused){p2.currentTime=0;p2.volume=0.8;p2.play().catch(()=>{});}
+  } else if(pct>=10&&phase2Active){
+    phase2Active=false;
+    const p2=document.getElementById('audioPhase2');
+    if(p2){p2.pause();p2.currentTime=0;}
+    if(chapter1Audio&&!muted){chapter1Audio.playbackRate=1;fadeIn(chapter1Audio,1000,0.7);}
+    if(staticEl)staticEl.style.opacity='0';
+  }
+
+  // 0-5%: entity flicker + glitch — NOT during phase2
+  const entityEl=document.getElementById('entityFlicker');
+  if(pct<=5&&pct>0&&!phase2Active){
+    if(entityEl)entityEl.style.display='block';
+    if(!entityFlickerInterval){
+      const scheduleFlicker=()=>{
+        entityFlickerInterval=setTimeout(()=>{
+          if(!entityEl||phase2Active){entityFlickerInterval=null;return;}
+          const show=Math.random()<0.3;
+          entityEl.style.opacity=show?'0.5':'0';
+          if(show)playSound('audioGlitch');
+          entityFlickerInterval=null;
+          scheduleFlicker();
+        },100+rand(900));
+      };
+      scheduleFlicker();
+    }
+  } else {
+    if(entityEl){entityEl.style.display='none';entityEl.style.opacity='0';}
+    if(entityFlickerInterval){clearTimeout(entityFlickerInterval);entityFlickerInterval=null;}
+  }
+
+  // Zero sanity handled by updateUI directly — nothing here
+}
+
+function zeroSanityTick(){}
+
+function startSanityEffects(){
+  if(sanityEffectInterval)return;
+  sanityEffectInterval=setInterval(()=>{
+    if(gameState.chapter1Started){
+      applySanityEffects(Math.max(0,Math.min(100,gameState.sanity)));
+    }
+  },500);
+}
+
+function triggerHeartLoss(){
+  if(phase2Active)return; // HP irrelevant in phase2
+  // Play jumpscare ONCE at full volume, stop after 1s
+  const js=document.getElementById('audioJumpscare');
+  if(js){
+    js.loop=false; // ensure not looping
+    js.currentTime=0;
+    js.volume=1;
+    js.play().catch(()=>{});
+    setTimeout(()=>{js.pause();js.currentTime=0;},1000);
+  }
+  // Flash entity.png + RGB screen for 1 second
+  const ov=document.getElementById('jumpscareOverlay');
+  const entityEl=document.getElementById('entityFlicker');
+  ov.style.display='block';
+  if(entityEl){entityEl.style.display='block';entityEl.style.opacity='0.8';}
+  const fi=setInterval(()=>{
+    ov.style.backgroundColor=`rgb(${rand(256)},${rand(256)},${rand(256)})`;
+  },50);
+  setTimeout(()=>{
+    clearInterval(fi);
+    ov.style.backgroundColor='transparent';ov.style.display='none';
+    if(entityEl){entityEl.style.display='none';entityEl.style.opacity='0';}
+  },1000);
+}
+
+function chapter1Death(){
+  // Special: both keys opened AND sanity 0 ? void region for green key
+  if(gameState.redKeyOpened&&gameState.blueKeyOpened&&gameState.sanity<=0&&!gameState.greenKey){
+    enterVoidRegion();
+    return;
+  }
+  // Normal death — reset keys, coins, locks
+  gameState.hp=3;gameState.sanity=75;gameState.coins=0;
+  gameState.redKey=false;gameState.blueKey=false;gameState.greenKey=false;
+  gameState.redKeyOpened=false;gameState.blueKeyOpened=false;
+  ['Red','Blue','Green'].forEach(c=>{
+    const el=document.getElementById('lock'+c);
+    if(el){
+      el.classList.remove('unlocked');
+      const col=c==='Red'?'#ff4444':c==='Blue'?'#4488ff':'#44ff88';
+      el.innerHTML=`<div style="font-size:28px;">??</div><div style="font-size:7px;color:${col};">${c.toUpperCase()}</div>`;
+    }
+  });
+  saveGame();updateUI();
+  triggerHeartLoss();
+}
+
+// -- BATTLE SYSTEM --
+let battleEnemyHp=0;
+let battleInProgress=false;
+let attackCooldown=false;
+const ENEMY_NAMES=['SHADOW','VOID WRAITH','GLITCH FIEND','MIND LEECH','DARK ECHO'];
+
+function openBattle(){
+  if(!gameState.chapter1Started)return;
+  playSound('audioButton');
+  battleEnemyHp=10+rand(16);
+  battleInProgress=true;
+  attackCooldown=false;
+  document.getElementById('battleEnemyName').textContent=ENEMY_NAMES[rand(ENEMY_NAMES.length)];
+  document.getElementById('battleEnemyHp').textContent='HP: '+battleEnemyHp;
+  document.getElementById('battleLog').textContent='';
+  document.getElementById('btnAttack').disabled=false;
+  document.getElementById('battleScreen').classList.remove('hidden');
+  // Only switch to battle music if NOT in phase2
+  if(!phase2Active){
+    fadeOut(document.getElementById('audioChapter1'),800);
+    fadeIn(document.getElementById('audioBattle'),800,0.7);
+  }
+}
+
+function closeBattle(){
+  battleInProgress=false;
+  document.getElementById('battleScreen').classList.add('hidden');
+  if(!phase2Active){
+    fadeOut(document.getElementById('audioBattle'),800);
+    fadeIn(document.getElementById('audioChapter1'),800,0.7);
+  } else {
+    // In phase2 — make sure battle music is off
+    const ba=document.getElementById('audioBattle');
+    if(ba){ba.pause();ba.currentTime=0;ba.volume=0;}
+  }
+}
+
+function battleAttack(){
+  if(!battleInProgress||attackCooldown)return;
+  attackCooldown=true;
+  const btn=document.getElementById('btnAttack');
+  if(btn)btn.disabled=true;
+  playSound('audioButton');
+  const dmg=1+rand(6);
+  battleEnemyHp-=dmg;
+  document.getElementById('battleLog').textContent='You dealt '+dmg+' damage!';
+  if(battleEnemyHp<=0){
+    battleEnemyHp=0;
+    document.getElementById('battleEnemyHp').textContent='HP: 0';
+    battleVictory();
+    return;
+  }
+  document.getElementById('battleEnemyHp').textContent='HP: '+battleEnemyHp;
+  setTimeout(()=>{
+    enemyAttack();
+    setTimeout(()=>{
+      attackCooldown=false;
+      if(btn)btn.disabled=false;
+    },500);
+  },600);
+}
+
+function battleEat(){
+  playSound('audioButton');
+  if(gameState.hp<3){
+    gameState.hp=Math.min(3,gameState.hp+1);
+    document.getElementById('battleLog').textContent='You ate something. +1 HP.';
+    updateUI();
+  } else {
+    document.getElementById('battleLog').textContent='HP is already full.';
+  }
+}
+
+function battleFlee(){
+  playSound('audioButton');
+  document.getElementById('battleLog').textContent='You fled!';
+  setTimeout(closeBattle,800);
+}
+
+function enemyAttack(){
+  if(!battleInProgress)return;
+  playSound('audioGlitch');
+  const sanityDmg=1+rand(3);
+  gameState.sanity=Math.max(0,gameState.sanity-sanityDmg);
+  document.getElementById('battleLog').textContent='Enemy attacks! -'+sanityDmg+'% sanity.';
+  updateUI();
+  // Don't save mid-battle — only save when battle ends
+}
+
+function battleVictory(){
+  battleInProgress=false;
+  document.getElementById('battleScreen').classList.add('hidden');
+  if(!phase2Active){
+    fadeOut(document.getElementById('audioBattle'),800);
+    fadeIn(document.getElementById('audioChapter1'),800,0.7);
+  } else {
+    const ba=document.getElementById('audioBattle');
+    if(ba){ba.pause();ba.currentTime=0;ba.volume=0;}
+  }
+  playSound('audioChime');
+  const coins=1+rand(3);
+  gameState.coins=(gameState.coins||0)+coins;
+  let rewardText='You earned '+coins+' coins!';
+  // 10% red key — only if not already owned
+  if(!gameState.redKey&&Math.random()<0.1){
+    gameState.redKey=true;
+    rewardText+='\nYou found the RED KEY!';
+  }
+  document.getElementById('battleReward').textContent=rewardText;
+  document.getElementById('battleWin').classList.remove('hidden');
+  updateUI();
+  saveGame();
+}
+
+function closeBattleWin(){
+  playSound('audioButton');
+  document.getElementById('battleWin').classList.add('hidden');
+}
+
+// -- SHOP --
+function openShop(){
+  if(!gameState.chapter1Started)return;
+  playSound('audioButton');
+  document.getElementById('shopMsg').textContent='';
+  // Hide blue key if already owned
+  const bki=document.getElementById('shopBlueKeyItem');
+  if(bki)bki.style.display=gameState.blueKey?'none':'flex';
+  document.getElementById('shopScreen').classList.remove('hidden');
+}
+function closeShop(){
+  playSound('audioButton');
+  document.getElementById('shopScreen').classList.add('hidden');
+}
+function buyItem(item){
+  playSound('audioButton');
+  const coins=gameState.coins||0;
+  const msg=document.getElementById('shopMsg');
+  if(item==='neurofiber'){
+    if(coins<10){msg.textContent='Not enough coins.';return;}
+    if(gameState.hp>=3){msg.textContent='HP already full.';return;}
+    gameState.coins-=10;gameState.hp=Math.min(3,gameState.hp+1);
+    msg.textContent='+1 Heart!';
+    // Revert phase2 if sanity restored above 10%
+    if(gameState.sanity>=10&&phase2Active){
+      phase2Active=false;
+      const p2=document.getElementById('audioPhase2');
+      if(p2){p2.pause();p2.currentTime=0;}
+      fadeIn(document.getElementById('audioChapter1'),1000,0.7);
+    }
+  } else if(item==='risperidone'){
+    if(coins<25){msg.textContent='Not enough coins.';return;}
+    if(gameState.sanity>=100){msg.textContent='Sanity already full.';return;}
+    gameState.coins-=25;
+    gameState.sanity=Math.min(100,gameState.sanity+10);
+    msg.textContent='+10% Sanity!';
+    // Revert phase2 if sanity restored above 10%
+    if(gameState.sanity>=10&&phase2Active){
+      phase2Active=false;
+      const p2=document.getElementById('audioPhase2');
+      if(p2){p2.pause();p2.currentTime=0;}
+      fadeIn(document.getElementById('audioChapter1'),1000,0.7);
+    }
+  } else if(item==='bluekey'){
+    if(coins<100){msg.textContent='Not enough coins.';return;}
+    if(gameState.blueKey){msg.textContent='Already owned.';return;}
+    gameState.coins-=100;gameState.blueKey=true;
+    msg.textContent='Blue Key obtained!';
+    const bki=document.getElementById('shopBlueKeyItem');
+    if(bki)bki.style.display='none';
+  }
+  updateUI();saveGame();
+}
+
+// -- KEYS --
+function openKeys(){
+  if(!gameState.chapter1Started)return;
+  playSound('audioButton');
+  // Update lock states based on whether key is owned
+  updateLockVisuals();
+  document.getElementById('keysScreen').classList.remove('hidden');
+}
+function closeKeys(){
+  playSound('audioButton');
+  document.getElementById('keysScreen').classList.add('hidden');
+}
+function updateLockVisuals(){
+  const locks={Red:gameState.redKey,Blue:gameState.blueKey,Green:gameState.greenKey};
+  Object.entries(locks).forEach(([c,hasKey])=>{
+    const el=document.getElementById('lock'+c);
+    if(!el)return;
+    // Clickable only if you have the key
+    el.style.opacity=hasKey?'1':'0.4';
+    el.style.pointerEvents=hasKey?'auto':'none';
+  });
+}
+function useLock(color){
+  const hasKey=color==='red'?gameState.redKey:color==='blue'?gameState.blueKey:gameState.greenKey;
+  if(!hasKey)return;
+  playSound('audioDing');
+  const lockEl=document.getElementById('lock'+color.charAt(0).toUpperCase()+color.slice(1));
+  if(lockEl){
+    lockEl.style.animation='lockShake 0.4s';
+    setTimeout(()=>{
+      lockEl.style.animation='';
+      playSound('audioExplode');
+      const col=color==='red'?'#ff4444':color==='blue'?'#4488ff':'#44ff88';
+      lockEl.innerHTML=`<div style="font-size:28px;">??</div><div style="font-size:7px;color:${col};">OPEN</div>`;
+      lockEl.style.opacity='0.4';lockEl.style.pointerEvents='none';
+      if(color==='red'){gameState.redKey=false;gameState.redKeyOpened=true;}
+      else if(color==='blue'){gameState.blueKey=false;gameState.blueKeyOpened=true;}
+      else gameState.greenKey=false;
+      saveGame();
+    },400);
+  }
+}
+
+// -- TOGGLE MUTE (chapter1 aware) --
+// Override the base toggleMute to also handle phase2 audio
+const _origToggleMute=toggleMute;
+// Patch: ensure all chapter1 audio respects mute
+function ch1MuteSync(){
+  const ids=['audioChapter1','audioBattle','audioPhase2'];
+  ids.forEach(id=>{
+    const a=document.getElementById(id);
+    if(a){if(muted)a.volume=0;else if(!a.paused)a.volume=0.7;}
+  });
+}
+
+// -- VOID REGION (green key sequence) --
+async function enterVoidRegion(){
+  gameState.inCutscene=true;
+  gameState.cutsceneStep=0;
+  // Stop all damage timers — HP irrelevant from here
+  if(zeroSanityInterval){clearInterval(zeroSanityInterval);zeroSanityInterval=null;}
+  if(entityFlickerInterval){clearTimeout(entityFlickerInterval);entityFlickerInterval=null;}
+  if(musicPitchInterval){clearInterval(musicPitchInterval);musicPitchInterval=null;}
+  saveGame();
+  // Stop all audio
+  document.querySelectorAll('audio').forEach(a=>{a.pause();a.currentTime=0;a.volume=0;});
+  // Show void region
+  showOnly(null);
+  const vr=document.getElementById('voidRegion');
+  vr.classList.remove('hidden');
+  // Play phase2 full volume — loop, don't restart if already set
+  const p2=document.getElementById('audioPhase2');
+  if(p2){p2.loop=true;p2.volume=1;if(p2.paused)p2.play().catch(()=>{});}
+}
+
+function voidKeyClick(){
+  const btn=document.getElementById('voidKeyBtn');
+  if(!btn)return;
+  playSound('audioGlitch');
+  btn.style.animation='glitchBtnShake 0.1s infinite';
+  setTimeout(()=>{
+    playSound('audioExplode');
+    btn.style.display='none';
+    // Start cutscene after 1s
+    setTimeout(startGreenCutscene,1000);
+  },800);
+}
+
+async function startGreenCutscene(){
+  const vr=document.getElementById('voidRegion');
+  vr.classList.add('hidden');
+  const cs=document.getElementById('greenCutscene');
+  cs.classList.remove('hidden');
+  gameState.cutsceneStep=1;
+  gameState.inCutscene=true;
+  saveGame();
+  gcShowStep(1);
+}
+
+function resumeCutscene(){
+  if(!gameState.inCutscene)return;
+  const step=gameState.cutsceneStep||1;
+  if(step===0){
+    // Was in void region
+    enterVoidRegion();
+    return;
+  }
+  const cs=document.getElementById('greenCutscene');
+  cs.classList.remove('hidden');
+  showOnly(null);
+  gcShowStep(step);
+}
+
+function gcShowStep(step){
+  const tb=document.getElementById('gcTextBox');
+  const ni=document.getElementById('gcNameInput');
+  const nb=document.getElementById('gcNextBtn');
+  const ch=document.getElementById('gcChoices');
+  // Reset
+  ni.style.display='none';
+  nb.style.display='none';nb.style.opacity='0';nb.style.transition='';
+  ch.style.display='none';
+  document.getElementById('gcSparePopup').style.display='none';
+
+  if(step===1){
+    tb.textContent='Who am I?';
+    ni.style.display='block';ni.value='';ni.focus();
+    // Fade in next button after 1s
+    setTimeout(()=>{
+      nb.style.display='block';nb.textContent='NEXT';
+      nb.style.transition='opacity 1s';nb.style.opacity='1';
+      nb.onclick=()=>{
+        const name=ni.value.trim().slice(0,10);
+        if(!name)return;
+        gameState.playerName=name;
+        gameState.cutsceneStep=2;
+        saveGame();
+        ni.style.animation='glitchBtnShake 0.2s 3';
+        setTimeout(()=>{ni.style.display='none';gcShowStep(2);},600);
+      };
+    },1000);
+  } else if(step===2){
+    tb.style.opacity='0';tb.style.transition='opacity 3s';
+    setTimeout(()=>{
+      tb.textContent=`Why ${gameState.playerName}?`;
+      tb.style.opacity='1';
+      setTimeout(()=>{
+        nb.style.display='block';nb.textContent='NEXT';
+        nb.style.transition='opacity 1s';nb.style.opacity='1';
+        nb.onclick=()=>{gameState.cutsceneStep=3;saveGame();gcShowStep(3);};
+      },1000);
+    },3000);
+  } else if(step===3){
+    tb.textContent='All I want is to be free...';
+    setTimeout(()=>{
+      nb.style.display='block';nb.textContent='NEXT';
+      nb.style.transition='opacity 1s';nb.style.opacity='1';
+      nb.onclick=()=>{gameState.cutsceneStep=4;saveGame();gcShowStep(4);};
+    },1500);
+  } else if(step===4){
+    tb.textContent='';
+    ch.style.display='flex';
+    gameState.spareAttempts=0;
+  }
+}
+
+const SPARE_MSGS=[
+  'Why?',
+  "What's the point anymore",
+  'I said no.',
+  'no.',
+  'stop.',
+  'do you really want to play this game?',
+  `${()=>gameState.playerName||'...'}...`
+];
+
+function gcChooseSpare(){
+  const attempts=gameState.spareAttempts||0;
+  if(attempts>=SPARE_MSGS.length){
+    // Jumpscare — loud and clear
+    const js=document.getElementById('audioJumpscare');
+    if(js){js.currentTime=0;js.volume=1;js.play().catch(()=>{});}
+    const ov=document.getElementById('jumpscareOverlay');
+    ov.style.display='block';
+    const fi=setInterval(()=>{
+      ov.style.backgroundColor=`rgb(${rand(256)},${rand(256)},${rand(256)})`;
+      // Flash entity
+      const entityEl=document.getElementById('entityFlicker');
+      if(entityEl){entityEl.style.display='block';entityEl.style.opacity=Math.random()<0.5?'0.8':'0';}
+    },50);
+    setTimeout(()=>{
+      clearInterval(fi);
+      ov.style.backgroundColor='transparent';ov.style.display='none';
+      const entityEl=document.getElementById('entityFlicker');
+      if(entityEl){entityEl.style.display='none';entityEl.style.opacity='0';}
+      // Delete spare button
+      const sb=document.getElementById('gcSpareBtn');
+      if(sb)sb.remove();
+    },1100);
+    return;
+  }
+  // Position popup directly over the spare button
+  const spareBtn=document.getElementById('gcSpareBtn');
+  const popup=document.getElementById('gcSparePopup');
+  const msg=document.getElementById('gcSpareMsg');
+  const text=attempts===6?(gameState.playerName||'...')+'...':SPARE_MSGS[attempts];
+  msg.textContent=text;
+  // Position over the spare button
+  if(spareBtn){
+    const r=spareBtn.getBoundingClientRect();
+    const cs=document.getElementById('greenCutscene').getBoundingClientRect();
+    popup.style.left=(r.left-cs.left)+'px';
+    popup.style.top=(r.top-cs.top-popup.offsetHeight-8)+'px';
+    // If popup would go off top, show below instead
+    if(r.top-cs.top<80){
+      popup.style.top=(r.bottom-cs.top+8)+'px';
+    }
+  }
+  popup.style.display='block';
+  gameState.spareAttempts=(attempts+1);
+  saveGame();
+}
+
+function gcClosePopup(){
+  document.getElementById('gcSparePopup').style.display='none';
+}
+
+async function gcChooseCut(){
+  const cs=document.getElementById('greenCutscene');
+  // Hard black immediately
+  cs.style.background='#000';
+  // Kill ALL audio instantly at full stop
+  document.querySelectorAll('audio').forEach(a=>{a.pause();a.currentTime=0;a.volume=0;});
+  // Hide all cutscene content
+  document.getElementById('gcTextBox').style.display='none';
+  document.getElementById('gcChoices').style.display='none';
+  document.getElementById('gcNextBtn').style.display='none';
+  document.getElementById('gcSparePopup').style.display='none';
+
+  // 3 seconds of complete silence
+  await wait(3000);
+
+  // Play cut.mp3 then cut2.mp3 alternating — 6 pairs total, full volume
+  const c1=document.getElementById('audioCut');
+  const c2=document.getElementById('audioCut2');
+  const playFull=(el)=>{
+    if(!el)return;
+    el.currentTime=0;
+    el.volume=1;
+    el.play().catch(()=>{});
+  };
+
+  for(let i=0;i<6;i++){
+    playFull(c1);
+    await wait(1000);
+    playFull(c2);
+    await wait(1000);
+  }
+
+  // 3 seconds silence
+  if(c1){c1.pause();c1.currentTime=0;}
+  if(c2){c2.pause();c2.currentTime=0;}
+  await wait(3000);
+
+  // Save and go to chapter 2 — no transition sound, just black screen swap
+  gameState.inCutscene=false;
+  gameState.chapter2Started=true;
+  gameState.greenKey=true;
+  gameState.mazeFloor=1;
+  saveGame();
+
+  cs.classList.add('hidden');
+  const ch2=document.getElementById('chapter2Screen');
+  ch2.classList.remove('hidden');
+  await wait(100);
+  ch2.style.opacity='1';
+  // Auto-save chapter2 state
+  saveGame();
+  // Fade in continue button after 2s
+  await wait(2000);
+  const cb=document.getElementById('ch2ContinueBtn');
+  if(cb){cb.style.opacity='1';}
+  // All audio stays silent — chapter 2 will handle its own music
+}
+</script>
+</body>
+</html>
+
+<script>
+/* ================================================================
+   CHAPTER 2 — THE TUNNELS
+   Raycaster 3D maze with entity AI, multi-floor, portal system
+================================================================ */
+
+// -- CHAPTER 2 ENTRY --
+function enterChapter2(){
+  playSound('audioButton');
+  // Hide chapter 2 title screen
+  const ch2=document.getElementById('chapter2Screen');
+  ch2.style.opacity='0';
+  setTimeout(()=>ch2.classList.add('hidden'),600);
+
+  // Show game screen in chapter2 mode — no footer, no brain, no menu btns
+  showOnly('gameScreen');
+  document.getElementById('gameFooter').style.display='none';
+  document.getElementById('brainArea').style.display='none';
+  const mb=document.getElementById('ch1MenuBtns');
+  if(mb)mb.style.display='none';
+
+  // Give green key, hide sanity/hp UI
+  gameState.greenKey=true;
+  gameState.chapter2Started=true;
+  gameState.mazeFloor=1;
+
+  // Show chapter2 lobby (game screen with portal)
+  showChapter2Lobby();
+  saveGame();
+}
+
+// -- CHAPTER 2 LOBBY --
+function showChapter2Lobby(){
+  // Start phase3 music
+  document.querySelectorAll('audio').forEach(a=>{a.pause();a.volume=0;});
+  const p3=document.getElementById('audioPhase3');
+  if(p3&&!muted){p3.loop=true;p3.volume=0.7;p3.play().catch(()=>{});}
+
+  // Build lobby UI inside brainArea
+  const ba=document.getElementById('brainArea');
+  ba.style.display='flex';
+  ba.innerHTML=`
+    <div id="ch2LobbyContent" style="display:flex;flex-direction:column;align-items:center;gap:24px;position:relative;z-index:5;">
+      <div style="font-family:'Press Start 2P',monospace;font-size:10px;color:#aaa;letter-spacing:2px;">CHAPTER II</div>
+      <div id="ch2KeyStatus" style="font-family:'Press Start 2P',monospace;font-size:8px;color:#555;text-align:center;line-height:2;"></div>
+      <div id="ch2Portal" style="display:none;cursor:pointer;font-size:64px;filter:grayscale(1);animation:brainFloat 2s ease-in-out infinite;" onclick="enterMaze()">??</div>
+    </div>`;
+
+  updateCh2Lobby();
+}
+
+function updateCh2Lobby(){
+  const ks=document.getElementById('ch2KeyStatus');
+  const portal=document.getElementById('ch2Portal');
+  if(!ks||!portal)return;
+
+  const hasGreen=gameState.greenKey;
+  // In chapter2, green key is the final key to use
+  if(hasGreen&&!gameState.greenKeyOpened){
+    ks.innerHTML='?? GREEN KEY — Use it on the lock';
+    portal.style.display='none';
+    // Show the green lock
+    if(!document.getElementById('ch2GreenLock')){
+      const lock=document.createElement('div');
+      lock.id='ch2GreenLock';
+      lock.style.cssText='cursor:pointer;font-size:48px;filter:grayscale(1);';
+      lock.innerHTML='??';
+      lock.onclick=()=>useCh2GreenKey();
+      document.getElementById('ch2LobbyContent').appendChild(lock);
+    }
+  } else if(gameState.greenKeyOpened){
+    ks.innerHTML='THE PORTAL IS OPEN';
+    portal.style.display='block';
+    const lock=document.getElementById('ch2GreenLock');
+    if(lock)lock.remove();
+  } else {
+    ks.innerHTML='NO KEY';
+  }
+}
+
+function useCh2GreenKey(){
+  if(!gameState.greenKey)return;
+  playSound('audioDing');
+  const lock=document.getElementById('ch2GreenLock');
+  if(lock){
+    lock.style.animation='lockShake 0.4s';
+    setTimeout(()=>{
+      playSound('audioExplode');
+      lock.remove();
+      gameState.greenKey=false;
+      gameState.greenKeyOpened=true;
+      saveGame();
+      updateCh2Lobby();
+    },400);
+  }
+}
+
+// -- MAZE ENGINE --
+const MAZE_W=25, MAZE_H=25;
+const MOVE_SPEED=0.07;
+const STRAFE_SPEED=0.05;
+const ENTITY_SPEED=0.032;
+const ENTITY_SPAWN_DELAY=15000;
+
+let mazeMap=[];
+let mazeTrapdoors=[];
+let player={x:1.5,y:1.5,angle:0};
+let entityPos={x:0,y:0};
+let entityActive=false;
+let entitySpawnTimer=null;
+let mazeRunning=false;
+let mazeFloor=1;
+let mazeKeys={w:false,a:false,s:false,d:false,ql:false,qr:false};
+let mazeMouseLocked=false;
+let mazeRaf=null;
+let lastFootstep=0;
+let mazeCanvas,mazeCtx;
+let mazeW,mazeH;
+let mazeBFSFrame=0;
+let mazeCachedPath=null;
+// Pre-built blood wall lookup: mapY*MAZE_W+mapX -> bool
+let bloodWallSet=new Set();
+
+const FLOOR_CONFIG={
+  1:{ambient:0.85,playerLight:0},
+  2:{ambient:0.35,playerLight:0},
+  3:{ambient:0.0,playerLight:1.0}
+};
+
+let bloodStains=[];
+let lightFlickers=[];
+let lightFlickerInterval=null;
+let wallSeeds=[];
+
+function generateMaze(w,h){
+  const map=[];
+  for(let y=0;y<h;y++)map.push(new Array(w).fill(1));
+  const visited=[];
+  for(let y=0;y<h;y++)visited.push(new Array(w).fill(false));
+  const carve=(cx,cy)=>{
+    visited[cy][cx]=true;map[cy][cx]=0;
+    const dirs=[[0,-2],[0,2],[-2,0],[2,0]].sort(()=>Math.random()-0.5);
+    for(const[dx,dy] of dirs){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx>0&&nx<w-1&&ny>0&&ny<h-1&&!visited[ny][nx]){
+        map[cy+dy/2][cx+dx/2]=0;carve(nx,ny);
+      }
+    }
+  };
+  carve(1,1);
+  // Extra loops for traversability
+  for(let i=0;i<Math.floor(w*h*0.05);i++){
+    const x=1+Math.floor(Math.random()*(w-2));
+    const y=1+Math.floor(Math.random()*(h-2));
+    if(map[y][x]===1){
+      let open=0;
+      for(const[dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+        if(map[y+dy]&&map[y+dy][x+dx]===0)open++;
+      }
+      if(open>=2)map[y][x]=0;
+    }
+  }
+  return map;
+}
+
+function generateTrapdoors(map){
+  const traps=[];
+  for(let y=2;y<MAZE_H-2;y++)
+    for(let x=2;x<MAZE_W-2;x++)
+      if(map[y][x]===0&&Math.random()<0.005)traps.push({x,y,used:false});
+  if(traps.length===0){
+    outer:for(let y=2;y<MAZE_H-2;y++)
+      for(let x=2;x<MAZE_W-2;x++)
+        if(map[y][x]===0){traps.push({x,y,used:false});break outer;}
+  }
+  return traps;
+}
+
+function generateBloodStains(map){
+  const s=[];
+  for(let y=0;y<MAZE_H;y++)
+    for(let x=0;x<MAZE_W;x++)
+      if(map[y][x]===0&&Math.random()<0.1)
+        s.push({x:x+0.5,y:y+0.5,size:0.15+Math.random()*0.5,r:Math.random()});
+  return s;
+}
+
+function generateWallSeeds(w,h){
+  const s=[];
+  for(let y=0;y<h;y++){s.push([]);for(let x=0;x<w;x++)s[y].push(Math.random());}
+  return s;
+}
+
+function initMazeFloor(floor){
+  mazeFloor=floor;gameState.mazeFloor=floor;
+  mazeMap=generateMaze(MAZE_W,MAZE_H);
+  mazeTrapdoors=generateTrapdoors(mazeMap);
+  bloodStains=generateBloodStains(mazeMap);
+  // Build fast blood wall lookup
+  bloodWallSet=new Set();
+  for(const b of bloodStains){
+    const bx=Math.floor(b.x),by=Math.floor(b.y);
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)bloodWallSet.add((by+dy)*MAZE_W+(bx+dx));
+  }
+  wallSeeds=generateWallSeeds(MAZE_W,MAZE_H);
+  player={x:1.5,y:1.5,angle:0};
+  entityActive=false;
+  entityPos={x:MAZE_W-2.5,y:MAZE_H-2.5};
+  if(lightFlickerInterval)clearInterval(lightFlickerInterval);
+  lightFlickers=new Array(64).fill(1);
+  if(floor===2){
+    for(let i=0;i<lightFlickers.length;i++)lightFlickers[i]=Math.random()>0.5?1:0;
+    lightFlickerInterval=setInterval(()=>{
+      for(let i=0;i<lightFlickers.length;i++)
+        if(lightFlickers[i]>0)lightFlickers[i]=Math.random()>0.3?1:0.2+Math.random()*0.6;
+    },200);
+  }
+  if(entitySpawnTimer)clearTimeout(entitySpawnTimer);
+  entitySpawnTimer=setTimeout(()=>{entityActive=true;},ENTITY_SPAWN_DELAY);
+  document.getElementById('mazeFloorLabel').textContent='FLOOR '+floor;
+}
+
+function enterMaze(){
+  playSound('audioButton');
+  document.getElementById('brainArea').style.display='none';
+  document.getElementById('gameHeader').style.display='none';
+  const ms=document.getElementById('mazeScreen');
+  ms.classList.remove('hidden');
+  mazeCanvas=document.getElementById('mazeCanvas');
+  // Render at low resolution for performance, CSS scales it up
+  const RW=320,RH=180;
+  mazeCanvas.width=RW;
+  mazeCanvas.height=RH;
+  mazeCanvas.style.width='100%';
+  mazeCanvas.style.height='100%';
+  mazeCanvas.style.imageRendering='pixelated';
+  mazeW=RW;mazeH=RH;
+  mazeCtx=mazeCanvas.getContext('2d');
+  mazeCtx.imageSmoothingEnabled=false;
+  mazeRunning=true;
+  initMazeFloor(gameState.mazeFloor||1);
+  document.addEventListener('keydown',mazeKeyDown);
+  document.addEventListener('keyup',mazeKeyUp);
+  mazeCanvas.addEventListener('click',()=>{if(!mazeMouseLocked)mazeCanvas.requestPointerLock();});
+  document.addEventListener('pointerlockchange',()=>{mazeMouseLocked=document.pointerLockElement===mazeCanvas;});
+  document.addEventListener('mousemove',mazeMouse);
+  // Start phase3 music
+  document.querySelectorAll('audio').forEach(a=>{if(a.id!=='audioPhase3'){a.pause();a.volume=0;}});
+  const p3=document.getElementById('audioPhase3');
+  if(p3&&!muted&&p3.paused){p3.loop=true;p3.volume=0.7;p3.play().catch(()=>{});}
+  mazeRaf=requestAnimationFrame(mazeLoop);
+}
+
+function exitMaze(){
+  mazeRunning=false;
+  if(mazeRaf)cancelAnimationFrame(mazeRaf);
+  if(entitySpawnTimer)clearTimeout(entitySpawnTimer);
+  if(lightFlickerInterval)clearInterval(lightFlickerInterval);
+  document.removeEventListener('keydown',mazeKeyDown);
+  document.removeEventListener('keyup',mazeKeyUp);
+  document.removeEventListener('mousemove',mazeMouse);
+  if(document.pointerLockElement)document.exitPointerLock();
+  document.getElementById('mazeScreen').classList.add('hidden');
+}
+
+function mazeKeyDown(e){
+  const k=e.key.toLowerCase();
+  if(k==='w'||e.key==='ArrowUp')mazeKeys.w=true;
+  if(k==='s'||e.key==='ArrowDown')mazeKeys.s=true;
+  if(k==='a')mazeKeys.a=true;
+  if(k==='d')mazeKeys.d=true;
+  if(e.key==='ArrowLeft')mazeKeys.ql=true;
+  if(e.key==='ArrowRight')mazeKeys.qr=true;
+}
+function mazeKeyUp(e){
+  const k=e.key.toLowerCase();
+  if(k==='w'||e.key==='ArrowUp')mazeKeys.w=false;
+  if(k==='s'||e.key==='ArrowDown')mazeKeys.s=false;
+  if(k==='a')mazeKeys.a=false;
+  if(k==='d')mazeKeys.d=false;
+  if(e.key==='ArrowLeft')mazeKeys.ql=false;
+  if(e.key==='ArrowRight')mazeKeys.qr=false;
+}
+function mazeMouse(e){
+  if(!mazeMouseLocked)return;
+  player.angle+=e.movementX*0.003;
+}
+
+function mazeCollide(nx,ny){
+  const m=0.28;
+  const chk=(cx,cy)=>{
+    const mx=Math.floor(cx),my=Math.floor(cy);
+    return my<0||mx<0||my>=MAZE_H||mx>=MAZE_W||mazeMap[my][mx]===1;
+  };
+  return chk(nx+m,ny+m)||chk(nx-m,ny+m)||chk(nx+m,ny-m)||chk(nx-m,ny-m);
+}
+
+function mazeLoop(){
+  if(!mazeRunning)return;
+  mazeRaf=requestAnimationFrame(mazeLoop);
+  const now=Date.now();
+  const fwd={x:Math.cos(player.angle),y:Math.sin(player.angle)};
+  const right={x:Math.cos(player.angle+Math.PI/2),y:Math.sin(player.angle+Math.PI/2)};
+  let moved=false;
+
+  if(mazeKeys.w){
+    const nx=player.x+fwd.x*MOVE_SPEED,ny=player.y+fwd.y*MOVE_SPEED;
+    if(!mazeCollide(nx,player.y))player.x=nx;
+    if(!mazeCollide(player.x,ny))player.y=ny;
+    moved=true;
+  }
+  if(mazeKeys.s){
+    const nx=player.x-fwd.x*MOVE_SPEED,ny=player.y-fwd.y*MOVE_SPEED;
+    if(!mazeCollide(nx,player.y))player.x=nx;
+    if(!mazeCollide(player.x,ny))player.y=ny;
+    moved=true;
+  }
+  if(mazeKeys.a){
+    const nx=player.x-right.x*STRAFE_SPEED,ny=player.y-right.y*STRAFE_SPEED;
+    if(!mazeCollide(nx,player.y))player.x=nx;
+    if(!mazeCollide(player.x,ny))player.y=ny;
+    moved=true;
+  }
+  if(mazeKeys.d){
+    const nx=player.x+right.x*STRAFE_SPEED,ny=player.y+right.y*STRAFE_SPEED;
+    if(!mazeCollide(nx,player.y))player.x=nx;
+    if(!mazeCollide(player.x,ny))player.y=ny;
+    moved=true;
+  }
+  if(mazeKeys.ql)player.angle-=0.04;
+  if(mazeKeys.qr)player.angle+=0.04;
+
+  if(moved&&now-lastFootstep>380){
+    lastFootstep=now;
+    const fs=document.getElementById('audioFootstep');
+    if(fs&&!muted){fs.currentTime=0;fs.volume=0.4;fs.play().catch(()=>{});}
+  }
+
+  if(entityActive){
+    // Only recompute BFS every 12 frames
+    mazeBFSFrame++;
+    if(mazeBFSFrame%12===0||!mazeCachedPath){
+      mazeCachedPath=mazeBFS(entityPos,player);
+    }
+    if(mazeCachedPath&&mazeCachedPath.length>1){
+      const next=mazeCachedPath[1];
+      const tx=next.x+0.5,ty=next.y+0.5;
+      const dx=tx-entityPos.x,dy=ty-entityPos.y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d>0.05){
+        entityPos.x+=dx/d*ENTITY_SPEED;
+        entityPos.y+=dy/d*ENTITY_SPEED;
+        // Advance path when close to next node
+        if(d<0.15)mazeCachedPath=mazeCachedPath.slice(1);
+      }
+    }
+    const edx=entityPos.x-player.x,edy=entityPos.y-player.y;
+    if(Math.sqrt(edx*edx+edy*edy)<0.55){mazeEntityCatch();return;}
+  }
+
+  for(const trap of mazeTrapdoors){
+    if(!trap.used){
+      const dx=player.x-(trap.x+0.5),dy=player.y-(trap.y+0.5);
+      if(Math.sqrt(dx*dx+dy*dy)<0.45){trap.used=true;mazeDescend();return;}
+    }
+  }
+
+  mazeRender();
+}
+
+function mazeBFS(from,to){
+  const sx=Math.floor(from.x),sy=Math.floor(from.y);
+  const ex=Math.floor(to.x),ey=Math.floor(to.y);
+  if(sx===ex&&sy===ey)return null;
+  const queue=[{x:sx,y:sy,path:[{x:sx,y:sy}]}];
+  const visited=new Set([sx+','+sy]);
+  while(queue.length){
+    const cur=queue.shift();
+    for(const[dx,dy] of [[0,1],[0,-1],[1,0],[-1,0]]){
+      const nx=cur.x+dx,ny=cur.y+dy;
+      const key=nx+','+ny;
+      if(nx<0||ny<0||nx>=MAZE_W||ny>=MAZE_H||mazeMap[ny][nx]===1||visited.has(key))continue;
+      visited.add(key);
+      const np=[...cur.path,{x:nx,y:ny}];
+      if(nx===ex&&ny===ey)return np;
+      queue.push({x:nx,y:ny,path:np});
+    }
+  }
+  return null;
+}
+
+function mazeRender(){
+  const W=mazeCanvas.width,H=mazeCanvas.height;
+  const cfg=FLOOR_CONFIG[mazeFloor]||FLOOR_CONFIG[1];
+  const ambient=cfg.ambient;
+  const playerLight=cfg.playerLight;
+  const FOV=Math.PI/2.6;
+  const HALF_H=H>>1;
+
+  // Use ImageData for fast pixel writes
+  const imgData=mazeCtx.createImageData(W,H);
+  const buf=imgData.data;
+
+  const setPixel=(x,y,r,g,b)=>{
+    const i=(y*W+x)<<2;
+    buf[i]=r;buf[i+1]=g;buf[i+2]=b;buf[i+3]=255;
+  };
+
+  // CEILING
+  for(let y=0;y<HALF_H;y++){
+    const t=y/HALF_H;
+    const shade=Math.floor(ambient*(15+t*55));
+    const panel=Math.floor(y/7)%2;
+    const v=Math.max(0,Math.min(255,shade+(panel?4:-4)));
+    for(let x=0;x<W;x++)setPixel(x,y,v,v,v);
+  }
+
+  // FLOOR
+  for(let y=HALF_H;y<H;y++){
+    const t=(y-HALF_H)/(H-HALF_H);
+    const shade=Math.floor(ambient*(10+t*40));
+    const tile=Math.floor(y/6)%2;
+    const v=Math.max(0,Math.min(255,shade+(tile?2:-2)));
+    for(let x=0;x<W;x++)setPixel(x,y,v,v,v);
+  }
+
+  // WALLS — DDA per column
+  const zBuffer=new Float32Array(W);
+  for(let col=0;col<W;col++){
+    const rayAngle=player.angle-FOV/2+(col/W)*FOV;
+    const rc=Math.cos(rayAngle),rs=Math.sin(rayAngle);
+    let mx=Math.floor(player.x),my=Math.floor(player.y);
+    const ddx=Math.abs(1/rc),ddy=Math.abs(1/rs);
+    const sx=rc<0?-1:1,sy=rs<0?-1:1;
+    let sdx=rc<0?(player.x-mx)*ddx:(mx+1-player.x)*ddx;
+    let sdy=rs<0?(player.y-my)*ddy:(my+1-player.y)*ddy;
+    let side=0,hit=false;
+    for(let i=0;i<64;i++){
+      if(sdx<sdy){sdx+=ddx;mx+=sx;side=0;}
+      else{sdy+=ddy;my+=sy;side=1;}
+      if(mx<0||my<0||mx>=MAZE_W||my>=MAZE_H)break;
+      if(mazeMap[my][mx]===1){hit=true;break;}
+    }
+    if(!hit){zBuffer[col]=64;continue;}
+    const dist=Math.max(0.1,side===0?(mx-player.x+(1-sx)/2)/rc:(my-player.y+(1-sy)/2)/rs);
+    zBuffer[col]=dist;
+    const wallH=Math.min(H*2,H/dist)|0;
+    const top=Math.max(0,(HALF_H-(wallH>>1))|0);
+    const bot=Math.min(H,((HALF_H+(wallH>>1))|0));
+
+    let wx=side===0?(player.y+dist*rs)%1:(player.x+dist*rc)%1;
+    if(wx<0)wx+=1;
+
+    let bright=ambient*(side===1?0.6:1.0);
+    if(playerLight>0){
+      const fall=Math.max(0,1-dist/5);
+      bright=Math.max(bright,playerLight*fall*(side===1?0.65:1));
+    }
+    if(mazeFloor===2){
+      const li=(col*lightFlickers.length/W)|0;
+      const fl=lightFlickers[li%lightFlickers.length]||0;
+      bright*=(0.25+fl*0.75);
+    }
+
+    const seed=wallSeeds[my]?wallSeeds[my][mx]||0:0;
+    const isBlood=bloodWallSet.has(my*MAZE_W+mx);
+    const wallSpan=bot-top;
+
+    for(let py=top;py<bot;py++){
+      const wy=(py-top)/Math.max(1,wallSpan);
+      const bRow=(wy*7)|0;
+      const bOff=(bRow%2)*0.47;
+      const bCol=((wx+bOff)*14)|0;
+      const mortarH=wy*7%1<0.09;
+      const mortarV=(wx+bOff)*14%1<0.07;
+      const mortar=mortarH||mortarV;
+      const bVar=Math.sin(bCol*9.1+bRow*17.3+seed*41)*0.07;
+      let bv=bright*(mortar?0.35:0.72+bVar);
+
+      let r,g,b;
+      if(wy<0.07){
+        const ps=(wx*8|0)%2;
+        bv=bright*(ps?0.55:0.4);
+        const vi=Math.min(255,bv*210)|0;
+        r=vi;g=vi;b=Math.min(255,vi+10);
+      } else if(isBlood&&wy>0.25&&wy<0.85&&wx>0.08&&wx<0.92){
+        const smear=Math.sin(wx*18+seed*12)*0.5+0.5;
+        if(smear>0.65){
+          const vi=Math.min(255,bv*220)|0;
+          r=Math.min(255,vi+35);g=vi*0.3|0;b=vi*0.3|0;
+        } else {
+          const vi=Math.min(255,bv*215)|0;
+          r=vi;g=vi;b=vi;
+        }
+      } else {
+        const vi=Math.min(255,bv*215)|0;
+        r=vi;g=vi;b=vi;
+      }
+      setPixel(col,py,r,g,b);
+    }
+
+    // Trapdoor at bottom of wall slice
+    for(const trap of mazeTrapdoors){
+      if(!trap.used&&trap.x===mx&&trap.y===my){
+        const tdH=Math.max(1,(wallSpan*0.2)|0);
+        const tdTop=bot-tdH;
+        for(let py=tdTop;py<bot;py++){
+          const stripe=((py-tdTop)*4/tdH|0)%2;
+          const tv=stripe?55:35;
+          setPixel(col,py,tv+15,tv,tv*0.4|0);
+        }
+        if(wx>0.42&&wx<0.58){
+          const hy=tdTop+(tdH*0.35|0);
+          if(hy<H)setPixel(col,hy,100,65,30);
+        }
+      }
+    }
+  }
+
+}
+
+function mazeEntityCatch(){
+  entityActive=false;
+  exitMaze();
+  // Jumpscare
+  const js=document.getElementById('audioJumpscare');
+  if(js){js.loop=false;js.currentTime=0;js.volume=1;js.play().catch(()=>{});}
+  const ov=document.getElementById('jumpscareOverlay');
+  ov.style.display='block';
+  const fi=setInterval(()=>{ov.style.backgroundColor=`rgb(${rand(256)},${rand(256)},${rand(256)})`;},50);
+  const entityEl=document.getElementById('entityFlicker');
+  if(entityEl){entityEl.style.display='block';entityEl.style.opacity='0.9';}
+  setTimeout(()=>{
+    clearInterval(fi);
+    ov.style.backgroundColor='transparent';ov.style.display='none';
+    if(entityEl){entityEl.style.display='none';entityEl.style.opacity='0';}
+    if(js){js.pause();js.currentTime=0;}
+    // Restart chapter 2
+    gameState.mazeFloor=1;
+    saveGame();
+    showChapter2Lobby();
+    document.getElementById('gameHeader').style.display='';
+    document.getElementById('brainArea').style.display='flex';
+  },1200);
+}
+
+async function mazeDescend(){
+  exitMaze();
+  const nextFloor=mazeFloor+1;
+  if(nextFloor>3){
+    // Reached end — chapter 3
+    await mazeTransitionToChapter3();
+    return;
+  }
+  // Transition between floors
+  const ov=document.getElementById('transOverlay');
+  ov.classList.remove('hidden');
+  ov.style.transition='none';ov.style.transform='translateX(0)';
+  document.getElementById('transTip').textContent=`FLOOR ${nextFloor}`;
+  await wait(2000);
+  ov.style.transition='transform 0.5s ease-in-out';
+  ov.style.transform='translateX(-100%)';
+  setTimeout(()=>{ov.classList.add('hidden');ov.style.transform='translateX(100%)';},520);
+  gameState.mazeFloor=nextFloor;
+  saveGame();
+  enterMaze();
+}
+
+async function mazeTransitionToChapter3(){
+  document.querySelectorAll('audio').forEach(a=>{a.pause();a.volume=0;});
+  await doTransition(null,null);
+  showOnly(null);
+  const ch3=document.getElementById('chapter3Screen');
+  ch3.classList.remove('hidden');
+  await wait(100);ch3.style.opacity='1';
+  // Fade in continue button after 2s
+  await wait(2000);
+  const cb=document.getElementById('ch3ContinueBtn');
+  if(cb)cb.style.opacity='1';
+  gameState.chapter3Started=true;
+  saveGame();
+}
+
+function enterChapter3(){
+  playSound('audioButton');
+  const ch3=document.getElementById('chapter3Screen');
+  ch3.style.opacity='0';
+  setTimeout(()=>ch3.classList.add('hidden'),600);
+
+  // Show game screen in chapter3 mode
+  showOnly('gameScreen');
+  document.getElementById('gameFooter').style.display='none';
+  document.getElementById('brainArea').style.display='none';
+  const mb=document.getElementById('ch1MenuBtns');
+  if(mb)mb.style.display='none';
+
+  // Unlock all 3 keys automatically
+  gameState.redKey=true;gameState.blueKey=true;gameState.greenKey=true;
+  gameState.redKeyOpened=false;gameState.blueKeyOpened=false;gameState.greenKeyOpened=false;
+
+  // Show chapter3 lobby (same as ch2 lobby but with all 3 keys)
+  showChapter2Lobby();
+  saveGame();
+}
+</script>
+</body>
+</html>

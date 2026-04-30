@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backrooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=Rubik+Glitch&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+canvas#c {
+  display: block; width: 100vw; height: 100vh;
+  image-rendering: pixelated;
+  filter: saturate(0.85);
+}
+#vignette {
+  position: fixed; inset: 0; pointer-events: none; z-index: 5;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.85) 100%);
+}
+#grain {
+  position: fixed; inset: 0; pointer-events: none; z-index: 6;
+  width: 100vw; height: 100vh;
+  image-rendering: pixelated;
+  opacity: 0.04;
+  background-size: 128px 128px;
+}
+#vhs {
+  position: fixed; inset: 0; pointer-events: none; z-index: 7;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 3px
+  );
+  opacity: 0.08;
+  animation: vhsDrift 8s linear infinite;
+}
+@keyframes vhsDrift {
+  0%   { transform: translateY(0px); filter: hue-rotate(0deg); }
+  25%  { transform: translateY(-1px); filter: hue-rotate(2deg); }
+  50%  { transform: translateY(1px); filter: hue-rotate(-2deg); }
+  75%  { transform: translateY(-2px); filter: hue-rotate(1deg); }
+  100% { transform: translateY(0px); filter: hue-rotate(0deg); }
+}
+#sanity-distort {
+  position: fixed; inset: 0; pointer-events: none; z-index: 8;
+  background: rgba(80,0,120,0.0);
+  opacity: 0; transition: opacity 0.5s;
+}
+#flash {
+  position: fixed; inset: 0; pointer-events: none; z-index: 20;
+  background: #000; opacity: 0; transition: opacity 0.3s;
+}
+</style>
+</head>
+<body>
+
+<!-- Overlay layers -->
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<canvas id="grain" width="256" height="256"></canvas>
+<div id="vhs"></div>
+<div id="sanity-distort"></div>
+<div id="flash"></div>
+
+<!-- Death screen -->
+<div id="death-screen" style="
+  position:fixed;inset:0;z-index:90;display:none;
+  background:rgba(180,0,0,0);
+  align-items:center;justify-content:center;
+  transition:background 1s;
+">
+  <img id="jumpscare-img" src="backrooms_entity1.png" style="
+    width:60vmin; height:auto; opacity:0;
+    animation: none;
+  ">
+</div>
+
+<!-- HUD -->
+<div id="hud" style="
+  position:fixed;top:18px;left:18px;z-index:30;
+  font-family:'Rubik Glitch',cursive;
+  color:#d4c17a;font-size:0.85rem;line-height:1.8;
+  text-shadow:0 0 8px #c8b56088, 0 0 20px #c8b56044;
+  pointer-events:none;
+">
+  <div id="hud-level">LEVEL: 0</div>
+  <div id="hud-sanity">SANITY: 100%</div>
+</div>
+
+<!-- Intro text -->
+<div id="intro-text" style="
+  position:fixed;inset:0;z-index:50;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Rubik Glitch',cursive;
+  color:#d4c17a;font-size:1.4rem;
+  text-shadow:0 0 20px #c8b560;
+  pointer-events:none;opacity:0;
+  transition:opacity 1s;
+"></div>
+
+<!-- Crosshair -->
+<div id="crosshair" style="
+  position:fixed;inset:0;z-index:10;
+  display:none;align-items:center;justify-content:center;
+  pointer-events:none;
+">
+  <div style="
+    width:14px;height:14px;position:relative;
+    opacity:0.6;
+  ">
+    <div style="position:absolute;top:6px;left:0;width:14px;height:2px;background:#d4c17a;"></div>
+    <div style="position:absolute;left:6px;top:0;width:2px;height:14px;background:#d4c17a;"></div>
+  </div>
+</div>
+
+<!-- Pause overlay -->
+<div id="pause-overlay" style="
+  position:fixed;inset:0;z-index:80;display:none;
+  background:rgba(0,0,0,0.7);
+  align-items:center;justify-content:center;
+  font-family:'Rubik Glitch',cursive;
+  color:#d4c17a;font-size:1.5rem;
+  text-shadow:0 0 20px #c8b560;
+  cursor:pointer;
+">PAUSED â€” Click to resume</div>
+
+<!-- Title screen -->
+<div id="title-screen" style="
+  position:fixed;inset:0;z-index:100;
+  background:#0a0900;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  overflow:hidden;
+">
+  <div style="
+    position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(
+      0deg,transparent,transparent 2px,
+      rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 3px
+    );
+    animation:vhsDrift 6s linear infinite;
+  "></div>
+  <h1 id="title-heading" style="
+    font-family:'Rubik Glitch',cursive;
+    font-size:5rem;color:#c8b560;
+    text-shadow:3px 0 #ff000033,-3px 0 #0000ff33,0 0 40px #c8b560,0 0 80px #c8b56066;
+    animation:glitch 6s infinite;
+    position:relative;z-index:1;
+    letter-spacing:0.05em;
+  ">BACKROOMS</h1>
+  <p style="
+    font-family:'Rubik Glitch',cursive;
+    font-size:1rem;color:#7a6a20;
+    margin-top:0.5rem;position:relative;z-index:1;
+    text-shadow:0 0 10px #7a6a2088;
+  ">Vortarium Productions</p>
+  <button id="play-btn" style="
+    margin-top:3rem;
+    font-family:'Rubik Glitch',cursive;
+    background:transparent;border:2px solid #c8b560;
+    color:#c8b560;padding:0.8rem 3rem;
+    font-size:1.2rem;cursor:pointer;
+    transition:background 0.2s,box-shadow 0.2s;
+    text-shadow:0 0 10px #c8b56088;
+    box-shadow:0 0 10px #c8b56033;
+    position:relative;z-index:1;
+  ">PLAY</button>
+</div>
+
+<style>
+@keyframes glitch {
+  0%,90%,100% { text-shadow:3px 0 #ff000033,-3px 0 #0000ff33,0 0 40px #c8b560; transform:skewX(0deg); }
+  92% { text-shadow:6px 0 #ff000066,-6px 0 #0000ff66,0 0 60px #c8b560; transform:skewX(-2deg); }
+  94% { text-shadow:-4px 0 #ff000044,4px 0 #0000ff44,0 0 40px #c8b560; transform:skewX(1deg); }
+  96% { text-shadow:3px 0 #ff000033,-3px 0 #0000ff33,0 0 40px #c8b560; transform:skewX(0deg); }
+}
+@keyframes entityShake {
+  0%,100% { transform:translate(0,0) rotate(0deg); opacity:1; }
+  10% { transform:translate(-8px,4px) rotate(-2deg); opacity:0.8; }
+  20% { transform:translate(10px,-6px) rotate(3deg); opacity:1; }
+  30% { transform:translate(-6px,8px) rotate(-1deg); opacity:0.6; }
+  40% { transform:translate(12px,-4px) rotate(2deg); opacity:1; }
+  50% { transform:translate(-10px,6px) rotate(-3deg); opacity:0.7; }
+  60% { transform:translate(8px,-8px) rotate(1deg); opacity:1; }
+  70% { transform:translate(-12px,4px) rotate(-2deg); opacity:0.5; }
+  80% { transform:translate(6px,10px) rotate(3deg); opacity:1; }
+  90% { transform:translate(-8px,-6px) rotate(-1deg); opacity:0.8; }
+}
+#play-btn:hover { background:#c8b56022; box-shadow:0 0 25px #c8b56066; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// â”€â”€â”€ CONSTANTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const CELL   = 8;
+const HALL_H = 4;
+const CHUNK_R = 4;
+const WALL_T = 0.4;
+const N = 1, S = 2, E = 4, W = 8;
+
+// â”€â”€â”€ GAME STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let gameState = 'TITLE'; // TITLE | PLAYING | DEAD
+let currentLevel = 0;
+let sanity = 100;
+let roomsVisited = new Set();
+let glitchChance = 0;
+let isDead = false;
+let isPointerLocked = false;
+
+// â”€â”€â”€ DOM REFS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const titleScreen   = document.getElementById('title-screen');
+const playBtn       = document.getElementById('play-btn');
+const hudLevel      = document.getElementById('hud-level');
+const hudSanity     = document.getElementById('hud-sanity');
+const introText     = document.getElementById('intro-text');
+const crosshair     = document.getElementById('crosshair');
+const pauseOverlay  = document.getElementById('pause-overlay');
+const deathScreen   = document.getElementById('death-screen');
+const jumpscareImg  = document.getElementById('jumpscare-img');
+const flashEl       = document.getElementById('flash');
+const sanityDistort = document.getElementById('sanity-distort');
+const vhsEl         = document.getElementById('vhs');
+const grainCanvas   = document.getElementById('grain');
+const grainCtx      = grainCanvas.getContext('2d');
+
+// â”€â”€â”€ AUDIO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Simple <audio> element approach â€” works on file:// and http:// without fetch
+const SFX = {};
+let audioUnlocked = false;
+
+function buildAudio(src, loop, vol) {
+  const a = new Audio(src);
+  a.loop = loop;
+  a.volume = vol;
+  return a;
+}
+
+function setupAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+
+  SFX.ambience  = buildAudio('backrooms_ambience.mp3',  true,  0.45);
+  SFX.insane    = buildAudio('backrooms_insane.mp3', true,  0.0);
+  SFX.footstep  = buildAudio('backrooms_footstep.mp3',  false, 0.55);
+  SFX.punch     = buildAudio('backrooms_punch.mp3',     false, 0.8);
+  SFX.door      = buildAudio('backrooms_rage.mp3',      false, 0.5);
+  SFX.tv        = buildAudio('backrooms_rage.mp3',        false, 0.5);
+  SFX.entity1   = buildAudio('backrooms_entity1.mp3',   false, 0.7);
+  SFX.jumpscare = buildAudio('backrooms_jumpscare.mp3', false, 1.0);
+
+  // Start ambience immediately
+  SFX.ambience.play().catch(() => {});
+  SFX.insane.play().catch(() => {});  // start paused at vol 0, ready to fade in
+}
+
+// Play a one-shot sound (creates fresh Audio so overlapping works fine)
+function playSound(name, vol) {
+  if (!SFX[name]) return;
+  const a = new Audio(SFX[name].src);
+  a.volume = (vol !== undefined) ? Math.min(1, Math.max(0, vol)) : SFX[name].volume;
+  a.play().catch(() => {});
+}
+
+// Footstep: reuse single element, retrigger from start
+function playFootstep() {
+  if (!SFX.footstep) return;
+  SFX.footstep.currentTime = 0;
+  SFX.footstep.play().catch(() => {});
+}
+
+// Insane music fade
+let insaneTarget = 0;
+function updateInsaneVolume(dt) {
+  if (!SFX.insane) return;
+  // Smooth fade: ~2 seconds to full volume
+  SFX.insane.volume = Math.min(1, Math.max(0,
+    SFX.insane.volume + (insaneTarget - SFX.insane.volume) * Math.min(1, dt * 0.8)
+  ));
+}
+
+// Random horror sound timer
+let horrorTimer = 0;
+function scheduleHorror() { horrorTimer = 30 + Math.random() * 60; }
+scheduleHorror();
+
+// Footstep timer
+let footTimer = 0;
+
+// â”€â”€â”€ THREE.JS SETUP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: false });
+renderer.setPixelRatio(0.6);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = false;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0900);
+scene.fog = new THREE.Fog(0x0a0900, 6, 28);
+
+// Single global ambient â€” very dim, warm brown-black
+const globalAmbient = new THREE.AmbientLight(0x1a1200, 0.35);
+scene.add(globalAmbient);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 80);
+camera.position.set(0, 1.7, 0);
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// â”€â”€â”€ TEXTURES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function makeWallTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  // Base yellow wallpaper
+  x.fillStyle = '#c8b560'; x.fillRect(0,0,256,256);
+  // Diamond pattern
+  x.strokeStyle = '#a89440'; x.lineWidth = 1.5;
+  for (let i = -32; i < 288; i += 32) {
+    for (let j = -32; j < 288; j += 32) {
+      x.beginPath();
+      x.moveTo(i+16, j); x.lineTo(i+32, j+16);
+      x.lineTo(i+16, j+32); x.lineTo(i, j+16);
+      x.closePath(); x.stroke();
+    }
+  }
+  // Stains
+  for (let s = 0; s < 12; s++) {
+    const sx = Math.random()*256, sy = Math.random()*256;
+    const r = 4 + Math.random()*18;
+    const g = x.createRadialGradient(sx,sy,0,sx,sy,r);
+    g.addColorStop(0,'rgba(80,60,10,0.35)');
+    g.addColorStop(1,'rgba(80,60,10,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(sx,sy,r,0,Math.PI*2); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1, 0.5);
+  return t;
+}
+
+function makeFloorTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#7a6030'; x.fillRect(0,0,256,256);
+  // Carpet weave
+  for (let i = 0; i < 256; i += 4) {
+    x.fillStyle = i%8===0 ? '#6a5028' : '#8a7038';
+    x.fillRect(i,0,2,256);
+  }
+  for (let j = 0; j < 256; j += 4) {
+    x.fillStyle = j%8===0 ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.04)';
+    x.fillRect(0,j,256,2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 2);
+  return t;
+}
+
+function makeCeilingTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#d8cfa0'; x.fillRect(0,0,256,256);
+  // Dirty patches
+  for (let s = 0; s < 20; s++) {
+    const sx = Math.random()*256, sy = Math.random()*256;
+    const r = 8 + Math.random()*30;
+    const g = x.createRadialGradient(sx,sy,0,sx,sy,r);
+    g.addColorStop(0,'rgba(100,90,50,0.25)');
+    g.addColorStop(1,'rgba(100,90,50,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(sx,sy,r,0,Math.PI*2); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 2);
+  return t;
+}
+
+const wallTex    = makeWallTexture();
+const floorTex   = makeFloorTexture();
+const ceilTex    = makeCeilingTexture();
+const wallMat    = new THREE.MeshLambertMaterial({ map: wallTex, color: 0x887755 });
+const floorMat   = new THREE.MeshLambertMaterial({ map: floorTex, color: 0x665533 });
+const ceilMat    = new THREE.MeshLambertMaterial({ map: ceilTex, color: 0x776644 });
+
+// Entity sprite texture
+const entityTexture = new THREE.TextureLoader().load('backrooms_entity1.png');
+
+// â”€â”€â”€ GLITCH TEXTURE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const glitchCanvas = document.createElement('canvas');
+glitchCanvas.width = 64; glitchCanvas.height = 128;
+const glitchCtx = glitchCanvas.getContext('2d');
+const glitchTex = new THREE.CanvasTexture(glitchCanvas);
+
+function updateGlitchTexture() {
+  const w = glitchCanvas.width, h = glitchCanvas.height;
+  for (let y = 0; y < h; y += 2) {
+    const r = Math.random()*255|0, g = Math.random()*255|0, b = Math.random()*255|0;
+    glitchCtx.fillStyle = `rgb(${r},${g},${b})`;
+    glitchCtx.fillRect(0, y, w * (0.3 + Math.random() * 0.7), 2);
+  }
+  glitchTex.needsUpdate = true;
+}
+
+// â”€â”€â”€ MAZE GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const cellMap = new Map(); // "cx,cz" -> flags
+
+function cellKey(cx, cz) { return `${cx},${cz}`; }
+
+function getCell(cx, cz) {
+  const k = cellKey(cx, cz);
+  if (!cellMap.has(k)) cellMap.set(k, generateCell(cx, cz));
+  return cellMap.get(k);
+}
+
+// Deterministic-ish cell generation using a simple hash
+function generateCell(cx, cz) {
+  // Use a seeded random based on position
+  const seed = (cx * 73856093) ^ (cz * 19349663);
+  const rng = () => {
+    let s = seed ^ (Math.random() * 0xFFFFFF | 0);
+    s = ((s >>> 16) ^ s) * 0x45d9f3b;
+    s = ((s >>> 16) ^ s) * 0x45d9f3b;
+    s = (s >>> 16) ^ s;
+    return (s & 0xFFFF) / 0xFFFF;
+  };
+  let flags = 0;
+  if (rng() > 0.35) flags |= N;
+  if (rng() > 0.35) flags |= S;
+  if (rng() > 0.35) flags |= E;
+  if (rng() > 0.35) flags |= W;
+  // Ensure at least one opening
+  if (flags === 0) flags = N | E;
+  return flags;
+}
+
+// Ensure neighbor connectivity
+function ensureConnected(cx, cz) {
+  const flags = getCell(cx, cz);
+  if (flags & N) { const k = cellKey(cx, cz-1); cellMap.set(k, (cellMap.get(k)||0) | S); }
+  if (flags & S) { const k = cellKey(cx, cz+1); cellMap.set(k, (cellMap.get(k)||0) | N); }
+  if (flags & E) { const k = cellKey(cx+1, cz); cellMap.set(k, (cellMap.get(k)||0) | W); }
+  if (flags & W) { const k = cellKey(cx-1, cz); cellMap.set(k, (cellMap.get(k)||0) | E); }
+}
+
+// â”€â”€â”€ COLLISION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function isWalkable(x, z) {
+  const cx = Math.round(x / CELL);
+  const cz = Math.round(z / CELL);
+  const flags = getCell(cx, cz);
+  const lx = x - cx * CELL;
+  const lz = z - cz * CELL;
+  const hw = CELL / 2 - 1.2;
+  const openHW = 2.5;
+  if (Math.abs(lx) < hw && Math.abs(lz) < hw) return true;
+  if (Math.abs(lx) < openHW) {
+    if (lz < -hw && (flags & N)) return true;
+    if (lz >  hw && (flags & S)) return true;
+  }
+  if (Math.abs(lz) < openHW) {
+    if (lx >  hw && (flags & E)) return true;
+    if (lx < -hw && (flags & W)) return true;
+  }
+  return false;
+}
+
+// â”€â”€â”€ CHUNK BUILDING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const chunks = new Map(); // "cx,cz" -> { group, lights, glitchMesh }
+const lightObjects = []; // all point lights for flicker
+
+function buildChunk(cx, cz) {
+  const key = cellKey(cx, cz);
+  if (chunks.has(key)) return;
+  ensureConnected(cx, cz);
+  const flags = getCell(cx, cz);
+
+  const group = new THREE.Group();
+  const ox = cx * CELL, oz = cz * CELL;
+
+  // Floor
+  const floorGeo = new THREE.PlaneGeometry(CELL, CELL);
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.position.set(ox, 0, oz);
+  group.add(floor);
+
+  // Ceiling
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), ceilMat);
+  ceil.rotation.x = Math.PI/2;
+  ceil.position.set(ox, HALL_H, oz);
+  group.add(ceil);
+
+  // Walls â€” build each side if no opening
+  const hw = CELL/2, hh = HALL_H/2;
+  const wallMat2 = wallMat.clone();
+  wallMat2.color = currentLevel >= 1
+    ? new THREE.Color(0x667755)
+    : new THREE.Color(0x887755);
+
+  function addWall(wx, wy, wz, roty, w, h) {
+    const geo = new THREE.PlaneGeometry(w, h);
+    const m = new THREE.Mesh(geo, wallMat2);
+    m.position.set(wx, wy, wz);
+    m.rotation.y = roty;
+    group.add(m);
+  }
+
+  const openHW = 2.5;
+  const openH = HALL_H;
+
+  // North wall (z = oz - hw)
+  if (!(flags & N)) {
+    addWall(ox, hh, oz - hw, 0, CELL, HALL_H);
+  } else {
+    // Side panels around opening
+    addWall(ox - (hw - openHW)/2 - openHW/2, hh, oz - hw, 0, hw - openHW, HALL_H);
+    addWall(ox + (hw - openHW)/2 + openHW/2, hh, oz - hw, 0, hw - openHW, HALL_H);
+  }
+  // South wall
+  if (!(flags & S)) {
+    addWall(ox, hh, oz + hw, Math.PI, CELL, HALL_H);
+  } else {
+    addWall(ox - (hw - openHW)/2 - openHW/2, hh, oz + hw, Math.PI, hw - openHW, HALL_H);
+    addWall(ox + (hw - openHW)/2 + openHW/2, hh, oz + hw, Math.PI, hw - openHW, HALL_H);
+  }
+  // East wall
+  if (!(flags & E)) {
+    addWall(ox + hw, hh, oz, -Math.PI/2, CELL, HALL_H);
+  } else {
+    addWall(ox + hw, hh, oz - (hw - openHW)/2 - openHW/2, -Math.PI/2, hw - openHW, HALL_H);
+    addWall(ox + hw, hh, oz + (hw - openHW)/2 + openHW/2, -Math.PI/2, hw - openHW, HALL_H);
+  }
+  // West wall
+  if (!(flags & W)) {
+    addWall(ox - hw, hh, oz, Math.PI/2, CELL, HALL_H);
+  } else {
+    addWall(ox - hw, hh, oz - (hw - openHW)/2 - openHW/2, Math.PI/2, hw - openHW, HALL_H);
+    addWall(ox - hw, hh, oz + (hw - openHW)/2 + openHW/2, Math.PI/2, hw - openHW, HALL_H);
+  }
+
+  // Fluorescent light â€” dim, moody, some cells have dead lights
+  const lightOn = ((cx * 7 + cz * 13) & 0xF) > 2; // ~80% on
+  const baseIntensity = (currentLevel >= 1 ? 0.55 : 0.7) * (lightOn ? 1.0 : 0.0);
+  const ptLight = new THREE.PointLight(0xd4b86a, baseIntensity, CELL * 1.6);
+  ptLight.position.set(ox, HALL_H - 0.3, oz);
+  ptLight.userData.baseIntensity = baseIntensity;
+  ptLight.userData.flickerTimer = Math.random() * 5;
+  ptLight.userData.shouldFlicker = ((cx * 3 + cz * 11) & 0x7) === 0; // ~12% flicker
+  group.add(ptLight);
+  lightObjects.push(ptLight);
+
+  // Light fixture (visual) â€” dim yellowish tube
+  const fixGeo = new THREE.BoxGeometry(1.5, 0.08, 0.25);
+  const fixMat = new THREE.MeshBasicMaterial({ color: lightOn ? 0xd4c87a : 0x111100 });
+  const fix = new THREE.Mesh(fixGeo, fixMat);
+  fix.position.set(ox, HALL_H - 0.04, oz);
+  group.add(fix);
+
+  // (no per-chunk ambient â€” global ambient handles base fill)
+
+  // Glitch portal
+  let glitchMesh = null;
+  if (glitchChance > 0 && roomsVisited.size >= 1 && Math.random() * 100 < glitchChance) {
+    glitchMesh = spawnGlitchPatch(ox, oz, flags);
+    if (glitchMesh) group.add(glitchMesh);
+  }
+
+  scene.add(group);
+  chunks.set(key, { group, lights: [ptLight], glitchMesh });
+}
+
+function spawnGlitchPatch(ox, oz, flags) {
+  const geo = new THREE.PlaneGeometry(1.5, 2.5);
+  const mat = new THREE.MeshBasicMaterial({ map: glitchTex, side: THREE.DoubleSide, transparent: true });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.userData.isGlitch = true;
+  mesh.userData.level = currentLevel;
+
+  // Place on a random available wall
+  const walls = [];
+  const hw = CELL/2 - 0.05;
+  if (!(flags & N)) walls.push({ pos: new THREE.Vector3(ox, 1.25, oz - hw + 0.05), rot: 0 });
+  if (!(flags & S)) walls.push({ pos: new THREE.Vector3(ox, 1.25, oz + hw - 0.05), rot: Math.PI });
+  if (!(flags & E)) walls.push({ pos: new THREE.Vector3(ox + hw - 0.05, 1.25, oz), rot: -Math.PI/2 });
+  if (!(flags & W)) walls.push({ pos: new THREE.Vector3(ox - hw + 0.05, 1.25, oz), rot: Math.PI/2 });
+
+  if (walls.length === 0) return null;
+  const w = walls[Math.floor(Math.random() * walls.length)];
+  mesh.position.copy(w.pos);
+  mesh.rotation.y = w.rot;
+  return mesh;
+}
+
+function removeDistantChunks() {
+  const px = Math.round(camera.position.x / CELL);
+  const pz = Math.round(camera.position.z / CELL);
+  for (const [key, chunk] of chunks) {
+    const [cx, cz] = key.split(',').map(Number);
+    if (Math.abs(cx - px) > CHUNK_R + 2 || Math.abs(cz - pz) > CHUNK_R + 2) {
+      scene.remove(chunk.group);
+      // Remove lights from lightObjects array
+      for (const l of chunk.lights) {
+        const idx = lightObjects.indexOf(l);
+        if (idx !== -1) lightObjects.splice(idx, 1);
+      }
+      chunks.delete(key);
+    }
+  }
+}
+
+function updateChunks() {
+  const px = Math.round(camera.position.x / CELL);
+  const pz = Math.round(camera.position.z / CELL);
+  for (let dx = -CHUNK_R; dx <= CHUNK_R; dx++) {
+    for (let dz = -CHUNK_R; dz <= CHUNK_R; dz++) {
+      buildChunk(px + dx, pz + dz);
+    }
+  }
+  removeDistantChunks();
+  // Track visited rooms
+  const roomKey = cellKey(px, pz);
+  if (!roomsVisited.has(roomKey)) {
+    roomsVisited.add(roomKey);
+    glitchChance = Math.min(99, roomsVisited.size * 0.1);
+  }
+}
+
+// â”€â”€â”€ PLAYER CONTROLS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const keys = {};
+let yaw = 0, pitch = 0;
+let velY = 0;
+const GRAVITY = -18, JUMP_V = 6, PLAYER_H = 1.7;
+let isGrounded = true;
+let screenShake = { x: 0, y: 0 };
+
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
+
+document.addEventListener('mousemove', e => {
+  if (!isPointerLocked || gameState !== 'PLAYING') return;
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
+});
+
+document.addEventListener('pointerlockchange', () => {
+  isPointerLocked = document.pointerLockElement === document.getElementById('c');
+  if (gameState === 'PLAYING') {
+    if (!isPointerLocked) {
+      pauseOverlay.style.display = 'flex';
+    } else {
+      pauseOverlay.style.display = 'none';
+    }
+  }
+});
+
+pauseOverlay.addEventListener('click', () => {
+  document.getElementById('c').requestPointerLock();
+});
+
+document.addEventListener('mousedown', e => {
+  if (e.button === 0 && gameState === 'PLAYING' && isPointerLocked) {
+    playSound('punch', 0.7);
+    // Raycast for glitch portal
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+    const allMeshes = [];
+    for (const [, chunk] of chunks) {
+      chunk.group.traverse(obj => { if (obj.isMesh) allMeshes.push(obj); });
+    }
+    const hits = raycaster.intersectObjects(allMeshes);
+    for (const hit of hits) {
+      if (hit.object.userData.isGlitch && hit.distance < 4) {
+        advanceLevel();
+        return;
+      }
+    }
+  }
+});
+
+// â”€â”€â”€ ENTITIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const entities = [];
+
+function maxEntities() {
+  if (sanity > 75) return 0;
+  let base = 1; // at least 1 once sanity hits 75%
+  if (sanity < 60) base = 2;
+  if (sanity < 50) base = 3;
+  if (sanity < 35) base = 4;
+  if (sanity < 25) base = 5;
+  if (sanity <= 0) base = 6;
+  if (currentLevel >= 1) base += 1;
+  return base;
+}
+
+function spawnEntity() {
+  // Spawn distance scales with sanity: lower sanity = closer spawn
+  // 75% sanity â†’ 40â€“64 units away, 0% sanity â†’ 16â€“32 units away
+  const sanityFrac = Math.max(0, sanity / 75); // 0..1
+  const minDist = 16 + sanityFrac * 24;  // 16 at 0% sanity, 40 at 75%
+  const maxDist = 32 + sanityFrac * 32;  // 32 at 0% sanity, 64 at 75%
+
+  let pos = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = minDist + Math.random() * (maxDist - minDist);
+    const tx = camera.position.x + Math.cos(angle) * dist;
+    const tz = camera.position.z + Math.sin(angle) * dist;
+    // Snap to nearest cell center so entity is always in open space
+    const cx = Math.round(tx / CELL);
+    const cz = Math.round(tz / CELL);
+    const snapX = cx * CELL;
+    const snapZ = cz * CELL;
+    // Check not too close to other entities
+    let tooClose = false;
+    for (const en of entities) {
+      if (en.pos.distanceTo(new THREE.Vector3(snapX, 0, snapZ)) < 30) { tooClose = true; break; }
+    }
+    if (!tooClose) { pos = new THREE.Vector3(snapX, 0, snapZ); break; }
+  }
+  // Fallback: just pick a random direction at min distance, snap to cell
+  if (!pos) {
+    const angle = Math.random() * Math.PI * 2;
+    const cx = Math.round((camera.position.x + Math.cos(angle) * minDist) / CELL);
+    const cz = Math.round((camera.position.z + Math.sin(angle) * minDist) / CELL);
+    pos = new THREE.Vector3(cx * CELL, 0, cz * CELL);
+  }
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: entityTexture, transparent: true }));
+  sprite.scale.set(1.5, 2.5, 1);
+  sprite.position.set(pos.x, 1.25, pos.z);
+  scene.add(sprite);
+
+  entities.push({
+    sprite,
+    pos: pos.clone(),
+    vel: new THREE.Vector3(),
+    state: 'WANDER',
+    wanderTimer: 0,
+    wanderDir: { x: Math.random()*2-1, z: Math.random()*2-1 },
+    soundTimer: 4 + Math.random() * 4,
+    gazeTimer: 0,
+    alertCooldown: 0,
+    speed: 2.5,
+    chaseSpeed: 8,
+  });
+}
+
+function removeEntity(en) {
+  scene.remove(en.sprite);
+  const idx = entities.indexOf(en);
+  if (idx !== -1) entities.splice(idx, 1);
+}
+
+function updateEntities(dt) {
+  if (gameState !== 'PLAYING') return;
+
+  // Spawn rate scales with insanity â€” lower sanity = faster spawning
+  const mx = maxEntities();
+  if (entities.length < mx) {
+    const insanityFrac = Math.max(0, (75 - sanity) / 75); // 0 at 75%, 1 at 0%
+    const spawnRate = 0.5 + insanityFrac * 3.0; // 0.5/s at 75%, 3.5/s at 0%
+    if (Math.random() < dt * spawnRate) {
+      spawnEntity();
+    }
+  }
+
+  const camFwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+  const playerPos = camera.position.clone();
+
+  for (let i = entities.length - 1; i >= 0; i--) {
+    const en = entities[i];
+    const toEntity = new THREE.Vector3(en.pos.x - playerPos.x, 0, en.pos.z - playerPos.z);
+    const dist = toEntity.length();
+
+    // Despawn if too far
+    if (dist > 60) { removeEntity(en); continue; }
+
+    // â”€â”€ Gaze detection â”€â”€
+    if (dist < 20 && en.state !== 'DEAD') {
+      const dirToEnt = toEntity.clone().normalize();
+      const angle = camFwd.angleTo(dirToEnt);
+      if (angle < 0.26) {
+        en.gazeTimer += dt;
+        if (en.gazeTimer >= 2.0 && en.state === 'WANDER') {
+          en.state = 'CHASE';
+          playSound('entity1', 1.0);
+        }
+      } else {
+        en.gazeTimer = Math.max(0, en.gazeTimer - dt * 2);
+      }
+    }
+
+    // â”€â”€ State machine â”€â”€
+    if (en.state === 'WANDER') {
+      en.wanderTimer -= dt;
+      if (en.wanderTimer <= 0) {
+        en.wanderTimer = 2 + Math.random() * 3;
+        // Bias wander toward player at low sanity
+        const insanityFrac = Math.max(0, (75 - sanity) / 75);
+        if (insanityFrac > 0.3 && Math.random() < insanityFrac * 0.6) {
+          // Drift toward player
+          const toPlayer = new THREE.Vector3(playerPos.x - en.pos.x, 0, playerPos.z - en.pos.z).normalize();
+          en.wanderDir = { x: toPlayer.x + (Math.random()-0.5)*0.5, z: toPlayer.z + (Math.random()-0.5)*0.5 };
+        } else {
+          const a = Math.random() * Math.PI * 2;
+          en.wanderDir = { x: Math.cos(a), z: Math.sin(a) };
+        }
+      }
+      // Move â€” use loose collision (just check cell center is reachable)
+      const nx = en.pos.x + en.wanderDir.x * en.speed * dt;
+      const nz = en.pos.z + en.wanderDir.z * en.speed * dt;
+      // Loose walkable: check if the cell at that position has any opening
+      const cx = Math.round(nx / CELL), cz = Math.round(nz / CELL);
+      const flags = getCell(cx, cz);
+      if (flags !== 0) {
+        en.pos.x = nx; en.pos.z = nz;
+      } else {
+        const a = Math.random() * Math.PI * 2;
+        en.wanderDir = { x: Math.cos(a), z: Math.sin(a) };
+        en.wanderTimer = 0.5;
+      }
+      // Alert if player gets close
+      if (dist < 10 && en.alertCooldown <= 0) {
+        en.state = 'CHASE';
+        playSound('entity1', 0.9);
+      }
+    } else if (en.state === 'CHASE') {
+      const dir = toEntity.clone().normalize();
+      const nx = en.pos.x + dir.x * en.chaseSpeed * dt;
+      const nz = en.pos.z + dir.z * en.chaseSpeed * dt;
+      if (isWalkable(nx, nz)) {
+        en.pos.x = nx; en.pos.z = nz;
+      } else {
+        // Try sliding
+        if (isWalkable(nx, en.pos.z)) en.pos.x = nx;
+        else if (isWalkable(en.pos.x, nz)) en.pos.z = nz;
+      }
+      // Chase sound
+      en.soundTimer -= dt;
+      if (en.soundTimer <= 0) {
+        en.soundTimer = 2;
+        playSound('entity1', 1.0);
+      }
+      // Kill player
+      if (dist < 1.5) { triggerDeath(); return; }
+    }
+
+    // â”€â”€ Ambient sound â”€â”€
+    if (en.state === 'WANDER' && dist < 25) {
+      en.soundTimer -= dt;
+      if (en.soundTimer <= 0) {
+        en.soundTimer = 4 + Math.random() * 4;
+        const vol = Math.max(0, 1 - dist / 25);
+        playSound('entity1', vol);
+      }
+    }
+
+    // â”€â”€ Update sprite â”€â”€
+    en.sprite.position.set(en.pos.x, 1.25, en.pos.z);
+    if (en.state === 'CHASE') {
+      const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.05;
+      en.sprite.scale.set(1.5 * pulse, 2.5 * pulse, 1);
+    } else {
+      en.sprite.scale.set(1.5, 2.5, 1);
+    }
+  }
+}
+
+// â”€â”€â”€ SANITY SYSTEM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function updateSanity(dt) {
+  if (gameState !== 'PLAYING') return;
+
+  // Base drain: exactly 1% per second
+  let drain = dt;
+
+  // Extra drain if entity nearby: +2% per second
+  let entityNearby = false;
+  for (const en of entities) {
+    const d = en.pos.distanceTo(camera.position);
+    if (d < 15) { entityNearby = true; break; }
+  }
+  if (entityNearby) drain += 2.0 * dt;
+
+  sanity = Math.max(0, sanity - drain);
+
+  // insane.mp3 fades in below 25%, fades out above 25%
+  insaneTarget = sanity < 25 ? (25 - sanity) / 25 * 0.7 : 0;
+  updateInsaneVolume(dt);
+
+  // Ambience pitch distortion at low sanity
+  if (SFX.ambience && sanity < 80) {
+    const drift = Math.sin(Date.now() * 0.001) * 0.04;
+    SFX.ambience.playbackRate = 0.96 + drift + (80 - sanity) / 80 * 0.04;
+  } else if (SFX.ambience) {
+    SFX.ambience.playbackRate = 1.0;
+  }
+
+  // Visual effects â€” scale aggressively with insanity
+  const insanity = (100 - sanity) / 100; // 0 = sane, 1 = fully insane
+
+  // Grain: barely visible at full sanity, heavy static at 0%
+  grainCanvas.style.opacity = 0.03 + insanity * 0.55;
+
+  // VHS scanlines: subtle to overwhelming
+  vhsEl.style.opacity = 0.06 + insanity * 0.5;
+
+  // Color distortion overlay
+  const distortAmt = Math.max(0, insanity - 0.2);
+  sanityDistort.style.opacity = distortAmt * 0.7;
+  sanityDistort.style.background = `rgba(${60 + insanity*80|0},0,${120 + insanity*60|0},${distortAmt * 0.4})`;
+
+  // Canvas filter: desaturate and add hue shift as sanity drops
+  const sat = Math.max(0.2, 0.85 - insanity * 0.65);
+  const hueShift = insanity > 0.5 ? (Math.sin(Date.now() * 0.003) * insanity * 15) : 0;
+  document.getElementById('c').style.filter = `saturate(${sat}) hue-rotate(${hueShift}deg)`;
+
+  // Vignette tightens at low sanity
+  document.getElementById('vignette').style.background =
+    `radial-gradient(ellipse at center, transparent ${Math.max(10, 40 - insanity*35)}%, rgba(0,0,0,${0.85 + insanity*0.15}) 100%)`;
+
+  // Screen shake at low sanity â€” more violent the lower it goes
+  if (sanity < 70 && Math.random() < dt * (sanity < 25 ? 8 : sanity < 50 ? 3 : 1)) {
+    const mag = sanity < 25 ? 10 : sanity < 50 ? 5 : 2;
+    screenShake.x = (Math.random() - 0.5) * mag;
+    screenShake.y = (Math.random() - 0.5) * mag;
+  } else {
+    screenShake.x *= 0.8;
+    screenShake.y *= 0.8;
+  }
+
+  // Chromatic aberration glitch flashes at very low sanity
+  if (sanity < 30 && Math.random() < dt * 4) {
+    const glitchShift = (Math.random() - 0.5) * 8;
+    document.getElementById('c').style.transform = `translateX(${glitchShift}px)`;
+    setTimeout(() => { document.getElementById('c').style.transform = ''; }, 60);
+  }
+
+  // HUD sanity color
+  let sanCol = '#00ff88';
+  if (sanity < 50) sanCol = '#ffff00';
+  if (sanity < 25) sanCol = '#ff4400';
+  if (sanity < 10) {
+    sanCol = '#ff0000';
+    if (Math.random() < 0.1) hudSanity.style.opacity = Math.random() > 0.5 ? '1' : '0.3';
+  } else {
+    hudSanity.style.opacity = '1';
+  }
+  hudSanity.style.color = sanCol;
+  hudSanity.textContent = `SANITY: ${Math.ceil(sanity)}%`;
+}
+
+// â”€â”€â”€ LIGHT FLICKER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function updateLights(dt) {
+  for (const light of lightObjects) {
+    if (!light.userData.shouldFlicker) continue;
+    light.userData.flickerTimer -= dt;
+    if (light.userData.flickerTimer <= 0) {
+      light.userData.flickerTimer = 0.04 + Math.random() * 0.12;
+      const flicker = Math.random() < 0.08 ? Math.random() * 0.15 : (0.7 + Math.random() * 0.3);
+      light.intensity = light.userData.baseIntensity * flicker;
+    }
+  }
+}
+
+// â”€â”€â”€ GRAIN ANIMATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function updateGrain() {
+  const id = grainCtx.createImageData(256, 256);
+  const d = id.data;
+  // Density scales with insanity â€” more pixels filled at low sanity
+  const insanity = (100 - sanity) / 100;
+  const density = 0.25 + insanity * 0.65; // 25%â€“90% pixel fill
+  for (let i = 0; i < d.length; i += 4) {
+    if (Math.random() < density) {
+      const v = Math.random() * 255 | 0;
+      d[i] = v; d[i+1] = v; d[i+2] = v; d[i+3] = 200;
+    } else {
+      d[i+3] = 0;
+    }
+  }
+  grainCtx.putImageData(id, 0, 0);
+  // Tile across full screen via CSS background
+  grainCanvas.style.backgroundImage = `url(${grainCanvas.toDataURL()})`;
+  grainCanvas.style.backgroundSize = '128px 128px';
+}
+
+// â”€â”€â”€ LEVEL ADVANCE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function advanceLevel() {
+  if (gameState !== 'PLAYING') return;
+  gameState = 'TRANSITIONING';
+
+  // Fade to white
+  flashEl.style.background = '#ffffff';
+  flashEl.style.transition = 'opacity 0.8s';
+  flashEl.style.opacity = '1';
+
+  setTimeout(() => {
+    currentLevel++;
+    // Clear all chunks
+    for (const [, chunk] of chunks) scene.remove(chunk.group);
+    chunks.clear();
+    lightObjects.length = 0;
+    // Clear entities
+    for (const en of entities) scene.remove(en.sprite);
+    entities.length = 0;
+    // Reset player
+    camera.position.set(0, PLAYER_H, 0);
+    yaw = 0; pitch = 0;
+    roomsVisited.clear();
+    glitchChance = 0;
+    sanity = 100;
+    cellMap.clear();
+    // Update fog for higher levels
+    scene.fog.near = currentLevel >= 1 ? 5 : 6;
+    scene.fog.far  = currentLevel >= 1 ? 22 : 28;
+    scene.fog.color.setHex(0x0a0900);
+    hudLevel.textContent = `LEVEL: ${currentLevel}`;
+    showIntro(`LEVEL ${currentLevel + 1}`);
+    updateChunks();
+    gameState = 'PLAYING';
+    flashEl.style.background = '#ffffff';
+    flashEl.style.opacity = '0';
+    setTimeout(() => { flashEl.style.transition = ''; flashEl.style.background = '#000'; }, 900);
+  }, 900);
+}
+
+// â”€â”€â”€ DEATH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function triggerDeath() {
+  if (isDead) return;
+  isDead = true;
+  gameState = 'DEAD';
+
+  // Stop movement
+  for (const k in keys) keys[k] = false;
+
+  playSound('jumpscare', 1.0);
+
+  deathScreen.style.display = 'flex';
+  jumpscareImg.style.opacity = '1';
+  jumpscareImg.style.animation = 'entityShake 0.1s infinite';
+
+  // Fade to red
+  setTimeout(() => {
+    deathScreen.style.background = 'rgba(180,0,0,0.85)';
+  }, 100);
+
+  setTimeout(() => {
+    deathScreen.style.background = 'rgba(180,0,0,1)';
+  }, 2000);
+
+  setTimeout(() => {
+    location.reload();
+  }, 3500);
+}
+
+// â”€â”€â”€ INTRO TEXT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function showIntro(msg) {
+  introText.textContent = msg;
+  introText.style.opacity = '1';
+  setTimeout(() => { introText.style.opacity = '0'; }, 2500);
+}
+
+// â”€â”€â”€ GAME START â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function startGame() {
+  titleScreen.style.transition = 'opacity 0.8s';
+  titleScreen.style.opacity = '0';
+  setTimeout(() => { titleScreen.style.display = 'none'; }, 800);
+
+  // Ensure audio is unlocked
+  setupAudio();
+
+  crosshair.style.display = 'flex';
+  hudLevel.textContent = `LEVEL: ${currentLevel}`;
+  hudSanity.textContent = `SANITY: 100%`;
+
+  camera.position.set(0, PLAYER_H, 0);
+  updateChunks();
+  showIntro('You have no-clipped into the backrooms. Good luck.');
+
+  gameState = 'PLAYING';
+  document.getElementById('c').requestPointerLock();
+}
+
+playBtn.addEventListener('click', startGame);
+
+// Init audio on first title screen interaction so ambience starts loading immediately
+titleScreen.addEventListener('mousedown', () => { setupAudio(); }, { once: true });
+titleScreen.addEventListener('touchstart', () => { setupAudio(); }, { once: true });
+
+// â”€â”€â”€ MAIN GAME LOOP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let lastTime = 0;
+let glitchFrame = 0;
+
+function gameLoop(ts) {
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  if (gameState === 'PLAYING') {
+    updatePlayer(dt);
+    updateEntities(dt);
+    updateSanity(dt);
+    updateLights(dt);
+    updateHorrorSounds(dt);
+    updateChunks();
+  }
+
+  // Glitch texture update every 3 frames
+  glitchFrame++;
+  if (glitchFrame % 3 === 0) updateGlitchTexture();
+
+  // Grain update every frame
+  updateGrain();
+
+  // Apply screen shake to camera
+  if (gameState === 'PLAYING') {
+    camera.position.x += screenShake.x * 0.001;
+    camera.position.y += screenShake.y * 0.001;
+  }
+
+  renderer.render(scene, camera);
+}
+
+function updatePlayer(dt) {
+  if (isDead) return;
+
+  // Camera rotation
+  const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+  camera.quaternion.setFromEuler(euler);
+
+  // Movement
+  const speed = keys['ShiftLeft'] || keys['ShiftRight'] ? 7 : 4.5;
+  const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+  let moveX = 0, moveZ = 0;
+
+  if (keys['KeyW'] || keys['ArrowUp'])    { moveX += fwd.x; moveZ += fwd.z; }
+  if (keys['KeyS'] || keys['ArrowDown'])  { moveX -= fwd.x; moveZ -= fwd.z; }
+  if (keys['KeyA'] || keys['ArrowLeft'])  { moveX -= right.x; moveZ -= right.z; }
+  if (keys['KeyD'] || keys['ArrowRight']) { moveX += right.x; moveZ += right.z; }
+
+  const len = Math.sqrt(moveX*moveX + moveZ*moveZ);
+  if (len > 0) { moveX /= len; moveZ /= len; }
+
+  const nx = camera.position.x + moveX * speed * dt;
+  const nz = camera.position.z + moveZ * speed * dt;
+
+  if (isWalkable(nx, camera.position.z)) camera.position.x = nx;
+  if (isWalkable(camera.position.x, nz)) camera.position.z = nz;
+
+  // Jump
+  if ((keys['Space']) && isGrounded) {
+    velY = JUMP_V;
+    isGrounded = false;
+  }
+
+  // Gravity
+  velY += GRAVITY * dt;
+  camera.position.y += velY * dt;
+  if (camera.position.y <= PLAYER_H) {
+    camera.position.y = PLAYER_H;
+    velY = 0;
+    isGrounded = true;
+  }
+
+  // Footstep sound
+  if (len > 0 && isGrounded) {
+    footTimer -= dt;
+    if (footTimer <= 0) {
+      footTimer = keys['ShiftLeft'] || keys['ShiftRight'] ? 0.3 : 0.5;
+      playFootstep();
+    }
+  } else {
+    footTimer = 0;
+  }
+}
+
+function updateHorrorSounds(dt) {
+  horrorTimer -= dt;
+  if (horrorTimer <= 0) {
+    scheduleHorror();
+    const pick = Math.random() < 0.5 ? 'door' : 'tv';
+    playSound(pick, 0.4 + Math.random() * 0.2);
+  }
+}
+
+// â”€â”€â”€ KICK OFF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>

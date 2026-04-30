@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOME</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#050d1a;overflow:hidden;font-family:'Press Start 2P',monospace;image-rendering:pixelated;}
+canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;}
+#menuBg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:0.55;}
+#rainCanvas{position:absolute;top:0;left:0;z-index:2;pointer-events:none;}
+#titleScreen{position:absolute;top:0;left:0;width:100vw;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;}
+#guideScreen{position:absolute;top:0;left:0;width:100vw;height:100vh;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;}
+/* pixel font enforced everywhere */
+.tc{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;transform:translateY(-80px);animation:swoosh 1.5s cubic-bezier(.22,1,.36,1) .4s forwards;}
+@keyframes swoosh{0%{opacity:0;transform:translateY(-120px) scaleX(1.15);}60%{opacity:1;}100%{opacity:1;transform:translateY(0);}}
+/* glass HOME - modern font, refractive */
+.glass{font-family:'Segoe UI',Arial,sans-serif;font-weight:900;font-style:italic;font-size:clamp(64px,11vw,110px);letter-spacing:20px;position:relative;user-select:none;background:linear-gradient(135deg,rgba(220,240,255,.15) 0%,rgba(180,220,255,.55) 20%,rgba(255,255,255,.92) 38%,rgba(140,200,255,.5) 52%,rgba(80,160,240,.3) 65%,rgba(200,230,255,.75) 80%,rgba(240,250,255,.2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 24px rgba(120,200,255,.95)) drop-shadow(0 0 60px rgba(60,140,255,.6)) drop-shadow(2px 4px 8px rgba(0,20,80,.7));}
+.glass::before{content:'HOME';position:absolute;top:0;left:0;font-family:inherit;font-weight:inherit;font-size:inherit;letter-spacing:inherit;background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,.7) 48%,rgba(200,240,255,.5) 52%,transparent 70%);background-size:200% 100%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:shimmer 4s ease-in-out infinite;}
+@keyframes shimmer{0%,100%{background-position:200% center;}50%{background-position:-200% center;}}
+.glass::after{content:'HOME';position:absolute;top:4px;left:4px;font-family:inherit;font-weight:inherit;font-size:inherit;letter-spacing:inherit;background:linear-gradient(135deg,rgba(20,60,160,.25),rgba(60,120,220,.15));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;z-index:-1;}
+/* pixel font subtitle */
+.sub{font-family:'Press Start 2P',monospace;font-size:clamp(5px,.9vw,9px);color:#5a9acc;letter-spacing:4px;text-shadow:0 0 12px rgba(60,160,255,.8);opacity:.8;}
+.btns{display:flex;flex-direction:column;gap:12px;margin-top:28px;align-items:center;}
+.btn{font-family:'Press Start 2P',monospace;font-size:clamp(8px,1.3vw,12px);color:#9ad0f0;background:rgba(5,20,55,.82);border:2px solid #1e5a9a;padding:11px 38px;cursor:pointer;letter-spacing:3px;text-transform:uppercase;transition:all .12s;box-shadow:0 0 14px rgba(30,90,200,.4),inset 0 0 10px rgba(10,40,120,.3);clip-path:polygon(5px 0%,calc(100% - 5px) 0%,100% 5px,100% calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,0% calc(100% - 5px),0% 5px);}
+.btn:hover{background:rgba(15,50,120,.92);border-color:#4a9aee;color:#d0eaff;box-shadow:0 0 26px rgba(50,130,255,.75),inset 0 0 14px rgba(30,90,200,.45);transform:scale(1.05);}
+.btn:active{transform:scale(.96);}
+.gbox{position:relative;z-index:5;background:rgba(3,12,35,.92);border:2px solid #1e5a9a;padding:34px 42px;max-width:540px;width:90vw;box-shadow:0 0 34px rgba(20,80,200,.55);clip-path:polygon(6px 0%,calc(100% - 6px) 0%,100% 6px,100% calc(100% - 6px),calc(100% - 6px) 100%,6px 100%,0% calc(100% - 6px),0% 6px);}
+.gt{font-family:'Press Start 2P',monospace;font-size:11px;color:#6abce0;letter-spacing:4px;margin-bottom:26px;text-align:center;text-shadow:0 0 10px rgba(80,180,255,.8);}
+.gs{margin-bottom:18px;}
+.gs h3{font-family:'Press Start 2P',monospace;font-size:7px;color:#4a9aee;margin-bottom:9px;letter-spacing:2px;}
+.gs p{font-family:'Press Start 2P',monospace;font-size:6px;color:#6aaed0;line-height:2.2;letter-spacing:1px;}
+.kb{display:inline-block;background:rgba(15,50,120,.85);border:1px solid #2a7acc;padding:2px 6px;font-size:5px;color:#9ad0f5;margin:0 2px;}
+#gameCanvas{position:absolute;top:0;left:0;z-index:5;display:none;}
+/* pixel overlay canvas always on top of game */
+#pixelCanvas{position:absolute;top:0;left:0;z-index:6;pointer-events:none;display:none;image-rendering:pixelated;}
+#hud{position:absolute;top:10px;left:12px;z-index:20;display:none;font-family:'Press Start 2P',monospace;font-size:7px;color:#4a8acc;letter-spacing:1px;text-shadow:0 0 6px rgba(30,90,200,.8);}
+#esc{position:absolute;bottom:12px;right:14px;z-index:20;display:none;font-family:'Press Start 2P',monospace;font-size:6px;color:#2a6a9a;letter-spacing:1px;}
+#hint{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:20;display:none;font-family:'Press Start 2P',monospace;font-size:7px;color:#7ac4f0;letter-spacing:1px;text-shadow:0 0 8px rgba(80,180,255,.9);background:rgba(3,12,35,.78);padding:7px 16px;border:1px solid #1e5a9a;white-space:nowrap;}
+#fade{position:absolute;top:0;left:0;width:100vw;height:100vh;background:#000;opacity:0;pointer-events:none;z-index:50;transition:opacity .55s ease;}
+</style>
+</head>
+<body>
+<div id="titleScreen">
+  <img id="menuBg" src="home_menu.gif" alt="">
+  <canvas id="rainCanvas"></canvas>
+  <div class="tc">
+    <div class="glass">HOME</div>
+    <div class="sub">VORTARIUM PRODUCTIONS</div>
+    <div class="btns">
+      <button class="btn" id="startBtn">START</button>
+      <button class="btn" id="guideBtn">GUIDE</button>
+      <button class="btn" id="restartBtn" style="display:none;font-size:clamp(6px,1vw,9px);padding:8px 28px;border-color:#1a3a6a;color:#4a7aaa;box-shadow:0 0 8px rgba(20,60,160,.3);">NEW GAME</button>
+    </div>
+  </div>
+</div>
+<div id="guideScreen">
+  <img src="home_menu.gif" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:0.55;">
+  <canvas id="guideRain" style="position:absolute;top:0;left:0;z-index:2;pointer-events:none;"></canvas>
+  <div class="gbox">
+    <div class="gt">— GUIDE —</div>
+    <div class="gs"><h3>MOVEMENT</h3><p>Use <span class="kb">W</span><span class="kb">A</span><span class="kb">S</span><span class="kb">D</span> or arrow keys to move your character around.</p></div>
+    <div class="gs"><h3>ACTIONS</h3><p>Press <span class="kb">SPACE</span> near doors or objects to interact. A prompt appears when available.</p></div>
+    <div class="gs"><h3>MENU</h3><p>Press <span class="kb">ESC</span> during gameplay to return to the main menu.</p></div>
+    <div style="text-align:center;margin-top:22px;"><button class="btn" id="backBtn">BACK</button></div>
+  </div>
+</div>
+<canvas id="gameCanvas"></canvas>
+<canvas id="pixelCanvas"></canvas>
+<div id="hud">HOME</div>
+<div id="esc">[ ESC ] MENU</div>
+<div id="hint"></div>
+<div id="fade"></div>
+<audio id="sTitle" src="home_title.mp3" loop></audio>
+<audio id="sRain"  src="home_rain.mp3"  loop></audio>
+<audio id="sHome"  src="home_home.mp3"  loop></audio>
+<audio id="sBtn"   src="home_button.mp3"></audio>
+<audio id="sTrans" src="home_transition.mp3"></audio>
+<audio id="sItem"  src="home_item.mp3"></audio>
+<audio id="sCut"   src="home_cutscene.mp3" loop></audio>
+<script src="game.js"></script>
+</body>
+</html>

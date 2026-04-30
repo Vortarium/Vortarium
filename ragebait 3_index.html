@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAGEBAIT 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #080810;
+  font-family: 'Press Start 2P', monospace;
+  overflow: hidden;
+  width: 100vw; height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+}
+.screen {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: none;
+  align-items: center; justify-content: center;
+  flex-direction: column;
+}
+.screen.active { display: flex; }
+
+/* ===== MENU ===== */
+#screen-menu {
+  background: none;
+}
+#menu-bg {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  z-index: 0;
+}
+#menu-content {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px;
+  background: rgba(0,0,0,0.35);
+  padding: 40px 60px;
+}
+#menu-title {
+  text-align: center;
+  line-height: 1.3;
+  margin-bottom: 24px;
+}
+#menu-title .t1 {
+  display: block;
+  font-size: 52px;
+  color: #fff;
+  text-shadow:
+    4px 4px 0 #000,
+    3px 3px 0 #222,
+    2px 2px 0 #333,
+    -1px -1px 0 #555,
+    6px 6px 0 #000,
+    8px 8px 0 rgba(0,0,0,0.4);
+  letter-spacing: 4px;
+}
+#menu-title .t2 {
+  display: block;
+  font-size: 80px;
+  color: #ffcc00;
+  text-shadow:
+    4px 4px 0 #000,
+    3px 3px 0 #aa6600,
+    2px 2px 0 #cc8800,
+    6px 6px 0 #000,
+    8px 8px 0 rgba(0,0,0,0.5);
+  letter-spacing: 8px;
+}
+
+/* ===== BUTTONS ===== */
+.btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 13px;
+  color: #eeeeff;
+  background: #1a1a2e;
+  border: 2px solid #4455aa;
+  padding: 12px 28px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #000, inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: transform 0.05s, box-shadow 0.05s;
+  min-width: 180px;
+  text-align: center;
+  border-radius: 0;
+  outline: none;
+  letter-spacing: 1px;
+}
+.btn:hover {
+  background: #2a2a4e;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #000, inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #000, inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.btn-sm {
+  font-size: 10px;
+  padding: 8px 16px;
+  min-width: 100px;
+}
+.btn-back {
+  font-size: 10px;
+  padding: 8px 14px;
+  min-width: 80px;
+  background: #111122;
+  border-color: #334466;
+}
+.btn-danger {
+  border-color: #aa2233;
+  color: #ff6677;
+}
+.btn-danger:hover { background: #2e1a1a; }
+.btn-gold {
+  border-color: #aa8800;
+  color: #ffcc00;
+}
+.btn-green {
+  border-color: #008844;
+  color: #00ff88;
+}
+
+/* ===== LEVEL SELECT ===== */
+#screen-levelselect {
+  background: #080810;
+  flex-direction: column;
+}
+#ls-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 18px 24px;
+  position: relative;
+}
+#ls-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 16px; color: #eeeeff;
+  text-shadow: 2px 2px 0 #000;
+}
+#ls-stars-display {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ffcc00;
+}
+#ls-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+}
+.ls-arrow {
+  font-size: 28px;
+  background: none;
+  border: 2px solid #334466;
+  color: #eeeeff;
+  padding: 12px 18px;
+  cursor: pointer;
+  font-family: 'Press Start 2P', monospace;
+  box-shadow: 0 4px 0 #000;
+  transition: transform 0.05s, box-shadow 0.05s;
+}
+.ls-arrow:hover { transform: translateY(-2px); box-shadow: 0 6px 0 #000; background: #1a1a2e; }
+.ls-arrow:active { transform: translateY(2px); box-shadow: 0 2px 0 #000; }
+#ls-card {
+  background: #111122;
+  border: 2px solid #334466;
+  box-shadow: 0 8px 0 #000, inset 0 1px 0 rgba(255,255,255,0.05);
+  padding: 28px 36px;
+  min-width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+#ls-level-num { font-size: 10px; color: #667788; }
+#ls-level-name { font-size: 15px; color: #eeeeff; text-align: center; }
+#ls-difficulty { font-size: 10px; }
+#ls-stats { font-size: 9px; color: #667788; display: flex; gap: 18px; }
+#ls-stars-row { display: flex; gap: 10px; font-size: 18px; }
+#ls-lock-msg { font-size: 10px; color: #ff6677; text-align: center; }
+#ls-play-btn { margin-top: 8px; }
+
+/* ===== COSMETICS ===== */
+#screen-cosmetics {
+  background: #080810;
+  flex-direction: column;
+  align-items: stretch;
+}
+#cos-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 2px solid #334466;
+  background: #111122;
+}
+#cos-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 14px; color: #eeeeff;
+}
+#cos-stars {
+  margin-left: auto;
+  font-size: 12px;
+  color: #ffcc00;
+}
+#cos-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+#cos-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  background: #0d0d1a;
+  border-right: 2px solid #334466;
+  min-width: 130px;
+}
+.cos-tab {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  color: #667788;
+  background: #111122;
+  border: 2px solid #334466;
+  padding: 10px 8px;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 3px 0 #000;
+  transition: all 0.05s;
+}
+.cos-tab:hover { color: #eeeeff; background: #1a1a2e; }
+.cos-tab.active { color: #ffcc00; border-color: #aa8800; background: #1a1a2e; }
+#cos-list {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cos-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #111122;
+  border: 2px solid #334466;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.05s;
+  box-shadow: 0 3px 0 #000;
+}
+.cos-item:hover { background: #1a1a2e; border-color: #4455aa; }
+.cos-item.equipped { border-color: #aa8800; background: #1a1a10; }
+.cos-item.locked { opacity: 0.5; cursor: not-allowed; }
+.cos-swatch {
+  width: 20px; height: 20px;
+  border: 2px solid #334466;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+.cos-item-name { font-size: 9px; color: #eeeeff; flex: 1; }
+.cos-item-req { font-size: 8px; color: #667788; }
+.cos-badge {
+  font-size: 7px;
+  padding: 3px 6px;
+  border: 1px solid;
+}
+.cos-badge.equipped { color: #ffcc00; border-color: #aa8800; }
+.cos-badge.unlocked { color: #00ff88; border-color: #008844; }
+.cos-badge.locked { color: #667788; border-color: #334466; }
+#cos-preview {
+  width: 200px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-left: 2px solid #334466;
+  background: #0d0d1a;
+}
+#cos-preview-label { font-size: 8px; color: #667788; }
+#cos-preview-frame {
+  width: 120px; height: 120px;
+  background: #080810;
+  border: 2px solid #334466;
+  display: flex; align-items: center; justify-content: center;
+  image-rendering: pixelated;
+}
+#cos-preview-canvas {
+  image-rendering: pixelated;
+}
+
+/* ===== GAME SCREEN ===== */
+#screen-game {
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+#hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  background: rgba(8,8,16,0.92);
+  border-bottom: 2px solid #334466;
+  font-size: 9px;
+  color: #eeeeff;
+  height: 32px;
+  box-sizing: border-box;
+}
+#hud-left { display: flex; gap: 16px; align-items: center; }
+#game-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  position: absolute;
+  /* top/left/width/height set by doLayout() in engine.js */
+}
+
+/* ===== OVERLAYS ===== */
+.overlay {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.75);
+  display: none;
+  align-items: center; justify-content: center;
+  flex-direction: column;
+  z-index: 200;
+  gap: 20px;
+}
+.overlay.active { display: flex; }
+.overlay-box {
+  background: #111122;
+  border: 2px solid #334466;
+  box-shadow: 0 8px 0 #000, inset 0 1px 0 rgba(255,255,255,0.05);
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-width: 300px;
+}
+.overlay-title { font-size: 20px; color: #eeeeff; text-shadow: 2px 2px 0 #000; }
+.overlay-sub { font-size: 9px; color: #667788; text-align: center; }
+.overlay-stats { font-size: 9px; color: #aabbcc; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.overlay-stars { font-size: 22px; display: flex; gap: 8px; }
+.overlay-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #080810; }
+::-webkit-scrollbar-thumb { background: #334466; }
+
+/* ===== FLASH MSG ===== */
+#flash-msg {
+  position: absolute;
+  bottom: 60px; left: 50%; transform: translateX(-50%);
+  background: #1a1a2e;
+  border: 2px solid #4455aa;
+  color: #ff6677;
+  font-size: 9px;
+  padding: 8px 16px;
+  z-index: 300;
+  display: none;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<!-- FLASH MESSAGE -->
+<div id="flash-msg"></div>
+
+<!-- MENU SCREEN -->
+<div id="screen-menu" class="screen active">
+  <img id="menu-bg" src="ragebait 3_title.gif" alt="">
+  <div id="menu-content">
+    <div id="menu-title">
+      <span class="t1">RAGEBAIT</span>
+      <span class="t2">3</span>
+    </div>
+    <button class="btn" id="btn-play">PLAY</button>
+    <button class="btn" id="btn-cosmetics">COSMETICS</button>
+    <button class="btn btn-danger" id="btn-reset">RESET</button>
+  </div>
+</div>
+
+<!-- LEVEL SELECT SCREEN -->
+<div id="screen-levelselect" class="screen">
+  <div id="ls-header">
+    <button class="btn btn-back" id="ls-back">? BACK</button>
+    <span id="ls-title">SELECT LEVEL</span>
+    <span id="ls-stars-display">? 0</span>
+  </div>
+  <div id="ls-body">
+    <button class="ls-arrow" id="ls-prev">?</button>
+    <div id="ls-card">
+      <div id="ls-level-num">LEVEL 1</div>
+      <div id="ls-level-name">THE SUNSET</div>
+      <div id="ls-difficulty">EASY</div>
+      <div id="ls-stars-row">
+        <span id="ls-star-0">?</span>
+        <span id="ls-star-1">?</span>
+        <span id="ls-star-2">?</span>
+      </div>
+      <div id="ls-stats">
+        <span id="ls-deaths">DEATHS: 0</span>
+        <span id="ls-time">BEST: --:--.--</span>
+      </div>
+      <div id="ls-lock-msg" style="display:none"></div>
+      <button class="btn btn-green" id="ls-play-btn">PLAY</button>
+    </div>
+    <button class="ls-arrow" id="ls-next">?</button>
+  </div>
+</div>
+
+<!-- COSMETICS SCREEN -->
+<div id="screen-cosmetics" class="screen">
+  <div id="cos-header" style="position:relative;">
+    <button class="btn btn-back" id="cos-back">? BACK</button>
+    <span id="cos-title">COSMETICS</span>
+    <span id="cos-stars">? 0</span>
+  </div>
+  <div id="cos-body">
+    <div id="cos-tabs">
+      <button class="cos-tab active" data-tab="color">COLOR</button>
+      <button class="cos-tab" data-tab="trail">TRAIL</button>
+      <button class="cos-tab" data-tab="death">DEATH SFX</button>
+    </div>
+    <div id="cos-list"></div>
+    <div id="cos-preview">
+      <div id="cos-preview-label">PREVIEW</div>
+      <div id="cos-preview-frame">
+        <canvas id="cos-preview-canvas" width="120" height="120"></canvas>
+      </div>
+      <div id="cos-equipped-info" style="font-size:8px;color:#667788;text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="screen-game" class="screen">
+  <div id="hud">
+    <div id="hud-left">
+      <span id="hud-deaths">DEATHS: 0</span>
+      <span id="hud-session">SESSION: 0</span>
+      <span id="hud-time">TIME: 00:00.00</span>
+    </div>
+    <button class="btn btn-back btn-sm" id="hud-back">? BACK</button>
+  </div>
+  <canvas id="game-canvas" width="800" height="450"></canvas>
+</div>
+
+<!-- DEATH OVERLAY -->
+<div id="overlay-death" class="overlay">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:#ff3344;">YOU DIED</div>
+    <div class="overlay-sub" id="death-sub">Click or press any key to retry</div>
+    <div class="overlay-stats" id="death-stats"></div>
+  </div>
+</div>
+
+<!-- WIN OVERLAY -->
+<div id="overlay-win" class="overlay">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:#00ff88;">LEVEL CLEAR!</div>
+    <div class="overlay-stars" id="win-stars">???</div>
+    <div class="overlay-stats" id="win-stats"></div>
+    <div class="overlay-btns">
+      <button class="btn btn-green" id="win-continue">CONTINUE</button>
+      <button class="btn btn-sm" id="win-retry">RETRY</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET CONFIRM OVERLAY -->
+<div id="overlay-reset" class="overlay">
+  <div class="overlay-box">
+    <div class="overlay-title" style="color:#ff3344;">RESET ALL DATA?</div>
+    <div class="overlay-sub">This will erase all progress, stars, and cosmetics. This cannot be undone.</div>
+    <div class="overlay-btns">
+      <button class="btn btn-danger" id="reset-confirm">YES, RESET</button>
+      <button class="btn" id="reset-cancel">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// SCRIPT BLOCK 1: SAVE, AUDIO, SCREEN MANAGEMENT, COSMETICS
+// ============================================================
+
+// --- AUDIO ---
+let bgMusic = new Audio('ragebait 3_title.mp3');
+bgMusic.loop = true;
+bgMusic.volume = 0.35;
+
+function ensureMusicPlaying() {
+  if (bgMusic.paused) bgMusic.play().catch(() => {});
+}
+function stopBgMusic() {
+  bgMusic.pause();
+}
+function playClick() {
+  const a = new Audio('ragebait 3_click.mp3');
+  a.volume = 0.6;
+  a.play().catch(() => {});
+}
+function sfx(src, vol = 0.7) {
+  const a = new Audio(src);
+  a.volume = vol;
+  a.play().catch(() => {});
+}
+
+// Try to start music immediately; fallback to first interaction
+ensureMusicPlaying();
+document.addEventListener('click', () => ensureMusicPlaying(), { once: false });
+document.addEventListener('keydown', () => ensureMusicPlaying(), { once: false });
+
+// --- SAVE SYSTEM ---
+const SAVE_KEY = 'rb3save';
+
+function defaultSave() {
+  const levels = {};
+  for (let i = 1; i <= 8; i++) {
+    levels[i] = { deaths: 0, bestTime: null, stars: [false, false, false] };
+  }
+  return {
+    equippedColor: 'white',
+    equippedTrail: 'none',
+    equippedDeath: 'default',
+    levels
+  };
+}
+
+let save = defaultSave();
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Merge to ensure all fields exist
+      save = Object.assign(defaultSave(), parsed);
+      // Ensure all levels exist
+      for (let i = 1; i <= 8; i++) {
+        if (!save.levels[i]) save.levels[i] = { deaths: 0, bestTime: null, stars: [false, false, false] };
+        if (!save.levels[i].stars) save.levels[i].stars = [false, false, false];
+      }
+    }
+  } catch (e) {
+    save = defaultSave();
+  }
+}
+
+function writeSave() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+  } catch (e) {}
+}
+
+function totalStars() {
+  let count = 0;
+  for (let i = 1; i <= 8; i++) {
+    if (save.levels[i] && save.levels[i].stars) {
+      for (const s of save.levels[i].stars) {
+        if (s) count++;
+      }
+    }
+  }
+  return count;
+}
+
+loadSave();
+
+// --- SCREEN MANAGEMENT ---
+const screens = {
+  menu: document.getElementById('screen-menu'),
+  levelselect: document.getElementById('screen-levelselect'),
+  cosmetics: document.getElementById('screen-cosmetics'),
+  game: document.getElementById('screen-game')
+};
+
+function showScreen(name) {
+  for (const [k, el] of Object.entries(screens)) {
+    el.classList.remove('active');
+  }
+  screens[name].classList.add('active');
+  if (name !== 'game') {
+    ensureMusicPlaying();
+  }
+}
+
+// --- FLASH MESSAGE ---
+let flashTimer = null;
+function showFlash(msg) {
+  const el = document.getElementById('flash-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+  if (flashTimer) clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { el.style.display = 'none'; }, 1800);
+}
+
+// --- COSMETICS DATA ---
+const COLORS = [
+  { id: 'white',  hex: '#ffffff', name: 'WHITE',  cost: 0 },
+  { id: 'green',  hex: '#00ff44', name: 'GREEN',  cost: 3 },
+  { id: 'cyan',   hex: '#00ffff', name: 'CYAN',   cost: 8 },
+  { id: 'red',    hex: '#ff3333', name: 'RED',    cost: 15 },
+  { id: 'purple', hex: '#9933ff', name: 'PURPLE', cost: 20 },
+];
+
+const TRAILS = [
+  { id: 'none',      name: 'NONE',      cost: 0,  desc: 'No trail' },
+  { id: 'dots',      name: 'DOTS',      cost: 5,  desc: 'White pixel dots' },
+  { id: 'fireflies', name: 'FIREFLIES', cost: 10, desc: 'Green glowing dots' },
+  { id: 'embers',    name: 'EMBERS',    cost: 15, desc: 'Purple rising embers' },
+];
+
+const DEATH_SFXS = [
+  { id: 'default',  name: 'DEFAULT',  cost: 0,  file: 'ragebait 3_death.mp3' },
+  { id: 'dramatic', name: 'DRAMATIC', cost: 10, file: 'ragebait 3_death2.mp3' },
+  { id: 'realistic',name: 'REALISTIC',cost: 20, file: 'ragebait 3_death3.mp3' },
+];
+
+let currentCosTab = 'color';
+
+function renderCosmetics() {
+  const stars = totalStars();
+  document.getElementById('cos-stars').textContent = '? ' + stars;
+
+  const list = document.getElementById('cos-list');
+  list.innerHTML = '';
+
+  let items, equippedId, equipFn;
+  if (currentCosTab === 'color') {
+    items = COLORS;
+    equippedId = save.equippedColor;
+    equipFn = (id) => { save.equippedColor = id; writeSave(); renderCosmetics(); updatePreviewCanvas(); };
+  } else if (currentCosTab === 'trail') {
+    items = TRAILS;
+    equippedId = save.equippedTrail;
+    equipFn = (id) => { save.equippedTrail = id; writeSave(); renderCosmetics(); };
+  } else {
+    items = DEATH_SFXS;
+    equippedId = save.equippedDeath;
+    equipFn = (id) => { save.equippedDeath = id; writeSave(); renderCosmetics(); };
+  }
+
+  for (const item of items) {
+    const unlocked = stars >= item.cost;
+    const equipped = item.id === equippedId;
+
+    const row = document.createElement('div');
+    row.className = 'cos-item' + (equipped ? ' equipped' : '') + (!unlocked ? ' locked' : '');
+
+    // Swatch / icon
+    const swatch = document.createElement('div');
+    swatch.className = 'cos-swatch';
+    if (currentCosTab === 'color') {
+      swatch.style.background = item.hex;
+      swatch.style.borderColor = item.hex;
+    } else if (currentCosTab === 'trail') {
+      swatch.style.background = '#080810';
+      swatch.style.borderColor = '#334466';
+      swatch.style.fontSize = '10px';
+      swatch.style.display = 'flex';
+      swatch.style.alignItems = 'center';
+      swatch.style.justifyContent = 'center';
+      swatch.textContent = item.id === 'none' ? '?' : '?';
+      swatch.style.color = item.id === 'fireflies' ? '#00ff88' : item.id === 'embers' ? '#cc44ff' : '#ffffff';
+    } else {
+      swatch.style.background = '#080810';
+      swatch.style.fontSize = '10px';
+      swatch.style.display = 'flex';
+      swatch.style.alignItems = 'center';
+      swatch.style.justifyContent = 'center';
+      swatch.textContent = '?';
+      swatch.style.color = '#eeeeff';
+    }
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'cos-item-name';
+    nameEl.textContent = item.name;
+
+    const reqEl = document.createElement('div');
+    reqEl.className = 'cos-item-req';
+    reqEl.textContent = item.cost === 0 ? 'FREE' : '? ' + item.cost + ' required';
+
+    const badge = document.createElement('div');
+    badge.className = 'cos-badge ' + (equipped ? 'equipped' : unlocked ? 'unlocked' : 'locked');
+    badge.textContent = equipped ? 'EQUIPPED' : unlocked ? 'UNLOCKED' : '?? ' + item.cost + ' ?';
+
+    row.appendChild(swatch);
+    row.appendChild(nameEl);
+    row.appendChild(reqEl);
+    row.appendChild(badge);
+
+    if (unlocked && !equipped) {
+      row.addEventListener('click', () => { playClick(); equipFn(item.id); });
+    } else if (!unlocked) {
+      row.addEventListener('click', () => { showFlash('Need ' + item.cost + ' ? to unlock!'); });
+    }
+
+    list.appendChild(row);
+  }
+
+  // Update equipped info
+  const infoEl = document.getElementById('cos-equipped-info');
+  if (currentCosTab === 'color') {
+    const c = COLORS.find(c => c.id === save.equippedColor);
+    infoEl.textContent = c ? c.name : '';
+  } else if (currentCosTab === 'trail') {
+    const t = TRAILS.find(t => t.id === save.equippedTrail);
+    infoEl.textContent = t ? t.name : '';
+  } else {
+    const d = DEATH_SFXS.find(d => d.id === save.equippedDeath);
+    infoEl.textContent = d ? d.name : '';
+  }
+
+  updatePreviewCanvas();
+}
+
+function updatePreviewCanvas() {
+  const canvas = document.getElementById('cos-preview-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 120, 120);
+  ctx.fillStyle = '#080810';
+  ctx.fillRect(0, 0, 120, 120);
+
+  // Draw a 12x12 pixel square (player preview) centered
+  const c = COLORS.find(c => c.id === save.equippedColor);
+  const hex = c ? c.hex : '#ffffff';
+  const px = 54, py = 54;
+  ctx.fillStyle = hex;
+  ctx.fillRect(px, py, 12, 12);
+
+  // Subtle glow
+  ctx.shadowColor = hex;
+  ctx.shadowBlur = 8;
+  ctx.fillRect(px, py, 12, 12);
+  ctx.shadowBlur = 0;
+}
+
+// Tab switching
+document.querySelectorAll('.cos-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    playClick();
+    document.querySelectorAll('.cos-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentCosTab = tab.dataset.tab;
+    renderCosmetics();
+  });
+});
+
+// --- MENU BUTTONS ---
+document.getElementById('btn-play').addEventListener('click', () => {
+  playClick();
+  currentLevelIndex = 0;
+  updateLevelSelectCard();
+  showScreen('levelselect');
+});
+document.getElementById('btn-cosmetics').addEventListener('click', () => {
+  playClick();
+  currentCosTab = 'color';
+  document.querySelectorAll('.cos-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.cos-tab[data-tab="color"]').classList.add('active');
+  renderCosmetics();
+  showScreen('cosmetics');
+});
+document.getElementById('btn-reset').addEventListener('click', () => {
+  playClick();
+  document.getElementById('overlay-reset').classList.add('active');
+});
+document.getElementById('reset-confirm').addEventListener('click', () => {
+  playClick();
+  save = defaultSave();
+  writeSave();
+  document.getElementById('overlay-reset').classList.remove('active');
+  showFlash('All data reset!');
+});
+document.getElementById('reset-cancel').addEventListener('click', () => {
+  playClick();
+  document.getElementById('overlay-reset').classList.remove('active');
+});
+document.getElementById('cos-back').addEventListener('click', () => {
+  playClick();
+  showScreen('menu');
+});
+document.getElementById('ls-back').addEventListener('click', () => {
+  playClick();
+  showScreen('menu');
+});
+document.getElementById('hud-back').addEventListener('click', () => {
+  playClick();
+  leaveGame();
+});
+</script>
+<script>
+// ============================================================
+// SCRIPT BLOCK 2: LEVEL DEFINITIONS
+// ============================================================
+
+const LEVEL_DEFS = [
+// ============================================================
+// LEVEL 1 ï¿½ Easy "The Sunset"  bg:1.gif  mapW:110
+// Full-tile collision. Spikes sit ON platforms (type 2 in row above platform).
+// ============================================================
+{
+  id:1, name:'THE SUNSET', difficulty:'EASY', diffColor:'#00ff88',
+  bg:'ragebait 3_1.gif', timeThreshold:60, mapW:110, mapH:22, lockStars:0,
+  platforms:[
+    // Start platform
+    {x:1,  y:17, w:5, type:1},
+    // Section 1 ï¿½ gentle steps
+    {x:8,  y:15, w:4, type:1},
+    {x:14, y:13, w:4, type:1},
+    {x:20, y:15, w:4, type:1},
+    {x:26, y:13, w:4, type:1},
+    // Spike on platform
+    {x:28, y:12, w:1, type:2},
+    {x:32, y:11, w:4, type:1},
+    {x:38, y:13, w:4, type:1},
+    {x:39, y:12, w:1, type:2},
+    // Section 2 ï¿½ wider gaps
+    {x:44, y:11, w:4, type:1},
+    {x:50, y:13, w:4, type:1},
+    {x:56, y:11, w:4, type:1},
+    {x:58, y:10, w:1, type:2},
+    {x:62, y:13, w:4, type:1},
+    {x:68, y:11, w:4, type:1},
+    // Star coin detour ï¿½ requires jumping up 3 platforms with a spike gap
+    {x:68, y:11, w:2, type:1},
+    {x:68, y:10, w:1, type:2},
+    {x:71, y:8,  w:2, type:1},
+    {x:71, y:7,  w:1, type:2},
+    {x:74, y:5,  w:2, type:1},
+    {x:75, y:4,  w:1, type:6},
+    // Continue
+    {x:74, y:13, w:4, type:1},
+    {x:80, y:11, w:4, type:1},
+    {x:82, y:10, w:1, type:2},
+    {x:86, y:13, w:4, type:1},
+    {x:92, y:11, w:4, type:1},
+    {x:98, y:13, w:4, type:1},
+    {x:104,y:11, w:4, type:1},
+    // Goal
+    {x:107,y:10, w:1, type:8},
+  ],
+  moving:[
+    {x:44, y:11, w:3, type:1, axis:'h', range:3, speed:1.0},
+  ]
+},
+// ============================================================
+// LEVEL 2 ï¿½ Medium "The Flock"  bg:2.gif  mapW:130
+// Introduces turrets. Platforms start getting narrower (w:3).
+// ============================================================
+{
+  id:2, name:'THE FLOCK', difficulty:'MEDIUM', diffColor:'#ffcc00',
+  bg:'ragebait 3_2.gif', timeThreshold:75, mapW:130, mapH:22, lockStars:0,
+  platforms:[
+    {x:1,  y:17, w:4, type:1},
+    {x:7,  y:15, w:3, type:1},
+    {x:12, y:13, w:3, type:1},
+    {x:13, y:12, w:1, type:7},
+    {x:17, y:15, w:3, type:1},
+    {x:22, y:12, w:3, type:1},
+    {x:23, y:11, w:1, type:2},
+    {x:27, y:14, w:3, type:1},
+    {x:32, y:11, w:3, type:1},
+    {x:33, y:10, w:1, type:7},
+    {x:37, y:13, w:3, type:1},
+    {x:42, y:10, w:3, type:1},
+    {x:43, y:9,  w:1, type:2},
+    {x:47, y:12, w:3, type:1},
+    {x:48, y:11, w:1, type:7},
+    {x:52, y:10, w:3, type:1},
+    {x:57, y:12, w:3, type:1},
+    {x:58, y:11, w:1, type:2},
+    {x:62, y:10, w:3, type:1},
+    {x:63, y:9,  w:1, type:7},
+    // Star coin detour ï¿½ high platform chain with spikes
+    {x:62, y:10, w:2, type:1},
+    {x:62, y:9,  w:1, type:2},
+    {x:65, y:7,  w:2, type:1},
+    {x:65, y:6,  w:1, type:2},
+    {x:68, y:5,  w:2, type:1},
+    {x:69, y:4,  w:1, type:6},
+    // Continue
+    {x:67, y:12, w:3, type:1},
+    {x:72, y:10, w:3, type:1},
+    {x:73, y:9,  w:1, type:2},
+    {x:77, y:12, w:3, type:1},
+    {x:78, y:11, w:1, type:7},
+    {x:82, y:10, w:3, type:1},
+    {x:87, y:12, w:3, type:1},
+    {x:88, y:11, w:1, type:2},
+    {x:92, y:10, w:3, type:1},
+    {x:97, y:12, w:3, type:1},
+    {x:98, y:11, w:1, type:7},
+    {x:102,y:10, w:3, type:1},
+    {x:107,y:12, w:3, type:1},
+    {x:112,y:10, w:3, type:1},
+    {x:113,y:9,  w:1, type:2},
+    {x:117,y:12, w:3, type:1},
+    {x:122,y:10, w:3, type:1},
+    {x:126,y:9,  w:1, type:8},
+  ],
+  moving:[
+    {x:37, y:13, w:3, type:1, axis:'h', range:4, speed:1.2},
+    {x:82, y:10, w:3, type:1, axis:'h', range:3, speed:1.4},
+  ]
+},
+// ============================================================
+// LEVEL 3 ï¿½ Hard "The Waterfall"  bg:3.gif  mapW:140
+// Breaking platforms. w:3 platforms. More spikes.
+// ============================================================
+{
+  id:3, name:'THE WATERFALL', difficulty:'HARD', diffColor:'#ff8800',
+  bg:'ragebait 3_3.gif', timeThreshold:90, mapW:140, mapH:22, lockStars:0,
+  platforms:[
+    {x:1,  y:17, w:4, type:1},
+    {x:7,  y:15, w:3, type:1},
+    {x:12, y:13, w:3, type:3},
+    {x:13, y:12, w:1, type:2},
+    {x:17, y:15, w:3, type:1},
+    {x:22, y:12, w:3, type:3},
+    {x:27, y:14, w:3, type:1},
+    {x:28, y:13, w:1, type:7},
+    {x:32, y:11, w:3, type:3},
+    {x:33, y:10, w:1, type:2},
+    {x:37, y:13, w:3, type:1},
+    {x:42, y:10, w:3, type:3},
+    // Star coin detour ï¿½ breaking platforms + spike gauntlet
+    {x:41, y:9,  w:2, type:3},
+    {x:41, y:8,  w:1, type:2},
+    {x:44, y:7,  w:2, type:3},
+    {x:44, y:6,  w:1, type:2},
+    {x:47, y:5,  w:2, type:1},
+    {x:48, y:4,  w:1, type:6},
+    {x:47, y:12, w:3, type:1},
+    {x:48, y:11, w:1, type:7},
+    {x:52, y:10, w:3, type:3},
+    {x:53, y:9,  w:1, type:2},
+    {x:57, y:12, w:3, type:1},
+    {x:62, y:10, w:3, type:3},
+    {x:63, y:9,  w:1, type:7},
+    {x:67, y:12, w:3, type:1},
+    {x:68, y:11, w:1, type:2},
+    {x:72, y:10, w:3, type:3},
+    {x:77, y:12, w:3, type:1},
+    {x:78, y:11, w:1, type:7},
+    {x:82, y:10, w:3, type:3},
+    {x:83, y:9,  w:1, type:2},
+    {x:87, y:12, w:3, type:1},
+    {x:92, y:10, w:3, type:3},
+    {x:97, y:12, w:3, type:1},
+    {x:98, y:11, w:1, type:7},
+    {x:102,y:10, w:3, type:3},
+    {x:103,y:9,  w:1, type:2},
+    {x:107,y:12, w:3, type:1},
+    {x:112,y:10, w:3, type:3},
+    {x:117,y:12, w:3, type:1},
+    {x:118,y:11, w:1, type:7},
+    {x:122,y:10, w:3, type:3},
+    {x:127,y:12, w:3, type:1},
+    {x:132,y:10, w:3, type:1},
+    {x:136,y:9,  w:1, type:8},
+  ],
+  moving:[
+    {x:22, y:12, w:3, type:1, axis:'h', range:4, speed:1.3},
+    {x:67, y:12, w:3, type:1, axis:'v', range:3, speed:1.2},
+    {x:107,y:12, w:3, type:1, axis:'h', range:4, speed:1.5},
+  ]
+},
+// ============================================================
+// LEVEL 4 ï¿½ Harder "Sunset at the Pond"  bg:5.gif  mapW:150
+// Double-jump orbs. Mix of breaking + orbs. w:2-3 platforms.
+// ============================================================
+{
+  id:4, name:'SUNSET AT THE POND', difficulty:'HARDER', diffColor:'#ff5500',
+  bg:'ragebait 3_5.gif', timeThreshold:100, mapW:150, mapH:22, lockStars:0,
+  platforms:[
+    {x:1,  y:17, w:3, type:1},
+    {x:6,  y:15, w:3, type:1},
+    {x:11, y:13, w:3, type:3},
+    {x:12, y:12, w:1, type:2},
+    {x:15, y:11, w:1, type:5},
+    {x:17, y:11, w:3, type:1},
+    {x:22, y:13, w:3, type:3},
+    {x:23, y:12, w:1, type:2},
+    {x:27, y:10, w:3, type:1},
+    {x:31, y:8,  w:1, type:5},
+    {x:33, y:8,  w:3, type:1},
+    {x:38, y:11, w:3, type:3},
+    {x:39, y:10, w:1, type:2},
+    {x:43, y:9,  w:3, type:1},
+    {x:47, y:7,  w:1, type:5},
+    // Star coin detour ï¿½ orb required, spike-guarded high path
+    {x:47, y:8,  w:2, type:1},
+    {x:47, y:7,  w:1, type:2},
+    {x:50, y:6,  w:1, type:5},
+    {x:52, y:4,  w:2, type:1},
+    {x:52, y:3,  w:1, type:2},
+    {x:55, y:2,  w:2, type:1},
+    {x:56, y:1,  w:1, type:6},
+    {x:53, y:10, w:3, type:3},
+    {x:54, y:9,  w:1, type:2},
+    {x:58, y:8,  w:3, type:1},
+    {x:63, y:11, w:3, type:3},
+    {x:64, y:10, w:1, type:2},
+    {x:67, y:9,  w:1, type:5},
+    {x:69, y:9,  w:3, type:1},
+    {x:74, y:12, w:3, type:1},
+    {x:79, y:10, w:3, type:3},
+    {x:80, y:9,  w:1, type:2},
+    {x:84, y:8,  w:3, type:1},
+    {x:88, y:6,  w:1, type:5},
+    {x:90, y:6,  w:3, type:1},
+    {x:95, y:9,  w:3, type:3},
+    {x:96, y:8,  w:1, type:2},
+    {x:100,y:7,  w:3, type:1},
+    {x:105,y:10, w:3, type:3},
+    {x:110,y:8,  w:3, type:1},
+    {x:111,y:7,  w:1, type:7},
+    {x:115,y:11, w:3, type:3},
+    {x:116,y:10, w:1, type:2},
+    {x:120,y:9,  w:3, type:1},
+    {x:125,y:12, w:3, type:1},
+    {x:130,y:10, w:3, type:3},
+    {x:135,y:8,  w:3, type:1},
+    {x:140,y:10, w:3, type:1},
+    {x:144,y:9,  w:1, type:8},
+  ],
+  moving:[
+    {x:27, y:10, w:3, type:1, axis:'h', range:4, speed:1.4},
+    {x:74, y:12, w:3, type:1, axis:'v', range:3, speed:1.3},
+    {x:120,y:9,  w:3, type:1, axis:'h', range:5, speed:1.6},
+  ]
+},
+// ============================================================
+// LEVEL 5 ï¿½ Advanced "Event Horizon"  bg:6.gif  mapW:160
+// Ice platforms. All mechanics. w:2-3. More turrets.
+// ============================================================
+{
+  id:5, name:'EVENT HORIZON', difficulty:'ADVANCED', diffColor:'#ff2244',
+  bg:'ragebait 3_5.gif', timeThreshold:110, mapW:160, mapH:22, lockStars:0,
+  platforms:[
+    {x:1,  y:17, w:3, type:1},
+    {x:6,  y:15, w:3, type:4},
+    {x:11, y:13, w:3, type:1},
+    {x:12, y:12, w:1, type:2},
+    {x:16, y:11, w:3, type:4},
+    {x:17, y:10, w:1, type:2},
+    {x:20, y:9,  w:1, type:5},
+    {x:22, y:9,  w:3, type:1},
+    {x:27, y:12, w:3, type:3},
+    {x:28, y:11, w:1, type:2},
+    {x:32, y:10, w:3, type:4},
+    {x:37, y:8,  w:3, type:1},
+    {x:38, y:7,  w:1, type:7},
+    {x:41, y:6,  w:1, type:5},
+    {x:43, y:6,  w:3, type:4},
+    // Star coin detour ï¿½ ice + orb + spike gauntlet
+    {x:42, y:5,  w:2, type:4},
+    {x:42, y:4,  w:1, type:2},
+    {x:45, y:3,  w:1, type:5},
+    {x:47, y:2,  w:2, type:4},
+    {x:47, y:1,  w:1, type:2},
+    {x:50, y:1,  w:2, type:1},
+    {x:51, y:0,  w:1, type:6},
+    {x:47, y:9,  w:3, type:3},
+    {x:48, y:8,  w:1, type:2},
+    {x:52, y:7,  w:3, type:1},
+    {x:57, y:10, w:3, type:4},
+    {x:58, y:9,  w:1, type:7},
+    {x:62, y:8,  w:3, type:1},
+    {x:63, y:7,  w:1, type:2},
+    {x:66, y:6,  w:1, type:5},
+    {x:68, y:6,  w:3, type:4},
+    {x:73, y:9,  w:3, type:3},
+    {x:74, y:8,  w:1, type:2},
+    {x:78, y:7,  w:3, type:1},
+    {x:83, y:10, w:3, type:4},
+    {x:84, y:9,  w:1, type:7},
+    {x:88, y:8,  w:3, type:1},
+    {x:89, y:7,  w:1, type:2},
+    {x:92, y:6,  w:1, type:5},
+    {x:94, y:6,  w:3, type:4},
+    {x:99, y:9,  w:3, type:3},
+    {x:100,y:8,  w:1, type:2},
+    {x:104,y:7,  w:3, type:1},
+    {x:109,y:10, w:3, type:4},
+    {x:110,y:9,  w:1, type:7},
+    {x:114,y:8,  w:3, type:1},
+    {x:115,y:7,  w:1, type:2},
+    {x:119,y:6,  w:3, type:4},
+    {x:124,y:9,  w:3, type:3},
+    {x:129,y:7,  w:3, type:1},
+    {x:134,y:10, w:3, type:4},
+    {x:139,y:8,  w:3, type:1},
+    {x:144,y:10, w:3, type:4},
+    {x:149,y:8,  w:3, type:1},
+    {x:154,y:7,  w:1, type:8},
+  ],
+  moving:[
+    {x:16, y:11, w:3, type:4, axis:'h', range:4, speed:1.5},
+    {x:57, y:10, w:3, type:4, axis:'h', range:5, speed:1.7},
+    {x:109,y:10, w:3, type:4, axis:'v', range:3, speed:1.4},
+    {x:144,y:10, w:3, type:4, axis:'h', range:4, speed:1.8},
+  ]
+},
+// ============================================================
+// LEVEL 6 ï¿½ Insane "The Sunset II"  bg:7.gif  mapW:170  lockStars:12
+// All mechanics. w:2 platforms. Dense turrets.
+// ============================================================
+{
+  id:6, name:'THE SUNSET II', difficulty:'INSANE', diffColor:'#cc00ff',
+  bg:'ragebait 3_6.gif', timeThreshold:130, mapW:170, mapH:22, lockStars:12,
+  platforms:[
+    {x:1,  y:17, w:3, type:1},
+    {x:5,  y:15, w:2, type:3},
+    {x:9,  y:13, w:2, type:4},
+    {x:10, y:12, w:1, type:2},
+    {x:12, y:11, w:1, type:5},
+    {x:13, y:11, w:2, type:1},
+    {x:16, y:13, w:2, type:3},
+    {x:19, y:10, w:2, type:1},
+    {x:20, y:9,  w:1, type:7},
+    {x:22, y:8,  w:1, type:5},
+    {x:23, y:8,  w:2, type:4},
+    {x:24, y:7,  w:1, type:2},
+    {x:26, y:11, w:2, type:3},
+    {x:29, y:9,  w:2, type:1},
+    {x:32, y:7,  w:2, type:4},
+    {x:33, y:6,  w:1, type:2},
+    {x:35, y:5,  w:1, type:5},
+    {x:36, y:5,  w:2, type:1},
+    {x:37, y:4,  w:1, type:7},
+    {x:39, y:8,  w:2, type:3},
+    {x:42, y:6,  w:2, type:4},
+    {x:43, y:5,  w:1, type:2},
+    {x:45, y:9,  w:2, type:1},
+    {x:46, y:8,  w:1, type:7},
+    {x:48, y:7,  w:1, type:5},
+    {x:49, y:7,  w:2, type:3},
+    // Star coin ï¿½ very high, requires multiple orbs + spike gauntlet
+    {x:48, y:6,  w:2, type:1},
+    {x:48, y:5,  w:1, type:2},
+    {x:51, y:4,  w:1, type:5},
+    {x:53, y:3,  w:2, type:3},
+    {x:53, y:2,  w:1, type:2},
+    {x:56, y:1,  w:2, type:1},
+    {x:57, y:0,  w:1, type:6},
+    {x:52, y:10, w:2, type:4},
+    {x:53, y:9,  w:1, type:2},
+    {x:55, y:8,  w:2, type:1},
+    {x:58, y:6,  w:2, type:3},
+    {x:59, y:5,  w:1, type:2},
+    {x:61, y:9,  w:2, type:4},
+    {x:62, y:8,  w:1, type:7},
+    {x:64, y:7,  w:1, type:5},
+    {x:65, y:7,  w:2, type:1},
+    {x:68, y:5,  w:2, type:3},
+    {x:71, y:8,  w:2, type:4},
+    {x:72, y:7,  w:1, type:2},
+    {x:74, y:6,  w:2, type:1},
+    {x:75, y:5,  w:1, type:7},
+    {x:77, y:9,  w:2, type:3},
+    {x:80, y:7,  w:2, type:4},
+    {x:81, y:6,  w:1, type:2},
+    {x:83, y:5,  w:2, type:1},
+    {x:86, y:8,  w:2, type:3},
+    {x:87, y:7,  w:1, type:7},
+    {x:89, y:6,  w:1, type:5},
+    {x:90, y:6,  w:2, type:4},
+    {x:93, y:9,  w:2, type:1},
+    {x:94, y:8,  w:1, type:2},
+    {x:96, y:7,  w:2, type:3},
+    {x:99, y:5,  w:2, type:4},
+    {x:100,y:4,  w:1, type:7},
+    {x:102,y:8,  w:2, type:1},
+    {x:105,y:6,  w:2, type:3},
+    {x:106,y:5,  w:1, type:2},
+    {x:108,y:9,  w:2, type:4},
+    {x:111,y:7,  w:2, type:1},
+    {x:114,y:5,  w:2, type:3},
+    {x:115,y:4,  w:1, type:7},
+    {x:117,y:8,  w:2, type:4},
+    {x:120,y:6,  w:2, type:1},
+    {x:123,y:4,  w:2, type:3},
+    {x:126,y:7,  w:2, type:4},
+    {x:129,y:5,  w:2, type:1},
+    {x:132,y:8,  w:2, type:3},
+    {x:135,y:6,  w:2, type:4},
+    {x:138,y:4,  w:2, type:1},
+    {x:141,y:7,  w:2, type:3},
+    {x:144,y:5,  w:2, type:4},
+    {x:147,y:8,  w:2, type:1},
+    {x:150,y:6,  w:2, type:3},
+    {x:153,y:4,  w:2, type:4},
+    {x:156,y:7,  w:2, type:1},
+    {x:159,y:5,  w:2, type:3},
+    {x:162,y:8,  w:2, type:4},
+    {x:165,y:6,  w:2, type:1},
+    {x:167,y:5,  w:1, type:8},
+  ],
+  moving:[
+    {x:9,  y:13, w:2, type:4, axis:'h', range:3, speed:1.6},
+    {x:39, y:8,  w:2, type:3, axis:'h', range:4, speed:1.8},
+    {x:77, y:9,  w:2, type:3, axis:'v', range:3, speed:1.5},
+    {x:117,y:8,  w:2, type:4, axis:'h', range:4, speed:2.0},
+    {x:147,y:8,  w:2, type:1, axis:'h', range:3, speed:1.9},
+  ]
+},
+// ============================================================
+// LEVEL 7 ï¿½ Extreme "Apocalypse"  bg:8.gif  mapW:180  lockStars:16
+// Brutal. w:1-2 platforms. Lots of turrets + spikes.
+// ============================================================
+{
+  id:7, name:'APOCALYPSE', difficulty:'EXTREME', diffColor:'#ff0000',
+  bg:'ragebait 3_7.gif', timeThreshold:160, mapW:180, mapH:22, lockStars:16,
+  platforms:[
+    {x:1,  y:18, w:2, type:1},
+    {x:4,  y:16, w:2, type:3},
+    {x:7,  y:14, w:2, type:4},
+    {x:8,  y:13, w:1, type:2},
+    {x:10, y:12, w:2, type:1},
+    {x:11, y:11, w:1, type:2},
+    {x:13, y:10, w:1, type:5},
+    {x:14, y:10, w:2, type:3},
+    {x:17, y:12, w:2, type:4},
+    {x:18, y:11, w:1, type:7},
+    {x:20, y:10, w:2, type:1},
+    {x:23, y:8,  w:2, type:3},
+    {x:24, y:7,  w:1, type:2},
+    {x:26, y:6,  w:1, type:5},
+    {x:27, y:6,  w:2, type:4},
+    {x:30, y:9,  w:2, type:1},
+    {x:31, y:8,  w:1, type:7},
+    {x:33, y:7,  w:2, type:3},
+    {x:36, y:5,  w:2, type:4},
+    {x:37, y:4,  w:1, type:2},
+    {x:39, y:3,  w:2, type:1},
+    {x:40, y:2,  w:1, type:7},
+    {x:42, y:6,  w:2, type:3},
+    {x:45, y:4,  w:2, type:4},
+    {x:48, y:7,  w:2, type:1},
+    {x:49, y:6,  w:1, type:2},
+    {x:51, y:5,  w:1, type:5},
+    {x:52, y:5,  w:2, type:3},
+    {x:55, y:8,  w:2, type:4},
+    {x:56, y:7,  w:1, type:7},
+    {x:58, y:6,  w:2, type:1},
+    {x:61, y:4,  w:2, type:3},
+    {x:62, y:3,  w:1, type:2},
+    {x:64, y:2,  w:1, type:5},
+    {x:65, y:2,  w:2, type:4},
+    {x:68, y:5,  w:2, type:1},
+    {x:69, y:4,  w:1, type:7},
+    {x:71, y:3,  w:2, type:3},
+    {x:74, y:6,  w:2, type:4},
+    {x:75, y:5,  w:1, type:2},
+    {x:77, y:4,  w:2, type:1},
+    {x:80, y:7,  w:2, type:3},
+    {x:81, y:6,  w:1, type:7},
+    {x:83, y:5,  w:2, type:4},
+    {x:86, y:3,  w:2, type:1},
+    {x:87, y:2,  w:1, type:2},
+    // Star coin ï¿½ extreme detour, spike-lined path at top of map
+    {x:84, y:1,  w:2, type:3},
+    {x:84, y:0,  w:1, type:2},
+    {x:87, y:1,  w:2, type:1},
+    {x:88, y:0,  w:1, type:6},
+    {x:90, y:5,  w:2, type:3},
+    {x:93, y:3,  w:2, type:4},
+    {x:96, y:6,  w:2, type:1},
+    {x:97, y:5,  w:1, type:2},
+    {x:99, y:4,  w:1, type:5},
+    {x:100,y:4,  w:2, type:3},
+    {x:103,y:7,  w:2, type:4},
+    {x:104,y:6,  w:1, type:7},
+    {x:106,y:5,  w:2, type:1},
+    {x:109,y:3,  w:2, type:3},
+    {x:110,y:2,  w:1, type:2},
+    {x:112,y:5,  w:2, type:4},
+    {x:115,y:3,  w:2, type:1},
+    {x:116,y:2,  w:1, type:7},
+    {x:118,y:6,  w:2, type:3},
+    {x:121,y:4,  w:2, type:4},
+    {x:124,y:7,  w:2, type:1},
+    {x:127,y:5,  w:2, type:3},
+    {x:130,y:3,  w:2, type:4},
+    {x:133,y:6,  w:2, type:1},
+    {x:136,y:4,  w:2, type:3},
+    {x:139,y:7,  w:2, type:4},
+    {x:142,y:5,  w:2, type:1},
+    {x:145,y:3,  w:2, type:3},
+    {x:148,y:6,  w:2, type:4},
+    {x:151,y:4,  w:2, type:1},
+    {x:154,y:7,  w:2, type:3},
+    {x:157,y:5,  w:2, type:4},
+    {x:160,y:3,  w:2, type:1},
+    {x:163,y:6,  w:2, type:3},
+    {x:166,y:4,  w:2, type:4},
+    {x:169,y:7,  w:2, type:1},
+    {x:172,y:5,  w:2, type:3},
+    {x:175,y:3,  w:2, type:4},
+    {x:177,y:2,  w:1, type:8},
+  ],
+  moving:[
+    {x:7,  y:14, w:2, type:4, axis:'h', range:3, speed:2.0},
+    {x:33, y:7,  w:2, type:3, axis:'h', range:4, speed:2.2},
+    {x:55, y:8,  w:2, type:4, axis:'v', range:3, speed:1.8},
+    {x:80, y:7,  w:2, type:3, axis:'h', range:4, speed:2.4},
+    {x:118,y:6,  w:2, type:3, axis:'h', range:3, speed:2.2},
+    {x:148,y:6,  w:2, type:4, axis:'v', range:3, speed:2.0},
+  ]
+},
+// ============================================================
+// LEVEL 8 ï¿½ Abysmal "The Finale"  bg:8.gif  mapW:200  lockStars:21
+// Nightmare. w:1 platforms. Everything.
+// ============================================================
+{
+  id:8, name:'THE FINALE', difficulty:'ABYSMAL', diffColor:'#880000',
+  bg:'ragebait 3_8.gif', timeThreshold:200, mapW:200, mapH:22, lockStars:21,
+  platforms:[
+    {x:1,  y:18, w:2, type:1},
+    {x:4,  y:16, w:2, type:3},
+    {x:7,  y:14, w:2, type:4},
+    {x:8,  y:13, w:1, type:2},
+    {x:10, y:12, w:2, type:1},
+    {x:11, y:11, w:1, type:2},
+    {x:13, y:10, w:1, type:5},
+    {x:14, y:10, w:2, type:3},
+    {x:17, y:12, w:2, type:4},
+    {x:18, y:11, w:1, type:7},
+    {x:20, y:10, w:2, type:1},
+    {x:21, y:9,  w:1, type:2},
+    {x:23, y:8,  w:2, type:3},
+    {x:24, y:7,  w:1, type:2},
+    {x:26, y:6,  w:1, type:5},
+    {x:27, y:6,  w:2, type:4},
+    {x:28, y:5,  w:1, type:2},
+    {x:30, y:9,  w:2, type:1},
+    {x:31, y:8,  w:1, type:7},
+    {x:33, y:7,  w:2, type:3},
+    {x:34, y:6,  w:1, type:2},
+    {x:36, y:5,  w:2, type:4},
+    {x:37, y:4,  w:1, type:2},
+    {x:39, y:3,  w:2, type:1},
+    {x:40, y:2,  w:1, type:7},
+    {x:42, y:6,  w:2, type:3},
+    {x:43, y:5,  w:1, type:2},
+    {x:45, y:4,  w:2, type:4},
+    {x:48, y:7,  w:2, type:1},
+    {x:49, y:6,  w:1, type:2},
+    {x:51, y:5,  w:1, type:5},
+    {x:52, y:5,  w:2, type:3},
+    {x:53, y:4,  w:1, type:2},
+    {x:55, y:8,  w:2, type:4},
+    {x:56, y:7,  w:1, type:7},
+    {x:58, y:6,  w:2, type:1},
+    {x:59, y:5,  w:1, type:2},
+    {x:61, y:4,  w:2, type:3},
+    {x:62, y:3,  w:1, type:2},
+    {x:64, y:2,  w:1, type:5},
+    {x:65, y:2,  w:2, type:4},
+    {x:66, y:1,  w:1, type:2},
+    {x:68, y:5,  w:2, type:1},
+    {x:69, y:4,  w:1, type:7},
+    {x:71, y:3,  w:2, type:3},
+    {x:72, y:2,  w:1, type:2},
+    {x:74, y:6,  w:2, type:4},
+    {x:75, y:5,  w:1, type:2},
+    {x:77, y:4,  w:2, type:1},
+    {x:78, y:3,  w:1, type:7},
+    {x:80, y:7,  w:2, type:3},
+    {x:81, y:6,  w:1, type:2},
+    {x:83, y:5,  w:2, type:4},
+    {x:84, y:4,  w:1, type:2},
+    {x:86, y:3,  w:2, type:1},
+    {x:87, y:2,  w:1, type:2},
+    // Star coin at the very top ï¿½ nightmare detour
+    {x:84, y:1,  w:2, type:3},
+    {x:84, y:0,  w:1, type:2},
+    {x:87, y:1,  w:2, type:1},
+    {x:88, y:0,  w:1, type:6},
+    {x:90, y:5,  w:2, type:3},
+    {x:91, y:4,  w:1, type:2},
+    {x:93, y:3,  w:2, type:4},
+    {x:94, y:2,  w:1, type:2},
+    {x:96, y:6,  w:2, type:1},
+    {x:97, y:5,  w:1, type:2},
+    {x:99, y:4,  w:1, type:5},
+    {x:100,y:4,  w:2, type:3},
+    {x:101,y:3,  w:1, type:2},
+    {x:103,y:7,  w:2, type:4},
+    {x:104,y:6,  w:1, type:7},
+    {x:106,y:5,  w:2, type:1},
+    {x:107,y:4,  w:1, type:2},
+    {x:109,y:3,  w:2, type:3},
+    {x:110,y:2,  w:1, type:2},
+    {x:112,y:5,  w:2, type:4},
+    {x:115,y:3,  w:2, type:1},
+    {x:116,y:2,  w:1, type:7},
+    {x:118,y:6,  w:2, type:3},
+    {x:119,y:5,  w:1, type:2},
+    {x:121,y:4,  w:2, type:4},
+    {x:122,y:3,  w:1, type:2},
+    {x:124,y:7,  w:2, type:1},
+    {x:127,y:5,  w:2, type:3},
+    {x:128,y:4,  w:1, type:2},
+    {x:130,y:3,  w:2, type:4},
+    {x:131,y:2,  w:1, type:2},
+    {x:133,y:6,  w:2, type:1},
+    {x:134,y:5,  w:1, type:7},
+    {x:136,y:4,  w:2, type:3},
+    {x:137,y:3,  w:1, type:2},
+    {x:139,y:7,  w:2, type:4},
+    {x:140,y:6,  w:1, type:2},
+    {x:142,y:5,  w:2, type:1},
+    {x:143,y:4,  w:1, type:7},
+    {x:145,y:3,  w:2, type:3},
+    {x:146,y:2,  w:1, type:2},
+    {x:148,y:6,  w:2, type:4},
+    {x:151,y:4,  w:2, type:1},
+    {x:154,y:7,  w:2, type:3},
+    {x:157,y:5,  w:2, type:4},
+    {x:160,y:3,  w:2, type:1},
+    {x:161,y:2,  w:1, type:7},
+    {x:163,y:6,  w:2, type:3},
+    {x:166,y:4,  w:2, type:4},
+    {x:169,y:7,  w:2, type:1},
+    {x:172,y:5,  w:2, type:3},
+    {x:175,y:3,  w:2, type:4},
+    {x:178,y:6,  w:2, type:1},
+    {x:181,y:4,  w:2, type:3},
+    {x:184,y:7,  w:2, type:4},
+    {x:187,y:5,  w:2, type:1},
+    {x:190,y:3,  w:2, type:3},
+    {x:193,y:6,  w:2, type:4},
+    {x:196,y:4,  w:2, type:1},
+    {x:198,y:3,  w:1, type:8},
+  ],
+  moving:[
+    {x:7,  y:14, w:2, type:4, axis:'h', range:3, speed:2.2},
+    {x:23, y:8,  w:2, type:3, axis:'h', range:3, speed:2.4},
+    {x:45, y:4,  w:2, type:4, axis:'v', range:3, speed:2.0},
+    {x:71, y:3,  w:2, type:3, axis:'h', range:4, speed:2.6},
+    {x:103,y:7,  w:2, type:4, axis:'v', range:3, speed:2.2},
+    {x:139,y:7,  w:2, type:3, axis:'h', range:4, speed:2.8},
+    {x:175,y:3,  w:2, type:4, axis:'h', range:3, speed:3.0},
+  ]
+},
+];
+
+</script><script src="engine.js"></script>
+</body>
+</html>
