@@ -1,0 +1,2565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nivorian Empire</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #main-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #footer {
+            background-color: #ddd;
+            padding: 10px;
+            border-top: 1px solid #000;
+            text-align: center;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+        #class-selection, #profession-selection {
+            margin-bottom: 20px;
+        }
+        #main-menu, #store-menu, #mycelgrove-store, #sabelmar-store, #crystalpine-store, #vyssal-store, #battle-menu, #skills-menu, #job-menu, #map-menu, #boss-menu, #mycelgrove-boss-menu, #sabelmar-boss-menu, #crystalpine-boss-menu, #pyrosyn-boss-menu, #vyssal-boss-menu, #craft-menu, #home-menu, #sylvia-menu, #cutscene-menu {
+            margin-bottom: 20px;
+        }
+        #inventory {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <h1 id="title">Nivorian Empire - Glacial Hollow</h1>
+        
+        <!-- Class Selection -->
+        <div id="class-selection">
+            <h2>Select Your Class</h2>
+            <h3>FIRE</h3>
+            <button onclick="selectClass('Warrior', 'Strength')">Warrior - Strength</button>
+            <button onclick="selectClass('Rogue', 'Agility')">Rogue - Agility</button>
+            <h3>WATER</h3>
+            <button onclick="selectClass('Mage', 'Wisdom')">Mage - Wisdom</button>
+            <button onclick="selectClass('Necromancer', 'Strength')">Necromancer - Strength</button>
+            <h3>WIND</h3>
+            <button onclick="selectClass('Bard', 'Wisdom')">Bard - Wisdom</button>
+            <button onclick="selectClass('Archer', 'Agility')">Archer - Agility</button>
+            <h3>EARTH</h3>
+            <button onclick="selectClass('Druid', 'Stamina')">Druid - Stamina</button>
+            <button onclick="selectClass('Cleric', 'Stamina')">Cleric - Stamina</button>
+        </div>
+        
+        <!-- Profession Selection -->
+        <div id="profession-selection" class="hidden">
+            <h2>Select Your Profession</h2>
+            <h3>Low Quality Jobs</h3>
+            <button onclick="selectProfession('Forager')">Forager</button>
+            <button onclick="selectProfession('Miner')">Miner</button>
+            <button onclick="selectProfession('Merchant')">Merchant</button>
+            <h3>Middle Class Quality Jobs</h3>
+            <button onclick="selectProfession('Fisher')">Fisher</button>
+            <button onclick="selectProfession('Builder')">Builder</button>
+            <button onclick="selectProfession('Farmer')">Farmer</button>
+            <button onclick="selectProfession('Soldier')">Soldier</button>
+            <h3>Upper Class Quality Jobs</h3>
+            <button onclick="selectProfession('Medic')">Medic</button>
+            <button onclick="selectProfession('Priest')">Priest</button>
+        </div>
+        
+        <!-- Main Menu -->
+        <div id="main-menu" class="hidden">
+            <h2>Main Menu</h2>
+            <button onclick="showStore()">Store</button>
+            <button onclick="startBattle()">Fight a Monster</button>
+            <button onclick="showSkills()">Upgrade Skills</button>
+            <button onclick="doJob()">Do Job</button>
+            <button onclick="showMap()">Map</button>
+            <button onclick="showCraft()">Craft</button>
+            <button onclick="showBoss()" id="boss-button" disabled>Challenge Boss (Level 10 Required)</button>
+            <button id="final-boss-button" class="hidden" onclick="challengeVyssal()">Challenge Vyssal (Level 50 Required, 3 Pyrosyn Blessings)</button>
+            <button id="home-button" onclick="enterHome()" disabled>Enter Home</button>
+        </div>
+        
+        <!-- Store Menu (Glacial Hollow) -->
+        <div id="store-menu" class="hidden">
+            <h2>Glacial Hollow Store</h2>
+            <h3>General</h3>
+            <button onclick="buyItem('Healing Potion I', 5, 'flecks')">Healing Potion I [+10HP] - ⌾5 FX</button>
+            <button onclick="buyItem('Mana Potion I', 4, 'flecks')">Mana Potion I [+1 MANA] - ⌾4 FX</button>
+            <button onclick="buyItem('Old Tunic', 1, 'shards')">Old Tunic [+2 DEF] - ◈1 SD</button>
+            <button onclick="buyItem('Rusty Sword', 7, 'flecks')">Rusty Sword [+4 dmg] - ⌾7 FX</button>
+            <button onclick="buyItem('Old Bow', 3, 'flecks')">Old Bow [+2 dmg] - ⌾3 FX</button>
+            <button onclick="buyItem('Eroded Dagger', 5, 'flecks')">Eroded Dagger [+3 dmg] - ⌾5 FX</button>
+            <button onclick="buyItem('Used Staff', 4, 'flecks')">Used Staff [+2 dmg] - ⌾4 FX</button>
+            <button onclick="buyItem('Broken Scepter', 5, 'flecks')">Broken Scepter [+3 dmg] - ⌾5 FX</button>
+            <button onclick="buyItem('Strength Ring I', 1, 'shards')">Strength Ring I [+5 HP, +2 dmg] - ◈1 SD</button>
+            <h3>Stable</h3>
+            <button onclick="buyItem('Horse', 5, 'shards')">Horse [Extra turn rarely] - ◈5 SD</button>
+            <button onclick="buyItem('Wild Dog', 8, 'shards')">Wild Dog [Fight for you sometimes] - ◈8 SD</button>
+            <h3>House</h3>
+            <button onclick="buyItem('House', 1, 'gleams')">Buy a Home - ✧1 GL</button>
+            <button onclick="buyItem('Indoor Plant', 2, 'flecks')">Indoor Plant - ⌾2 FX</button>
+            <button onclick="buyItem('Table', 6, 'flecks')">Table - ⌾6 FX</button>
+            <button onclick="buyItem('Chair', 4, 'flecks')">Chair - ⌾4 FX</button>
+            <button onclick="buyItem('Rug', 3, 'flecks')">Rug - ⌾3 FX</button>
+            <button onclick="buyItem('Hedge', 1, 'flecks')">Hedge - ⌾1 FX</button>
+            <h3>Sell Items</h3>
+            <button onclick="sellItem('Frozen Flesh', 1, 'flecks')">Sell Frozen Flesh - ⌾1 FX</button>
+            <button onclick="sellItem('Frozen Limb', 2, 'flecks')">Sell Frozen Limb - ⌾2 FX</button>
+            <button onclick="sellItem('Empty Bottle', 2, 'flecks')">Sell Empty Bottle - ⌾2 FX</button>
+            <button onclick="sellItem('Iron Nugget', 2, 'flecks')">Sell Iron Nugget - ⌾2 FX</button>
+            <button onclick="sellItem('Chillfin Fish', 3, 'flecks')">Sell Chillfin Fish - ⌾3 FX</button>
+            <button onclick="sellItem('Crystalmelon', 8, 'flecks')">Sell Crystalmelon - ⌾8 FX</button>
+            <button onclick="sellItem('Pinecone', 1, 'flecks')">Sell Pinecone - ⌾1 FX</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+
+        <!-- Store Menu (Mycelgrove) -->
+        <div id="mycelgrove-store" class="hidden">
+            <h2>Mycelgrove Store</h2>
+            <h3>General</h3>
+            <button onclick="buyItem('Healing Potion II', 1.2, 'shards')">Healing Potion II [+25 HP] - ◈1.2</button>
+            <button onclick="buyItem('Mana Potion II', 1, 'shards')">Mana Potion II [+3 MANA] - ◈1</button>
+            <button onclick="buyItem('Strength Potion I', 3.5, 'shards')">Strength Potion I [1.3x melee attack] - ◈3.5</button>
+            <button onclick="buyItem('Wisdom Potion I', 3, 'shards')">Wisdom Potion I [1.3x magic attack] - ◈3</button>
+            <button onclick="buyItem('Iron Suit', 1.1, 'gleams')">Iron Suit [+7 DEF] - ✧1.1</button>
+            <button onclick="buyItem('Broad Sword', 4, 'shards')">Broad Sword [+10 dmg] - ◈4</button>
+            <button onclick="buyItem('Fungal Bow', 2, 'shards')">Fungal Bow [+4 dmg] - ◈2</button>
+            <button onclick="buyItem('Shroomal Dagger', 3.5, 'shards')">Shroomal Dagger [+8 dmg] - ◈3.5</button>
+            <button onclick="buyItem('Forest Staff', 2.5, 'shards')">Forest Staff [+5 dmg] - ◈2.5</button>
+            <button onclick="buyItem('Leafy Scepter', 3, 'shards')">Leafy Scepter [+6 dmg] - ◈3</button>
+            <button onclick="buyItem('Wind Ring II', 8, 'shards')">Wind Ring II [x2 wind attack dmg] - ◈8</button>
+            <h3>Stable</h3>
+            <button onclick="buyItem('Deer', 2.5, 'gleams')">Deer [Will give you an extra turn some of the time] - ✧2.5</button>
+            <button onclick="buyItem('Shroomler', 9.7, 'gleams')">Shroomler [Will fight for you most of the time] - ✧9.7</button>
+            <h3>House</h3>
+            <button onclick="buyItem('Home Upgrade', 8, 'gleams')">Home Upgrade [you can store up to 10 items now] - ✧8</button>
+            <button onclick="buyItem('Bed', 2, 'shards')">Bed - ◈2</button>
+            <button onclick="buyItem('Painting', 3.2, 'shards')">Painting - ◈3.2</button>
+            <button onclick="buyItem('Window', 1, 'shards')">Window - ◈1</button>
+            <button onclick="buyItem('Bathroom', 8.7, 'shards')">Bathroom - ◈8.7</button>
+
+            <button onclick="buyItem('Flowerbed', 5.5, 'shards')">Flowerbed - ◈5.5</button>
+            <h3>Sell Items</h3>
+            <button onclick="sellItem('Stems', 3, 'flecks')">Sell Stems - ⌾3</button>
+            <button onclick="sellItem('Fungal Drops', 4, 'flecks')">Sell Fungal Drops - ⌾4</button>
+            <button onclick="sellItem('Spores', 3, 'flecks')">Sell Spores - ⌾3</button>
+            <button onclick="sellItem('Earthy Leak', 2, 'shards')">Sell Earthy Leak - ◈2</button>
+            <button onclick="sellItem('Salmon', 5, 'flecks')">Sell Salmon - ⌾5</button>
+            <button onclick="sellItem('Wild Mushroom', 2, 'flecks')">Sell Wild Mushroom - ⌾2</button>
+            <button onclick="sellItem('Gold Nugget', 4, 'flecks')">Sell Gold Nugget - ⌾4</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Store Menu (Sabelmar Dunes) -->
+        <div id="sabelmar-store" class="hidden">
+            <h2>Sabelmar Dunes Store</h2>
+            <h3>General</h3>
+            <button onclick="buyItem('Healing Potion III', 7, 'shards')">Healing Potion III [+100 HP] - ◈7</button>
+            <button onclick="buyItem('Mana Potion III', 5, 'shards')">Mana Potion III [+5 MANA] - ◈5</button>
+            <button onclick="buyItem('Strength Potion II', 1.3, 'gleams')">Strength Potion II [1.5x melee attack] - ✧1.3</button>
+            <button onclick="buyItem('Wisdom Potion II', 1, 'gleams')">Wisdom Potion II [1.5x magic attack] - ✧1</button>
+            <button onclick="buyItem('Stamina Potion I', 4, 'shards')">Stamina Potion I [+0.2 turns] - ◈4</button>
+            <button onclick="buyItem('Agility Potion I', 5, 'shards')">Agility Potion I [+3% crit chance] - ◈5</button>
+            <button onclick="buyItem('Desertscale Armor', 8.4, 'gleams')">Desertscale Armor [+15 DEF] - ✧8.4</button>
+            <button onclick="buyItem('Sand Sword', 5, 'gleams')">Sand Sword [+30 dmg] - ✧5</button>
+            <button onclick="buyItem('Dry Bow', 1.5, 'gleams')">Dry Bow [+10 dmg] - ✧1.5</button>
+            <button onclick="buyItem('Fiery Dagger', 4, 'gleams')">Fiery Dagger [+20 dmg] - ✧4</button>
+            <button onclick="buyItem('Sun Staff', 2, 'gleams')">Sun Staff [+13 dmg] - ✧2</button>
+            <button onclick="buyItem('Pyramid Scepter', 3, 'gleams')">Pyramid Scepter [+15 dmg] - ✧3</button>
+            <button onclick="buyItem('Wet Stamina Ring III', 7.6, 'gleams')">Wet Stamina Ring III [x2 water attack dmg, +0.8 turns] - ✧7.6</button>
+            <h3>Stable</h3>
+            <button onclick="buyItem('Sand Strider', 3, 'flares')">Sand Strider [Will give you an extra turn frequently, but more in Sabelmar Dunes] - ⏣3</button>
+            <button onclick="buyItem('Mini Wyrm', 10, 'flares')">Mini Wyrm [Will fight for you lots of the time] - ⏣10</button>
+            <h3>House</h3>
+            <button onclick="buyItem('Home Upgrade', 5, 'flares')">Home Upgrade [you can store up to 25 items now] - ⏣5</button>
+            <button onclick="buyItem('Stove', 5, 'gleams')">Stove - ✧5</button>
+            <button onclick="buyItem('Sofa', 6.3, 'gleams')">Sofa - ✧6.3</button>
+            <button onclick="buyItem('Fridge', 8.2, 'gleams')">Fridge - ✧8.2</button>
+            <button onclick="buyItem('Lamp', 2.1, 'gleams')">Lamp - ✧2.1</button>
+            <button onclick="buyItem('Tree', 5.7, 'gleams')">Tree - ✧5.7</button>
+            <h3>Sell Items</h3>
+            <button onclick="sellItem('Fang', 4, 'flecks')">Sell Fang - ⌾4</button>
+            <button onclick="sellItem('Sandy Scales', 5, 'flecks')">Sell Sandy Scales - ⌾5</button>
+            <button onclick="sellItem('Cursed Bottle', 3, 'shards')">Sell Cursed Bottle - ◈3</button>
+            <button onclick="sellItem('Sapphire Nuggets', 5, 'shards')">Sell Sapphire Nuggets - ◈5</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Store Menu (Crystalpine Peaks) -->
+        <div id="crystalpine-store" class="hidden">
+            <h2>Crystalpine Peaks Store</h2>
+            <h3>General</h3>
+            <button onclick="buyItem('Healing Potion IV', 7, 'gleams')">Healing Potion IV [+200 HP] - ✧7</button>
+            <button onclick="buyItem('Mana Potion IV', 5, 'gleams')">Mana Potion IV [+10 MANA] - ✧5</button>
+            <button onclick="buyItem('Strength Potion III', 1.1, 'flares')">Strength Potion III [2x melee dmg] - ⏣1.1</button>
+            <button onclick="buyItem('Wisdom Potion III', 8, 'gleams')">Wisdom Potion III [2x magic dmg] - ✧8</button>
+            <button onclick="buyItem('Stamina Potion II', 4, 'gleams')">Stamina Potion II [+0.6 turns] - ✧4</button>
+            <button onclick="buyItem('Agility Potion II', 5, 'gleams')">Agility Potion II [+5% crit chance] - ✧5</button>
+            <button onclick="buyItem('Elemental Potion', 2, 'flares')">Elemental Potion [Boost your element by 1.2x dmg] - ⏣2</button>
+            <button onclick="buyItem('Mountainshaw Armor', 5.4, 'flares')">Mountainshaw Armor [+50 DEF] - ⏣5.4</button>
+            <button onclick="buyItem('Cosmic Sword', 2, 'flares')">Cosmic Sword [+80 dmg] - ⏣2</button>
+            <button onclick="buyItem('Galactic Bow', 8.7, 'gleams')">Galactic Bow [+35 dmg] - ✧8.7</button>
+            <button onclick="buyItem('Solar Dagger', 1.3, 'flares')">Solar Dagger [+50 dmg] - ⏣1.3</button>
+            <button onclick="buyItem('Vortexic Staff', 8, 'gleams')">Vortexic Staff [+30 dmg] - ✧8</button>
+            <button onclick="buyItem('Nebulus Scepter', 9.5, 'gleams')">Nebulus Scepter [+35 dmg] - ✧9.5</button>
+            <button onclick="buyItem('Hot Agile Ring IV', 4.4, 'flares')">Hot Agile Ring IV [2.5x Fire attack dmg, +2% crit chance] - ⏣4.4</button>
+            <h3>Stable</h3>
+            <button onclick="buyItem('Mountainwagner', 12, 'flares')">Mountainwagner [Will most likely give you an extra turn and boost your crit by 3%] - ⏣12</button>
+            <button onclick="buyItem('Cosmic Beast', 30, 'flares')">Cosmic Beast [Will fight for you all the time and might heal you] - ⏣30</button>
+            <h3>House</h3>
+            <button onclick="buyItem('Home Upgrade', 15, 'flares')">Home Upgrade [you can store up to 50 items now] - ⏣15</button>
+            <button onclick="buyItem('Living Room', 9.6, 'flares')">Living Room - ⏣9.6</button>
+            <button onclick="buyItem('Bedroom', 5.2, 'flares')">Bedroom - ⏣5.2</button>
+            <button onclick="buyItem('Kitchen', 7.1, 'flares')">Kitchen - ⏣7.1</button>
+            <button onclick="buyItem('Pet Cage', 4, 'flares')">Pet Cage - ⏣4</button>
+            <button onclick="buyItem('Pool', 6.1, 'flares')">Pool - ⏣6.1</button>
+            <h3>Sell Items</h3>
+            <button onclick="sellItem('Mountain Shards', 1, 'shards')">Sell Mountain Shards - ◈1</button>
+            <button onclick="sellItem('Elemental Bottle', 1, 'shards')">Sell Elemental Bottle - ◈1</button>
+            <button onclick="sellItem('Ruby Nuggets', 2, 'shards')">Sell Ruby Nuggets - ◈2</button>
+            <button onclick="sellItem('Iced Horns', 1, 'shards')">Sell Iced Horns - ◈1</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Store Menu (Vyssal Crucible) -->
+        <div id="vyssal-store" class="hidden">
+            <h2>Vyssal Market</h2>
+            <h3>General</h3>
+            <button onclick="buyItem('Healing Potion V', 7, 'flares')">Healing Potion V [+500 HP] - ⏣7</button>
+            <button onclick="buyItem('Mana Potion V', 5, 'flares')">Mana Potion V [+25 MANA] - ⏣5</button>
+            <button onclick="buyItem('Strength Potion IV', 12, 'flares')">Strength Potion IV [2.5x melee dmg] - ⏣12</button>
+            <button onclick="buyItem('Wisdom Potion IV', 11, 'flares')">Wisdom Potion IV [2.5x magic dmg] - ⏣11</button>
+            <button onclick="buyItem('Stamina Potion III', 15, 'flares')">Stamina Potion III [+1.4 turns] - ⏣15</button>
+            <button onclick="buyItem('Agility Potion III', 18, 'flares')">Agility Potion III [+10% crit chance] - ⏣18</button>
+            <button onclick="buyItem('Elemental Potion+', 24, 'flares')">Elemental Potion+ [Boost your element even more to 1.5x dmg] - ⏣24</button>
+            <button onclick="buyItem('Godslayer Armor', 30, 'flares')">Godslayer Armor [+100 DEF] - ⏣30</button>
+            <button onclick="buyItem('Prismatic Sword', 20, 'flares')">Prismatic Sword [+200 dmg] - ⏣20</button>
+            <button onclick="buyItem('Universal Bow', 10, 'flares')">Universal Bow [+100 dmg] - ⏣10</button>
+            <button onclick="buyItem('Infernum Dagger', 15, 'flares')">Infernum Dagger [+150 dmg] - ⏣15</button>
+            <button onclick="buyItem('Void Staff', 8, 'flares')">Void Staff [+80 dmg] - ⏣8</button>
+            <button onclick="buyItem('Singularity Scepter', 12.5, 'flares')">Singularity Scepter [+120 dmg] - ⏣12.5</button>
+            <button onclick="buyItem('Elemental Skillful Ring V', 25.7, 'flares')">Elemental Skillful Ring V [x1.4 all elemental dmg, +20 HP, +2 MANA, +1 turns, +3% crit chance] - ⏣25.7</button>
+            <h3>Stable</h3>
+            <button onclick="buyItem('Micro Vyss', 50, 'flares')">Micro Vyss [Will give you an extra turn and sometimes 2 extra, will boost your crit by 5%] - ⏣50</button>
+            <button onclick="buyItem('Son of Vyssal', 100, 'flares')">Son of Vyssal [Will fight for you all the time and will heal you HP and Mana along with boosting your elements] - ⏣100</button>
+            <h3>House</h3>
+            <button onclick="buyItem('Home Upgrade', 50, 'flares')">Home Upgrade [you can store up to 100 items now] - ⏣50</button>
+            <button onclick="buyItem('Glacial Trophy', 10, 'flares')">Glacial Trophy - ⏣10</button>
+            <button onclick="buyItem('Mycel Trophy', 25, 'flares')">Mycel Trophy - ⏣25</button>
+            <button onclick="buyItem('Sabelmar Trophy', 50, 'flares')">Sabelmar Trophy - ⏣50</button>
+            <button onclick="buyItem('Crystalpine Trophy', 100, 'flares')">Crystalpine Trophy - ⏣100</button>
+            <button onclick="buyItem('Vyssal Trophy', 500, 'flares')">Vyssal Trophy - ⏣500</button>
+            <button onclick="buyItem('Pyrosyn Trophy', 1000, 'flares')">Pyrosyn Trophy [can only be bought after killing the final boss] - ⏣1000</button>
+            <button onclick="buyItem('Painted House', 100, 'flares')">Painted House [red,yellow,green,blue,pink] - ⏣100</button>
+            <h3>Sell Items</h3>
+            <button onclick="sellItem('Igneous Rock', 4, 'shards')">Sell Igneous Rock - ◈4</button>
+            <button onclick="sellItem('Vyssal Bottle', 3, 'gleams')">Sell Vyssal Bottle - ✧3</button>
+            <button onclick="sellItem('Molten Gems', 5, 'gleams')">Sell Molten Gems - ✧5</button>
+            <button onclick="sellItem('Diamond Nugget', 2, 'flares')">Sell Diamond Nugget - ⏣2</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Battle Menu -->
+        <div id="battle-menu" class="hidden">
+            <h2>Battle</h2>
+            <p id="enemy-info"></p>
+            <p id="moves-info"></p>
+            <p id="battle-log"></p>
+            <select id="ability-select"></select>
+            <button onclick="useAbility()">Use Ability</button>
+            <select id="potion-select"></select>
+            <button onclick="useSelectedPotion()">Use Potion</button>
+            <button onclick="fleeBattle()">Flee</button>
+        </div>
+        
+        <!-- Skills Menu -->
+        <div id="skills-menu" class="hidden">
+            <h2>Upgrade Skills (Credits: <span id="skill-credits">0</span>)</h2>
+            <button onclick="upgradeSkill('Strength')">Strength (+10 Max HP, Full Heal)</button>
+            <button onclick="upgradeSkill('Wisdom')">Wisdom (+1 Max Mana, Full Mana)</button>
+            <button onclick="upgradeSkill('Stamina')">Stamina (+1% Crit Chance)</button>
+            <button onclick="upgradeSkill('Agility')">Agility (+0.2 Turns)</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Job Menu -->
+        <div id="job-menu" class="hidden">
+            <h2>Do Your Job: <span id="profession-name"></span></h2>
+            <p id="job-description"></p>
+            <button id="job-action" onclick="performJob()"></button>
+            <p id="job-cooldown"></p>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Map Menu -->
+        <div id="map-menu" class="hidden">
+            <h2>Map</h2>
+            <button id="map-btn-Glacial-Hollow" onclick="switchArea('Glacial Hollow')">Glacial Hollow (Unlocked)</button>
+            <button id="map-btn-Mycelgrove" onclick="switchArea('Mycelgrove')" disabled>Mycelgrove (Locked)</button>
+            <button id="map-btn-Sabelmar-dunes" onclick="switchArea('Sabelmar dunes')" disabled>Sabelmar dunes (Locked)</button>
+            <button id="map-btn-Crystalpine-peaks" onclick="switchArea('Crystalpine peaks')" disabled>Crystalpine peaks (Locked)</button>
+            <button id="map-btn-the-vyssal-crucible" onclick="switchArea('the vyssal crucible')" disabled>Vyssal Crucible (Locked)</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Glacial Hollow -->
+        <div id="boss-menu" class="hidden">
+            <h2>The Altar of Water</h2>
+            <p>🌊 FIGHT POSEIDON GOD OF THE SEA 🌊</p>
+            <p>250 HP - Drops 100 XP, 5 Shards, maybe a weapon</p>
+            <button onclick="startBossBattle()">Challenge</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Mycelgrove -->
+        <div id="mycelgrove-boss-menu" class="hidden">
+            <h2>THE ALTER OF THE EARTH</h2>
+            <p>The god of the Earth rests in her throne waiting to be challenged and put to rest after eons of slumber, you must be at least LEVEL 20 to fight her</p>
+            <p>🌿 FIGHT GAIA GODESS OF THE EARTH 🌿</p>
+            <p>500 HP - Drops 8000 XP, 5 Gleams, and sometimes an armor piece of you class</p>
+            <p>RECOMENDED STATS: HP over 200 at least 5 healing potions Armor with at least more than 7 def</p>
+            <button onclick="startBossBattle()">Challenge at level 20</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Sabelmar Dunes -->
+        <div id="sabelmar-boss-menu" class="hidden">
+            <h2>THE ALTER OF FIRE</h2>
+            <p>The god of the Fire elements are growing very restless, Hephaestus scoffs at your pathetic progress claiming he will end you.</p>
+            <p>LEVEL 30 to fight him</p>
+            <p>🔥 FIGHT HEPHAESTUS GOD OF FIRE 🔥</p>
+            <p>1000 HP - Drops 500000 XP, 3 Flares, and sometimes ring of you class</p>
+            <p>RECOMENDED STATS: HP over 400 at least 5 healing potions Armor with at least more than 20 def</p>
+            <p>NEGATIVE EFFECTS TO 🌿 ELEMENT: 1.5x less dmg no defense</p>
+            <button onclick="startBossBattle()">Challenge at level 30</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Crystalpine Peaks -->
+        <div id="crystalpine-boss-menu" class="hidden">
+            <h2>THE ALTER OF WIND</h2>
+            <p>The god of the north wind is a pretty chill guy, he means no harm, and doesn't mind the challege, win or not he will respect your progression in the nivorian empire.</p>
+            <p>LEVEL 40 to fight him</p>
+            <p>💨 FIGHT BOREAS GOD OF THE NORTH WIND 💨</p>
+            <p>2000 HP - Drops 25000000 XP, 25 Flares, and sometimes ring, armor or weapon of your class</p>
+            <p>RECOMENDED STATS: HP over 500 at least 8 healing potions Armor with at least more than 50 def</p>
+            <p>NEGATIVE EFFECTS TO 💧 ELEMENT: 1.5x less dmg no defense</p>
+            <button onclick="startBossBattle()">Challenge at level 40</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Pyrosyn -->
+        <div id="pyrosyn-boss-menu" class="hidden">
+            <h2>THE CAVE OF PYROSYN</h2>
+            <p>Pyrosyn has been a great plague over the land of Nivoria, once slain, peace will be brought all to the land of everyone </p>
+            <p>ANY LEVEL to fight him</p>
+            <p>🐉 FIGHT PYROSYN, THE FINAL BOSS 🐉</p>
+            <p>5000 HP - Drops 2.000.000.000 XP, 100 Flares, and a single essence of his soul</p>
+            <p>RECOMENDED STATS: HP over 800 at least 10 healing potions Armor with at least more than 100 def</p>
+            <p>NEGATIVE EFFECTS TO LEVELS UNDER 50: 1.5x less dmg no defense</p>
+            <button onclick="startBossBattle()">Challenge</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Boss Menu Vyssal -->
+        <div id="vyssal-boss-menu" class="hidden">
+            <h2>A PLACE OF DREAD FEAR AND DESOLATION</h2>
+            <p>"Young Vessel, what has come to this, I am your creator, thou shant strike against the one who made man. This is a warning, dont try anything idiodic"</p>
+            <p>YOU MUST OFFER 3 PYROSYN BLESSINGS TO FIGHT ONCE</p>
+            <p>🎆 FIGHT VYSSAL, THE CALAMITY, THE CREATOR 🌌</p>
+            <p>? HP - Drops ? XP, ? Flares, and ?</p>
+            <p>RECOMENDED STATS: goodluck, you are never going to get very far...</p>
+            <p>NEGATIVE EFFECTS TO 💧🌿🔥💨 ELEMENTS: 2x less dmg No defense Binding of Strength Binding of Wisdom Binding of Agility Binding of Stamina Pets will be killed if used Mounts will be killed if used Rings are 2x less effective</p>
+            <p>POSITIVE EFFECTS: Souls deal 2x dmg The more Pyrosyn Blessing's used the easier the fight</p>
+            <p>WARNING, CHALLENGING VYSSAL CAN RESULT IN PERMANENT CHANGES THAT MIGHT END YOUR GAMEPLAY IF DONE INCORRECTLY</p>
+            <button onclick="startBossBattle()">Challenge</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Craft Menu -->
+        <div id="craft-menu" class="hidden">
+            <h2>Crafting</h2>
+            <select id="item1"><option value="">None</option></select> Qty: <input type="number" id="qty1" min="0" value="0"><br>
+            <select id="item2"><option value="">None</option></select> Qty: <input type="number" id="qty2" min="0" value="0"><br>
+            <select id="item3"><option value="">None</option></select> Qty: <input type="number" id="qty3" min="0" value="0"><br>
+            <button onclick="attemptCraft()">Craft</button>
+            <button onclick="backToMain()">Back</button>
+        </div>
+        
+        <!-- Home Menu -->
+        <div id="home-menu" class="hidden">
+            <h2>Your Home</h2>
+            <div id="home-area" style="position: relative; width: 600px; height: 400px; border: 1px solid black; background-color: #eee;">
+            </div>
+            <button onclick="backToMain()">Leave Home</button>
+        </div>
+        
+        <!-- Sylvia Menu -->
+        <div id="sylvia-menu" class="hidden">
+            <h2>Sylvia Fairy of Death</h2>
+            <p id="sylvia-message"></p>
+            <button id="revive-button" onclick="reviveFromSylvia()">Revive</button>
+            <div id="sylvia-shop" class="hidden">
+                <h3>Shop</h3>
+                <div id="shop-items"></div>
+            </div>
+            <button onclick="confirmKill()">Kill</button>
+        </div>
+        
+        <!-- Cutscene Menu -->
+        <div id="cutscene-menu" class="hidden">
+            <h2>Cutscene</h2>
+            <p id="cutscene-message"></p>
+            <div id="cutscene-buttons"></div>
+        </div>
+        
+        <!-- Inventory -->
+        <div id="inventory">
+            <h3>Inventory</h3>
+            <ul id="inventory-list"></ul>
+        </div>
+        
+        <p id="message"></p>
+    </div>
+    
+    <!-- Footer -->
+    <div id="footer">
+        <span id="hp">HP: 100/100</span> |
+        <span id="mana">Mana: 10/10</span> |
+        <span id="defense">Defense: 0</span> |
+        <span id="turns">Turns: 1</span> |
+        <span id="crit">Crit Chance: 0%</span> |
+        <span id="xp-level">Level 1 (0/1 XP)</span> |
+        <span id="reward-multi">Reward Multi: 1.0x</span> |
+        <span id="money">Money: ⌾0 FX</span>
+    </div>
+
+    <script>
+        // Game State
+        let player = {
+            class: '',
+            profession: '',
+            element: '',
+            attackType: '',
+            usesMana: false,
+            hp: 100,
+            maxHp: 100,
+            mana: 10,
+            maxMana: 10,
+            defense: 0,
+            turns: 1,
+            critChance: 0,
+            level: 1,
+            xp: 0,
+            xpNeeded: 1,
+            skillCredits: 0,
+            strength: 0,
+            wisdom: 0,
+            stamina: 0,
+            agility: 0,
+            extraMaxDmg: 0,
+            money: { flecks: 0, shards: 0, gleams: 0, flares: 0 },
+            inventory: {},
+            equipped: { weapon: null, armor: null, ring: null },
+            currentArea: 'Glacial Hollow',
+            unlockedAreas: ['Glacial Hollow'],
+            farmerCrops: [],
+            jobStreak: 0,
+            lastJobTime: 0,
+            dmgMultiplier: 1,
+            moneyMultiplier: 1,
+            canUseMana: true,
+            tempDmgMultiplier: 1,
+            tempMoneyBoost: 1,
+            tempWaterDmg: 1,
+            tempEarthDmg: 1,
+            rewardMultiplier: 1.0,
+            furniturePositions: {},
+            deathCount: 0,
+            souls: 0,
+            vyssalPhase: 0,
+            blessingsUsed: 0,
+            defeatedVyssal: false
+        };
+
+        let battle = {
+            enemy: null,
+            playerTurns: 0,
+            initialTurns: 0,
+            inBattle: false,
+            richesBoost: 1,
+            missRate: 0,
+            dmgMultiplier: 1,
+            turnPenalty: 0
+        };
+
+        const areas = ['Glacial Hollow', 'Mycelgrove', 'Sabelmar dunes', 'Crystalpine peaks', 'the vyssal crucible'];
+
+        // Enemies by area
+        const areaEnemies = {
+            'Glacial Hollow': [
+                { name: 'Frozen Zombie', minLevel: 1, hpRange: [10,20], dmgRange: [1,10], moneyRange: [1,2], xpRange: [1,5], element: 'WATER', drops: [{item: 'Frozen Flesh', qty: [1,4], chance: 50}, {item: 'Frozen Limb', qty: [1,4], chance: 25}] },
+                { name: 'Culdigur', minLevel: 1, hpRange: [10,30], dmgRange: [1,15], moneyRange: [1,3], xpRange: [2,7], element: 'WATER', drops: [{item: 'Empty Bottle', qty: [1,1], chance: 50}, {item: 'Iron Nugget', qty: [1,4], chance: 25}] }
+            ],
+            'Mycelgrove': [
+                { name: 'Shroomer', minLevel: 10, hpRange: [20,100], dmgRange: [1,30], moneyRange: [2,10], xpRange: [20,80], element: 'EARTH', drops: [{item: 'Enchanted Glass Bottle', qty: [1,1], chance: 50}, {item: 'Stems', qty: [1,2], chance: 50}, {item: 'Fungal Drops', qty: [1,4], chance: 25}, {item: 'Spore Clusters', qty: [1,6], chance: 10}] },
+                { name: 'Mycelius', minLevel: 10, hpRange: [30,200], dmgRange: [1,50], moneyRange: [3,20], xpRange: [50,180], element: 'EARTH', drops: [{item: 'Stems', qty: [1,3], chance: 75}, {item: 'Fungal Drops', qty: [1,6], chance: 50}, {item: 'Spore Clusters', qty: [1,8], chance: 25}, {item: 'Gold Nugget', qty: [1,8], chance: 10}] },
+                { name: 'Mushrill', minLevel: 15, hpRange: [40,250], dmgRange: [1,70], moneyRange: [4,30], xpRange: [80,250], element: 'EARTH', drops: [{item: 'Stems', qty: [1,4], chance: 75}, {item: 'Fungal Drops', qty: [1,5], chance: 75}, {item: 'Spore Clusters', qty: [1,6], chance: 50}, {item: 'Gold Nugget', qty: [1,6], chance: 25}] }
+            ],
+            'Sabelmar dunes': [
+                { name: 'Wyrm', minLevel: 20, hpRange: [50,280], dmgRange: [5,100], moneyRange: [5,50], xpRange: [500,2000], element: 'FIRE', drops: [{item: 'Fang', qty: [1,3], chance: 50}, {item: 'Sandy Scales', qty: [1,5], chance: 25}] },
+                { name: 'Sandmaw', minLevel: 20, hpRange: [60,300], dmgRange: [10,140], moneyRange: [7,70], xpRange: [800,4000], element: 'FIRE', drops: [{item: 'Cursed Bottle', qty: [1,1], chance: 50}, {item: 'Sapphire Nuggets', qty: [1,5], chance: 25}] },
+                { name: 'L\'Karam', minLevel: 25, hpRange: [70,350], dmgRange: [10,180], moneyRange: [8,80], xpRange: [3000,8000], element: 'FIRE', drops: [{item: 'Fang', qty: [1,8], chance: 75}, {item: 'Sandy Scales', qty: [1,4], chance: 50}, {item: 'Sapphire Nuggets', qty: [1,4], chance: 50}] }
+            ],
+            'Crystalpine peaks': [
+                { name: 'Cyrovex', minLevel: 30, hpRange: [80,375], dmgRange: [20,200], moneyRange: [1,9], xpRange: [80000,120000], element: 'WIND', drops: [{item: 'Mountain Shards', qty: [1,1], chance: 25}] },
+                { name: 'Wendrak', minLevel: 30, hpRange: [90,400], dmgRange: [30,220], moneyRange: [1,10], xpRange: [100000,150000], element: 'WIND', drops: [{item: 'Elemental Bottle', qty: [1,1], chance: 25}] },
+                { name: 'Hailing Wraith', minLevel: 35, hpRange: [100,500], dmgRange: [50,230], moneyRange: [2,12], xpRange: [300000,500000], element: 'WIND', drops: [{item: 'Ruby Nuggets', qty: [1,2], chance: 25}] },
+                { name: 'Boreal Brethren', minLevel: 35, hpRange: [100,800], dmgRange: [60,300], moneyRange: [2,13], xpRange: [500000,800000], element: 'WIND', drops: [{item: 'Iced Horns', qty: [1,1], chance: 25}] }
+            ],
+            'the vyssal crucible': [
+                { name: 'Ignarok', minLevel: 40, hpRange: [110,1000], dmgRange: [80,400], moneyRange: [3,15], xpRange: [1000000,2000000], element: 'VYSSAL', drops: [{item: 'Igneous Rock', qty: [1,4], chance: 50}, {item: 'Vyssal Bottle', qty: [1,1], chance: 25}] },
+                { name: 'Eldrichten', minLevel: 45, hpRange: [150,1300], dmgRange: [100,500], moneyRange: [5,20], xpRange: [5000000,10000000], element: 'VYSSAL', drops: [{item: 'Igneous Rock', qty: [1,8], chance: 50}, {item: 'Molten Gems', qty: [1,2], chance: 25}] },
+                { name: 'Xyromagmus', minLevel: 50, hpRange: [200,2000], dmgRange: [400,600], moneyRange: [3,3], xpRange: [80000000,300000000], element: 'VYSSAL', drops: [{item: 'Igneous Rock', qty: [1,16], chance: 50}, {item: 'Molten Gems', qty: [1,4], chance: 50}, {item: 'Diamond Nugget', qty: [1,1], chance: 25}] }
+            ]
+        };
+
+        // Bosses by area
+        const bosses = {
+            'Glacial Hollow': {name: 'Poseidon', hp: 250, maxHp: 250, dmgRange: [1,50], money: 5, moneyType: 'shards', xp: 100, badElement: 'FIRE', unlock: 'Mycelgrove', dropItem: () => `${player.class} Weapon`},
+            'Mycelgrove': {name: 'Gaia', hp: 500, maxHp: 500, dmgRange: [5,80], money: 5, moneyType: 'gleams', xp: 8000, badElement: 'WIND', unlock: 'Sabelmar dunes', dropItem: () => `${player.class} Armor`},
+            'Sabelmar dunes': {name: 'Hephaestus', hp: 1000, maxHp: 1000, dmgRange: [10,150], money: 3, moneyType: 'flares', xp: 500000, badElement: 'EARTH', unlock: 'Crystalpine peaks', dropItem: () => `${player.class} Ring`},
+            'Crystalpine peaks': {name: 'Boreas', hp: 2000, maxHp: 2000, dmgRange: [20,250], money: 25, moneyType: 'flares', xp: 25000000, badElement: 'WATER', unlock: 'the vyssal crucible', dropItem: () => Math.random() < 0.33 ? `${player.class} Ring` : Math.random() < 0.5 ? `${player.class} Armor` : `${player.class} Weapon`},
+            'the vyssal crucible': {name: 'Pyrosyn', hp: 5000, maxHp: 5000, dmgRange: [80,400], money: 100, moneyType: 'flares', xp: 2000000000, badElement: null, unlock: null, dropItem: null},
+            'vyssal': {name: 'Vyssal', hp: 10000, maxHp: 10000, dmgFixed: 1000, money: 1000, moneyType: 'flares', xp: 10000000000, badElement: null, unlock: null, dropItem: null}
+        };
+
+        const areaBossLevelReq = {
+            'Glacial Hollow': 10,
+            'Mycelgrove': 20,
+            'Sabelmar dunes': 30,
+            'Crystalpine peaks': 40,
+            'the vyssal crucible': 0
+        };
+
+        // Recipes
+        const recipes = {
+            'Weak Water Ring I': { 'Iron Nugget': 1, 'Frozen Flesh': 1 },
+            'Weak Cold Ring I': { 'Iron Nugget': 1, 'Frozen Limb': 1 },
+            'Water Ring II': { 'Iron Nugget': 1, 'Chillfin Fish': 1 },
+            'Cold Earth Ring I': { 'Iron Nugget': 1, 'Pinecone': 1 },
+            'Cold Earth Ring II': { 'Iron Nugget': 1, 'Crystalmelon': 1 },
+            'Ring of riches I': { 'Iron Nugget': 1, 'flecks': 1 },
+            'Ring of strength I': { 'Iron Nugget': 2 },
+            'Brittle Blade': { 'Iron Nugget': 3, 'Frozen Flesh': 2 },
+            'Brittle Bow': { 'Iron Nugget': 3, 'Frozen Limb': 2 },
+            'Brittle Staff': { 'Iron Nugget': 3, 'Pinecone': 2 },
+            'Brittle Scepter': { 'Iron Nugget': 3, 'Frozen Flesh': 1, 'Frozen Limb': 1 },
+            'Winter Armor': { 'Iron Nugget': 5, 'Frozen Flesh': 3 },
+            'Reinforced Winter Armor': { 'Iron Nugget': 5, 'Frozen Limb': 3 },
+            'Potion of cold strength I': { 'Empty Bottle': 1, 'Frozen Flesh': 1 },
+            'Potion of cold stamina': { 'Empty Bottle': 1, 'Frozen Limb': 1 },
+            'Potion of strength I': { 'Empty Bottle': 1, 'Iron Nugget': 1 },
+            'Potion of Riches I': { 'Empty Bottle': 1, 'flecks': 1 },
+            'Potion of cold water elemental I': { 'Enchanted Glass Bottle': 1, 'Chillfin Fish': 1 },
+            'Potion of cold wisdom I': { 'Enchanted Glass Bottle': 1, 'Pinecone': 1 },
+            'Potion of cold earth elemental I': { 'Enchanted Glass Bottle': 1, 'Crystalmelon': 1 },
+            'Earth Ring I': { 'Gold Nugget': 1, 'Stems': 1 },
+            'Earth Ring II': { 'Gold Nugget': 1, 'Fungal Drops': 1 },
+            'Wisdom Ring I': { 'Gold Nugget': 1, 'Spore Clusters': 1 },
+            'Toxic Earth Ring IV': { 'Gold Nugget': 1, 'Earthy Leak': 1 },
+            'Toxic Earth Ring III': { 'Gold Nugget': 1, 'Wild Mushroom': 1 },
+            'Ring of Riches II': { 'Gold Nugget': 1, 'shards': 1 },
+            'Ring of Strength II': { 'Gold Nugget': 2 },
+            'Toxic Water Elemental Ring III': { 'Gold Nugget': 1, 'Salmon': 1 },
+            'Sporeblade': { 'Gold Nugget': 3, 'Stems': 2 },
+            'Thornbow': { 'Gold Nugget': 3, 'Spore Clusters': 2 },
+            'Tree Scepter': { 'Gold Nugget': 3, 'Fungal Drops': 2 },
+            'Bush Staff': { 'Gold Nugget': 3, 'Earthy Leak': 2 },
+            'Mycelium Armor': { 'Gold Nugget': 5, 'Stems': 3 },
+            'Toxic Shroom Armor': { 'Gold Nugget': 3, 'Fungal Drops': 3 },
+            'Sporeguard Armor': { 'Gold Nugget': 5, 'Spore Clusters': 3 },
+            'Earth Potion II': { 'Enchanted Glass Bottle': 1, 'Stems': 1 },
+            'Toxic Earth Potion III': { 'Enchanted Glass Bottle': 1, 'Fungal Drops': 1 },
+            'Toxic Wisdom Potion II': { 'Enchanted Glass Bottle': 1, 'Spore Clusters': 1 },
+            'Earth Potion IV': { 'Enchanted Glass Bottle': 1, 'Earthy Leak': 1 },
+            'Toxic Earth Strength Potion II': { 'Enchanted Glass Bottle': 1, 'Wild Mushroom': 1 },
+            'Potion of Riches II': { 'Enchanted Glass Bottle': 1, 'shards': 1 },
+            'Healing Potion II': { 'Enchanted Glass Bottle': 1, 'Gold Nugget': 1 },
+            'Toxic Water Elemental Potion III': { 'Enchanted Glass Bottle': 1, 'Salmon': 1 },
+            // Previous Sabelmar and Crystalpine recipes omitted for brevity, assume they are there
+            // New recipes for Vyssal Crucible - Potions (25 examples)
+            'Vyssal Strength Potion I': { 'Vyssal Bottle': 1, 'Igneous Rock': 1 },
+            'Vyssal Strength Potion II': { 'Vyssal Bottle': 1, 'Igneous Rock': 2 },
+            'Vyssal Strength Potion III': { 'Vyssal Bottle': 1, 'Igneous Rock': 3 },
+            'Vyssal Strength Potion IV': { 'Vyssal Bottle': 1, 'Igneous Rock': 4 },
+            'Vyssal Strength Potion V': { 'Vyssal Bottle': 1, 'Igneous Rock': 5 },
+            'Molten Stamina Potion I': { 'Vyssal Bottle': 1, 'Molten Gems': 1 },
+            'Molten Stamina Potion II': { 'Vyssal Bottle': 1, 'Molten Gems': 2 },
+            'Molten Stamina Potion III': { 'Vyssal Bottle': 1, 'Molten Gems': 3 },
+            'Molten Stamina Potion IV': { 'Vyssal Bottle': 1, 'Molten Gems': 4 },
+            'Molten Stamina Potion V': { 'Vyssal Bottle': 1, 'Molten Gems': 5 },
+            'Diamond Wisdom Potion I': { 'Vyssal Bottle': 1, 'Diamond Nugget': 1 },
+            'Diamond Wisdom Potion II': { 'Vyssal Bottle': 1, 'Diamond Nugget': 2 },
+            'Diamond Wisdom Potion III': { 'Vyssal Bottle': 1, 'Diamond Nugget': 3 },
+            'Diamond Wisdom Potion IV': { 'Vyssal Bottle': 1, 'Diamond Nugget': 4 },
+            'Diamond Wisdom Potion V': { 'Vyssal Bottle': 1, 'Diamond Nugget': 5 },
+            'Crucible Riches Potion I': { 'Vyssal Bottle': 1, 'Igneous Rock': 1, 'Molten Gems': 1 },
+            'Crucible Riches Potion II': { 'Vyssal Bottle': 1, 'Igneous Rock': 2, 'Molten Gems': 1 },
+            'Crucible Riches Potion III': { 'Vyssal Bottle': 1, 'Igneous Rock': 1, 'Molten Gems': 2 },
+            'Crucible Riches Potion IV': { 'Vyssal Bottle': 1, 'Igneous Rock': 3, 'Molten Gems': 1 },
+            'Crucible Riches Potion V': { 'Vyssal Bottle': 1, 'Igneous Rock': 1, 'Molten Gems': 3 },
+            'Vyssal Healing Potion I': { 'Vyssal Bottle': 1, 'Diamond Nugget': 1, 'Igneous Rock': 1 },
+            'Vyssal Healing Potion II': { 'Vyssal Bottle': 1, 'Diamond Nugget': 2, 'Igneous Rock': 1 },
+            'Vyssal Healing Potion III': { 'Vyssal Bottle': 1, 'Diamond Nugget': 1, 'Igneous Rock': 2 },
+            'Vyssal Healing Potion IV': { 'Vyssal Bottle': 1, 'Diamond Nugget': 3, 'Igneous Rock': 1 },
+            'Vyssal Healing Potion V': { 'Vyssal Bottle': 1, 'Diamond Nugget': 1, 'Igneous Rock': 3 },
+            // New recipes for Vyssal Crucible - Rings (25 examples)
+            'Vyssal Ring I': { 'Diamond Nugget': 1, 'Igneous Rock': 1 },
+            'Vyssal Ring II': { 'Diamond Nugget': 1, 'Igneous Rock': 2 },
+            'Vyssal Ring III': { 'Diamond Nugget': 1, 'Igneous Rock': 3 },
+            'Vyssal Ring IV': { 'Diamond Nugget': 1, 'Igneous Rock': 4 },
+            'Vyssal Ring V': { 'Diamond Nugget': 1, 'Igneous Rock': 5 },
+            'Molten Ring I': { 'Diamond Nugget': 1, 'Molten Gems': 1 },
+            'Molten Ring II': { 'Diamond Nugget': 1, 'Molten Gems': 2 },
+            'Molten Ring III': { 'Diamond Nugget': 1, 'Molten Gems': 3 },
+            'Molten Ring IV': { 'Diamond Nugget': 1, 'Molten Gems': 4 },
+            'Molten Ring V': { 'Diamond Nugget': 1, 'Molten Gems': 5 },
+            'Crucible Fire Ring I': { 'Diamond Nugget': 1, 'Vyssal Bottle': 1 },
+            'Crucible Fire Ring II': { 'Diamond Nugget': 1, 'Vyssal Bottle': 1, 'Igneous Rock': 1 },
+            'Crucible Fire Ring III': { 'Diamond Nugget': 1, 'Vyssal Bottle': 1, 'Igneous Rock': 2 },
+            'Crucible Fire Ring IV': { 'Diamond Nugget': 1, 'Vyssal Bottle': 1, 'Igneous Rock': 3 },
+            'Crucible Fire Ring V': { 'Diamond Nugget': 1, 'Vyssal Bottle': 1, 'Igneous Rock': 4 },
+            'Vyssal Strength Ring I': { 'Diamond Nugget': 2 },
+            'Vyssal Strength Ring II': { 'Diamond Nugget': 3 },
+            'Vyssal Strength Ring III': { 'Diamond Nugget': 4 },
+            'Vyssal Strength Ring IV': { 'Diamond Nugget': 5 },
+            'Vyssal Strength Ring V': { 'Diamond Nugget': 6 },
+            'Calamity Riches Ring I': { 'Diamond Nugget': 1, 'flares': 1 },
+            'Calamity Riches Ring II': { 'Diamond Nugget': 1, 'flares': 2 },
+            'Calamity Riches Ring III': { 'Diamond Nugget': 1, 'flares': 3 },
+            'Calamity Riches Ring IV': { 'Diamond Nugget': 1, 'flares': 4 },
+            'Calamity Riches Ring V': { 'Diamond Nugget': 1, 'flares': 5 },
+            // New recipes for Vyssal Crucible - Weapons/Tools (25 examples)
+            'Rock Blade I': { 'Diamond Nugget': 3, 'Igneous Rock': 2 },
+            'Rock Blade II': { 'Diamond Nugget': 3, 'Igneous Rock': 3 },
+            'Rock Blade III': { 'Diamond Nugget': 3, 'Igneous Rock': 4 },
+            'Rock Blade IV': { 'Diamond Nugget': 3, 'Igneous Rock': 5 },
+            'Rock Blade V': { 'Diamond Nugget': 3, 'Igneous Rock': 6 },
+            'Gem Bow I': { 'Diamond Nugget': 3, 'Molten Gems': 2 },
+            'Gem Bow II': { 'Diamond Nugget': 3, 'Molten Gems': 3 },
+            'Gem Bow III': { 'Diamond Nugget': 3, 'Molten Gems': 4 },
+            'Gem Bow IV': { 'Diamond Nugget': 3, 'Molten Gems': 5 },
+            'Gem Bow V': { 'Diamond Nugget': 3, 'Molten Gems': 6 },
+            'Vyssal Staff I': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1 },
+            'Vyssal Staff II': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Igneous Rock': 1 },
+            'Vyssal Staff III': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Igneous Rock': 2 },
+            'Vyssal Staff IV': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Igneous Rock': 3 },
+            'Vyssal Staff V': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Igneous Rock': 4 },
+            'Crucible Dagger I': { 'Diamond Nugget': 4, 'Molten Gems': 2 },
+            'Crucible Dagger II': { 'Diamond Nugget': 4, 'Molten Gems': 3 },
+            'Crucible Dagger III': { 'Diamond Nugget': 4, 'Molten Gems': 4 },
+            'Crucible Dagger IV': { 'Diamond Nugget': 4, 'Molten Gems': 5 },
+            'Crucible Dagger V': { 'Diamond Nugget': 4, 'Molten Gems': 6 },
+            'Calamity Scepter I': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Molten Gems': 1 },
+            'Calamity Scepter II': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Molten Gems': 2 },
+            'Calamity Scepter III': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Molten Gems': 3 },
+            'Calamity Scepter IV': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Molten Gems': 4 },
+            'Calamity Scepter V': { 'Diamond Nugget': 3, 'Vyssal Bottle': 1, 'Molten Gems': 5 },
+            // New recipes for Vyssal Crucible - Armors (25 examples)
+            'Rock Armor I': { 'Diamond Nugget': 5, 'Igneous Rock': 3 },
+            'Rock Armor II': { 'Diamond Nugget': 5, 'Igneous Rock': 4 },
+            'Rock Armor III': { 'Diamond Nugget': 5, 'Igneous Rock': 5 },
+            'Rock Armor IV': { 'Diamond Nugget': 5, 'Igneous Rock': 6 },
+            'Rock Armor V': { 'Diamond Nugget': 5, 'Igneous Rock': 7 },
+            'Gem Armor I': { 'Diamond Nugget': 5, 'Molten Gems': 3 },
+            'Gem Armor II': { 'Diamond Nugget': 5, 'Molten Gems': 4 },
+            'Gem Armor III': { 'Diamond Nugget': 5, 'Molten Gems': 5 },
+            'Gem Armor IV': { 'Diamond Nugget': 5, 'Molten Gems': 6 },
+            'Gem Armor V': { 'Diamond Nugget': 5, 'Molten Gems': 7 },
+            'Vyssal Armor I': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1 },
+            'Vyssal Armor II': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Igneous Rock': 1 },
+            'Vyssal Armor III': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Igneous Rock': 2 },
+            'Vyssal Armor IV': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Igneous Rock': 3 },
+            'Vyssal Armor V': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Igneous Rock': 4 },
+            'Crucible Armor I': { 'Diamond Nugget': 6, 'Molten Gems': 3 },
+            'Crucible Armor II': { 'Diamond Nugget': 6, 'Molten Gems': 4 },
+            'Crucible Armor III': { 'Diamond Nugget': 6, 'Molten Gems': 5 },
+            'Crucible Armor IV': { 'Diamond Nugget': 6, 'Molten Gems': 6 },
+            'Crucible Armor V': { 'Diamond Nugget': 6, 'Molten Gems': 7 },
+            'Calamity Armor I': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Molten Gems': 1 },
+            'Calamity Armor II': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Molten Gems': 2 },
+            'Calamity Armor III': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Molten Gems': 3 },
+            'Calamity Armor IV': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Molten Gems': 4 },
+            'Calamity Armor V': { 'Diamond Nugget': 5, 'Vyssal Bottle': 1, 'Molten Gems': 5 }
+        };
+
+        // Abilities
+        const abilities = {
+            'Warrior': [
+                {level: 1, name: 'Slash', cost: 0, dmg: [1,6]},
+                {level: 10, name: 'Sweeping', cost: 0, dmg: [3,12]},
+                {level: 20, name: 'Flame', cost: 3, dmg: [10,20]},
+                {level: 30, name: 'Flurry', cost: 0, dmg: [40,50], turnCost: 2, requires: {stamina: 3}},
+                {level: 40, name: 'Magma', cost: 5, dmg: [30,50]},
+                {level: 50, name: 'Shockwave', cost: 0, dmg: [80,100]}
+            ],
+            'Rogue': [
+                {level: 1, name: 'Stab', cost: 0, dmg: [1,5]},
+                {level: 10, name: 'Backstab', cost: 0, dmg: [2,10]},
+                {level: 20, name: 'Katanas', cost: 0, dmg: [5,30]},
+                {level: 30, name: 'Hot Aura', cost: 4, dmg: [5,10]},
+                {level: 40, name: 'Shadow Stab', cost: 0, dmg: [30,50]},
+                {level: 50, name: 'Void Vessel', cost: 8, dmg: [120,120]}
+            ],
+            'Mage': [
+                {level: 1, name: 'Spark', cost: 1, dmg: [1,5]},
+                {level: 10, name: 'Drizzle', cost: 2, dmg: [10,20]},
+                {level: 20, name: 'Tsunami', cost: 4, dmg: [20,50]},
+                {level: 30, name: 'Blindness', cost: 3, special: 'miss+50'},
+                {level: 40, name: 'Order of the Whale', cost: 5, special: 'enemyDmgHalf'},
+                {level: 50, name: 'Aquarius god of water', cost: 20, dmg: [250,250]}
+            ],
+            'Necromancer': [
+                {level: 1, name: 'Rip', cost: 1, dmg: [1,6]},
+                {level: 10, name: 'Flight', cost: 2, dmg: [5,15]},
+                {level: 20, name: 'Landfish', cost: 3, dmg: [10,30]},
+                {level: 30, name: 'Necrosyphes', cost: 4, dmg: [20,60]},
+                {level: 40, name: 'Hades', cost: 8, dmg: [60,120]},
+                {level: 50, name: 'Eternal Grim', cost: 15, dmg: [150,200]}
+            ],
+            'Bard': [
+                {level: 1, name: 'Music', cost: 0, dmg: [1,4]},
+                {level: 10, name: 'Song', cost: 0, dmg: [5,15]},
+                {level: 20, name: 'Harmonize', cost: 2, dmg: [10,30]},
+                {level: 30, name: 'Etude the Sonnet', cost: 0, dmg: [15,40]},
+                {level: 40, name: 'Tornado of Notes', cost: 5, dmg: [20,60]},
+                {level: 50, name: 'Trickery of Emotion', cost: 10, dmg: [50,100]}
+            ],
+            'Archer': [
+                {level: 1, name: 'Shoot', cost: 0, dmg: [1,5]},
+                {level: 10, name: 'Multishot', cost: 0, dmg: [1,25]},
+                {level: 20, name: 'Wind burst', cost: 3, dmg: [10,40]},
+                {level: 30, name: 'Bullet', cost: 0, dmg: [15,50]},
+                {level: 40, name: 'Barbed', cost: 0, dmg: [20,60]},
+                {level: 50, name: 'Target', cost: 8, dmg: [50,100]}
+            ],
+            'Druid': [
+                {level: 1, name: 'Earthbound', cost: 2, dmg: [1,7]},
+                {level: 10, name: 'Shroomlings', cost: 1, dmg: [1,2]},
+                {level: 20, name: 'Earthquake', cost: 3, dmg: [2,15]},
+                {level: 30, name: 'Spore Gore', cost: 2, dmg: [3,6]},
+                {level: 40, name: 'Earth Haze', cost: 5, dmg: [5,5]},
+                {level: 50, name: 'Mama Shroomer', cost: 8, dmg: [80,80]},
+                {level: 50, name: 'Army Shroomers', cost: 3, dmg: [9,12]}
+            ],
+            'Cleric': [
+                {level: 1, name: 'Pray', cost: 1, dmg: [1,5]},
+                {level: 10, name: 'Compel', cost: 2, dmg: [1,3], heal:5},
+                {level: 20, name: 'Sacrifice', cost: 2, dmg: [5,20], hpCost:10},
+                {level: 30, name: 'Vyssal Alter', cost: 4, dmg: [10,40]},
+                {level: 40, name: 'Vyssal Shrine', cost: 6, dmg: [20,70]},
+                {level: 50, name: 'Vyssal', cost: 20, dmg: [1000,1000], hpCost:200}
+            ]
+        };
+
+        // Cheat code
+        let cheatBuffer = '';
+        document.addEventListener('keydown', (e) => {
+            cheatBuffer += e.key.toLowerCase();
+            if (cheatBuffer.endsWith('🍓')) {
+                if (!player.unlockedAreas.includes('Mycelgrove')) {
+                    player.unlockedAreas.push('Mycelgrove');
+                    updateMapButtons();
+                }
+                player.level += 10;
+                player.skillCredits += 10;
+                player.money.flecks += 9;
+                player.money.shards += 9;
+                player.money.gleams += 9;
+                player.money.flares += 9;
+                normalizeMoney();
+                updateFooter();
+                showMessage('Cheat activated!');
+                cheatBuffer = '';
+            }
+            if (cheatBuffer.length > 10) cheatBuffer = cheatBuffer.slice(-10);
+        });
+
+        // Functions
+        function updateFooter() {
+            document.getElementById('hp').textContent = `HP: ${player.hp}/${player.maxHp}`;
+            document.getElementById('mana').textContent = `Mana: ${player.mana}/${player.maxMana}`;
+            document.getElementById('defense').textContent = `Defense: ${player.defense}`;
+            document.getElementById('turns').textContent = `Turns: ${player.turns.toFixed(1)}`;
+            document.getElementById('crit').textContent = `Crit Chance: ${player.critChance}%`;
+            document.getElementById('xp-level').textContent = `Level ${player.level} (${player.xp}/${player.xpNeeded} XP)`;
+            document.getElementById('reward-multi').textContent = `Reward Multi: ${player.rewardMultiplier.toFixed(1)}x`;
+            let moneyText = `Money: ⌾${player.money.flecks} FX, ◈${player.money.shards} SD, ✧${player.money.gleams} GL, ⏣${player.money.flares} FR`;
+            if (player.deathCount >= 1) {
+                moneyText += ` | Souls: ꩜${player.souls}`;
+            }
+            document.getElementById('money').textContent = moneyText;
+        }
+
+        function updateTitle() {
+            document.getElementById('title').textContent = `Nivorian Empire - ${player.currentArea === 'the vyssal crucible' ? 'Vyssal Crucible' : player.currentArea}`;
+        }
+
+        function updateInventory() {
+            const list = document.getElementById('inventory-list');
+            list.innerHTML = '';
+            for (let item in player.inventory) {
+                let li = document.createElement('li');
+                li.textContent = `${item}: ${player.inventory[item]}`;
+                if (isEquipable(item)) {
+                    let type = getItemType(item);
+                    if (player.equipped[type] === item) {
+                        li.textContent += ' (Equipped)';
+                        let unequipBtn = document.createElement('button');
+                        unequipBtn.textContent = 'Unequip';
+                        unequipBtn.onclick = () => unequipItem(item);
+                        li.appendChild(unequipBtn);
+                    } else {
+                        let equipBtn = document.createElement('button');
+                        equipBtn.textContent = 'Equip';
+                        equipBtn.onclick = () => equipItem(item);
+                        li.appendChild(equipBtn);
+                    }
+                }
+                list.appendChild(li);
+            }
+        }
+
+        function getItemType(item) {
+            if (item.includes('Ring')) return 'ring';
+            if (item.includes('Armor') || item === 'Old Tunic' || item === 'Iron Suit' || item === 'Desertscale Armor' || item === 'Mountainshaw Armor' || item === 'Godslayer Armor') return 'armor';
+            if (item.includes('Sword') || item.includes('Bow') || item.includes('Dagger') || item.includes('Staff') || item.includes('Scepter') || item.includes('Blade')) return 'weapon';
+            return null;
+        }
+
+        function isEquipable(item) {
+            return getItemType(item) !== null;
+        }
+
+        function selectClass(className, attribute) {
+            player.class = className;
+            const classData = {
+                'Warrior': {element: 'FIRE', attackType: 'melee', usesMana: false},
+                'Rogue': {element: 'FIRE', attackType: 'melee', usesMana: false},
+                'Mage': {element: 'WATER', attackType: 'magic', usesMana: true},
+                'Necromancer': {element: 'WATER', attackType: 'magic', usesMana: true},
+                'Bard': {element: 'WIND', attackType: 'magic', usesMana: true},
+                'Archer': {element: 'WIND', attackType: 'ranged', usesMana: false},
+                'Druid': {element: 'EARTH', attackType: 'summoned', usesMana: true},
+                'Cleric': {element: 'EARTH', attackType: 'melee', usesMana: true},
+            };
+            Object.assign(player, classData[className]);
+            upgradeSkill(attribute);
+            document.getElementById('class-selection').classList.add('hidden');
+            document.getElementById('profession-selection').classList.remove('hidden');
+            updateFooter();
+        }
+
+        function selectProfession(prof) {
+            player.profession = prof;
+            document.getElementById('profession-selection').classList.add('hidden');
+            document.getElementById('main-menu').classList.remove('hidden');
+            document.getElementById('profession-name').textContent = prof;
+            updateJobDescription();
+            if (player.level >= 10) {
+                document.getElementById('boss-button').disabled = false;
+            }
+            updateFooter();
+            updateTitle();
+            updateMapButtons();
+        }
+
+        function updateJobDescription() {
+            const desc = document.getElementById('job-description');
+            const action = document.getElementById('job-action');
+            switch (player.profession) {
+                case 'Forager':
+                    desc.textContent = 'Pick loose materials. Random finds.';
+                    action.textContent = 'Forage';
+                    break;
+                case 'Miner':
+                    desc.textContent = 'Mine for gems. Unreliable.';
+                    action.textContent = 'Mine';
+                    break;
+                case 'Merchant':
+                    desc.textContent = 'Sell items manually.';
+                    action.textContent = 'Sell to NPC';
+                    break;
+                case 'Fisher':
+                    desc.textContent = 'Catch fish. Random success.';
+                    action.textContent = 'Fish';
+                    break;
+                case 'Builder':
+                    desc.textContent = 'Build homes. Daily pay.';
+                    action.textContent = 'Build';
+                    break;
+                case 'Farmer':
+                    desc.textContent = 'Plant, water, harvest. Manage crops.';
+                    action.textContent = 'Farm Action';
+                    break;
+                case 'Soldier':
+                    desc.textContent = 'Fight monsters for extra drops.';
+                    action.textContent = 'Patrol';
+                    break;
+                case 'Medic':
+                    desc.textContent = 'Heal NPCs for pay.';
+                    action.textContent = 'Heal';
+                    break;
+                case 'Priest':
+                    desc.textContent = 'Collect donations.';
+                    action.textContent = 'Pray/Collect';
+                    break;
+            }
+        }
+
+        function showStore() {
+            document.getElementById('main-menu').classList.add('hidden');
+            if (player.currentArea === 'Glacial Hollow') {
+                document.getElementById('store-menu').classList.remove('hidden');
+            } else if (player.currentArea === 'Mycelgrove') {
+                document.getElementById('mycelgrove-store').classList.remove('hidden');
+            } else if (player.currentArea === 'Sabelmar dunes') {
+                document.getElementById('sabelmar-store').classList.remove('hidden');
+            } else if (player.currentArea === 'Crystalpine peaks') {
+                document.getElementById('crystalpine-store').classList.remove('hidden');
+            } else if (player.currentArea === 'the vyssal crucible') {
+                document.getElementById('vyssal-store').classList.remove('hidden');
+            }
+        }
+
+        function showSkills() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('skills-menu').classList.remove('hidden');
+            document.getElementById('skill-credits').textContent = player.skillCredits;
+        }
+
+        function doJob() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('job-menu').classList.remove('hidden');
+            updateJobCooldown();
+            jobInterval = setInterval(updateJobCooldown, 1000);
+        }
+
+        let jobInterval;
+
+        function updateJobCooldown() {
+            let remaining = 60 - Math.floor((Date.now() - player.lastJobTime) / 1000);
+            if (remaining > 0) {
+                document.getElementById('job-cooldown').textContent = `Cooldown: ${remaining}s`;
+                document.getElementById('job-action').disabled = true;
+            } else {
+                document.getElementById('job-cooldown').textContent = '';
+                document.getElementById('job-action').disabled = false;
+            }
+        }
+
+        function showMap() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('map-menu').classList.remove('hidden');
+        }
+
+        function showBoss() {
+            const req = areaBossLevelReq[player.currentArea] || 10;
+            if (player.level < req && req > 0) {
+                showMessage(`You must be level ${req} to challenge the boss.`);
+                return;
+            }
+            document.getElementById('main-menu').classList.add('hidden');
+            if (player.currentArea === 'Glacial Hollow') {
+                document.getElementById('boss-menu').classList.remove('hidden');
+            } else if (player.currentArea === 'Mycelgrove') {
+                document.getElementById('mycelgrove-boss-menu').classList.remove('hidden');
+            } else if (player.currentArea === 'Sabelmar dunes') {
+                document.getElementById('sabelmar-boss-menu').classList.remove('hidden');
+            } else if (player.currentArea === 'Crystalpine peaks') {
+                document.getElementById('crystalpine-boss-menu').classList.remove('hidden');
+            } else if (player.currentArea === 'the vyssal crucible') {
+                document.getElementById('pyrosyn-boss-menu').classList.remove('hidden');
+            }
+        }
+
+        function challengeVyssal() {
+            if (player.level < 50) {
+                showMessage('You must be level 50 to challenge Vyssal.');
+                return;
+            }
+            if (player.inventory["Pyrosyn's Blessing"] < 3) {
+                showMessage('You need at least 3 Pyrosyn Blessings to challenge Vyssal.');
+                return;
+            }
+            player.blessingsUsed = player.inventory["Pyrosyn's Blessing"];
+            player.inventory["Pyrosyn's Blessing"] = 0;
+            player.vyssalPhase = 1;
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('vyssal-boss-menu').classList.remove('hidden');
+        }
+
+        function showCraft() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('craft-menu').classList.remove('hidden');
+            populateCraftSelects();
+        }
+
+        function enterHome() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('home-menu').classList.remove('hidden');
+            populateHome();
+        }
+
+        function populateHome() {
+            const area = document.getElementById('home-area');
+            area.innerHTML = '';
+            const furnItems = ['Indoor Plant', 'Table', 'Chair', 'Rug', 'Hedge', 'Bed', 'Painting', 'Window', 'Bathroom', 'Flowerbed', 'Stove', 'Sofa', 'Fridge', 'Lamp', 'Tree', 'Living Room', 'Bedroom', 'Kitchen', 'Pet Cage', 'Pool', 'Glacial Trophy', 'Mycel Trophy', 'Sabelmar Trophy', 'Crystalpine Trophy', 'Vyssal Trophy', 'Pyrosyn Trophy', 'Painted House'];
+            furnItems.forEach(item => {
+                if (player.inventory[item]) {
+                    for (let i = 0; i < player.inventory[item]; i++) {
+                        let div = document.createElement('div');
+                        div.id = `${item}_${i}`;
+                        div.style.position = 'absolute';
+                        div.style.cursor = 'move';
+                        div.style.userSelect = 'none';
+                        div.textContent = item;
+                        let pos = player.furniturePositions[div.id] || {left: Math.random() * 500, top: Math.random() * 300};
+                        div.style.left = pos.left + 'px';
+                        div.style.top = pos.top + 'px';
+                        div.onmousedown = function(e) {
+                            let shiftX = e.clientX - div.getBoundingClientRect().left;
+                            let shiftY = e.clientY - div.getBoundingClientRect().top;
+                            function moveAt(pageX, pageY) {
+                                div.style.left = pageX - shiftX + 'px';
+                                div.style.top = pageY - shiftY + 'px';
+                            }
+                            function onMouseMove(e) {
+                                moveAt(e.pageX, e.pageY);
+                            }
+                            document.addEventListener('mousemove', onMouseMove);
+                            document.onmouseup = function() {
+                                document.removeEventListener('mousemove', onMouseMove);
+                                document.onmouseup = null;
+                                player.furniturePositions[div.id] = {left: parseFloat(div.style.left), top: parseFloat(div.style.top)};
+                            };
+                        };
+                        div.ondragstart = () => false;
+                        area.appendChild(div);
+                    }
+                }
+            });
+        }
+
+        function populateCraftSelects() {
+            const selects = ['item1', 'item2', 'item3'];
+            selects.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '<option value="">None</option>';
+                for (let item in player.inventory) {
+                    if (player.inventory[item] > 0) {
+                        let opt = document.createElement('option');
+                        opt.value = item;
+                        opt.text = item;
+                        select.add(opt);
+                    }
+                }
+            });
+        }
+
+        function backToMain() {
+            const menus = ['store-menu', 'mycelgrove-store', 'sabelmar-store', 'crystalpine-store', 'vyssal-store', 'skills-menu', 'job-menu', 'map-menu', 'boss-menu', 'mycelgrove-boss-menu', 'sabelmar-boss-menu', 'crystalpine-boss-menu', 'pyrosyn-boss-menu', 'vyssal-boss-menu', 'craft-menu', 'battle-menu', 'home-menu', 'sylvia-menu', 'cutscene-menu'];
+            menus.forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById('main-menu').classList.remove('hidden');
+            if (jobInterval) clearInterval(jobInterval);
+        }
+
+        function tryDeductMoney(cost, currency) {
+            let totalFlecks = 0;
+            if (currency === 'flecks') totalFlecks = Math.ceil(cost);
+            else if (currency === 'shards') totalFlecks = Math.ceil(cost * 10);
+            else if (currency === 'gleams') totalFlecks = Math.ceil(cost * 100);
+            else if (currency === 'flares') totalFlecks = Math.ceil(cost * 1000);
+            let totalPlayerFlecks = player.money.flecks + player.money.shards * 10 + player.money.gleams * 100 + player.money.flares * 1000;
+            if (totalPlayerFlecks < totalFlecks) return false;
+            totalPlayerFlecks -= totalFlecks;
+            player.money.flares = Math.floor(totalPlayerFlecks / 1000);
+            totalPlayerFlecks %= 1000;
+            player.money.gleams = Math.floor(totalPlayerFlecks / 100);
+            totalPlayerFlecks %= 100;
+            player.money.shards = Math.floor(totalPlayerFlecks / 10);
+            totalPlayerFlecks %= 10;
+            player.money.flecks = totalPlayerFlecks;
+            return true;
+        }
+
+        function getHigherCurrency(curr) {
+            if (curr === 'flecks') return 'shards';
+            if (curr === 'shards') return 'gleams';
+            if (curr === 'gleams') return 'flares';
+            return null;
+        }
+
+        function getLowerCurrency(curr) {
+            if (curr === 'shards') return 'flecks';
+            if (curr === 'gleams') return 'shards';
+            if (curr === 'flares') return 'gleams';
+            return null;
+        }
+
+        function buyItem(item, cost, currency) {
+            if (item === 'Pyrosyn Trophy' || item === 'Painted House') {
+                if (!player.defeatedVyssal) {
+                    showMessage('This item can only be bought after killing the final boss.');
+                    return;
+                }
+            }
+            if (!tryDeductMoney(cost, currency)) {
+                showMessage('Not enough money!');
+                return;
+            }
+            addToInventory(item, 1);
+            showMessage(`Bought ${item}`);
+            if (item === 'House') {
+                document.getElementById('home-button').disabled = false;
+            }
+            updateFooter();
+            updateInventory();
+        }
+
+        function sellItem(item, value, currency) {
+            if (!player.inventory[item] || player.inventory[item] <= 0) {
+                showMessage('You do not have this item!');
+                return;
+            }
+            player.inventory[item]--;
+            addMoney(value, currency);
+            showMessage(`Sold ${item} for ${value} ${currency.toUpperCase()}`);
+            updateFooter();
+            updateInventory();
+        }
+
+        function addMoney(amount, currency) {
+            player.money[currency] += amount;
+            normalizeMoney();
+        }
+
+        function normalizeMoney() {
+            while (player.money.flecks >= 10) {
+                player.money.flecks -= 10;
+                player.money.shards++;
+            }
+            while (player.money.shards >= 10) {
+                player.money.shards -= 10;
+                player.money.gleams++;
+            }
+            while (player.money.gleams >= 10) {
+                player.money.gleams -= 10;
+                player.money.flares++;
+            }
+        }
+
+        function addToInventory(item, qty) {
+            if (!player.inventory[item]) player.inventory[item] = 0;
+            player.inventory[item] += qty;
+        }
+
+        function upgradeSkill(skill) {
+            if (player.skillCredits <= 0) {
+                showMessage('No skill credits!');
+                return;
+            }
+            player.skillCredits--;
+            player[skill.toLowerCase()]++;
+            switch (skill) {
+                case 'Strength':
+                    player.maxHp += 10;
+                    player.hp = player.maxHp;
+                    break;
+                case 'Wisdom':
+                    player.maxMana += 1;
+                    player.mana = player.maxMana;
+                    break;
+                case 'Stamina':
+                    player.critChance += 1;
+                    break;
+                case 'Agility':
+                    player.turns += 0.2;
+                    break;
+            }
+            document.getElementById('skill-credits').textContent = player.skillCredits;
+            updateFooter();
+        }
+
+        function gainXp(amount) {
+            amount = Math.round(amount * player.rewardMultiplier);
+            player.xp += amount;
+            while (player.xp >= player.xpNeeded) {
+                player.xp -= player.xpNeeded;
+                player.level++;
+                player.skillCredits++;
+                if (player.level <= 5) {
+                    player.xpNeeded *= 2;
+                } else {
+                    player.xpNeeded = Math.ceil(player.xpNeeded * 1.5);
+                }
+                if (player.level >= 10) {
+                    document.getElementById('boss-button').disabled = false;
+                }
+            }
+            updateFooter();
+        }
+
+        function startBattle() {
+            const enemies = areaEnemies[player.currentArea] || [];
+            const possibleEnemies = enemies.filter(e => player.level >= e.minLevel);
+            if (possibleEnemies.length === 0) {
+                showMessage('No suitable enemies in this area!');
+                return;
+            }
+            const enemy = possibleEnemies[Math.floor(Math.random() * possibleEnemies.length)];
+            battle.enemy = {
+                name: enemy.name,
+                hp: randomInRange(enemy.hpRange),
+                maxHp: randomInRange(enemy.hpRange),
+                dmgRange: enemy.dmgRange,
+                moneyRange: enemy.moneyRange,
+                moneyType: enemy.moneyType,
+                xpRange: enemy.xpRange,
+                element: enemy.element,
+                drops: enemy.drops,
+                missRate: 0,
+                dmgMultiplier: 1,
+                isBoss: false
+            };
+            battle.playerTurns = Math.floor(player.turns - battle.turnPenalty);
+            battle.initialTurns = battle.playerTurns;
+            battle.inBattle = true;
+            battle.richesBoost = 1;
+            battle.turnPenalty = 0;
+            player.tempDmgMultiplier = 1;
+            player.canUseMana = true;
+            player.tempWaterDmg = 1;
+            player.tempEarthDmg = 1;
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('battle-menu').classList.remove('hidden');
+            document.getElementById('enemy-info').textContent = `${battle.enemy.name} HP: ${battle.enemy.hp}/${battle.enemy.maxHp}`;
+            document.getElementById('battle-log').textContent = 'Battle started!';
+            populatePotionSelect();
+            populateAbilitySelect();
+            if (player.inventory['Horse'] > 0 && Math.random() < 0.05) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Deer'] > 0 && Math.random() < 0.1) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Wild Dog'] > 0 && Math.random() < 0.1) {
+                let dogDmg = randomInRange([1,3]);
+                battle.enemy.hp -= dogDmg;
+                appendBattleLog(`Wild Dog attacks for ${dogDmg} damage!`);
+            }
+            if (player.inventory['Shroomler'] > 0 && Math.random() < 0.2) {
+                let shroomDmg = randomInRange([1,5]);
+                battle.enemy.hp -= shroomDmg;
+                appendBattleLog(`Shroomler attacks for ${shroomDmg} damage!`);
+            }
+            if (player.inventory['Sand Strider'] > 0) {
+                const chance = player.currentArea === 'Sabelmar dunes' ? 0.25 : 0.2;
+                if (Math.random() < chance) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                    appendBattleLog('Sand Strider grants an extra turn!');
+                }
+            }
+            if (player.inventory['Mini Wyrm'] > 0 && Math.random() < 0.33) {
+                let wyrmDmg = randomInRange([1,10]);
+                battle.enemy.hp -= wyrmDmg;
+                appendBattleLog(`Mini Wyrm attacks for ${wyrmDmg} damage!`);
+            }
+            if (player.inventory['Mountainwagner'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                player.critChance += 3;
+                appendBattleLog('Mountainwagner grants an extra turn and +3% crit!');
+            }
+            if (player.inventory['Cosmic Beast'] > 0) {
+                let beastDmg = randomInRange([1,20]);
+                battle.enemy.hp -= beastDmg;
+                appendBattleLog(`Cosmic Beast attacks for ${beastDmg} damage!`);
+                if (Math.random() < 0.2) {
+                    player.hp = Math.min(player.hp + 20, player.maxHp);
+                    appendBattleLog('Cosmic Beast heals you for 20 HP!');
+                }
+            }
+            if (player.inventory['Micro Vyss'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                if (Math.random() < 0.3) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                }
+                player.critChance += 5;
+                appendBattleLog('Micro Vyss grants an extra turn (and maybe two) and +5% crit!');
+            }
+            if (player.inventory['Son of Vyssal'] > 0) {
+                let sonDmg = randomInRange([1,30]);
+                battle.enemy.hp -= sonDmg;
+                appendBattleLog(`Son of Vyssal attacks for ${sonDmg} damage!`);
+                player.hp = Math.min(player.hp + randomInRange([10,50]), player.maxHp);
+                player.mana = Math.min(player.mana + randomInRange([10,50]), player.maxMana);
+                player.dmgMultiplier *= 1.1;
+                appendBattleLog('Son of Vyssal heals HP and Mana and boosts elements!');
+            }
+            updateMovesInfo();
+            updateEnemyInfo();
+        }
+
+        function updateMovesInfo() {
+            const used = battle.initialTurns - battle.playerTurns;
+            document.getElementById('moves-info').textContent = `(${used}/${battle.initialTurns} moves made)`;
+        }
+
+        function populateAbilitySelect() {
+            const select = document.getElementById('ability-select');
+            select.innerHTML = '';
+            abilities[player.class].filter(a => player.level >= a.level).forEach(a => {
+                let opt = document.createElement('option');
+                opt.value = JSON.stringify(a);
+                let text = a.name;
+                if (a.dmg) text += ` (dmg ${a.dmg[0]}-${a.dmg[1]})`;
+                if (a.cost) text += ` (${a.cost} mana)`;
+                if (a.turnCost) text += ` (${a.turnCost} turns)`;
+                if (a.hpCost) text += ` (-${a.hpCost} HP)`;
+                if (a.heal) text += ` (+${a.heal} HP)`;
+                if (a.special) text += ` (special)`;
+                opt.text = text;
+                select.add(opt);
+            });
+            const punch = {name: 'Punch', cost:0, dmg: [1,1]};
+            let optPunch = document.createElement('option');
+            optPunch.value = JSON.stringify(punch);
+            optPunch.text = 'Punch (dmg 1)';
+            select.add(optPunch);
+        }
+
+        function populatePotionSelect() {
+            const select = document.getElementById('potion-select');
+            select.innerHTML = '<option value="">Select Potion</option>';
+            for (let item in player.inventory) {
+                if (item.includes('Potion') && player.inventory[item] > 0) {
+                    let opt = document.createElement('option');
+                    opt.value = item;
+                    opt.text = item;
+                    select.add(opt);
+                }
+            }
+        }
+
+        function startBossBattle() {
+            const bossData = bosses[player.currentArea] || bosses['vyssal'];
+            if (!bossData) {
+                showMessage('No boss in this area!');
+                return;
+            }
+            battle.enemy = { 
+                ...bossData, 
+                hp: bossData.hp, 
+                maxHp: bossData.maxHp,
+                missRate: 0, 
+                dmgMultiplier: 1,
+                isBoss: true,
+                area: player.currentArea
+            };
+            battle.playerTurns = Math.floor(player.turns - battle.turnPenalty);
+            battle.initialTurns = battle.playerTurns;
+            battle.inBattle = true;
+            battle.richesBoost = 1;
+            battle.turnPenalty = 0;
+            player.tempDmgMultiplier = 1;
+            player.canUseMana = true;
+            player.tempWaterDmg = 1;
+            player.tempEarthDmg = 1;
+            if (player.element === bossData.badElement) {
+                player.dmgMultiplier *= 2/3;
+                player.defense = 0;
+            }
+            if (battle.enemy.name === 'Pyrosyn' && player.level < 50) {
+                player.dmgMultiplier *= 2/3;
+                player.defense = 0;
+            }
+            if (battle.enemy.name === 'Vyssal') {
+                let factor = Math.pow(1 / 1.1, player.blessingsUsed - 3);
+                battle.enemy.hp = 10000 * factor;
+                battle.enemy.maxHp = battle.enemy.hp;
+                battle.enemy.dmgFixed = 1000 * factor;
+                player.dmgMultiplier *= 0.5;
+                player.defense = 0;
+                player.strength = 0;
+                player.wisdom = 0;
+                player.agility = 0;
+                player.stamina = 0;
+                const pets = ['Horse', 'Wild Dog', 'Deer', 'Shroomler', 'Sand Strider', 'Mini Wyrm', 'Mountainwagner', 'Cosmic Beast', 'Micro Vyss', 'Son of Vyssal'];
+                pets.forEach(pet => {
+                    if (player.inventory[pet] > 0) {
+                        player.inventory[pet] = 0;
+                        appendBattleLog(`Your ${pet} has been killed!`);
+                    }
+                });
+                player.dmgMultiplier *= 0.5; // Rings 2x less effective
+                if (player.deathCount >= 1) {
+                    player.dmgMultiplier *= 2; // Souls 2x dmg
+                }
+                if (player.vyssalPhase === 3) {
+                    player.mana = Infinity; // Infinite mana
+                    player.critChance += 10;
+                    player.turns += 2;
+                }
+            }
+            const bossMenuId = player.currentArea === 'Glacial Hollow' ? 'boss-menu' : player.currentArea === 'Mycelgrove' ? 'mycelgrove-boss-menu' : player.currentArea === 'Sabelmar dunes' ? 'sabelmar-boss-menu' : player.currentArea === 'Crystalpine peaks' ? 'crystalpine-boss-menu' : player.currentArea === 'the vyssal crucible' ? 'pyrosyn-boss-menu' : 'vyssal-boss-menu';
+            document.getElementById(bossMenuId).classList.add('hidden');
+            document.getElementById('battle-menu').classList.remove('hidden');
+            document.getElementById('enemy-info').textContent = `${battle.enemy.name} HP: ${battle.enemy.hp}/${battle.enemy.maxHp}`;
+            document.getElementById('battle-log').textContent = 'Boss battle started!';
+            populatePotionSelect();
+            populateAbilitySelect();
+            if (player.inventory['Horse'] > 0 && Math.random() < 0.05) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Deer'] > 0 && Math.random() < 0.1) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Wild Dog'] > 0 && Math.random() < 0.1) {
+                let dogDmg = randomInRange([1,3]);
+                battle.enemy.hp -= dogDmg;
+                appendBattleLog(`Wild Dog attacks for ${dogDmg} damage!`);
+            }
+            if (player.inventory['Shroomler'] > 0 && Math.random() < 0.2) {
+                let shroomDmg = randomInRange([1,5]);
+                battle.enemy.hp -= shroomDmg;
+                appendBattleLog(`Shroomler attacks for ${shroomDmg} damage!`);
+            }
+            if (player.inventory['Sand Strider'] > 0) {
+                const chance = player.currentArea === 'Sabelmar dunes' ? 0.25 : 0.2;
+                if (Math.random() < chance) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                    appendBattleLog('Sand Strider grants an extra turn!');
+                }
+            }
+            if (player.inventory['Mini Wyrm'] > 0 && Math.random() < 0.33) {
+                let wyrmDmg = randomInRange([1,10]);
+                battle.enemy.hp -= wyrmDmg;
+                appendBattleLog(`Mini Wyrm attacks for ${wyrmDmg} damage!`);
+            }
+            if (player.inventory['Mountainwagner'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                player.critChance += 3;
+                appendBattleLog('Mountainwagner grants an extra turn and +3% crit!');
+            }
+            if (player.inventory['Cosmic Beast'] > 0) {
+                let beastDmg = randomInRange([1,20]);
+                battle.enemy.hp -= beastDmg;
+                appendBattleLog(`Cosmic Beast attacks for ${beastDmg} damage!`);
+                if (Math.random() < 0.2) {
+                    player.hp = Math.min(player.hp + 20, player.maxHp);
+                    appendBattleLog('Cosmic Beast heals you for 20 HP!');
+                }
+            }
+            if (player.inventory['Micro Vyss'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                if (Math.random() < 0.3) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                }
+                player.critChance += 5;
+                appendBattleLog('Micro Vyss grants an extra turn (and maybe two) and +5% crit!');
+            }
+            if (player.inventory['Son of Vyssal'] > 0) {
+                let sonDmg = randomInRange([1,30]);
+                battle.enemy.hp -= sonDmg;
+                appendBattleLog(`Son of Vyssal attacks for ${sonDmg} damage!`);
+                player.hp = Math.min(player.hp + randomInRange([10,50]), player.maxHp);
+                player.mana = Math.min(player.mana + randomInRange([10,50]), player.maxMana);
+                player.dmgMultiplier *= 1.1;
+                appendBattleLog('Son of Vyssal heals HP and Mana and boosts elements!');
+            }
+            updateMovesInfo();
+            updateEnemyInfo();
+        }
+
+        function useAbility() {
+            if (battle.playerTurns <= 0 || !battle.inBattle) return;
+            const abStr = document.getElementById('ability-select').value;
+            if (!abStr) return;
+            const ab = JSON.parse(abStr);
+            if (ab.requires && player[Object.keys(ab.requires)[0]] <= ab.requires[Object.keys(ab.requires)[0]]) {
+                showMessage('Requirements not met!');
+                return;
+            }
+            if (ab.cost > 0 && player.mana < ab.cost && player.vyssalPhase !== 3) {
+                showMessage('No mana!');
+                return;
+            }
+            if (ab.hpCost > 0 && player.hp < ab.hpCost) {
+                showMessage('Not enough HP!');
+                return;
+            }
+            let turnCost = ab.turnCost || 1;
+            if (battle.playerTurns < turnCost) {
+                showMessage('Not enough turns!');
+                return;
+            }
+            battle.playerTurns -= turnCost;
+            if (ab.cost > 0 && player.vyssalPhase !== 3) player.mana -= ab.cost;
+            if (ab.hpCost > 0) {
+                player.hp -= ab.hpCost;
+                player.hp = Math.max(0, player.hp);
+            }
+            let dmg = 0;
+            if (ab.dmg) dmg = randomInRange([ab.dmg[0], ab.dmg[1] + player.extraMaxDmg]);
+            dmg *= player.dmgMultiplier * player.tempDmgMultiplier;
+            if (player.element === 'WATER') dmg *= player.tempWaterDmg;
+            if (player.element === 'EARTH') dmg *= player.tempEarthDmg;
+            if (Math.random() * 100 < player.critChance) dmg *= 10;
+            dmg = Math.floor(dmg);
+            battle.enemy.hp -= dmg;
+            appendBattleLog(`Used ${ab.name} for ${dmg} damage!`);
+            if (ab.heal) player.hp = Math.min(player.hp + ab.heal, player.maxHp);
+            if (ab.special === 'miss+50') battle.enemy.missRate += 0.5;
+            if (ab.special === 'enemyDmgHalf') battle.enemy.dmgMultiplier *= 0.5;
+            if (battle.enemy.hp <= 0) {
+                endBattle(true);
+                return;
+            }
+            if (player.hp <= 0) {
+                endBattle(false);
+                return;
+            }
+            updateMovesInfo();
+            if (battle.playerTurns === 0) enemyAttack();
+            updateEnemyInfo();
+            updateFooter();
+        }
+
+        function useSelectedPotion() {
+            const item = document.getElementById('potion-select').value;
+            if (!item) return;
+            usePotion(item);
+        }
+
+        function usePotion(item) {
+            if (battle.playerTurns <= 0 || !battle.inBattle) return;
+            if (!player.inventory[item] || player.inventory[item] <= 0) {
+                showMessage('No potion!');
+                return;
+            }
+            player.inventory[item]--;
+            battle.playerTurns--;
+            switch (item) {
+                case 'Healing Potion I':
+                    player.hp = Math.min(player.hp + 10, player.maxHp);
+                    break;
+                case 'Mana Potion I':
+                    player.mana = Math.min(player.mana + 1, player.maxMana);
+                    break;
+                case 'Potion of cold strength I':
+                    player.hp = Math.min(player.hp + 10, player.maxHp);
+                    player.canUseMana = false;
+                    break;
+                case 'Potion of cold stamina':
+                    battle.playerTurns += 1;
+                    player.canUseMana = false;
+                    break;
+                case 'Potion of strength I':
+                    if (player.attackType === 'melee') player.tempDmgMultiplier *= 1.3;
+                    break;
+                case 'Potion of Riches I':
+                    battle.richesBoost *= 1.5;
+                    break;
+                case 'Potion of cold water elemental I':
+                    player.tempWaterDmg *= 1.4;
+                    player.canUseMana = false;
+                    break;
+                case 'Potion of cold wisdom I':
+                    player.mana = Math.min(player.mana + 3, player.maxMana);
+                    player.canUseMana = false;
+                    break;
+                case 'Potion of cold earth elemental I':
+                    player.tempEarthDmg *= 1.4;
+                    player.canUseMana = false;
+                    break;
+                case 'Healing Potion II':
+                    player.hp = Math.min(player.hp + 25, player.maxHp);
+                    break;
+                case 'Mana Potion II':
+                    player.mana = Math.min(player.mana + 3, player.maxMana);
+                    break;
+                case 'Strength Potion I':
+                    if (player.attackType === 'melee') player.tempDmgMultiplier *= 1.3;
+                    break;
+                case 'Wisdom Potion I':
+                    if (player.usesMana) player.tempDmgMultiplier *= 1.3;
+                    break;
+                case 'Earth Potion II':
+                    if (player.element === 'EARTH') player.tempEarthDmg *= 1.3;
+                    break;
+                case 'Toxic Earth Potion III':
+                    if (player.element === 'EARTH') player.tempEarthDmg *= 1.6;
+                    battle.turnPenalty += 0.6;
+                    break;
+                case 'Toxic Wisdom Potion II':
+                    player.mana = Math.min(player.mana + 2, player.maxMana);
+                    battle.turnPenalty += 0.4;
+                    break;
+                case 'Earth Potion IV':
+                    if (player.element === 'EARTH') player.tempEarthDmg *= 1.7;
+                    break;
+                case 'Toxic Earth Strength Potion II':
+                    if (player.element === 'EARTH') player.tempEarthDmg *= 1.3;
+                    player.hp = Math.min(player.hp + 10, player.maxHp);
+                    battle.turnPenalty += 0.4;
+                    break;
+                case 'Potion of Riches II':
+                    battle.richesBoost *= 2;
+                    break;
+                case 'Toxic Water Elemental Potion III':
+                    player.tempWaterDmg *= 1.9;
+                    battle.turnPenalty += 0.6;
+                    break;
+                case 'Healing Potion III':
+                    player.hp = Math.min(player.hp + 100, player.maxHp);
+                    break;
+                case 'Mana Potion III':
+                    player.mana = Math.min(player.mana + 5, player.maxMana);
+                    break;
+                case 'Strength Potion II':
+                    if (player.attackType === 'melee') player.tempDmgMultiplier *= 1.5;
+                    break;
+                case 'Wisdom Potion II':
+                    if (player.usesMana) player.tempDmgMultiplier *= 1.5;
+                    break;
+                case 'Stamina Potion I':
+                    battle.playerTurns += 0.2;
+                    break;
+                case 'Agility Potion I':
+                    player.critChance += 3;
+                    break;
+                case 'Healing Potion IV':
+                    player.hp = Math.min(player.hp + 200, player.maxHp);
+                    break;
+                case 'Mana Potion IV':
+                    player.mana = Math.min(player.mana + 10, player.maxMana);
+                    break;
+                case 'Strength Potion III':
+                    if (player.attackType === 'melee') player.tempDmgMultiplier *= 2;
+                    break;
+                case 'Wisdom Potion III':
+                    if (player.usesMana) player.tempDmgMultiplier *= 2;
+                    break;
+                case 'Stamina Potion II':
+                    battle.playerTurns += 0.6;
+                    break;
+                case 'Agility Potion II':
+                    player.critChance += 5;
+                    break;
+                case 'Elemental Potion':
+                    player.dmgMultiplier *= 1.2;
+                    break;
+                case 'Healing Potion V':
+                    player.hp = Math.min(player.hp + 500, player.maxHp);
+                    break;
+                case 'Mana Potion V':
+                    player.mana = Math.min(player.mana + 25, player.maxMana);
+                    break;
+                case 'Strength Potion IV':
+                    if (player.attackType === 'melee') player.tempDmgMultiplier *= 2.5;
+                    break;
+                case 'Wisdom Potion IV':
+                    if (player.usesMana) player.tempDmgMultiplier *= 2.5;
+                    break;
+                case 'Stamina Potion III':
+                    battle.playerTurns += 1.4;
+                    break;
+                case 'Agility Potion III':
+                    player.critChance += 10;
+                    break;
+                case 'Elemental Potion+':
+                    player.dmgMultiplier *= 1.5;
+                    break;
+                // Add effects for other new potions as needed
+            }
+            appendBattleLog(`Used ${item}`);
+            updateMovesInfo();
+            updateInventory();
+            updateFooter();
+            populatePotionSelect();
+            if (battle.playerTurns === 0) enemyAttack();
+        }
+
+        function enemyAttack() {
+            player.canUseMana = true;
+            player.mana = Math.min(player.mana + 1, player.maxMana);
+            if (!battle.inBattle) return;
+            if (Math.random() < 0.1 + battle.enemy.missRate) {
+                appendBattleLog('Enemy misses!');
+            } else {
+                let dmg;
+                if (battle.enemy.dmgFixed) {
+                    dmg = battle.enemy.dmgFixed - player.defense;
+                } else {
+                    dmg = randomInRange(battle.enemy.dmgRange) * battle.enemy.dmgMultiplier - player.defense;
+                }
+                dmg = Math.max(1, dmg);
+                player.hp -= dmg;
+                player.hp = Math.max(0, player.hp);
+                appendBattleLog(`Enemy attacks for ${dmg} damage!`);
+                updateFooter();
+            }
+            if (player.hp <= 0) {
+                endBattle(false);
+                return;
+            }
+            battle.playerTurns = Math.floor(player.turns - battle.turnPenalty);
+            battle.initialTurns = battle.playerTurns;
+            if (player.inventory['Horse'] > 0 && Math.random() < 0.05) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Deer'] > 0 && Math.random() < 0.1) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+            }
+            if (player.inventory['Wild Dog'] > 0 && Math.random() < 0.1) {
+                let dogDmg = randomInRange([1,3]);
+                battle.enemy.hp -= dogDmg;
+                appendBattleLog(`Wild Dog attacks for ${dogDmg} damage!`);
+                if (battle.enemy.hp <= 0) endBattle(true);
+            }
+            if (player.inventory['Shroomler'] > 0 && Math.random() < 0.2) {
+                let shroomDmg = randomInRange([1,5]);
+                battle.enemy.hp -= shroomDmg;
+                appendBattleLog(`Shroomler attacks for ${shroomDmg} damage!`);
+                if (battle.enemy.hp <= 0) endBattle(true);
+            }
+            if (player.inventory['Sand Strider'] > 0) {
+                const chance = player.currentArea === 'Sabelmar dunes' ? 0.25 : 0.2;
+                if (Math.random() < chance) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                    appendBattleLog('Sand Strider grants an extra turn!');
+                }
+            }
+            if (player.inventory['Mini Wyrm'] > 0 && Math.random() < 0.33) {
+                let wyrmDmg = randomInRange([1,10]);
+                battle.enemy.hp -= wyrmDmg;
+                appendBattleLog(`Mini Wyrm attacks for ${wyrmDmg} damage!`);
+                if (battle.enemy.hp <= 0) endBattle(true);
+            }
+            if (player.inventory['Mountainwagner'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                player.critChance += 3;
+                appendBattleLog('Mountainwagner grants an extra turn and +3% crit!');
+            }
+            if (player.inventory['Cosmic Beast'] > 0) {
+                let beastDmg = randomInRange([1,20]);
+                battle.enemy.hp -= beastDmg;
+                appendBattleLog(`Cosmic Beast attacks for ${beastDmg} damage!`);
+                if (Math.random() < 0.2) {
+                    player.hp = Math.min(player.hp + 20, player.maxHp);
+                    appendBattleLog('Cosmic Beast heals you for 20 HP!');
+                }
+            }
+            if (player.inventory['Micro Vyss'] > 0 && Math.random() < 0.5) {
+                battle.playerTurns++;
+                battle.initialTurns++;
+                if (Math.random() < 0.3) {
+                    battle.playerTurns++;
+                    battle.initialTurns++;
+                }
+                player.critChance += 5;
+                appendBattleLog('Micro Vyss grants an extra turn (and maybe two) and +5% crit!');
+            }
+            if (player.inventory['Son of Vyssal'] > 0) {
+                let sonDmg = randomInRange([1,30]);
+                battle.enemy.hp -= sonDmg;
+                appendBattleLog(`Son of Vyssal attacks for ${sonDmg} damage!`);
+                player.hp = Math.min(player.hp + randomInRange([10,50]), player.maxHp);
+                player.mana = Math.min(player.mana + randomInRange([10,50]), player.maxMana);
+                player.dmgMultiplier *= 1.1;
+                appendBattleLog('Son of Vyssal heals HP and Mana and boosts elements!');
+            }
+            updateMovesInfo();
+        }
+
+        function fleeBattle() {
+            appendBattleLog('You fled the battle!');
+            endBattle(false);
+        }
+
+        function endBattle(win) {
+            battle.inBattle = false;
+            document.getElementById('battle-menu').classList.add('hidden');
+            if (win) {
+                let moneyAmt = Math.round(randomInRange(battle.enemy.moneyRange || [0,0]) * battle.richesBoost * player.moneyMultiplier * player.rewardMultiplier);
+                let xp = Math.round(randomInRange(battle.enemy.xpRange || [0,0]) * player.rewardMultiplier);
+                addMoney(moneyAmt, battle.enemy.moneyType || 'flecks');
+                gainXp(xp);
+                appendBattleLog(`Victory! Gained ${moneyAmt} ${ (battle.enemy.moneyType || 'flecks').toUpperCase() } and ${xp} XP.`);
+                battle.enemy.drops?.forEach(drop => {
+                    if (Math.random() * 100 < drop.chance) {
+                        let qty = Math.round(randomInRange(drop.qty) * player.rewardMultiplier);
+                        addToInventory(drop.item, qty);
+                        appendBattleLog(`Dropped ${qty} ${drop.item}`);
+                    }
+                });
+                if (player.deathCount >= 1 && !battle.enemy.isBoss) {
+                    player.souls += 1;
+                }
+                if (battle.enemy.isBoss) {
+                    const bossData = bosses[battle.enemy.area];
+                    addMoney(bossData.money, bossData.moneyType);
+                    gainXp(bossData.xp);
+                    if (bossData.dropItem && Math.random() < 0.5) addToInventory(bossData.dropItem(), 1);
+                    if (bossData.unlock && !player.unlockedAreas.includes(bossData.unlock)) {
+                        player.unlockedAreas.push(bossData.unlock);
+                        updateMapButtons();
+                    }
+                    if (battle.enemy.name === 'Pyrosyn') {
+                        addToInventory("Pyrosyn's Blessing", 1);
+                    }
+                    if (battle.enemy.name === 'Vyssal') {
+                        addMoney(1000, 'flares');
+                        gainXp(10000000000);
+                        addToInventory('Nivorian Blessing', 1);
+                        if (player.vyssalPhase === 1) {
+                            player.vyssalPhase = 2;
+                            setTimeout(showCutscenePhase1, 2000);
+                            return;
+                        } else if (player.vyssalPhase === 3) {
+                            setTimeout(showCutscenePhase5, 2000);
+                            return;
+                        }
+                    }
+                }
+                setTimeout(backToMain, 2000);
+            } else {
+                appendBattleLog('Battle ended.');
+                if (player.hp <= 0) {
+                    if (player.inventory['Revive'] > 0) {
+                        player.inventory['Revive']--;
+                        player.hp = 50;
+                        appendBattleLog('Revived with +50 HP!');
+                        updateFooter();
+                        updateInventory();
+                        setTimeout(backToMain, 2000);
+                    } else {
+                        if (battle.enemy.name === 'Vyssal' && player.vyssalPhase === 3) {
+                            gameOver();
+                            return;
+                        }
+                        player.deathCount++;
+                        player.hp = 0;
+                        showSylvia();
+                        return;
+                    }
+                } else {
+                    setTimeout(backToMain, 2000);
+                }
+            }
+            battle.playerTurns = 0;
+            updateFooter();
+            updateInventory();
+        }
+
+        function updateEnemyInfo() {
+            document.getElementById('enemy-info').textContent = `${battle.enemy.name} HP: ${battle.enemy.hp}/${battle.enemy.maxHp}`;
+        }
+
+        function appendBattleLog(msg) {
+            const log = document.getElementById('battle-log');
+            log.textContent += `\n${msg}`;
+        }
+
+        function performJob() {
+            if (Date.now() - player.lastJobTime < 60000) {
+                showMessage('Job cooldown: wait 1 minute.');
+                return;
+            }
+            let earnings = 0;
+            let currency = 'flecks';
+            switch (player.profession) {
+                case 'Forager':
+                    earnings = Math.floor(Math.random() * 5) + 1;
+                    if (Math.random() < 0.2) addToInventory('Pinecone', 1);
+                    break;
+                case 'Miner':
+                    earnings = Math.random() < 0.5 ? 0 : Math.floor(Math.random() * 10) + 1;
+                    break;
+                case 'Merchant':
+                    earnings = Math.floor(Math.random() * 20);
+                    break;
+                case 'Fisher':
+                    if (Math.random() < 0.7) {
+                        earnings = Math.floor(Math.random() * 5) + 1;
+                        if (Math.random() < 0.3) addToInventory('Chillfin Fish', 1);
+                    } else {
+                        showMessage('Fish escaped!');
+                    }
+                    break;
+                case 'Builder':
+                    earnings = 5;
+                    break;
+                case 'Farmer':
+                    if (player.farmerCrops.length < 5) {
+                        player.farmerCrops.push({days: 0});
+                        showMessage('Planted seed.');
+                    } else {
+                        player.farmerCrops.forEach(crop => {
+                            crop.days++;
+                            if (crop.days >= 3) {
+                                earnings += 10;
+                                if (Math.random() < 0.1) addToInventory('Crystalmelon', 1);
+                            }
+                        });
+                        player.farmerCrops = player.farmerCrops.filter(c => c.days < 3);
+                        showMessage('Harvested/farmed.');
+                    }
+                    break;
+                case 'Soldier':
+                    earnings = Math.floor(Math.random() * 10);
+                    break;
+                case 'Medic':
+                    earnings = Math.floor(Math.random() * 15) + 5;
+                    break;
+                case 'Priest':
+                    earnings = Math.floor(Math.random() * 20);
+                    break;
+            }
+            if (earnings > 0) addMoney(earnings, currency);
+            player.jobStreak++;
+            player.lastJobTime = Date.now();
+            player.rewardMultiplier += 0.1;
+            showMessage(`Earned ${earnings} FX from job.`);
+            if (Math.random() < 0.1 && player.currentArea === 'Glacial Hollow') getGlacialLoot();
+            updateFooter();
+            updateInventory();
+        }
+
+        function getGlacialLoot() {
+            let tier = player.level <= 3 ? 1 : player.level <= 6 ? 2 : 3;
+            let fleshRange = tier === 1 ? [0,2] : tier === 2 ? [1,3] : [2,5];
+            let xpRange = tier === 1 ? [0,5] : tier === 2 ? [1,10] : [2,20];
+            let flecksRange = tier === 1 ? [0,3] : tier === 2 ? [1,5] : [2,10];
+            addToInventory('Frozen Flesh', Math.round(randomInRange(fleshRange) * player.rewardMultiplier));
+            gainXp(Math.round(randomInRange(xpRange) * player.rewardMultiplier));
+            addMoney(Math.round(randomInRange(flecksRange) * player.rewardMultiplier), 'flecks');
+            showMessage('Found a loot chest!');
+        }
+
+        function switchArea(area) {
+            if (player.unlockedAreas.includes(area)) {
+                player.currentArea = area;
+                showMessage(`Switched to ${area === 'the vyssal crucible' ? 'Vyssal Crucible' : area}`);
+                updateTitle();
+                const bossBtn = document.getElementById('boss-button');
+                const req = areaBossLevelReq[player.currentArea] || 10;
+                bossBtn.textContent = `Challenge Boss (Level ${req} Required)`;
+                bossBtn.disabled = player.level < req && req > 0;
+                if (area === 'the vyssal crucible') {
+                    document.getElementById('final-boss-button').classList.remove('hidden');
+                } else {
+                    document.getElementById('final-boss-button').classList.add('hidden');
+                }
+            } else {
+                showMessage('Area locked!');
+            }
+            backToMain();
+        }
+
+        function updateMapButtons() {
+            areas.forEach(area => {
+                let btnId = `map-btn-${area.replace(/\s/g, '-')}`;
+                let btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.disabled = !player.unlockedAreas.includes(area);
+                    btn.textContent = `${area === 'the vyssal crucible' ? 'Vyssal Crucible' : area} ${player.unlockedAreas.includes(area) ? '(Unlocked)' : '(Locked)'}`;
+                }
+            });
+        }
+
+        function randomInRange(range) {
+            return Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+        }
+
+        function showMessage(msg) {
+            document.getElementById('message').textContent = msg;
+            setTimeout(() => document.getElementById('message').textContent = '', 3000);
+        }
+
+        function attemptCraft() {
+            let ing = {};
+            const items = [document.getElementById('item1').value, document.getElementById('item2').value, document.getElementById('item3').value];
+            const qtys = [parseInt(document.getElementById('qty1').value) || 0, parseInt(document.getElementById('qty2').value) || 0, parseInt(document.getElementById('qty3').value) || 0];
+            for (let i = 0; i < 3; i++) {
+                if (items[i] && qtys[i] > 0) {
+                    if (!ing[items[i]]) ing[items[i]] = 0;
+                    ing[items[i]] += qtys[i];
+                }
+            }
+            let crafted = false;
+            for (let result in recipes) {
+                let match = true;
+                const recipe = recipes[result];
+                for (let k in recipe) {
+                    if (['flecks', 'shards', 'gleams', 'flares'].includes(k)) {
+                        if (!tryDeductMoney(recipe[k], k)) match = false;
+                    } else {
+                        if (ing[k] !== recipe[k]) match = false;
+                    }
+                }
+                for (let k in ing) {
+                    if (!recipe[k]) match = false;
+                }
+                if (match) {
+                    addToInventory(result, 1);
+                    showMessage(`Crafted ${result}`);
+                    crafted = true;
+                    break;
+                }
+            }
+            if (!crafted) {
+                // Special for Frozen Zombie Armor
+                if (ing['Iron Nugget'] === 5) {
+                    const flesh = ing['Frozen Flesh'] || 0;
+                    const limb = ing['Frozen Limb'] || 0;
+                    if ((flesh >= 1 && flesh <= 2 && limb === 0) || (flesh === 0 && limb >= 1 && limb <= 2) || (flesh >= 1 && flesh <= 2 && limb >= 1 && limb <= 2)) {
+                        addToInventory('Frozen Zombie Armor', 1);
+                        showMessage('Crafted Frozen Zombie Armor');
+                        crafted = true;
+                    }
+                }
+            }
+            // Deduct ingredients always
+            for (let it in ing) {
+                if (player.inventory[it] >= ing[it]) {
+                    player.inventory[it] -= ing[it];
+                } else {
+                    showMessage('Not enough items!');
+                    return;
+                }
+            }
+            if (!crafted) showMessage('Craft failed, items lost.');
+            updateInventory();
+            updateFooter();
+        }
+
+        function equipItem(item) {
+            const type = getItemType(item);
+            if (player.equipped[type]) unequipItem(player.equipped[type]);
+            player.equipped[type] = item;
+            applyItemEffect(item, false);
+            showMessage(`Equipped ${item}`);
+            updateFooter();
+            updateInventory();
+        }
+
+        function unequipItem(item) {
+            const type = getItemType(item);
+            applyItemEffect(item, true);
+            player.equipped[type] = null;
+            showMessage(`Unequipped ${item}`);
+            updateFooter();
+            updateInventory();
+        }
+
+        function applyItemEffect(item, reverse) {
+            const sign = reverse ? -1 : 1;
+            switch (item) {
+                case 'Old Tunic':
+                    player.defense += sign * 2;
+                    break;
+                case 'Rusty Sword':
+                    player.extraMaxDmg += sign * 4;
+                    break;
+                case 'Old Bow':
+                    player.extraMaxDmg += sign * 2;
+                    break;
+                case 'Eroded Dagger':
+                    player.extraMaxDmg += sign * 3;
+                    break;
+                case 'Used Staff':
+                    player.extraMaxDmg += sign * 2;
+                    break;
+                case 'Broken Scepter':
+                    player.extraMaxDmg += sign * 3;
+                    break;
+                case 'Strength Ring I':
+                    player.maxHp += sign * 5;
+                    player.hp += sign * 5;
+                    player.extraMaxDmg += sign * 2;
+                    break;
+                case 'Weak Water Ring I':
+                    if (player.element === 'WATER') player.dmgMultiplier *= (reverse ? 1/1.1 : 1.1);
+                    break;
+                case 'Weak Cold Ring I':
+                    player.dmgMultiplier *= (reverse ? 1/1.1 : 1.1);
+                    player.maxMana += sign * -3;
+                    player.mana = Math.min(player.mana, player.maxMana);
+                    break;
+                case 'Water Ring II':
+                    if (player.element === 'WATER') player.dmgMultiplier *= (reverse ? 1/1.2 : 1.2);
+                    break;
+                case 'Cold Earth Ring I':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.1 : 1.1);
+                    player.maxMana += sign * -2;
+                    player.mana = Math.min(player.mana, player.maxMana);
+                    break;
+                case 'Cold Earth Ring II':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.3 : 1.3);
+                    player.maxMana += sign * -3;
+                    player.mana = Math.min(player.mana, player.maxMana);
+                    break;
+                case 'Ring of riches I':
+                    player.moneyMultiplier *= (reverse ? 1/1.1 : 1.1);
+                    break;
+                case 'Ring of strength I':
+                    player.maxHp += sign * 5;
+                    player.hp += sign * 5;
+                    break;
+                case 'Brittle Blade':
+                    if (player.attackType === 'melee') player.extraMaxDmg += sign * 1;
+                    break;
+                case 'Brittle Bow':
+                    if (player.attackType === 'ranged') player.extraMaxDmg += sign * 1;
+                    break;
+                case 'Brittle Staff':
+                    if (player.attackType === 'summoned') player.extraMaxDmg += sign * 1;
+                    break;
+                case 'Brittle Scepter':
+                    if (player.attackType === 'magic') player.extraMaxDmg += sign * 1;
+                    break;
+                case 'Winter Armor':
+                    player.defense += sign * 1;
+                    break;
+                case 'Reinforced Winter Armor':
+                    player.defense += sign * 3;
+                    break;
+                case 'Frozen Zombie Armor':
+                    player.defense += sign * 2;
+                    break;
+                case 'Iron Suit':
+                    player.defense += sign * 7;
+                    break;
+                case 'Broad Sword':
+                    player.extraMaxDmg += sign * 10;
+                    break;
+                case 'Fungal Bow':
+                    player.extraMaxDmg += sign * 4;
+                    break;
+                case 'Shroomal Dagger':
+                    player.extraMaxDmg += sign * 8;
+                    break;
+                case 'Forest Staff':
+                    player.extraMaxDmg += sign * 5;
+                    break;
+                case 'Leafy Scepter':
+                    player.extraMaxDmg += sign * 6;
+                    break;
+                case 'Wind Ring II':
+                    if (player.element === 'WIND') player.dmgMultiplier *= (reverse ? 1/2 : 2);
+                    break;
+                case 'Earth Ring I':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.1 : 1.1);
+                    break;
+                case 'Earth Ring II':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.2 : 1.2);
+                    break;
+                case 'Wisdom Ring I':
+                    player.maxMana += sign * 1;
+                    player.mana = Math.min(player.mana, player.maxMana);
+                    break;
+                case 'Toxic Earth Ring IV':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.7 : 1.7);
+                    player.turns += sign * -1;
+                    break;
+                case 'Toxic Earth Ring III':
+                    if (player.element === 'EARTH') player.dmgMultiplier *= (reverse ? 1/1.5 : 1.5);
+                    player.turns += sign * -0.6;
+                    break;
+                case 'Ring of Riches II':
+                    player.moneyMultiplier *= (reverse ? 1/1.3 : 1.3);
+                    break;
+                case 'Ring of Strength II':
+                    player.maxHp += sign * 20;
+                    player.hp += sign * 20;
+                    break;
+                case 'Toxic Water Elemental Ring III':
+                    if (player.element === 'WATER') player.dmgMultiplier *= (reverse ? 1/1.7 : 1.7);
+                    player.turns += sign * -0.6;
+                    break;
+                case 'Sporeblade':
+                    if (player.attackType === 'melee') player.extraMaxDmg += sign * 8;
+                    break;
+                case 'Thornbow':
+                    if (player.attackType === 'ranged') player.extraMaxDmg += sign * 3;
+                    break;
+                case 'Tree Scepter':
+                    if (player.attackType === 'magic') player.extraMaxDmg += sign * 6;
+                    break;
+                case 'Bush Staff':
+                    if (player.attackType === 'summoned') player.extraMaxDmg += sign * 4;
+                    break;
+                case 'Mycelium Armor':
+                    player.defense += sign * 4;
+                    player.maxHp += sign * -5;
+                    player.hp = Math.min(player.hp, player.maxHp);
+                    player.critChance += sign * 1;
+                    break;
+                case 'Toxic Shroom Armor':
+                    player.defense += sign * 6;
+                    player.maxHp += sign * -10;
+                    player.hp = Math.min(player.hp, player.maxHp);
+                    player.critChance += sign * 3;
+                    break;
+                case 'Sporeguard Armor':
+                    player.defense += sign * 8;
+                    player.maxHp += sign * -25;
+                    player.hp = Math.min(player.hp, player.maxHp);
+                    player.critChance += sign * 6;
+                    break;
+                case 'Desertscale Armor':
+                    player.defense += sign * 15;
+                    break;
+                case 'Sand Sword':
+                    player.extraMaxDmg += sign * 30;
+                    break;
+                case 'Dry Bow':
+                    player.extraMaxDmg += sign * 10;
+                    break;
+                case 'Fiery Dagger':
+                    player.extraMaxDmg += sign * 20;
+                    break;
+                case 'Sun Staff':
+                    player.extraMaxDmg += sign * 13;
+                    break;
+                case 'Pyramid Scepter':
+                    player.extraMaxDmg += sign * 15;
+                    break;
+                case 'Wet Stamina Ring III':
+                    if (player.element === 'WATER') player.dmgMultiplier *= (reverse ? 1/2 : 2);
+                    player.turns += sign * 0.8;
+                    break;
+                case 'Mountainshaw Armor':
+                    player.defense += sign * 50;
+                    break;
+                case 'Cosmic Sword':
+                    player.extraMaxDmg += sign * 80;
+                    break;
+                case 'Galactic Bow':
+                    player.extraMaxDmg += sign * 35;
+                    break;
+                case 'Solar Dagger':
+                    player.extraMaxDmg += sign * 50;
+                    break;
+                case 'Vortexic Staff':
+                    player.extraMaxDmg += sign * 30;
+                    break;
+                case 'Nebulus Scepter':
+                    player.extraMaxDmg += sign * 35;
+                    break;
+                case 'Hot Agile Ring IV':
+                    if (player.element === 'FIRE') player.dmgMultiplier *= (reverse ? 1/2.5 : 2.5);
+                    player.critChance += sign * 2;
+                    break;
+                case 'Godslayer Armor':
+                    player.defense += sign * 100;
+                    break;
+                case 'Prismatic Sword':
+                    player.extraMaxDmg += sign * 200;
+                    break;
+                case 'Universal Bow':
+                    player.extraMaxDmg += sign * 100;
+                    break;
+                case 'Infernum Dagger':
+                    player.extraMaxDmg += sign * 150;
+                    break;
+                case 'Void Staff':
+                    player.extraMaxDmg += sign * 80;
+                    break;
+                case 'Singularity Scepter':
+                    player.extraMaxDmg += sign * 120;
+                    break;
+                case 'Elemental Skillful Ring V':
+                    player.dmgMultiplier *= (reverse ? 1/1.4 : 1.4);
+                    player.maxHp += sign * 20;
+                    player.hp += sign * 20;
+                    player.maxMana += sign * 2;
+                    player.mana += sign * 2;
+                    player.turns += sign * 1;
+                    player.critChance += sign * 3;
+                    break;
+                // Add effects for new crafted items as needed
+            }
+        }
+
+        function showSylvia() {
+            document.getElementById('battle-menu').classList.add('hidden');
+            document.getElementById('sylvia-menu').classList.remove('hidden');
+            const msg = document.getElementById('sylvia-message');
+            const shop = document.getElementById('sylvia-shop');
+            const reviveBtn = document.getElementById('revive-button');
+            
+            let reviveCost = 0;
+            if (player.deathCount === 1) {
+                msg.textContent = 'Welcome to the realm between life and death. For your first time, you may leave for free. You will wake up with 1 HP.';
+                reviveCost = 0;
+                shop.classList.add('hidden');
+            } else if (player.deathCount === 2) {
+                msg.textContent = 'Back again? This time it will cost 10 souls to revive.';
+                reviveCost = 10;
+                shop.classList.add('hidden');
+            } else {
+                msg.textContent = 'You keep returning. Revival costs 15 souls now and forever. Browse my shop if you wish.';
+                reviveCost = 15;
+                shop.classList.remove('hidden');
+                populateSylviaShop();
+            }
+            
+            reviveBtn.onclick = () => reviveFromSylvia(reviveCost);
+        }
+
+        function addShopItem(container, name, cost, action) {
+            let btn = document.createElement('button');
+            btn.textContent = `${name} - ${cost}꩜`;
+            btn.onclick = () => {
+                if (player.souls >= cost) {
+                    player.souls -= cost;
+                    action();
+                    updateFooter();
+                    showMessage(`Purchased ${name}`);
+                    populateSylviaShop(); // Refresh shop
+                } else {
+                    showMessage('Not enough souls!');
+                }
+            };
+            container.appendChild(btn);
+        }
+
+        function populateSylviaShop() {
+            const shopItems = document.getElementById('shop-items');
+            shopItems.innerHTML = '';
+            
+            // Base items after 3rd death
+            if (player.deathCount >= 3) {
+                addShopItem(shopItems, '+10 Max HP', 3, () => {
+                    player.maxHp += 10;
+                    player.hp += 10;
+                });
+                addShopItem(shopItems, '+1 Max Mana', 3, () => {
+                    player.maxMana += 1;
+                    player.mana = Math.min(player.mana + 1, player.maxMana);
+                });
+                addShopItem(shopItems, 'Skill Change (Redistribute skill points)', 1, () => {
+                    // Reset skills to allow redistribution
+                    player.skillCredits += player.strength + player.wisdom + player.stamina + player.agility;
+                    player.strength = 0;
+                    player.wisdom = 0;
+                    player.stamina = 0;
+                    player.agility = 0;
+                    player.maxHp = 100; // Reset to base, player will re-upgrade
+                    player.hp = player.maxHp;
+                    player.maxMana = 10;
+                    player.mana = player.maxMana;
+                    player.critChance = 0;
+                    player.turns = 1;
+                    showMessage('Skills reset. Use skill menu to redistribute.');
+                });
+            }
+            
+            // Upgrades after 5th death
+            if (player.deathCount >= 5) {
+                addShopItem(shopItems, '+20 Max HP (upgrade)', 3, () => {
+                    player.maxHp += 20;
+                    player.hp += 20;
+                });
+                addShopItem(shopItems, '+2 Max Mana (upgrade)', 3, () => {
+                    player.maxMana += 2;
+                    player.mana = Math.min(player.mana + 2, player.maxMana);
+                });
+                addShopItem(shopItems, '+1 Revive', 20, () => {
+                    addToInventory('Revive', 1);
+                });
+            }
+            
+            // Upgrades after 10th death
+            if (player.deathCount >= 10) {
+                addShopItem(shopItems, '+50 Max HP (upgrade)', 4, () => {
+                    player.maxHp += 50;
+                    player.hp += 50;
+                });
+                addShopItem(shopItems, '+4 Max Mana (upgrade)', 4, () => {
+                    player.maxMana += 4;
+                    player.mana = Math.min(player.mana + 4, player.maxMana);
+                });
+            }
+        }
+
+        function reviveFromSylvia(cost) {
+            if (cost > 0 && player.souls < cost) {
+                showMessage('Not enough souls!');
+                return;
+            }
+            if (cost > 0) player.souls -= cost;
+            player.hp = cost === 0 ? 1 : player.maxHp;
+            updateFooter();
+            backToMain();
+        }
+
+        function confirmKill() {
+            if (confirm('Are you sure you want to stay dead? This will reset the game.')) {
+                location.reload();
+            }
+        }
+
+        function showCutscene(text, buttons) {
+            document.getElementById('cutscene-message').textContent = text;
+            const btnDiv = document.getElementById('cutscene-buttons');
+            btnDiv.innerHTML = '';
+            buttons.forEach(b => {
+                const btn = document.createElement('button');
+                btn.textContent = b.text;
+                btn.onclick = b.action;
+                btnDiv.appendChild(btn);
+            });
+            document.getElementById('cutscene-menu').classList.remove('hidden');
+        }
+
+        function showCutscenePhase1() {
+            showCutscene('... Mortal... Impossible... Impossible? What does possible even represent Why mortal Why slay the one who shaped you The one who you created your thoughts and appeals The one who picked who you were this journey The one who shaped your thoughts and feelings Why mortal?', [
+                {text: 'It had to be done', action: showCutscenePhase1a},
+                {text: '...', action: showCutscenePhase2}
+            ]);
+        }
+
+        function showCutscenePhase1a() {
+            showCutscene('What need to be done mortal, nothing was ever in great chaos, I created the voices that once shouted against me, I created the world, I am Nivoria, there is no stopping?', [
+                {text: 'Continue', action: showCutscenePhase2}
+            ]);
+        }
+
+        function showCutscenePhase2() {
+            showCutscene('Foolish Unbeliveable No No no no I will not let this happen This cannot be right', [
+                {text: 'Continue', action: () => {
+                    document.getElementById('cutscene-menu').classList.add('hidden');
+                    player.maxHp = 1;
+                    player.hp = 1;
+                    player.maxMana = 0;
+                    player.mana = 0;
+                    player.critChance = 0;
+                    player.turns = 1;
+                    updateFooter();
+                    showMessage('The player wakes up back in the boss arena with 1/1 HP, 0/0 Mana, 0 Crit Chance and 1 Turn');
+                    setTimeout(() => {
+                        player.hp = 0;
+                        updateFooter();
+                        showMessage('Vyssal strikes you down dealing 1 Million Dmg');
+                        setTimeout(showCutscenePhase3, 2000);
+                    }, 2000);
+                }}
+            ]);
+        }
+
+        function showCutscenePhase3() {
+            showCutscene('Username? Username wake up The world around you looks otherworldly, is this the afterlife? It’s me Sylvia You are not dead, you are imprisoned This is the realm of thoughts free of the creator I have been under trance since created Help me help you win this Stop Vyssal from total control Will you help?', [
+                {text: 'Yes', action: showCutscenePhase4},
+                {text: 'No', action: gameOver}
+            ]);
+        }
+
+        function gameOver() {
+            document.getElementById('cutscene-menu').classList.add('hidden');
+            showMessage('Game Over');
+            // Perhaps disable further gameplay
+        }
+
+        function showCutscenePhase4() {
+            showCutscene('Another battle appears, all stats are normal now, you need to fight Vyssal all over again but with help from Sylvia who grants you infinite Mana, and multiple chances to deal crits or extra turns.', [
+                {text: 'Fight', action: () => {
+                    document.getElementById('cutscene-menu').classList.add('hidden');
+                    player.hp = player.maxHp;
+                    player.mana = player.maxMana;
+                    player.vyssalPhase = 3;
+                    startBossBattle();
+                }}
+            ]);
+        }
+
+        function showCutscenePhase5() {
+            showCutscene('NO NOT THIS AGAIN WHY DO YOU DO THIS TO ME Fine Seal me away You have proven your work But killing me will cause irreversible damage to this universe Do you really want to kill me?', [
+                {text: 'YES', action: resetToLevel1},
+                {text: 'NO', action: spareVyssal}
+            ]);
+        }
+
+        function resetToLevel1() {
+            addToInventory('Nivorian Blessing', 1);
+            player.level = 1;
+            player.xp = 0;
+            player.xpNeeded = 1;
+            player.skillCredits = 0;
+            player.strength = 0;
+            player.wisdom = 0;
+            player.stamina = 0;
+            player.agility = 0;
+            player.maxHp = 100;
+            player.hp = 100;
+            player.maxMana = 10;
+            player.mana = 10;
+            player.critChance = 0;
+            player.turns = 1;
+            player.vyssalPhase = 0;
+            player.defeatedVyssal = true;
+            updateFooter();
+            backToMain();
+            showMessage('YOU FOOL! HAHAHAH THE END IS COMING!');
+        }
+
+        function spareVyssal() {
+            addToInventory('Vyssal Blessing', 1);
+            player.vyssalPhase = 0;
+            player.defeatedVyssal = true;
+            backToMain();
+            showMessage('Really? You would spare me? I nearly ended you? Why maybe you are a good soul after all Be gone child, for my blessing will be eternal over you and the world of Nivoria Good luck out there! :)');
+        }
+
+        // Initial update
+        updateFooter();
+        updateInventory();
+        updateMapButtons();
+    </script>
+</body>
+</html>

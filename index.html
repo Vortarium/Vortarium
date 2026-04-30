@@ -96,22 +96,75 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Playtime Tracker */
+        /* ── Top bar (playtime + search) ── */
         header {
             position: fixed;
             top: 0;
+            left: 0;
             right: 0;
-            padding: 20px;
+            padding: 14px 24px;
             z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
         }
         .playtime {
-            background: rgba(0,0,0,0.6);
-            padding: 12px 24px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
             border-radius: 25px;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
             backdrop-filter: blur(8px);
             border: 1px solid rgba(255,255,255,0.2);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* Search bar */
+        #search-wrap {
+            flex: 1;
+            max-width: 420px;
+            position: relative;
+        }
+        #search-wrap svg {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.45;
+            pointer-events: none;
+        }
+        #game-search {
+            width: 100%;
+            padding: 10px 16px 10px 42px;
+            border-radius: 25px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            font-family: 'Quicksand', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            outline: none;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.2s, background 0.2s;
+        }
+        #game-search::placeholder { color: rgba(255,255,255,0.35); }
+        #game-search:focus {
+            border-color: rgba(255,255,255,0.5);
+            background: rgba(0,0,0,0.65);
+        }
+
+        /* "No results" message */
+        #no-results {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.5);
         }
 
         /* Main Branding */
@@ -219,6 +272,13 @@
 
     <header>
         <div class="playtime">Playtime: <span id="playtime-display">0m 0s</span></div>
+        <div id="search-wrap">
+            <!-- magnifier icon -->
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+            </svg>
+            <input id="game-search" type="text" placeholder="Search games…" autocomplete="off" spellcheck="false">
+        </div>
     </header>
 
     <div class="hero">
@@ -231,6 +291,7 @@
 
     <div class="container">
         <div class="game-grid" id="game-grid"></div>
+        <div id="no-results">No games match "<span id="no-results-term"></span>"</div>
     </div>
 
     <button id="mute-btn" onclick="toggleMute()">🔊 Mute Music</button>
@@ -263,17 +324,35 @@
 
         // ── Game list ─────────────────────────────────────────────────────────
         const games = [
-            { prefix: 'backrooms',       name: 'Backrooms',       img: 'backrooms.png' },
-            { prefix: 'ragebait',        name: 'Ragebait',        img: 'ragebait.png' },
-            { prefix: 'ragebait 2',      name: 'Ragebait 2',      img: 'ragebait-2.png' },
-            { prefix: 'ragebait 3',      name: 'Ragebait 3',      img: 'ragebait-3.png' },
-            { prefix: 'mindscape',       name: 'Mindscape',       img: 'mindscape.png' },
-            { prefix: 'trivio',          name: 'Trivio',          img: 'trivio.png' },
-            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png' },
-            { prefix: 'home',            name: 'Home',            img: 'home.png' },
-            { prefix: 'void run',        name: 'Void Run',        img: 'void-run.png' },
-            { prefix: 'the eye',         name: 'The Eye',         img: 'the-eye.png' },
-            { prefix: 'mini pet',        name: 'Mini Pet',        img: 'mini-pet.png' }
+            // ── Games (each loads its own _index.html in the fullscreen overlay) ──
+            { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png'        },
+            { prefix: 'ragebait',        name: 'Ragebait',         img: 'ragebait.png'         },
+            { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png'       },
+            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait-3.png'       },
+            { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png'        },
+            { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png'           },
+            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png'  },
+            { prefix: 'home',            name: 'Home',             img: 'home.png'             },
+            { prefix: 'void run',        name: 'Void Run',         img: 'void-run.png'         },
+            { prefix: 'the eye',         name: 'The Eye',          img: 'the-eye.png'          },
+            { prefix: 'mini pet',        name: 'Mini Pet',         img: 'mini-pet.png'         },
+            { prefix: 'fishtopia',       name: 'Fishtopia',        img: 'fishtopia.png'        },
+            { prefix: 'steringos',       name: 'SterlingOS',       img: 'steringos.png'        },
+            { prefix: 'vortalk',         name: 'Vortalk',          img: 'vortalk.png'          },
+            { prefix: 'vplace',          name: 'V-Place',          img: 'vplace.png'           },
+            { prefix: 'nivorian empire', name: 'Nivorian Empire',  img: 'nivorian-empire.png'  },
+            { prefix: 'pixel mice sim',  name: 'Pixel Mice Sim',   img: 'pixel-mice-sim.png'   },
+            { prefix: 'vortarius',       name: 'Vortarius',        img: 'vortarius.png'        },
+            { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png'        },
+            { prefix: 'level up',        name: 'Level Up',         img: 'level-up.png'         },
+            { prefix: 'beat',            name: 'Beat',             img: 'beat.png'             },
+            { prefix: 'byte clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png'     },
+            { prefix: 'canvas',          name: 'Canvas',           img: 'canvas.png'           },
+            { prefix: 'black hole',      name: 'Black Hole',       img: 'black-hole.png'       },
+            // ── TO ADD A NEW GAME: copy a line above and fill in the three fields ──
+            // prefix → filename prefix  (e.g. 'mygame' loads 'mygame_index.html')
+            // name   → display name on the card
+            // img    → thumbnail filename in the root folder
         ];
 
         const grid = document.getElementById('game-grid');
@@ -282,7 +361,7 @@
             card.className = 'game-card';
             card.onclick = () => launchGame(game.prefix);
             card.innerHTML = `
-                <img src="${game.img}" class="game-thumb" alt="${game.name}">
+                <img src="${game.img}" class="game-thumb" alt="${game.name}" onerror="this.style.background='rgba(255,255,255,0.05)'">
                 <div class="game-title">${game.name}</div>
             `;
             grid.appendChild(card);
@@ -294,12 +373,8 @@
         const music   = document.getElementById('cafe-music');
         const muteBtn = document.getElementById('mute-btn');
 
-        // Start music on first click (only when hub is visible)
-        document.body.addEventListener('click', () => {
-            if (overlay.style.display !== 'block' && !music.muted) {
-                music.play().catch(() => {});
-            }
-        }, { once: true });
+        // Music only starts when returning to the hub (via closeGame → fadeIn).
+        // It never autoplays on initial page load.
 
         function toggleMute() {
             music.muted = !music.muted;
@@ -385,6 +460,8 @@
         function launchGame(prefix) {
             // Fade out cafe music over 600ms while curtain closes
             fadeOut(music, 600);
+            // Hide page scrollbar while inside a game
+            setScrollbarVisible(false);
 
             runCurtain(() => {
                 // Midpoint: swap content while screen is hidden
@@ -402,9 +479,40 @@
                 overlay.style.display = 'none';
                 iframe.src = '';
             }, 1400).then(() => {
-                // Curtain open — fade cafe music back in
+                // Curtain open — restore scrollbar and fade cafe music back in
+                setScrollbarVisible(true);
                 if (!music.muted) fadeIn(music, 800);
             });
+        }
+        // ── Search filtering ──────────────────────────────────────────────────
+        const searchInput   = document.getElementById('game-search');
+        const noResults     = document.getElementById('no-results');
+        const noResultsTerm = document.getElementById('no-results-term');
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            const cards = grid.querySelectorAll('.game-card');
+            let visible = 0;
+
+            cards.forEach(card => {
+                const title = card.querySelector('.game-title').textContent.toLowerCase();
+                const match = !query || title.includes(query);
+                card.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+
+            if (visible === 0 && query) {
+                noResultsTerm.textContent = searchInput.value.trim();
+                noResults.style.display = 'block';
+            } else {
+                noResults.style.display = 'none';
+            }
+        });
+
+        // ── Hide scrollbar while inside a game ───────────────────────────────
+        function setScrollbarVisible(visible) {
+            document.documentElement.style.overflow = visible ? '' : 'hidden';
+            document.body.style.overflow            = visible ? '' : 'hidden';
         }
     </script>
 </body>

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>World Pixel Painter — Minimal HUD</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body,html {margin:0;height:100%;background:#f0f0f0;color:#000;font-family:sans-serif;}
+  #map {width:100%;height:100%;}
+  /* Bottom toolbar */
+  #toolbar{
+    position:absolute;bottom:0;left:0;right:0;z-index:1000;
+    background:rgba(255,255,255,0.85);backdrop-filter:blur(6px);
+    display:flex;align-items:center;gap:8px;
+    padding:6px 8px;border-top:1px solid rgba(0,0,0,0.1);
+    overflow-x:auto;overflow-y:hidden;
+  }
+  .chip{
+    font-size:12px;background:rgba(0,0,0,0.08);
+    padding:4px 8px;border-radius:6px;white-space:nowrap;
+  }
+  #palette{
+    display:flex;gap:6px;align-items:center;
+  }
+  .swatch{
+    width:20px;height:20px;border-radius:4px;border:1px solid #ccc;
+    cursor:pointer;flex-shrink:0;
+  }
+  .selected{outline:2px solid #0000ff;}
+  button.toolbtn{
+    background:rgba(0,0,0,0.1);
+    border:none;color:#000;font-size:14px;
+    padding:4px 8px;border-radius:6px;cursor:pointer;
+  }
+  button.active{background:#4caf50;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="toolbar">
+  <span class="chip">Lvl <span id="level">1</span></span>
+  <span class="chip">Px <span id="pixels">100</span>/<span id="maxPixels">100</span></span>
+  <span class="chip">+1 in <span id="regenTimer">15s</span></span>
+  <span class="chip">Next <span id="placedThisLevel">0</span>/<span id="requiredNext">10</span></span>
+  <button id="eraserBtn" class="toolbtn">🧽</button>
+  <button id="lockBtn" class="toolbtn">🔒</button>
+  <div id="palette"></div>
+</div>
+
+<script>
+(function(){
+  const PIXEL_SIZE = 20;
+  const MIN_ZOOM_TO_PLACE = 14;
+  const REGEN_INTERVAL_SEC = 10;
+  const REQUIRED_MULTIPLIER = 1.1;
+  const LEVEL_MAX_INCREMENT = 10;
+
+  const PALETTE = [
+"#000000", "#330000", "#660000", "#990000", "#CC0000",
+"#FF0000", "#754e14", "#FF6633", "#E07B5F", "#C68642",
+"#D2A679", "#FFDAB3", "#ffe6b3", "#FFCC00", "#FFFF00",
+"#CCFF33", "#99FF33", "#66FF33",
+"#00FF66", "#00FF99", "#00FFCC", "#00FFFF", "#00CCFF",
+"#0099FF", "#0066FF", "#0033FF", "#0000FF", "#3300FF",
+"#6600FF", "#9933FF", "#CC00FF", "#FF00FF", "#FF33CC",
+"#FF3399", "#FF3366", "#FF6699", "#FF99CC", "#FFB6C1",
+"#FFD9E6", "#E6E6E6", "#CCCCCC", "#999999", "#666666",
+"#333333", "#111111", "#222222", "#444444", "#FFFFFF"
+
+  ];
+
+  let state = {
+    level:1,
+    pixels:100,
+    maxPixels:100,
+    placedThisLevel:0,
+    requiredNext:10,
+    lastRegen:Date.now(),
+    selectedColor:PALETTE[3],
+    grid:{},
+    eraseMode:false,
+    lockDrag:false
+  };
+
+  // Map setup
+  const map = L.map('map',{preferCanvas:true}).setView([20,0],3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+  const pixelsLayer = L.layerGroup().addTo(map);
+
+  function snapCell(latlng){
+    const proj = map.options.crs.project(L.latLng(latlng));
+    const x = Math.floor(proj.x/PIXEL_SIZE)*PIXEL_SIZE;
+    const y = Math.floor(proj.y/PIXEL_SIZE)*PIXEL_SIZE;
+    return {x,y};
+  }
+  function rectFromCell(x,y,color){
+    const p1 = L.point(x,y), p2 = L.point(x+PIXEL_SIZE,y+PIXEL_SIZE);
+    const ll1 = map.options.crs.unproject(p1), ll2 = map.options.crs.unproject(p2);
+    return L.rectangle([ll1,ll2],{color,fillColor:color,fillOpacity:1,weight:1,interactive:false});
+  }
+  function rebuild(){
+    pixelsLayer.clearLayers();
+    for(const key in state.grid){
+      const color = state.grid[key];
+      const [x,y] = key.split("_").map(Number);
+      rectFromCell(x,y,color).addTo(pixelsLayer);
+    }
+  }
+
+  // UI
+  const elLevel=document.getElementById("level");
+  const elPixels=document.getElementById("pixels");
+  const elMax=document.getElementById("maxPixels");
+  const elPlaced=document.getElementById("placedThisLevel");
+  const elReq=document.getElementById("requiredNext");
+  const elRegen=document.getElementById("regenTimer");
+  const elPalette=document.getElementById("palette");
+  const eraserBtn=document.getElementById("eraserBtn");
+  const lockBtn=document.getElementById("lockBtn");
+
+  function updateUI(){
+    elLevel.textContent=state.level;
+    elPixels.textContent=state.pixels;
+    elMax.textContent=state.maxPixels;
+    elPlaced.textContent=state.placedThisLevel;
+    elReq.textContent=state.requiredNext;
+    eraserBtn.classList.toggle("active",state.eraseMode);
+    lockBtn.classList.toggle("active",state.lockDrag);
+  }
+
+  PALETTE.forEach(col=>{
+    const b=document.createElement("div");
+    b.className="swatch"; b.style.background=col;
+    if(col===state.selectedColor) b.classList.add("selected");
+    b.onclick=()=>{
+      state.selectedColor=col;
+      [...elPalette.children].forEach(c=>c.classList.remove("selected"));
+      b.classList.add("selected");
+    };
+    elPalette.appendChild(b);
+  });
+
+  function placeOrErase(latlng){
+    if(map.getZoom()<MIN_ZOOM_TO_PLACE) return;
+    if(state.pixels<=0) return;
+    const cell=snapCell(latlng);
+    const key=`${cell.x}_${cell.y}`;
+    if(state.eraseMode){
+      if(state.grid[key]){
+        delete state.grid[key];
+        state.pixels--;
+        state.placedThisLevel++;
+        checkLevelUp();
+        rebuild();
+      }
+    }else{
+      if(!state.grid[key]){
+        state.grid[key]=state.selectedColor;
+        rectFromCell(cell.x,cell.y,state.selectedColor).addTo(pixelsLayer);
+        state.pixels--;
+        state.placedThisLevel++;
+        checkLevelUp();
+      }
+    }
+    updateUI();
+  }
+
+  function checkLevelUp(){
+    if(state.placedThisLevel>=state.requiredNext){
+      state.level++;
+      state.maxPixels+=LEVEL_MAX_INCREMENT;
+      state.requiredNext=Math.floor(state.requiredNext*REQUIRED_MULTIPLIER);
+      state.placedThisLevel=0;
+    }
+  }
+
+  // Regen loop
+  setInterval(()=>{
+    const now=Date.now();
+    const elapsed=Math.floor((now-state.lastRegen)/1000);
+    const remain=REGEN_INTERVAL_SEC-(elapsed%REGEN_INTERVAL_SEC);
+    elRegen.textContent=remain+"s";
+    if(elapsed>=REGEN_INTERVAL_SEC){
+      state.lastRegen=now;
+      if(state.pixels<state.maxPixels){
+        state.pixels++;
+        updateUI();
+      }
+    }
+  },1000);
+
+  // Events
+  let dragging=false;
+  map.on("click",e=>{
+    if(!state.lockDrag) placeOrErase(e.latlng);
+  });
+  map.on("mousedown",()=>{ if(state.lockDrag) dragging=true; });
+  map.on("mouseup",()=>{ dragging=false; });
+  map.on("mousemove",e=>{ if(dragging||state.lockDrag) placeOrErase(e.latlng); });
+
+  document.addEventListener("keydown",e=>{
+    if(e.code==="KeyE"){state.eraseMode=!state.eraseMode;updateUI();}
+    if(e.code==="Space"){state.lockDrag=!state.lockDrag;updateUI(); e.preventDefault();}
+  });
+  eraserBtn.onclick=()=>{state.eraseMode=!state.eraseMode;updateUI();}
+  lockBtn.onclick=()=>{state.lockDrag=!state.lockDrag;updateUI();}
+
+  updateUI();
+})();
+</script>
+</body>
+</html>

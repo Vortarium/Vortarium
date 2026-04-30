@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLAY2GAME</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100vh;
+            padding: 20px;
+            position: relative;
+        }
+
+        #main-menu {
+            display: flex;
+        }
+
+        #gamehub {
+            font-size: clamp(3rem, 8vw, 10rem);
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient-shift 3s ease-in-out infinite;
+            margin-bottom: 40px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .game-btn {
+            width: 200px;
+            height: 200px;
+            border: none;
+            border-radius: 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .game-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+        }
+
+        .red-btn {
+            background: linear-gradient(45deg, #ff4757, #ff6b6b);
+        }
+
+        .yellow-btn {
+            background: linear-gradient(45deg, #ffa502, #ffeb3b);
+        }
+
+        .green-btn {
+            background: linear-gradient(45deg, #2ed573, #51cf66);
+        }
+
+        .blue-btn {
+            background: linear-gradient(45deg, #3742fa, #5f27cd);
+        }
+
+        .game-screen {
+            justify-content: space-between;
+            text-align: center;
+        }
+
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 2.5em;
+            background: rgba(0,0,0,0.3);
+            border: none;
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .back-btn:hover {
+            background: rgba(0,0,0,0.5);
+            transform: scale(1.1);
+        }
+
+        .game-title {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .bar-container {
+            position: relative;
+            width: 90vw;
+            max-width: 800px;
+            height: 200px;
+            background: #333;
+            border-radius: 100px;
+            border: 8px solid #555;
+            margin: 0 auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        #red-bar {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(to right, #ff6b6b, #ee5a52);
+            border-radius: 92px 0 0 92px;
+            transition: width 0.15s ease-out;
+        }
+
+        #black-bar {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            background: linear-gradient(to left, #2c2c54, #1a1a2e);
+            border-radius: 0 92px 92px 0;
+            transition: width 0.15s ease-out;
+        }
+
+        #score {
+            position: absolute;
+            left: 50%;
+            top: -30px;
+            transform: translateX(-50%);
+            font-size: clamp(3rem, 6vw, 6rem);
+            color: #fff;
+            text-shadow: 3px 3px 6px #000;
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        .timer {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(5rem, 12vw, 12rem);
+            color: #fff;
+            text-shadow: 4px 4px 8px #000;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .timer.show {
+            opacity: 1;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+        }
+
+        .countdown {
+            animation: pulse 0.6s infinite;
+        }
+
+        .message {
+            font-size: clamp(3rem, 8vw, 8rem);
+            opacity: 0;
+            transition: opacity 0.5s;
+            text-shadow: 3px 3px 6px #000;
+            font-weight: bold;
+        }
+
+        .message.show {
+            opacity: 1;
+        }
+
+        .players-info {
+            display: flex;
+            justify-content: space-between;
+            width: 90vw;
+            max-width: 800px;
+            margin-top: 20px;
+            font-size: 1.4em;
+        }
+
+        .player-red {
+            color: #ff6b6b;
+            text-align: left;
+        }
+
+        .player-black {
+            color: #2c2c54;
+            text-align: right;
+        }
+
+        .keys {
+            font-size: 0.8em;
+            opacity: 0.9;
+            font-family: monospace;
+        }
+
+        .coming-soon {
+            font-size: clamp(2rem, 5vw, 5rem);
+            opacity: 0.8;
+        }
+
+        /* Yellow Game Styles */
+        #yellow-game {
+            flex-direction: row;
+            justify-content: center;
+            align-items: stretch;
+        }
+
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: calc(100vh - 100px);
+            max-width: 1200px;
+        }
+
+        .player-area {
+            width: 50%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .yellow-bg {
+            background: linear-gradient(to bottom, #ffd700, #ffcc00);
+            color: #333;
+        }
+
+        .black-bg {
+            background: linear-gradient(to bottom, #333, #111);
+            color: #fff;
+        }
+
+        .player-info {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            z-index: 5;
+        }
+
+        .goal {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+        }
+
+        .goal-shape {
+            transform: scale(0.8);
+            position: relative !important;
+            left: 0 !important;
+            top: 0 !important;
+        }
+
+        .shape-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .shape {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: var(--shape-color);
+        }
+
+        .circle {
+            border-radius: 50%;
+        }
+
+        .square {}
+
+        .triangle {
+            background: none;
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-bottom: 50px solid var(--shape-color);
+        }
+
+        .star {
+            background: none;
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-bottom: 50px solid var(--shape-color);
+            position: relative;
+        }
+
+        .star::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 50px solid var(--shape-color);
+            top: 15px;
+            left: -25px;
+        }
+
+        .points {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        /* Green Game Styles */
+        #green-game {
+            flex-direction: row;
+            justify-content: center;
+            align-items: stretch;
+        }
+
+        .green-bg {
+            background: linear-gradient(to bottom, #2ed573, #51cf66);
+            color: #333;
+        }
+
+        .choice {
+            font-size: clamp(5rem, 10vw, 10rem);
+            margin-top: 50px;
+        }
+
+        .status {
+            font-size: 1.5em;
+            margin-top: 20px;
+        }
+
+        .instructions {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 800px;
+            margin-top: 20px;
+            font-size: 1.2em;
+            gap: 20px;
+        }
+
+        .instructions span {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        /* Blue Game Styles */
+        #blue-game {
+            background: #000;
+        }
+
+        #blue-canvas {
+            background: #87ceeb;
+            border: 2px solid #fff;
+        }
+
+        #blue-timer {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2em;
+            color: #000;
+        }
+
+        .player-blue {
+            color: #3742fa;
+            text-align: left;
+        }
+
+        .player-black {
+            color: #2c2c54;
+            text-align: right;
+        }
+
+        #tagger-info {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5em;
+            color: #000;
+        }
+
+        .game-description {
+            font-size: 1em;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-menu" class="screen">
+        <h1 id="gamehub">PLAY2GAME</h1>
+        <div class="games-grid">
+            <button class="game-btn red-btn" onclick="showScreen('red-game')">RED<br>TUG OF WAR</button>
+            <button class="game-btn yellow-btn" onclick="showScreen('yellow-game')">YELLOW<br>SHAPE REACTION</button>
+            <button class="game-btn green-btn" onclick="showScreen('green-game')">GREEN<br>ROCK PAPER SCISSORS</button>
+            <button class="game-btn blue-btn" onclick="showScreen('blue-game')">BLUE<br>TAG</button>
+        </div>
+    </div>
+
+    <div id="red-game" class="screen game-screen">
+        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
+        <h2 class="game-title">RED TUG OF WAR</h2>
+        <div class="bar-container">
+            <div id="red-bar"></div>
+            <div id="black-bar"></div>
+            <div id="score">0</div>
+            <div id="red-timer" class="timer"></div>
+        </div>
+        <div id="red-message" class="message"></div>
+        <div class="players-info">
+            <div class="player-red">
+                RED PLAYER<br>
+                <div class="keys">qwertasdfgzxcv</div>
+            </div>
+            <div class="player-black">
+                BLACK PLAYER<br>
+                <div class="keys">yuiophjklbnm</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="yellow-game" class="screen game-screen">
+        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
+        <h2 class="game-title">YELLOW SHAPE REACTION</h2>
+        <div class="split-container">
+            <div id="yellow-area" class="player-area yellow-bg">
+                <div class="player-info">
+                    <div>YELLOW PLAYER</div>
+                    <div class="goal">Goal: <div id="yellow-goal-shape" class="goal-shape shape"></div><span id="yellow-goal-text"></span></div>
+                    <div class="points">Points: <span id="yellow-points">0</span></div>
+                    <div class="keys">qwertasdfgzxcv</div>
+                </div>
+                <div id="yellow-shapes" class="shape-container"></div>
+            </div>
+            <div id="black-area" class="player-area black-bg">
+                <div class="player-info">
+                    <div>BLACK PLAYER</div>
+                    <div class="goal">Goal: <div id="black-goal-shape" class="goal-shape shape"></div><span id="black-goal-text"></span></div>
+                    <div class="points">Points: <span id="black-points">0</span></div>
+                    <div class="keys">yuiophjklbnm</div>
+                </div>
+                <div id="black-shapes" class="shape-container"></div>
+            </div>
+        </div>
+        <div id="yellow-timer" class="timer"></div>
+        <div id="yellow-message" class="message"></div>
+    </div>
+
+    <div id="green-game" class="screen game-screen">
+        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
+        <h2 class="game-title">GREEN ROCK PAPER SCISSORS</h2>
+        <div class="split-container">
+            <div id="green-area" class="player-area green-bg">
+                <div class="player-info">
+                    <div>GREEN PLAYER</div>
+                    <div class="points">Points: <span id="green-points">0</span></div>
+                    <div class="keys">a s d</div>
+                </div>
+                <div id="green-choice" class="choice"></div>
+                <div id="green-status" class="status">Waiting...</div>
+            </div>
+            <div id="black-area" class="player-area black-bg">
+                <div class="player-info">
+                    <div>BLACK PLAYER</div>
+                    <div class="points">Points: <span id="green-black-points">0</span></div>
+                    <div class="keys">j k l</div>
+                </div>
+                <div id="black-choice" class="choice"></div>
+                <div id="black-status" class="status">Waiting...</div>
+            </div>
+        </div>
+        <div id="green-timer" class="timer"></div>
+        <div id="green-message" class="message"></div>
+        <div class="instructions">
+            <span>ROCK ✊ (Green: A, Black: J)</span>
+            <span>PAPER ✋ (Green: S, Black: K)</span>
+            <span>SCISSORS ✌️ (Green: D, Black: L)</span>
+        </div>
+    </div>
+
+    <div id="blue-game" class="screen game-screen">
+        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
+        <h2 class="game-title">BLUE TAG</h2>
+        <canvas id="blue-canvas" width="800" height="600"></canvas>
+        <div id="blue-timer" class="timer"></div>
+        <div id="tagger-info"></div>
+        <div id="blue-message" class="message"></div>
+        <div class="players-info">
+            <div class="player-blue">
+                BLUE PLAYER<br>
+                <div class="keys">WASD</div>
+            </div>
+            <div class="player-black">
+                BLACK PLAYER<br>
+                <div class="keys">IJKL</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentScreen = 'main-menu';
+
+        const redKeys = ['q','w','e','r','t','a','s','d','f','g','z','x','c','v'];
+        const blackKeys = ['y','u','i','o','p','h','j','k','l','b','n','m'];
+
+        // Red Game
+        let redState = 'waiting';
+        let redScore = 0;
+        let redPosition = 50;
+        const redBar = document.getElementById('red-bar');
+        const blackBar = document.getElementById('black-bar');
+        const redScoreEl = document.getElementById('score');
+        const redTimerEl = document.getElementById('red-timer');
+        const redMessageEl = document.getElementById('red-message');
+
+        function resetRedGame() {
+            redState = 'waiting';
+            redScore = 0;
+            redPosition = 50;
+            updateRedBar();
+            redTimerEl.classList.remove('show', 'countdown');
+            redMessageEl.classList.remove('show');
+        }
+
+        function updateRedBar() {
+            redPosition = Math.max(0, Math.min(100, 50 + redScore));
+            redBar.style.width = redPosition + '%';
+            blackBar.style.width = (100 - redPosition) + '%';
+            redScoreEl.textContent = redScore;
+        }
+
+        function startRedCountdown() {
+            redState = 'counting';
+            redTimerEl.classList.add('show', 'countdown');
+            let timeLeft = 3;
+            redTimerEl.textContent = '3';
+            const countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    redTimerEl.textContent = timeLeft;
+                } else {
+                    redTimerEl.textContent = 'GO!';
+                    clearInterval(countdownInterval);
+                    setTimeout(() => {
+                        redTimerEl.classList.remove('countdown');
+                        setTimeout(() => {
+                            redTimerEl.classList.remove('show');
+                            redState = 'playing';
+                        }, 300);
+                    }, 200);
+                }
+            }, 1000);
+        }
+
+        function showRedWin(winner) {
+            const color = winner.includes('RED') ? '#ff6b6b' : '#2c2c54';
+            redMessageEl.textContent = winner;
+            redMessageEl.style.color = color;
+            redMessageEl.classList.add('show');
+            setTimeout(() => {
+                showScreen('main-menu');
+            }, 3000);
+        }
+
+        // Yellow Game
+        let yellowState = 'waiting';
+        let yellowGameActive = false;
+        let yellowPoints = 0;
+        let blackPoints = 0;
+        let yellowPositives = [];
+        let blackPositives = [];
+        let yellowLastPress = 0;
+        let blackLastPress = 0;
+        let yellowGoal = {};
+        let blackGoal = {};
+        const colorList = ['red', 'green', 'blue', 'purple'];
+        const shapeList = ['circle', 'triangle', 'square', 'star'];
+        const colorValues = {
+            red: '#ff0000',
+            green: '#00ff00',
+            blue: '#0000ff',
+            purple: '#800080'
+        };
+
+        const yellowPointsEl = document.getElementById('yellow-points');
+        const blackPointsEl = document.getElementById('black-points');
+        const yellowTimerEl = document.getElementById('yellow-timer');
+        const yellowMessageEl = document.getElementById('yellow-message');
+        const yellowShapesContainer = document.getElementById('yellow-shapes');
+        const blackShapesContainer = document.getElementById('black-shapes');
+
+        let yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
+        let blackNextCountdown = Math.floor(Math.random() * 5) + 2;
+
+        function resetYellowGame() {
+            yellowState = 'waiting';
+            yellowGameActive = true;
+            yellowPoints = 0;
+            blackPoints = 0;
+            yellowPositives = [];
+            blackPositives = [];
+            yellowLastPress = 0;
+            blackLastPress = 0;
+            yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
+            blackNextCountdown = Math.floor(Math.random() * 5) + 2;
+            yellowMessageEl.classList.remove('show');
+            yellowMessageEl.textContent = '';
+            yellowTimerEl.classList.remove('show', 'countdown');
+            updateYellowPoints();
+
+            // Random goals
+            yellowGoal.color = colorList[Math.floor(Math.random() * colorList.length)];
+            yellowGoal.shape = shapeList[Math.floor(Math.random() * shapeList.length)];
+            blackGoal.color = colorList[Math.floor(Math.random() * colorList.length)];
+            blackGoal.shape = shapeList[Math.floor(Math.random() * shapeList.length)];
+
+            // Display goals
+            const yellowGoalShape = document.getElementById('yellow-goal-shape');
+            const yellowGoalText = document.getElementById('yellow-goal-text');
+            yellowGoalShape.className = 'goal-shape shape ' + yellowGoal.shape;
+            yellowGoalShape.style.setProperty('--shape-color', colorValues[yellowGoal.color]);
+            yellowGoalText.textContent = `${yellowGoal.color.charAt(0).toUpperCase() + yellowGoal.color.slice(1)} ${yellowGoal.shape.charAt(0).toUpperCase() + yellowGoal.shape.slice(1)}`;
+
+            const blackGoalShape = document.getElementById('black-goal-shape');
+            const blackGoalText = document.getElementById('black-goal-text');
+            blackGoalShape.className = 'goal-shape shape ' + blackGoal.shape;
+            blackGoalShape.style.setProperty('--shape-color', colorValues[blackGoal.color]);
+            blackGoalText.textContent = `${blackGoal.color.charAt(0).toUpperCase() + blackGoal.color.slice(1)} ${blackGoal.shape.charAt(0).toUpperCase() + blackGoal.shape.slice(1)}`;
+        }
+
+        function getDifficulty(points) {
+            let numShapes = 1 + Math.max(0, Math.floor(points / 3));
+            let duration = 500 - (points * 40);
+            if (points < 0) {
+                numShapes = 1;
+                duration = 500 + Math.min(400, Math.abs(points) * 40);
+            }
+            duration = Math.max(100, duration);
+            return { num: numShapes, dur: duration };
+        }
+
+        function flashYellow() {
+            if (!yellowGameActive || yellowState !== 'playing') return;
+            const { num, dur } = getDifficulty(yellowPoints);
+            const rect = yellowShapesContainer.getBoundingClientRect();
+            yellowShapesContainer.innerHTML = '';
+            yellowNextCountdown--;
+            let forceHasGoal = yellowNextCountdown <= 0;
+            if (forceHasGoal) {
+                yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
+            }
+            let includedGoal = forceHasGoal;
+            for (let i = 0; i < num; i++) {
+                let color, shape;
+                if (forceHasGoal && i === 0) {
+                    color = yellowGoal.color;
+                    shape = yellowGoal.shape;
+                    forceHasGoal = false;
+                } else {
+                    do {
+                        color = colorList[Math.floor(Math.random() * colorList.length)];
+                        shape = shapeList[Math.floor(Math.random() * shapeList.length)];
+                    } while (color === yellowGoal.color && shape === yellowGoal.shape);
+                }
+                const div = document.createElement('div');
+                div.classList.add('shape', shape);
+                div.style.setProperty('--shape-color', colorValues[color]);
+                div.style.left = `${Math.random() * (rect.width - 60) + 30}px`;
+                div.style.top = `${Math.random() * (rect.height - 60) + 30}px`;
+                yellowShapesContainer.appendChild(div);
+            }
+            const start = Date.now();
+            if (includedGoal) {
+                yellowPositives.push(start);
+            }
+            setTimeout(() => {
+                yellowShapesContainer.innerHTML = '';
+            }, dur);
+            const pause = Math.random() * 1500 + 500;
+            setTimeout(flashYellow, dur + pause);
+        }
+
+        function flashBlack() {
+            if (!yellowGameActive || yellowState !== 'playing') return;
+            const { num, dur } = getDifficulty(blackPoints);
+            const rect = blackShapesContainer.getBoundingClientRect();
+            blackShapesContainer.innerHTML = '';
+            blackNextCountdown--;
+            let forceHasGoal = blackNextCountdown <= 0;
+            if (forceHasGoal) {
+                blackNextCountdown = Math.floor(Math.random() * 5) + 2;
+            }
+            let includedGoal = forceHasGoal;
+            for (let i = 0; i < num; i++) {
+                let color, shape;
+                if (forceHasGoal && i === 0) {
+                    color = blackGoal.color;
+                    shape = blackGoal.shape;
+                    forceHasGoal = false;
+                } else {
+                    do {
+                        color = colorList[Math.floor(Math.random() * colorList.length)];
+                        shape = shapeList[Math.floor(Math.random() * shapeList.length)];
+                    } while (color === blackGoal.color && shape === blackGoal.shape);
+                }
+                const div = document.createElement('div');
+                div.classList.add('shape', shape);
+                div.style.setProperty('--shape-color', colorValues[color]);
+                div.style.left = `${Math.random() * (rect.width - 60) + 30}px`;
+                div.style.top = `${Math.random() * (rect.height - 60) + 30}px`;
+                blackShapesContainer.appendChild(div);
+            }
+            const start = Date.now();
+            if (includedGoal) {
+                blackPositives.push(start);
+            }
+            setTimeout(() => {
+                blackShapesContainer.innerHTML = '';
+            }, dur);
+            const pause = Math.random() * 1500 + 500;
+            setTimeout(flashBlack, dur + pause);
+        }
+
+        function updateYellowPoints() {
+            yellowPointsEl.textContent = yellowPoints;
+            blackPointsEl.textContent = blackPoints;
+        }
+
+        function checkYellowWin() {
+            if (yellowPoints >= 10 || blackPoints <= -10) {
+                yellowWin('YELLOW WINS!');
+            } else if (blackPoints >= 10 || yellowPoints <= -10) {
+                yellowWin('BLACK WINS!');
+            }
+        }
+
+        function yellowWin(winner) {
+            yellowGameActive = false;
+            const color = winner.includes('YELLOW') ? '#ffd700' : '#333';
+            yellowMessageEl.textContent = winner;
+            yellowMessageEl.style.color = color;
+            yellowMessageEl.classList.add('show');
+            setTimeout(() => {
+                showScreen('main-menu');
+            }, 3000);
+        }
+
+        function startYellowCountdown() {
+            yellowState = 'counting';
+            yellowTimerEl.classList.add('show', 'countdown');
+            let timeLeft = 3;
+            yellowTimerEl.textContent = '3';
+            const countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    yellowTimerEl.textContent = timeLeft;
+                } else {
+                    yellowTimerEl.textContent = 'GO!';
+                    clearInterval(countdownInterval);
+                    setTimeout(() => {
+                        yellowTimerEl.classList.remove('countdown');
+                        setTimeout(() => {
+                            yellowTimerEl.classList.remove('show');
+                            yellowState = 'playing';
+                            flashYellow();
+                            flashBlack();
+                        }, 300);
+                    }, 200);
+                }
+            }, 1000);
+        }
+
+        // Green Game
+        let greenState = 'waiting';
+        let greenGameActive = false;
+        let greenPoints = 0;
+        let blackPointsG = 0; 
+        let greenChoice = null;
+        let blackChoice = null;
+        const greenKeysMap = { 'a': 'rock', 's': 'paper', 'd': 'scissors' };
+        const blackKeysMap = { 'j': 'rock', 'k': 'paper', 'l': 'scissors' };
+        const choiceEmojis = { rock: '✊', paper: '✋', scissors: '✌️' };
+
+        const greenPointsEl = document.getElementById('green-points');
+        const blackPointsElG = document.getElementById('green-black-points');
+        const greenChoiceEl = document.getElementById('green-choice');
+        const blackChoiceEl = document.getElementById('black-choice');
+        const greenStatusEl = document.getElementById('green-status');
+        const blackStatusEl = document.getElementById('black-status');
+        const greenTimerEl = document.getElementById('green-timer');
+        const greenMessageEl = document.getElementById('green-message');
+
+        function resetGreenGame() {
+            greenState = 'waiting';
+            greenGameActive = true;
+            greenPoints = 0;
+            blackPointsG = 0;
+            updateGreenPoints();
+            resetGreenRound();
+            greenTimerEl.classList.remove('show', 'countdown');
+            greenMessageEl.classList.remove('show');
+            greenMessageEl.textContent = '';
+        }
+
+        function updateGreenPoints() {
+            greenPointsEl.textContent = greenPoints;
+            blackPointsElG.textContent = blackPointsG;
+        }
+
+        function resetGreenRound() {
+            greenChoice = null;
+            blackChoice = null;
+            greenChoiceEl.textContent = '';
+            blackChoiceEl.textContent = '';
+            greenStatusEl.textContent = 'Waiting...';
+            blackStatusEl.textContent = 'Waiting...';
+        }
+
+        function startGreenCountdown() {
+            greenState = 'counting';
+            greenTimerEl.classList.add('show', 'countdown');
+            let timeLeft = 3;
+            greenTimerEl.textContent = '3';
+            const countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    greenTimerEl.textContent = timeLeft;
+                } else {
+                    greenTimerEl.textContent = 'GO!';
+                    clearInterval(countdownInterval);
+                    setTimeout(() => {
+                        greenTimerEl.classList.remove('countdown');
+                        setTimeout(() => {
+                            greenTimerEl.classList.remove('show');
+                            greenState = 'playing';
+                        }, 300);
+                    }, 200);
+                }
+            }, 1000);
+        }
+
+        function checkBothChosen() {
+            if (greenChoice !== null && blackChoice !== null) {
+                greenStatusEl.textContent = 'Chosen';
+                blackStatusEl.textContent = 'Chosen';
+                startFastCountdown();
+            }
+        }
+
+        function startFastCountdown() {
+            greenTimerEl.classList.add('show', 'countdown');
+            let timeLeft = 3;
+            greenTimerEl.textContent = '3';
+            const fastInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    greenTimerEl.textContent = timeLeft;
+                } else {
+                    clearInterval(fastInterval);
+                    greenTimerEl.classList.remove('show', 'countdown');
+                    revealResults();
+                }
+            }, 500);
+        }
+
+        function revealResults() {
+            greenChoiceEl.textContent = choiceEmojis[greenChoice];
+            blackChoiceEl.textContent = choiceEmojis[blackChoice];
+            const winner = determineWinner(greenChoice, blackChoice);
+            if (winner === 'green') {
+                greenPoints++;
+                greenMessageEl.textContent = 'GREEN WINS ROUND!';
+                greenMessageEl.style.color = '#2ed573';
+            } else if (winner === 'black') {
+                blackPointsG++;
+                greenMessageEl.textContent = 'BLACK WINS ROUND!';
+                greenMessageEl.style.color = '#333';
+            } else {
+                greenMessageEl.textContent = 'TIE!';
+                greenMessageEl.style.color = '#fff';
+            }
+            greenMessageEl.classList.add('show');
+            updateGreenPoints();
+            setTimeout(() => {
+                greenMessageEl.classList.remove('show');
+                if (greenPoints >= 5 || blackPointsG >= 5) {
+                    greenGameActive = false;
+                    greenMessageEl.textContent = (greenPoints >= 5 ? 'GREEN WINS!' : 'BLACK WINS!');
+                    greenMessageEl.style.color = (greenPoints >= 5 ? '#2ed573' : '#333');
+                    greenMessageEl.classList.add('show');
+                    setTimeout(() => {
+                        showScreen('main-menu');
+                    }, 3000);
+                } else {
+                    resetGreenRound();
+                }
+            }, 2000);
+        }
+
+        function determineWinner(gChoice, bChoice) {
+            if (gChoice === bChoice) return 'tie';
+            if (
+                (gChoice === 'rock' && bChoice === 'scissors') ||
+                (gChoice === 'scissors' && bChoice === 'paper') ||
+                (gChoice === 'paper' && bChoice === 'rock')
+            ) {
+                return 'green';
+            }
+            return 'black';
+        }
+
+        // Blue Game
+        let blueState = 'waiting';
+        let blueGameActive = false;
+        const canvas = document.getElementById('blue-canvas');
+        const ctx = canvas.getContext('2d');
+        const blueTimerEl = document.getElementById('blue-timer');
+        const taggerInfoEl = document.getElementById('tagger-info');
+        const blueMessageEl = document.getElementById('blue-message');
+
+        let bluePlayer = { x: 100, y: 500, vx: 0, vy: 0, radius: 20, color: '#3742fa', onGround: false };
+        let blackPlayer = { x: 700, y: 500, vx: 0, vy: 0, radius: 20, color: '#2c2c54', onGround: false };
+        let platforms = [];
+        let tagger = null;
+        let immunityTime = 0;
+        let gameTime = 30;
+        let gameInterval = null;
+        let countdownInterval = null;
+        const gravity = 0.5;
+        const jumpStrength = -12;
+        const moveSpeed = 5;
+
+        const blueKeysDown = {};
+        const blackKeysDown = {};
+
+        function generatePlatforms() {
+            const plats = [];
+            const cw = canvas.width;
+            const ch = canvas.height;
+            const pw = 180;
+            const ph = 10;
+
+            // Ground
+            plats.push({x: 0, y: ch - ph, width: cw, height: ph});
+
+            // Upper quartile (top 150px)
+            plats.push({x: 80, y: 70, width: pw, height: ph});
+            plats.push({x: 540, y: 100, width: pw, height: ph});
+            plats.push({x: 310, y: 130, width: pw, height: ph});
+
+            // Middle section (y 150-450) - 5 platforms, 60px vertical spacing
+            const middleY = [190, 250, 310, 370, 430];
+            const middleX = [80, 540, 310, 80, 540];
+            for (let i = 0; i < 5; i++) {
+                plats.push({x: middleX[i], y: middleY[i], width: pw, height: ph});
+            }
+
+            // Bottom quartile (y 450-600) - 3 platforms
+            plats.push({x: 310, y: 470, width: pw, height: ph});
+            plats.push({x: 80, y: 520, width: pw, height: ph});
+            plats.push({x: 540, y: 560, width: pw, height: ph});
+
+            return plats;
+        }
+
+        function resetBlueGame() {
+            blueState = 'waiting';
+            blueGameActive = true;
+            bluePlayer = { x: 150, y: canvas.height - 30, vx: 0, vy: 0, radius: 20, color: '#3742fa', onGround: true };
+            blackPlayer = { x: canvas.width - 150, y: canvas.height - 30, vx: 0, vy: 0, radius: 20, color: '#2c2c54', onGround: true };
+            platforms = generatePlatforms();
+            tagger = null;
+            immunityTime = 0;
+            gameTime = 30;
+            if (gameInterval) clearInterval(gameInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+            blueTimerEl.classList.remove('show', 'countdown');
+            blueMessageEl.classList.remove('show');
+            blueMessageEl.textContent = '';
+            taggerInfoEl.textContent = '';
+            blueTimerEl.textContent = '';
+            requestAnimationFrame(drawBlueGame);
+        }
+
+        function drawBlueGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Draw platforms
+            ctx.fillStyle = '#808080';
+            platforms.forEach(p => {
+                ctx.fillRect(p.x, p.y, p.width, p.height);
+            });
+            // Draw players
+            ctx.fillStyle = bluePlayer.color;
+            ctx.beginPath();
+            ctx.arc(bluePlayer.x, bluePlayer.y, bluePlayer.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = blackPlayer.color;
+            ctx.beginPath();
+            ctx.arc(blackPlayer.x, blackPlayer.y, blackPlayer.radius, 0, Math.PI * 2);
+            ctx.fill();
+            if (blueState === 'playing') requestAnimationFrame(drawBlueGame);
+        }
+
+        function updatePhysics(player) {
+            player.vy += gravity;
+            player.y += player.vy;
+            player.x += player.vx;
+            player.onGround = false;
+
+            // Collision with platforms
+            platforms.forEach(p => {
+                if (player.y + player.radius > p.y && player.y - player.radius < p.y + p.height &&
+                    player.x > p.x && player.x < p.x + p.width && player.vy >= 0) {
+                    player.y = p.y - player.radius;
+                    player.vy = 0;
+                    player.onGround = true;
+                }
+            });
+
+            // Boundaries
+            if (player.x < player.radius) player.x = player.radius;
+            if (player.x > canvas.width - player.radius) player.x = canvas.width - player.radius;
+            if (player.y > canvas.height - player.radius) {
+                player.y = canvas.height - player.radius;
+                player.vy = 0;
+                player.onGround = true;
+            }
+            if (player.y < player.radius) player.y = player.radius;
+
+            // Friction
+            if (player.onGround) player.vx *= 0.8;
+        }
+
+        function checkCollision() {
+            const dx = bluePlayer.x - blackPlayer.x;
+            const dy = bluePlayer.y - blackPlayer.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist < bluePlayer.radius + blackPlayer.radius;
+        }
+
+        function startBlueCountdown() {
+            blueState = 'counting';
+            blueTimerEl.classList.add('show', 'countdown');
+            let timeLeft = 3;
+            blueTimerEl.textContent = '3';
+            const cdInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    blueTimerEl.textContent = timeLeft;
+                } else {
+                    blueTimerEl.textContent = 'GO!';
+                    clearInterval(cdInterval);
+                    setTimeout(() => {
+                        blueTimerEl.classList.remove('countdown');
+                        setTimeout(() => {
+                            blueTimerEl.classList.remove('show');
+                            blueState = 'playing';
+                            startBlueGame();
+                        }, 300);
+                    }, 200);
+                }
+            }, 1000);
+        }
+
+        function startBlueGame() {
+            tagger = Math.random() < 0.5 ? 'blue' : 'black';
+            taggerInfoEl.textContent = `${tagger.toUpperCase()} is the tagger!`;
+            blueTimerEl.classList.add('show');
+            blueTimerEl.textContent = gameTime;
+            countdownInterval = setInterval(() => {
+                gameTime--;
+                blueTimerEl.textContent = gameTime;
+                if (gameTime <= 0) {
+                    endBlueGame();
+                }
+            }, 1000);
+            gameInterval = setInterval(updateBlueGame, 16);
+            requestAnimationFrame(drawBlueGame);
+        }
+
+        function updateBlueGame() {
+            // Blue player movement
+            if (blueKeysDown['a']) bluePlayer.vx = -moveSpeed;
+            if (blueKeysDown['d']) bluePlayer.vx = moveSpeed;
+            if (blueKeysDown['w'] && bluePlayer.onGround) bluePlayer.vy = jumpStrength;
+            // Black player movement
+            if (blackKeysDown['j']) blackPlayer.vx = -moveSpeed;
+            if (blackKeysDown['l']) blackPlayer.vx = moveSpeed;
+            if (blackKeysDown['i'] && blackPlayer.onGround) blackPlayer.vy = jumpStrength;
+
+            updatePhysics(bluePlayer);
+            updatePhysics(blackPlayer);
+
+            if (immunityTime > 0) immunityTime--;
+
+            if (checkCollision() && immunityTime <= 0) {
+                tagger = tagger === 'blue' ? 'black' : 'blue';
+                taggerInfoEl.textContent = `${tagger.toUpperCase()} is the tagger!`;
+                immunityTime = 60;
+            }
+        }
+
+        function endBlueGame() {
+            clearInterval(gameInterval);
+            clearInterval(countdownInterval);
+            blueGameActive = false;
+            blueTimerEl.classList.remove('show');
+            taggerInfoEl.textContent = '';
+            const winner = tagger === 'blue' ? 'BLACK WINS!' : 'BLUE WINS!';
+            const color = tagger === 'blue' ? '#2c2c54' : '#3742fa';
+            blueMessageEl.textContent = winner;
+            blueMessageEl.style.color = color;
+            blueMessageEl.classList.add('show');
+            setTimeout(() => {
+                showScreen('main-menu');
+            }, 3000);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            const now = Date.now();
+
+            if (currentScreen === 'red-game') {
+                if (redState === 'waiting') {
+                    if (redKeys.includes(key) || blackKeys.includes(key)) {
+                        startRedCountdown();
+                    }
+                    return;
+                }
+
+                if (redState !== 'playing') return;
+
+                if (redKeys.includes(key)) {
+                    redScore++;
+                    updateRedBar();
+                    if (redPosition >= 75) {
+                        redState = 'ended';
+                        showRedWin('RED WINS!');
+                    }
+                } else if (blackKeys.includes(key)) {
+                    redScore--;
+                    updateRedBar();
+                    if (redPosition <= 25) {
+                        redState = 'ended';
+                        showRedWin('BLACK WINS!');
+                    }
+                }
+            } else if (currentScreen === 'yellow-game' && yellowGameActive) {
+                if (yellowState === 'waiting') {
+                    if (redKeys.includes(key) || blackKeys.includes(key)) {
+                        startYellowCountdown();
+                    }
+                    return;
+                }
+
+                if (yellowState !== 'playing') return;
+
+                if (redKeys.includes(key)) {
+                    if (now - yellowLastPress < 100) return;
+                    yellowLastPress = now;
+                    yellowPositives = yellowPositives.filter(s => now - s < 500);
+                    if (yellowPositives.length > 0) {
+                        yellowPoints++;
+                        yellowPositives.shift();
+                    } else {
+                        yellowPoints--;
+                    }
+                    updateYellowPoints();
+                    checkYellowWin();
+                } else if (blackKeys.includes(key)) {
+                    if (now - blackLastPress < 100) return;
+                    blackLastPress = now;
+                    blackPositives = blackPositives.filter(s => now - s < 500);
+                    if (blackPositives.length > 0) {
+                        blackPoints++;
+                        blackPositives.shift();
+                    } else {
+                        blackPoints--;
+                    }
+                    updateYellowPoints();
+                    checkYellowWin();
+                }
+            } else if (currentScreen === 'green-game' && greenGameActive) {
+                if (greenState === 'waiting') {
+                    if (greenKeysMap[key] || blackKeysMap[key]) {
+                        startGreenCountdown();
+                    }
+                    return;
+                }
+
+                if (greenState !== 'playing') return;
+
+                if (greenChoice === null && greenKeysMap[key]) {
+                    greenChoice = greenKeysMap[key];
+                    greenStatusEl.textContent = 'Chosen';
+                    checkBothChosen();
+                } else if (blackChoice === null && blackKeysMap[key]) {
+                    blackChoice = blackKeysMap[key];
+                    blackStatusEl.textContent = 'Chosen';
+                    checkBothChosen();
+                }
+            } else if (currentScreen === 'blue-game' && blueGameActive) {
+                if (blueState === 'waiting') {
+                    if (['w','a','s','d','i','j','k','l'].includes(key)) {
+                        startBlueCountdown();
+                    }
+                }
+                blueKeysDown[key] = true;
+                blackKeysDown[key] = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            blueKeysDown[key] = false;
+            blackKeysDown[key] = false;
+            if (['a','d'].includes(key)) bluePlayer.vx = 0;
+            if (['j','l'].includes(key)) blackPlayer.vx = 0;
+        });
+
+        function showScreen(screenName) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.style.display = 'none';
+            });
+            document.getElementById(screenName).style.display = 'flex';
+            currentScreen = screenName;
+
+            if (screenName === 'red-game') {
+                resetRedGame();
+            } else if (screenName === 'yellow-game') {
+                resetYellowGame();
+            } else if (screenName === 'green-game') {
+                resetGreenGame();
+            } else if (screenName === 'blue-game') {
+                resetBlueGame();
+            }
+        }
+
+        // Init
+        showScreen('main-menu');
+    </script>
+</body>
+</html>

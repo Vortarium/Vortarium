@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Hole</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #ffffff;
+            border: none; /* Remove the border */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let gravityEnabled = true; // Toggle for gravity
+        let consumeMode = false; // Toggle for black hole consuming mode
+
+        let blackHoles = [{
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            suctionForce: 0.001, // Slight gravity force
+            currentForce: 0.001 // Slight current force
+        }];
+
+        let squares = [];
+        let orbits = []; // Array to store orbit data
+
+        let dragging = false;
+        let dragStartX, dragStartY, dragEndX, dragEndY;
+
+        function createSquare(x, y, size) {
+            return {
+                x: x,
+                y: y,
+                size: size,
+                color: 'black', // All squares are now black
+                velocityX: 0,
+                velocityY: 0,
+                lastAngle: 0
+            };
+        }
+
+        function drawSquare(square) {
+            ctx.fillStyle = square.color;
+            ctx.beginPath();
+            ctx.arc(square.x, square.y, square.size, 0, Math.PI * 2); // Draw circles instead of squares
+            ctx.fill();
+        }
+
+        function drawBlackHole(blackHole) {
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(blackHole.x, blackHole.y, blackHole.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawOrbit(orbit) {
+            ctx.strokeStyle = 'red';
+            ctx.beginPath();
+            ctx.ellipse(orbit.x, orbit.y, orbit.majorAxis, orbit.minorAxis, orbit.rotation, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function distance(x1, y1, x2, y2) {
+            return Math.hypot(x1 - x2, y1 - y2);
+        }
+
+        function updateSquares() {
+            for (let i = squares.length - 1; i >= 0; i--) {
+                const square = squares[i];
+
+                if (dragging && square.x === dragStartX && square.y === dragStartY) {
+                    square.velocityX = (dragEndX - dragStartX) / 10;
+                    square.velocityY = (dragEndY - dragStartY) / 10;
+                    dragging = false;
+                }
+
+                blackHoles.forEach(blackHole => {
+                    if (gravityEnabled) {
+                        const angle = Math.atan2(blackHole.y - square.y, blackHole.x - square.x);
+                        const suctionForce = Math.min(blackHole.suctionForce, blackHole.radius / distance(square.x, square.y, blackHole.x, blackHole.y));
+                        square.velocityX += Math.cos(angle) * suctionForce;
+                        square.velocityY += Math.sin(angle) * suctionForce;
+
+                        // Add tangential force
+                        const currentAngle = angle + Math.PI / 2; // Perpendicular to gravity
+                        const currentForce = blackHole.currentForce / distance(square.x, square.y, blackHole.x, blackHole.y); // Decrease force with distance
+                        square.velocityX += Math.cos(currentAngle) * currentForce;
+                        square.velocityY += Math.sin(currentAngle) * currentForce;
+
+                        // Check if the square completes a rotation around the black hole without touching it
+                        const dx = square.x - blackHole.x;
+                        const dy = square.y - blackHole.y;
+                        const angleToHole = Math.atan2(dy, dx);
+                        const distanceToHole = distance(square.x, square.y, blackHole.x, blackHole.y);
+                        if (Math.abs(angleToHole - square.lastAngle) > Math.PI * 2 && distanceToHole > blackHole.radius * 2) {
+                            // Add orbit to the list
+                            orbits.push({
+                                x: blackHole.x,
+                                y: blackHole.y,
+                                majorAxis: distanceToHole,
+                                minorAxis: blackHole.radius / 2,
+                                rotation: angleToHole,
+                                alpha: 1
+                            });
+                        }
+                        square.lastAngle = angleToHole;
+                    }
+
+                    // Handle collisions with the black hole
+                    const distanceToHole = distance(square.x, square.y, blackHole.x, blackHole.y);
+                    if (consumeMode && distanceToHole <= square.size + blackHole.radius) {
+                        // Remove the square from existence
+                        squares.splice(i, 1);
+                    }
+                });
+
+                square.x += square.velocityX;
+                square.y += square.velocityY;
+
+                // Remove squares that leave the canvas
+                if (square.x < -square.size || square.x > canvas.width + square.size || square.y < -square.size || square.y > canvas.height + square.size) {
+                    squares.splice(i, 1);
+                }
+            }
+        }
+
+        function addSquare(event) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            const size = Math.random() * 5 + 1; // Varying sizes from very small to small
+            squares.push(createSquare(mouseX, mouseY, size));
+        }
+
+        function handleMouseDown(event) {
+            dragging = true;
+            const rect = canvas.getBoundingClientRect();
+            dragStartX = event.clientX - rect.left;
+            dragStartY = event.clientY - rect.top;
+        }
+
+        function handleMouseUp(event) {
+            dragging = false;
+            const rect = canvas.getBoundingClientRect();
+            dragEndX = event.clientX - rect.left;
+            dragEndY = event.clientY - rect.top;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === '1') {
+                gravityEnabled = !gravityEnabled; // Toggle gravity
+            } else if (event.key === '2') {
+                consumeMode = !consumeMode; // Toggle black hole consume mode
+            } else if (event.key === '3') {
+                // Add a new black hole at the cursor's position
+                canvas.addEventListener('click', function addBlackHole(event) {
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX = event.clientX - rect.left;
+                    const mouseY = event.clientY - rect.top;
+                    blackHoles.push({
+                        x: mouseX,
+                        y: mouseY,
+                        radius: 10,
+                        suctionForce: 0.001,
+                        currentForce: 0.001
+                    });
+                    drawBlackHole({ x: mouseX, y: mouseY, radius: 10 });
+                    // Remove the event listener after adding the black hole
+                    canvas.removeEventListener('click', addBlackHole);
+                }, { once: true });
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', addSquare);
+        window.addEventListener('keypress', handleKeyPress);
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            blackHoles.forEach(drawBlackHole);
+            updateSquares();
+            squares.forEach(drawSquare);
+            orbits.forEach(drawOrbit); // Draw orbits
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

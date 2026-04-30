@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Beat</title>
+<style>
+  :root{
+    --size: 420px;
+    --bg: #0f1724;
+    --panel: #0b1220;
+    --white: #ffffff;
+    --muted: rgba(255,255,255,0.14);
+    --accent: #9ae6b4;
+    --yellow: #f6e05e;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#071021);font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--white)}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;}
+  .panel{width:calc(var(--size) + 320px);max-width:100%;background:rgba(255,255,255,0.02);border-radius:12px;padding:20px;display:flex;gap:24px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+  .left{width:var(--size);height:var(--size);display:flex;align-items:center;justify-content:center;position:relative}
+  .wheel{width:360px;height:360px;border-radius:999px;background:var(--white);position:relative;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(2,6,23,0.6)}
+  .center-dot{width:14px;height:14px;background:#111;border-radius:50%;position:absolute;z-index:30;transform:translate(-50%,-50%);left:50%;top:50%}
+  .hand{width:6px;height:44%;background:#111;position:absolute;left:50%;top:8%;transform-origin:50% 92%;border-radius:4px;z-index:20;box-shadow:0 2px 6px rgba(0,0,0,0.5)}
+  /* info on right */
+  .right{color:var(--white);flex:1}
+  .title{font-size:20px;font-weight:700;margin-bottom:6px}
+  .sub{opacity:0.85;margin-bottom:12px}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .stat{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:10px;border-radius:8px;min-width:110px}
+  .big{font-weight:700;font-size:20px}
+  .controls{margin-top:8px}
+  .message{margin-top:12px;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);min-height:36px}
+  .custom{margin-top:12px;font-size:13px;opacity:0.9}
+  .btn{display:inline-block;padding:8px 12px;border-radius:8px;background:rgba(255,255,255,0.03);cursor:pointer}
+  /* overlay for level up / fail */
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:80;pointer-events:none}
+  .bubble{background:rgba(0,0,0,0.6);padding:18px 26px;border-radius:12px;font-weight:700;font-size:20px;backdrop-filter:blur(4px);color:var(--white)}
+  /* SVG arcs */
+  .zones { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10 }
+  /* footer */
+  .footer{margin-top:18px;opacity:0.9;font-size:13px}
+  .score-bar{height:10px;background:rgba(255,255,255,0.06);border-radius:999px;margin-top:6px;overflow:hidden}
+  .score-fill{height:100%;background:linear-gradient(90deg,var(--accent),#68d391);width:0%}
+  /* small screens */
+  @media (max-width:880px){
+    .panel{flex-direction:column;align-items:center;padding:16px}
+    .right{width:100%}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel" role="application" aria-label="Beat rhythm game">
+    <div class="left" id="left">
+      <div class="wheel" id="wheel">
+        <!-- zones drawn with inline SVG for precise arcs -->
+        <svg class="zones" width="360" height="360" viewBox="0 0 360 360" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <filter id="glow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <g transform="translate(180,180)">
+            <!-- angles measured with 0 degrees pointing to the right; we'll rotate the group -90deg to make 0 at top -->
+            <g transform="rotate(-90)">
+              <!-- left yellow (counterclockwise side) -->
+              <path id="leftYellow" d="" fill="rgba(246,224,94,0.34)"></path>
+              <!-- green -->
+              <path id="green" d="" fill="rgba(154,230,180,0.85)"></path>
+              <!-- right yellow (clockwise side) -->
+              <path id="rightYellow" d="" fill="rgba(246,224,94,0.34)"></path>
+              <!-- thin white rim -->
+              <circle r="170" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="6"></circle>
+            </g>
+          </g>
+        </svg>
+
+        <div class="hand" id="hand" style="transform:rotate(0deg)"></div>
+        <div class="center-dot" title="center"></div>
+      </div>
+
+      <div class="overlay" id="overlay" style="display:none;pointer-events:none">
+        <div class="bubble" id="overlayText"></div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="title">Beat</div>
+      <div class="sub">Press <kbd>Space</kbd> or click to play. Start by pressing while the hand is in the green or yellow zones.</div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="big" id="level">Level 1</div>
+          <div style="font-size:12px;opacity:0.85">BPM: <span id="bpm">60</span></div>
+        </div>
+        <div class="stat">
+          <div class="big" id="score">0</div>
+          <div style="font-size:12px;opacity:0.85">Points (need 10)</div>
+        </div>
+        <div class="stat">
+          <div class="big" id="last">—</div>
+          <div style="font-size:12px;opacity:0.85">Last Hit</div>
+        </div>
+      </div>
+
+      <div class="score-bar">
+        <div class="score-fill" id="scoreFill"></div>
+      </div>
+
+      <div class="message" id="message">Waiting to start. Press space or click in the green or yellow zones to begin.</div>
+
+      <div class="custom">
+        <label>Sandbox Level: <input id="levelInput" type="number" min="1" value="1" style="width:50px;background:rgba(255,255,255,0.1);border:none;color:white;padding:4px;border-radius:4px;"></label>
+        <span class="btn" id="setLevel">Set</span>
+        <br>
+        <label>Green zone %: <input id="greenSlider" type="range" min="1" max="10" value="2"></label> <span id="greenVal">2%</span>
+        <br>
+        <label>Yellow each %: <input id="yellowSlider" type="range" min="1" max="20" value="4"></label> <span id="yellowVal">4%</span>
+      </div>
+
+      <div class="footer">
+        <div><span class="btn" id="resetBtn">Reset</span></div>
+        <div style="margin-top:8px;font-size:13px;opacity:0.85">Tone: 440Hz quick ding (per beat)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  Beat — rhythm game
+  - Uses WebAudio for 440Hz "ding"
+  - Hand angle is computed from elapsed time and BPM
+  - Zones: customizable
+  - Start: press Space or click while hand in green or yellow zone to begin playing
+  - For each beat:
+      - If valid press occurred, award points
+      - No failure for missing beats
+  - Press space or click anytime; evaluation uses current hand angle
+*/
+
+(() => {
+  // DOM
+  const hand = document.getElementById('hand');
+  const bpmEl = document.getElementById('bpm');
+  const scoreEl = document.getElementById('score');
+  const levelEl = document.getElementById('level');
+  const messageEl = document.getElementById('message');
+  const lastEl = document.getElementById('last');
+  const scoreFill = document.getElementById('scoreFill');
+  const overlay = document.getElementById('overlay');
+  const overlayText = document.getElementById('overlayText');
+  const resetBtn = document.getElementById('resetBtn');
+  const left = document.getElementById('left');
+  const levelInput = document.getElementById('levelInput');
+  const setLevelBtn = document.getElementById('setLevel');
+  const greenSlider = document.getElementById('greenSlider');
+  const yellowSlider = document.getElementById('yellowSlider');
+  const greenVal = document.getElementById('greenVal');
+  const yellowVal = document.getElementById('yellowVal');
+
+  // Game constants
+  const START_BPM = 60;
+  const POINTS_TO_LEVEL = 10;
+
+  // Zone variables
+  let green_percent = 0.02;
+  let yellow_percent = 0.04;
+  let greenHalf = 360 * green_percent / 2;
+  let yellowSide = 360 * yellow_percent;
+  let yellowOuter = greenHalf + yellowSide;
+
+  // SVG arcs (for visual zones) - build arcs centered at top
+  const createArcPath = (startDeg, endDeg, radius = 170) => {
+    const toRad = (d) => (d) * Math.PI / 180;
+    const large = (endDeg - startDeg) > 180 ? 1 : 0;
+    const x1 = Math.cos(toRad(startDeg)) * radius;
+    const y1 = Math.sin(toRad(startDeg)) * radius;
+    const x2 = Math.cos(toRad(endDeg)) * radius;
+    const y2 = Math.sin(toRad(endDeg)) * radius;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2} L 0 0 Z`;
+  };
+
+  function updateZones() {
+    const greenAngle = 360 * green_percent;
+    const yellowAngle = 360 * yellow_percent;
+    const greenStart = -greenAngle/2;
+    const greenEnd = greenAngle/2;
+    const leftYellowStart = -greenAngle/2 - yellowAngle;
+    const leftYellowEnd = -greenAngle/2;
+    const rightYellowStart = greenAngle/2;
+    const rightYellowEnd = greenAngle/2 + yellowAngle;
+
+    document.getElementById('green').setAttribute('d', createArcPath(greenStart, greenEnd));
+    document.getElementById('leftYellow').setAttribute('d', createArcPath(leftYellowStart, leftYellowEnd));
+    document.getElementById('rightYellow').setAttribute('d', createArcPath(rightYellowStart, rightYellowEnd));
+
+    greenHalf = 360 * green_percent / 2;
+    yellowSide = 360 * yellow_percent;
+    yellowOuter = greenHalf + yellowSide;
+  }
+
+  updateZones(); // initial draw
+
+  // Audio setup
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const audioCtx = new AudioContext();
+  function playDing(freq = 440, duration = 0.06) {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    g.gain.setValueAtTime(0, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0.9, audioCtx.currentTime + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + duration + 0.01);
+  }
+
+  // Game state
+  let bpm = START_BPM;
+  let level = 1;
+  let score = 0;
+  let playing = false; // whether game is active
+  let lastBeatNumber = -1;
+  let lastHitStr = '—';
+  let startTime = performance.now(); // reference time for hand position
+  let failedTimeout = null;
+
+  // helpers
+  function setMessage(text) { messageEl.textContent = text; }
+  function updateUI(){
+    bpmEl.textContent = Math.round(bpm);
+    levelEl.textContent = `Level ${level}`;
+    scoreEl.textContent = (Math.round(score * 10) / 10).toString();
+    lastEl.textContent = lastHitStr;
+    const pct = Math.min(100, (score / POINTS_TO_LEVEL) * 100);
+    scoreFill.style.width = pct + '%';
+  }
+  updateUI();
+
+  function resetGame(full = true){
+    if(full){
+      bpm = START_BPM;
+      level = 1;
+    }
+    score = 0;
+    playing = false;
+    lastBeatNumber = -1;
+    lastHitStr = '—';
+    showOverlay('FAILED', 1400);
+    setMessage('You failed — resetting to level 1. Press space or click in the green or yellow zones to try again.');
+    updateUI();
+  }
+
+  function showOverlay(text, ms = 1400){
+    overlayText.textContent = text;
+    overlay.style.display = 'flex';
+    overlay.style.pointerEvents = 'none';
+    clearTimeout(failedTimeout);
+    failedTimeout = setTimeout(()=>{ overlay.style.display = 'none'; }, ms);
+  }
+
+  // evaluate angle in degrees (0 at top, increasing clockwise)
+  function getAngleFromTime(now){
+    const period = 60000 / bpm;
+    const elapsed = (now - startTime);
+    const cycles = elapsed / period;
+    const fractional = cycles - Math.floor(cycles);
+    const angle = fractional * 360;
+    return angle;
+  }
+
+  // Check zone by angle
+  function zoneForAngle(angle){
+    let signed = angle;
+    if (signed > 180) signed -= 360;
+    const abs = Math.abs(signed);
+    if (abs <= greenHalf) return 'green';
+    if (abs <= yellowOuter) return 'yellow';
+    return 'miss';
+  }
+
+  // Press handling
+  function handlePress(now){
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const angle = getAngleFromTime(now);
+    const zone = zoneForAngle(angle);
+
+    if (!playing) {
+      if (zone === 'miss') {
+        setMessage('To start, press space or click while the hand is inside the green or yellow zones.');
+        showOverlay('Start in GREEN or YELLOW', 900);
+        return;
+      }
+      playing = true;
+      setMessage('Game started! Press space or click on each beep to score points.');
+      if (zone === 'green') {
+        score += 1;
+        lastHitStr = '+1 (Green)';
+      } else {
+        score += 0.5;
+        lastHitStr = '+0.5 (Yellow)';
+      }
+      updateUI();
+      if (score >= POINTS_TO_LEVEL) {
+        level++;
+        bpm = Math.round(bpm + 1);
+        showOverlay(`Level ${level}`, 1200);
+        setMessage(`Level up! BPM increased to ${bpm}. Score reset to 0 — go again.`);
+        score = 0;
+        updateUI();
+      } else {
+        setMessage(`Good — ${lastHitStr}. Keep going.`);
+      }
+      return;
+    }
+
+    if (zone === 'miss') {
+      lastHitStr = 'Miss (Bad press)';
+      updateUI();
+      resetGame(true);
+      return;
+    }
+    if (zone === 'green') {
+      score += 1;
+      lastHitStr = '+1 (Green)';
+    } else if (zone === 'yellow') {
+      score += 0.5;
+      lastHitStr = '+0.5 (Yellow)';
+    }
+
+    updateUI();
+
+    if (score >= POINTS_TO_LEVEL) {
+      level++;
+      bpm = Math.round(bpm + 1);
+      showOverlay(`Level ${level}`, 1200);
+      setMessage(`Level up! BPM increased to ${bpm}. Score reset to 0 — go again.`);
+      score = 0;
+      updateUI();
+    } else {
+      setMessage(`Good — ${lastHitStr}. Keep going.`);
+    }
+  }
+
+  // Beat scheduler + animation
+  function loop(now){
+    const angle = getAngleFromTime(now);
+    hand.style.transform = `rotate(${angle}deg)`;
+
+    const period = 60000 / bpm;
+    const elapsed = (now - startTime);
+    const beatNumber = Math.floor(elapsed / period);
+    if (beatNumber !== lastBeatNumber) {
+      lastBeatNumber = beatNumber;
+      playDing(440, 0.06);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  // keyboard
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      const now = performance.now();
+      handlePress(now);
+    }
+  });
+
+  // click
+  left.addEventListener('click', (e) => {
+    const now = performance.now();
+    handlePress(now);
+  });
+
+  resetBtn.addEventListener('click', () => {
+    bpm = START_BPM;
+    level = 1;
+    score = 0;
+    playing = false;
+    lastBeatNumber = -1;
+    lastHitStr = '—';
+    startTime = performance.now();
+    updateUI();
+    setMessage('Reset. Press space or click in the green or yellow zones to start.');
+    showOverlay('RESET', 900);
+  });
+
+  setLevelBtn.addEventListener('click', () => {
+    const newLevel = parseInt(levelInput.value);
+    if (newLevel >= 1) {
+      level = newLevel;
+      bpm = START_BPM + (newLevel - 1);
+      score = 0;
+      playing = false;
+      lastBeatNumber = -1;
+      lastHitStr = '—';
+      startTime = performance.now();
+      updateUI();
+      setMessage(`Set to level ${level}. BPM: ${bpm}. Press space or click in zones to start.`);
+      showOverlay(`Level ${level}`, 900);
+    }
+  });
+
+  greenSlider.addEventListener('input', () => {
+    green_percent = greenSlider.value / 100;
+    greenVal.textContent = greenSlider.value + '%';
+    updateZones();
+  });
+
+  yellowSlider.addEventListener('input', () => {
+    yellow_percent = yellowSlider.value / 100;
+    yellowVal.textContent = yellowSlider.value + '%';
+    updateZones();
+  });
+
+  // Start animation
+  requestAnimationFrame(loop);
+
+  // initial message and UI
+  setMessage('Clock is running at 60 BPM. Press space or click while hand is in GREEN or YELLOW to start.');
+  updateUI();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fishtopia</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #1a1a1a;
+      color: white;
+    }
+    #game-container {
+      margin: 20px auto;
+      max-width: 600px;
+      position: relative;
+    }
+    #fishing-square {
+      width: 200px;
+      height: 200px;
+      background-color: black;
+      margin: 20px auto;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    #cooldown {
+      font-size: 18px;
+      margin-top: 10px;
+    }
+    #fish-list {
+      margin: 20px 0;
+    }
+    #sell-button {
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    #money {
+      font-size: 24px;
+      margin-top: 20px;
+      display: inline-block;
+    }
+    #rods-menu {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: #333;
+      padding: 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    #rods-menu button {
+      display: block;
+      margin: 5px 0;
+    }
+    #troll-lock {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      cursor: pointer;
+    }
+#troll-convert {
+  font-size: 100px; /* Makes the troll emoji giant */
+  cursor: pointer; /* Makes it clickable */
+  margin: 20px auto; /* Centers it */
+  text-align: center; /* Ensures it's centered */
+  transition: transform 0.2s ease; /* Adds a slight animation on hover */
+}
+
+#troll-convert:hover {
+  transform: scale(1.1); /* Slightly enlarges the emoji on hover */
+}
+    #troll-shop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: black;
+      color: white;
+      text-align: center;
+      padding-top: 50px;
+    }
+    #troll-shop button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    #troll-shop #troll-message {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    #troll-shop #troll-currency {
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    #troll-shop #exit-shop {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    @keyframes wobble {
+      0% { transform: rotate(0deg); }
+      25% { transform: rotate(5deg); }
+      50% { transform: rotate(-5deg); }
+      75% { transform: rotate(5deg); }
+      100% { transform: rotate(0deg); }
+    }
+    @keyframes golden-gradient {
+      0% { background-color: gold; }
+      50% { background-color: yellow; }
+      100% { background-color: gold; }
+    }
+    @keyframes galaxy-gradient {
+      0% { background-color: black; }
+      50% { background-color: gray; }
+      100% { background-color: black; }
+    }
+    @keyframes rainbow-gradient {
+      0% { background-color: red; }
+      14% { background-color: orange; }
+      28% { background-color: yellow; }
+      42% { background-color: green; }
+      57% { background-color: blue; }
+      71% { background-color: indigo; }
+      85% { background-color: violet; }
+      100% { background-color: red; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="rods-menu">
+      <h3>Rods</h3>
+      <div id="rods-list"></div>
+    </div>
+    <button onclick="toggleRodsMenu()">Rods</button>
+    <span id="money">$: <span id="money-amount">0</span></span>
+    <button id="sell-button" onclick="sellFish()">Sell</button>
+    <div id="fishing-square" onclick="fish()"></div>
+    <div id="cooldown">Cooldown: 3.00s</div>
+    <div id="fish-list">
+      <p>🐟: <span id="fish1">0</span></p>
+      <p>🐠: <span id="fish2">0</span></p>
+      <p>🐡: <span id="fish3">0</span></p>
+      <p>🐢: <span id="fish4">0</span></p>
+      <p>🦀: <span id="fish5">0</span></p>
+      <p>🦞: <span id="fish6">0</span></p>
+      <p>🐙: <span id="fish7">0</span></p>
+      <p>🐬: <span id="fish8">0</span></p>
+      <p>🦑: <span id="fish9">0</span></p>
+      <p>🦈: <span id="fish10">0</span></p>
+    </div>
+    <div id="troll-lock" onclick="unlockTrollShop()">🧌 <span id="troll-lock-price">$100F</span></div>
+  </div>
+
+  <!-- Troll Shop -->
+  <div id="troll-shop">
+  <div id="exit-shop" onclick="exitTrollShop()">🐟</div>
+  <div id="troll-message"></div>
+  <div id="troll-currency">*: <span id="troll-currency-amount">0</span></div>
+  <div id="troll-currency">$: <span id="money-amount-troll">0</span></div>
+  <div id="troll-convert" onclick="convertToStarCurrency()">🧌</div> <!-- Giant troll emoji -->
+  <div>
+    <h3>Troll Shop Upgrades</h3>
+    <button onclick="buyFishStocks()">Fish Stocks (1*)</button>
+    <button onclick="buyFishBait()">Fish Bait (1*)</button>
+  </div>
+</div>
+
+  <script>
+    let fishCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let money = 0;
+    let starCurrency = 0;
+    let cooldown = 3;
+    let isCooldown = false;
+    let currentRod = -1;
+    let ownedRods = [false, false, false, false, false, false, false, false, false];
+    let trollShopUnlocked = false;
+    let convertPrice = parseNumber("100F");
+    let fishStocksPrice = 1;
+    let fishBaitPrice = 1;
+    let fishSellMultiplier = 1;
+    let fishBaitMultiplier = 1;
+
+// Cheat code listener
+const cheatCode = "56";
+let cheatInput = "";
+
+document.addEventListener("keydown", (event) => {
+  cheatInput += event.key;
+  if (cheatInput.length > cheatCode.length) {
+    cheatInput = cheatInput.slice(-cheatCode.length); // Keep only the last 3 characters
+  }
+  if (cheatInput === cheatCode) {
+    money *= 10; // Double the money
+    document.getElementById("money-amount").innerText = simplifyNumber(money);
+    document.getElementById("money-amount-troll").innerText = simplifyNumber(money);
+    alert("Cheat activated! Money doubled!");
+    cheatInput = ""; // Reset the input
+  }
+});
+    const fishValues = [1, 100, parseNumber("10A"), parseNumber("1B"), parseNumber("100B"), parseNumber("10C"), parseNumber("1D"), parseNumber("100D"), parseNumber("10E"), parseNumber("1F")];
+
+    const rods = [
+      { name: "Basic Rod", price: "1A", color: "red", cooldownReduction: 0.3, fishRanges: [[1, 100], [1, 10]] },
+      { name: "Beginner's Rod", price: "100A", color: "orange", cooldownReduction: 0.6, fishRanges: [[1, parseNumber("1A")], [1, 100], [1, 10]] },
+      { name: "Steel Rod", price: "10B", color: "yellow", cooldownReduction: 0.9, fishRanges: [[1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]] },
+      { name: "Angler's Rod", price: "1C", color: "green", cooldownReduction: 1.2, fishRanges: [[1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]] },
+      { name: "Advanced Rod", price: "100C", color: "blue", cooldownReduction: 1.5, fishRanges: [[1, parseNumber("1B")], [1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]] },
+      { name: "Molten Rod", price: "10D", color: "purple", cooldownReduction: 1.8, fishRanges: [[1, parseNumber("10B")], [1, parseNumber("1B")], [1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]] },
+      { name: "Grand Rod", price: "1E", color: "gold", cooldownReduction: 2.1, fishRanges: [[1, parseNumber("100B")], [1, parseNumber("10B")], [1, parseNumber("1B")], [1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]], animation: "golden-gradient 2s infinite" },
+      { name: "Galaxy Rod", price: "100E", color: "black", cooldownReduction: 2.4, fishRanges: [[1, parseNumber("1C")], [1, parseNumber("100B")], [1, parseNumber("10B")], [1, parseNumber("1B")], [1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]], animation: "galaxy-gradient 2s infinite" },
+      { name: "Universal Rod", price: "10F", color: "rainbow", cooldownReduction: 2.7, fishRanges: [[1, parseNumber("10C")], [1, parseNumber("1C")], [1, parseNumber("100B")], [1, parseNumber("10B")], [1, parseNumber("1B")], [1, parseNumber("100A")], [1, parseNumber("10A")], [1, parseNumber("1A")], [1, 100], [1, 10]], animation: "rainbow-gradient 2s infinite" }
+    ];
+
+    function unlockTrollShop() {
+      if (trollShopUnlocked) {
+        enterTrollShop();
+        return;
+      }
+      const price = parseNumber("100F");
+      if (money >= price) {
+        money -= price;
+        trollShopUnlocked = true;
+        document.getElementById("troll-lock").innerHTML = "🧌";
+        document.getElementById("money-amount").innerText = simplifyNumber(money);
+        enterTrollShop();
+      } else {
+        alert("You need $100F to unlock the Troll Shop!");
+      }
+    }
+
+    function enterTrollShop() {
+      document.getElementById("game-container").style.display = "none";
+      document.getElementById("troll-shop").style.display = "block";
+      startTrollCutscene();
+    }
+
+    function exitTrollShop() {
+      document.getElementById("troll-shop").style.display = "none";
+      document.getElementById("game-container").style.display = "block";
+    }
+
+    function startTrollCutscene() {
+  const trollMessage = document.getElementById("troll-message");
+  trollMessage.innerText = "Welcome to my shop!";
+  setTimeout(() => {
+    trollMessage.innerText = "Here you can transfer $ into *";
+    setTimeout(() => {
+      trollMessage.innerText = "This can buff the sell price of your fish";
+      setTimeout(() => {
+        trollMessage.innerText = `Click me to convert $${simplifyNumber(convertPrice)} into 1*`;
+      }, 4000);
+    }, 2000);
+  }, 2000);
+}
+
+    function convertToStarCurrency() {
+  if (money >= convertPrice) {
+    money -= convertPrice;
+    starCurrency += 1;
+    convertPrice *= 2; // Double the price for the next conversion
+    document.getElementById("money-amount").innerText = simplifyNumber(money);
+    document.getElementById("money-amount-troll").innerText = simplifyNumber(money);
+    document.getElementById("troll-currency-amount").innerText = starCurrency;
+  } else {
+    const trollMessage = document.getElementById("troll-message");
+    trollMessage.innerText = "Too bad kiddo, I need cash";
+    setTimeout(() => {
+      trollMessage.innerText = `Click me to convert $${simplifyNumber(convertPrice)} into 1*`;
+    }, 2000);
+  }
+}
+
+    function buyFishStocks() {
+  if (starCurrency >= fishStocksPrice) {
+    starCurrency -= fishStocksPrice;
+    fishSellMultiplier *= 2;
+    fishStocksPrice = 1; // Double the price for the next purchase
+    document.getElementById("troll-currency-amount").innerText = starCurrency;
+  } else {
+    alert("Not enough *!");
+  }
+}
+
+    function buyFishBait() {
+  if (starCurrency >= fishBaitPrice) {
+    starCurrency -= fishBaitPrice;
+    fishBaitMultiplier *= 2;
+    fishBaitPrice = 1; // Double the price for the next purchase
+    document.getElementById("troll-currency-amount").innerText = starCurrency;
+  } else {
+    alert("Not enough *!");
+  }
+}
+    function fish() {
+      if (isCooldown) return;
+      isCooldown = true;
+
+      const square = document.getElementById("fishing-square");
+      square.style.animation = "wobble 0.5s";
+      setTimeout(() => square.style.animation = "", 500);
+
+      const fishEmoji = document.createElement("div");
+      fishEmoji.innerText = "🐟";
+      fishEmoji.style.fontSize = "24px";
+      square.appendChild(fishEmoji);
+      setTimeout(() => fishEmoji.remove(), 500);
+
+      if (currentRod === -1) {
+        const fishCaught = Math.floor(Math.random() * 10) + 1;
+        fishCounts[0] += fishCaught * fishBaitMultiplier;
+        document.getElementById(`fish1`).innerText = simplifyNumber(fishCounts[0]);
+      } else {
+        const rod = rods[currentRod];
+        for (let i = 0; i < rod.fishRanges.length; i++) {
+          const [min, max] = rod.fishRanges[i];
+          const fishCaught = Math.floor(Math.random() * (max - min + 1)) + min;
+          fishCounts[i] += fishCaught * fishBaitMultiplier;
+          document.getElementById(`fish${i + 1}`).innerText = simplifyNumber(fishCounts[i]);
+        }
+      }
+
+      let remainingCooldown = cooldown - (currentRod >= 0 ? rods[currentRod].cooldownReduction : 0);
+      const cooldownInterval = setInterval(() => {
+        remainingCooldown -= 0.01;
+        document.getElementById("cooldown").innerText = `Cooldown: ${remainingCooldown.toFixed(2)}s`;
+        if (remainingCooldown <= 0) {
+          clearInterval(cooldownInterval);
+          isCooldown = false;
+          document.getElementById("cooldown").innerText = "Cooldown: 0.00s";
+        }
+      }, 10);
+    }
+
+    function sellFish() {
+      let total = 0;
+      fishCounts.forEach((count, index) => {
+        total += count * fishValues[index] * fishSellMultiplier;
+      });
+      money += total;
+      fishCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      updateFishDisplay();
+      document.getElementById("money-amount").innerText = simplifyNumber(money);
+      document.getElementById("money-amount-troll").innerText = simplifyNumber(money);
+    }
+
+    function updateFishDisplay() {
+      for (let i = 0; i < fishCounts.length; i++) {
+        document.getElementById(`fish${i + 1}`).innerText = simplifyNumber(fishCounts[i]);
+      }
+    }
+
+    function toggleRodsMenu() {
+      const menu = document.getElementById("rods-menu");
+      menu.style.display = menu.style.display === "block" ? "none" : "block";
+      if (menu.style.display === "block") loadRods();
+    }
+
+    function loadRods() {
+      const rodsList = document.getElementById("rods-list");
+      rodsList.innerHTML = "";
+      rods.forEach((rod, index) => {
+        const rodDiv = document.createElement("div");
+        rodDiv.innerHTML = `
+          <p>${rod.name} - ${rod.price}</p>
+          <button onclick="buyRod(${index})">Buy</button>
+          <button onclick="selectRod(${index})">Select</button>
+        `;
+        rodsList.appendChild(rodDiv);
+      });
+    }
+
+    function buyRod(index) {
+      const rod = rods[index];
+      const price = parseNumber(rod.price);
+      if (money >= price) {
+        money -= price;
+        ownedRods[index] = true;
+        document.getElementById("money-amount").innerText = simplifyNumber(money);
+        alert(`You bought the ${rod.name}!`);
+      } else {
+        alert("Not enough money!");
+      }
+    }
+
+    function selectRod(index) {
+      if (!ownedRods[index]) {
+        alert("You must buy this rod first!");
+        return;
+      }
+      currentRod = index;
+      const square = document.getElementById("fishing-square");
+      square.style.backgroundColor = rods[index].color;
+      if (rods[index].animation) {
+        square.style.animation = rods[index].animation;
+      } else {
+        square.style.animation = "";
+      }
+      alert(`Selected ${rods[index].name}`);
+    }
+
+    function simplifyNumber(number) {
+      const suffixes = ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
+      let suffixIndex = 0;
+      while (number >= 1000 && suffixIndex < suffixes.length - 1) {
+        number /= 1000;
+        suffixIndex++;
+      }
+      return `${number.toFixed(2)}${suffixes[suffixIndex]}`;
+    }
+
+    function parseNumber(str) {
+      const suffixes = { "A": 1e3, "B": 1e6, "C": 1e9, "D": 1e12, "E": 1e15, "F": 1e18, "G": 1e21, "H": 1e24, "I": 1e27, "J": 1e30, "K": 1e33, "L": 1e36, "M": 1e39, "N": 1e42, "O": 1e45, "P": 1e48, "Q": 1e51, "R": 1e54, "S": 1e57, "T": 1e60, "U": 1e63, "V": 1e66, "W": 1e69, "X": 1e72, "Y": 1e75, "Z": 1e78 };
+      const suffix = str.slice(-1);
+      const num = parseFloat(str.slice(0, -1));
+      return num * (suffixes[suffix] || 1);
+    }
+  </script>
+</body>
+</html>

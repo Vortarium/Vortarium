@@ -1,0 +1,1454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vortalk</title>
+<style>
+  /* Plain 2000s look — monospace, black & white, square corners */
+  :root { --bg: #fff; --fg: #000; }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family: 'Courier New', monospace;font-size:14px}
+  *{box-sizing:border-box}
+  .app { display:grid; grid-template-columns:240px 1fr 320px; gap:8px; height:100vh; padding:8px; }
+  .panel { background:#fff; border:1px solid #000; padding:10px; overflow:auto; }
+  h1,h2,h3,h4 { margin:4px 0; font-weight:700; }
+  label{display:block;margin-top:8px}
+  input, textarea, select, button { font-family:inherit; font-size:14px; background:#fff; color:#000; border:1px solid #000; padding:6px; }
+  button { cursor:pointer; }
+  .small { font-size:12px; color:#000; }
+  .group-btn{display:block;width:100%;text-align:left;margin-bottom:6px}
+  .post { border:1px solid #000; padding:8px; margin-bottom:8px; white-space:pre-wrap; }
+  .reply { margin-left:18px; border-left:1px solid #000; padding-left:8px; margin-top:6px; white-space:pre-wrap;}
+  .attachments img, .attachments video { max-width:260px; display:block; margin-top:6px; border:1px solid #000; }
+  .attachments audio { display:block; margin-top:6px; }
+  .muted { color:#333; font-size:12px; }
+  .topbar { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+  .form-row { margin-top:8px; }
+  .tiny { font-size:11px; padding:4px; }
+  .notice { margin-top:8px; color:#900; }
+  .pfp { width:32px; height:32px; border:1px solid #000; vertical-align:middle; margin-right:6px; }
+  .author-line { display:flex; align-items:center; }
+  .likes-dislikes { display:flex; gap:8px; margin-top:6px; }
+  .like-btn, .dislike-btn { font-size:12px; }
+  .big-pfp { width:128px; height:128px; border:1px solid #000; }
+  .profile-view { padding:10px; }
+  .profile-images img { max-width:200px; margin:6px; border:1px solid #000; }
+  .user-post { margin-bottom:12px; border-bottom:1px solid #000; padding-bottom:8px; }
+  .deleted { color:#900; font-style:italic; }
+  .clickable { cursor:pointer; text-decoration:underline; }
+  .spoiler { background-color:#000; color:#000; cursor:pointer; }
+  .spoiler.revealed { color:inherit; background-color:transparent; }
+  .poll-options { margin-top:8px; }
+  .poll-option { display:block; margin-bottom:4px; }
+  .poll-result { display:block; margin-bottom:4px; }
+  .html-embed { border:1px dashed #000; padding:8px; margin-top:8px; }
+  iframe { width:300px; height:200px; border:1px solid #000; }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Vortalk app">
+    <!-- LEFT: Boards & Auth -->
+    <aside class="panel" id="leftPanel" aria-label="Boards and account">
+      <h2>Vortalk</h2>
+      <div>
+        <strong>Account</strong>
+        <div class="small" id="accountStatus">Not signed in</div>
+        <div style="margin-top:6px">
+          <button id="showSignUpBtn" class="tiny">Sign up</button>
+          <button id="showLoginBtn" class="tiny">Log in</button>
+          <button id="logoutBtn" class="tiny">Log out</button>
+        </div>
+      </div>
+      <hr/>
+      <div>
+        <strong>Create board</strong>
+        <div class="small">Pick one character (letter/symbol, case-sensitive) then name after &amp;</div>
+        <label for="boardChar">Character</label>
+        <input id="boardChar" maxlength="1" placeholder="e.g. A or a or !" />
+        <label for="boardName">Board name</label>
+        <input id="boardName" placeholder="topic"/>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="createBoardBtn">Create</button>
+          <button id="refreshBoardsBtn">Refresh</button>
+        </div>
+        <div id="createBoardMsg" class="small muted"></div>
+      </div>
+      <hr/>
+      <div>
+        <strong>Boards</strong>
+        <div id="boardsList" style="margin-top:8px"></div>
+      </div>
+    </aside>
+    <!-- CENTER: Feed & Composer -->
+    <main class="panel" id="mainPanel" aria-label="Main feed">
+      <div class="topbar">
+        <div>
+          <h3 id="feedTitle">Feed</h3>
+          <div class="small" id="selectedBoardDisplay">No board selected</div>
+          <div class="small" id="boardCreatorDisplay"></div>
+        </div>
+      </div>
+      <!-- Composer -->
+      <div style="border-top:1px solid #000;padding-top:10px;margin-top:8px">
+        <label for="postSelect">Post to board</label>
+        <select id="postSelect"></select>
+        <label for="postTitle">Title (optional)</label>
+        <input id="postTitle" />
+        <label for="postText">Text</label>
+        <textarea id="postText" rows="5"></textarea>
+        <label for="postFiles">Attachments (each ≤ 10 MB)</label>
+        <input id="postFiles" type="file" multiple accept="image/*,video/*,audio/*" />
+        <label><input type="checkbox" id="pollToggle"> Create poll</label>
+        <div id="pollOptions" style="display:none">
+          <div id="pollOptsContainer"></div>
+          <button id="addPollOpt" class="tiny">+</button>
+          <button id="removePollOpt" class="tiny">-</button>
+        </div>
+        <button id="addHtmlBtn" class="tiny">Add HTML</button>
+        <div id="htmlInput" style="display:none">
+          <label for="htmlCode">Paste HTML code</label>
+          <textarea id="htmlCode" rows="5"></textarea>
+        </div>
+        <label><input type="checkbox" id="embedLinks"> Embed links?</label>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="postBtn">Post</button>
+          <button id="clearComposerBtn">Clear</button>
+        </div>
+        <div id="composerMsg" class="small muted"></div>
+      </div>
+      <!-- Feed -->
+      <div id="feedArea" style="margin-top:12px"></div>
+    </main>
+    <!-- RIGHT: Profile / Pages / Verify UI -->
+    <aside class="panel" id="rightPanel" aria-label="Profile and pages">
+      <h3>Profile</h3>
+      <div id="profileArea">
+        <div><strong id="profileName" class="clickable">Anonymous</strong></div>
+        <div id="profileBio" class="muted">No bio</div>
+        <label for="bioText">Bio (max 1000 chars)</label>
+        <textarea id="bioText" rows="4" maxlength="1000"></textarea>
+        <button id="saveBioBtn" class="tiny">Save bio</button>
+        <div id="profilePfp"></div>
+        <label for="pfpUpload" style="margin-top:8px">Upload PFP (image)</label>
+        <input id="pfpUpload" type="file" accept="image/*" />
+        <button id="uploadPfpBtn" class="tiny">Upload</button>
+        <label for="profileImagesUpload">Upload profile images (up to 4)</label>
+        <input id="profileImagesUpload" type="file" multiple accept="image/*" />
+        <button id="uploadProfileImagesBtn" class="tiny">Upload</button>
+        <div id="profileImages"></div>
+        <div id="pfpMsg" class="small muted"></div>
+        <div id="accountCreated" class="small muted"></div>
+      </div>
+      <hr/>
+      <!-- Sign up / Login / Verify forms shown as needed -->
+      <div id="authArea">
+        <!-- Sign up -->
+        <div id="signUpForm" style="display:none">
+          <h4>Sign up</h4>
+          <label for="suUsername">Username</label>
+          <input id="suUsername" placeholder="yourusername" />
+          <label for="suPass">Password</label>
+          <input id="suPass" type="password" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="doSignUp">Create account</button>
+            <button id="cancelSignUp">Cancel</button>
+          </div>
+          <div id="suMsg" class="small muted"></div>
+        </div>
+        <!-- Login -->
+        <div id="loginForm" style="display:none">
+          <h4>Log in</h4>
+          <label for="liUsername">Username</label>
+          <input id="liUsername" />
+          <label for="liPass">Password</label>
+          <input id="liPass" type="password" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="doLogin">Log in</button>
+            <button id="cancelLogin">Cancel</button>
+          </div>
+          <div id="liMsg" class="small muted"></div>
+        </div>
+      </div>
+      <hr/>
+      <div>
+        <strong>Boards created</strong>
+        <div id="userBoardsList" class="small muted"></div>
+      </div>
+      <hr/>
+      <div id="debug" class="small muted" style="margin-top:8px"></div>
+    </aside>
+  </div>
+<script>
+/*
+Vortalk single-file app
+- Attachments saved in IndexedDB as blobs (avoids localStorage quota)
+- Metadata (users, boards, posts) saved in localStorage (small)
+- Anonymous until logged in
+- Boards case-sensitive and support symbols
+*/
+// ---------- IndexedDB helpers for attachments ----------
+const DB_NAME = 'VortalkDB_v1';
+const ATT_STORE = 'attachments';
+let dbPromise = null;
+function openDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(ATT_STORE)) {
+        db.createObjectStore(ATT_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+async function saveBlobToDB(blob, meta = {}) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_STORE, 'readwrite');
+    const store = tx.objectStore(ATT_STORE);
+    const id = 'att_' + Date.now() + '_' + Math.floor(Math.random()*9000+1000);
+    const obj = { id, blob, meta };
+    const r = store.put(obj);
+    r.onsuccess = () => resolve(id);
+    r.onerror = () => reject(r.error || new Error('indexeddb put failed'));
+  });
+}
+async function getBlobFromDB(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_STORE, 'readonly');
+    const store = tx.objectStore(ATT_STORE);
+    const r = store.get(id);
+    r.onsuccess = () => resolve(r.result ? r.result.blob : null);
+    r.onerror = () => reject(r.error || new Error('indexeddb get failed'));
+  });
+}
+async function deleteBlobFromDB(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ATT_STORE, 'readwrite');
+    const store = tx.objectStore(ATT_STORE);
+    const r = store.delete(id);
+    r.onsuccess = () => resolve();
+    r.onerror = () => reject(r.error);
+  });
+}
+// ---------- App state (metadata) ----------
+const LS_KEY = 'vortalk_meta_v1'; // stores boards, posts, users (lightweight)
+let meta = {
+  boards: {}, // boardKey -> { desc, created, creator, posts: [postId,...] }
+  posts: {}, // postId -> {id, boardKey, title, text, attachments: [{id,name,type,size}], author, created, replies: [], likes: [], dislikes: [], deleted: false, deletedBy: null, edited: false, editedAt: null, poll: null, htmlCode: null, embedLinks: false } // poll: {options: [str], votes: [[usernames]]}
+  users: {}, // username -> {username, pass, bio:'', pfpAttId: null, profileImages: [], followers: [], created: null}
+  currentUser: null // username or null
+};
+// load meta from localStorage
+function loadMeta() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) meta = JSON.parse(raw);
+  } catch(e) {
+    console.error('load meta failed', e);
+  }
+}
+function saveMeta() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(meta));
+  } catch(e) {
+    console.error('save meta failed', e);
+    // if quota issues arise, we can't store attachments here (they're in IndexedDB), so try to trim old posts
+    // simple fallback: keep only last 100 posts metadata
+    try {
+      const postIds = Object.keys(meta.posts).sort((a,b) => (meta.posts[b].created||0) - (meta.posts[a].created||0));
+      const keep = postIds.slice(0, 200);
+      const newPosts = {};
+      keep.forEach(id => newPosts[id] = meta.posts[id]);
+      meta.posts = newPosts;
+      localStorage.setItem(LS_KEY, JSON.stringify(meta));
+      console.warn('trimmed meta posts to reduce storage');
+    } catch(err2) {
+      console.error('failed to trim meta', err2);
+    }
+  }
+}
+// ---------- Utilities ----------
+function uid(prefix='x') { return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*9000+1000); }
+function now() { return Date.now(); }
+function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+// Minimal markdown-ish rendering: **bold**, *italic*, lines starting with "# " => header
+function renderFormatted(text, isTitle = false, embedLinks = false) {
+  if (!text) return '';
+  let out = escapeHtml(text);
+  if (!isTitle) {
+    out = out.replace(/^#\s+(.*)$/gm, '<strong style="font-size:18px">$1</strong>');
+  }
+  out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  out = out.replace(/\n/g, '<br/>');
+  // spoilers
+  out = out.replace(/\|\|\s*(.*?)\s*\|\|/g, '<span class="spoiler" onclick="this.classList.add(\'revealed\')">$1</span>');
+  // links
+  if (embedLinks) {
+    out = out.replace(/(https?:\/\/[^\s<]+)/g, '<iframe src="$1"></iframe>');
+  } else {
+    out = out.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank">$1</a>');
+  }
+  // bullets - simple replace
+  out = out.replace(/^-\s+(.*)$/gm, '&bull; $1<br/>');
+  return out;
+}
+// ---------- DOM refs ----------
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const refs = {
+  boardsList: $('#boardsList'),
+  boardChar: $('#boardChar'),
+  boardName: $('#boardName'),
+  createBoardBtn: $('#createBoardBtn'),
+  refreshBoardsBtn: $('#refreshBoardsBtn'),
+  createBoardMsg: $('#createBoardMsg'),
+  postSelect: $('#postSelect'),
+  postTitle: $('#postTitle'),
+  postText: $('#postText'),
+  postFiles: $('#postFiles'),
+  postBtn: $('#postBtn'),
+  clearComposerBtn: $('#clearComposerBtn'),
+  composerMsg: $('#composerMsg'),
+  pollToggle: $('#pollToggle'),
+  pollOptions: $('#pollOptions'),
+  addPollOpt: $('#addPollOpt'),
+  removePollOpt: $('#removePollOpt'),
+  pollOptsContainer: $('#pollOptsContainer'),
+  addHtmlBtn: $('#addHtmlBtn'),
+  htmlInput: $('#htmlInput'),
+  htmlCode: $('#htmlCode'),
+  embedLinks: $('#embedLinks'),
+  feedArea: $('#feedArea'),
+  selectedBoardDisplay: $('#selectedBoardDisplay'),
+  boardCreatorDisplay: $('#boardCreatorDisplay'),
+  feedTitle: $('#feedTitle'),
+  profileName: $('#profileName'),
+  profileBio: $('#profileBio'),
+  bioText: $('#bioText'),
+  saveBioBtn: $('#saveBioBtn'),
+  profilePfp: $('#profilePfp'),
+  pfpUpload: $('#pfpUpload'),
+  uploadPfpBtn: $('#uploadPfpBtn'),
+  profileImagesUpload: $('#profileImagesUpload'),
+  uploadProfileImagesBtn: $('#uploadProfileImagesBtn'),
+  profileImages: $('#profileImages'),
+  pfpMsg: $('#pfpMsg'),
+  accountStatus: $('#accountStatus'),
+  accountCreated: $('#accountCreated'),
+  userBoardsList: $('#userBoardsList'),
+  // auth
+  showSignUpBtn: $('#showSignUpBtn'),
+  showLoginBtn: $('#showLoginBtn'),
+  logoutBtn: $('#logoutBtn'),
+  signUpForm: $('#signUpForm'),
+  loginForm: $('#loginForm'),
+  suUsername: $('#suUsername'),
+  suPass: $('#suPass'),
+  doSignUp: $('#doSignUp'),
+  cancelSignUp: $('#cancelSignUp'),
+  suMsg: $('#suMsg'),
+  liUsername: $('#liUsername'),
+  liPass: $('#liPass'),
+  doLogin: $('#doLogin'),
+  cancelLogin: $('#cancelLogin'),
+  liMsg: $('#liMsg'),
+  debug: $('#debug'),
+  mainPanel: $('#mainPanel')
+};
+// ---------- Board logic ----------
+function boardKeyFrom(char, name) {
+  return `${char}&${name}`;
+}
+function createBoard(char, name) {
+  const key = boardKeyFrom(char, name);
+  if (!char || !name) return { ok:false, msg:'Provide char and name' };
+  if (meta.boards[key]) return { ok:false, msg:'Board already exists' };
+  const creator = (getCurrentUser()) ? getCurrentUser().username : 'Anonymous';
+  meta.boards[key] = { desc: name, created: now(), creator, posts: [] };
+  saveMeta();
+  return { ok:true, key };
+}
+async function deleteBoard(key) {
+  const board = meta.boards[key];
+  if (!board) return { ok:false, msg:'Board not found' };
+  const user = getCurrentUser();
+  if (!user || board.creator !== user.username) return { ok:false, msg:'You cannot delete this board' };
+  // delete all posts
+  for (const pid of board.posts) {
+    await deletePost(pid, true); // force as admin
+  }
+  delete meta.boards[key];
+  if (meta.currentBoard === key) meta.currentBoard = null;
+  saveMeta();
+  return { ok:true };
+}
+function renderBoards() {
+  refs.boardsList.innerHTML = '';
+  const keys = Object.keys(meta.boards).sort((a,b)=> meta.boards[a].created - meta.boards[b].created );
+  if (keys.length === 0) refs.boardsList.innerHTML = '<div class="small muted">No boards yet</div>';
+  keys.forEach(k => {
+    const cont = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.textContent = k + ' — ' + meta.boards[k].desc;
+    btn.className = 'group-btn';
+    btn.onclick = () => selectBoard(k);
+    cont.appendChild(btn);
+    const user = getCurrentUser();
+    if (user && meta.boards[k].creator === user.username) {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.className = 'tiny';
+      delBtn.onclick = async () => {
+        if (!confirm('Delete board ' + k + ' and all posts?')) return;
+        const res = await deleteBoard(k);
+        if (!res.ok) alert(res.msg);
+        renderBoards();
+        if (meta.currentBoard === k) selectBoard(null);
+        renderFeed();
+      };
+      cont.appendChild(delBtn);
+    }
+    refs.boardsList.appendChild(cont);
+  });
+  // update post select
+  refs.postSelect.innerHTML = '';
+  if (keys.length === 0) {
+    const opt = document.createElement('option'); opt.text = 'No boards'; refs.postSelect.appendChild(opt);
+  } else {
+    keys.forEach(k => { const opt = document.createElement('option'); opt.value = k; opt.text = k; refs.postSelect.appendChild(opt); });
+    if (!meta.currentBoard && keys.length) meta.currentBoard = keys[0];
+    if (meta.currentBoard) refs.postSelect.value = meta.currentBoard;
+  }
+  saveMeta();
+}
+function selectBoard(key) {
+  meta.currentBoard = key;
+  saveMeta();
+  refs.selectedBoardDisplay.textContent = key || 'No board selected';
+  const board = meta.boards[key];
+  refs.boardCreatorDisplay.textContent = board ? `Made by ${board.creator}` : '';
+  renderFeed();
+  renderBoards();
+}
+// ---------- Post logic ----------
+async function postAttachmentsFromFiles(fileList) {
+  const arr = Array.from(fileList||[]);
+  const saved = [];
+  for (const f of arr) {
+    if (f.size > 10*1024*1024) throw new Error('File ' + f.name + ' exceeds 10 MB');
+    const id = await saveBlobToDB(f, { name: f.name, type: f.type, size: f.size });
+    saved.push({ id, name: f.name, type: f.type, size: f.size });
+  }
+  return saved;
+}
+function createPost(boardKey, title, text, attachmentsMeta, author, poll = null, htmlCode = null, embedLinks = false) {
+  const id = uid('post');
+  const post = { id, boardKey, title, text, attachments: attachmentsMeta||[], author, created: now(), replies: [], likes: [], dislikes: [], deleted: false, deletedBy: null, edited: false, editedAt: null, poll, htmlCode, embedLinks };
+  meta.posts[id] = post;
+  meta.boards[boardKey].posts.push(id);
+  saveMeta();
+  return post;
+}
+function createReplyOnPost(postId, parentReplyId, text, attachmentsMeta, author) {
+  const post = meta.posts[postId];
+  if (!post) return { ok:false, msg:'Post not found' };
+  const replyObj = { id: uid('r'), text, attachments: attachmentsMeta||[], author, created: now(), replies: [], likes: [], dislikes: [], deleted: false, deletedBy: null, edited: false, editedAt: null };
+  if (!parentReplyId) {
+    post.replies.push(replyObj);
+  } else {
+    // recursive find
+    function findReply(list, id) {
+      for (const r of list) {
+        if (r.id === id) return r;
+        if (r.replies && r.replies.length) {
+          const found = findReply(r.replies, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    const parent = findReply(post.replies, parentReplyId);
+    if (!parent) return { ok:false, msg:'Parent reply not found' };
+    parent.replies.push(replyObj);
+  }
+  saveMeta();
+  return { ok:true, reply: replyObj };
+}
+async function deletePost(postId, forceAdmin = false) {
+  const post = meta.posts[postId];
+  if (!post) return { ok:false, msg:'Post not found' };
+  const user = getCurrentUser();
+  const board = meta.boards[post.boardKey];
+  const isAdmin = user && board && board.creator === user.username;
+  const isOwner = user && post.author === user.username;
+  if (!forceAdmin && !isOwner && !isAdmin) return { ok:false, msg:'You cannot delete this post' };
+  // mark as deleted
+  post.deleted = true;
+  post.deletedBy = isAdmin && !isOwner ? 'admin' : 'self';
+  // delete attachments
+  for (const a of post.attachments) {
+    await deleteBlobFromDB(a.id);
+  }
+  post.attachments = [];
+  post.text = '';
+  post.title = '';
+  post.poll = null;
+  post.htmlCode = null;
+  // recursively mark replies deleted
+  function markRepliesDeleted(list) {
+    for (const r of list) {
+      r.deleted = true;
+      r.deletedBy = post.deletedBy;
+      r.text = '';
+      for (const a of r.attachments) {
+        deleteBlobFromDB(a.id);
+      }
+      r.attachments = [];
+      if (r.replies) markRepliesDeleted(r.replies);
+    }
+  }
+  markRepliesDeleted(post.replies);
+  saveMeta();
+  return { ok:true };
+}
+function deleteReply(postId, replyId, forceAdmin = false) {
+  const post = meta.posts[postId];
+  if (!post) return { ok:false, msg:'Post not found' };
+  const user = getCurrentUser();
+  const board = meta.boards[post.boardKey];
+  const isAdmin = user && board && board.creator === user.username;
+  function findAndMark(list, id) {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        const r = list[i];
+        const isOwner = user && r.author === user.username;
+        if (!forceAdmin && !isOwner && !isAdmin) return false;
+        r.deleted = true;
+        r.deletedBy = isAdmin && !isOwner ? 'admin' : 'self';
+        r.text = '';
+        for (const a of r.attachments) {
+          deleteBlobFromDB(a.id);
+        }
+        r.attachments = [];
+        function markChildren(list) {
+          for (const child of list) {
+            child.deleted = true;
+            child.deletedBy = r.deletedBy;
+            child.text = '';
+            for (const a of child.attachments) {
+              deleteBlobFromDB(a.id);
+            }
+            child.attachments = [];
+            if (child.replies) markChildren(child.replies);
+          }
+        }
+        markChildren(r.replies);
+        return true;
+      }
+      if (list[i].replies && findAndMark(list[i].replies, id)) return true;
+    }
+    return false;
+  }
+  const found = findAndMark(post.replies, replyId);
+  if (!found) return { ok:false, msg:'Reply not found' };
+  saveMeta();
+  return { ok:true };
+}
+function editPost(postId, newTitle, newText) {
+  const post = meta.posts[postId];
+  if (!post) return { ok:false, msg:'Post not found' };
+  const user = getCurrentUser();
+  if (!user || post.author !== user.username) return { ok:false, msg:'You cannot edit this post' };
+  post.title = newTitle;
+  post.text = newText;
+  post.edited = true;
+  post.editedAt = now();
+  saveMeta();
+  return { ok:true };
+}
+function editReply(postId, replyId, newText) {
+  const post = meta.posts[postId];
+  if (!post) return { ok:false, msg:'Post not found' };
+  function findAndEdit(list, id) {
+    for (const r of list) {
+      if (r.id === id) {
+        r.text = newText;
+        r.edited = true;
+        r.editedAt = now();
+        return true;
+      }
+      if (r.replies && findAndEdit(r.replies, id)) return true;
+    }
+    return false;
+  }
+  const found = findAndEdit(post.replies, replyId);
+  if (!found) return { ok:false, msg:'Reply not found' };
+  saveMeta();
+  return { ok:true };
+}
+// like/dislike
+function toggleLike(item, isLike = true) {
+  const user = getCurrentUser();
+  if (!user) return { ok:false, msg:'Must be logged in' };
+  const username = user.username;
+  const likes = item.likes;
+  const dislikes = item.dislikes;
+  const arr = isLike ? likes : dislikes;
+  const oppArr = isLike ? dislikes : likes;
+  if (arr.includes(username)) {
+    // remove
+    arr.splice(arr.indexOf(username), 1);
+  } else {
+    // add, remove from opp if present
+    arr.push(username);
+    if (oppArr.includes(username)) oppArr.splice(oppArr.indexOf(username), 1);
+  }
+  saveMeta();
+  return { ok:true };
+}
+function votePoll(postId, optionIndex) {
+  const post = meta.posts[postId];
+  if (!post || !post.poll) return { ok:false, msg:'No poll' };
+  const user = getCurrentUser();
+  if (!user) return { ok:false, msg:'Must be logged in' };
+  const username = user.username;
+  const votes = post.poll.votes;
+  // check if already voted
+  const hasVoted = votes.some(v => v.includes(username));
+  if (hasVoted) return { ok:false, msg:'Already voted' };
+  votes[optionIndex].push(username);
+  saveMeta();
+  return { ok:true };
+}
+// render feed for current board
+async function renderFeed() {
+  const scrollPos = refs.mainPanel.scrollTop;
+  refs.feedArea.innerHTML = '';
+  const bk = meta.currentBoard;
+  refs.feedTitle.textContent = bk ? ('Feed: ' + bk) : 'Feed';
+  refs.selectedBoardDisplay.textContent = bk || 'No board selected';
+  const board = meta.boards[bk];
+  refs.boardCreatorDisplay.textContent = board ? `Made by ${board.creator}` : '';
+  if (!bk || !board) {
+    refs.feedArea.innerHTML = '<div class="small muted">Select a board to view posts.</div>';
+    return;
+  }
+  const postIds = (board.posts || []).slice().reverse();
+  if (postIds.length === 0) {
+    refs.feedArea.innerHTML = '<div class="small muted">No posts yet</div>';
+    refs.mainPanel.scrollTop = scrollPos;
+    return;
+  }
+  for (const pid of postIds) {
+    const post = meta.posts[pid];
+    if (!post) continue;
+    const node = document.createElement('div'); node.className = 'post';
+    let titleHtml = post.title ? '<strong style="font-size:18px">' + renderFormatted(post.title, true, post.embedLinks) + '</strong>' : '';
+    if (post.edited) titleHtml += ' <span class="muted">(edited)</span>';
+    const author = escapeHtml(post.author || 'Anonymous');
+    const pfpImg = await renderPfpForAuthor(post.author);
+    const authorDiv = document.createElement('div');
+    authorDiv.className = 'author-line';
+    if (pfpImg) authorDiv.appendChild(pfpImg);
+    const authorSpan = document.createElement('span');
+    authorSpan.className = 'muted clickable';
+    authorSpan.innerHTML = `<strong>${author}</strong> • ${new Date(post.created).toLocaleString()}`;
+    if (post.author !== 'Anonymous') {
+      authorSpan.onclick = () => showUserProfile(post.author);
+    }
+    authorDiv.appendChild(authorSpan);
+    node.appendChild(authorDiv);
+    if (post.deleted) {
+      const delMsg = post.deletedBy === 'admin' ? `Deleted by admins of ${bk}` : `${author} deleted this post`;
+      node.innerHTML += `<div class="deleted">${delMsg}</div>`;
+    } else {
+      if (titleHtml) node.innerHTML += `<div style="margin-top:6px">${titleHtml}</div>`;
+      node.innerHTML += `<div style="margin-top:6px">${renderFormatted(post.text, false, post.embedLinks)}</div>`;
+      const acont = document.createElement('div'); acont.className = 'attachments';
+      node.appendChild(acont);
+      if (post.attachments && post.attachments.length) {
+        for (const a of post.attachments) {
+          try {
+            const blob = await getBlobFromDB(a.id);
+            if (blob) {
+              if (a.type.startsWith('image/')) {
+                const img = document.createElement('img'); img.src = URL.createObjectURL(blob);
+                acont.appendChild(img);
+              } else if (a.type.startsWith('video/')) {
+                const v = document.createElement('video'); v.controls = true; v.src = URL.createObjectURL(blob); v.style.maxWidth='260px';
+                acont.appendChild(v);
+              } else if (a.type.startsWith('audio/')) {
+                const au = document.createElement('audio'); au.controls = true; au.src = URL.createObjectURL(blob);
+                acont.appendChild(au);
+              } else {
+                const dd = document.createElement('div'); dd.textContent = `[attachment: ${a.name}]`; acont.appendChild(dd);
+              }
+            } else {
+              const missing = document.createElement('div'); missing.textContent = '[attachment missing]'; acont.appendChild(missing);
+            }
+          } catch(err) {
+            console.error('attachment load err', err);
+            const errDiv = document.createElement('div'); errDiv.textContent = '[attachment error]'; acont.appendChild(errDiv);
+          }
+        }
+      }
+      // html embed
+      if (post.htmlCode) {
+        const embedDiv = document.createElement('div');
+        embedDiv.className = 'html-embed';
+        embedDiv.innerHTML = post.htmlCode;
+        node.appendChild(embedDiv);
+      }
+      // poll
+      if (post.poll) {
+        const pollCont = document.createElement('div');
+        pollCont.className = 'poll-options';
+        pollCont.innerHTML = '<strong>Poll:</strong><br/>';
+        const user = getCurrentUser();
+        const hasVoted = user && post.poll.votes.some(v => v.includes(user.username));
+        const totalVotes = post.poll.votes.reduce((s, v) => s + v.length, 0);
+        post.poll.options.forEach((opt, i) => {
+          if (hasVoted || !user) {
+            const perc = totalVotes > 0 ? Math.round((post.poll.votes[i].length / totalVotes) * 100) : 0;
+            const res = document.createElement('div');
+            res.className = 'poll-result';
+            res.textContent = `${opt}: ${perc}%`;
+            pollCont.appendChild(res);
+          } else {
+            const btn = document.createElement('button');
+            btn.className = 'tiny poll-option';
+            btn.textContent = opt;
+            btn.onclick = () => {
+              votePoll(post.id, i);
+              const scrollPos = refs.mainPanel.scrollTop;
+              renderFeed();
+              refs.mainPanel.scrollTop = scrollPos;
+            };
+            pollCont.appendChild(btn);
+          }
+        });
+        node.appendChild(pollCont);
+      }
+    }
+    // likes/dislikes
+    const ldCont = document.createElement('div'); ldCont.className = 'likes-dislikes';
+    const likeBtn = document.createElement('button'); likeBtn.className = 'like-btn tiny';
+    likeBtn.textContent = `Like (${post.likes.length})`;
+    likeBtn.onclick = () => { 
+      const scrollPos = refs.mainPanel.scrollTop;
+      toggleLike(post, true); 
+      renderFeed(); 
+      refs.mainPanel.scrollTop = scrollPos;
+    };
+    const dislikeBtn = document.createElement('button'); dislikeBtn.className = 'dislike-btn tiny';
+    dislikeBtn.textContent = `Dislike (${post.dislikes.length})`;
+    dislikeBtn.onclick = () => { 
+      const scrollPos = refs.mainPanel.scrollTop;
+      toggleLike(post, false); 
+      renderFeed(); 
+      refs.mainPanel.scrollTop = scrollPos;
+    };
+    ldCont.appendChild(likeBtn);
+    ldCont.appendChild(dislikeBtn);
+    node.appendChild(ldCont);
+    // Edit and Delete buttons if own or admin
+    const user = getCurrentUser();
+    const isAdmin = user && board.creator === user.username;
+    const isOwner = user && post.author === user.username;
+    if (!post.deleted && isOwner) {
+      const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.className='tiny';
+      editBtn.onclick = () => openEditBox(post, node, true);
+      node.appendChild(editBtn);
+    }
+    if (isOwner || isAdmin) {
+      const delBtn = document.createElement('button'); delBtn.textContent = 'Delete'; delBtn.className='tiny';
+      delBtn.onclick = async () => {
+        if (!confirm('Delete this post?')) return;
+        const scrollPos = refs.mainPanel.scrollTop;
+        const res = await deletePost(post.id);
+        if (!res.ok) alert(res.msg);
+        renderFeed();
+        refs.mainPanel.scrollTop = scrollPos;
+      };
+      node.appendChild(delBtn);
+    }
+    // Reply button
+    if (!post.deleted) {
+      const replyBtn = document.createElement('button'); replyBtn.textContent = 'Reply'; replyBtn.className='tiny';
+      replyBtn.onclick = () => openReplyBox(post.id, null, node);
+      node.appendChild(replyBtn);
+    }
+    // render replies (recursive)
+    const repliesContainer = document.createElement('div'); repliesContainer.className = 'replies';
+    async function renderReplies(list, container) {
+      for (const r of list) {
+        const rr = document.createElement('div'); rr.className = 'reply';
+        const rAuthor = escapeHtml(r.author||'Anonymous');
+        const rPfpImg = await renderPfpForAuthor(r.author);
+        const rAuthorDiv = document.createElement('div');
+        rAuthorDiv.className = 'author-line';
+        if (rPfpImg) rAuthorDiv.appendChild(rPfpImg);
+        const rAuthorSpan = document.createElement('span');
+        rAuthorSpan.className = 'muted clickable';
+        let editedNote = r.edited ? ' (edited)' : '';
+        rAuthorSpan.innerHTML = `<strong>${rAuthor}</strong> • ${new Date(r.created).toLocaleString()}${editedNote}`;
+        if (r.author !== 'Anonymous') {
+          rAuthorSpan.onclick = () => showUserProfile(r.author);
+        }
+        rAuthorDiv.appendChild(rAuthorSpan);
+        rr.appendChild(rAuthorDiv);
+        if (r.deleted) {
+          const delMsg = r.deletedBy === 'admin' ? `Deleted by admins of ${bk}` : `${rAuthor} deleted this reply`;
+          rr.innerHTML += `<div class="deleted">${delMsg}</div>`;
+        } else {
+          rr.innerHTML += `<div style="margin-top:6px">${renderFormatted(r.text, false, post.embedLinks)}</div>`;
+          const raCont = document.createElement('div'); raCont.className = 'attachments';
+          rr.appendChild(raCont);
+          if (r.attachments && r.attachments.length) {
+            for (const a of r.attachments) {
+              try {
+                const blob = await getBlobFromDB(a.id);
+                if (blob) {
+                  if (a.type.startsWith('image/')) {
+                    const img = document.createElement('img'); img.src = URL.createObjectURL(blob);
+                    raCont.appendChild(img);
+                  } else if (a.type.startsWith('video/')) {
+                    const v = document.createElement('video'); v.controls = true; v.src = URL.createObjectURL(blob); v.style.maxWidth='260px';
+                    raCont.appendChild(v);
+                  } else if (a.type.startsWith('audio/')) {
+                    const au = document.createElement('audio'); au.controls = true; au.src = URL.createObjectURL(blob);
+                    raCont.appendChild(au);
+                  } else {
+                    const dd = document.createElement('div'); dd.textContent = `[attachment: ${a.name}]`; raCont.appendChild(dd);
+                  }
+                } else {
+                  const missing = document.createElement('div'); missing.textContent = '[attachment missing]'; raCont.appendChild(missing);
+                }
+              } catch(err) {
+                console.error('attachment load err', err);
+                const errDiv = document.createElement('div'); errDiv.textContent = '[attachment error]'; raCont.appendChild(errDiv);
+              }
+            }
+          }
+        }
+        // likes/dislikes for reply
+        const rLdCont = document.createElement('div'); rLdCont.className = 'likes-dislikes';
+        const rLikeBtn = document.createElement('button'); rLikeBtn.className = 'like-btn tiny';
+        rLikeBtn.textContent = `Like (${r.likes.length})`;
+        rLikeBtn.onclick = () => { 
+          const scrollPos = refs.mainPanel.scrollTop;
+          toggleLike(r, true); 
+          renderFeed(); 
+          refs.mainPanel.scrollTop = scrollPos;
+        };
+        const rDislikeBtn = document.createElement('button'); rDislikeBtn.className = 'dislike-btn tiny';
+        rDislikeBtn.textContent = `Dislike (${r.dislikes.length})`;
+        rDislikeBtn.onclick = () => { 
+          const scrollPos = refs.mainPanel.scrollTop;
+          toggleLike(r, false); 
+          renderFeed(); 
+          refs.mainPanel.scrollTop = scrollPos;
+        };
+        rLdCont.appendChild(rLikeBtn);
+        rLdCont.appendChild(rDislikeBtn);
+        rr.appendChild(rLdCont);
+        // edit/delete if own or admin
+        if (!r.deleted && user && r.author === user.username) {
+          const rEditBtn = document.createElement('button'); rEditBtn.textContent = 'Edit'; rEditBtn.className='tiny';
+          rEditBtn.onclick = () => openEditBox(r, rr, false, post.id, r.id);
+          rr.appendChild(rEditBtn);
+        }
+        if ((user && r.author === user.username) || isAdmin) {
+          const rDelBtn = document.createElement('button'); rDelBtn.textContent = 'Delete'; rDelBtn.className='tiny';
+          rDelBtn.onclick = async () => {
+            if (!confirm('Delete this reply?')) return;
+            const scrollPos = refs.mainPanel.scrollTop;
+            const res = deleteReply(post.id, r.id);
+            if (!res.ok) alert(res.msg);
+            renderFeed();
+            refs.mainPanel.scrollTop = scrollPos;
+          };
+          rr.appendChild(rDelBtn);
+        }
+        // reply to reply
+        if (!r.deleted) {
+          const rbtn = document.createElement('button'); rbtn.textContent = 'Reply'; rbtn.className='tiny';
+          rbtn.onclick = () => openReplyBox(post.id, r.id, rr);
+          rr.appendChild(rbtn);
+        }
+        container.appendChild(rr);
+        if (r.replies && r.replies.length) await renderReplies(r.replies, rr);
+      }
+    }
+    await renderReplies(post.replies || [], repliesContainer);
+    node.appendChild(repliesContainer);
+    refs.feedArea.appendChild(node);
+  }
+  refs.mainPanel.scrollTop = scrollPos;
+}
+// ---------- Edit box ----------
+function openEditBox(item, insertAfterNode, isPost = false, postId = null, replyId = null) {
+  const container = insertAfterNode || refs.feedArea;
+  const existing = container.querySelector('.edit-box');
+  if (existing) { existing.remove(); return; }
+  const box = document.createElement('div'); box.className = 'edit-box'; box.style.marginTop='6px';
+  let html = '';
+  if (isPost) {
+    html = `<label for="editTitle">Title</label><input id="editTitle" value="${escapeHtml(item.title || '')}" />
+    <label for="editText">Text</label><textarea id="editText" rows="5">${escapeHtml(item.text)}</textarea>`;
+  } else {
+    html = `<textarea id="editText" rows="3">${escapeHtml(item.text)}</textarea>`;
+  }
+  html += `<div style="display:flex;gap:8px;margin-top:6px">
+    <button class="tiny">Save</button>
+    <button class="tiny">Cancel</button>
+  </div>`;
+  box.innerHTML = html;
+  const titleIn = box.querySelector('#editTitle');
+  const ta = box.querySelector('#editText');
+  const save = box.querySelector('button');
+  const cancel = box.querySelectorAll('button')[1];
+  save.onclick = () => {
+    const newText = ta.value.trim();
+    if (!newText) return alert('Cannot be empty');
+    let res;
+    if (isPost) {
+      const newTitle = titleIn.value.trim();
+      res = editPost(item.id, newTitle, newText);
+    } else {
+      res = editReply(postId, replyId, newText);
+    }
+    if (!res.ok) return alert(res.msg);
+    const scrollPos = refs.mainPanel.scrollTop;
+    renderFeed();
+    refs.mainPanel.scrollTop = scrollPos;
+    box.remove();
+  };
+  cancel.onclick = () => box.remove();
+  container.appendChild(box);
+  addTextShortcuts(ta);
+}
+// ---------- Reply box ----------
+function openReplyBox(postId, parentReplyId, insertAfterNode) {
+  // create a small inline reply UI and append to insertAfterNode
+  const container = insertAfterNode || refs.feedArea;
+  // remove existing reply-box within this container
+  const existing = container.querySelector('.reply-box');
+  if (existing) { existing.remove(); return; }
+  const box = document.createElement('div'); box.className = 'reply-box'; box.style.marginTop='6px';
+  box.innerHTML = `<textarea rows="3" class="input" placeholder="Write reply..."></textarea>
+  <label for="replyFiles">Attachments</label>
+  <input id="replyFiles" type="file" multiple accept="image/*,video/*,audio/*" />
+  <div style="display:flex;gap:8px;margin-top:6px">
+    <button class="tiny">Send</button>
+    <button class="tiny">Cancel</button>
+  </div>`;
+  const ta = box.querySelector('textarea');
+  const filesIn = box.querySelector('#replyFiles');
+  const send = box.querySelector('button');
+  const cancel = box.querySelectorAll('button')[1];
+  send.onclick = async () => {
+    const txt = ta.value.trim();
+    const files = filesIn.files;
+    let attachments = [];
+    if (files.length) {
+      try {
+        attachments = await postAttachmentsFromFiles(files);
+      } catch(e) {
+        return alert('Attachment error: ' + e.message);
+      }
+    }
+    if (!txt && attachments.length === 0) return alert('Reply empty');
+    const author = (getCurrentUser()) ? getCurrentUser().username : 'Anonymous';
+    const res = createReplyOnPost(postId, parentReplyId, txt, attachments, author);
+    if (!res.ok && res.msg) return alert(res.msg);
+    const scrollPos = refs.mainPanel.scrollTop;
+    renderFeed();
+    refs.mainPanel.scrollTop = scrollPos;
+    box.remove();
+  };
+  cancel.onclick = () => box.remove();
+  container.appendChild(box);
+  addTextShortcuts(ta);
+}
+// ---------- Auth: signup/login ----------
+function showOnly(sectionId) {
+  // hide all forms then show the requested one
+  refs.signUpForm.style.display = 'none';
+  refs.loginForm.style.display = 'none';
+  if (sectionId === 'signup') refs.signUpForm.style.display = 'block';
+  if (sectionId === 'login') refs.loginForm.style.display = 'block';
+}
+function clearAuthMessages() {
+  refs.suMsg.textContent = '';
+  refs.liMsg.textContent = '';
+}
+function getCurrentUser() {
+  const username = meta.currentUser;
+  if (!username) return null;
+  return meta.users[username] || null;
+}
+// simplest passwords: stored as plain string here (client-side demo). In production use hashing+server.
+function signup(username, pass) {
+  if (!username || !pass) return { ok:false, msg:'Provide username and password' };
+  if (meta.users[username]) return { ok:false, msg:'Account already exists' };
+  meta.users[username] = { username, pass, bio:'', pfpAttId: null, profileImages: [], followers: [], created: now() };
+  meta.currentUser = username;
+  saveMeta();
+  return { ok:true, username };
+}
+function login(username, pass) {
+  const u = meta.users[username];
+  if (!u || u.pass !== pass) return { ok:false, msg:'Username or password incorrect' };
+  meta.currentUser = username;
+  saveMeta();
+  return { ok:true, user:u };
+}
+function logout() {
+  meta.currentUser = null;
+  saveMeta();
+}
+// ---------- PFP and profile images ----------
+async function uploadPfp(file) {
+  const user = getCurrentUser();
+  if (!user) return { ok:false, msg:'Must be logged in' };
+  if (!file || !file.type.startsWith('image/')) return { ok:false, msg:'Invalid image' };
+  // crop to 1:1 and resize
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  await new Promise(r => img.onload = r);
+  const size = Math.min(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, (img.width - size)/2, (img.height - size)/2, size, size, 0, 0, 128, 128);
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+  // delete old if exists
+  if (user.pfpAttId) await deleteBlobFromDB(user.pfpAttId);
+  // save new
+  const id = await saveBlobToDB(blob, { name: 'pfp.png', type: 'image/png', size: blob.size });
+  user.pfpAttId = id;
+  saveMeta();
+  return { ok:true };
+}
+async function uploadProfileImages(files) {
+  const user = getCurrentUser();
+  if (!user) return { ok:false, msg:'Must be logged in' };
+  const arr = Array.from(files).slice(0, 4 - user.profileImages.length);
+  if (arr.length === 0) return { ok:false, msg:'No images or limit reached' };
+  const saved = [];
+  for (const f of arr) {
+    if (!f.type.startsWith('image/')) continue;
+    const id = await saveBlobToDB(f, { name: f.name, type: f.type, size: f.size });
+    saved.push({ id, name: f.name, type: f.type, size: f.size });
+  }
+  user.profileImages.push(...saved);
+  if (user.profileImages.length > 4) user.profileImages = user.profileImages.slice(-4);
+  saveMeta();
+  return { ok:true };
+}
+async function renderPfpForAuthor(author) {
+  if (author === 'Anonymous') return null;
+  const u = meta.users[author];
+  if (!u || !u.pfpAttId) return null;
+  const blob = await getBlobFromDB(u.pfpAttId);
+  if (!blob) return null;
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(blob);
+  img.className = 'pfp';
+  return img;
+}
+// ---------- User profile view ----------
+async function showUserProfile(username) {
+  const user = meta.users[username];
+  if (!user) return alert('User not found');
+  const scrollPos = refs.mainPanel.scrollTop;
+  refs.feedArea.innerHTML = '';
+  const profileDiv = document.createElement('div');
+  profileDiv.className = 'profile-view';
+  const backBtn = document.createElement('button');
+  backBtn.textContent = '← Back to feed';
+  backBtn.className = 'tiny';
+  backBtn.onclick = () => { renderFeed(); refs.mainPanel.scrollTop = scrollPos; };
+  profileDiv.appendChild(backBtn);
+  // big pfp
+  if (user.pfpAttId) {
+    const blob = await getBlobFromDB(user.pfpAttId);
+    if (blob) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.className = 'big-pfp';
+      profileDiv.appendChild(img);
+    }
+  }
+  // big name
+  const nameH = document.createElement('h2');
+  nameH.textContent = username;
+  profileDiv.appendChild(nameH);
+  // bio
+  const bioDiv = document.createElement('div');
+  bioDiv.innerHTML = renderFormatted(user.bio || 'No bio');
+  profileDiv.appendChild(bioDiv);
+  // profile images
+  const imagesCont = document.createElement('div');
+  imagesCont.className = 'profile-images';
+  for (const pi of user.profileImages) {
+    const blob = await getBlobFromDB(pi.id);
+    if (blob) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      imagesCont.appendChild(img);
+    }
+  }
+  profileDiv.appendChild(imagesCont);
+  // followers
+  const followersDiv = document.createElement('div');
+  followersDiv.textContent = `Followers: ${user.followers.length}`;
+  profileDiv.appendChild(followersDiv);
+  // follow button
+  const current = getCurrentUser();
+  if (current && current.username !== username) {
+    const isFollowing = user.followers.includes(current.username);
+    const followBtn = document.createElement('button');
+    followBtn.textContent = isFollowing ? 'Unfollow' : 'Follow';
+    followBtn.className = 'tiny';
+    followBtn.onclick = () => {
+      if (isFollowing) {
+        user.followers.splice(user.followers.indexOf(current.username), 1);
+      } else {
+        user.followers.push(current.username);
+      }
+      saveMeta();
+      showUserProfile(username);
+    };
+    profileDiv.appendChild(followBtn);
+  }
+  // posts and replies
+  const userPosts = document.createElement('div');
+  userPosts.innerHTML = '<h4>Posts and replies</h4>';
+  // collect all
+  const items = [];
+  for (const pid in meta.posts) {
+    const p = meta.posts[pid];
+    if (p.author === username && !p.deleted) {
+      items.push({ type: 'post', board: p.boardKey, content: p.title ? p.title + ' - ' + p.text : p.text, created: p.created });
+    }
+    function collectReplies(list) {
+      for (const r of list) {
+        if (r.author === username && !r.deleted) {
+          items.push({ type: 'reply', board: p.boardKey, content: r.text, created: r.created });
+        }
+        if (r.replies) collectReplies(r.replies);
+      }
+    }
+    collectReplies(p.replies);
+  }
+  items.sort((a,b) => b.created - a.created);
+  for (const item of items) {
+    const up = document.createElement('div');
+    up.className = 'user-post';
+    up.innerHTML = `<div class="muted">${item.type} in ${item.board} • ${new Date(item.created).toLocaleString()}</div><div>${renderFormatted(item.content)}</div>`;
+    userPosts.appendChild(up);
+  }
+  if (items.length === 0) userPosts.innerHTML += '<div class="small muted">No posts or replies</div>';
+  profileDiv.appendChild(userPosts);
+  refs.feedArea.appendChild(profileDiv);
+}
+// ---------- UI events ----------
+refs.createBoardBtn.onclick = () => {
+  const c = refs.boardChar.value.trim();
+  const n = refs.boardName.value.trim();
+  const res = createBoard(c, n);
+  if (!res.ok) {
+    refs.createBoardMsg.textContent = res.msg;
+    return;
+  }
+  refs.createBoardMsg.textContent = 'Created ' + res.key;
+  refs.boardChar.value = '';
+  refs.boardName.value = '';
+  renderBoards();
+  selectBoard(res.key);
+};
+refs.refreshBoardsBtn.onclick = () => renderBoards();
+refs.postBtn.onclick = async () => {
+  const board = refs.postSelect.value;
+  if (!board || !meta.boards[board]) return alert('Select a board to post to');
+  const title = refs.postTitle.value.trim();
+  const text = refs.postText.value.trim();
+  const files = refs.postFiles.files;
+  if (!text && (!files || files.length === 0)) return alert('Cannot post empty');
+  refs.composerMsg.textContent = 'Uploading attachments...';
+  let attachments = [];
+  try {
+    if (files && files.length) {
+      attachments = await postAttachmentsFromFiles(files);
+    }
+  } catch(e) {
+    refs.composerMsg.textContent = '';
+    return alert('Attachment error: ' + e.message);
+  }
+  let poll = null;
+  if (refs.pollToggle.checked) {
+    const opts = $$('.pollOpt').map(i => i.value.trim()).filter(v => v);
+    if (opts.length < 2) return alert('Poll needs at least 2 options');
+    poll = { options: opts, votes: opts.map(() => []) };
+  }
+  let htmlCode = null;
+  if (refs.htmlCode.value.trim()) htmlCode = refs.htmlCode.value.trim();
+  const embedLinks = refs.embedLinks.checked;
+  const author = (getCurrentUser()) ? getCurrentUser().username : 'Anonymous';
+  const scrollPos = refs.mainPanel.scrollTop;
+  createPost(board, title, text, attachments, author, poll, htmlCode, embedLinks);
+  refs.composerMsg.textContent = 'Posted';
+  refs.postTitle.value = '';
+  refs.postText.value = '';
+  refs.postFiles.value = '';
+  refs.pollToggle.checked = false;
+  refs.pollOptions.style.display = 'none';
+  refs.pollOptsContainer.innerHTML = '';
+  refs.htmlInput.style.display = 'none';
+  refs.htmlCode.value = '';
+  refs.embedLinks.checked = false;
+  renderFeed();
+  refs.mainPanel.scrollTop = scrollPos;
+  setTimeout(()=>refs.composerMsg.textContent = '', 1500);
+};
+refs.clearComposerBtn.onclick = () => { refs.postTitle.value=''; refs.postText.value=''; refs.postFiles.value=''; refs.composerMsg.textContent=''; refs.pollToggle.checked = false; refs.pollOptions.style.display = 'none'; refs.pollOptsContainer.innerHTML = ''; refs.htmlInput.style.display = 'none'; refs.htmlCode.value = ''; refs.embedLinks.checked = false; };
+refs.pollToggle.onchange = () => {
+  if (refs.pollToggle.checked) {
+    refs.pollOptions.style.display = 'block';
+    initPollOpts();
+  } else {
+    refs.pollOptions.style.display = 'none';
+    refs.pollOptsContainer.innerHTML = '';
+  }
+};
+function initPollOpts(num = 2) {
+  refs.pollOptsContainer.innerHTML = '';
+  for (let i = 0; i < num; i++) {
+    const label = document.createElement('label');
+    label.textContent = `Option ${i+1}`;
+    const inp = document.createElement('input');
+    inp.className = 'pollOpt';
+    label.appendChild(inp);
+    refs.pollOptsContainer.appendChild(label);
+  }
+}
+refs.addPollOpt.onclick = () => {
+  const curr = $$('.pollOpt').length;
+  if (curr >= 4) return;
+  initPollOpts(curr + 1);
+};
+refs.removePollOpt.onclick = () => {
+  const curr = $$('.pollOpt').length;
+  if (curr <= 2) return;
+  initPollOpts(curr - 1);
+};
+refs.addHtmlBtn.onclick = () => {
+  refs.htmlInput.style.display = refs.htmlInput.style.display === 'none' ? 'block' : 'none';
+};
+refs.showSignUpBtn.onclick = () => { showOnly('signup'); clearAuthMessages(); };
+refs.cancelSignUp.onclick = () => { showOnly(null); clearAuthMessages(); };
+refs.doSignUp.onclick = () => {
+  const un = refs.suUsername.value.trim();
+  const pw = refs.suPass.value;
+  const r = signup(un, pw);
+  if (!r.ok) { refs.suMsg.textContent = r.msg; return; }
+  refs.suMsg.textContent = 'Account created and logged in.';
+  renderProfile();
+  showOnly(null);
+};
+refs.showLoginBtn.onclick = () => { showOnly('login'); clearAuthMessages(); };
+refs.cancelLogin.onclick = () => { showOnly(null); clearAuthMessages(); };
+refs.doLogin.onclick = () => {
+  const un = refs.liUsername.value.trim();
+  const pw = refs.liPass.value;
+  const r = login(un, pw);
+  if (!r.ok) { refs.liMsg.textContent = r.msg; return; }
+  refs.liMsg.textContent = 'Logged in as ' + un;
+  renderProfile();
+  showOnly(null);
+};
+refs.logoutBtn.onclick = () => { logout(); renderProfile(); };
+refs.saveBioBtn.onclick = () => {
+  const user = getCurrentUser();
+  if (!user) return alert('Must be logged in');
+  user.bio = refs.bioText.value.trim();
+  saveMeta();
+  renderProfile();
+};
+refs.uploadPfpBtn.onclick = async () => {
+  const file = refs.pfpUpload.files[0];
+  if (!file) return alert('Select an image');
+  const res = await uploadPfp(file);
+  if (!res.ok) return alert(res.msg);
+  refs.pfpMsg.textContent = 'PFP uploaded';
+  renderProfile();
+  renderFeed();
+  refs.pfpUpload.value = '';
+  setTimeout(()=>refs.pfpMsg.textContent='', 1500);
+};
+refs.uploadProfileImagesBtn.onclick = async () => {
+  const files = refs.profileImagesUpload.files;
+  if (!files.length) return alert('Select images');
+  const res = await uploadProfileImages(files);
+  if (!res.ok) return alert(res.msg);
+  refs.pfpMsg.textContent = 'Images uploaded';
+  renderProfile();
+  refs.profileImagesUpload.value = '';
+  setTimeout(()=>refs.pfpMsg.textContent='', 1500);
+};
+// ---------- Auth UI & profile rendering ----------
+async function renderProfile() {
+  const u = getCurrentUser();
+  if (!u) {
+    refs.profileName.textContent = 'Anonymous';
+    refs.profileName.classList.remove('clickable');
+    refs.profileName.onclick = null;
+    refs.profileBio.textContent = 'Not signed in';
+    refs.bioText.value = '';
+    refs.bioText.disabled = true;
+    refs.accountStatus.textContent = 'Not signed in';
+    refs.profilePfp.innerHTML = '';
+    refs.profileImages.innerHTML = '';
+    refs.saveBioBtn.disabled = true;
+    refs.uploadPfpBtn.disabled = true;
+    refs.uploadProfileImagesBtn.disabled = true;
+    refs.accountCreated.textContent = '';
+    refs.userBoardsList.innerHTML = 'Not signed in';
+    return;
+  }
+  refs.profileName.textContent = u.username;
+  refs.profileName.classList.add('clickable');
+  refs.profileName.onclick = () => showUserProfile(u.username);
+  refs.profileBio.textContent = u.bio || 'No bio';
+  refs.bioText.value = u.bio || '';
+  refs.bioText.disabled = false;
+  refs.accountStatus.textContent = 'Logged in';
+  refs.saveBioBtn.disabled = false;
+  refs.uploadPfpBtn.disabled = false;
+  refs.uploadProfileImagesBtn.disabled = false;
+  refs.profilePfp.innerHTML = '';
+  if (u.pfpAttId) {
+    const blob = await getBlobFromDB(u.pfpAttId);
+    if (blob) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.className = 'pfp';
+      img.style.width = '64px';
+      img.style.height = '64px';
+      refs.profilePfp.appendChild(img);
+    }
+  }
+  refs.profileImages.innerHTML = '';
+  for (const pi of u.profileImages) {
+    const blob = await getBlobFromDB(pi.id);
+    if (blob) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.style.maxWidth = '100px';
+      refs.profileImages.appendChild(img);
+    }
+  }
+  refs.accountCreated.textContent = `Account created: ${new Date(u.created).toLocaleString()}`;
+  // boards created
+  refs.userBoardsList.innerHTML = '';
+  const userBoards = Object.keys(meta.boards).filter(k => meta.boards[k].creator === u.username);
+  if (userBoards.length === 0) {
+    refs.userBoardsList.innerHTML = 'None';
+  } else {
+    userBoards.forEach(k => {
+      const div = document.createElement('div');
+      div.textContent = k;
+      refs.userBoardsList.appendChild(div);
+    });
+  }
+}
+// ---------- Keyboard shortcuts for textareas ----------
+function addTextShortcuts(ta) {
+  ta.addEventListener('keydown', (e) => {
+    if (e.ctrlKey) {
+      if (e.key === 'b') {
+        e.preventDefault();
+        wrapSelection(ta, '**');
+      } else if (e.key === 'i') {
+        e.preventDefault();
+        wrapSelection(ta, '*');
+      } else if (e.key === 'u') {
+        e.preventDefault();
+        wrapSelection(ta, '<u>', '</u>');
+      }
+    }
+  });
+}
+function wrapSelection(ta, open, close = open) {
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  const before = ta.value.substring(0, start);
+  const after = ta.value.substring(end);
+  ta.value = before + open + selected + close + after;
+  ta.selectionStart = start + open.length;
+  ta.selectionEnd = ta.selectionStart + selected.length;
+  ta.focus();
+}
+// ---------- Boot ----------
+async function boot() {
+  await openDB();
+  loadMeta();
+  // ensure meta structure
+  meta.boards = meta.boards || {};
+  meta.posts = meta.posts || {};
+  meta.users = meta.users || {};
+  meta.currentUser = meta.currentUser || null;
+  // migrate if needed
+  for (const k in meta.boards) {
+    if (!meta.boards[k].creator) meta.boards[k].creator = 'Anonymous';
+  }
+  for (const p in meta.posts) {
+    if (meta.posts[p].deleted === undefined) meta.posts[p].deleted = false;
+    if (meta.posts[p].deletedBy === undefined) meta.posts[p].deletedBy = null;
+    if (meta.posts[p].edited === undefined) meta.posts[p].edited = false;
+    if (meta.posts[p].editedAt === undefined) meta.posts[p].editedAt = null;
+    if (meta.posts[p].poll === undefined) meta.posts[p].poll = null;
+    if (meta.posts[p].htmlCode === undefined) meta.posts[p].htmlCode = null;
+    if (meta.posts[p].embedLinks === undefined) meta.posts[p].embedLinks = false;
+    function addToReplies(list) {
+      for (const r of list) {
+        if (r.deleted === undefined) r.deleted = false;
+        if (r.deletedBy === undefined) r.deletedBy = null;
+        if (r.edited === undefined) r.edited = false;
+        if (r.editedAt === undefined) r.editedAt = null;
+        if (r.attachments === undefined) r.attachments = [];
+        if (r.replies) addToReplies(r.replies);
+      }
+    }
+    addToReplies(meta.posts[p].replies);
+  }
+  for (const u in meta.users) {
+    if (!meta.users[u].profileImages) meta.users[u].profileImages = [];
+    if (!meta.users[u].followers) meta.users[u].followers = [];
+    if (!meta.users[u].created) meta.users[u].created = now();
+  }
+  // set currentBoard initially to first board if exists
+  const bkeys = Object.keys(meta.boards);
+  if (!meta.currentBoard && bkeys.length) meta.currentBoard = bkeys[0];
+  renderBoards();
+  await renderProfile();
+  await renderFeed();
+  refs.debug.textContent = 'Loaded. Boards: ' + Object.keys(meta.boards).length + ', Posts: ' + Object.keys(meta.posts).length + ', Users: ' + Object.keys(meta.users).length;
+  addTextShortcuts(refs.postText);
+  addTextShortcuts(refs.bioText);
+}
+boot();
+</script>
+</body>
+</html>

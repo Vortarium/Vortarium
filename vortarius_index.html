@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vortarius</title>
+    <style>
+        body { margin: 0; background: black; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { image-rendering: pixelated; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const NEON_COLORS = ['#FF0000', '#FF4500', '#FFFF00', '#00FF00', '#0000FF', '#800080'];
+        let NEON_COLOR = NEON_COLORS[0];
+        const PIXEL_SIZE = 4;
+        const WIDTH = canvas.width / PIXEL_SIZE;
+        const HEIGHT = canvas.height / PIXEL_SIZE;
+
+        // Audio setup
+        let audioCtx;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn('AudioContext initialization failed:', e);
+            audioCtx = null;
+        }
+        let backgroundMusic = null;
+        let musicOn = true;
+        let soundsOn = true;
+        function playSound(frequency, type, duration, volume) {
+            if (!soundsOn || !audioCtx) return;
+            try {
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.type = type;
+                oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + duration);
+                oscillator.onended = () => {
+                    gainNode.disconnect();
+                    oscillator.disconnect();
+                };
+            } catch (e) {
+                console.warn('Sound playback failed:', e);
+            }
+        }
+        function playSynthwave() {
+            if (!musicOn || !audioCtx) return null;
+            try {
+                const bass = audioCtx.createOscillator();
+                const bassGain = audioCtx.createGain();
+                bass.type = 'sine';
+                bass.frequency.setValueAtTime(110, audioCtx.currentTime);
+                bassGain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                bassGain.gain.setTargetAtTime(0.1, audioCtx.currentTime + 0.5, 0.5);
+                bassGain.gain.setTargetAtTime(0.2, audioCtx.currentTime + 1.0, 0.5);
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(500, audioCtx.currentTime);
+                bass.connect(bassGain);
+                bassGain.connect(filter);
+                filter.connect(audioCtx.destination);
+                const lead = audioCtx.createOscillator();
+                const leadGain = audioCtx.createGain();
+                lead.type = 'square';
+                leadGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                lead.connect(leadGain);
+                leadGain.connect(audioCtx.destination);
+                const secondLead = audioCtx.createOscillator();
+                const secondLeadGain = audioCtx.createGain();
+                secondLead.type = 'sawtooth';
+                secondLeadGain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                secondLead.connect(secondLeadGain);
+                secondLeadGain.connect(audioCtx.destination);
+                const arpNotes = [110, 165, 220, 330, 440, 550, 660];
+                const secondArpNotes = [165, 220, 330, 440];
+                let arpIndex = 0;
+                let secondArpIndex = 0;
+                function updateArp() {
+                    if (!musicOn || !audioCtx) return;
+                    if (Math.random() > 0.1) {
+                        lead.frequency.setValueAtTime(arpNotes[Math.floor(Math.random() * arpNotes.length)], audioCtx.currentTime);
+                    }
+                    arpIndex = (arpIndex + 1) % arpNotes.length;
+                    setTimeout(updateArp, 250);
+                }
+                function updateSecondArp() {
+                    if (!musicOn || !audioCtx) return;
+                    if (Math.random() > 0.1) {
+                        secondLead.frequency.setValueAtTime(secondArpNotes[Math.floor(Math.random() * secondArpNotes.length)], audioCtx.currentTime);
+                    }
+                    secondArpIndex = (secondArpIndex + 1) % secondArpNotes.length;
+                    setTimeout(updateSecondArp, 400);
+                }
+                const pad = audioCtx.createOscillator();
+                const padGain = audioCtx.createGain();
+                pad.type = 'triangle';
+                pad.frequency.setValueAtTime(165, audioCtx.currentTime);
+                padGain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                pad.connect(padGain);
+                padGain.connect(filter);
+                function varyBass() {
+                    if (!musicOn || !audioCtx) return;
+                    const newFreq = 100 + Math.random() * 20;
+                    bass.frequency.exponentialRampToValueAtTime(newFreq, audioCtx.currentTime + 2);
+                    setTimeout(varyBass, 2000);
+                }
+                bass.start();
+                lead.start();
+                secondLead.start();
+                pad.start();
+                updateArp();
+                updateSecondArp();
+                varyBass();
+                return { bass, bassGain, lead, leadGain, secondLead, secondLeadGain, pad, padGain, filter };
+            } catch (e) {
+                console.warn('Synthwave playback failed:', e);
+                return null;
+            }
+        }
+        function playArpeggio() {
+            if (!soundsOn || !audioCtx) return;
+            const notes = [440, 330, 220, 110];
+            notes.forEach((freq, i) => {
+                setTimeout(() => playSound(freq, 'square', 0.1, 0.2), i * 100);
+            });
+        }
+        function stopSynthwave(music) {
+            if (music) {
+                try {
+                    music.bass.stop();
+                    music.lead.stop();
+                    music.secondLead.stop();
+                    music.pad.stop();
+                    music.bassGain.disconnect();
+                    music.leadGain.disconnect();
+                    music.secondLeadGain.disconnect();
+                    music.padGain.disconnect();
+                    music.filter.disconnect();
+                } catch (e) {
+                    console.warn('Stopping synthwave failed:', e);
+                }
+            }
+        }
+
+        // Game states
+        let state = 'menu';
+        let menuSelection = 0;
+        let targetMenuSelection = 0;
+        let menuLerp = 0;
+        let menuOptions = ['START', 'SKINS', 'LEADERBOARD', 'CO-OP', 'SHOP', 'GAMBLE', 'SETTINGS', 'BOSSRUSH'];
+        let scores = [];
+        try {
+            scores = JSON.parse(localStorage.getItem('vortariusScores')) || [];
+            if (!Array.isArray(scores)) scores = [];
+        } catch (e) {
+            console.warn('Failed to parse scores from localStorage:', e);
+            scores = [];
+        }
+        let credits = 0;
+        try {
+            credits = parseInt(localStorage.getItem('vortariusCredits')) || 0;
+            if (isNaN(credits)) credits = 0;
+        } catch (e) {
+            console.warn('Failed to parse credits from localStorage:', e);
+            credits = 0;
+        }
+        let selectedSkin = 'Vori';
+        let ownedSkins = ['Vori'];
+        try {
+            ownedSkins = JSON.parse(localStorage.getItem('vortariusSkins')) || ['Vori'];
+            if (!Array.isArray(ownedSkins)) ownedSkins = ['Vori'];
+        } catch (e) {
+            console.warn('Failed to parse skins from localStorage:', e);
+            ownedSkins = ['Vori'];
+        }
+        let shield = false;
+        let fireRate = 0.5;
+        let bulletRows = 1;
+        let purchasedFireRateUpgrades = 0;
+        try {
+            purchasedFireRateUpgrades = parseInt(localStorage.getItem('vortariusFireRateUpgrades')) || 0;
+            if (isNaN(purchasedFireRateUpgrades)) purchasedFireRateUpgrades = 0;
+        } catch (e) {
+            console.warn('Failed to parse fire rate upgrades from localStorage:', e);
+            purchasedFireRateUpgrades = 0;
+        }
+        try {
+            bulletRows = parseInt(localStorage.getItem('vortariusBulletRows')) || 1;
+            if (isNaN(bulletRows)) bulletRows = 1;
+        } catch (e) {
+            console.warn('Failed to parse bullet rows from localStorage:', e);
+            bulletRows = 1;
+        }
+        let inputName = '';
+        let colorInput = '';
+        let boss = null;
+        let bossLevel = 0;
+        let lastBossAttack = 0;
+        let lastBossMoveChange = 0;
+        let lastBossLaserTime = 0;
+        let gambleOptions = ['Nothing', 'Nothing', 'Nothing', '150', 'Shield', '300'];
+        let gambleSpin = 0;
+        let gambleSpinTime = 0;
+        let gambleResult = null;
+        let freeSpinTime = 0;
+        try {
+            freeSpinTime = parseInt(localStorage.getItem('vortariusFreeSpinTime')) || 0;
+            if (isNaN(freeSpinTime)) freeSpinTime = 0;
+        } catch (e) {
+            console.warn('Failed to parse free spin time from localStorage:', e);
+            freeSpinTime = 0;
+        }
+        let lastUpdateTime = Date.now();
+        let catVisits = 0;
+        try {
+            catVisits = parseInt(localStorage.getItem('vortariusCatVisits')) || 0;
+            if (isNaN(catVisits)) catVisits = 0;
+        } catch (e) {
+            console.warn('Failed to parse cat visits from localStorage:', e);
+            catVisits = 0;
+        }
+        let secretTransition = 0;
+        let resetCountdown = 0;
+        let secretTimer = 0;
+        let lastEnemyFireTime = 0;
+        let enemyFireInterval = 3;
+        let fastComputer = false;
+        let enemySideSpeed = 0.5;
+        let enemiesKilledSinceLastEdge = 0;
+        let isCoop = false;
+        let isBossRush = false;
+        let cheatCodeInput = '';
+
+        // Update free spin timer
+        setInterval(() => {
+            const now = Date.now();
+            const delta = (now - lastUpdateTime) / 1000;
+            lastUpdateTime = now;
+            if (freeSpinTime > 0) {
+                freeSpinTime = Math.max(0, freeSpinTime - delta);
+                localStorage.setItem('vortariusFreeSpinTime', freeSpinTime);
+            }
+        }, 1000);
+
+        // Input handling
+        let keys = {};
+        document.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (state === 'game') {
+                if (/^[0-9]$/.test(e.key)) {
+                    cheatCodeInput += e.key;
+                    if (cheatCodeInput === '56' && !isBossRush) {
+                        score += 10;
+                        enemySpawnRate *= 1.1;
+                        enemySpeed *= 1.1;
+                        enemySideSpeed *= 1.1;
+                        cheatCodeInput = '';
+                        playSound(880, 'sine', 0.1, 0.2);
+                    } else if (!'56'.startsWith(cheatCodeInput)) {
+                        cheatCodeInput = '';
+                    }
+                }
+            }
+            if (state === 'nameInput') {
+                if (/^[A-Za-z]$/.test(e.key) && inputName.length < 4) {
+                    inputName += e.key.toUpperCase();
+                    playSound(880, 'sine', 0.1, 0.2);
+                } else if (e.key === 'Backspace') {
+                    inputName = inputName.slice(0, -1);
+                    playSound(880, 'sine', 0.1, 0.2);
+                } else if (e.key === 'Enter' && inputName.length === 4) {
+                    if (!isCoop) {
+                        scores.push({ name: inputName, score });
+                        scores.sort((a, b) => b.score - a.score);
+                        localStorage.setItem('vortariusScores', JSON.stringify(scores));
+                    }
+                    credits += score + (isBossRush ? bossLevel * 10 : 0);
+                    localStorage.setItem('vortariusCredits', credits);
+                    state = 'gameover';
+                    inputName = '';
+                    keys['Enter'] = false;
+                }
+            } else if (state === 'settings' && menuSelection === 3) {
+                if (/^[0-9A-Fa-f]$/.test(e.key) && colorInput.length < 6) {
+                    colorInput += e.key.toUpperCase();
+                    playSound(880, 'sine', 0.1, 0.2);
+                } else if (e.key === 'Backspace') {
+                    colorInput = colorInput.slice(0, -1);
+                    playSound(880, 'sine', 0.1, 0.2);
+                } else if (e.key === ' ' && colorInput.length === 6) {
+                    if (/^[0-9A-Fa-f]{6}$/.test(colorInput)) {
+                        NEON_COLOR = `#${colorInput}`;
+                        playSound(440, 'square', 0.1, 0.3);
+                    }
+                    colorInput = '';
+                    keys[' '] = false;
+                }
+            } else if (state === 'menu' || state === 'skins' || state === 'shop' || state === 'gamble' || state === 'settings') {
+                if ((keys['ArrowLeft'] || keys['a'] || keys['ArrowRight'] || keys['d']) && (state === 'menu' || state === 'gamble')) {
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys[' '] && !(state === 'menu' && menuSelection === 6) && state !== 'settings') {
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+            }
+        });
+        document.addEventListener('keyup', e => keys[e.key] = false);
+
+        // Pixelated drawing functions
+        function drawPixel(x, y) {
+            ctx.fillStyle = NEON_COLOR;
+            ctx.fillRect(Math.floor(x) * PIXEL_SIZE, Math.floor(y) * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+        }
+
+        function drawText(text, x, y, size, highlight = false) {
+            ctx.font = `${size}px monospace`;
+            ctx.fillStyle = highlight ? `rgba(${parseInt(NEON_COLOR.slice(1,3),16)},${parseInt(NEON_COLOR.slice(3,5),16)},${parseInt(NEON_COLOR.slice(5,7),16)},1)` : NEON_COLOR;
+            ctx.fillText(text, x * PIXEL_SIZE, y * PIXEL_SIZE);
+        }
+
+        function drawShape(x, y, shape) {
+            if (shape === 'Vori') {
+                for (let i = -2; i <= 2; i++) {
+                    for (let j = -2; j <= 2; j++) {
+                        if (i * i + j * j <= 4) drawPixel(x + i, y + j);
+                    }
+                }
+            } else if (shape === 'Pyram') {
+                drawPixel(x, y - 2);
+                drawPixel(x - 1, y - 1); drawPixel(x + 1, y - 1);
+                drawPixel(x - 2, y); drawPixel(x - 1, y); drawPixel(x, y); drawPixel(x + 1, y); drawPixel(x + 2, y);
+            } else if (shape === 'Starlight') {
+                drawPixel(x, y - 2);
+                drawPixel(x - 2, y - 1); drawPixel(x + 2, y - 1);
+                drawPixel(x - 2, y + 1); drawPixel(x + 2, y + 1);
+                drawPixel(x - 1, y); drawPixel(x + 1, y); drawPixel(x, y);
+            } else if (shape === 'Vortexius') {
+                drawPixel(x - 1, y - 2); drawPixel(x + 1, y - 2);
+                drawPixel(x - 2, y - 1); drawPixel(x + 2, y - 1);
+                drawPixel(x - 2, y + 1); drawPixel(x + 2, y + 1);
+                drawPixel(x - 1, y); drawPixel(x + 1, y); drawPixel(x, y);
+            }
+        }
+
+        function drawMenu() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('VORTARIUS', WIDTH / 2 - 10, 10, 20);
+            const radius = 20;
+            const lerpSpeed = 0.1;
+            menuLerp += lerpSpeed;
+            if (menuLerp > 1) menuLerp = 1;
+            const currentAngle = (menuSelection / 8) * 2 * Math.PI;
+            const targetAngle = (targetMenuSelection / 8) * 2 * Math.PI;
+            const lerpedAngle = currentAngle + (targetAngle - currentAngle) * menuLerp;
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * 2 * Math.PI - Math.PI / 2 - lerpedAngle;
+                const x = WIDTH / 2 + radius * Math.cos(angle);
+                const y = HEIGHT / 2 + radius * Math.sin(angle);
+                const isNorth = Math.abs(angle + Math.PI / 2) < 0.1;
+                drawText(menuOptions[i], x - menuOptions[i].length / 2, y, isNorth ? 16 : 12, isNorth);
+                if (isNorth && menuOptions[i] === 'GAMBLE') {
+                    drawText('SPIN TO WIN', WIDTH / 2 - 10, HEIGHT / 2 + 30, 12);
+                }
+            }
+            drawText('Use A/D key or Left/Right arrow to switch options, press space to select and escape to go back', WIDTH / 2 - 38, menuOptions[menuSelection] === 'GAMBLE' ? HEIGHT / 2 + 40 : HEIGHT / 2 + 30, 8);
+        }
+
+        function drawSkinsMenu() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('SKINS', WIDTH / 2 - 5, 10, 16);
+            drawText('Credits: ' + credits, WIDTH / 2 - 10, 20, 12);
+            const skins = [
+                { name: 'Vori', cost: 0 },
+                { name: 'Pyram', cost: 250 },
+                { name: 'Starlight', cost: 1000 },
+                { name: 'Vortexius', cost: 1000 }
+            ];
+            skins.forEach((skin, i) => {
+                drawText(`${skin.name.toUpperCase()} ${ownedSkins.includes(skin.name) ? 'OWNED' : skin.cost}`, 10, 30 + i * 10, 12);
+                drawShape(5, 30 + i * 10, skin.name);
+                if (menuSelection === i) drawText('>', 2, 30 + i * 10, 12);
+            });
+        }
+
+        function drawLeaderboard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('LEADERBOARD', WIDTH / 2 - 10, 10, 16);
+            scores.slice(0, 5).forEach((entry, i) => {
+                drawText(`${i + 1}. ${entry.name}: ${entry.score}`, WIDTH / 2 - 10, 30 + i * 10, 12);
+            });
+        }
+
+        function drawShop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('SHOP', WIDTH / 2 - 5, 10, 16);
+            drawText('Credits: ' + credits, WIDTH / 2 - 10, 20, 12);
+            const items = [
+                { name: 'Shield (1 Hit)', cost: 50 },
+                { name: 'Ammo Boost (-0.05s)', cost: 100 },
+                { name: 'Bullet Rows (+1 Column)', cost: 500 }
+            ];
+            items.forEach((item, i) => {
+                drawText(`${item.name}: ${item.cost}`, 10, 30 + i * 10, 12);
+                if (menuSelection === i) drawText('>', 2, 30 + i * 10, 12);
+            });
+        }
+
+        function drawGambleMenu() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('GAMBLE', WIDTH / 2 - 5, 10, 16);
+            drawText('Credits: ' + credits, WIDTH / 2 - 10, 20, 12);
+            const radius = 20;
+            if (gambleSpin > 0) {
+                targetMenuSelection = (targetMenuSelection + gambleSpin / 60) % 6;
+                menuLerp = 0;
+                gambleSpinTime += 1 / 60;
+                if (gambleSpinTime >= 10) {
+                    gambleSpin = 0;
+                    const rand = Math.random();
+                    let resultIndex;
+                    if (rand < 0.5) resultIndex = Math.floor(Math.random() * 3); // Nothing (50%)
+                    else if (rand < 0.75) resultIndex = 4; // Shield (25%)
+                    else if (rand < 0.95) resultIndex = 3; // 150 (20%)
+                    else resultIndex = 5; // 300 (5%)
+                    gambleResult = gambleOptions[resultIndex];
+                    if (gambleResult === '150') credits += 150;
+                    else if (gambleResult === '300') credits += 300;
+                    else if (gambleResult === 'Shield') shield = true;
+                    localStorage.setItem('vortariusCredits', credits);
+                }
+            }
+            const lerpSpeed = 0.1;
+            menuLerp += lerpSpeed;
+            if (menuLerp > 1) menuLerp = 1;
+            const currentAngle = (menuSelection / 6) * 2 * Math.PI;
+            const targetAngle = (targetMenuSelection / 6) * 2 * Math.PI;
+            const lerpedAngle = currentAngle + (targetAngle - currentAngle) * menuLerp;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * 2 * Math.PI - Math.PI / 2 - lerpedAngle;
+                const x = WIDTH / 2 + radius * Math.cos(angle);
+                const y = HEIGHT / 2 + radius * Math.sin(angle);
+                const isNorth = Math.abs(angle + Math.PI / 2) < 0.1;
+                drawText(gambleOptions[i], x - gambleOptions[i].length / 2, y, isNorth ? 16 : 12, isNorth);
+            }
+            const buttonText = freeSpinTime <= 0 ? 'FREE' : credits >= 50 ? 'PAY 50' : `FREE in ${Math.floor(freeSpinTime / 3600)}:${Math.floor((freeSpinTime % 3600) / 60).toString().padStart(2, '0')}:${Math.floor(freeSpinTime % 60).toString().padStart(2, '0')}`;
+            drawText(buttonText, WIDTH / 2 - 10, HEIGHT / 2 + 30, 12, gambleSpin === 0 && (freeSpinTime <= 0 || credits >= 50));
+            if (gambleResult) {
+                drawText(`Won: ${gambleResult}`, WIDTH / 2 - 10, HEIGHT / 2 + 40, 12);
+            }
+        }
+
+        function drawSettingsMenu() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawText('SETTINGS', WIDTH / 2 - 7, 10, 16);
+            const settings = [
+                `Music: ${musicOn ? 'ON' : 'OFF'}`,
+                `Sounds: ${soundsOn ? 'ON' : 'OFF'}`,
+                `Fast Computer: ${fastComputer ? 'ON' : 'OFF'}`,
+                `Color: ${colorInput || 'Enter Hex'}`
+            ];
+            settings.forEach((setting, i) => {
+                drawText(setting, 10, 30 + i * 10, 12);
+                if (menuSelection === i) drawText('>', 2, 30 + i * 10, 12);
+            });
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < HEIGHT; i += 5) {
+                drawPixel(i % 2 ? 0 : 2, i);
+                drawPixel(WIDTH - (i % 2 ? 1 : 3), i);
+            }
+            if (player1.alive) drawShape(player1.x, player1.y, selectedSkin);
+            if (player2 && player2.alive) drawShape(player2.x, player2.y, selectedSkin);
+            bullets.forEach(b => drawPixel(b.x, b.y));
+            enemyBullets.forEach(b => {
+                const size = b.isBossBullet && boss && boss.level >= 4 ? 2 : b.isBossBullet ? 1 : 0;
+                for (let i = -size; i <= size; i++) for (let j = -size; j <= size; j++) drawPixel(b.x + i, b.y + j);
+            });
+            enemies.forEach(e => {
+                if (e.isEdge) {
+                    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) drawPixel(e.x + i, e.y + j);
+                    if (e.isCharging) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = e.chargeStart + 3 < gameTime ? NEON_COLOR : `rgba(${parseInt(NEON_COLOR.slice(1,3),16)},${parseInt(NEON_COLOR.slice(3,5),16)},${parseInt(NEON_COLOR.slice(5,7),16)},0.5)`;
+                        ctx.lineWidth = PIXEL_SIZE;
+                        ctx.moveTo((e.x + 2) * PIXEL_SIZE, (e.y + 2) * PIXEL_SIZE);
+                        ctx.lineTo(e.targetX * PIXEL_SIZE, HEIGHT * PIXEL_SIZE);
+                        ctx.stroke();
+                    }
+                } else {
+                    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) drawPixel(e.x + i, e.y + j);
+                }
+            });
+            if (isBossRush && boss && boss.hp > 0) {
+                for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) drawPixel(boss.x + i, boss.y + j);
+                const barWidth = 50;
+                const barHeight = 3;
+                for (let i = 0; i < barWidth + 2; i++) {
+                    drawPixel(WIDTH / 2 - barWidth / 2 - 1 + i, 2);
+                    drawPixel(WIDTH / 2 - barWidth / 2 - 1 + i, 2 + barHeight + 1);
+                }
+                for (let j = 0; j < barHeight + 2; j++) {
+                    drawPixel(WIDTH / 2 - barWidth / 2 - 1, 2 + j);
+                    drawPixel(WIDTH / 2 + barWidth / 2, 2 + j);
+                }
+                const healthWidth = (boss.hp / boss.maxHp) * barWidth;
+                for (let i = 0; i < healthWidth; i++) for (let j = 0; j < barHeight; j++) {
+                    drawPixel(WIDTH / 2 - barWidth / 2 + i, 3 + j);
+                }
+                if (boss.isCharging && boss.level >= 2) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = boss.chargeStart + 3 < gameTime ? NEON_COLOR : `rgba(${parseInt(NEON_COLOR.slice(1,3),16)},${parseInt(NEON_COLOR.slice(3,5),16)},${parseInt(NEON_COLOR.slice(5,7),16)},0.5)`;
+                    ctx.lineWidth = PIXEL_SIZE;
+                    ctx.moveTo((boss.x + 3) * PIXEL_SIZE, (boss.y + 3) * PIXEL_SIZE);
+                    ctx.lineTo(boss.targetX * PIXEL_SIZE, HEIGHT * PIXEL_SIZE);
+                    ctx.stroke();
+                }
+            }
+            drawText('Score: ' + score, 2, 5, 12);
+            if (shield) drawText('Shield: ON', 2, 15, 12);
+        }
+
+        function drawNameInput() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGame();
+            drawText('GAME OVER', WIDTH / 2 - 10, HEIGHT / 2 - 20, 16);
+            drawText('Score: ' + score, WIDTH / 2 - 10, HEIGHT / 2 - 10, 12);
+            drawText('Enter 4-letter Name: ' + inputName, WIDTH / 2 - 15, HEIGHT / 2, 12);
+            drawText('Submit [Enter]', WIDTH / 2 - 10, HEIGHT / 2 + 10, 12);
+        }
+
+        function drawSecretRoom() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const offset = Math.floor(secretTransition / 5 * WIDTH);
+            for (let x = -offset; x < WIDTH - offset; x++) for (let y = 0; y < HEIGHT; y++) {
+                if (Math.random() < 0.1) drawPixel(x, y);
+            }
+            for (let i = -10; i <= 10; i++) for (let j = -10; j <= 10; j++) {
+                if (i * i + j * j <= 100) drawPixel(WIDTH / 2 + i, HEIGHT / 2 + j);
+            }
+            drawText(catVisits === 0 ? 'Good day sir, heres 50' : catVisits === 1 ? 'More? No' : 'Fine, you greedy player, enjoy death instead :)', WIDTH / 2 - 10, HEIGHT / 2 - 15, 12);
+            if (catVisits === 2) drawText(`Reset in ${Math.ceil(10 - resetCountdown)}`, WIDTH / 2 - 10, HEIGHT / 2 + 15, 12);
+        }
+
+        function updateGame(delta) {
+            gameTime += delta;
+            let adjustedEnemySpeed = fastComputer ? enemySpeed * 0.5 : enemySpeed;
+            let adjustedFireInterval = fastComputer ? enemyFireInterval * 2 : enemyFireInterval;
+            let adjustedPlayerFireRate = fastComputer ? fireRate * 2 : fireRate;
+            if (isBossRush && !boss) {
+                boss = { 
+                    x: WIDTH / 2, 
+                    y: HEIGHT / 4, 
+                    hp: 100 * Math.pow(2, bossLevel), 
+                    maxHp: 100 * Math.pow(2, bossLevel), 
+                    hits: 0, 
+                    vx: (Math.random() * 2 - 1) * 8 * Math.pow(1.1, bossLevel), 
+                    vy: 1, 
+                    level: bossLevel + 1, 
+                    chargeStart: 0, 
+                    isCharging: false, 
+                    targetX: Math.random() * WIDTH 
+                };
+                lastBossAttack = gameTime;
+                lastBossMoveChange = gameTime;
+                lastBossLaserTime = gameTime;
+            }
+            if (isBossRush && boss) {
+                if (gameTime - lastBossMoveChange > 3) {
+                    boss.vx = (Math.random() * 2 - 1) * 8 * Math.pow(1.1, boss.level - 1);
+                    lastBossMoveChange = gameTime;
+                }
+                boss.x = Math.max(5, Math.min(WIDTH - 5, boss.x + boss.vx * delta));
+                boss.y = Math.min(HEIGHT / 2 - 5, boss.y + boss.vy * delta);
+                if (gameTime - lastBossAttack >= 3) {
+                    if (Math.random() < 0.5) {
+                        for (let i = 0; i < 10; i++) {
+                            enemyBullets.push({ x: boss.x + Math.random() * 6, y: boss.y + 6, isBossBullet: true });
+                        }
+                    } else {
+                        const numMinions = boss.level >= 3 ? Math.floor(Math.random() * 3) + 1 : Math.floor(Math.random() * 2) + 1;
+                        for (let i = 0; i < numMinions; i++) {
+                            if (boss.level >= 2 && Math.random() < 0.1 * (boss.level - 1)) {
+                                const isLeft = Math.random() < 0.5;
+                                enemies.push({ 
+                                    x: isLeft ? 3 : WIDTH - 3, 
+                                    y: Math.random() * (HEIGHT - 4), 
+                                    vx: 0, 
+                                    isEdge: true, 
+                                    hp: 5, 
+                                    chargeStart: 0, 
+                                    isCharging: false, 
+                                    targetX: Math.random() * WIDTH 
+                                });
+                            } else {
+                                enemies.push({ 
+                                    x: boss.x + Math.random() * 6, 
+                                    y: boss.y + 6, 
+                                    vx: 0, 
+                                    isMinion: true, 
+                                    isFastMinion: boss.level >= 3 && Math.random() < 0.2 
+                                });
+                            }
+                        }
+                    }
+                    lastBossAttack = gameTime;
+                }
+                if (boss.level >= 2 && gameTime - lastBossLaserTime >= Math.max(3, 6 - 0.5 * (boss.level - 2))) {
+                    boss.isCharging = true;
+                    boss.chargeStart = gameTime;
+                    boss.targetX = Math.random() * WIDTH;
+                    lastBossLaserTime = gameTime;
+                }
+                if (boss.isCharging && gameTime - boss.chargeStart > 4) {
+                    boss.isCharging = false;
+                    boss.chargeStart = 0;
+                }
+            }
+            if (!isBossRush && gameTime - lastSpawnTime > 3 / (enemySpawnRate * 60)) {
+                if (score >= 60 && enemiesKilledSinceLastEdge >= Math.floor(Math.random() * 11 + 5)) {
+                    const isLeft = Math.random() < 0.5;
+                    enemies.push({ 
+                        x: isLeft ? 3 : WIDTH - 3, 
+                        y: Math.random() * (HEIGHT - 4), 
+                        vx: 0, 
+                        isEdge: true, 
+                        hp: 5, 
+                        chargeStart: 0, 
+                        isCharging: false, 
+                        targetX: Math.random() * WIDTH 
+                    });
+                    enemiesKilledSinceLastEdge = 0;
+                } else {
+                    enemies.push({ x: Math.random() * (WIDTH - 3), y: 0, vx: 0 });
+                }
+                lastSpawnTime = gameTime;
+            }
+            if (!isBossRush && score >= 20) {
+                if (gameTime - lastEnemyFireTime >= adjustedFireInterval) {
+                    enemies.forEach(e => {
+                        if (!e.isEdge && !e.isMinion) {
+                            enemyBullets.push({ x: e.x + 1.5, y: e.y + 3 });
+                        }
+                    });
+                    lastEnemyFireTime = gameTime;
+                }
+            }
+            const accel = fastComputer ? 0.3 / 1.5 : 0.3;
+            const friction = 0.7;
+            if (player1.alive) {
+                if (keys['a']) player1.vx -= accel;
+                if (keys['d']) player1.vx += accel;
+                player1.vx *= friction;
+                player1.x = Math.max(3, Math.min(WIDTH - 3, player1.x + player1.vx));
+            }
+            if (player2 && player2.alive) {
+                if (keys['ArrowLeft']) player2.vx -= accel;
+                if (keys['ArrowRight']) player2.vx += accel;
+                player2.vx *= friction;
+                player2.x = Math.max(3, Math.min(WIDTH - 3, player2.x + player2.vx));
+            }
+            if (isCoop && player1.alive && player2.alive && player1.x < 5 && player2.x > WIDTH - 5) {
+                secretTimer += delta;
+                if (secretTimer >= 10) {
+                    state = 'secret';
+                    secretTransition = 0;
+                    secretTimer = 0;
+                }
+            } else {
+                secretTimer = 0;
+            }
+            if (gameTime - lastFireTime > adjustedPlayerFireRate) {
+                if (player1.alive) {
+                    for (let i = 0; i < bulletRows; i++) {
+                        bullets.push({ x: player1.x - (bulletRows - 1) / 2 + i, y: player1.y - 2 });
+                    }
+                }
+                if (player2 && player2.alive) {
+                    for (let i = 0; i < bulletRows; i++) {
+                        bullets.push({ x: player2.x - (bulletRows - 1) / 2 + i, y: player2.y - 2 });
+                    }
+                }
+                playSound(220, 'square', 0.05, 0.1);
+                lastFireTime = gameTime;
+            }
+            bullets.forEach(b => b.y -= 0.2);
+            bullets = bullets.filter(b => b.y > 0 && b.x >= 0 && b.x <= WIDTH);
+            enemyBullets.forEach(b => b.y += b.isBossBullet ? 1.5 : adjustedEnemySpeed * 7.5);
+            enemyBullets = enemyBullets.filter(b => b.y < HEIGHT && b.x >= 0 && b.x <= WIDTH);
+            let lastSideMoveChange = 0;
+            enemies.forEach(e => {
+                if (!e.isEdge) {
+                    const minionSpeed = isBossRush && e.isMinion ? adjustedEnemySpeed * Math.pow(1.1, bossLevel - 1) * (e.isFastMinion ? 2 : 1) : adjustedEnemySpeed;
+                    e.y += minionSpeed;
+                    if ((!isBossRush && score >= 30) || (isBossRush && e.isMinion)) {
+                        if (gameTime - lastSideMoveChange > 2) {
+                            const direction = Math.random() < 0.5 ? -1 : 1;
+                            e.vx += direction * accel;
+                            e.vx = Math.max(-enemySideSpeed, Math.min(enemySideSpeed, e.vx));
+                            lastSideMoveChange = gameTime;
+                        }
+                        e.vx *= friction;
+                        e.x = Math.max(3, Math.min(WIDTH - 3, e.x + e.vx));
+                    }
+                }
+                if (e.isEdge && (score >= 60 || isBossRush)) {
+                    if (!e.isCharging && Math.random() < 0.01) {
+                        e.isCharging = true;
+                        e.chargeStart = gameTime;
+                    }
+                    if (e.isCharging && gameTime - e.chargeStart > 4) {
+                        e.isCharging = false;
+                        e.chargeStart = 0;
+                    }
+                }
+            });
+            enemies.forEach((e, ei) => {
+                if (e.y > HEIGHT && !e.isEdge) {
+                    playArpeggio();
+                    endGame();
+                    return;
+                }
+                bullets.forEach((b, bi) => {
+                    if (e.isEdge) {
+                        if (Math.abs(b.x - e.x) < 4 && Math.abs(b.y - e.y) < 4) {
+                            e.hp -= 1;
+                            bullets.splice(bi, 1);
+                            playSound(660, 'square', 0.1, 0.3);
+                            if (e.hp <= 0) {
+                                enemies.splice(ei, 1);
+                                if (!isBossRush || !e.isMinion) {
+                                    score++;
+                                    enemiesKilledSinceLastEdge++;
+                                    if (!isBossRush) {
+                                        enemySpawnRate *= 1.01;
+                                        enemySpeed *= 1.01;
+                                        enemySideSpeed *= 1.01;
+                                        if (score >= 20) {
+                                            enemyFireInterval = Math.max(1, enemyFireInterval * 0.99);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if (Math.abs(b.x - e.x) < 2.5 && Math.abs(b.y - e.y) < 2.5) {
+                        enemies.splice(ei, 1);
+                        bullets.splice(bi, 1);
+                        if (!isBossRush || !e.isMinion) {
+                            score++;
+                            enemiesKilledSinceLastEdge++;
+                            if (!isBossRush) {
+                                enemySpawnRate *= 1.01;
+                                enemySpeed *= 1.01;
+                                enemySideSpeed *= 1.01;
+                                if (score >= 20) {
+                                    enemyFireInterval = Math.max(1, enemyFireInterval * 0.99);
+                                }
+                            }
+                        }
+                        playSound(660, 'square', 0.1, 0.3);
+                    }
+                });
+                if (player1.alive && Math.abs(e.x - player1.x) < (e.isEdge ? 2.5 : 2.5) && Math.abs(e.y - player1.y) < (e.isEdge ? 2.5 : 2.5)) {
+                    if (shield) {
+                        shield = false;
+                        enemies.splice(ei, 1);
+                    } else {
+                        player1.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && (!player2 || !player2.alive)) endGame();
+                    }
+                }
+                if (player2 && player2.alive && Math.abs(e.x - player2.x) < (e.isEdge ? 2.5 : 2.5) && Math.abs(e.y - player2.y) < (e.isEdge ? 2.5 : 2.5)) {
+                    if (shield) {
+                        shield = false;
+                        enemies.splice(ei, 1);
+                    } else {
+                        player2.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && !player2.alive) endGame();
+                    }
+                }
+                if (e.isEdge && e.isCharging && gameTime - e.chargeStart >= 3 && gameTime - e.chargeStart < 4) {
+                    const dx = e.targetX - (e.x + 2);
+                    const dy = HEIGHT - (e.y + 2);
+                    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+                    const xInc = dx / steps;
+                    const yInc = dy / steps;
+                    for (let i = 0; i <= steps; i++) {
+                        const x = (e.x + 2) + i * xInc;
+                        const y = (e.y + 2) + i * yInc;
+                        if (player1.alive && Math.abs(x - player1.x) < 1 && Math.abs(y - player1.y) < 1) {
+                            if (shield) {
+                                shield = false;
+                            } else {
+                                player1.alive = false;
+                                playArpeggio();
+                                if (!player1.alive && (!player2 || !player2.alive)) endGame();
+                            }
+                        }
+                        if (player2 && player2.alive && Math.abs(x - player2.x) < 1 && Math.abs(y - player2.y) < 1) {
+                            if (shield) {
+                                shield = false;
+                            } else {
+                                player2.alive = false;
+                                playArpeggio();
+                                if (!player1.alive && !player2.alive) endGame();
+                            }
+                        }
+                    }
+                }
+            });
+            if (isBossRush && boss && boss.hp > 0) {
+                bullets.forEach((b, bi) => {
+                    if (Math.abs(b.x - boss.x) < 5 && Math.abs(b.y - boss.y) < 5) {
+                        boss.hp -= boss.maxHp * 0.05;
+                        boss.hits++;
+                        bullets.splice(bi, 1);
+                        playSound(660, 'square', 0.1, 0.3);
+                        if (boss.hp <= 0) {
+                            credits += 10;
+                            localStorage.setItem('vortariusCredits', credits);
+                            bossLevel++;
+                            boss = null;
+                        }
+                    }
+                });
+                if (player1.alive && Math.abs(boss.x - player1.x) < 5 && Math.abs(boss.y - player1.y) < 5) {
+                    if (shield) {
+                        shield = false;
+                    } else {
+                        player1.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && (!player2 || !player2.alive)) endGame();
+                    }
+                }
+                if (player2 && player2.alive && Math.abs(boss.x - player2.x) < 5 && Math.abs(boss.y - player2.y) < 5) {
+                    if (shield) {
+                        shield = false;
+                    } else {
+                        player2.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && !player2.alive) endGame();
+                    }
+                }
+                if (boss.isCharging && gameTime - boss.chargeStart >= 3 && gameTime - boss.chargeStart < 4) {
+                    const dx = boss.targetX - (boss.x + 3);
+                    const dy = HEIGHT - (boss.y + 3);
+                    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+                    const xInc = dx / steps;
+                    const yInc = dy / steps;
+                    for (let i = 0; i <= steps; i++) {
+                        const x = (boss.x + 3) + i * xInc;
+                        const y = (boss.y + 3) + i * yInc;
+                        if (player1.alive && Math.abs(x - player1.x) < 1 && Math.abs(y - player1.y) < 1) {
+                            if (shield) {
+                                shield = false;
+                            } else {
+                                player1.alive = false;
+                                playArpeggio();
+                                if (!player1.alive && (!player2 || !player2.alive)) endGame();
+                            }
+                        }
+                        if (player2 && player2.alive && Math.abs(x - player2.x) < 1 && Math.abs(y - player2.y) < 1) {
+                            if (shield) {
+                                shield = false;
+                            } else {
+                                player2.alive = false;
+                                playArpeggio();
+                                if (!player1.alive && !player2.alive) endGame();
+                            }
+                        }
+                    }
+                }
+            }
+            enemyBullets.forEach((b, bi) => {
+                if (player1.alive && Math.abs(b.x - player1.x) < (b.isBossBullet ? (boss && boss.level >= 4 ? 4 : 3) : 2.5) && Math.abs(b.y - player1.y) < (b.isBossBullet ? (boss && boss.level >= 4 ? 4 : 3) : 2.5)) {
+                    if (shield) {
+                        shield = false;
+                        enemyBullets.splice(bi, 1);
+                    } else {
+                        player1.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && (!player2 || !player2.alive)) endGame();
+                    }
+                }
+                if (player2 && player2.alive && Math.abs(b.x - player2.x) < (b.isBossBullet ? (boss && boss.level >= 4 ? 4 : 3) : 2.5) && Math.abs(b.y - player2.y) < (b.isBossBullet ? (boss && boss.level >= 4 ? 4 : 3) : 2.5)) {
+                    if (shield) {
+                        shield = false;
+                        enemyBullets.splice(bi, 1);
+                    } else {
+                        player2.alive = false;
+                        playArpeggio();
+                        if (!player1.alive && !player2.alive) endGame();
+                    }
+                }
+            });
+        }
+
+        function endGame() {
+            if (!isCoop) {
+                state = 'nameInput';
+            } else {
+                credits += score + (isBossRush ? bossLevel * 10 : 0);
+                localStorage.setItem('vortariusCredits', credits);
+                state = 'gameover';
+            }
+            if (musicOn && backgroundMusic) stopSynthwave(backgroundMusic);
+            backgroundMusic = null;
+            boss = null;
+            bossLevel = 0;
+        }
+
+        function startGame() {
+            score = 0;
+            enemies = [];
+            bullets = [];
+            enemyBullets = [];
+            player1 = { x: WIDTH / 2, y: HEIGHT - 10, width: 4, height: 4, vx: 0, alive: true };
+            player2 = isCoop ? { x: WIDTH / 2 + 5, y: HEIGHT - 10, width: 4, height: 4, vx: 0, alive: true } : null;
+            gameTime = 0;
+            enemySpawnRate = 1 / 120;
+            enemySpeed = 0.075;
+            enemySideSpeed = 0.5;
+            enemiesKilledSinceLastEdge = 0;
+            lastFireTime = 0;
+            lastSpawnTime = 0;
+            lastEnemyFireTime = 0;
+            enemyFireInterval = 3;
+            lastBossAttack = 0;
+            lastBossMoveChange = 0;
+            lastBossLaserTime = 0;
+            secretTimer = 0;
+            colorInput = '';
+            cheatCodeInput = '';
+            bulletRows = parseInt(localStorage.getItem('vortariusBulletRows')) || 1;
+            if (isBossRush) {
+                boss = { 
+                    x: WIDTH / 2, 
+                    y: HEIGHT / 4, 
+                    hp: 100, 
+                    maxHp: 100, 
+                    hits: 0, 
+                    vx: (Math.random() * 2 - 1) * 8, 
+                    vy: 1, 
+                    level: 1, 
+                    chargeStart: 0, 
+                    isCharging: false, 
+                    targetX: Math.random() * WIDTH 
+                };
+                bossLevel = 0;
+            } else {
+                boss = null;
+                bossLevel = 0;
+            }
+            if (musicOn && backgroundMusic) stopSynthwave(backgroundMusic);
+            backgroundMusic = musicOn ? playSynthwave() : null;
+            state = 'game';
+        }
+
+        function gameLoop() {
+            if (state === 'menu') {
+                if (keys['ArrowLeft'] || keys['a']) {
+                    targetMenuSelection = (targetMenuSelection - 1 + 8) % 8;
+                    menuLerp = 0;
+                    keys['ArrowLeft'] = keys['a'] = false;
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys['ArrowRight'] || keys['d']) {
+                    targetMenuSelection = (targetMenuSelection + 1) % 8;
+                    menuLerp = 0;
+                    keys['ArrowRight'] = keys['d'] = false;
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (menuLerp >= 1) menuSelection = targetMenuSelection;
+                if (keys[' '] && menuSelection === 6) {
+                    state = 'settings';
+                    menuSelection = 0;
+                    targetMenuSelection = 0;
+                    menuLerp = 0;
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                } else if (keys[' '] && menuSelection === 5) {
+                    state = 'gamble';
+                    menuSelection = 0;
+                    targetMenuSelection = 0;
+                    menuLerp = 0;
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                } else if (keys[' '] && menuSelection === 7) {
+                    isBossRush = true;
+                    isCoop = false;
+                    startGame();
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                } else if (keys[' ']) {
+                    if (menuOptions[menuSelection] === 'START') {
+                        isBossRush = false;
+                        isCoop = false;
+                        startGame();
+                    } else if (menuOptions[menuSelection] === 'CO-OP') {
+                        isBossRush = false;
+                        isCoop = true;
+                        startGame();
+                    } else {
+                        state = menuOptions[menuSelection].toLowerCase();
+                    }
+                    menuSelection = 0;
+                    targetMenuSelection = 0;
+                    menuLerp = 0;
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawMenu();
+            } else if (state === 'skins') {
+                if (keys['ArrowLeft'] || keys['a']) { 
+                    menuSelection = (menuSelection - 1 + 4) % 4; 
+                    keys['ArrowLeft'] = keys['a'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys['ArrowRight'] || keys['d']) { 
+                    menuSelection = (menuSelection + 1) % 4; 
+                    keys['ArrowRight'] = keys['d'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys[' ']) {
+                    const skins = ['Vori', 'Pyram', 'Starlight', 'Vortexius'];
+                    const costs = [0, 250, 1000, 1000];
+                    if (!ownedSkins.includes(skins[menuSelection]) && credits >= costs[menuSelection]) {
+                        credits -= costs[menuSelection];
+                        ownedSkins.push(skins[menuSelection]);
+                        localStorage.setItem('vortariusSkins', JSON.stringify(ownedSkins));
+                        localStorage.setItem('vortariusCredits', credits);
+                    }
+                    if (ownedSkins.includes(skins[menuSelection])) {
+                        selectedSkin = skins[menuSelection];
+                    }
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                if (keys['Escape']) {
+                    state = 'menu';
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawSkinsMenu();
+            } else if (state === 'leaderboard') {
+                if (keys['Escape']) {
+                    state = 'menu';
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawLeaderboard();
+            } else if (state === 'co-op') {
+                isBossRush = false;
+                isCoop = true;
+                startGame();
+            } else if (state === 'shop') {
+                if (keys['ArrowLeft'] || keys['a']) { 
+                    menuSelection = (menuSelection - 1 + 3) % 3; 
+                    keys['ArrowLeft'] = keys['a'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys['ArrowRight'] || keys['d']) { 
+                    menuSelection = (menuSelection + 1) % 3; 
+                    keys['ArrowRight'] = keys['d'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys[' '] && credits >= (menuSelection === 0 ? 50 : menuSelection === 1 ? 100 : 500)) {
+                    credits -= menuSelection === 0 ? 50 : menuSelection === 1 ? 100 : 500;
+                    if (menuSelection === 0) shield = true;
+                    else if (menuSelection === 1) {
+                        fireRate -= 0.05;
+                        purchasedFireRateUpgrades++;
+                        localStorage.setItem('vortariusFireRateUpgrades', purchasedFireRateUpgrades);
+                    } else {
+                        bulletRows++;
+                        localStorage.setItem('vortariusBulletRows', bulletRows);
+                    }
+                    localStorage.setItem('vortariusCredits', credits);
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                if (keys['Escape']) {
+                    state = 'menu';
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawShop();
+            } else if (state === 'gamble') {
+                if (keys[' '] && gambleSpin === 0 && (freeSpinTime <= 0 || credits >= 50)) {
+                    if (freeSpinTime <= 0) {
+                        freeSpinTime = 3600;
+                        localStorage.setItem('vortariusFreeSpinTime', freeSpinTime);
+                    } else {
+                        credits -= 50;
+                        localStorage.setItem('vortariusCredits', credits);
+                    }
+                    gambleSpin = 10;
+                    gambleSpinTime = 0;
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                if (keys['Escape']) {
+                    state = 'menu';
+                    gambleResult = null;
+                    menuSelection = 0;
+                    targetMenuSelection = 0;
+                    menuLerp = 0;
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawGambleMenu();
+            } else if (state === 'settings') {
+                if (keys['ArrowLeft'] || keys['a']) { 
+                    menuSelection = (menuSelection - 1 + 4) % 4; 
+                    keys['ArrowLeft'] = keys['a'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys['ArrowRight'] || keys['d']) { 
+                    menuSelection = (menuSelection + 1) % 4; 
+                    keys['ArrowRight'] = keys['d'] = false; 
+                    playSound(880, 'sine', 0.1, 0.2);
+                }
+                if (keys[' '] && menuSelection !== 3) {
+                    if (menuSelection === 0) {
+                        musicOn = !musicOn;
+                        if (!musicOn && backgroundMusic) {
+                            stopSynthwave(backgroundMusic);
+                            backgroundMusic = null;
+                        } else if (musicOn && !backgroundMusic && state !== 'game') {
+                            backgroundMusic = playSynthwave();
+                        }
+                    } else if (menuSelection === 1) {
+                        soundsOn = !soundsOn;
+                    } else if (menuSelection === 2) {
+                        fastComputer = !fastComputer;
+                    }
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                if (keys['Escape']) {
+                    state = 'menu';
+                    colorInput = '';
+                    menuSelection = 0;
+                    targetMenuSelection = 0;
+                    menuLerp = 0;
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                drawSettingsMenu();
+            } else if (state === 'game') {
+                updateGame(1 / 60);
+                drawGame();
+                if (keys['Escape']) {
+                    credits += score + (isBossRush ? bossLevel * 10 : 0);
+                    localStorage.setItem('vortariusCredits', credits);
+                    if (musicOn && backgroundMusic) stopSynthwave(backgroundMusic);
+                    backgroundMusic = null;
+                    state = 'menu';
+                    player2 = null;
+                    isCoop = false;
+                    isBossRush = false;
+                    score = 0;
+                    enemies = [];
+                    bullets = [];
+                    enemyBullets = [];
+                    boss = null;
+                    bossLevel = 0;
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+            } else if (state === 'nameInput') {
+                drawNameInput();
+            } else if (state === 'gameover') {
+                drawGame();
+                drawText('GAME OVER', WIDTH / 2 - 10, HEIGHT / 2 - 10, 16);
+                drawText('Score: ' + score, WIDTH / 2 - 10, HEIGHT / 2, 12);
+                drawText('Play Again? [Space]', WIDTH / 2 - 15, HEIGHT / 2 + 10, 12);
+                drawText('Exit [Esc]', WIDTH / 2 - 10, HEIGHT / 2 + 20, 12);
+                if (keys[' ']) {
+                    startGame();
+                    keys[' '] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+                if (keys['Escape']) {
+                    credits += score + (isBossRush ? bossLevel * 10 : 0);
+                    localStorage.setItem('vortariusCredits', credits);
+                    state = 'menu';
+                    player2 = null;
+                    isCoop = false;
+                    isBossRush = false;
+                    score = 0;
+                    enemies = [];
+                    bullets = [];
+                    enemyBullets = [];
+                    boss = null;
+                    bossLevel = 0;
+                    keys['Escape'] = false;
+                    playSound(440, 'square', 0.1, 0.3);
+                }
+            } else if (state === 'secret') {
+                secretTransition += 1 / 60;
+                if (secretTransition >= 5) {
+                    if (catVisits === 0) {
+                        credits += 50;
+                        localStorage.setItem('vortariusCredits', credits);
+                        catVisits = 1;
+                        localStorage.setItem('vortariusCatVisits', catVisits);
+                        state = 'menu';
+                        player2 = null;
+                        isCoop = false;
+                        isBossRush = false;
+                        score = 0;
+                        enemies = [];
+                        bullets = [];
+                        enemyBullets = [];
+                        secretTransition = 0;
+                    } else if (catVisits === 1) {
+                        catVisits = 2;
+                        localStorage.setItem('vortariusCatVisits', catVisits);
+                        state = 'menu';
+                        player2 = null;
+                        isCoop = false;
+                        isBossRush = false;
+                        score = 0;
+                        enemies = [];
+                        bullets = [];
+                        enemyBullets = [];
+                        secretTransition = 0;
+                    } else if (catVisits === 2) {
+                        resetCountdown += 1 / 60;
+                        if (resetCountdown >= 10) {
+                            localStorage.clear();
+                            location.reload();
+                        }
+                    }
+                }
+                drawSecretRoom();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        if (musicOn) backgroundMusic = playSynthwave();
+        gameLoop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+
+        #canvas {
+            background-color: white;
+            border: 2px solid black;
+            cursor: crosshair;
+        }
+
+        #colorInput {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 18px;
+            padding: 5px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+
+<input type="text" id="colorInput" placeholder="#000000" maxlength="7" value="#000000" />
+<canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const colorInput = document.getElementById('colorInput');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let isDrawing = false;
+    let isHolding = false;
+    let holdTime = 0;
+    let startX, startY;
+
+    // Initialize drawing color
+    let currentColor = '#000000';
+
+    // Listen for changes in the color input box
+    colorInput.addEventListener('input', (e) => {
+        const value = e.target.value;
+        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
+            currentColor = value;
+        }
+    });
+
+    // Start drawing after holding for more than 1 second
+    canvas.addEventListener('mousedown', (e) => {
+        holdTime = Date.now();
+        isHolding = true;
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+
+    // Check if the hold was long enough to allow drawing
+    canvas.addEventListener('mousemove', (e) => {
+        if (isHolding && !isDrawing && Date.now() - holdTime >= 0) {
+            isDrawing = true;
+        }
+
+        if (isDrawing) {
+            drawLine(startX, startY, e.clientX, e.clientY);
+            startX = e.clientX;
+            startY = e.clientY;
+        }
+    });
+
+    // Stop drawing
+    canvas.addEventListener('mouseup', () => {
+        isHolding = false;
+        isDrawing = false;
+    });
+
+    // Function to draw a smooth line
+    function drawLine(x1, y1, x2, y2) {
+        ctx.strokeStyle = currentColor;
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.closePath();
+    }
+</script>
+
+</body>
+</html>

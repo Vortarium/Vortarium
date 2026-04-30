@@ -1,0 +1,1744 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Level Up</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #69460f;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            image-rendering: pixelated;
+            -webkit-font-smoothing: none;
+            font-smooth: never;
+        }
+        
+        h1, h2, p {
+            font-family: 'Courier New', monospace;
+            image-rendering: pixelated;
+        }
+        
+        #game-container, #achievements-container, #market-container, #spells-container, #wheel-container, #special-container {
+            max-width: 400px;
+            margin: 0 auto;
+            background-color: #e0e0e0;
+            padding: 20px;
+            border: 4px solid #000;
+            box-shadow: 4px 4px 0 #000;
+        }
+        
+        #achievements-container, #market-container, #spells-container, #wheel-container, #special-container {
+            display: none;
+        }
+        
+        #total {
+            font-size: 32px;
+            margin: 10px 0;
+        }
+        
+        #click-button {
+            width: 100px;
+            height: 100px;
+            margin: 20px auto;
+            background-color: #3ddbff;
+            border: 4px solid #000;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 4px 4px 0 #000;
+            image-rendering: pixelated;
+        }
+        
+        #click-button:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 #000;
+        }
+        
+        #progress-container {
+            width: 100%;
+            height: 30px;
+            border: 3px solid #000;
+            margin-top: 20px;
+            position: relative;
+        }
+        
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #000;
+        }
+        
+        #progress-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        
+        #level-display {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        #cps-display {
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        
+        #achievements-button, #market-button, #spells-button, #special-button {
+            margin-top: 15px;
+            padding: 8px 16px;
+            background-color: #ddd;
+            border: 3px solid #000;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            box-shadow: 3px 3px 0 #000;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        #achievements-button:active, #market-button:active, #spells-button:active, #special-button:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 #000;
+        }
+        
+        .achievement {
+            border: 3px solid #000;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #ccc;
+            text-align: left;
+        }
+        
+        .achievement.unlocked {
+            background-color: #ff0;
+        }
+        
+        #close-achievements, #close-market, #close-spells, #close-wheel, #close-special {
+            float: right;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .market-item {
+            border: 3px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+            background-color: #ddd;
+            text-align: left;
+        }
+        
+        .market-item h3 {
+            margin-top: 0;
+        }
+        
+        .market-item button {
+            padding: 8px 16px;
+            background-color: #ccc;
+            border: 2px solid #000;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            box-shadow: 2px 2px 0 #000;
+            margin-top: 10px;
+        }
+        
+        .market-item button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        
+        .market-item button:active:not(:disabled) {
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0 #000;
+        }
+        
+        .hire-progress-container {
+            width: 100%;
+            height: 20px;
+            border: 2px solid #000;
+            margin-top: 10px;
+            position: relative;
+        }
+        
+        .hire-progress-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #000;
+        }
+        
+        .hire-progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+        }
+        
+        .error-message {
+            color: red;
+            margin-top: 5px;
+            font-size: 12px;
+            display: none;
+        }
+        
+        #total-achievements {
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .active-worker {
+            color: green;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .spell {
+            border: 3px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+            background-color: #ddd;
+            text-align: center;
+            cursor: pointer;
+        }
+        
+        .spell-emoji {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+        
+        .spell-cooldown {
+            width: 100%;
+            height: 20px;
+            border: 2px solid #000;
+            margin-top: 10px;
+            position: relative;
+        }
+        
+        .spell-cooldown-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #000;
+        }
+        
+        .spell-cooldown-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+        }
+        
+        .spell-active {
+            color: green;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        #wheel {
+            width: 200px;
+            height: 200px;
+            border: 3px solid #000;
+            border-radius: 50%;
+            margin: 20px auto;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .wheel-section {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            clip-path: polygon(50% 50%, 50% 0%, 100% 0%);
+            transform-origin: 50% 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        #spin-button {
+            padding: 10px 20px;
+            background-color: #ccc;
+            border: 3px solid #000;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            box-shadow: 3px 3px 0 #000;
+            margin-top: 10px;
+        }
+        
+        #spin-button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        
+        .wheel-cooldown {
+            width: 100%;
+            height: 20px;
+            border: 2px solid #000;
+            margin-top: 15px;
+            position: relative;
+        }
+        
+        .wheel-cooldown-bar {
+            height: 100%;
+            width: 0%;
+            background-color: #000;
+        }
+        
+        .wheel-cooldown-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+        }
+        
+        .wheel-result {
+            font-weight: bold;
+            margin-top: 15px;
+            min-height: 20px;
+        }
+        
+        #token-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #e0e0e0;
+            padding: 5px 10px;
+            border: 3px solid #000;
+            box-shadow: 3px 3px 0 #000;
+            font-size: 16px;
+        }
+        
+        .special-item {
+            border: 3px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+            background-color: #ddd;
+            text-align: left;
+        }
+        
+        .special-item h3 {
+            margin-top: 0;
+        }
+        
+        .special-item button {
+            padding: 8px 16px;
+            background-color: #ccc;
+            border: 2px solid #000;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            box-shadow: 2px 2px 0 #000;
+            margin-top: 10px;
+        }
+        
+        .special-item button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        
+        .special-item button:active:not(:disabled) {
+            transform: translate(1px, 1px);
+            box-shadow: 1px 1px 0 #000;
+        }
+        
+        #cookie-banner button {
+    padding: 5px 15px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#cookie-banner button:first-child {
+    background-color: #4CAF50;
+    color: white;
+}
+
+#cookie-banner button:last-child {
+    background-color: #f44336;
+    color: white;
+}
+    </style>
+</head>
+<body>
+    <div id="cookie-banner" style="display: none; position: fixed; bottom: 0; left: 0; right: 0; background: #333; color: white; padding: 15px; text-align: center; z-index: 1000;">
+    <p>We use cookies to save your game progress. Do you accept cookies?</p>
+    <button onclick="acceptCookies()" style="margin-right: 10px;">Accept</button>
+    <button onclick="declineCookies()">Decline</button>
+</div>
+    <div id="token-display">⬡0</div>
+    
+    <div id="game-container">
+        <div id="level-display">Level 1</div>
+        <div id="total">0</div>
+        
+        <div id="click-button" onclick="clickButton()"></div>
+        
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="progress-labels">
+            <span>0</span>
+            <span>1</span>
+        </div>
+        <div id="cps-display">CPS: 0</div>
+        <button id="market-button" onclick="showMarket()">Market</button>
+        <button id="spells-button" onclick="showSpells()">Spells</button>
+        <button id="special-button" onclick="showSpecial()">Special Shop</button>
+        <button id="achievements-button" onclick="showAchievements()">Achievements</button>
+    </div>
+
+    <div id="achievements-container">
+        <div id="close-achievements" onclick="hideAchievements()">X</div>
+        <h2>Achievements</h2>
+        <div id="total-achievements">Total Unlocked: 0</div>
+        <div id="achievements-list"></div>
+    </div>
+
+    <div id="market-container">
+        <div id="close-market" onclick="hideMarket()">X</div>
+        <h2>Market</h2>
+        <div class="market-item">
+            <h3>Hire a Helper</h3>
+            <p>Cost: 1K</p>
+            <p>Automatically clicks once per second</p>
+            <p>Takes 1 minute to arrive</p>
+            <button id="hire-helper" onclick="hireHelper()">Order Helper</button>
+            <div class="hire-progress-container">
+                <div id="helper-progress" class="hire-progress-bar"></div>
+                <div id="helper-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="helper-active" class="active-worker" style="display:none">Helper is working! (+1/s)</div>
+            <div id="helper-error" class="error-message"></div>
+        </div>
+        
+        <div class="market-item">
+            <h3>Hire a Manager</h3>
+            <p>Cost: 5K</p>
+            <p>Automatically clicks 10 times per second</p>
+            <p>Takes 10 minutes to arrive</p>
+            <button id="hire-manager" onclick="hireManager()">Order Manager</button>
+            <div class="hire-progress-container">
+                <div id="manager-progress" class="hire-progress-bar"></div>
+                <div id="manager-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="manager-active" class="active-worker" style="display:none">Manager is working! (+10/s)</div>
+            <div id="manager-error" class="error-message"></div>
+        </div>
+        
+        <div class="market-item">
+            <h3>Hire a Boss</h3>
+            <p>Cost: 10K</p>
+            <p>Automatically clicks 100 times per second</p>
+            <p>Takes 1 hour to arrive</p>
+            <button id="hire-boss" onclick="hireBoss()">Order Boss</button>
+            <div class="hire-progress-container">
+                <div id="boss-progress" class="hire-progress-bar"></div>
+                <div id="boss-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="boss-active" class="active-worker" style="display:none">Boss is working! (+100/s)</div>
+            <div id="boss-error" class="error-message"></div>
+        </div>
+    </div>
+
+    <div id="spells-container">
+        <div id="close-spells" onclick="hideSpells()">X</div>
+        <h2>Spells</h2>
+        
+        <div class="spell" onclick="castPowerSpell()">
+            <div class="spell-emoji">✨</div>
+            <h3>Power Boost</h3>
+            <p>Double clicking power for 30 seconds</p>
+            <div class="spell-cooldown">
+                <div id="power-cooldown" class="spell-cooldown-bar"></div>
+                <div id="power-cooldown-text" class="spell-cooldown-text">Ready!</div>
+            </div>
+            <div id="power-active" class="spell-active" style="display:none">Active! (2x power)</div>
+        </div>
+        
+        <div class="spell" onclick="castTimeSpell()">
+            <div class="spell-emoji">⏱️</div>
+            <h3>Time Warp</h3>
+            <p>Halves worker time for 20 seconds</p>
+            <div class="spell-cooldown">
+                <div id="time-cooldown" class="spell-cooldown-bar"></div>
+                <div id="time-cooldown-text" class="spell-cooldown-text">Ready!</div>
+            </div>
+            <div id="time-active" class="spell-active" style="display:none">Active! (2x speed)</div>
+        </div>
+        
+        <div class="spell" onclick="showWheel()">
+            <div class="spell-emoji">💎</div>
+            <h3>Wheel of Fortune</h3>
+            <p>Spin for a random reward</p>
+            <div class="spell-cooldown">
+                <div id="wheel-cooldown" class="spell-cooldown-bar"></div>
+                <div id="wheel-cooldown-text" class="spell-cooldown-text">Ready!</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="wheel-container">
+        <div id="close-wheel" onclick="hideWheel()">X</div>
+        <h2>Wheel of Fortune</h2>
+        
+        <div id="wheel">
+            <div class="wheel-section" style="transform: rotate(0deg); background-color: #ff9999;">Nothing</div>
+            <div class="wheel-section" style="transform: rotate(90deg); background-color: #99ff99;">+1K</div>
+            <div class="wheel-section" style="transform: rotate(180deg); background-color: #9999ff;">+Helper</div>
+            <div class="wheel-section" style="transform: rotate(270deg); background-color: #ffff99;">Reset CDs</div>
+        </div>
+        
+        <button id="spin-button" onclick="spinWheel()">Spin!</button>
+        <div id="wheel-result" class="wheel-result"></div>
+        
+        <div class="wheel-cooldown">
+            <div id="wheel-cooldown-bar" class="wheel-cooldown-bar"></div>
+            <div id="wheel-cooldown-text" class="wheel-cooldown-text">Ready!</div>
+        </div>
+    </div>
+
+    <div id="special-container">
+        <div id="close-special" onclick="hideSpecial()">X</div>
+        <h2>Special Shop</h2>
+        
+        <div class="special-item">
+            <h3>Marketer</h3>
+            <p>Cost: ⬡5</p>
+            <p>Permanently increases clicking power by 1</p>
+            <p>Takes 5 minutes to arrive</p>
+            <button id="buy-marketer" onclick="buyMarketer()">Hire Marketer</button>
+            <div class="hire-progress-container">
+                <div id="marketer-progress" class="hire-progress-bar"></div>
+                <div id="marketer-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="marketer-error" class="error-message"></div>
+        </div>
+        
+        <div class="special-item">
+            <h3>Salesman</h3>
+            <p>Cost: ⬡20</p>
+            <p>Permanently increases clicking power by 5</p>
+            <p>Takes 30 minutes to arrive</p>
+            <button id="buy-salesman" onclick="buySalesman()">Hire Salesman</button>
+            <div class="hire-progress-container">
+                <div id="salesman-progress" class="hire-progress-bar"></div>
+                <div id="salesman-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="salesman-error" class="error-message"></div>
+        </div>
+        
+        <div class="special-item">
+            <h3>Broker</h3>
+            <p>Cost: ⬡50</p>
+            <p>Permanently increases clicking power by 20</p>
+            <p>Takes 2 hours to arrive</p>
+            <button id="buy-broker" onclick="buyBroker()">Hire Broker</button>
+            <div class="hire-progress-container">
+                <div id="broker-progress" class="hire-progress-bar"></div>
+                <div id="broker-progress-text" class="hire-progress-text">Not ordered</div>
+            </div>
+            <div id="broker-error" class="error-message"></div>
+        </div>
+    </div>
+
+    <script>
+        let total = 0;
+        let level = 1;
+        let currentGoal = 0;
+        let nextGoal = 1;
+        let clicks = 0;
+        let cps = 0;
+        let lastClickTime = Date.now();
+        let clickTimes = [];
+        let achievements = {
+            levels: [],
+            cps: []
+        };
+        let newAchievement = false;
+        let clickPower = 1;
+        let workerSpeed = 1;
+        let tokens = 0;
+        
+        // Auto-clicker variables
+        let helperCount = 0;
+        let managerCount = 0;
+        let bossCount = 0;
+        let helperInterval = null;
+        let managerInterval = null;
+        let bossInterval = null;
+        let helperTimer = null;
+        let managerTimer = null;
+        let bossTimer = null;
+        
+        // Special upgrades variables
+        let marketerCount = 0;
+        let salesmanCount = 0;
+        let brokerCount = 0;
+        let marketerTimer = null;
+        let salesmanTimer = null;
+        let brokerTimer = null;
+        
+        // Spell variables
+        let powerSpellActive = false;
+        let timeSpellActive = false;
+        let powerSpellCooldown = false;
+        let timeSpellCooldown = false;
+        let wheelCooldown = false;
+        
+        // Full color spectrum (32 colors)
+        const levelColors = [
+            "#3ddbff", "#3dc8ff", "#3da1ff", "#3d8eff", "#3d77ff", "#3d64ff", "#3d44ff", "#4d3dff",
+            "#6b3dff", "#8a3dff", "#a83dff", "#c73dff", "#e53dff", "#ff3df2", "#ff3dd4", "#ff3db5",
+            "#ff3d96", "#ff3d77", "#ff3d59", "#ff3d3d", "#ff593d", "#ff773d", "#ff963d", "#ffb53d",
+            "#ffd43d", "#fff23d", "#e5ff3d", "#c7ff3d", "#a8ff3d", "#8aff3d", "#6bff3d", "#4dff3d"
+        ];
+        
+        // Add this at the top of your script with other variable declarations
+let cookiesAccepted = false;
+
+// Add this function to handle cookie consent
+function checkCookies() {
+    if (document.cookie.includes('cookies_accepted=true')) {
+        cookiesAccepted = true;
+        loadGame();
+    } else {
+        // Show cookie consent banner (you'll need to add HTML for this)
+        document.getElementById('cookie-banner').style.display = 'block';
+    }
+}
+
+// Add these functions for cookie handling
+function acceptCookies() {
+    document.cookie = "cookies_accepted=true; max-age=31536000"; // 1 year expiration
+    cookiesAccepted = true;
+    document.getElementById('cookie-banner').style.display = 'none';
+    saveGame();
+}
+
+function declineCookies() {
+    document.getElementById('cookie-banner').style.display = 'none';
+    // Don't save anything if cookies are declined
+}
+
+// Modify the saveGame function
+function saveGame() {
+    if (!cookiesAccepted) return;
+    
+    const gameData = {
+        total,
+        level,
+        currentGoal,
+        nextGoal,
+        clicks,
+        cps,
+        achievements,
+        clickPower,
+        workerSpeed,
+        helperCount,
+        managerCount,
+        bossCount,
+        marketerCount,
+        salesmanCount,
+        brokerCount,
+        tokens,
+        powerSpellActive,
+        timeSpellActive,
+        powerSpellCooldown,
+        timeSpellCooldown,
+        wheelCooldown,
+        cpsAchievements,
+        nextCPSGoal
+    };
+    
+    // Save to both localStorage and cookies
+    localStorage.setItem('pixelLevelUpGame', JSON.stringify(gameData));
+    document.cookie = `gameData=${JSON.stringify(gameData)}; max-age=31536000`; // 1 year
+}
+
+// Modify the loadGame function
+function loadGame() {
+    // Try to load from cookies first
+    const cookieData = document.cookie.split('; ')
+        .find(row => row.startsWith('gameData='));
+    
+    let savedData;
+    if (cookieData) {
+        savedData = JSON.parse(cookieData.split('=')[1]);
+    } else {
+        // Fall back to localStorage
+        savedData = localStorage.getItem('pixelLevelUpGame');
+        if (savedData) savedData = JSON.parse(savedData);
+    }
+    
+    if (savedData) {
+        // Restore all game data...
+        // (Keep your existing load code but add these lines)
+        if (savedData.cpsAchievements) {
+            cpsAchievements = savedData.cpsAchievements;
+            nextCPSGoal = savedData.nextCPSGoal || nextCPSGoal;
+        }
+    }
+}
+
+// Modify the initGame function
+function initGame() {
+    updateDisplay();
+    updateCPS();
+    setInterval(updateCPS, 1000);
+    setInterval(saveGame, 30000);
+    checkCookies(); // Add this line
+    
+    // Also add autosave when window is closing
+    window.addEventListener('beforeunload', saveGame);
+}
+        
+        // CPS achievements (doubling each time)
+        const cpsAchievements = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
+        
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            }
+            if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num;
+        }
+        
+        function parseFormattedNumber(str) {
+            if (str.includes('M')) return parseFloat(str) * 1000000;
+            if (str.includes('K')) return parseFloat(str) * 1000;
+            return parseInt(str);
+        }
+        
+        function updateCPS() {
+            const now = Date.now();
+            // Keep only clicks from the last second
+            clickTimes = clickTimes.filter(time => now - time < 1000);
+            cps = clickTimes.length * clickPower + helperCount + (managerCount * 10) + (bossCount * 100);
+            document.getElementById('cps-display').textContent = `CPS: ${cps.toFixed(1)}`;
+            
+            // Check CPS achievements
+            cpsAchievements.forEach((goal, index) => {
+                if (cps >= goal && !achievements.cps.includes(index)) {
+                    achievements.cps.push(index);
+                    newAchievement = true;
+                }
+            });
+        }
+        
+        function updateDisplay() {
+            document.getElementById('total').textContent = formatNumber(total);
+            document.getElementById('level-display').textContent = `Level ${level}`;
+            document.getElementById('token-display').textContent = `⬡${tokens}`;
+            
+            // Recalculate level in case total decreased from purchases
+            while (total >= nextGoal) {
+                level++;
+                currentGoal = nextGoal;
+                nextGoal = currentGoal === 0 ? 1 : currentGoal * 2;
+                
+                // Check level achievement
+                if (!achievements.levels.includes(level - 1)) {
+                    achievements.levels.push(level - 1);
+                    newAchievement = true;
+                }
+            }
+            
+            // Handle case where total decreased below current goal
+            while (level > 1 && total < currentGoal) {
+                level--;
+                nextGoal = currentGoal;
+                currentGoal = level === 1 ? 0 : Math.pow(2, level - 2);
+            }
+            
+            const progress = currentGoal === 0 ? total : (total - currentGoal) / (nextGoal - currentGoal) * 100;
+            document.getElementById('progress-bar').style.width = `${Math.min(progress, 100)}%`;
+            
+            document.getElementById('progress-labels').innerHTML = `
+                <span>${formatNumber(currentGoal)}</span>
+                <span>${formatNumber(nextGoal)}</span>
+            `;
+            
+            // Update button color based on level (looping through colors)
+            const colorIndex = (level - 1) % levelColors.length;
+            document.getElementById('click-button').style.backgroundColor = levelColors[colorIndex];
+        }
+        
+        function clickButton() {
+            total += clickPower;
+            clicks++;
+            clickTimes.push(Date.now());
+            
+            // 0.1% chance to get a token
+            if (Math.random() < 0.001) {
+                tokens++;
+                document.getElementById('token-display').textContent = `⬡${tokens}`;
+            }
+            
+            if (total >= nextGoal) {
+                level++;
+                currentGoal = nextGoal;
+                nextGoal = currentGoal === 0 ? 1 : currentGoal * 2;
+                
+                // Check level achievement
+                if (!achievements.levels.includes(level - 1)) {
+                    achievements.levels.push(level - 1);
+                    newAchievement = true;
+                }
+            }
+            
+            updateDisplay();
+            updateCPS();
+        }
+        
+        function autoClick(amount) {
+            total += amount;
+            clicks += amount;
+            clickTimes.push(Date.now());
+            
+            if (total >= nextGoal) {
+                level++;
+                currentGoal = nextGoal;
+                nextGoal = currentGoal === 0 ? 1 : currentGoal * 2;
+                
+                // Check level achievement
+                if (!achievements.levels.includes(level - 1)) {
+                    achievements.levels.push(level - 1);
+                    newAchievement = true;
+                }
+            }
+            updateDisplay();
+            updateCPS();
+        }
+        
+        function showAchievements() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('market-container').style.display = 'none';
+            document.getElementById('spells-container').style.display = 'none';
+            document.getElementById('wheel-container').style.display = 'none';
+            document.getElementById('special-container').style.display = 'none';
+            document.getElementById('achievements-container').style.display = 'block';
+            
+            const list = document.getElementById('achievements-list');
+            list.innerHTML = '';
+            
+            // Add level achievements
+            achievements.levels.sort((a, b) => a - b).forEach(lvl => {
+                const achievement = document.createElement('div');
+                achievement.className = 'achievement unlocked';
+                achievement.textContent = `You Reached Level ${lvl}`;
+                list.appendChild(achievement);
+            });
+            
+            // Add CPS achievements
+            achievements.cps.sort((a, b) => a - b).forEach(index => {
+                const achievement = document.createElement('div');
+                achievement.className = 'achievement unlocked';
+                achievement.textContent = `Reached ${cpsAchievements[index]} CPS`;
+                list.appendChild(achievement);
+            });
+            
+            // Update total achievements count
+            const totalAchievements = achievements.levels.length + achievements.cps.length;
+            document.getElementById('total-achievements').textContent = `Total Unlocked: ${totalAchievements}`;
+            
+            // Clear new achievement flag
+            if (newAchievement) {
+                newAchievement = false;
+            }
+        }
+        
+        function hideAchievements() {
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('achievements-container').style.display = 'none';
+        }
+        
+        function showMarket() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('achievements-container').style.display = 'none';
+            document.getElementById('spells-container').style.display = 'none';
+            document.getElementById('wheel-container').style.display = 'none';
+            document.getElementById('special-container').style.display = 'none';
+            document.getElementById('market-container').style.display = 'block';
+        }
+        
+        function hideMarket() {
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('market-container').style.display = 'none';
+        }
+        
+        function showSpells() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('achievements-container').style.display = 'none';
+            document.getElementById('market-container').style.display = 'none';
+            document.getElementById('wheel-container').style.display = 'none';
+            document.getElementById('special-container').style.display = 'none';
+            document.getElementById('spells-container').style.display = 'block';
+        }
+        
+        function hideSpells() {
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('spells-container').style.display = 'none';
+        }
+        
+        function showWheel() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('achievements-container').style.display = 'none';
+            document.getElementById('market-container').style.display = 'none';
+            document.getElementById('spells-container').style.display = 'none';
+            document.getElementById('special-container').style.display = 'none';
+            document.getElementById('wheel-container').style.display = 'block';
+        }
+        
+        function hideWheel() {
+            document.getElementById('spells-container').style.display = 'block';
+            document.getElementById('wheel-container').style.display = 'none';
+        }
+        
+        function showSpecial() {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('achievements-container').style.display = 'none';
+            document.getElementById('market-container').style.display = 'none';
+            document.getElementById('spells-container').style.display = 'none';
+            document.getElementById('wheel-container').style.display = 'none';
+            document.getElementById('special-container').style.display = 'block';
+        }
+        
+        function hideSpecial() {
+            document.getElementById('game-container').style.display = 'block';
+            document.getElementById('special-container').style.display = 'none';
+        }
+        
+        function hireHelper() {
+    const cost = 1000;
+    if (total < cost) {
+        document.getElementById('helper-error').textContent = "Not enough funds!";
+        document.getElementById('helper-error').style.display = "block";
+        return;
+    }
+    
+    if (helperTimer !== null) return;
+    
+    total -= cost;
+    updateDisplay();
+    document.getElementById('hire-helper').disabled = true;
+    document.getElementById('helper-error').style.display = "none";
+    
+    startWorkerTimer('helper', 60 / workerSpeed);
+}
+
+function hireManager() {
+    const cost = 5000;
+    if (total < cost) {
+        document.getElementById('manager-error').textContent = "Not enough funds!";
+        document.getElementById('manager-error').style.display = "block";
+        return;
+    }
+    
+    if (managerTimer !== null) return;
+    
+    total -= cost;
+    updateDisplay();
+    document.getElementById('hire-manager').disabled = true;
+    document.getElementById('manager-error').style.display = "none";
+    
+    startWorkerTimer('manager', 600 / workerSpeed);
+}
+
+function hireBoss() {
+    const cost = 10000;
+    if (total < cost) {
+        document.getElementById('boss-error').textContent = "Not enough funds!";
+        document.getElementById('boss-error').style.display = "block";
+        return;
+    }
+    
+    if (bossTimer !== null) return;
+    
+    total -= cost;
+    updateDisplay();
+    document.getElementById('hire-boss').disabled = true;
+    document.getElementById('boss-error').style.display = "none";
+    
+    startWorkerTimer('boss', 3600 / workerSpeed);
+}
+        
+        function updateHelperProgress(percent) {
+            document.getElementById('helper-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(60 / workerSpeed - (60 / workerSpeed * (percent / 100)));
+            document.getElementById('helper-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${timeLeft}s`;
+        }
+        
+        function hireManager() {
+            const cost = 5000;
+            if (total < cost) {
+                document.getElementById('manager-error').textContent = "Not enough funds!";
+                document.getElementById('manager-error').style.display = "block";
+                return;
+            }
+            
+            if (managerTimer !== null) {
+                document.getElementById('manager-error').textContent = "Already ordered!";
+                document.getElementById('manager-error').style.display = "block";
+                return;
+            }
+            
+            // Deduct funds
+            total -= cost;
+            updateDisplay();
+            
+            document.getElementById('hire-manager').disabled = true;
+            document.getElementById('manager-error').style.display = "none";
+            
+            let timeLeft = 600 / workerSpeed; // 10 minutes adjusted by worker speed
+            let totalTime = timeLeft;
+            updateManagerProgress(0);
+            
+            managerTimer = setInterval(() => {
+                timeLeft--;
+                const progress = ((totalTime - timeLeft) / totalTime) * 100;
+                updateManagerProgress(progress);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(managerTimer);
+                    managerTimer = null;
+                    managerCount++;
+                    document.getElementById('manager-active').style.display = "block";
+                    document.getElementById('manager-active').textContent = `Manager is working! (+${managerCount * 10}/s)`;
+                    document.getElementById('hire-manager').disabled = false;
+                    
+                    // Start auto-clicking if not already
+                    if (managerInterval === null) {
+                        managerInterval = setInterval(() => autoClick(managerCount * 10), 1000);
+                    } else {
+                        // Update existing interval with new count
+                        clearInterval(managerInterval);
+                        managerInterval = setInterval(() => autoClick(managerCount * 10), 1000);
+                    }
+                }
+            }, 1000);
+        }
+        
+        function updateManagerProgress(percent) {
+            document.getElementById('manager-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(600 / workerSpeed - (600 / workerSpeed * (percent / 100)));
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('manager-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${minutes}m ${seconds}s`;
+        }
+        
+        function hireBoss() {
+            const cost = 10000;
+            if (total < cost) {
+                document.getElementById('boss-error').textContent = "Not enough funds!";
+                document.getElementById('boss-error').style.display = "block";
+                return;
+            }
+            
+            if (bossTimer !== null) {
+                document.getElementById('boss-error').textContent = "Already ordered!";
+                document.getElementById('boss-error').style.display = "block";
+                return;
+            }
+            
+            // Deduct funds
+            total -= cost;
+            updateDisplay();
+            
+            document.getElementById('hire-boss').disabled = true;
+            document.getElementById('boss-error').style.display = "none";
+            
+            let timeLeft = 3600 / workerSpeed; // 1 hour adjusted by worker speed
+            let totalTime = timeLeft;
+            updateBossProgress(0);
+            
+            bossTimer = setInterval(() => {
+                timeLeft--;
+                const progress = ((totalTime - timeLeft) / totalTime) * 100;
+                updateBossProgress(progress);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(bossTimer);
+                    bossTimer = null;
+                    bossCount++;
+                    document.getElementById('boss-active').style.display = "block";
+                    document.getElementById('boss-active').textContent = `Boss is working! (+${bossCount * 100}/s)`;
+                    document.getElementById('hire-boss').disabled = false;
+                    
+                    // Start auto-clicking if not already
+                    if (bossInterval === null) {
+                        bossInterval = setInterval(() => autoClick(bossCount * 100), 1000);
+                    } else {
+                        // Update existing interval with new count
+                        clearInterval(bossInterval);
+                        bossInterval = setInterval(() => autoClick(bossCount * 100), 1000);
+                    }
+                }
+            }, 1000);
+        }
+        
+        function updateBossProgress(percent) {
+            document.getElementById('boss-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(3600 / workerSpeed - (3600 / workerSpeed * (percent / 100)));
+            const hours = Math.floor(timeLeft / 3600);
+            const minutes = Math.floor((timeLeft % 3600) / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('boss-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${hours}h ${minutes}m ${seconds}s`;
+        }
+        
+        function buyMarketer() {
+            const cost = 5;
+            if (tokens < cost) {
+                document.getElementById('marketer-error').textContent = "Not enough tokens!";
+                document.getElementById('marketer-error').style.display = "block";
+                return;
+            }
+            
+            if (marketerTimer !== null) {
+                document.getElementById('marketer-error').textContent = "Already ordered!";
+                document.getElementById('marketer-error').style.display = "block";
+                return;
+            }
+            
+            // Deduct tokens
+            tokens -= cost;
+            updateDisplay();
+            
+            document.getElementById('buy-marketer').disabled = true;
+            document.getElementById('marketer-error').style.display = "none";
+            
+            let timeLeft = 300; // 5 minutes
+            let totalTime = timeLeft;
+            updateMarketerProgress(0);
+            
+            marketerTimer = setInterval(() => {
+                timeLeft--;
+                const progress = ((totalTime - timeLeft) / totalTime) * 100;
+                updateMarketerProgress(progress);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(marketerTimer);
+                    marketerTimer = null;
+                    marketerCount++;
+                    clickPower += 1;
+                    document.getElementById('buy-marketer').disabled = false;
+                }
+            }, 1000);
+        }
+        
+        function updateMarketerProgress(percent) {
+            document.getElementById('marketer-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(300 - (300 * (percent / 100)));
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('marketer-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${minutes}m ${seconds}s`;
+        }
+        
+        function buySalesman() {
+            const cost = 20;
+            if (tokens < cost) {
+                document.getElementById('salesman-error').textContent = "Not enough tokens!";
+                document.getElementById('salesman-error').style.display = "block";
+                return;
+            }
+            
+            if (salesmanTimer !== null) {
+                document.getElementById('salesman-error').textContent = "Already ordered!";
+                document.getElementById('salesman-error').style.display = "block";
+                return;
+            }
+            
+            // Deduct tokens
+            tokens -= cost;
+            updateDisplay();
+            
+            document.getElementById('buy-salesman').disabled = true;
+            document.getElementById('salesman-error').style.display = "none";
+            
+            let timeLeft = 1800; // 30 minutes
+            let totalTime = timeLeft;
+            updateSalesmanProgress(0);
+            
+            salesmanTimer = setInterval(() => {
+                timeLeft--;
+                const progress = ((totalTime - timeLeft) / totalTime) * 100;
+                updateSalesmanProgress(progress);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(salesmanTimer);
+                    salesmanTimer = null;
+                    salesmanCount++;
+                    clickPower += 5;
+                    document.getElementById('buy-salesman').disabled = false;
+                }
+            }, 1000);
+        }
+        
+        function updateSalesmanProgress(percent) {
+            document.getElementById('salesman-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(1800 - (1800 * (percent / 100)));
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('salesman-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${minutes}m ${seconds}s`;
+        }
+        
+        function buyBroker() {
+            const cost = 50;
+            if (tokens < cost) {
+                document.getElementById('broker-error').textContent = "Not enough tokens!";
+                document.getElementById('broker-error').style.display = "block";
+                return;
+            }
+            
+            if (brokerTimer !== null) {
+                document.getElementById('broker-error').textContent = "Already ordered!";
+                document.getElementById('broker-error').style.display = "block";
+                return;
+            }
+            
+            // Deduct tokens
+            tokens -= cost;
+            updateDisplay();
+            
+            document.getElementById('buy-broker').disabled = true;
+            document.getElementById('broker-error').style.display = "none";
+            
+            let timeLeft = 7200; // 2 hours
+            let totalTime = timeLeft;
+            updateBrokerProgress(0);
+            
+            brokerTimer = setInterval(() => {
+                timeLeft--;
+                const progress = ((totalTime - timeLeft) / totalTime) * 100;
+                updateBrokerProgress(progress);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(brokerTimer);
+                    brokerTimer = null;
+                    brokerCount++;
+                    clickPower += 20;
+                    document.getElementById('buy-broker').disabled = false;
+                }
+            }, 1000);
+        }
+        
+        function updateBrokerProgress(percent) {
+            document.getElementById('broker-progress').style.width = `${percent}%`;
+            const timeLeft = Math.ceil(7200 - (7200 * (percent / 100)));
+            const hours = Math.floor(timeLeft / 3600);
+            const minutes = Math.floor((timeLeft % 3600) / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('broker-progress-text').textContent = 
+                percent >= 100 ? "Ready!" : `Arriving in: ${hours}h ${minutes}m ${seconds}s`;
+        }
+        
+        function castPowerSpell() {
+            if (powerSpellActive || powerSpellCooldown) return;
+            
+            powerSpellActive = true;
+            clickPower = 2;
+            document.getElementById('power-active').style.display = "block";
+            
+            // Spell duration
+            setTimeout(() => {
+                powerSpellActive = false;
+                clickPower = 1 + marketerCount + (salesmanCount * 5) + (brokerCount * 20);
+                document.getElementById('power-active').style.display = "none";
+                
+                // Start cooldown
+                powerSpellCooldown = true;
+                let cooldownLeft = 300; // 5 minutes
+                updatePowerCooldown(0);
+                
+                const cooldownInterval = setInterval(() => {
+                    cooldownLeft--;
+                    const progress = ((300 - cooldownLeft) / 300) * 100;
+                    updatePowerCooldown(progress);
+                    
+                    if (cooldownLeft <= 0) {
+                        clearInterval(cooldownInterval);
+                        powerSpellCooldown = false;
+                        document.getElementById('power-cooldown-text').textContent = "Ready!";
+                    }
+                }, 1000);
+            }, 30000); // 30 seconds
+            
+            document.getElementById('power-cooldown-text').textContent = "Active!";
+        }
+        
+        function updatePowerCooldown(percent) {
+            document.getElementById('power-cooldown').style.width = `${percent}%`;
+            const timeLeft = 300 - Math.floor(300 * (percent / 100));
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            if (timeLeft > 0) {
+                document.getElementById('power-cooldown-text').textContent = 
+                    `Cooldown: ${minutes}m ${seconds}s`;
+            }
+        }
+        
+        function castTimeSpell() {
+    if (timeSpellActive || timeSpellCooldown) return;
+    
+    timeSpellActive = true;
+    workerSpeed = 2; // Double the speed
+    document.getElementById('time-active').style.display = "block";
+    
+    // Store original timer intervals
+    const originalTimers = {
+        helper: helperTimer,
+        manager: managerTimer,
+        boss: bossTimer
+    };
+    
+    // Store original remaining times
+    const remainingTimes = {};
+    
+    // Calculate remaining time for helper
+    if (helperTimer) {
+        const progress = parseFloat(document.getElementById('helper-progress').style.width) || 0;
+        remainingTimes.helper = Math.ceil((60 * (100 - progress) / 100) / workerSpeed);
+        clearInterval(helperTimer);
+    }
+    
+    // Calculate remaining time for manager
+    if (managerTimer) {
+        const progress = parseFloat(document.getElementById('manager-progress').style.width) || 0;
+        remainingTimes.manager = Math.ceil((600 * (100 - progress) / 100) / workerSpeed);
+        clearInterval(managerTimer);
+    }
+    
+    // Calculate remaining time for boss
+    if (bossTimer) {
+        const progress = parseFloat(document.getElementById('boss-progress').style.width) || 0;
+        remainingTimes.boss = Math.ceil((3600 * (100 - progress) / 100) / workerSpeed);
+        clearInterval(bossTimer);
+    }
+    
+    // Restart timers with new speed
+    if (originalTimers.helper) {
+        startWorkerTimer('helper', remainingTimes.helper || 30);
+    }
+    if (originalTimers.manager) {
+        startWorkerTimer('manager', remainingTimes.manager || 300);
+    }
+    if (originalTimers.boss) {
+        startWorkerTimer('boss', remainingTimes.boss || 1800);
+    }
+    
+    // Spell duration
+    setTimeout(() => {
+        timeSpellActive = false;
+        workerSpeed = 1; // Reset to normal speed
+        document.getElementById('time-active').style.display = "none";
+        
+        // Restart timers with normal speed
+        if (helperTimer) {
+            const progress = parseFloat(document.getElementById('helper-progress').style.width) || 0;
+            const remaining = Math.ceil((60 * (100 - progress) / 100) / workerSpeed);
+            clearInterval(helperTimer);
+            startWorkerTimer('helper', remaining);
+        }
+        if (managerTimer) {
+            const progress = parseFloat(document.getElementById('manager-progress').style.width) || 0;
+            const remaining = Math.ceil((600 * (100 - progress) / 100) / workerSpeed);
+            clearInterval(managerTimer);
+            startWorkerTimer('manager', remaining);
+        }
+        if (bossTimer) {
+            const progress = parseFloat(document.getElementById('boss-progress').style.width) || 0;
+            const remaining = Math.ceil((3600 * (100 - progress) / 100) / workerSpeed);
+            clearInterval(bossTimer);
+            startWorkerTimer('boss', remaining);
+        }
+        
+        // Start cooldown
+        timeSpellCooldown = true;
+        let cooldownLeft = 600; // 10 minutes
+        updateTimeCooldown(0);
+        
+        const cooldownInterval = setInterval(() => {
+            cooldownLeft--;
+            const progress = ((600 - cooldownLeft) / 600) * 100;
+            updateTimeCooldown(progress);
+            
+            if (cooldownLeft <= 0) {
+                clearInterval(cooldownInterval);
+                timeSpellCooldown = false;
+                document.getElementById('time-cooldown-text').textContent = "Ready!";
+            }
+        }, 1000);
+    }, 20000); // 20 seconds
+    
+    document.getElementById('time-cooldown-text').textContent = "Active!";
+}
+
+function startWorkerTimer(type, timeLeft) {
+    const totalTime = {
+        helper: 60 / workerSpeed,
+        manager: 600 / workerSpeed,
+        boss: 3600 / workerSpeed
+    }[type];
+    
+    const progress = ((totalTime - timeLeft) / totalTime) * 100;
+    
+    // Update progress bar
+    switch(type) {
+        case 'helper':
+            updateHelperProgress(progress);
+            helperTimer = createTimer(type, timeLeft, totalTime);
+            break;
+        case 'manager':
+            updateManagerProgress(progress);
+            managerTimer = createTimer(type, timeLeft, totalTime);
+            break;
+        case 'boss':
+            updateBossProgress(progress);
+            bossTimer = createTimer(type, timeLeft, totalTime);
+            break;
+    }
+}
+
+function createTimer(type, timeLeft, totalTime) {
+    return setInterval(() => {
+        timeLeft--;
+        const progress = ((totalTime - timeLeft) / totalTime) * 100;
+        
+        switch(type) {
+            case 'helper':
+                updateHelperProgress(progress);
+                if (timeLeft <= 0) completeWorker('helper');
+                break;
+            case 'manager':
+                updateManagerProgress(progress);
+                if (timeLeft <= 0) completeWorker('manager');
+                break;
+            case 'boss':
+                updateBossProgress(progress);
+                if (timeLeft <= 0) completeWorker('boss');
+                break;
+        }
+    }, 1000);
+}
+
+function completeWorker(type) {
+    switch(type) {
+        case 'helper':
+            clearInterval(helperTimer);
+            helperTimer = null;
+            helperCount++;
+            document.getElementById('helper-active').style.display = "block";
+            document.getElementById('helper-active').textContent = `Helper is working! (+${helperCount}/s)`;
+            document.getElementById('hire-helper').disabled = false;
+            if (!helperInterval) {
+                helperInterval = setInterval(() => autoClick(helperCount), 1000);
+            }
+            break;
+        case 'manager':
+            clearInterval(managerTimer);
+            managerTimer = null;
+            managerCount++;
+            document.getElementById('manager-active').style.display = "block";
+            document.getElementById('manager-active').textContent = `Manager is working! (+${managerCount * 10}/s)`;
+            document.getElementById('hire-manager').disabled = false;
+            if (!managerInterval) {
+                managerInterval = setInterval(() => autoClick(managerCount * 10), 1000);
+            }
+            break;
+        case 'boss':
+            clearInterval(bossTimer);
+            bossTimer = null;
+            bossCount++;
+            document.getElementById('boss-active').style.display = "block";
+            document.getElementById('boss-active').textContent = `Boss is working! (+${bossCount * 100}/s)`;
+            document.getElementById('hire-boss').disabled = false;
+            if (!bossInterval) {
+                bossInterval = setInterval(() => autoClick(bossCount * 100), 1000);
+            }
+            break;
+    }
+}
+        
+        function updateTimeCooldown(percent) {
+            document.getElementById('time-cooldown').style.width = `${percent}%`;
+            const timeLeft = 600 - Math.floor(600 * (percent / 100));
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            if (timeLeft > 0) {
+                document.getElementById('time-cooldown-text').textContent = 
+                    `Cooldown: ${minutes}m ${seconds}s`;
+            }
+        }
+        
+        function updateAllWorkerTimers() {
+            // Helper timer
+            if (helperTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('helper-progress').style.width) || 0;
+                const remainingTime = Math.ceil((60 / workerSpeed) * (1 - currentProgress / 100));
+                updateHelperProgress(currentProgress);
+            }
+            
+            // Manager timer
+            if (managerTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('manager-progress').style.width) || 0;
+                const remainingTime = Math.ceil((600 / workerSpeed) * (1 - currentProgress / 100));
+                updateManagerProgress(currentProgress);
+            }
+            
+            // Boss timer
+            if (bossTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('boss-progress').style.width) || 0;
+                const remainingTime = Math.ceil((3600 / workerSpeed) * (1 - currentProgress / 100));
+                updateBossProgress(currentProgress);
+            }
+            
+            // Marketer timer
+            if (marketerTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('marketer-progress').style.width) || 0;
+                updateMarketerProgress(currentProgress);
+            }
+            
+            // Salesman timer
+            if (salesmanTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('salesman-progress').style.width) || 0;
+                updateSalesmanProgress(currentProgress);
+            }
+            
+            // Broker timer
+            if (brokerTimer !== null) {
+                const currentProgress = parseFloat(document.getElementById('broker-progress').style.width) || 0;
+                updateBrokerProgress(currentProgress);
+            }
+        }
+        
+        function spinWheel() {
+            if (wheelCooldown) return;
+            
+            document.getElementById('spin-button').disabled = true;
+            document.getElementById('wheel-result').textContent = "Spinning...";
+            
+            // Animation
+            let spins = 0;
+            const maxSpins = 20 + Math.floor(Math.random() * 10);
+            const spinInterval = setInterval(() => {
+                const wheel = document.getElementById('wheel');
+                const currentRotation = parseInt(wheel.style.transform.replace('rotate(', '').replace('deg)', '')) || 0;
+                wheel.style.transform = `rotate(${currentRotation + 45}deg)`;
+                spins++;
+                
+                if (spins >= maxSpins) {
+                    clearInterval(spinInterval);
+                    determineWheelResult();
+                }
+            }, 100);
+        }
+        
+        function determineWheelResult() {
+            const wheel = document.getElementById('wheel');
+            const rotation = parseInt(wheel.style.transform.replace('rotate(', '').replace('deg)', '')) || 0;
+            const normalizedRotation = rotation % 360;
+            
+            // Determine which section the wheel landed on
+            let result;
+            if (normalizedRotation >= 0 && normalizedRotation < 90) {
+                result = "Nothing";
+            } else if (normalizedRotation >= 90 && normalizedRotation < 180) {
+                result = "+1K";
+            } else if (normalizedRotation >= 180 && normalizedRotation < 270) {
+                result = "+Helper";
+            } else {
+                result = "Reset CDs";
+            }
+            
+            // Apply the result
+            switch(result) {
+                case "Nothing":
+                    document.getElementById('wheel-result').textContent = "You got nothing! Better luck next time.";
+                    break;
+                case "+1K":
+                    total += 1000;
+                    updateDisplay();
+                    document.getElementById('wheel-result').textContent = "You won 1,000 points!";
+                    break;
+                case "+Helper":
+                    helperCount++;
+                    document.getElementById('helper-active').style.display = "block";
+                    document.getElementById('helper-active').textContent = `Helper is working! (+${helperCount}/s)`;
+                    if (helperInterval === null) {
+                        helperInterval = setInterval(() => autoClick(helperCount), 1000);
+                    } else {
+                        clearInterval(helperInterval);
+                        helperInterval = setInterval(() => autoClick(helperCount), 1000);
+                    }
+                    document.getElementById('wheel-result').textContent = "You got a free Helper!";
+                    break;
+                case "Reset CDs":
+                    if (powerSpellCooldown || timeSpellCooldown) {
+                        powerSpellCooldown = false;
+                        timeSpellCooldown = false;
+                        document.getElementById('power-cooldown').style.width = "0%";
+                        document.getElementById('power-cooldown-text').textContent = "Ready!";
+                        document.getElementById('time-cooldown').style.width = "0%";
+                        document.getElementById('time-cooldown-text').textContent = "Ready!";
+                        document.getElementById('wheel-result').textContent = "All spell cooldowns reset!";
+                    } else {
+                        document.getElementById('wheel-result').textContent = "No cooldowns to reset!";
+                    }
+                    break;
+            }
+            
+            // Start wheel cooldown
+            wheelCooldown = true;
+            document.getElementById('spin-button').disabled = false;
+            
+            let cooldownLeft = 7200; // 2 hours
+            updateWheelCooldown(0);
+            
+            const cooldownInterval = setInterval(() => {
+                cooldownLeft--;
+                const progress = ((7200 - cooldownLeft) / 7200) * 100;
+                updateWheelCooldown(progress);
+                
+                if (cooldownLeft <= 0) {
+                    clearInterval(cooldownInterval);
+                    wheelCooldown = false;
+                    document.getElementById('wheel-cooldown-text').textContent = "Ready!";
+                }
+            }, 1000);
+        }
+        
+        function updateWheelCooldown(percent) {
+            document.getElementById('wheel-cooldown-bar').style.width = `${percent}%`;
+            const timeLeft = 7200 - Math.floor(7200 * (percent / 100));
+            const hours = Math.floor(timeLeft / 3600);
+            const minutes = Math.floor((timeLeft % 3600) / 60);
+            const seconds = timeLeft % 60;
+            if (timeLeft > 0) {
+                document.getElementById('wheel-cooldown-text').textContent = 
+                    `Cooldown: ${hours}h ${minutes}m ${seconds}s`;
+            }
+        }
+        
+        // Initialize the game
+        function initGame() {
+            updateDisplay();
+            updateCPS();
+            
+            // Set up CPS calculation
+            setInterval(updateCPS, 1000);
+            
+            // Set up auto-saving
+            setInterval(saveGame, 30000); // Save every 30 seconds
+            
+            // Load any saved game
+            loadGame();
+        }
+        
+        function saveGame() {
+            const gameData = {
+                total,
+                level,
+                currentGoal,
+                nextGoal,
+                clicks,
+                cps,
+                achievements,
+                clickPower,
+                workerSpeed,
+                helperCount,
+                managerCount,
+                bossCount,
+                marketerCount,
+                salesmanCount,
+                brokerCount,
+                tokens,
+                powerSpellActive,
+                timeSpellActive,
+                powerSpellCooldown,
+                timeSpellCooldown,
+                wheelCooldown
+            };
+            localStorage.setItem('pixelLevelUpGame', JSON.stringify(gameData));
+        }
+        
+        function loadGame() {
+            const savedData = localStorage.getItem('pixelLevelUpGame');
+            if (savedData) {
+                const gameData = JSON.parse(savedData);
+                
+                total = gameData.total || 0;
+                level = gameData.level || 1;
+                currentGoal = gameData.currentGoal || 0;
+                nextGoal = gameData.nextGoal || 1;
+                clicks = gameData.clicks || 0;
+                cps = gameData.cps || 0;
+                achievements = gameData.achievements || { levels: [], cps: [] };
+                clickPower = gameData.clickPower || 1;
+                workerSpeed = gameData.workerSpeed || 1;
+                helperCount = gameData.helperCount || 0;
+                managerCount = gameData.managerCount || 0;
+                bossCount = gameData.bossCount || 0;
+                marketerCount = gameData.marketerCount || 0;
+                salesmanCount = gameData.salesmanCount || 0;
+                brokerCount = gameData.brokerCount || 0;
+                tokens = gameData.tokens || 0;
+                powerSpellActive = gameData.powerSpellActive || false;
+                timeSpellActive = gameData.timeSpellActive || false;
+                powerSpellCooldown = gameData.powerSpellCooldown || false;
+                timeSpellCooldown = gameData.timeSpellCooldown || false;
+                wheelCooldown = gameData.wheelCooldown || false;
+                
+                // Restore active workers
+                if (helperCount > 0) {
+                    document.getElementById('helper-active').style.display = "block";
+                    document.getElementById('helper-active').textContent = `Helper is working! (+${helperCount}/s)`;
+                    helperInterval = setInterval(() => autoClick(helperCount), 1000);
+                }
+                
+                if (managerCount > 0) {
+                    document.getElementById('manager-active').style.display = "block";
+                    document.getElementById('manager-active').textContent = `Manager is working! (+${managerCount * 10}/s)`;
+                    managerInterval = setInterval(() => autoClick(managerCount * 10), 1000);
+                }
+                
+                if (bossCount > 0) {
+                    document.getElementById('boss-active').style.display = "block";
+                    document.getElementById('boss-active').textContent = `Boss is working! (+${bossCount * 100}/s)`;
+                    bossInterval = setInterval(() => autoClick(bossCount * 100), 1000);
+                }
+                
+                // Restore active spells
+                if (powerSpellActive) {
+                    document.getElementById('power-active').style.display = "block";
+                }
+                
+                if (timeSpellActive) {
+                    document.getElementById('time-active').style.display = "block";
+                }
+                
+                updateDisplay();
+                updateCPS();
+            }
+        }
+        
+        // Start the game when the page loads
+        window.onload = initGame;
+    </script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Byte Clicker</title>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        
+        #gameContainer, #databaseContainer {
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        #databaseContainer {
+            display: none;
+        }
+        
+        #clickButton {
+            width: 100px;
+            height: 100px;
+            background-color: black;
+            border-radius: 50%;
+            margin: 30px auto;
+            cursor: pointer;
+            image-rendering: pixelated;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            position: relative;
+            transition: transform 0.05s;
+            user-select: none;
+        }
+        
+        #clickButton:after {
+            content: "";
+            position: absolute;
+            width: 104px;
+            height: 104px;
+            border: 2px solid black;
+            border-radius: 50%;
+            left: -4px;
+            top: -4px;
+        }
+        
+        #clickButton:active {
+            transform: scale(0.95);
+        }
+        
+        #timer {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        
+        #description, #newSession, #prestigeButton {
+            font-size: 16px;
+            margin: 20px 0;
+            display: none;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        
+        #newSession {
+            color: green;
+        }
+        
+        #prestigeButton {
+            color: purple;
+        }
+        
+        .upgrade {
+            border: 2px solid black;
+            padding: 10px;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        
+        .error {
+            color: red;
+            font-size: 14px;
+            margin: 5px 0;
+            display: none;
+        }
+        
+        #storageDisplay, #cpsDisplay {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 2px solid black;
+        }
+        
+        #closeDatabase {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        #speedrunTimer {
+            font-size: 14px;
+            margin-top: 20px;
+            color: #555;
+        }
+        
+        #hardcoreButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        #hardcorePopup, #prestigePopup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 3px solid black;
+            padding: 20px;
+            z-index: 100;
+            text-align: center;
+        }
+        
+        #hardcorePopup button, #prestigePopup button {
+            margin: 10px;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #prestigeMultiplier {
+            font-size: 14px;
+            margin-top: 5px;
+            color: purple;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="hardcoreButton">☠</div>
+        <h1 id="gameTitle">0 Bytes</h1>
+        <div id="clickButton">Click</div>
+        <div id="timer">00:10</div>
+        <div id="description">View Database</div>
+        <div id="newSession">Start session #1</div>
+        <div id="prestigeButton">Prestige</div>
+        <div id="speedrunTimer">00:00:00.000</div>
+    </div>
+    
+    <div id="databaseContainer">
+        <div id="closeDatabase">X</div>
+        <h1>Database</h1>
+        <div id="storageDisplay">Total Storage: 0 Bytes</div>
+        <div id="sessionResult">You mined 0 Bytes this session</div>
+        <div id="cpsDisplay">Bytes per second: 0</div>
+        
+        <div class="upgrade" id="bitMinerUpgrade">
+            <h3>Bit Miners</h3>
+            <p>Mines +0.1 bytes every 0.1 seconds</p>
+            <p>Current: 0.1 bytes/0.1s</p>
+            <p>Cost: <span id="bitMinerCost">100</span> Bytes</p>
+            <div class="error" id="bitMinerError">Not enough bytes!</div>
+        </div>
+        
+        <div class="upgrade" id="bitCrusherUpgrade">
+            <h3>Bit Crushers</h3>
+            <p>+1 clicking power</p>
+            <p>Current: 1x</p>
+            <p>Cost: <span id="bitCrusherCost">200</span> Bytes</p>
+            <div class="error" id="bitCrusherError">Not enough bytes!</div>
+        </div>
+        
+        <div class="upgrade" id="bitStatementUpgrade">
+            <h3>Bit Statements</h3>
+            <p>+1 second to session time</p>
+            <p>Current: 10 seconds</p>
+            <p>Cost: <span id="bitStatementCost">50</span> Bytes</p>
+            <div class="error" id="bitStatementError">Not enough bytes!</div>
+        </div>
+        
+        <div class="upgrade" id="bitFarmerUpgrade">
+            <h3>Bit Farmers</h3>
+            <p>+1 byte every 0.1 seconds</p>
+            <p>Current: 0 bytes/0.1s</p>
+            <p>Cost: <span id="bitFarmerCost">1</span> kB</p>
+            <div class="error" id="bitFarmerError">Not enough bytes!</div>
+        </div>
+        
+        <div class="upgrade" id="bitWorshipUpgrade">
+            <h3>Bit Worships</h3>
+            <p>+100 bytes every 0.1 seconds</p>
+            <p>Current: 0 bytes/0.1s</p>
+            <p>Cost: <span id="bitWorshipCost">100</span> kB</p>
+            <div class="error" id="bitWorshipError">Not enough bytes!</div>
+        </div>
+    </div>
+    
+    <div id="hardcorePopup">
+        <h2>Begin Hardcore?</h2>
+        <p>1 second sessions, doubled prices</p>
+        <p>Cannot be undone!</p>
+        <button id="hardcoreYes">Yes</button>
+        <button id="hardcoreNo">No</button>
+    </div>
+    
+    <div id="prestigePopup">
+        <h2>Prestige?</h2>
+        <p>Current bonus: <span id="currentPrestigeBonus">0</span>x</p>
+        <p>You will gain: <span id="newPrestigeBonus">0</span>x</p>
+        <p>Everything resets but you keep the bonus!</p>
+        <button id="prestigeYes">Yes</button>
+        <button id="prestigeNo">No</button>
+    </div>
+
+    <script>
+        // Game state
+        let bytes = 0;
+        let bitMiners = 0;
+        let bitCrushers = 0;
+        let bitStatements = 0;
+        let bitFarmers = 0;
+        let bitWorships = 0;
+        let clickPower = 1;
+        let timer = 10;
+        let gameActive = true;
+        let sessionBytes = 0;
+        let sessionCount = 1;
+        let countdownInterval;
+        let baseSessionTime = 10;
+        let speedrunStart = Date.now();
+        let speedrunInterval;
+        let hardcoreMode = false;
+        let priceMultiplier = 1;
+        let prestigeBonus = 0;
+        let totalPrestigeBonus = 1;
+        let cheatCodeBuffer = "";
+        
+        // DOM elements
+        const gameTitle = document.getElementById('gameTitle');
+        const clickButton = document.getElementById('clickButton');
+        const timerDisplay = document.getElementById('timer');
+        const description = document.getElementById('description');
+        const newSession = document.getElementById('newSession');
+        const prestigeButton = document.getElementById('prestigeButton');
+        const gameContainer = document.getElementById('gameContainer');
+        const databaseContainer = document.getElementById('databaseContainer');
+        const storageDisplay = document.getElementById('storageDisplay');
+        const sessionResult = document.getElementById('sessionResult');
+        const cpsDisplay = document.getElementById('cpsDisplay');
+        const bitMinerUpgrade = document.getElementById('bitMinerUpgrade');
+        const bitCrusherUpgrade = document.getElementById('bitCrusherUpgrade');
+        const bitStatementUpgrade = document.getElementById('bitStatementUpgrade');
+        const bitFarmerUpgrade = document.getElementById('bitFarmerUpgrade');
+        const bitWorshipUpgrade = document.getElementById('bitWorshipUpgrade');
+        const bitMinerCostDisplay = document.getElementById('bitMinerCost');
+        const bitCrusherCostDisplay = document.getElementById('bitCrusherCost');
+        const bitStatementCostDisplay = document.getElementById('bitStatementCost');
+        const bitFarmerCostDisplay = document.getElementById('bitFarmerCost');
+        const bitWorshipCostDisplay = document.getElementById('bitWorshipCost');
+        const bitMinerError = document.getElementById('bitMinerError');
+        const bitCrusherError = document.getElementById('bitCrusherError');
+        const bitStatementError = document.getElementById('bitStatementError');
+        const bitFarmerError = document.getElementById('bitFarmerError');
+        const bitWorshipError = document.getElementById('bitWorshipError');
+        const closeDatabase = document.getElementById('closeDatabase');
+        const speedrunTimer = document.getElementById('speedrunTimer');
+        const hardcoreButton = document.getElementById('hardcoreButton');
+        const hardcorePopup = document.getElementById('hardcorePopup');
+        const hardcoreYes = document.getElementById('hardcoreYes');
+        const hardcoreNo = document.getElementById('hardcoreNo');
+        const prestigePopup = document.getElementById('prestigePopup');
+        const prestigeYes = document.getElementById('prestigeYes');
+        const prestigeNo = document.getElementById('prestigeNo');
+        const currentPrestigeBonusDisplay = document.getElementById('currentPrestigeBonus');
+        const newPrestigeBonusDisplay = document.getElementById('newPrestigeBonus');
+        
+        // Format bytes
+        function formatBytes(bytes) {
+            bytes = Math.round(bytes * 10) / 10; // Round to nearest tenth
+            if (bytes < 1000) return bytes + " Bytes";
+            if (bytes < 1000000) return (bytes/1000).toFixed(1) + " kB";
+            if (bytes < 1000000000) return (bytes/1000000).toFixed(1) + " MB";
+            if (bytes < 1000000000000) return (bytes/1000000000).toFixed(1) + " GB";
+            if (bytes < 1000000000000000) return (bytes/1000000000000).toFixed(1) + " TB";
+            return (bytes/1000000000000000).toFixed(1) + " PB";
+        }
+        
+        // Update display
+        function updateDisplay() {
+            const formattedBytes = formatBytes(bytes);
+            gameTitle.textContent = formattedBytes;
+            storageDisplay.textContent = "Total Storage: " + formattedBytes;
+            
+            // Update CPS display (multiplied by 10 to show per second)
+            const cps = (bitMiners * 0.1 + bitFarmers * 1 + bitWorships * 100) * 10 * totalPrestigeBonus;
+            cpsDisplay.textContent = "Bytes per second: " + Math.round(cps * 10) / 10;
+            
+            // Check for prestige eligibility
+            if (bytes >= 1000000) {
+                prestigeButton.style.display = 'block';
+                const newBonus = Math.round((bytes / 1000000) * 10) / 10;
+                currentPrestigeBonusDisplay.textContent = totalPrestigeBonus;
+                newPrestigeBonusDisplay.textContent = newBonus;
+            } else {
+                prestigeButton.style.display = 'none';
+            }
+        }
+        
+        // Calculate scaled cost (x^1.1 scaling)
+        function calculateScaledCost(baseCost, level) {
+            return Math.round(Math.pow(baseCost, 1.1 ** level));
+        }
+        
+        // Format speedrun time
+        function formatSpeedrunTime(ms) {
+            let hours = Math.floor(ms / 3600000);
+            ms %= 3600000;
+            let minutes = Math.floor(ms / 60000);
+            ms %= 60000;
+            let seconds = Math.floor(ms / 1000);
+            ms %= 1000;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        }
+        
+        // Update speedrun timer
+        function updateSpeedrunTimer() {
+            const elapsed = Date.now() - speedrunStart;
+            speedrunTimer.textContent = formatSpeedrunTime(elapsed);
+        }
+        
+        // Start timer
+        function startTimer() {
+            clearInterval(countdownInterval);
+            timer = baseSessionTime + bitStatements;
+            updateTimerDisplay();
+            
+            countdownInterval = setInterval(function() {
+                timer--;
+                updateTimerDisplay();
+                
+                if (timer <= 0) {
+                    clearInterval(countdownInterval);
+                    gameActive = false;
+                    description.style.display = 'block';
+                    newSession.style.display = 'block';
+                    newSession.textContent = `Start session #${sessionCount + 1}`;
+                    timerDisplay.textContent = "00:00";
+                }
+            }, 1000);
+        }
+        
+        // Update timer display
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timer / 60);
+            const seconds = timer % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Start new session
+        function startNewSession() {
+            sessionCount++;
+            sessionBytes = 0;
+            gameActive = true;
+            description.style.display = 'none';
+            newSession.style.display = 'none';
+            startTimer();
+        }
+        
+        newSession.addEventListener('click', startNewSession);
+        
+        // Prestige function
+        function prestige() {
+            const newBonus = bytes / 1000000;
+            totalPrestigeBonus = Math.round((totalPrestigeBonus + newBonus / 100) * 10) / 10;
+            
+            // Reset game state
+            bytes = 0;
+            bitMiners = 0;
+            bitCrushers = 0;
+            bitStatements = 0;
+            bitFarmers = 0;
+            bitWorships = 0;
+            clickPower = 1;
+            sessionCount = 1;
+            sessionBytes = 0;
+            baseSessionTime = 10;
+            
+            // Update UI
+            updateDisplay();
+            bitMinerUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            bitCrusherUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 1x';
+            bitStatementUpgrade.querySelector('p:nth-child(3)').textContent = `Current: ${baseSessionTime} seconds`;
+            bitFarmerUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            bitWorshipUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            
+            // Update costs
+            bitMinerCostDisplay.textContent = formatBytes(calculateScaledCost(100, 0) * priceMultiplier);
+            bitCrusherCostDisplay.textContent = formatBytes(calculateScaledCost(200, 0) * priceMultiplier);
+            bitStatementCostDisplay.textContent = formatBytes(calculateScaledCost(50, 0) * priceMultiplier);
+            bitFarmerCostDisplay.textContent = formatBytes(calculateScaledCost(1000, 0) * priceMultiplier);
+            bitWorshipCostDisplay.textContent = formatBytes(calculateScaledCost(100000, 0) * priceMultiplier);
+            
+            // Hide prestige button
+            prestigeButton.style.display = 'none';
+            prestigePopup.style.display = 'none';
+            
+            // Start new session
+            startNewSession();
+        }
+        
+        prestigeButton.addEventListener('click', function() {
+            if (bytes >= 1000000) {
+                prestigePopup.style.display = 'block';
+            }
+        });
+        
+        prestigeYes.addEventListener('click', prestige);
+        prestigeNo.addEventListener('click', function() {
+            prestigePopup.style.display = 'none';
+        });
+        
+        // Automation handlers
+        setInterval(function() {
+            if (gameActive) {
+                let mined = 0;
+                
+                // Bit Miners
+                if (bitMiners > 0) {
+                    mined += bitMiners * 0.1 * totalPrestigeBonus;
+                }
+                
+                // Bit Farmers
+                if (bitFarmers > 0) {
+                    mined += bitFarmers * 1 * totalPrestigeBonus;
+                }
+                
+                // Bit Worships
+                if (bitWorships > 0) {
+                    mined += bitWorships * 100 * totalPrestigeBonus;
+                }
+                
+                if (mined > 0) {
+                    mined = Math.round(mined * 10) / 10; // Round to nearest tenth
+                    bytes += mined;
+                    sessionBytes += mined;
+                    updateDisplay();
+                }
+            }
+        }, 100);
+        
+        // Click handler
+        clickButton.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            if (gameActive) {
+                bytes += clickPower * totalPrestigeBonus;
+                sessionBytes += clickPower * totalPrestigeBonus;
+                updateDisplay();
+            }
+        });
+        
+        // Cheat code handler
+        document.addEventListener('keydown', function(e) {
+            cheatCodeBuffer += e.key.toLowerCase();
+            if (cheatCodeBuffer.length > 9) {
+                cheatCodeBuffer = cheatCodeBuffer.slice(-9);
+            }
+            if (cheatCodeBuffer === 'vortarium') {
+                bytes *= 10;
+                updateDisplay();
+                cheatCodeBuffer = '';
+            }
+        });
+        
+        // Switch to database
+        description.addEventListener('click', function() {
+            gameContainer.style.display = 'none';
+            databaseContainer.style.display = 'block';
+            sessionResult.textContent = `You mined ${formatBytes(sessionBytes)} this session`;
+        });
+        
+        // Close database
+        closeDatabase.addEventListener('click', function() {
+            gameContainer.style.display = 'block';
+            databaseContainer.style.display = 'none';
+        });
+        
+        // Bit Miner Upgrade
+        bitMinerUpgrade.addEventListener('click', function() {
+            const cost = calculateScaledCost(100, bitMiners) * priceMultiplier;
+            if (bytes >= cost) {
+                bytes -= cost;
+                bitMiners++;
+                updateDisplay();
+                bitMinerUpgrade.querySelector('p:nth-child(3)').textContent = 
+                    `Current: ${(bitMiners * 0.1).toFixed(1)} bytes/0.1s`;
+                bitMinerCostDisplay.textContent = formatBytes(calculateScaledCost(100, bitMiners) * priceMultiplier);
+                bitMinerError.style.display = 'none';
+            } else {
+                bitMinerError.style.display = 'block';
+                setTimeout(() => {
+                    bitMinerError.style.display = 'none';
+                }, 2000);
+            }
+        });
+        
+        // Bit Crusher Upgrade
+        bitCrusherUpgrade.addEventListener('click', function() {
+            const cost = calculateScaledCost(200, bitCrushers) * priceMultiplier;
+            if (bytes >= cost) {
+                bytes -= cost;
+                bitCrushers++;
+                clickPower = 1 + bitCrushers;
+                updateDisplay();
+                bitCrusherUpgrade.querySelector('p:nth-child(3)').textContent = 
+                    `Current: ${clickPower}x`;
+                bitCrusherCostDisplay.textContent = formatBytes(calculateScaledCost(200, bitCrushers) * priceMultiplier);
+                bitCrusherError.style.display = 'none';
+            } else {
+                bitCrusherError.style.display = 'block';
+                setTimeout(() => {
+                    bitCrusherError.style.display = 'none';
+                }, 2000);
+            }
+        });
+        
+        // Bit Statement Upgrade
+        bitStatementUpgrade.addEventListener('click', function() {
+            const cost = calculateScaledCost(50, bitStatements) * priceMultiplier;
+            if (bytes >= cost) {
+                bytes -= cost;
+                bitStatements++;
+                updateDisplay();
+                bitStatementUpgrade.querySelector('p:nth-child(3)').textContent = 
+                    `Current: ${baseSessionTime + bitStatements} seconds`;
+                bitStatementCostDisplay.textContent = formatBytes(calculateScaledCost(50, bitStatements) * priceMultiplier);
+                bitStatementError.style.display = 'none';
+            } else {
+                bitStatementError.style.display = 'block';
+                setTimeout(() => {
+                    bitStatementError.style.display = 'none';
+                }, 2000);
+            }
+        });
+        
+        // Bit Farmer Upgrade
+        bitFarmerUpgrade.addEventListener('click', function() {
+            const cost = calculateScaledCost(1000, bitFarmers) * priceMultiplier;
+            if (bytes >= cost) {
+                bytes -= cost;
+                bitFarmers++;
+                updateDisplay();
+                bitFarmerUpgrade.querySelector('p:nth-child(3)').textContent = 
+                    `Current: ${bitFarmers} bytes/0.1s`;
+                bitFarmerCostDisplay.textContent = formatBytes(calculateScaledCost(1000, bitFarmers) * priceMultiplier);
+                bitFarmerError.style.display = 'none';
+            } else {
+                bitFarmerError.style.display = 'block';
+                setTimeout(() => {
+                    bitFarmerError.style.display = 'none';
+                }, 2000);
+            }
+        });
+        
+        // Bit Worship Upgrade
+        bitWorshipUpgrade.addEventListener('click', function() {
+            const cost = calculateScaledCost(100000, bitWorships) * priceMultiplier;
+            if (bytes >= cost) {
+                bytes -= cost;
+                bitWorships++;
+                updateDisplay();
+                bitWorshipUpgrade.querySelector('p:nth-child(3)').textContent = 
+                    `Current: ${bitWorships * 100} bytes/0.1s`;
+                bitWorshipCostDisplay.textContent = formatBytes(calculateScaledCost(100000, bitWorships) * priceMultiplier);
+                bitWorshipError.style.display = 'none';
+            } else {
+                bitWorshipError.style.display = 'block';
+                setTimeout(() => {
+                    bitWorshipError.style.display = 'none';
+                }, 2000);
+            }
+        });
+        
+        // Hardcore mode
+        hardcoreButton.addEventListener('click', function() {
+            if (!hardcoreMode) {
+                hardcorePopup.style.display = 'block';
+            }
+        });
+        
+        hardcoreYes.addEventListener('click', function() {
+            hardcoreMode = true;
+            priceMultiplier = 2;
+            baseSessionTime = 1;
+            hardcorePopup.style.display = 'none';
+            
+            // Reset game
+            bytes = 0;
+            bitMiners = 0;
+            bitCrushers = 0;
+            bitStatements = 0;
+            bitFarmers = 0;
+            bitWorships = 0;
+            clickPower = 1;
+            sessionCount = 1;
+            sessionBytes = 0;
+            
+            // Reset UI
+            updateDisplay();
+            bitMinerUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            bitCrusherUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 1x';
+            bitStatementUpgrade.querySelector('p:nth-child(3)').textContent = `Current: ${baseSessionTime} seconds`;
+            bitFarmerUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            bitWorshipUpgrade.querySelector('p:nth-child(3)').textContent = 'Current: 0 bytes/0.1s';
+            
+            // Update costs to reflect hardcore prices
+            bitMinerCostDisplay.textContent = formatBytes(calculateScaledCost(100, 0) * priceMultiplier);
+            bitCrusherCostDisplay.textContent = formatBytes(calculateScaledCost(200, 0) * priceMultiplier);
+            bitStatementCostDisplay.textContent = formatBytes(calculateScaledCost(50, 0) * priceMultiplier);
+            bitFarmerCostDisplay.textContent = formatBytes(calculateScaledCost(1000, 0) * priceMultiplier);
+            bitWorshipCostDisplay.textContent = formatBytes(calculateScaledCost(100000, 0) * priceMultiplier);
+            
+            // Reset timers
+            speedrunStart = Date.now();
+            startNewSession();
+        });
+        
+        hardcoreNo.addEventListener('click', function() {
+            hardcorePopup.style.display = 'none';
+        });
+        
+        // Initialize
+        updateDisplay();
+        startTimer();
+        speedrunInterval = setInterval(updateSpeedrunTimer, 10);
+        
+        // Prevent text selection when clicking rapidly
+        document.addEventListener('selectstart', function(e) {
+            if (e.target === clickButton) {
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>

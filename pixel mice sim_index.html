@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pixel Mice Sim</title>
+<style>
+  :root {
+    /* Visual scale down so 1000x1000 pixel-art fits comfortably */
+    --initial-scale: 0.6; /* starting visible scale (1000 -> 600px) */
+  }
+  * { box-sizing: border-box; }
+  html,body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #fff;
+    color: #000;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .wrap {
+    display: grid;
+    gap: 10px;
+    place-items: center;
+  }
+  /* FPS centered above the board */
+  .fps-row {
+    width: calc(1000px * var(--initial-scale));
+    display: grid;
+    place-items: center;
+    margin-bottom: 4px;
+  }
+  #fps {
+    font-weight: 700;
+    font-size: 18px;
+    padding: 4px 10px;
+    border: 2px solid #000;
+    background: #fff;
+    user-select: none;
+  }
+  .viewport {
+    overflow: hidden;
+    width: calc(1000px * var(--initial-scale));
+    height: calc(1000px * var(--initial-scale));
+    border: 2px solid #000; /* outer outline */
+    background: #fff;
+    position: relative;
+    touch-action: none;
+  }
+  .board {
+    position: absolute;
+    left: 0; top: 0;
+    /* we'll use transform to scale/translate for zoom & pan */
+    transform-origin: 0 0;
+    image-rendering: pixelated;
+    will-change: transform;
+  }
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 1000px;
+    height: 1000px;
+    image-rendering: pixelated;
+  }
+  .status {
+    width: calc(1000px * var(--initial-scale));
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .pill {
+    border: 1px dashed #000;
+    padding: 2px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .swatch {
+    display: inline-block;
+    width: 1.25em; height: 1.25em;
+    border: 1px solid #000;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend { width: calc(1000px * var(--initial-scale)); font-size: 13px; opacity: 0.9; line-height: 1.35; }
+  .progress-container {
+    width: calc(1000px * var(--initial-scale));
+    display: grid;
+    gap: 0;
+  }
+  .progress-labels {
+    height: 20px;
+    display: flex;
+    font-size: 12px;
+    align-items: center;
+  }
+  .progress-labels > div {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    color: #000;
+  }
+  .progress-bar {
+    height: 20px;
+    display: flex;
+    border: 2px solid #000;
+    background: #fff;
+  }
+  .progress-bar > div {
+    height: 100%;
+    border-right: 1px solid #ccc;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="fps-row"><div id="fps">FPS: 0</div></div>
+
+    <div class="viewport" id="viewport" aria-label="Random Mouse Painter 1000x1000">
+      <div class="board" id="board" style="width:1000px;height:1000px;">
+        <!-- Trail layer -->
+        <canvas id="trail" width="1000" height="1000"></canvas>
+        <!-- Mice layer (sprites) -->
+        <canvas id="mice" width="1000" height="1000"></canvas>
+      </div>
+    </div>
+
+    <div class="status" id="status">
+      <div class="pill">Mice: <strong id="miceCount">1</strong></div>
+      <div class="pill">Brush: <strong id="brushLabel">1×1</strong></div>
+      <div class="pill"><span class="swatch" id="colorSwatch"></span> Paint: <strong id="colorLabel">Black (#000000)</strong></div>
+      <div class="pill">Time: <strong id="timeLabel">1.00×</strong></div>
+      <div class="pill" id="pauseStatus">Running</div>
+    </div>
+
+    <div class="legend">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="pill">1: Black</div>
+        <div class="pill">2: Blue</div>
+        <div class="pill">3: Green</div>
+        <div class="pill">4: Orange</div>
+        <div class="pill">5: Neon Purple (#5600DE)</div>
+        <div class="pill">6: White</div>
+        <div class="pill">Q: Red</div>
+        <div class="pill">W: Light Blue</div>
+        <div class="pill">E: Pink</div>
+        <div class="pill">7: Brush 1×1</div>
+        <div class="pill">8: Brush 3×3</div>
+        <div class="pill">9: Brush 5×5</div>
+        <div class="pill">0: Brush 7×7</div>
+        <div class="pill">/: Reset</div>
+        <div class="pill">p: Pause</div>
+        <div class="pill">Left-drag: Paint</div>
+        <div class="pill">Right-drag: Spawn mice</div>
+        <div class="pill">Middle-drag: Pan</div>
+        <div class="pill">Wheel: Zoom (centered at cursor)</div>
+        <div class="pill">- : toggle 0.5× time</div>
+        <div class="pill">+ or = : toggle 0.1× time</div>
+      </div>
+    </div>
+
+    <div class="progress-container">
+      <div id="progressLabels" class="progress-labels"></div>
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+
+    <div class="progress-container">
+      <div id="miceLabels" class="progress-labels"></div>
+      <div id="miceBar" class="progress-bar"></div>
+    </div>
+
+    <div class="progress-container">
+      <div id="deathsLabels" class="progress-labels"></div>
+      <div id="deathsBar" class="progress-bar"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  /* ========== Constants & State ========== */
+  const W = 1000, H = 1000;
+  const viewport = document.getElementById('viewport');
+  const boardEl = document.getElementById('board');
+  const trailCanvas = document.getElementById('trail');
+  const miceCanvas = document.getElementById('mice');
+  const fpsEl = document.getElementById('fps');
+  const miceCountEl = document.getElementById('miceCount');
+  const brushLabelEl = document.getElementById('brushLabel');
+  const colorLabelEl = document.getElementById('colorLabel');
+  const colorSwatchEl = document.getElementById('colorSwatch');
+  const timeLabelEl = document.getElementById('timeLabel');
+  const pauseStatusEl = document.getElementById('pauseStatus');
+  const progressBar = document.getElementById('progressBar');
+  const progressLabels = document.getElementById('progressLabels');
+  const miceBar = document.getElementById('miceBar');
+  const miceLabels = document.getElementById('miceLabels');
+  const deathsBar = document.getElementById('deathsBar');
+  const deathsLabels = document.getElementById('deathsLabels');
+
+  const trailCtx = trailCanvas.getContext('2d', { alpha: false });
+  const miceCtx = miceCanvas.getContext('2d', { alpha: true });
+
+  // canonical palette (map index -> hex)
+  const PALETTE = {
+    0: '#FFFFFF', // white (empty)
+    1: '#000000', // black
+    2: '#0000FF', // blue
+    3: '#00FF00', // green
+    4: '#FFA500', // orange
+    5: '#5600DE', // neon purple
+    6: '#FFFFFF',  // white duplicate for key '6' - treat as white
+    7: '#FF0000', // red
+    8: '#ADD8E6', // light blue
+    9: '#FFC0CB'  // pink
+  };
+
+  // Map key '1'..'6' to palette index
+  const KEY_TO_INDEX = { '1':1, '2':2, '3':3, '4':4, '5':5, '6':6, 'q':7, 'w':8, 'e':9 };
+
+  const COLOR_ORDER = [
+    {index:1, name:'Black', hex:PALETTE[1]},
+    {index:2, name:'Blue', hex:PALETTE[2]},
+    {index:3, name:'Green', hex:PALETTE[3]},
+    {index:4, name:'Orange', hex:PALETTE[4]},
+    {index:5, name:'Neon Purple', hex:PALETTE[5]},
+    {index:7, name:'Red', hex:PALETTE[7]},
+    {index:8, name:'Light Blue', hex:PALETTE[8]},
+    {index:9, name:'Pink', hex:PALETTE[9]},
+    {index:[0,6], name:'White', hex:PALETTE[0]},
+  ];
+
+  // memory grid storing index per pixel (Uint8Array 0..9)
+  const grid = new Uint8Array(W * H); // default 0 => white
+
+  let counts = {0: W*H, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0};
+
+  let deaths = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0};
+
+  let gridChanged = true;
+  let miceChanged = true;
+
+  // mice array: each mouse has {x,y,colorIndex}
+  let mice = [{ x: Math.floor(W/2), y: Math.floor(H/2), colorIndex: 1 }];
+
+  // drawing/interaction state
+  let currentColorIndex = 1; // default black
+  let brushSize = 1;         // 1,3,5,7
+  let painting = false;
+  let paintingPointerId = null;
+  let paintingLast = null;
+
+  // right-drag spawn
+  let spawning = false;
+  let spawnPointerId = null;
+  let spawnLast = null;
+
+  // middle-drag pan
+  let panning = false;
+  let panPointerId = null;
+  let lastPan = null;
+
+  // zoom & pan transform state
+  let initialScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--initial-scale')) || 0.6;
+  let scale = initialScale;   // current scale multiplier
+  const MIN_SCALE = 0.1, MAX_SCALE = 10;
+  let panX = 0, panY = 0;      // translation in CSS pixels (board coordinates in px)
+  // We'll treat board coordinate units as px (1 canvas pixel = 1 unit). CSS transforms convert.
+
+  // time scale & simulation
+  let timeScale = 1.0; // can be toggled to 0.5 or 0.1
+  let timeMode = 1;    // 1 => normal, 0.5 => toggled, 0.1 => toggled; toggles on keys
+  const baseStepRate = 1.0; // steps per ms (approx), this matches earlier behavior of 1 step per ms baseline
+
+  let isPaused = false;
+
+  // simulation timing
+  let lastSimTime = performance.now();
+
+  /* ========== Helpers ========== */
+  function idx(x,y){ return y * W + x; }
+  function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+  function setGridPixel(x,y,colorIndex, skipDeathCheck = false){
+    x = clamp(x, 0, W-1);
+    y = clamp(y, 0, H-1);
+    const i = idx(x,y);
+    const prev = grid[i];
+    if (prev === colorIndex) return prev;
+    grid[i] = colorIndex;
+    // paint on canvas
+    trailCtx.fillStyle = PALETTE[colorIndex];
+    trailCtx.fillRect(x, y, 1, 1);
+    // if we painted a color on a pixel where a mouse exists whose color != painted color => that mouse dies
+    if (!skipDeathCheck) {
+      checkMouseDeathAt(x,y,colorIndex);
+    }
+    // update counts
+    counts[prev]--;
+    counts[colorIndex]++;
+    gridChanged = true;
+    return prev;
+  }
+
+  function getGridPixel(x,y){
+    x = clamp(x, 0, W-1);
+    y = clamp(y, 0, H-1);
+    return grid[idx(x,y)];
+  }
+
+  function checkMouseDeathAt(x,y, paintedIndex){
+    // remove any mice that are at (x,y) and whose colorIndex != paintedIndex
+    // (we remove in-place)
+    let killed = false;
+    for (let i = mice.length - 1; i >= 0; i--){
+      const m = mice[i];
+      if (m.x === x && m.y === y && m.colorIndex !== paintedIndex){
+        deaths[m.colorIndex]++;
+        mice.splice(i,1);
+        killed = true;
+      }
+    }
+    if (killed) miceChanged = true;
+    updateStatusUI();
+  }
+
+  function updateStatusUI(){
+    miceCountEl.textContent = String(mice.length);
+    brushLabelEl.textContent = `${brushSize}×${brushSize}`;
+    const hex = PALETTE[currentColorIndex];
+    colorLabelEl.textContent = `${colorName(hex)} (${hex})`;
+    colorSwatchEl.style.background = hex;
+    timeLabelEl.textContent = `${timeScale.toFixed(2)}×`;
+    pauseStatusEl.textContent = isPaused ? 'Paused' : 'Running';
+  }
+
+  function colorName(hex){
+    switch ((hex||'').toUpperCase()){
+      case '#000000': return 'Black';
+      case '#0000FF': return 'Blue';
+      case '#00FF00': return 'Green';
+      case '#FFA500': return 'Orange';
+      case '#5600DE': return 'Neon Purple';
+      case '#FFFFFF': return 'White';
+      case '#FF0000': return 'Red';
+      case '#ADD8E6': return 'Light Blue';
+      case '#FFC0CB': return 'Pink';
+      default: return hex;
+    }
+  }
+
+  function clearGrid(){
+    grid.fill(0);
+    trailCtx.fillStyle = '#FFFFFF';
+    trailCtx.fillRect(0,0,W,H);
+    Object.keys(counts).forEach(k => counts[k] = (parseInt(k) === 0 ? W * H : 0));
+    gridChanged = true;
+  }
+
+  function updateProgressBar() {
+    const total = W * H;
+    progressBar.innerHTML = '';
+    progressLabels.innerHTML = '';
+    COLOR_ORDER.forEach(c => {
+      const count = Array.isArray(c.index) ? c.index.reduce((sum, i) => sum + (counts[i] || 0), 0) : (counts[c.index] || 0);
+      const perc = (count / total * 100).toFixed(2);
+      const labelDiv = document.createElement('div');
+      labelDiv.style.width = `${(count / total * 100)}%`;
+      labelDiv.textContent = `${perc}%`;
+      labelDiv.title = `${c.name}: ${perc}%`;
+      progressLabels.appendChild(labelDiv);
+      const barDiv = document.createElement('div');
+      barDiv.style.width = `${(count / total * 100)}%`;
+      barDiv.style.backgroundColor = c.hex;
+      barDiv.title = `${c.name}: ${perc}%`;
+      progressBar.appendChild(barDiv);
+    });
+  }
+
+  function updateMiceBar(){
+    const mouseCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0};
+    for (const m of mice) {
+      if (mouseCounts.hasOwnProperty(m.colorIndex)) {
+        mouseCounts[m.colorIndex]++;
+      }
+    }
+    const totalMice = mice.length;
+    miceBar.innerHTML = '';
+    miceLabels.innerHTML = '';
+    COLOR_ORDER.forEach(c => {
+      const count = mouseCounts[Array.isArray(c.index) ? c.index[1] : c.index] || 0;
+      const perc = totalMice > 0 ? (count / totalMice * 100) : 0;
+      const labelDiv = document.createElement('div');
+      labelDiv.style.width = `${perc}%`;
+      labelDiv.textContent = `${count}`;
+      labelDiv.title = `${c.name}: ${count} mice`;
+      miceLabels.appendChild(labelDiv);
+      const barDiv = document.createElement('div');
+      barDiv.style.width = `${perc}%`;
+      barDiv.style.backgroundColor = c.hex;
+      barDiv.title = `${c.name}: ${count} mice`;
+      miceBar.appendChild(barDiv);
+    });
+  }
+
+  function updateDeathsBar(){
+    const totalDeaths = Object.values(deaths).reduce((sum, v) => sum + v, 0);
+    deathsBar.innerHTML = '';
+    deathsLabels.innerHTML = '';
+    COLOR_ORDER.forEach(c => {
+      const count = deaths[Array.isArray(c.index) ? c.index[1] : c.index] || 0;
+      const perc = totalDeaths > 0 ? (count / totalDeaths * 100) : 0;
+      const labelDiv = document.createElement('div');
+      labelDiv.style.width = `${perc}%`;
+      labelDiv.textContent = `${count}`;
+      labelDiv.title = `${c.name}: ${count} deaths`;
+      deathsLabels.appendChild(labelDiv);
+      const barDiv = document.createElement('div');
+      barDiv.style.width = `${perc}%`;
+      barDiv.style.backgroundColor = c.hex;
+      barDiv.title = `${c.name}: ${count} deaths`;
+      deathsBar.appendChild(barDiv);
+    });
+  }
+
+  /* ========== Drawing helpers: brush / interpolation ========== */
+  function paintBrushAt(x,y, colorIndex){
+    const half = Math.floor((brushSize - 1) / 2);
+    for (let yy = -half; yy <= half; yy++){
+      for (let xx = -half; xx <= half; xx++){
+        const px = clamp(x + xx, 0, W - 1);
+        const py = clamp(y + yy, 0, H - 1);
+        setGridPixel(px, py, colorIndex);
+      }
+    }
+  }
+
+  function paintLine(x0,y0,x1,y1,colorIndex){
+    const dx = x1 - x0, dy = y1 - y0;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    if (steps === 0) { paintBrushAt(x1,y1,colorIndex); return; }
+    const stepx = dx / steps, stepy = dy / steps;
+    for (let i = 0; i <= steps; i++){
+      const cx = Math.round(x0 + stepx * i);
+      const cy = Math.round(y0 + stepy * i);
+      paintBrushAt(cx, cy, colorIndex);
+    }
+  }
+
+  /* ========== Mice rendering ========== */
+  function drawMiceLayer(){
+    miceCtx.clearRect(0,0,W,H);
+    // draw each mouse as a 1x1 dot (could be styled differently)
+    for (const m of mice){
+      miceCtx.fillStyle = PALETTE[m.colorIndex] || '#000000';
+      miceCtx.fillRect(m.x, m.y, 1, 1);
+    }
+  }
+
+  /* ========== Simulation step: mice move and paint ========== */
+  function simulateSteps(steps){
+    for (let s = 0; s < steps; s++){
+      const intended = new Map(); // posKey => {miceIndices: [], colorCount: new Map()}
+      for (let i = 0; i < mice.length; i++){
+        const m = mice[i];
+        const dir = Math.floor(Math.random() * 4);
+        let nx = m.x, ny = m.y;
+        if (dir === 0) ny -= 1;
+        else if (dir === 1) ny += 1;
+        else if (dir === 2) nx -= 1;
+        else nx += 1;
+        nx = clamp(nx, 0, W - 1);
+        ny = clamp(ny, 0, H - 1);
+        const key = `${nx},${ny}`;
+        if (!intended.has(key)) intended.set(key, {miceIndices: [], colorCount: new Map()});
+        const entry = intended.get(key);
+        entry.miceIndices.push(i);
+        const col = m.colorIndex;
+        entry.colorCount.set(col, (entry.colorCount.get(col) || 0) + 1);
+      }
+
+      // move all mice first
+      for (const [key, entry] of intended) {
+        for (const i of entry.miceIndices) {
+          const [nx, ny] = key.split(',').map(Number);
+          mice[i].x = nx;
+          mice[i].y = ny;
+        }
+      }
+
+      // determine winners and collect kill indices
+      let killIndices = [];
+      for (const [key, entry] of intended){
+        let maxCnt = 0;
+        const candidates = [];
+        for (const [col, cnt] of entry.colorCount){
+          if (cnt > maxCnt){
+            maxCnt = cnt;
+            candidates.length = 0;
+            candidates.push(col);
+          } else if (cnt === maxCnt){
+            candidates.push(col);
+          }
+        }
+        const winCol = candidates[Math.floor(Math.random() * candidates.length)];
+        for (const i of entry.miceIndices){
+          if (mice[i].colorIndex !== winCol){
+            killIndices.push(i);
+            deaths[mice[i].colorIndex]++;
+          }
+        }
+        // paint
+        const [x, y] = key.split(',').map(Number);
+        setGridPixel(x, y, winCol, true); // skip death check
+      }
+
+      // kill
+      killIndices.sort((a,b) => b - a);
+      for (const idx of killIndices){
+        mice.splice(idx, 1);
+      }
+      if (killIndices.length > 0) miceChanged = true;
+    }
+  }
+
+  /* ========== Input coordinate conversion ========== */
+  function screenToBoard(clientX, clientY){
+    // Convert client coordinates to board pixel coordinates taking transform into account
+    // boardEl is positioned inside viewport. We maintain panX/panY and scale in pixels.
+    const vpRect = viewport.getBoundingClientRect();
+    // board transform maps board coordinates to viewport:
+    // displayedX = (boardX * scale) + panX
+    // so boardX = (displayedX - panX) / scale
+    const localX = clientX - vpRect.left;
+    const localY = clientY - vpRect.top;
+    const boardX = Math.floor((localX - panX) / scale);
+    const boardY = Math.floor((localY - panY) / scale);
+    return { x: clamp(boardX, 0, W-1), y: clamp(boardY, 0, H-1) };
+  }
+
+  /* ========== Viewport transform (zoom & pan) ========== */
+  function applyTransform(){
+    // apply CSS transform to boardEl
+    boardEl.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  }
+
+  // Zoom at cursor (client coords). delta > 0 => zoom out; delta < 0 => zoom in.
+  function zoomAtClient(delta, clientX, clientY){
+    // choose a multiplier per tick
+    const zoomFactorPerTick = 1.25;
+    const oldScale = scale;
+    const vpRect = viewport.getBoundingClientRect();
+    // compute board coordinates under cursor before zoom
+    const before = {
+      x: (clientX - vpRect.left - panX) / oldScale,
+      y: (clientY - vpRect.top - panY) / oldScale
+    };
+
+    if (delta < 0) {
+      // wheel up -> zoom in
+      scale = clamp(scale * zoomFactorPerTick, MIN_SCALE, MAX_SCALE);
+    } else {
+      // wheel down -> zoom out
+      scale = clamp(scale / zoomFactorPerTick, MIN_SCALE, MAX_SCALE);
+    }
+
+    // compute new pan so that the board point "before" remains at cursor
+    const after = {
+      x: before.x * scale,
+      y: before.y * scale
+    };
+    // cursor position in viewport coordinates
+    const cursorVX = clientX - vpRect.left;
+    const cursorVY = clientY - vpRect.top;
+    // adjust pan to keep cursor anchored
+    panX = cursorVX - after.x;
+    panY = cursorVY - after.y;
+
+    applyTransform();
+  }
+
+  /* ========== Interaction handlers (pointer events) ========== */
+  // pointerdown: handle left (paint), right (spawn), middle (pan)
+  viewport.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    viewport.setPointerCapture(e.pointerId);
+    if (e.button === 0) { // left
+      painting = true; paintingPointerId = e.pointerId;
+      const p = screenToBoard(e.clientX, e.clientY);
+      paintingLast = { x: p.x, y: p.y };
+      paintBrushAt(p.x, p.y, currentColorIndex);
+    } else if (e.button === 2) { // right => spawn-mode (and allow dragging)
+      spawning = true; spawnPointerId = e.pointerId;
+      const p = screenToBoard(e.clientX, e.clientY);
+      spawnLast = { x: p.x, y: p.y };
+      // spawn one immediately
+      mice.push({ x: p.x, y: p.y, colorIndex: currentColorIndex });
+      miceChanged = true;
+      updateStatusUI();
+    } else if (e.button === 1) { // middle => pan
+      panning = true; panPointerId = e.pointerId;
+      lastPan = { x: e.clientX, y: e.clientY, panX, panY };
+    }
+  });
+
+  viewport.addEventListener('pointermove', (e) => {
+    if (painting && e.pointerId === paintingPointerId){
+      const p = screenToBoard(e.clientX, e.clientY);
+      if (paintingLast) paintLine(paintingLast.x, paintingLast.y, p.x, p.y, currentColorIndex);
+      else paintBrushAt(p.x,p.y,currentColorIndex);
+      paintingLast = { x: p.x, y: p.y };
+    } else if (spawning && e.pointerId === spawnPointerId){
+      const p = screenToBoard(e.clientX, e.clientY);
+      // spawn only when we've moved to a different cell to avoid duplicates
+      if (!spawnLast || p.x !== spawnLast.x || p.y !== spawnLast.y){
+        mice.push({ x: p.x, y: p.y, colorIndex: currentColorIndex });
+        spawnLast = { x: p.x, y: p.y };
+        miceChanged = true;
+        updateStatusUI();
+      }
+    } else if (panning && e.pointerId === panPointerId){
+      const dx = e.clientX - lastPan.x;
+      const dy = e.clientY - lastPan.y;
+      // scale pan speed by zoom so panning is slower when zoomed out and finer when zoomed in
+      panX = lastPan.panX + dx;
+      panY = lastPan.panY + dy;
+      applyTransform();
+    }
+  });
+
+  viewport.addEventListener('pointerup', (e) => {
+    viewport.releasePointerCapture(e.pointerId);
+    if (painting && e.pointerId === paintingPointerId){
+      painting = false; paintingPointerId = null; paintingLast = null;
+    }
+    if (spawning && e.pointerId === spawnPointerId){
+      spawning = false; spawnPointerId = null; spawnLast = null;
+    }
+    if (panning && e.pointerId === panPointerId){
+      panning = false; panPointerId = null; lastPan = null;
+    }
+  });
+
+  viewport.addEventListener('pointercancel', (e) => {
+    // mirror pointerup cleanup
+    if (painting && e.pointerId === paintingPointerId){ painting = false; paintingPointerId = null; paintingLast = null; }
+    if (spawning && e.pointerId === spawnPointerId){ spawning = false; spawnPointerId = null; spawnLast = null; }
+    if (panning && e.pointerId === panPointerId){ panning = false; panPointerId = null; lastPan = null; }
+  });
+
+  // Disable context menu inside viewport so right-click drag works
+  viewport.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+
+  // wheel for zoom (centered on cursor)
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    // In many mice, wheel up => deltaY < 0 => zoom in
+    zoomAtClient(e.deltaY, e.clientX, e.clientY);
+  }, { passive: false });
+
+  /* ========== Keyboard controls ========== */
+  function setCurrentColorIndex(idx) {
+    currentColorIndex = idx;
+    updateStatusUI();
+  }
+  function setBrush(sz){
+    brushSize = sz;
+    updateStatusUI();
+  }
+
+  function resetSimulation(){
+    clearGrid();
+    // reset mice to single black at center
+    mice = [{ x: Math.floor(W/2), y: Math.floor(H/2), colorIndex: 1 }];
+    setCurrentColorIndex(1);
+    setBrush(1);
+    scale = initialScale; panX = 0; panY = 0;
+    applyTransform();
+    Object.keys(deaths).forEach(k => deaths[k] = 0);
+    miceChanged = true;
+    updateStatusUI();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    let k = e.key.toLowerCase();
+    if (k in KEY_TO_INDEX) {
+      setCurrentColorIndex(KEY_TO_INDEX[k]);
+    } else if (k === '7') setBrush(1);
+    else if (k === '8') setBrush(3);
+    else if (k === '9') setBrush(5);
+    else if (k === '0') setBrush(7);
+    else if (k === '/') resetSimulation();
+    else if (k === '-') {
+      // toggle 0.5x time (press again to restore)
+      if (timeScale === 0.5) { timeScale = 1.0; }
+      else { timeScale = 0.5; }
+      updateStatusUI();
+    } else if (k === '=' || k === '+') {
+      // toggle 0.1x time
+      if (Math.abs(timeScale - 0.1) < 1e-9) { timeScale = 1.0; }
+      else { timeScale = 0.1; }
+      updateStatusUI();
+    } else if (k === 'p') {
+      isPaused = !isPaused;
+      updateStatusUI();
+    }
+  });
+
+  /* ========== Simulation loop (timing-based) ========== */
+  // We'll use a small setInterval that computes how many simulation steps to perform
+  // based on elapsed real ms * baseStepRate * timeScale. This approximates the "1 step per ms" behavior.
+  lastSimTime = performance.now();
+  const simIntervalMs = 16; // tick ~60Hz to compute how many steps to catch up
+  const simTimer = setInterval(() => {
+    const now = performance.now();
+    if (isPaused) {
+      lastSimTime = now;
+      return;
+    }
+    let elapsed = now - lastSimTime;
+    if (elapsed <= 0) { lastSimTime = now; return; }
+    // calculate number of logical steps (1 step per ms baseline)
+    let stepsFloat = elapsed * baseStepRate * timeScale;
+    // floor steps to integer; keep fractional remainder by advancing lastSimTime partially
+    const steps = Math.floor(stepsFloat);
+    if (steps > 0) {
+      simulateSteps(steps);
+      // advance lastSimTime by steps / (baseStepRate * timeScale)
+      lastSimTime += steps / (baseStepRate * timeScale);
+    } else {
+      // too small to perform a full step; allow the fractional accumulation to stay
+      lastSimTime = now - (stepsFloat / (baseStepRate * timeScale));
+    }
+    // after simulation, redraw mice layer
+    drawMiceLayer();
+  }, simIntervalMs);
+
+  // Note: we intentionally do NOT stop the interval on visibilitychange.
+  // Browsers may throttle timers in background tabs, but we don't explicitly stop the sim.
+
+  /* ========== FPS rendering (rAF) ========== */
+  let frames = 0, lastFpsTime = performance.now();
+  function rafLoop(now){
+    frames++;
+    if (now - lastFpsTime >= 1000){
+      fpsEl.textContent = `FPS: ${frames}`;
+      frames = 0;
+      lastFpsTime = now;
+    }
+    if (gridChanged) {
+      updateProgressBar();
+      gridChanged = false;
+    }
+    if (miceChanged) {
+      updateMiceBar();
+      updateDeathsBar();
+      miceChanged = false;
+    }
+    requestAnimationFrame(rafLoop);
+  }
+  requestAnimationFrame(rafLoop);
+
+  /* ========== Initialization ========== */
+  clearGrid();
+  // draw initial trail to white
+  trailCtx.fillStyle = '#FFFFFF';
+  trailCtx.fillRect(0, 0, W, H);
+  // paint the initial mouse's pixel with its color so it's visible
+  setGridPixel(mice[0].x, mice[0].y, mice[0].colorIndex);
+  drawMiceLayer();
+  applyTransform();
+  updateStatusUI();
+  updateMiceBar();
+  updateDeathsBar();
+
+  /* ========== Extra: on resize keep viewport centered nicely ========== */
+  window.addEventListener('resize', () => {
+    // no special action required; viewport size in CSS keeps the board area consistent
+  });
+
+  /* ========== IMPORTANT NOTES (no action required by user) ==========
+     - This implementation keeps simulation running in an interval instead of clearing it on visibilitychange.
+       Browsers still throttle background timers for power/battery reasons; there is no reliable way to fully
+       prevent throttling in a normal web page. However, the sim will not be explicitly stopped when you leave
+       the tab (previous behavior that cleared intervals has been removed).
+     - If the page becomes very slow with thousands of mice, consider reducing spawn rate or using fewer steps.
+  ================================================================ */
+})();
+</script>
+</body>
+</html>
