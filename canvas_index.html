@@ -1,103 +1,435 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #f0f0f0;
-        }
-
-        #canvas {
-            background-color: white;
-            border: 2px solid black;
-            cursor: crosshair;
-        }
-
-        #colorInput {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 18px;
-            padding: 5px;
-            border: 1px solid black;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canvas</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#1a1a2e;color:#fff;font-family:'Segoe UI',sans-serif;overflow:hidden;user-select:none;}
+#back{position:fixed;top:130px;left:20px;width:120px;opacity:1;cursor:pointer;z-index:99999;filter:drop-shadow(0 0 8px rgba(0,0,0,0.6));transition:transform .2s;}
+#back:hover{transform:scale(1.08);}
+#toolbar{position:fixed;top:0;left:0;right:0;height:52px;background:#0d0d1a;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;gap:6px;padding:0 10px;z-index:1000;overflow-x:auto;}
+.sep{width:1px;height:30px;background:#2a2a4a;flex-shrink:0;margin:0 2px;}
+.tb{background:#1e1e3a;border:1px solid #3a3a5a;color:#ccc;padding:4px 9px;border-radius:5px;cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0;transition:background .1s,color .1s;}
+.tb:hover{background:#2a2a4e;color:#fff;}
+.tb.on{background:#5b4fcf;border-color:#7c6fff;color:#fff;}
+.lbl{font-size:11px;color:#666;flex-shrink:0;}
+input[type=range]{width:72px;flex-shrink:0;accent-color:#7c6fff;cursor:pointer;}
+input[type=color]{width:30px;height:26px;border:2px solid #3a3a5a;border-radius:4px;cursor:pointer;flex-shrink:0;padding:1px;}
+#wrap{position:fixed;top:52px;left:0;right:0;bottom:0;overflow:hidden;}
+#c{position:absolute;top:0;left:0;image-rendering:pixelated;}
+#ov{position:absolute;top:0;left:0;pointer-events:none;image-rendering:pixelated;}
+#shape-bar{position:fixed;top:52px;left:50%;transform:translateX(-50%);background:#0d0d1a;border:1px solid #2a2a4a;border-top:none;border-radius:0 0 8px 8px;display:none;gap:5px;padding:5px 10px;z-index:999;}
+#shape-bar.show{display:flex;}
+.sb{background:#1e1e3a;border:1px solid #3a3a5a;color:#ccc;padding:3px 10px;border-radius:5px;cursor:pointer;font-size:12px;}
+.sb.on{background:#5b4fcf;border-color:#7c6fff;color:#fff;}
+#pal{display:flex;gap:3px;flex-shrink:0;}
+.sw{width:20px;height:20px;border-radius:3px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
+.sw:hover,.sw.on{border-color:#fff;}
+#cursor-dot{position:fixed;pointer-events:none;border-radius:50%;border:1.5px solid rgba(255,255,255,0.7);transform:translate(-50%,-50%);z-index:9998;display:none;}
+</style>
 </head>
 <body>
+<img src="v.png" id="back" onclick="window.location.href='index.html'" alt="Back">
+<div id="cursor-dot"></div>
 
-<input type="text" id="colorInput" placeholder="#000000" maxlength="7" value="#000000" />
-<canvas id="canvas"></canvas>
+<div id="toolbar">
+  <button class="tb on" id="t-pen"     onclick="setTool('pen')">✏️ Pen</button>
+  <button class="tb"    id="t-eraser"  onclick="setTool('eraser')">🧹 Eraser</button>
+  <button class="tb"    id="t-fill"    onclick="setTool('fill')">🪣 Fill</button>
+  <button class="tb"    id="t-shape"   onclick="setTool('shape')">⬛ Shape</button>
+  <button class="tb"    id="t-line"    onclick="setTool('line')">📏 Line</button>
+  <button class="tb"    id="t-pick"    onclick="setTool('pick')">💉 Pick</button>
+  <div class="sep"></div>
+  <button class="tb" onclick="undo()">↩</button>
+  <button class="tb" onclick="redo()">↪</button>
+  <div class="sep"></div>
+  <span class="lbl">Size</span>
+  <input type="range" id="sz" min="1" max="100" value="8" oninput="sz=+this.value;szLbl.textContent=sz">
+  <span class="lbl" id="sz-lbl">8</span>
+  <div class="sep"></div>
+  <span class="lbl">Opacity</span>
+  <input type="range" id="op" min="1" max="100" value="100" oninput="op=+this.value/100;opLbl.textContent=this.value+'%'">
+  <span class="lbl" id="op-lbl">100%</span>
+  <div class="sep"></div>
+  <input type="color" id="cpick" value="#000000" oninput="setColor(this.value)">
+  <div id="pal"></div>
+  <div class="sep"></div>
+  <span class="lbl">BG</span>
+  <input type="color" id="bgpick" value="#ffffff" oninput="changeBg(this.value)">
+  <button class="tb" onclick="clearAll()">🗑 Clear</button>
+  <button class="tb" onclick="saveImg()">💾 Save</button>
+</div>
+
+<div id="shape-bar">
+  <button class="sb on" id="sh-rect"     onclick="setShape('rect')">⬛ Rect</button>
+  <button class="sb"    id="sh-circle"   onclick="setShape('circle')">⭕ Circle</button>
+  <button class="sb"    id="sh-triangle" onclick="setShape('tri')">🔺 Tri</button>
+  <button class="sb on" id="sh-fill"     onclick="toggleSFill()">Filled</button>
+</div>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <canvas id="ov"></canvas>
+</div>
 
 <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const colorInput = document.getElementById('colorInput');
+// ── Canvas setup ────────────────────────────────────────────────────────────
+// We keep one large offscreen bitmap (the "document") and composite it onto
+// the visible canvas every frame. Zoom is done via CSS transform so the
+// browser uses GPU scaling — no blurriness because we never downscale the
+// source pixels.
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+const wrap = document.getElementById('wrap');
+const c    = document.getElementById('c');
+const ov   = document.getElementById('ov');
+const ctx  = c.getContext('2d');
+const ovx  = ov.getContext('2d');
 
-    let isDrawing = false;
-    let isHolding = false;
-    let holdTime = 0;
-    let startX, startY;
+const DOC_W = 3000, DOC_H = 3000;
+c.width  = DOC_W; c.height  = DOC_H;
+ov.width = DOC_W; ov.height = DOC_H;
 
-    // Initialize drawing color
-    let currentColor = '#000000';
+// ── Viewport state ──────────────────────────────────────────────────────────
+let zoom = 1, panX = 0, panY = 0;
 
-    // Listen for changes in the color input box
-    colorInput.addEventListener('input', (e) => {
-        const value = e.target.value;
-        if (/^#[0-9A-Fa-f]{6}$/.test(value)) {
-            currentColor = value;
-        }
-    });
+function applyVP() {
+  const t = `translate(${panX}px,${panY}px) scale(${zoom})`;
+  c.style.transform  = t; c.style.transformOrigin  = '0 0';
+  ov.style.transform = t; ov.style.transformOrigin = '0 0';
+}
+applyVP();
 
-    // Start drawing after holding for more than 1 second
-    canvas.addEventListener('mousedown', (e) => {
-        holdTime = Date.now();
-        isHolding = true;
-        startX = e.clientX;
-        startY = e.clientY;
-    });
+// ── Tool / brush state ──────────────────────────────────────────────────────
+let tool = 'pen', shape = 'rect', shapeFilled = true;
+let sz = 8, op = 1;
+let color = '#000000', bgColor = '#ffffff';
+const szLbl = document.getElementById('sz-lbl');
+const opLbl = document.getElementById('op-lbl');
 
-    // Check if the hold was long enough to allow drawing
-    canvas.addEventListener('mousemove', (e) => {
-        if (isHolding && !isDrawing && Date.now() - holdTime >= 0) {
-            isDrawing = true;
-        }
+// ── Background layer ────────────────────────────────────────────────────────
+// We keep a separate offscreen canvas for the background so we can change it
+// without touching the drawing layer.
+const bgCanvas = document.createElement('canvas');
+bgCanvas.width = DOC_W; bgCanvas.height = DOC_H;
+const bgCtx = bgCanvas.getContext('2d');
+bgCtx.fillStyle = '#ffffff';
+bgCtx.fillRect(0, 0, DOC_W, DOC_H);
 
-        if (isDrawing) {
-            drawLine(startX, startY, e.clientX, e.clientY);
-            startX = e.clientX;
-            startY = e.clientY;
-        }
-    });
+// Drawing layer (transparent PNG)
+const drawCanvas = document.createElement('canvas');
+drawCanvas.width = DOC_W; drawCanvas.height = DOC_H;
+const drawCtx = drawCanvas.getContext('2d');
 
-    // Stop drawing
-    canvas.addEventListener('mouseup', () => {
-        isHolding = false;
-        isDrawing = false;
-    });
+function composite() {
+  ctx.clearRect(0, 0, DOC_W, DOC_H);
+  ctx.drawImage(bgCanvas, 0, 0);
+  ctx.drawImage(drawCanvas, 0, 0);
+}
+composite();
 
-    // Function to draw a smooth line
-    function drawLine(x1, y1, x2, y2) {
-        ctx.strokeStyle = currentColor;
-        ctx.lineWidth = 10;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.closePath();
+function changeBg(col) {
+  bgColor = col;
+  bgCtx.fillStyle = col;
+  bgCtx.fillRect(0, 0, DOC_W, DOC_H);
+  composite();
+}
+
+// ── History ─────────────────────────────────────────────────────────────────
+let hist = [], hIdx = -1;
+function saveHist() {
+  hist = hist.slice(0, hIdx + 1);
+  // Store only the draw layer (bg is cheap to recreate)
+  hist.push(drawCanvas.toDataURL());
+  if (hist.length > 30) hist.shift();
+  hIdx = hist.length - 1;
+}
+function loadHist(url) {
+  const img = new Image();
+  img.onload = () => { drawCtx.clearRect(0,0,DOC_W,DOC_H); drawCtx.drawImage(img,0,0); composite(); };
+  img.src = url;
+}
+function undo() { if (hIdx > 0) { hIdx--; loadHist(hist[hIdx]); } }
+function redo() { if (hIdx < hist.length-1) { hIdx++; loadHist(hist[hIdx]); } }
+saveHist(); // initial blank state
+
+// ── Palette ─────────────────────────────────────────────────────────────────
+const COLS = ['#000000','#ffffff','#e74c3c','#e67e22','#f1c40f','#2ecc71','#3498db','#9b59b6','#ff69b4','#1abc9c','#8B4513','#95a5a6','#2c3e50','#ecf0f1','#ff8c00','#00ced1'];
+const palEl = document.getElementById('pal');
+COLS.forEach(col => {
+  const s = document.createElement('div');
+  s.className = 'sw'; s.style.background = col;
+  s.onclick = () => setColor(col);
+  palEl.appendChild(s);
+});
+function setColor(col) {
+  color = col;
+  document.getElementById('cpick').value = col;
+  palEl.querySelectorAll('.sw').forEach(s => {
+    s.classList.toggle('on', s.style.background === hexToRgbStr(col));
+  });
+}
+function hexToRgbStr(h) {
+  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// ── Tool switching ───────────────────────────────────────────────────────────
+function setTool(t) {
+  tool = t;
+  ['pen','eraser','fill','shape','line','pick'].forEach(id => {
+    document.getElementById('t-'+id)?.classList.toggle('on', id===t);
+  });
+  document.getElementById('shape-bar').classList.toggle('show', t==='shape');
+}
+function setShape(s) {
+  shape = s;
+  ['rect','circle','tri'].forEach(id => document.getElementById('sh-'+id)?.classList.toggle('on', id===s));
+}
+function toggleSFill() {
+  shapeFilled = !shapeFilled;
+  document.getElementById('sh-fill').classList.toggle('on', shapeFilled);
+  document.getElementById('sh-fill').textContent = shapeFilled ? 'Filled' : 'Outline';
+}
+
+// ── Coordinate helpers ───────────────────────────────────────────────────────
+function toDoc(ex, ey) {
+  const r = wrap.getBoundingClientRect();
+  return [(ex - r.left - panX) / zoom, (ey - r.top - panY) / zoom];
+}
+
+// ── Stroke color helper ──────────────────────────────────────────────────────
+function rgba(col, alpha) {
+  const r=parseInt(col.slice(1,3),16),g=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ── Smooth stroke (Catmull-Rom via midpoint bezier) ──────────────────────────
+let pts = [];
+function strokeBegin(x, y, erase) {
+  pts = [{x,y}];
+  drawCtx.save();
+  drawCtx.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
+  drawCtx.strokeStyle = erase ? 'rgba(0,0,0,1)' : rgba(color, op);
+  drawCtx.lineWidth   = sz;
+  drawCtx.lineCap     = 'round';
+  drawCtx.lineJoin    = 'round';
+  drawCtx.beginPath();
+  drawCtx.moveTo(x, y);
+}
+function strokeMove(x, y) {
+  pts.push({x,y});
+  if (pts.length < 3) {
+    drawCtx.lineTo(x, y);
+    drawCtx.stroke();
+    drawCtx.beginPath();
+    drawCtx.moveTo(x, y);
+  } else {
+    const p0 = pts[pts.length-3];
+    const p1 = pts[pts.length-2];
+    const p2 = pts[pts.length-1];
+    const mx1 = (p0.x+p1.x)/2, my1 = (p0.y+p1.y)/2;
+    const mx2 = (p1.x+p2.x)/2, my2 = (p1.y+p2.y)/2;
+    drawCtx.beginPath();
+    drawCtx.moveTo(mx1, my1);
+    drawCtx.quadraticCurveTo(p1.x, p1.y, mx2, my2);
+    drawCtx.stroke();
+  }
+  composite();
+}
+function strokeEnd() {
+  drawCtx.restore();
+  pts = [];
+  saveHist();
+}
+
+// ── Flood fill ───────────────────────────────────────────────────────────────
+function floodFill(fx, fy) {
+  fx = Math.floor(fx); fy = Math.floor(fy);
+  if (fx<0||fx>=DOC_W||fy<0||fy>=DOC_H) return;
+  // Fill on the composited canvas so bg is included
+  const imgData = ctx.getImageData(0, 0, DOC_W, DOC_H);
+  const d = imgData.data;
+  const i0 = (fy*DOC_W+fx)*4;
+  const tr=d[i0],tg=d[i0+1],tb=d[i0+2],ta=d[i0+3];
+  const fr=parseInt(color.slice(1,3),16), fg=parseInt(color.slice(3,5),16), fb=parseInt(color.slice(5,7),16);
+  const fa=Math.round(op*255);
+  if(tr===fr&&tg===fg&&tb===fb&&ta===fa) return;
+  const stack=[fy*DOC_W+fx];
+  const vis=new Uint8Array(DOC_W*DOC_H);
+  while(stack.length){
+    const idx=stack.pop();
+    if(vis[idx]) continue;
+    const px=idx%DOC_W, py=Math.floor(idx/DOC_W);
+    const i=idx*4;
+    if(d[i]!==tr||d[i+1]!==tg||d[i+2]!==tb||d[i+3]!==ta) continue;
+    vis[idx]=1;
+    d[i]=fr;d[i+1]=fg;d[i+2]=fb;d[i+3]=fa;
+    if(px>0)      stack.push(idx-1);
+    if(px<DOC_W-1)stack.push(idx+1);
+    if(py>0)      stack.push(idx-DOC_W);
+    if(py<DOC_H-1)stack.push(idx+DOC_W);
+  }
+  // Write fill result back to draw layer
+  ctx.putImageData(imgData, 0, 0);
+  // Extract just the draw layer by subtracting bg
+  drawCtx.clearRect(0,0,DOC_W,DOC_H);
+  drawCtx.drawImage(c, 0, 0);
+  // Re-composite cleanly
+  composite();
+  saveHist();
+}
+
+// ── Shape drawing ────────────────────────────────────────────────────────────
+function drawShapeOn(context, x1,y1,x2,y2) {
+  const w=x2-x1, h=y2-y1;
+  context.save();
+  context.strokeStyle = rgba(color, op);
+  context.fillStyle   = rgba(color, op);
+  context.lineWidth   = sz;
+  context.lineCap = context.lineJoin = 'round';
+  context.beginPath();
+  if (shape==='rect') {
+    context.rect(x1,y1,w,h);
+  } else if (shape==='circle') {
+    context.ellipse(x1+w/2,y1+h/2,Math.abs(w/2),Math.abs(h/2),0,0,Math.PI*2);
+  } else {
+    context.moveTo(x1+w/2,y1); context.lineTo(x2,y2); context.lineTo(x1,y2); context.closePath();
+  }
+  if (shapeFilled) context.fill();
+  context.stroke();
+  context.restore();
+}
+
+// ── Pointer state ────────────────────────────────────────────────────────────
+let isDrawing=false, isPanning=false, isErasing=false;
+let startX=0, startY=0, lastPanX=0, lastPanY=0;
+
+wrap.addEventListener('contextmenu', e=>e.preventDefault());
+
+wrap.addEventListener('mousedown', e=>{
+  e.preventDefault();
+  const [dx,dy] = toDoc(e.clientX, e.clientY);
+
+  if (e.button===1) { // middle — pan
+    isPanning=true; lastPanX=e.clientX; lastPanY=e.clientY;
+    wrap.style.cursor='grabbing'; return;
+  }
+
+  const erase = (tool==='eraser') || (e.button===2 && tool!=='eraser');
+
+  if (tool==='fill' && e.button===0) { floodFill(dx,dy); return; }
+  if (tool==='pick' && e.button===0) {
+    const p=ctx.getImageData(Math.floor(dx),Math.floor(dy),1,1).data;
+    setColor('#'+[p[0],p[1],p[2]].map(v=>v.toString(16).padStart(2,'0')).join(''));
+    setTool('pen'); return;
+  }
+
+  isDrawing=true; isErasing=erase;
+  startX=dx; startY=dy;
+
+  if (tool==='pen'||tool==='eraser'||(e.button===2)) {
+    strokeBegin(dx,dy,erase);
+  }
+});
+
+wrap.addEventListener('mousemove', e=>{
+  // Custom cursor dot
+  const dot=document.getElementById('cursor-dot');
+  const ds=Math.max(4, sz*zoom);
+  dot.style.cssText=`position:fixed;pointer-events:none;border-radius:50%;border:1.5px solid rgba(255,255,255,0.8);width:${ds}px;height:${ds}px;left:${e.clientX}px;top:${e.clientY}px;transform:translate(-50%,-50%);z-index:9998;display:block;`;
+
+  if (isPanning) {
+    panX+=e.clientX-lastPanX; panY+=e.clientY-lastPanY;
+    lastPanX=e.clientX; lastPanY=e.clientY;
+    applyVP(); return;
+  }
+  if (!isDrawing) return;
+  const [dx,dy]=toDoc(e.clientX,e.clientY);
+
+  if (tool==='pen'||tool==='eraser'||(e.buttons===2&&tool!=='shape'&&tool!=='line')) {
+    strokeMove(dx,dy);
+  } else if (tool==='shape'||tool==='line') {
+    ovx.clearRect(0,0,DOC_W,DOC_H);
+    if (tool==='line') {
+      ovx.save();
+      ovx.strokeStyle=rgba(color,op); ovx.lineWidth=sz; ovx.lineCap='round';
+      ovx.beginPath(); ovx.moveTo(startX,startY); ovx.lineTo(dx,dy); ovx.stroke();
+      ovx.restore();
+    } else {
+      drawShapeOn(ovx,startX,startY,dx,dy);
     }
-</script>
+  }
+});
 
+window.addEventListener('mouseup', e=>{
+  if (isPanning) { isPanning=false; wrap.style.cursor='crosshair'; return; }
+  if (!isDrawing) return;
+  isDrawing=false;
+  const [dx,dy]=toDoc(e.clientX,e.clientY);
+
+  if (tool==='shape') {
+    ovx.clearRect(0,0,DOC_W,DOC_H);
+    drawCtx.save();
+    drawCtx.globalCompositeOperation='source-over';
+    drawShapeOn(drawCtx,startX,startY,dx,dy);
+    drawCtx.restore();
+    composite(); saveHist();
+  } else if (tool==='line') {
+    ovx.clearRect(0,0,DOC_W,DOC_H);
+    drawCtx.save();
+    drawCtx.globalCompositeOperation='source-over';
+    drawCtx.strokeStyle=rgba(color,op); drawCtx.lineWidth=sz; drawCtx.lineCap='round';
+    drawCtx.beginPath(); drawCtx.moveTo(startX,startY); drawCtx.lineTo(dx,dy); drawCtx.stroke();
+    drawCtx.restore();
+    composite(); saveHist();
+  } else {
+    strokeEnd();
+  }
+});
+
+wrap.addEventListener('mouseleave', ()=>{
+  document.getElementById('cursor-dot').style.display='none';
+});
+
+// ── Zoom ─────────────────────────────────────────────────────────────────────
+wrap.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = e.deltaY<0 ? 1.12 : 1/1.12;
+  const r = wrap.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  panX = mx-(mx-panX)*f;
+  panY = my-(my-panY)*f;
+  zoom = Math.min(20, Math.max(0.05, zoom*f));
+  applyVP();
+},{passive:false});
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+window.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();redo();}
+  if(e.key==='b') setTool('pen');
+  if(e.key==='e') setTool('eraser');
+  if(e.key==='g') setTool('fill');
+  if(e.key==='u') setTool('shape');
+  if(e.key==='l') setTool('line');
+  if(e.key==='i') setTool('pick');
+  if(e.key==='['){sz=Math.max(1,sz-2);document.getElementById('sz').value=sz;szLbl.textContent=sz;}
+  if(e.key===']'){sz=Math.min(100,sz+2);document.getElementById('sz').value=sz;szLbl.textContent=sz;}
+});
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function clearAll(){
+  drawCtx.clearRect(0,0,DOC_W,DOC_H);
+  bgCtx.fillStyle=bgColor; bgCtx.fillRect(0,0,DOC_W,DOC_H);
+  composite(); saveHist();
+}
+function saveImg(){
+  const a=document.createElement('a');
+  a.download='canvas.png'; a.href=c.toDataURL(); a.click();
+}
+</script>
 </body>
 </html>
