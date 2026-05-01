@@ -1,1306 +1,2504 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PLAY2GAME</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            overflow: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: Arial, sans-serif;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .screen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100vh;
-            padding: 20px;
-            position: relative;
-        }
-
-        #main-menu {
-            display: flex;
-        }
-
-        #gamehub {
-            font-size: clamp(3rem, 8vw, 10rem);
-            font-weight: bold;
-            background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
-            background-size: 400% 400%;
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: gradient-shift 3s ease-in-out infinite;
-            margin-bottom: 40px;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        @keyframes gradient-shift {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-
-        .games-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 30px;
-            max-width: 800px;
-            width: 100%;
-        }
-
-        .game-btn {
-            width: 200px;
-            height: 200px;
-            border: none;
-            border-radius: 20px;
-            font-size: 1.5em;
-            font-weight: bold;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-
-        .game-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
-        }
-
-        .red-btn {
-            background: linear-gradient(45deg, #ff4757, #ff6b6b);
-        }
-
-        .yellow-btn {
-            background: linear-gradient(45deg, #ffa502, #ffeb3b);
-        }
-
-        .green-btn {
-            background: linear-gradient(45deg, #2ed573, #51cf66);
-        }
-
-        .blue-btn {
-            background: linear-gradient(45deg, #3742fa, #5f27cd);
-        }
-
-        .game-screen {
-            justify-content: space-between;
-            text-align: center;
-        }
-
-        .back-btn {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 2.5em;
-            background: rgba(0,0,0,0.3);
-            border: none;
-            color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.3s;
-            z-index: 10;
-        }
-
-        .back-btn:hover {
-            background: rgba(0,0,0,0.5);
-            transform: scale(1.1);
-        }
-
-        .game-title {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 2em;
-            margin: 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        .bar-container {
-            position: relative;
-            width: 90vw;
-            max-width: 800px;
-            height: 200px;
-            background: #333;
-            border-radius: 100px;
-            border: 8px solid #555;
-            margin: 0 auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-        }
-
-        #red-bar {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            width: 50%;
-            background: linear-gradient(to right, #ff6b6b, #ee5a52);
-            border-radius: 92px 0 0 92px;
-            transition: width 0.15s ease-out;
-        }
-
-        #black-bar {
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
-            width: 50%;
-            background: linear-gradient(to left, #2c2c54, #1a1a2e);
-            border-radius: 0 92px 92px 0;
-            transition: width 0.15s ease-out;
-        }
-
-        #score {
-            position: absolute;
-            left: 50%;
-            top: -30px;
-            transform: translateX(-50%);
-            font-size: clamp(3rem, 6vw, 6rem);
-            color: #fff;
-            text-shadow: 3px 3px 6px #000;
-            font-weight: bold;
-            z-index: 5;
-        }
-
-        .timer {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            font-size: clamp(5rem, 12vw, 12rem);
-            color: #fff;
-            text-shadow: 4px 4px 8px #000;
-            font-weight: bold;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .timer.show {
-            opacity: 1;
-        }
-
-        @keyframes pulse {
-            0%, 100% {
-                transform: translate(-50%, -50%) scale(1);
-            }
-            50% {
-                transform: translate(-50%, -50%) scale(1.2);
-            }
-        }
-
-        .countdown {
-            animation: pulse 0.6s infinite;
-        }
-
-        .message {
-            font-size: clamp(3rem, 8vw, 8rem);
-            opacity: 0;
-            transition: opacity 0.5s;
-            text-shadow: 3px 3px 6px #000;
-            font-weight: bold;
-        }
-
-        .message.show {
-            opacity: 1;
-        }
-
-        .players-info {
-            display: flex;
-            justify-content: space-between;
-            width: 90vw;
-            max-width: 800px;
-            margin-top: 20px;
-            font-size: 1.4em;
-        }
-
-        .player-red {
-            color: #ff6b6b;
-            text-align: left;
-        }
-
-        .player-black {
-            color: #2c2c54;
-            text-align: right;
-        }
-
-        .keys {
-            font-size: 0.8em;
-            opacity: 0.9;
-            font-family: monospace;
-        }
-
-        .coming-soon {
-            font-size: clamp(2rem, 5vw, 5rem);
-            opacity: 0.8;
-        }
-
-        /* Yellow Game Styles */
-        #yellow-game {
-            flex-direction: row;
-            justify-content: center;
-            align-items: stretch;
-        }
-
-        .split-container {
-            display: flex;
-            width: 100%;
-            height: calc(100vh - 100px);
-            max-width: 1200px;
-        }
-
-        .player-area {
-            width: 50%;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .yellow-bg {
-            background: linear-gradient(to bottom, #ffd700, #ffcc00);
-            color: #333;
-        }
-
-        .black-bg {
-            background: linear-gradient(to bottom, #333, #111);
-            color: #fff;
-        }
-
-        .player-info {
-            text-align: center;
-            font-size: 1.2em;
-            margin-bottom: 20px;
-            z-index: 5;
-        }
-
-        .goal {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: bold;
-        }
-
-        .goal-shape {
-            transform: scale(0.8);
-            position: relative !important;
-            left: 0 !important;
-            top: 0 !important;
-        }
-
-        .shape-container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .shape {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background: var(--shape-color);
-        }
-
-        .circle {
-            border-radius: 50%;
-        }
-
-        .square {}
-
-        .triangle {
-            background: none;
-            width: 0;
-            height: 0;
-            border-left: 25px solid transparent;
-            border-right: 25px solid transparent;
-            border-bottom: 50px solid var(--shape-color);
-        }
-
-        .star {
-            background: none;
-            width: 0;
-            height: 0;
-            border-left: 25px solid transparent;
-            border-right: 25px solid transparent;
-            border-bottom: 50px solid var(--shape-color);
-            position: relative;
-        }
-
-        .star::after {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 0;
-            border-left: 25px solid transparent;
-            border-right: 25px solid transparent;
-            border-top: 50px solid var(--shape-color);
-            top: 15px;
-            left: -25px;
-        }
-
-        .points {
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-
-        /* Green Game Styles */
-        #green-game {
-            flex-direction: row;
-            justify-content: center;
-            align-items: stretch;
-        }
-
-        .green-bg {
-            background: linear-gradient(to bottom, #2ed573, #51cf66);
-            color: #333;
-        }
-
-        .choice {
-            font-size: clamp(5rem, 10vw, 10rem);
-            margin-top: 50px;
-        }
-
-        .status {
-            font-size: 1.5em;
-            margin-top: 20px;
-        }
-
-        .instructions {
-            display: flex;
-            justify-content: space-around;
-            width: 100%;
-            max-width: 800px;
-            margin-top: 20px;
-            font-size: 1.2em;
-            gap: 20px;
-        }
-
-        .instructions span {
-            background: rgba(255,255,255,0.2);
-            padding: 10px;
-            border-radius: 10px;
-        }
-
-        /* Blue Game Styles */
-        #blue-game {
-            background: #000;
-        }
-
-        #blue-canvas {
-            background: #87ceeb;
-            border: 2px solid #fff;
-        }
-
-        #blue-timer {
-            position: absolute;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 2em;
-            color: #000;
-        }
-
-        .player-blue {
-            color: #3742fa;
-            text-align: left;
-        }
-
-        .player-black {
-            color: #2c2c54;
-            text-align: right;
-        }
-
-        #tagger-info {
-            position: absolute;
-            top: 120px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 1.5em;
-            color: #000;
-        }
-
-        .game-description {
-            font-size: 1em;
-            margin-top: 10px;
-            opacity: 0.8;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PLAY2GAME</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f0f1a;color:#fff;font-family:system-ui,-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;}
+#hub{display:block;overflow-y:auto;}
+.hub-header{text-align:center;padding:40px 20px 20px;}
+.hub-title{font-size:clamp(2.5rem,6vw,5rem);font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,#ff0080,#ff8c00,#ffe600,#00ff88,#00cfff,#a855f7,#ff0080);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:rainbow 3s linear infinite;}
+@keyframes rainbow{0%{background-position:0%}100%{background-position:200%}}
+.hub-sub{color:#888;font-size:1rem;margin-top:8px;letter-spacing:2px;}
+.games-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px;padding:30px 40px 80px;max-width:1400px;margin:0 auto;}
+.game-card{border-radius:16px;padding:26px 20px;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}
+.game-card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.game-card .emoji{font-size:2.8rem;display:block;margin-bottom:10px;}
+.game-card .gname{font-size:1.15rem;font-weight:700;margin-bottom:6px;}
+.game-card .keys{font-size:0.72rem;opacity:0.7;line-height:1.6;}
+.game-card .keys span{display:inline-block;background:rgba(255,255,255,0.12);border-radius:4px;padding:1px 5px;margin:1px;font-family:monospace;}
+.card-1{background:linear-gradient(135deg,#1a0a0a,#2d0f0f);border-color:rgba(255,80,80,0.3);}
+.card-2{background:linear-gradient(135deg,#0a0a1a,#1a0a2d);border-color:rgba(80,120,255,0.3);}
+.card-3{background:linear-gradient(135deg,#0a1a0a,#1a0f00);border-color:rgba(0,200,100,0.3);}
+.card-4{background:linear-gradient(135deg,#1a1a00,#1a0a00);border-color:rgba(255,220,0,0.3);}
+.card-5{background:linear-gradient(135deg,#0a1a1a,#001a1a);border-color:rgba(0,200,200,0.3);}
+.card-6{background:linear-gradient(135deg,#1a0a1a,#0f0020);border-color:rgba(200,0,255,0.3);}
+.card-7{background:linear-gradient(135deg,#1a0505,#050a1a);border-color:rgba(255,100,100,0.3);}
+.card-8{background:linear-gradient(135deg,#001a0a,#0a001a);border-color:rgba(0,255,150,0.3);}
+.card-9{background:linear-gradient(135deg,#0a0a00,#1a1000);border-color:rgba(255,200,0,0.3);}
+.card-10{background:linear-gradient(135deg,#00100a,#0a1a00);border-color:rgba(0,255,100,0.3);}
+.card-11{background:linear-gradient(135deg,#000a1a,#001020);border-color:rgba(0,150,255,0.3);}
+.card-12{background:linear-gradient(135deg,#1a000a,#200010);border-color:rgba(255,0,100,0.3);}
+.game-screen{display:none;position:fixed;inset:0;z-index:1000;background:#0f0f1a;flex-direction:column;align-items:center;justify-content:flex-start;overflow-y:auto;}
+.game-screen.active{display:flex;}
+.gs-back{position:fixed;top:16px;left:16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:0.9rem;z-index:10001;transition:background 0.2s;}
+.gs-back:hover{background:rgba(255,255,255,0.2);}
+.gs-title{font-size:1.4rem;font-weight:800;letter-spacing:2px;margin:60px 0 12px;text-align:center;}
+.winner-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.88);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;}
+.winner-text{font-size:clamp(2rem,5vw,3.5rem);font-weight:900;text-align:center;margin-bottom:20px;text-shadow:0 0 40px currentColor;}
+.play-again-btn{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:14px 36px;border-radius:12px;font-size:1.1rem;font-weight:700;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;margin:8px;}
+.play-again-btn:hover{transform:scale(1.05);box-shadow:0 8px 30px rgba(99,102,241,0.5);}
+.hub-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:12px 28px;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;margin:8px;transition:background 0.2s;}
+.hub-btn:hover{background:rgba(255,255,255,0.2);}
+canvas{display:block;border-radius:8px;}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes bombpulse{0%,100%{transform:scale(1) rotate(-5deg)}50%{transform:scale(1.15) rotate(5deg)}}
+</style>
 </head>
 <body>
-    <div id="main-menu" class="screen">
-        <h1 id="gamehub">PLAY2GAME</h1>
-        <div class="games-grid">
-            <button class="game-btn red-btn" onclick="showScreen('red-game')">RED<br>TUG OF WAR</button>
-            <button class="game-btn yellow-btn" onclick="showScreen('yellow-game')">YELLOW<br>SHAPE REACTION</button>
-            <button class="game-btn green-btn" onclick="showScreen('green-game')">GREEN<br>ROCK PAPER SCISSORS</button>
-            <button class="game-btn blue-btn" onclick="showScreen('blue-game')">BLUE<br>TAG</button>
-        </div>
+
+<!-- HUB -->
+<div id="hub">
+  <div class="hub-header">
+    <div class="hub-title">PLAY2GAME</div>
+    <div class="hub-sub">2-PLAYER LOCAL MULTIPLAYER &bull; 12 GAMES</div>
+  </div>
+  <div class="games-grid">
+    <div class="game-card card-1" onclick="openGame('tug')">
+      <span class="emoji">💪</span>
+      <div class="gname">Tug of War</div>
+      <div class="keys">Red: <span>Q W E R T A S D F G Z X C V</span><br>Blue: <span>Y U I O P H J K L B N M</span></div>
     </div>
-
-    <div id="red-game" class="screen game-screen">
-        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
-        <h2 class="game-title">RED TUG OF WAR</h2>
-        <div class="bar-container">
-            <div id="red-bar"></div>
-            <div id="black-bar"></div>
-            <div id="score">0</div>
-            <div id="red-timer" class="timer"></div>
-        </div>
-        <div id="red-message" class="message"></div>
-        <div class="players-info">
-            <div class="player-red">
-                RED PLAYER<br>
-                <div class="keys">qwertasdfgzxcv</div>
-            </div>
-            <div class="player-black">
-                BLACK PLAYER<br>
-                <div class="keys">yuiophjklbnm</div>
-            </div>
-        </div>
+    <div class="game-card card-2" onclick="openGame('ptag')">
+      <span class="emoji">🏃</span>
+      <div class="gname">Platform Tag</div>
+      <div class="keys">Blue: <span>WASD</span> &nbsp; Red: <span>IJKL</span></div>
     </div>
-
-    <div id="yellow-game" class="screen game-screen">
-        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
-        <h2 class="game-title">YELLOW SHAPE REACTION</h2>
-        <div class="split-container">
-            <div id="yellow-area" class="player-area yellow-bg">
-                <div class="player-info">
-                    <div>YELLOW PLAYER</div>
-                    <div class="goal">Goal: <div id="yellow-goal-shape" class="goal-shape shape"></div><span id="yellow-goal-text"></span></div>
-                    <div class="points">Points: <span id="yellow-points">0</span></div>
-                    <div class="keys">qwertasdfgzxcv</div>
-                </div>
-                <div id="yellow-shapes" class="shape-container"></div>
-            </div>
-            <div id="black-area" class="player-area black-bg">
-                <div class="player-info">
-                    <div>BLACK PLAYER</div>
-                    <div class="goal">Goal: <div id="black-goal-shape" class="goal-shape shape"></div><span id="black-goal-text"></span></div>
-                    <div class="points">Points: <span id="black-points">0</span></div>
-                    <div class="keys">yuiophjklbnm</div>
-                </div>
-                <div id="black-shapes" class="shape-container"></div>
-            </div>
-        </div>
-        <div id="yellow-timer" class="timer"></div>
-        <div id="yellow-message" class="message"></div>
+    <div class="game-card card-3" onclick="openGame('rps')">
+      <span class="emoji">✊</span>
+      <div class="gname">Rock Paper Scissors</div>
+      <div class="keys">Green: <span>A</span>Rock <span>S</span>Paper <span>D</span>Scissors<br>Orange: <span>J</span>Rock <span>K</span>Paper <span>L</span>Scissors</div>
     </div>
-
-    <div id="green-game" class="screen game-screen">
-        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
-        <h2 class="game-title">GREEN ROCK PAPER SCISSORS</h2>
-        <div class="split-container">
-            <div id="green-area" class="player-area green-bg">
-                <div class="player-info">
-                    <div>GREEN PLAYER</div>
-                    <div class="points">Points: <span id="green-points">0</span></div>
-                    <div class="keys">a s d</div>
-                </div>
-                <div id="green-choice" class="choice"></div>
-                <div id="green-status" class="status">Waiting...</div>
-            </div>
-            <div id="black-area" class="player-area black-bg">
-                <div class="player-info">
-                    <div>BLACK PLAYER</div>
-                    <div class="points">Points: <span id="green-black-points">0</span></div>
-                    <div class="keys">j k l</div>
-                </div>
-                <div id="black-choice" class="choice"></div>
-                <div id="black-status" class="status">Waiting...</div>
-            </div>
-        </div>
-        <div id="green-timer" class="timer"></div>
-        <div id="green-message" class="message"></div>
-        <div class="instructions">
-            <span>ROCK ✊ (Green: A, Black: J)</span>
-            <span>PAPER ✋ (Green: S, Black: K)</span>
-            <span>SCISSORS ✌️ (Green: D, Black: L)</span>
-        </div>
+    <div class="game-card card-4" onclick="openGame('shape')">
+      <span class="emoji">🔷</span>
+      <div class="gname">Shape Reaction</div>
+      <div class="keys">Yellow: <span>WASD</span> &nbsp; Purple: <span>Arrow Keys</span></div>
     </div>
-
-    <div id="blue-game" class="screen game-screen">
-        <button class="back-btn" onclick="showScreen('main-menu')">←</button>
-        <h2 class="game-title">BLUE TAG</h2>
-        <canvas id="blue-canvas" width="800" height="600"></canvas>
-        <div id="blue-timer" class="timer"></div>
-        <div id="tagger-info"></div>
-        <div id="blue-message" class="message"></div>
-        <div class="players-info">
-            <div class="player-blue">
-                BLUE PLAYER<br>
-                <div class="keys">WASD</div>
-            </div>
-            <div class="player-black">
-                BLACK PLAYER<br>
-                <div class="keys">IJKL</div>
-            </div>
-        </div>
+    <div class="game-card card-5" onclick="openGame('pong')">
+      <span class="emoji">🏓</span>
+      <div class="gname">Pong</div>
+      <div class="keys">Left: <span>W</span><span>S</span> &nbsp; Right: <span>↑</span><span>↓</span></div>
     </div>
+    <div class="game-card card-6" onclick="openGame('bomb')">
+      <span class="emoji">💣</span>
+      <div class="gname">Bomb Pass</div>
+      <div class="keys">Red pass: <span>Space</span> &nbsp; Blue pass: <span>Enter</span></div>
+    </div>
+    <div class="game-card card-7" onclick="openGame('paperio')">
+      <span class="emoji">�️</span>
+      <div class="gname">Territory.io</div>
+      <div class="keys">Red: <span>Arrow Keys</span> &nbsp; Blue: <span>WASD</span></div>
+    </div>
+    <div class="game-card card-8" onclick="openGame('sumo')">
+      <span class="emoji">🥊</span>
+      <div class="gname">Sumo</div>
+      <div class="keys">Red: <span>WASD</span> &nbsp; Blue: <span>IJKL</span></div>
+    </div>
+    <div class="game-card card-9" onclick="openGame('wheel')">
+      <span class="emoji">🎯</span>
+      <div class="gname">Accuracy Wheel</div>
+      <div class="keys">Red: <span>Space</span> &nbsp; Blue: <span>Enter</span></div>
+    </div>
+    <div class="game-card card-10" onclick="openGame('tanks')">
+      <span class="emoji">🪖</span>
+      <div class="gname">Tanks</div>
+      <div class="keys">Red: <span>WASD</span>+<span>Space</span> &nbsp; Blue: <span>IJKL</span>+<span>Enter</span></div>
+    </div>
+    <div class="game-card card-11" onclick="openGame('checkers')">
+      <span class="emoji">♟️</span>
+      <div class="gname">Checkers</div>
+      <div class="keys">Red vs Black &bull; Click to move</div>
+    </div>
+    <div class="game-card card-12" onclick="openGame('darts')">
+      <span class="emoji">🎯</span>
+      <div class="gname">Darts</div>
+      <div class="keys">Red: <span>Space</span> &nbsp; Blue: <span>Enter</span></div>
+    </div>
+  </div>
+</div>
 
-    <script>
-        let currentScreen = 'main-menu';
+<!-- GAME SCREENS -->
 
-        const redKeys = ['q','w','e','r','t','a','s','d','f','g','z','x','c','v'];
-        const blackKeys = ['y','u','i','o','p','h','j','k','l','b','n','m'];
+<!-- GAME 1: TUG OF WAR -->
+<div id="g-tug" class="game-screen">
+  <button class="gs-back" onclick="closeGame('tug')">← Back</button>
+  <div class="gs-title" style="color:#ff5555;">💪 TUG OF WAR</div>
+  <div id="tug-ui" style="width:700px;max-width:98vw;padding:0 10px;position:relative;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="color:#ff5555;font-weight:700;font-size:1.1rem;">RED</div>
+      <div id="tug-timer" style="font-size:1.4rem;font-weight:900;color:#fff;">30</div>
+      <div style="color:#5599ff;font-weight:700;font-size:1.1rem;">BLUE</div>
+    </div>
+    <!-- Power meters -->
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px;gap:10px;">
+      <div style="flex:1;">
+        <div style="font-size:0.75rem;color:#ff5555;margin-bottom:3px;">POWER</div>
+        <div style="background:#1a1a2e;border-radius:6px;height:14px;overflow:hidden;">
+          <div id="tug-red-power" style="height:100%;background:linear-gradient(90deg,#ff3333,#ff8888);width:0%;transition:width 0.05s;border-radius:6px;"></div>
+        </div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:0.75rem;color:#5599ff;margin-bottom:3px;text-align:right;">POWER</div>
+        <div style="background:#1a1a2e;border-radius:6px;height:14px;overflow:hidden;">
+          <div id="tug-blue-power" style="height:100%;background:linear-gradient(90deg,#8888ff,#3333ff);width:0%;transition:width 0.05s;border-radius:6px;float:right;"></div>
+        </div>
+      </div>
+    </div>
+    <!-- Tug bar -->
+    <div style="position:relative;background:#1a1a2e;border-radius:12px;height:60px;overflow:hidden;border:2px solid #333;">
+      <div id="tug-red-fill" style="position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#cc2222,#ff5555);width:50%;transition:width 0.05s;"></div>
+      <div id="tug-blue-fill" style="position:absolute;right:0;top:0;height:100%;background:linear-gradient(270deg,#2244cc,#5577ff);width:50%;transition:width 0.05s;"></div>
+      <div id="tug-rope" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;background:#fff;border-radius:50%;border:4px solid #333;z-index:10;transition:left 0.05s;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🪢</div>
+      <!-- Win zones -->
+      <div style="position:absolute;left:0;top:0;width:10%;height:100%;background:rgba(255,0,0,0.15);border-right:2px dashed rgba(255,80,80,0.5);"></div>
+      <div style="position:absolute;right:0;top:0;width:10%;height:100%;background:rgba(0,0,255,0.15);border-left:2px dashed rgba(80,80,255,0.5);"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.75rem;color:#666;">
+      <span>← Red wins here</span>
+      <span>Blue wins here →</span>
+    </div>
+    <div id="tug-msg" style="text-align:center;margin-top:16px;font-size:1rem;color:#aaa;">Mash your keys to pull the rope!</div>
+    <div id="tug-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="tug-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initTug()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('tug')">Back to Hub</button>
+    </div>
+  </div>
+</div>
 
-        // Red Game
-        let redState = 'waiting';
-        let redScore = 0;
-        let redPosition = 50;
-        const redBar = document.getElementById('red-bar');
-        const blackBar = document.getElementById('black-bar');
-        const redScoreEl = document.getElementById('score');
-        const redTimerEl = document.getElementById('red-timer');
-        const redMessageEl = document.getElementById('red-message');
+<!-- GAME 2: PLATFORM TAG -->
+<div id="g-ptag" class="game-screen">
+  <button class="gs-back" onclick="closeGame('ptag')">← Back</button>
+  <div class="gs-title" style="color:#5599ff;">🏃 PLATFORM TAG</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="ptag-canvas" width="800" height="500" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="ptag-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="ptag-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initPtag()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('ptag')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Blue: WASD &nbsp;|&nbsp; Red: IJKL &nbsp;|&nbsp; IT player must tag the other!</div>
+</div>
 
-        function resetRedGame() {
-            redState = 'waiting';
-            redScore = 0;
-            redPosition = 50;
-            updateRedBar();
-            redTimerEl.classList.remove('show', 'countdown');
-            redMessageEl.classList.remove('show');
+<!-- GAME 3: ROCK PAPER SCISSORS -->
+<div id="g-rps" class="game-screen">
+  <button class="gs-back" onclick="closeGame('rps')">← Back</button>
+  <div class="gs-title" style="color:#00cc66;">✊ ROCK PAPER SCISSORS</div>
+  <div id="rps-ui" style="width:600px;max-width:98vw;text-align:center;position:relative;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
+      <div style="color:#00cc66;font-size:1.1rem;font-weight:700;">GREEN <span id="rps-green-score" style="font-size:1.5rem;">0</span></div>
+      <div style="color:#888;font-size:0.9rem;">Best of 5 (first to 3)</div>
+      <div style="color:#ff8800;font-size:1.1rem;font-weight:700;"><span id="rps-orange-score" style="font-size:1.5rem;">0</span> ORANGE</div>
+    </div>
+    <div style="display:flex;justify-content:space-around;margin-bottom:20px;">
+      <div style="text-align:center;">
+        <div style="font-size:5rem;" id="rps-green-emoji">❓</div>
+        <div style="color:#00cc66;font-size:0.85rem;margin-top:4px;" id="rps-green-label">Waiting...</div>
+        <div style="color:#555;font-size:0.75rem;margin-top:8px;"><span style="background:#1a2a1a;padding:3px 8px;border-radius:4px;">A</span>=Rock <span style="background:#1a2a1a;padding:3px 8px;border-radius:4px;">S</span>=Paper <span style="background:#1a2a1a;padding:3px 8px;border-radius:4px;">D</span>=Scissors</div>
+      </div>
+      <div style="display:flex;align-items:center;font-size:2rem;color:#555;">VS</div>
+      <div style="text-align:center;">
+        <div style="font-size:5rem;" id="rps-orange-emoji">❓</div>
+        <div style="color:#ff8800;font-size:0.85rem;margin-top:4px;" id="rps-orange-label">Waiting...</div>
+        <div style="color:#555;font-size:0.75rem;margin-top:8px;"><span style="background:#2a1a00;padding:3px 8px;border-radius:4px;">J</span>=Rock <span style="background:#2a1a00;padding:3px 8px;border-radius:4px;">K</span>=Paper <span style="background:#2a1a00;padding:3px 8px;border-radius:4px;">L</span>=Scissors</div>
+      </div>
+    </div>
+    <div id="rps-msg" style="font-size:1.4rem;font-weight:700;min-height:40px;color:#fff;"></div>
+    <div id="rps-round-msg" style="font-size:0.9rem;color:#888;margin-top:6px;"></div>
+    <div id="rps-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="rps-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initRps()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('rps')">Back to Hub</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME 4: SHAPE REACTION -->
+<div id="g-shape" class="game-screen">
+  <button class="gs-back" onclick="closeGame('shape')">← Back</button>
+  <div class="gs-title" style="color:#ffdd00;">🔷 SHAPE REACTION</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="shape-canvas" width="800" height="480" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="shape-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="shape-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initShape()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('shape')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Yellow: WASD &nbsp;|&nbsp; Purple: Arrow Keys &nbsp;|&nbsp; Press when YOUR goal shape appears!</div>
+</div>
+
+<!-- GAME 5: PONG -->
+<div id="g-pong" class="game-screen">
+  <button class="gs-back" onclick="closeGame('pong')">← Back</button>
+  <div class="gs-title" style="color:#00cccc;">🏓 PONG</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="pong-canvas" width="800" height="500" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="pong-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="pong-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initPong()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('pong')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Left: W/S &nbsp;|&nbsp; Right: ↑/↓ &nbsp;|&nbsp; First to 7 wins</div>
+</div>
+
+<!-- GAME 6: BOMB PASS -->
+<div id="g-bomb" class="game-screen">
+  <button class="gs-back" onclick="closeGame('bomb')">← Back</button>
+  <div class="gs-title" style="color:#cc44ff;">💣 BOMB PASS</div>
+  <div id="bomb-ui" style="width:500px;max-width:98vw;text-align:center;position:relative;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
+      <div style="color:#ff5555;font-size:1.1rem;font-weight:700;">RED <span id="bomb-red-score" style="font-size:1.5rem;">0</span></div>
+      <div style="color:#888;font-size:0.9rem;">Best of 5 (first to 3 wins)</div>
+      <div style="color:#5599ff;font-size:1.1rem;font-weight:700;"><span id="bomb-blue-score" style="font-size:1.5rem;">0</span> BLUE</div>
+    </div>
+    <div id="bomb-holder-label" style="font-size:1.1rem;font-weight:700;margin-bottom:10px;color:#aaa;"></div>
+    <div id="bomb-emoji" style="font-size:8rem;animation:bombpulse 0.5s infinite;display:inline-block;">💣</div>
+    <div id="bomb-fuse" style="font-size:1.5rem;font-weight:900;margin:10px 0;color:#ff8800;"></div>
+    <div style="background:#1a1a2e;border-radius:8px;height:20px;overflow:hidden;margin:10px 0;">
+      <div id="bomb-fuse-bar" style="height:100%;background:linear-gradient(90deg,#ff4400,#ffaa00);width:100%;transition:width 0.1s;border-radius:8px;"></div>
+    </div>
+    <div id="bomb-msg" style="font-size:1rem;color:#888;margin-top:10px;"></div>
+    <div style="margin-top:16px;font-size:0.85rem;color:#555;">Red passes: <span style="background:#1a0a0a;padding:2px 8px;border-radius:4px;">Space</span> &nbsp; Blue passes: <span style="background:#0a0a1a;padding:2px 8px;border-radius:4px;">Enter</span></div>
+    <div id="bomb-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="bomb-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initBomb()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('bomb')">Back to Hub</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME 7: PAPER.IO STYLE -->
+<div id="g-paperio" class="game-screen">
+  <button class="gs-back" onclick="closeGame('paperio')">← Back</button>
+  <div class="gs-title" style="color:#ff5555;">🗺️ TERRITORY.IO</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="paperio-canvas" width="640" height="480" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="paperio-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="paperio-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initPaperio()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('paperio')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Red: Arrow Keys &nbsp;|&nbsp; Blue: WASD &nbsp;|&nbsp; Claim territory, avoid trails!</div>
+</div>
+
+<!-- GAME 8: SUMO -->
+<div id="g-sumo" class="game-screen">
+  <button class="gs-back" onclick="closeGame('sumo')">← Back</button>
+  <div class="gs-title" style="color:#00ff99;">🥊 SUMO</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="sumo-canvas" width="700" height="500" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="sumo-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="sumo-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initSumo()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('sumo')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Red: WASD &nbsp;|&nbsp; Blue: IJKL &nbsp;|&nbsp; Push opponent off the circle! First to 3 wins.</div>
+</div>
+
+<!-- GAME 9: ACCURACY WHEEL -->
+<div id="g-wheel" class="game-screen">
+  <button class="gs-back" onclick="closeGame('wheel')">← Back</button>
+  <div class="gs-title" style="color:#ffcc00;">🎯 ACCURACY WHEEL</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="wheel-canvas" width="700" height="420" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="wheel-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="wheel-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initWheel()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('wheel')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Red: Space &nbsp;|&nbsp; Blue: Enter &nbsp;|&nbsp; 5 throws each, highest score wins!</div>
+</div>
+
+<!-- GAME 10: TANKS -->
+<div id="g-tanks" class="game-screen">
+  <button class="gs-back" onclick="closeGame('tanks')">← Back</button>
+  <div class="gs-title" style="color:#44ff88;">🪖 TANKS</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="tanks-canvas" width="800" height="500" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="tanks-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="tanks-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initTanks()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('tanks')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Red: WASD+Space &nbsp;|&nbsp; Blue: IJKL+Enter &nbsp;|&nbsp; First to 5 hits wins!</div>
+</div>
+
+<!-- GAME 11: CHECKERS -->
+<div id="g-checkers" class="game-screen">
+  <button class="gs-back" onclick="closeGame('checkers')">← Back</button>
+  <div class="gs-title" style="color:#4499ff;">♟️ CHECKERS</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="checkers-canvas" width="560" height="560" style="border:2px solid #333;border-radius:8px;cursor:pointer;"></canvas>
+    <div id="checkers-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="checkers-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initCheckers()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('checkers')">Back to Hub</button>
+    </div>
+  </div>
+  <div id="checkers-status" style="margin-top:8px;font-size:1rem;color:#aaa;text-align:center;"></div>
+</div>
+
+<!-- GAME 12: DARTS -->
+<div id="g-darts" class="game-screen">
+  <button class="gs-back" onclick="closeGame('darts')">← Back</button>
+  <div class="gs-title" style="color:#ff4488;">🎯 DARTS</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="darts-canvas" width="700" height="480" style="border:2px solid #333;border-radius:8px;"></canvas>
+    <div id="darts-winner" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;z-index:5000;border-radius:8px;">
+      <div id="darts-winner-text" class="winner-text"></div>
+      <button class="play-again-btn" onclick="initDarts()">Play Again</button>
+      <button class="hub-btn" onclick="closeGame('darts')">Back to Hub</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:0.8rem;color:#666;">Red: Space &nbsp;|&nbsp; Blue: Enter &nbsp;|&nbsp; 3 darts per round, 5 rounds!</div>
+</div>
+
+<script>
+// ============================================================
+// CORE NAVIGATION
+// ============================================================
+let activeGame = null;
+let _intervals = [];
+let _timeouts = [];
+let _rafId = null;
+
+function stopAllLoops() {
+  _intervals.forEach(id => clearInterval(id));
+  _timeouts.forEach(id => clearTimeout(id));
+  _intervals = [];
+  _timeouts = [];
+  if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
+}
+
+function safeInterval(fn, ms) { const id = setInterval(fn, ms); _intervals.push(id); return id; }
+function safeTimeout(fn, ms) { const id = setTimeout(fn, ms); _timeouts.push(id); return id; }
+
+function openGame(id) {
+  stopAllLoops();
+  activeGame = id;
+  document.getElementById('hub').style.display = 'none';
+  const el = document.getElementById('g-' + id);
+  el.classList.add('active');
+  const inits = {
+    tug: initTug, ptag: initPtag, rps: initRps, shape: initShape,
+    pong: initPong, bomb: initBomb, paperio: initPaperio, sumo: initSumo,
+    wheel: initWheel, tanks: initTanks, checkers: initCheckers, darts: initDarts
+  };
+  if (inits[id]) inits[id]();
+}
+
+function closeGame(id) {
+  stopAllLoops();
+  activeGame = null;
+  const el = document.getElementById('g-' + id);
+  el.classList.remove('active');
+  document.getElementById('hub').style.display = 'block';
+}
+
+// ============================================================
+// GAME 1: TUG OF WAR
+// ============================================================
+let tugState = {};
+
+function initTug() {
+  stopAllLoops();
+  tugState = {
+    redPower: 0, bluePower: 0,
+    ropePos: 0.5, // 0=red wins, 1=blue wins
+    timeLeft: 30, over: false
+  };
+  const winner = document.getElementById('tug-winner');
+  winner.style.display = 'none';
+  document.getElementById('tug-msg').textContent = 'Mash your keys to pull the rope!';
+
+  const redKeys = new Set(['q','w','e','r','t','a','s','d','f','g','z','x','c','v']);
+  const blueKeys = new Set(['y','u','i','o','p','h','j','k','l','b','n','m']);
+
+  function onKey(e) {
+    if (activeGame !== 'tug' || tugState.over) return;
+    const k = e.key.toLowerCase();
+    if (redKeys.has(k)) tugState.redPower += 5 + Math.random() * 20;
+    if (blueKeys.has(k)) tugState.bluePower += 5 + Math.random() * 20;
+  }
+  document.addEventListener('keydown', onKey);
+  tugState._keyHandler = onKey;
+
+  // Physics loop ~60fps
+  let last = performance.now();
+  function loop(now) {
+    if (activeGame !== 'tug') return;
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    if (!tugState.over) {
+      // Decay
+      tugState.redPower *= Math.pow(0.85, dt * 60);
+      tugState.bluePower *= Math.pow(0.85, dt * 60);
+      // Move rope based on power difference
+      const diff = (tugState.bluePower - tugState.redPower) / 200;
+      tugState.ropePos += diff * dt * 2;
+      tugState.ropePos = Math.max(0.05, Math.min(0.95, tugState.ropePos));
+      updateTugUI();
+      if (tugState.ropePos <= 0.1) endTug('🔴 RED WINS!', '#ff5555');
+      else if (tugState.ropePos >= 0.9) endTug('🔵 BLUE WINS!', '#5599ff');
+    }
+    _rafId = requestAnimationFrame(loop);
+  }
+  _rafId = requestAnimationFrame(loop);
+
+  // Timer
+  safeInterval(() => {
+    if (activeGame !== 'tug' || tugState.over) return;
+    tugState.timeLeft--;
+    document.getElementById('tug-timer').textContent = tugState.timeLeft;
+    if (tugState.timeLeft <= 0) {
+      if (tugState.ropePos < 0.5) endTug('🔴 RED WINS! (Time)', '#ff5555');
+      else if (tugState.ropePos > 0.5) endTug('🔵 BLUE WINS! (Time)', '#5599ff');
+      else endTug("🤝 DRAW!", '#ffffff');
+    }
+  }, 1000);
+}
+
+function updateTugUI() {
+  const rope = document.getElementById('tug-rope');
+  const redFill = document.getElementById('tug-red-fill');
+  const blueFill = document.getElementById('tug-blue-fill');
+  const redPow = document.getElementById('tug-red-power');
+  const bluePow = document.getElementById('tug-blue-power');
+  const pct = tugState.ropePos * 100;
+  rope.style.left = pct + '%';
+  redFill.style.width = pct + '%';
+  blueFill.style.width = (100 - pct) + '%';
+  redPow.style.width = Math.min(100, tugState.redPower / 2) + '%';
+  bluePow.style.width = Math.min(100, tugState.bluePower / 2) + '%';
+}
+
+function endTug(msg, color) {
+  tugState.over = true;
+  if (tugState._keyHandler) document.removeEventListener('keydown', tugState._keyHandler);
+  const w = document.getElementById('tug-winner');
+  document.getElementById('tug-winner-text').textContent = msg;
+  document.getElementById('tug-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 2: PLATFORM TAG
+// ============================================================
+let ptagState = {};
+
+function initPtag() {
+  stopAllLoops();
+  const canvas = document.getElementById('ptag-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 500;
+
+  const platforms = [
+    {x:0, y:460, w:800, h:40},       // floor
+    {x:100, y:360, w:160, h:16},
+    {x:320, y:300, w:160, h:16},
+    {x:540, y:360, w:160, h:16},
+    {x:60, y:220, w:140, h:16},
+    {x:600, y:220, w:140, h:16},
+    {x:280, y:170, w:240, h:16},
+    {x:160, y:100, w:120, h:16},
+    {x:520, y:100, w:120, h:16},
+  ];
+
+  ptagState = {
+    over: false,
+    timeLeft: 60,
+    tagCooldown: 0,
+    itPlayer: 0, // 0=blue, 1=red
+    blueTags: 0, redTags: 0,
+    blue: {x:150, y:380, vx:0, vy:0, onGround:false, w:28, h:36},
+    red:  {x:600, y:380, vx:0, vy:0, onGround:false, w:28, h:36},
+    keys: {}
+  };
+
+  document.getElementById('ptag-winner').style.display = 'none';
+
+  function onKey(e) {
+    if (activeGame !== 'ptag') return;
+    ptagState.keys[e.code] = e.type === 'keydown';
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('keyup', onKey);
+  ptagState._keyHandler = onKey;
+
+  safeInterval(() => {
+    if (activeGame !== 'ptag' || ptagState.over) return;
+    ptagState.timeLeft--;
+    if (ptagState.timeLeft <= 0) {
+      // fewer tags = winner
+      if (ptagState.blueTags < ptagState.redTags) endPtag('🔵 BLUE WINS!\n(Tagged less)', '#5599ff');
+      else if (ptagState.redTags < ptagState.blueTags) endPtag('🔴 RED WINS!\n(Tagged less)', '#ff5555');
+      else endPtag("🤝 DRAW!", '#ffffff');
+    }
+  }, 1000);
+
+  const GRAV = 0.6, SPEED = 4, JUMP = -13;
+
+  function update() {
+    if (ptagState.over) return;
+    const {blue, red, keys} = ptagState;
+    const players = [blue, red];
+
+    // Blue: WASD
+    if (keys['KeyA']) blue.vx = -SPEED;
+    else if (keys['KeyD']) blue.vx = SPEED;
+    else blue.vx *= 0.8;
+    if (keys['KeyW'] && blue.onGround) { blue.vy = JUMP; blue.onGround = false; }
+
+    // Red: IJKL
+    if (keys['KeyJ']) red.vx = -SPEED;
+    else if (keys['KeyL']) red.vx = SPEED;
+    else red.vx *= 0.8;
+    if (keys['KeyI'] && red.onGround) { red.vy = JUMP; red.onGround = false; }
+
+    players.forEach(p => {
+      p.vy += GRAV;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.onGround = false;
+
+      platforms.forEach(pl => {
+        if (p.x + p.w > pl.x && p.x < pl.x + pl.w &&
+            p.y + p.h > pl.y && p.y + p.h < pl.y + pl.h + 12 && p.vy >= 0) {
+          p.y = pl.y - p.h;
+          p.vy = 0;
+          p.onGround = true;
+        }
+      });
+
+      p.x = Math.max(0, Math.min(W - p.w, p.x));
+      if (p.y > H) { p.y = 0; p.vy = 0; }
+    });
+
+    // Tag logic
+    if (ptagState.tagCooldown > 0) ptagState.tagCooldown--;
+    if (ptagState.tagCooldown === 0) {
+      const dx = (blue.x + blue.w/2) - (red.x + red.w/2);
+      const dy = (blue.y + blue.h/2) - (red.y + red.h/2);
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 40) {
+        if (ptagState.itPlayer === 0) { // blue is IT, tags red
+          ptagState.redTags++;
+          ptagState.itPlayer = 1;
+          // knockback
+          blue.vx = dx > 0 ? 8 : -8; blue.vy = -6;
+          red.vx = dx > 0 ? -8 : 8; red.vy = -6;
+        } else { // red is IT, tags blue
+          ptagState.blueTags++;
+          ptagState.itPlayer = 0;
+          red.vx = dx > 0 ? 8 : -8; red.vy = -6;
+          blue.vx = dx > 0 ? -8 : 8; blue.vy = -6;
+        }
+        ptagState.tagCooldown = 60; // 1 second at 60fps
+      }
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0d0d1f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Platforms
+    platforms.forEach((pl, i) => {
+      ctx.fillStyle = i === 0 ? '#2a2a4a' : '#3a3a6a';
+      ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+      ctx.fillStyle = i === 0 ? '#4a4a8a' : '#6a6aaa';
+      ctx.fillRect(pl.x, pl.y, pl.w, 3);
+    });
+
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(`⏱ ${ptagState.timeLeft}s`, W/2, 30);
+    ctx.fillStyle = '#5599ff';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Blue tagged: ${ptagState.blueTags}`, 20, 30);
+    ctx.fillStyle = '#ff5555';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Red tagged: ${ptagState.redTags}`, W-20, 30);
+
+    // Draw players
+    const {blue, red} = ptagState;
+    const isBlueIT = ptagState.itPlayer === 0;
+    const isRedIT = ptagState.itPlayer === 1;
+
+    // Blue player
+    if (isBlueIT) {
+      ctx.shadowColor = '#00aaff'; ctx.shadowBlur = 20;
+      ctx.strokeStyle = '#00aaff'; ctx.lineWidth = 3;
+      ctx.strokeRect(blue.x - 3, blue.y - 3, blue.w + 6, blue.h + 6);
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#4488ff';
+    ctx.fillRect(blue.x, blue.y, blue.w, blue.h);
+    ctx.fillStyle = '#88bbff';
+    ctx.fillRect(blue.x + 6, blue.y + 6, 16, 12); // face
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    if (isBlueIT) {
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText('IT', blue.x + blue.w/2, blue.y - 8);
+    }
+
+    // Red player
+    if (isRedIT) {
+      ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 20;
+      ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 3;
+      ctx.strokeRect(red.x - 3, red.y - 3, red.w + 6, red.h + 6);
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ff4444';
+    ctx.fillRect(red.x, red.y, red.w, red.h);
+    ctx.fillStyle = '#ff8888';
+    ctx.fillRect(red.x + 6, red.y + 6, 16, 12);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    if (isRedIT) {
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText('IT', red.x + red.w/2, red.y - 8);
+    }
+
+    // Cooldown flash
+    if (ptagState.tagCooldown > 0) {
+      ctx.fillStyle = 'rgba(255,255,0,0.15)';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function gameLoop() {
+    if (activeGame !== 'ptag') return;
+    update();
+    draw();
+    _rafId = requestAnimationFrame(gameLoop);
+  }
+  _rafId = requestAnimationFrame(gameLoop);
+}
+
+function endPtag(msg, color) {
+  ptagState.over = true;
+  if (ptagState._keyHandler) {
+    document.removeEventListener('keydown', ptagState._keyHandler);
+    document.removeEventListener('keyup', ptagState._keyHandler);
+  }
+  const w = document.getElementById('ptag-winner');
+  document.getElementById('ptag-winner-text').textContent = msg;
+  document.getElementById('ptag-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 3: ROCK PAPER SCISSORS
+// ============================================================
+let rpsState = {};
+
+function initRps() {
+  stopAllLoops();
+  rpsState = {
+    greenScore: 0, orangeScore: 0,
+    greenChoice: null, orangeChoice: null,
+    over: false, roundOver: false
+  };
+  document.getElementById('rps-green-score').textContent = '0';
+  document.getElementById('rps-orange-score').textContent = '0';
+  document.getElementById('rps-green-emoji').textContent = '❓';
+  document.getElementById('rps-orange-emoji').textContent = '❓';
+  document.getElementById('rps-green-label').textContent = 'Waiting...';
+  document.getElementById('rps-orange-label').textContent = 'Waiting...';
+  document.getElementById('rps-msg').textContent = '';
+  document.getElementById('rps-round-msg').textContent = '';
+  document.getElementById('rps-winner').style.display = 'none';
+
+  function onKey(e) {
+    if (activeGame !== 'rps' || rpsState.over || rpsState.roundOver) return;
+    const k = e.key.toLowerCase();
+    const map = {a:'rock', s:'paper', d:'scissors', j:'rock', k:'paper', l:'scissors'};
+    const emojis = {rock:'✊', paper:'✋', scissors:'✌️'};
+    if (!map[k]) return;
+    const choice = map[k];
+    if (['a','s','d'].includes(k) && !rpsState.greenChoice) {
+      rpsState.greenChoice = choice;
+      document.getElementById('rps-green-emoji').textContent = '🤔';
+      document.getElementById('rps-green-label').textContent = 'Chosen!';
+    }
+    if (['j','k','l'].includes(k) && !rpsState.orangeChoice) {
+      rpsState.orangeChoice = choice;
+      document.getElementById('rps-orange-emoji').textContent = '🤔';
+      document.getElementById('rps-orange-label').textContent = 'Chosen!';
+    }
+    if (rpsState.greenChoice && rpsState.orangeChoice) {
+      rpsState.roundOver = true;
+      const gc = rpsState.greenChoice, oc = rpsState.orangeChoice;
+      document.getElementById('rps-green-emoji').textContent = emojis[gc];
+      document.getElementById('rps-orange-emoji').textContent = emojis[oc];
+      document.getElementById('rps-green-label').textContent = gc.toUpperCase();
+      document.getElementById('rps-orange-label').textContent = oc.toUpperCase();
+
+      let msg = '';
+      if (gc === oc) {
+        msg = "🤝 DRAW!";
+      } else if ((gc==='rock'&&oc==='scissors')||(gc==='paper'&&oc==='rock')||(gc==='scissors'&&oc==='paper')) {
+        rpsState.greenScore++;
+        msg = "🟢 GREEN WINS THE ROUND!";
+      } else {
+        rpsState.orangeScore++;
+        msg = "🟠 ORANGE WINS THE ROUND!";
+      }
+      document.getElementById('rps-msg').textContent = msg;
+      document.getElementById('rps-green-score').textContent = rpsState.greenScore;
+      document.getElementById('rps-orange-score').textContent = rpsState.orangeScore;
+
+      if (rpsState.greenScore >= 3) {
+        safeTimeout(() => endRps('🟢 GREEN WINS!', '#00cc66'), 1200);
+      } else if (rpsState.orangeScore >= 3) {
+        safeTimeout(() => endRps('🟠 ORANGE WINS!', '#ff8800'), 1200);
+      } else {
+        document.getElementById('rps-round-msg').textContent = 'Next round in 2s...';
+        safeTimeout(() => {
+          rpsState.greenChoice = null;
+          rpsState.orangeChoice = null;
+          rpsState.roundOver = false;
+          document.getElementById('rps-green-emoji').textContent = '❓';
+          document.getElementById('rps-orange-emoji').textContent = '❓';
+          document.getElementById('rps-green-label').textContent = 'Waiting...';
+          document.getElementById('rps-orange-label').textContent = 'Waiting...';
+          document.getElementById('rps-msg').textContent = '';
+          document.getElementById('rps-round-msg').textContent = '';
+        }, 2000);
+      }
+    }
+  }
+  document.addEventListener('keydown', onKey);
+  rpsState._keyHandler = onKey;
+}
+
+function endRps(msg, color) {
+  rpsState.over = true;
+  if (rpsState._keyHandler) document.removeEventListener('keydown', rpsState._keyHandler);
+  const w = document.getElementById('rps-winner');
+  document.getElementById('rps-winner-text').textContent = msg;
+  document.getElementById('rps-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 4: SHAPE REACTION
+// ============================================================
+let shapeState = {};
+
+const SHAPES = ['circle','square','triangle','diamond','star'];
+const SHAPE_COLORS = ['#ff4444','#44ff88','#4488ff','#ffdd00','#ff44ff','#44ffff','#ff8844'];
+
+function drawShape(ctx, shape, color, x, y, size) {
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  if (shape === 'circle') {
+    ctx.arc(x, y, size, 0, Math.PI*2);
+  } else if (shape === 'square') {
+    ctx.rect(x - size, y - size, size*2, size*2);
+  } else if (shape === 'triangle') {
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + size, y + size);
+    ctx.lineTo(x - size, y + size);
+    ctx.closePath();
+  } else if (shape === 'diamond') {
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + size, y);
+    ctx.lineTo(x, y + size);
+    ctx.lineTo(x - size, y);
+    ctx.closePath();
+  } else if (shape === 'star') {
+    for (let i = 0; i < 5; i++) {
+      const a = (i * 4 * Math.PI / 5) - Math.PI/2;
+      const b = (i * 4 * Math.PI / 5 + 2*Math.PI/5) - Math.PI/2;
+      if (i === 0) ctx.moveTo(x + size * Math.cos(a), y + size * Math.sin(a));
+      else ctx.lineTo(x + size * Math.cos(a), y + size * Math.sin(a));
+      ctx.lineTo(x + size*0.4 * Math.cos(b), y + size*0.4 * Math.sin(b));
+    }
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+function initShape() {
+  stopAllLoops();
+  const canvas = document.getElementById('shape-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 480;
+
+  function randShape() { return SHAPES[Math.floor(Math.random()*SHAPES.length)]; }
+  function randColor() { return SHAPE_COLORS[Math.floor(Math.random()*SHAPE_COLORS.length)]; }
+
+  shapeState = {
+    yellowScore: 0, purpleScore: 0,
+    over: false,
+    yellowGoal: {shape: randShape(), color: randColor()},
+    purpleGoal: {shape: randShape(), color: randColor()},
+    yellowCurrent: null, purpleCurrent: null,
+    showTimer: 0, showDuration: 45, // frames
+    flashMsg: {yellow:'', purple:'', timer:0},
+    keys: {}
+  };
+
+  document.getElementById('shape-winner').style.display = 'none';
+
+  function spawnShapes() {
+    shapeState.yellowCurrent = {shape: randShape(), color: randColor()};
+    shapeState.purpleCurrent = {shape: randShape(), color: randColor()};
+    // Sometimes match the goal
+    if (Math.random() < 0.35) shapeState.yellowCurrent = {...shapeState.yellowGoal};
+    if (Math.random() < 0.35) shapeState.purpleCurrent = {...shapeState.purpleGoal};
+    shapeState.showTimer = shapeState.showDuration;
+    shapeState.yellowPressed = false;
+    shapeState.purplePressed = false;
+  }
+
+  function onKey(e) {
+    if (activeGame !== 'shape' || shapeState.over) return;
+    const k = e.code;
+    const yellowKeys = ['KeyW','KeyA','KeyS','KeyD'];
+    const purpleKeys = ['ArrowUp','ArrowLeft','ArrowDown','ArrowRight'];
+    if (yellowKeys.includes(k) && !shapeState.yellowPressed && shapeState.showTimer > 0) {
+      shapeState.yellowPressed = true;
+      const yc = shapeState.yellowCurrent;
+      const yg = shapeState.yellowGoal;
+      if (yc && yc.shape === yg.shape && yc.color === yg.color) {
+        shapeState.yellowScore++;
+        shapeState.flashMsg.yellow = '+1 ✓';
+      } else {
+        shapeState.yellowScore = Math.max(0, shapeState.yellowScore - 1);
+        shapeState.flashMsg.yellow = '-1 ✗';
+      }
+      shapeState.flashMsg.timer = 40;
+      if (shapeState.yellowScore >= 10) endShape('🟡 YELLOW WINS!', '#ffdd00');
+    }
+    if (purpleKeys.includes(k) && !shapeState.purplePressed && shapeState.showTimer > 0) {
+      e.preventDefault();
+      shapeState.purplePressed = true;
+      const pc = shapeState.purpleCurrent;
+      const pg = shapeState.purpleGoal;
+      if (pc && pc.shape === pg.shape && pc.color === pg.color) {
+        shapeState.purpleScore++;
+        shapeState.flashMsg.purple = '+1 ✓';
+      } else {
+        shapeState.purpleScore = Math.max(0, shapeState.purpleScore - 1);
+        shapeState.flashMsg.purple = '-1 ✗';
+      }
+      shapeState.flashMsg.timer = 40;
+      if (shapeState.purpleScore >= 10) endShape('🟣 PURPLE WINS!', '#aa44ff');
+    }
+  }
+  document.addEventListener('keydown', onKey);
+  shapeState._keyHandler = onKey;
+
+  spawnShapes();
+  let frameCount = 0;
+
+  function loop() {
+    if (activeGame !== 'shape') return;
+    ctx.fillStyle = '#0d0d1f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Divider
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+
+    // Yellow side (left)
+    ctx.fillStyle = '#1a1a00';
+    ctx.fillRect(0, 0, W/2, H);
+
+    // Purple side (right)
+    ctx.fillStyle = '#0d001a';
+    ctx.fillRect(W/2, 0, W/2, H);
+
+    // Goal labels
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillText('YELLOW — Goal:', W/4, 30);
+    ctx.fillStyle = '#aa44ff';
+    ctx.fillText('PURPLE — Goal:', 3*W/4, 30);
+
+    // Draw goal shapes
+    const yg = shapeState.yellowGoal;
+    const pg = shapeState.purpleGoal;
+    drawShape(ctx, yg.shape, yg.color, W/4, 75, 28);
+    drawShape(ctx, pg.shape, pg.color, 3*W/4, 75, 28);
+
+    // Goal labels text
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = yg.color;
+    ctx.fillText(yg.shape.toUpperCase(), W/4, 115);
+    ctx.fillStyle = pg.color;
+    ctx.fillText(pg.shape.toUpperCase(), 3*W/4, 115);
+
+    // Scores
+    ctx.font = 'bold 28px system-ui';
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillText(shapeState.yellowScore, W/4, 155);
+    ctx.fillStyle = '#aa44ff';
+    ctx.fillText(shapeState.purpleScore, 3*W/4, 155);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.fillText('First to 10 wins', W/2, 155);
+
+    // Current shapes
+    shapeState.showTimer--;
+    if (shapeState.showTimer <= 0) {
+      frameCount++;
+      if (frameCount % 80 === 0) spawnShapes();
+    }
+
+    if (shapeState.showTimer > 0) {
+      const yc = shapeState.yellowCurrent;
+      const pc = shapeState.purpleCurrent;
+      if (yc) drawShape(ctx, yc.shape, yc.color, W/4, H/2 + 30, 50);
+      if (pc) drawShape(ctx, pc.shape, pc.color, 3*W/4, H/2 + 30, 50);
+      if (yc) { ctx.font = 'bold 14px system-ui'; ctx.fillStyle = yc.color; ctx.textAlign='center'; ctx.fillText(yc.shape.toUpperCase(), W/4, H/2 + 100); }
+      if (pc) { ctx.font = 'bold 14px system-ui'; ctx.fillStyle = pc.color; ctx.textAlign='center'; ctx.fillText(pc.shape.toUpperCase(), 3*W/4, H/2 + 100); }
+    } else {
+      ctx.font = 'bold 20px system-ui';
+      ctx.fillStyle = '#444';
+      ctx.textAlign = 'center';
+      ctx.fillText('...', W/4, H/2 + 30);
+      ctx.fillText('...', 3*W/4, H/2 + 30);
+    }
+
+    // Flash messages
+    if (shapeState.flashMsg.timer > 0) {
+      shapeState.flashMsg.timer--;
+      const alpha = shapeState.flashMsg.timer / 40;
+      ctx.font = 'bold 32px system-ui';
+      ctx.globalAlpha = alpha;
+      const yOk = shapeState.flashMsg.yellow.includes('+');
+      ctx.fillStyle = yOk ? '#00ff88' : '#ff4444';
+      ctx.textAlign = 'center';
+      ctx.fillText(shapeState.flashMsg.yellow, W/4, H - 60);
+      const pOk = shapeState.flashMsg.purple.includes('+');
+      ctx.fillStyle = pOk ? '#00ff88' : '#ff4444';
+      ctx.fillText(shapeState.flashMsg.purple, 3*W/4, H - 60);
+      ctx.globalAlpha = 1;
+    }
+
+    // Keys hint
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press WASD', W/4, H - 20);
+    ctx.fillText('Press Arrow Keys', 3*W/4, H - 20);
+
+    _rafId = requestAnimationFrame(loop);
+  }
+  _rafId = requestAnimationFrame(loop);
+}
+
+function endShape(msg, color) {
+  shapeState.over = true;
+  if (shapeState._keyHandler) document.removeEventListener('keydown', shapeState._keyHandler);
+  const w = document.getElementById('shape-winner');
+  document.getElementById('shape-winner-text').textContent = msg;
+  document.getElementById('shape-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 5: PONG
+// ============================================================
+let pongState = {};
+
+function initPong() {
+  stopAllLoops();
+  const canvas = document.getElementById('pong-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 500;
+  const PW = 12, PH = 80;
+
+  pongState = {
+    lScore: 0, rScore: 0, over: false,
+    lPaddle: {x:20, y:H/2-PH/2, vy:0},
+    rPaddle: {x:W-20-PW, y:H/2-PH/2, vy:0},
+    ball: {x:W/2, y:H/2, vx:0, vy:0},
+    serving: true, serveTimer: 0,
+    keys: {}
+  };
+
+  document.getElementById('pong-winner').style.display = 'none';
+
+  function launchBall() {
+    const angle = (Math.random() * 60 - 30) * Math.PI / 180;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    pongState.ball.x = W/2; pongState.ball.y = H/2;
+    pongState.ball.vx = dir * 6 * Math.cos(angle);
+    pongState.ball.vy = 6 * Math.sin(angle);
+    pongState.serving = false;
+  }
+
+  function onKey(e) {
+    if (activeGame !== 'pong') return;
+    pongState.keys[e.code] = e.type === 'keydown';
+    if (['ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('keyup', onKey);
+  pongState._keyHandler = onKey;
+
+  // Start serve after 1s
+  pongState.serving = true;
+  safeTimeout(launchBall, 1000);
+
+  function update() {
+    if (pongState.over || pongState.serving) return;
+    const {lPaddle, rPaddle, ball, keys} = pongState;
+    const PSPEED = 7;
+
+    if (keys['KeyW']) lPaddle.y -= PSPEED;
+    if (keys['KeyS']) lPaddle.y += PSPEED;
+    if (keys['ArrowUp']) rPaddle.y -= PSPEED;
+    if (keys['ArrowDown']) rPaddle.y += PSPEED;
+
+    lPaddle.y = Math.max(0, Math.min(H - PH, lPaddle.y));
+    rPaddle.y = Math.max(0, Math.min(H - PH, rPaddle.y));
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // Wall bounce
+    if (ball.y <= 6 || ball.y >= H - 6) { ball.vy *= -1; ball.y = ball.y <= 6 ? 6 : H-6; }
+
+    // Paddle collisions
+    const speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+    const newSpeed = Math.min(speed * 1.05, 15);
+
+    if (ball.x - 6 <= lPaddle.x + PW && ball.x + 6 >= lPaddle.x &&
+        ball.y >= lPaddle.y && ball.y <= lPaddle.y + PH && ball.vx < 0) {
+      const rel = (ball.y - (lPaddle.y + PH/2)) / (PH/2);
+      const angle = rel * 60 * Math.PI / 180;
+      ball.vx = newSpeed * Math.cos(angle);
+      ball.vy = newSpeed * Math.sin(angle);
+      ball.x = lPaddle.x + PW + 7;
+    }
+    if (ball.x + 6 >= rPaddle.x && ball.x - 6 <= rPaddle.x + PW &&
+        ball.y >= rPaddle.y && ball.y <= rPaddle.y + PH && ball.vx > 0) {
+      const rel = (ball.y - (rPaddle.y + PH/2)) / (PH/2);
+      const angle = rel * 60 * Math.PI / 180;
+      ball.vx = -newSpeed * Math.cos(angle);
+      ball.vy = newSpeed * Math.sin(angle);
+      ball.x = rPaddle.x - 7;
+    }
+
+    // Score
+    if (ball.x < 0) {
+      pongState.rScore++;
+      if (pongState.rScore >= 7) { endPong('RIGHT WINS! →', '#ff8800'); return; }
+      pongState.serving = true;
+      safeTimeout(launchBall, 1000);
+    }
+    if (ball.x > W) {
+      pongState.lScore++;
+      if (pongState.lScore >= 7) { endPong('← LEFT WINS!', '#00cccc'); return; }
+      pongState.serving = true;
+      safeTimeout(launchBall, 1000);
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Center line
+    ctx.setLineDash([10, 10]);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Scores
+    ctx.font = 'bold 48px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,200,200,0.5)';
+    ctx.fillText(pongState.lScore, W/4, 70);
+    ctx.fillStyle = 'rgba(255,136,0,0.5)';
+    ctx.fillText(pongState.rScore, 3*W/4, 70);
+
+    // Paddles
+    ctx.fillStyle = '#00cccc';
+    ctx.shadowColor = '#00cccc'; ctx.shadowBlur = 12;
+    ctx.fillRect(pongState.lPaddle.x, pongState.lPaddle.y, PW, PH);
+    ctx.fillStyle = '#ff8800';
+    ctx.shadowColor = '#ff8800';
+    ctx.fillRect(pongState.rPaddle.x, pongState.rPaddle.y, PW, PH);
+    ctx.shadowBlur = 0;
+
+    // Ball
+    if (!pongState.serving) {
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = '#fff'; ctx.shadowBlur = 16;
+      ctx.beginPath();
+      ctx.arc(pongState.ball.x, pongState.ball.y, 8, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.font = 'bold 18px system-ui';
+      ctx.fillStyle = '#888';
+      ctx.textAlign = 'center';
+      ctx.fillText('Serving...', W/2, H/2);
+    }
+  }
+
+  function gameLoop() {
+    if (activeGame !== 'pong') return;
+    update();
+    draw();
+    _rafId = requestAnimationFrame(gameLoop);
+  }
+  _rafId = requestAnimationFrame(gameLoop);
+}
+
+function endPong(msg, color) {
+  pongState.over = true;
+  if (pongState._keyHandler) {
+    document.removeEventListener('keydown', pongState._keyHandler);
+    document.removeEventListener('keyup', pongState._keyHandler);
+  }
+  const w = document.getElementById('pong-winner');
+  document.getElementById('pong-winner-text').textContent = msg;
+  document.getElementById('pong-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 6: BOMB PASS
+// ============================================================
+let bombState = {};
+
+function initBomb() {
+  stopAllLoops();
+  bombState = {
+    redScore: 0, blueScore: 0,
+    holder: Math.random() < 0.5 ? 'red' : 'blue',
+    fuseTime: 3000 + Math.random() * 5000,
+    fuseStart: Date.now(),
+    over: false, roundOver: false, round: 1
+  };
+  document.getElementById('bomb-red-score').textContent = '0';
+  document.getElementById('bomb-blue-score').textContent = '0';
+  document.getElementById('bomb-winner').style.display = 'none';
+  updateBombUI();
+
+  function onKey(e) {
+    if (activeGame !== 'bomb' || bombState.over || bombState.roundOver) return;
+    if (e.code === 'Space' && bombState.holder === 'red') {
+      e.preventDefault();
+      bombState.holder = 'blue';
+      updateBombUI();
+    }
+    if (e.code === 'Enter' && bombState.holder === 'blue') {
+      e.preventDefault();
+      bombState.holder = 'red';
+      updateBombUI();
+    }
+  }
+  document.addEventListener('keydown', onKey);
+  bombState._keyHandler = onKey;
+
+  safeInterval(() => {
+    if (activeGame !== 'bomb' || bombState.over || bombState.roundOver) return;
+    const elapsed = Date.now() - bombState.fuseStart;
+    const remaining = Math.max(0, bombState.fuseTime - elapsed);
+    const pct = remaining / bombState.fuseTime * 100;
+    document.getElementById('bomb-fuse').textContent = (remaining / 1000).toFixed(1) + 's';
+    document.getElementById('bomb-fuse-bar').style.width = pct + '%';
+    document.getElementById('bomb-fuse-bar').style.background =
+      pct > 60 ? 'linear-gradient(90deg,#ff4400,#ffaa00)' :
+      pct > 30 ? 'linear-gradient(90deg,#ff2200,#ff6600)' :
+                 'linear-gradient(90deg,#ff0000,#ff3300)';
+
+    if (remaining <= 0) {
+      bombState.roundOver = true;
+      const loser = bombState.holder;
+      document.getElementById('bomb-emoji').textContent = '💥';
+      document.getElementById('bomb-msg').textContent = `💥 ${loser.toUpperCase()} was holding it! ${loser === 'red' ? 'Blue' : 'Red'} scores!`;
+      if (loser === 'red') bombState.blueScore++;
+      else bombState.redScore++;
+      document.getElementById('bomb-red-score').textContent = bombState.redScore;
+      document.getElementById('bomb-blue-score').textContent = bombState.blueScore;
+
+      if (bombState.redScore >= 3) {
+        safeTimeout(() => endBomb('🔴 RED WINS!', '#ff5555'), 1500);
+      } else if (bombState.blueScore >= 3) {
+        safeTimeout(() => endBomb('🔵 BLUE WINS!', '#5599ff'), 1500);
+      } else {
+        safeTimeout(() => {
+          bombState.holder = Math.random() < 0.5 ? 'red' : 'blue';
+          bombState.fuseTime = 3000 + Math.random() * 5000;
+          bombState.fuseStart = Date.now();
+          bombState.roundOver = false;
+          bombState.round++;
+          document.getElementById('bomb-emoji').textContent = '💣';
+          document.getElementById('bomb-msg').textContent = '';
+          updateBombUI();
+        }, 2000);
+      }
+    }
+  }, 100);
+}
+
+function updateBombUI() {
+  const h = bombState.holder;
+  document.getElementById('bomb-holder-label').innerHTML =
+    `<span style="color:${h==='red'?'#ff5555':'#5599ff'}">${h.toUpperCase()}</span> is holding the bomb!`;
+  document.getElementById('bomb-holder-label').style.color = h === 'red' ? '#ff5555' : '#5599ff';
+}
+
+function endBomb(msg, color) {
+  bombState.over = true;
+  if (bombState._keyHandler) document.removeEventListener('keydown', bombState._keyHandler);
+  const w = document.getElementById('bomb-winner');
+  document.getElementById('bomb-winner-text').textContent = msg;
+  document.getElementById('bomb-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 7: PAPER.IO STYLE (Territory)
+// ============================================================
+let paperioState = {};
+
+function initPaperio() {
+  stopAllLoops();
+  const canvas = document.getElementById('paperio-canvas');
+  const ctx = canvas.getContext('2d');
+  const COLS = 32, ROWS = 24, CW = 20, CH = 20;
+  const W = COLS * CW, H = ROWS * CH;
+
+  // Grid: 0=empty, 1=red territory, 2=blue territory, 3=red trail, 4=blue trail
+  const grid = Array.from({length: ROWS}, () => new Array(COLS).fill(0));
+
+  // Seed starting territories
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) grid[r][c] = 1;
+  for (let r = ROWS-4; r < ROWS; r++) for (let c = COLS-4; c < COLS; c++) grid[r][c] = 2;
+
+  paperioState = {
+    over: false, timeLeft: 60,
+    red: {col: 2, row: 2, dir: {dc:1,dr:0}, nextDir: {dc:1,dr:0}, trail: [], alive: true},
+    blue: {col: COLS-3, row: ROWS-3, dir: {dc:-1,dr:0}, nextDir: {dc:-1,dr:0}, trail: [], alive: true},
+    grid, keys: {}
+  };
+
+  document.getElementById('paperio-winner').style.display = 'none';
+
+  function onKey(e) {
+    if (activeGame !== 'paperio') return;
+    const {red, blue} = paperioState;
+    if (e.code === 'ArrowUp' && red.dir.dr !== 1) red.nextDir = {dc:0,dr:-1};
+    if (e.code === 'ArrowDown' && red.dir.dr !== -1) red.nextDir = {dc:0,dr:1};
+    if (e.code === 'ArrowLeft' && red.dir.dc !== 1) red.nextDir = {dc:-1,dr:0};
+    if (e.code === 'ArrowRight' && red.dir.dc !== -1) red.nextDir = {dc:1,dr:0};
+    if (e.code === 'KeyW' && blue.dir.dr !== 1) blue.nextDir = {dc:0,dr:-1};
+    if (e.code === 'KeyS' && blue.dir.dr !== -1) blue.nextDir = {dc:0,dr:1};
+    if (e.code === 'KeyA' && blue.dir.dc !== 1) blue.nextDir = {dc:-1,dr:0};
+    if (e.code === 'KeyD' && blue.dir.dc !== -1) blue.nextDir = {dc:1,dr:0};
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  paperioState._keyHandler = onKey;
+
+  safeInterval(() => {
+    if (activeGame !== 'paperio' || paperioState.over) return;
+    paperioState.timeLeft--;
+    if (paperioState.timeLeft <= 0) {
+      let redCount = 0, blueCount = 0;
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (paperioState.grid[r][c] === 1) redCount++;
+        if (paperioState.grid[r][c] === 2) blueCount++;
+      }
+      if (redCount > blueCount) endPaperio('🔴 RED WINS!\n(' + redCount + ' vs ' + blueCount + ')', '#ff5555');
+      else if (blueCount > redCount) endPaperio('🔵 BLUE WINS!\n(' + blueCount + ' vs ' + redCount + ')', '#5599ff');
+      else endPaperio("🤝 DRAW!", '#ffffff');
+    }
+  }, 1000);
+
+  function floodFill(grid, startR, startC, targetVal, fillVal, rows, cols) {
+    const stack = [[startR, startC]];
+    const visited = new Set();
+    const cells = [];
+    while (stack.length) {
+      const [r, c] = stack.pop();
+      const key = r * cols + c;
+      if (visited.has(key)) continue;
+      if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+      if (grid[r][c] !== targetVal) continue;
+      visited.add(key);
+      cells.push([r, c]);
+      stack.push([r+1,c],[r-1,c],[r,c+1],[r,c-1]);
+    }
+    return cells;
+  }
+
+  function claimTerritory(player, playerVal, trailVal, territoryVal) {
+    // Convert trail to territory
+    player.trail.forEach(([r,c]) => { if (paperioState.grid[r][c] === trailVal) paperioState.grid[r][c] = territoryVal; });
+    // Flood fill enclosed empty cells
+    const tempGrid = paperioState.grid.map(row => [...row]);
+    // Mark all cells reachable from border as "outside"
+    const outside = new Set();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if ((r === 0 || r === ROWS-1 || c === 0 || c === COLS-1) && tempGrid[r][c] === 0) {
+        const cells = floodFill(tempGrid, r, c, 0, -1, ROWS, COLS);
+        cells.forEach(([rr,cc]) => outside.add(rr * COLS + cc));
+      }
+    }
+    // Fill enclosed empty cells
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (tempGrid[r][c] === 0 && !outside.has(r * COLS + c)) {
+        paperioState.grid[r][c] = territoryVal;
+      }
+    }
+    player.trail = [];
+  }
+
+  function movePlayer(player, playerVal, trailVal, opponentTrailVal, opponentVal) {
+    if (!player.alive) return;
+    player.dir = player.nextDir;
+    const newCol = player.col + player.dir.dc;
+    const newRow = player.row + player.dir.dr;
+
+    if (newCol < 0 || newCol >= COLS || newRow < 0 || newRow >= ROWS) {
+      // Hit wall — respawn
+      respawnPlayer(player, playerVal, trailVal);
+      return;
+    }
+
+    const cell = paperioState.grid[newRow][newCol];
+
+    // Hit opponent's trail = opponent dies
+    if (cell === opponentTrailVal) {
+      // Clear opponent trail
+      const opp = playerVal === 1 ? paperioState.blue : paperioState.red;
+      opp.trail.forEach(([r,c]) => { if (paperioState.grid[r][c] === opponentTrailVal) paperioState.grid[r][c] = 0; });
+      opp.trail = [];
+    }
+
+    // Move
+    const prevCell = paperioState.grid[player.row][player.col];
+    if (prevCell !== playerVal) {
+      paperioState.grid[player.row][player.col] = trailVal;
+      player.trail.push([player.row, player.col]);
+    }
+
+    player.col = newCol;
+    player.row = newRow;
+
+    // Returned to own territory
+    if (paperioState.grid[newRow][newCol] === playerVal && player.trail.length > 0) {
+      claimTerritory(player, playerVal, trailVal, playerVal);
+    }
+  }
+
+  function respawnPlayer(player, playerVal, trailVal) {
+    player.trail.forEach(([r,c]) => { if (paperioState.grid[r][c] === trailVal) paperioState.grid[r][c] = 0; });
+    player.trail = [];
+    // Find a safe spot in own territory
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (paperioState.grid[r][c] === playerVal) { player.col = c; player.row = r; return; }
+    }
+  }
+
+  safeInterval(() => {
+    if (activeGame !== 'paperio' || paperioState.over) return;
+    movePlayer(paperioState.red, 1, 3, 4, 2);
+    movePlayer(paperioState.blue, 2, 4, 3, 1);
+  }, 150);
+
+  function draw() {
+    if (activeGame !== 'paperio') return;
+    ctx.fillStyle = '#0d0d1f';
+    ctx.fillRect(0, 0, W, H);
+
+    const colors = ['#1a1a2e','#cc2222','#2244cc','rgba(255,80,80,0.5)','rgba(80,120,255,0.5)'];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const v = paperioState.grid[r][c];
+      if (v === 0) continue;
+      ctx.fillStyle = colors[v];
+      ctx.fillRect(c*CW, r*CH, CW, CH);
+    }
+
+    // Grid lines (subtle)
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 0.5;
+    for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(0,r*CH); ctx.lineTo(W,r*CH); ctx.stroke(); }
+    for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(c*CW,0); ctx.lineTo(c*CW,H); ctx.stroke(); }
+
+    // Players
+    const {red, blue} = paperioState;
+    ctx.fillStyle = '#ff4444';
+    ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 12;
+    ctx.fillRect(red.col*CW+2, red.row*CH+2, CW-4, CH-4);
+    ctx.fillStyle = '#4488ff';
+    ctx.shadowColor = '#4488ff';
+    ctx.fillRect(blue.col*CW+2, blue.row*CH+2, CW-4, CH-4);
+    ctx.shadowBlur = 0;
+
+    // HUD
+    let redCount = 0, blueCount = 0;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (paperioState.grid[r][c] === 1) redCount++;
+      if (paperioState.grid[r][c] === 2) blueCount++;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, H-28, W, 28);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#ff5555';
+    ctx.textAlign = 'left';
+    ctx.fillText('🔴 Red: ' + redCount, 10, H-10);
+    ctx.fillStyle = '#5599ff';
+    ctx.textAlign = 'right';
+    ctx.fillText('Blue: ' + blueCount + ' 🔵', W-10, H-10);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('⏱ ' + paperioState.timeLeft + 's', W/2, H-10);
+
+    _rafId = requestAnimationFrame(draw);
+  }
+  _rafId = requestAnimationFrame(draw);
+}
+
+function endPaperio(msg, color) {
+  paperioState.over = true;
+  if (paperioState._keyHandler) document.removeEventListener('keydown', paperioState._keyHandler);
+  const w = document.getElementById('paperio-winner');
+  document.getElementById('paperio-winner-text').textContent = msg;
+  document.getElementById('paperio-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 8: SUMO
+// ============================================================
+let sumoState = {};
+
+function initSumo() {
+  stopAllLoops();
+  const canvas = document.getElementById('sumo-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 700, H = 500;
+  const CX = W/2, CY = H/2, RADIUS = 180;
+
+  sumoState = {
+    redScore: 0, blueScore: 0, over: false,
+    red:  {x: CX-80, y: CY, vx:0, vy:0, r:22},
+    blue: {x: CX+80, y: CY, vx:0, vy:0, r:22},
+    keys: {}, roundOver: false
+  };
+
+  document.getElementById('sumo-winner').style.display = 'none';
+
+  function onKey(e) {
+    if (activeGame !== 'sumo') return;
+    sumoState.keys[e.code] = e.type === 'keydown';
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('keyup', onKey);
+  sumoState._keyHandler = onKey;
+
+  function resetPositions() {
+    sumoState.red.x = CX-80; sumoState.red.y = CY; sumoState.red.vx = 0; sumoState.red.vy = 0;
+    sumoState.blue.x = CX+80; sumoState.blue.y = CY; sumoState.blue.vx = 0; sumoState.blue.vy = 0;
+    sumoState.roundOver = false;
+  }
+
+  function update() {
+    if (sumoState.over || sumoState.roundOver) return;
+    const {red, blue, keys} = sumoState;
+    const ACCEL = 0.5, FRICTION = 0.88, MAX_SPEED = 5;
+
+    if (keys['KeyW']) red.vy -= ACCEL;
+    if (keys['KeyS']) red.vy += ACCEL;
+    if (keys['KeyA']) red.vx -= ACCEL;
+    if (keys['KeyD']) red.vx += ACCEL;
+    if (keys['KeyI']) blue.vy -= ACCEL;
+    if (keys['KeyK']) blue.vy += ACCEL;
+    if (keys['KeyJ']) blue.vx -= ACCEL;
+    if (keys['KeyL']) blue.vx += ACCEL;
+
+    [red, blue].forEach(p => {
+      p.vx *= FRICTION; p.vy *= FRICTION;
+      const spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+      if (spd > MAX_SPEED) { p.vx = p.vx/spd*MAX_SPEED; p.vy = p.vy/spd*MAX_SPEED; }
+      p.x += p.vx; p.y += p.vy;
+    });
+
+    // Player collision
+    const dx = blue.x - red.x, dy = blue.y - red.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const minDist = red.r + blue.r;
+    if (dist < minDist && dist > 0) {
+      const nx = dx/dist, ny = dy/dist;
+      const relVx = blue.vx - red.vx, relVy = blue.vy - red.vy;
+      const relV = relVx*nx + relVy*ny;
+      if (relV < 0) {
+        const impulse = -relV * 1.4;
+        red.vx -= impulse * nx; red.vy -= impulse * ny;
+        blue.vx += impulse * nx; blue.vy += impulse * ny;
+      }
+      const overlap = minDist - dist;
+      red.x -= nx * overlap/2; red.y -= ny * overlap/2;
+      blue.x += nx * overlap/2; blue.y += ny * overlap/2;
+    }
+
+    // Check fall off
+    const redDist = Math.sqrt((red.x-CX)**2 + (red.y-CY)**2);
+    const blueDist = Math.sqrt((blue.x-CX)**2 + (blue.y-CY)**2);
+
+    if (redDist > RADIUS - red.r) {
+      sumoState.blueScore++;
+      sumoState.roundOver = true;
+      if (sumoState.blueScore >= 3) { safeTimeout(() => endSumo('🔵 BLUE WINS!', '#5599ff'), 1000); return; }
+      safeTimeout(resetPositions, 1500);
+    }
+    if (blueDist > RADIUS - blue.r) {
+      sumoState.redScore++;
+      sumoState.roundOver = true;
+      if (sumoState.redScore >= 3) { safeTimeout(() => endSumo('🔴 RED WINS!', '#ff5555'), 1000); return; }
+      safeTimeout(resetPositions, 1500);
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    // Arena
+    ctx.beginPath();
+    ctx.arc(CX, CY, RADIUS + 20, 0, Math.PI*2);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(CX, CY, RADIUS, 0, Math.PI*2);
+    ctx.fillStyle = '#2a2a3a';
+    ctx.fill();
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(CX, CY-RADIUS); ctx.lineTo(CX, CY+RADIUS); ctx.stroke();
+
+    // Scores
+    ctx.font = 'bold 22px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff5555';
+    ctx.fillText('🔴 ' + sumoState.redScore, CX - 120, 40);
+    ctx.fillStyle = '#5599ff';
+    ctx.fillText(sumoState.blueScore + ' 🔵', CX + 120, 40);
+    ctx.fillStyle = '#888';
+    ctx.font = '14px system-ui';
+    ctx.fillText('First to 3', CX, 40);
+
+    // Players
+    const {red, blue} = sumoState;
+    ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 16;
+    ctx.fillStyle = '#ff4444';
+    ctx.beginPath(); ctx.arc(red.x, red.y, red.r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowColor = '#4488ff';
+    ctx.fillStyle = '#4488ff';
+    ctx.beginPath(); ctx.arc(blue.x, blue.y, blue.r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Labels
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('R', red.x, red.y + 4);
+    ctx.fillText('B', blue.x, blue.y + 4);
+
+    if (sumoState.roundOver) {
+      ctx.fillStyle = 'rgba(255,255,0,0.15)';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function gameLoop() {
+    if (activeGame !== 'sumo') return;
+    update();
+    draw();
+    _rafId = requestAnimationFrame(gameLoop);
+  }
+  _rafId = requestAnimationFrame(gameLoop);
+}
+
+function endSumo(msg, color) {
+  sumoState.over = true;
+  if (sumoState._keyHandler) {
+    document.removeEventListener('keydown', sumoState._keyHandler);
+    document.removeEventListener('keyup', sumoState._keyHandler);
+  }
+  const w = document.getElementById('sumo-winner');
+  document.getElementById('sumo-winner-text').textContent = msg;
+  document.getElementById('sumo-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 9: ACCURACY WHEEL
+// ============================================================
+let wheelState = {};
+
+function initWheel() {
+  stopAllLoops();
+  const canvas = document.getElementById('wheel-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 700, H = 420;
+
+  wheelState = {
+    over: false,
+    redScore: 0, blueScore: 0,
+    redThrows: 0, blueThrows: 0,
+    maxThrows: 5,
+    needleAngle: 0,
+    needleSpeed: 0.08, // radians per frame — fast
+    redFlash: 0, blueFlash: 0,
+    redLastScore: 0, blueLastScore: 0,
+    turn: 'red', // alternate turns
+    waitingForThrow: true
+  };
+
+  document.getElementById('wheel-winner').style.display = 'none';
+
+  function scoreFromAngle(angle) {
+    // Normalize to 0-2PI
+    const a = ((angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    // Zones from center: bullseye < 0.15, good < 0.35, ok < 0.6, miss rest
+    // Map angle to distance from "top" (0 = top)
+    const fromTop = Math.abs(a - Math.PI/2) / (Math.PI/2);
+    // Use sine wave to create zones
+    const zone = Math.abs(Math.sin(a * 3));
+    if (zone > 0.9) return {score: 50, label: 'BULLSEYE!', color: '#00ff88'};
+    if (zone > 0.7) return {score: 25, label: 'GREAT!', color: '#ffdd00'};
+    if (zone > 0.45) return {score: 10, label: 'GOOD', color: '#ff8800'};
+    if (zone > 0.2) return {score: 5, label: 'OK', color: '#ff4444'};
+    return {score: 1, label: 'MISS', color: '#555'};
+  }
+
+  function onKey(e) {
+    if (activeGame !== 'wheel' || wheelState.over || !wheelState.waitingForThrow) return;
+    const isRed = e.code === 'Space' && wheelState.turn === 'red';
+    const isBlue = e.code === 'Enter' && wheelState.turn === 'blue';
+    if (!isRed && !isBlue) return;
+    if (e.code === 'Space') e.preventDefault();
+
+    wheelState.waitingForThrow = false;
+    const result = scoreFromAngle(wheelState.needleAngle);
+
+    if (isRed) {
+      wheelState.redScore += result.score;
+      wheelState.redThrows++;
+      wheelState.redFlash = 80;
+      wheelState.redLastScore = result.score;
+      wheelState.redLastLabel = result.label;
+      wheelState.redLastColor = result.color;
+    } else {
+      wheelState.blueScore += result.score;
+      wheelState.blueThrows++;
+      wheelState.blueFlash = 80;
+      wheelState.blueLastScore = result.score;
+      wheelState.blueLastLabel = result.label;
+      wheelState.blueLastColor = result.color;
+    }
+
+    // Check if game over
+    if (wheelState.redThrows >= wheelState.maxThrows && wheelState.blueThrows >= wheelState.maxThrows) {
+      safeTimeout(() => {
+        if (wheelState.redScore > wheelState.blueScore) endWheel('🔴 RED WINS!\n' + wheelState.redScore + ' vs ' + wheelState.blueScore, '#ff5555');
+        else if (wheelState.blueScore > wheelState.redScore) endWheel('🔵 BLUE WINS!\n' + wheelState.blueScore + ' vs ' + wheelState.redScore, '#5599ff');
+        else endWheel('🤝 DRAW!\n' + wheelState.redScore + ' each', '#ffffff');
+      }, 1500);
+      return;
+    }
+
+    // Switch turn
+    safeTimeout(() => {
+      if (isRed && wheelState.blueThrows < wheelState.maxThrows) wheelState.turn = 'blue';
+      else if (isBlue && wheelState.redThrows < wheelState.maxThrows) wheelState.turn = 'red';
+      wheelState.waitingForThrow = true;
+    }, 800);
+  }
+  document.addEventListener('keydown', onKey);
+  wheelState._keyHandler = onKey;
+
+  function draw() {
+    if (activeGame !== 'wheel') return;
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
+
+    wheelState.needleAngle += wheelState.needleSpeed;
+
+    const CX = W/2, CY = H/2 + 20, R = 140;
+
+    // Draw wheel zones
+    const zones = [
+      {r: R, color: '#1a1a2e'},
+      {r: R*0.85, color: '#cc2200'},
+      {r: R*0.65, color: '#ff8800'},
+      {r: R*0.45, color: '#ffdd00'},
+      {r: R*0.25, color: '#00ff88'},
+    ];
+    zones.forEach(z => {
+      ctx.beginPath();
+      ctx.arc(CX, CY, z.r, 0, Math.PI*2);
+      ctx.fillStyle = z.color;
+      ctx.fill();
+    });
+
+    // Zone labels
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('MISS', CX, CY - R*0.92);
+    ctx.fillText('OK', CX, CY - R*0.75);
+    ctx.fillText('GOOD', CX, CY - R*0.55);
+    ctx.fillText('GREAT', CX, CY - R*0.35);
+    ctx.fillText('BULL', CX, CY - R*0.12);
+
+    // Spinning needle
+    const nx = CX + R * Math.cos(wheelState.needleAngle - Math.PI/2);
+    const ny = CY + R * Math.sin(wheelState.needleAngle - Math.PI/2);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(nx, ny); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(CX, CY, 6, 0, Math.PI*2); ctx.fill();
+
+    // Scores
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillStyle = '#ff5555';
+    ctx.textAlign = 'left';
+    ctx.fillText('🔴 RED: ' + wheelState.redScore + ' (' + wheelState.redThrows + '/' + wheelState.maxThrows + ')', 20, 30);
+    ctx.fillStyle = '#5599ff';
+    ctx.textAlign = 'right';
+    ctx.fillText('BLUE: ' + wheelState.blueScore + ' (' + wheelState.blueThrows + '/' + wheelState.maxThrows + ') 🔵', W-20, 30);
+
+    // Turn indicator
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'center';
+    const turnColor = wheelState.turn === 'red' ? '#ff5555' : '#5599ff';
+    ctx.fillStyle = turnColor;
+    ctx.fillText(wheelState.turn.toUpperCase() + "'s turn — press " + (wheelState.turn === 'red' ? 'Space' : 'Enter'), W/2, H - 20);
+
+    // Flash result
+    if (wheelState.redFlash > 0) {
+      wheelState.redFlash--;
+      ctx.globalAlpha = wheelState.redFlash / 80;
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillStyle = wheelState.redLastColor || '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText(wheelState.redLastLabel + ' +' + wheelState.redLastScore, 20, H/2 - 20);
+      ctx.globalAlpha = 1;
+    }
+    if (wheelState.blueFlash > 0) {
+      wheelState.blueFlash--;
+      ctx.globalAlpha = wheelState.blueFlash / 80;
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillStyle = wheelState.blueLastColor || '#fff';
+      ctx.textAlign = 'right';
+      ctx.fillText(wheelState.blueLastLabel + ' +' + wheelState.blueLastScore, W-20, H/2 - 20);
+      ctx.globalAlpha = 1;
+    }
+
+    _rafId = requestAnimationFrame(draw);
+  }
+  _rafId = requestAnimationFrame(draw);
+}
+
+function endWheel(msg, color) {
+  wheelState.over = true;
+  if (wheelState._keyHandler) document.removeEventListener('keydown', wheelState._keyHandler);
+  const w = document.getElementById('wheel-winner');
+  document.getElementById('wheel-winner-text').textContent = msg;
+  document.getElementById('wheel-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 10: TANKS
+// ============================================================
+let tanksState = {};
+
+function initTanks() {
+  stopAllLoops();
+  const canvas = document.getElementById('tanks-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 500;
+
+  const walls = [
+    {x:150, y:100, w:20, h:120},
+    {x:350, y:60, w:100, h:20},
+    {x:350, y:420, w:100, h:20},
+    {x:630, y:100, w:20, h:120},
+    {x:150, y:280, w:20, h:120},
+    {x:630, y:280, w:20, h:120},
+    {x:280, y:200, w:20, h:100},
+    {x:500, y:200, w:20, h:100},
+    {x:350, y:220, w:100, h:20},
+  ];
+
+  tanksState = {
+    over: false,
+    redScore: 0, blueScore: 0,
+    red:  {x:80, y:80, angle:0, vx:0, vy:0},
+    blue: {x:680, y:380, angle:Math.PI, vx:0, vy:0},
+    bullets: [],
+    keys: {},
+    redCooldown: 0, blueCooldown: 0
+  };
+
+  document.getElementById('tanks-winner').style.display = 'none';
+
+  function onKey(e) {
+    if (activeGame !== 'tanks') return;
+    tanksState.keys[e.code] = e.type === 'keydown';
+    if (['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('keyup', onKey);
+  tanksState._keyHandler = onKey;
+
+  function rectCollide(bx, by, walls) {
+    return walls.some(w => bx > w.x && bx < w.x+w.w && by > w.y && by < w.y+w.h);
+  }
+
+  function update() {
+    if (tanksState.over) return;
+    const {red, blue, keys, bullets} = tanksState;
+    const SPEED = 2.5, ROT = 0.05;
+
+    // Red: WASD
+    if (keys['KeyW']) { red.x += Math.cos(red.angle)*SPEED; red.y += Math.sin(red.angle)*SPEED; }
+    if (keys['KeyS']) { red.x -= Math.cos(red.angle)*SPEED; red.y -= Math.sin(red.angle)*SPEED; }
+    if (keys['KeyA']) red.angle -= ROT;
+    if (keys['KeyD']) red.angle += ROT;
+    // Blue: IJKL
+    if (keys['KeyI']) { blue.x += Math.cos(blue.angle)*SPEED; blue.y += Math.sin(blue.angle)*SPEED; }
+    if (keys['KeyK']) { blue.x -= Math.cos(blue.angle)*SPEED; blue.y -= Math.sin(blue.angle)*SPEED; }
+    if (keys['KeyJ']) blue.angle -= ROT;
+    if (keys['KeyL']) blue.angle += ROT;
+
+    // Clamp to arena
+    red.x = Math.max(16, Math.min(W-16, red.x));
+    red.y = Math.max(16, Math.min(H-16, red.y));
+    blue.x = Math.max(16, Math.min(W-16, blue.x));
+    blue.y = Math.max(16, Math.min(H-16, blue.y));
+
+    // Wall collision for tanks
+    walls.forEach(w => {
+      if (red.x+14 > w.x && red.x-14 < w.x+w.w && red.y+14 > w.y && red.y-14 < w.y+w.h) {
+        red.x -= Math.cos(red.angle)*SPEED*2; red.y -= Math.sin(red.angle)*SPEED*2;
+      }
+      if (blue.x+14 > w.x && blue.x-14 < w.x+w.w && blue.y+14 > w.y && blue.y-14 < w.y+w.h) {
+        blue.x -= Math.cos(blue.angle)*SPEED*2; blue.y -= Math.sin(blue.angle)*SPEED*2;
+      }
+    });
+
+    // Shoot
+    if (tanksState.redCooldown > 0) tanksState.redCooldown--;
+    if (tanksState.blueCooldown > 0) tanksState.blueCooldown--;
+
+    if (keys['Space'] && tanksState.redCooldown === 0) {
+      bullets.push({x: red.x + Math.cos(red.angle)*18, y: red.y + Math.sin(red.angle)*18,
+        vx: Math.cos(red.angle)*8, vy: Math.sin(red.angle)*8, owner:'red', bounces:0});
+      tanksState.redCooldown = 30;
+    }
+    if (keys['Enter'] && tanksState.blueCooldown === 0) {
+      bullets.push({x: blue.x + Math.cos(blue.angle)*18, y: blue.y + Math.sin(blue.angle)*18,
+        vx: Math.cos(blue.angle)*8, vy: Math.sin(blue.angle)*8, owner:'blue', bounces:0});
+      tanksState.blueCooldown = 30;
+    }
+
+    // Update bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.vx; b.y += b.vy;
+
+      // Wall bounce
+      if (b.x < 4 || b.x > W-4) { b.vx *= -1; b.bounces++; }
+      if (b.y < 4 || b.y > H-4) { b.vy *= -1; b.bounces++; }
+
+      walls.forEach(w => {
+        if (b.x > w.x && b.x < w.x+w.w && b.y > w.y && b.y < w.y+w.h) {
+          // Determine which side
+          const fromLeft = Math.abs(b.x - w.x);
+          const fromRight = Math.abs(b.x - (w.x+w.w));
+          const fromTop = Math.abs(b.y - w.y);
+          const fromBottom = Math.abs(b.y - (w.y+w.h));
+          const minD = Math.min(fromLeft, fromRight, fromTop, fromBottom);
+          if (minD === fromLeft || minD === fromRight) b.vx *= -1;
+          else b.vy *= -1;
+          b.bounces++;
+        }
+      });
+
+      if (b.bounces > 2) { bullets.splice(i, 1); continue; }
+
+      // Hit detection
+      const hitRed = b.owner === 'blue' && Math.hypot(b.x-red.x, b.y-red.y) < 18;
+      const hitBlue = b.owner === 'red' && Math.hypot(b.x-blue.x, b.y-blue.y) < 18;
+      if (hitRed) {
+        tanksState.blueScore++;
+        bullets.splice(i, 1);
+        if (tanksState.blueScore >= 5) endTanks('🔵 BLUE WINS!', '#5599ff');
+        continue;
+      }
+      if (hitBlue) {
+        tanksState.redScore++;
+        bullets.splice(i, 1);
+        if (tanksState.redScore >= 5) endTanks('🔴 RED WINS!', '#ff5555');
+        continue;
+      }
+    }
+  }
+
+  function drawTank(x, y, angle, color, glowColor) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = glowColor; ctx.shadowBlur = 12;
+    // Body
+    ctx.fillStyle = color;
+    ctx.fillRect(-14, -10, 28, 20);
+    // Barrel
+    ctx.fillStyle = color;
+    ctx.fillRect(10, -3, 16, 6);
+    // Turret
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0d1a0d';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    // Walls
+    walls.forEach(w => {
+      ctx.fillStyle = '#3a4a3a';
+      ctx.fillRect(w.x, w.y, w.w, w.h);
+      ctx.strokeStyle = '#5a6a5a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(w.x, w.y, w.w, w.h);
+    });
+
+    // Tanks
+    drawTank(tanksState.red.x, tanksState.red.y, tanksState.red.angle, '#cc3333', '#ff4444');
+    drawTank(tanksState.blue.x, tanksState.blue.y, tanksState.blue.angle, '#3355cc', '#4488ff');
+
+    // Bullets
+    tanksState.bullets.forEach(b => {
+      ctx.fillStyle = b.owner === 'red' ? '#ffaa44' : '#44aaff';
+      ctx.shadowColor = b.owner === 'red' ? '#ff8800' : '#0088ff';
+      ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+
+    // HUD
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, W, 36);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillStyle = '#ff5555';
+    ctx.textAlign = 'left';
+    ctx.fillText('🔴 Red: ' + tanksState.redScore + '/5', 20, 24);
+    ctx.fillStyle = '#5599ff';
+    ctx.textAlign = 'right';
+    ctx.fillText('Blue: ' + tanksState.blueScore + '/5 🔵', W-20, 24);
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('First to 5 wins', W/2, 24);
+  }
+
+  function gameLoop() {
+    if (activeGame !== 'tanks') return;
+    update();
+    draw();
+    _rafId = requestAnimationFrame(gameLoop);
+  }
+  _rafId = requestAnimationFrame(gameLoop);
+}
+
+function endTanks(msg, color) {
+  tanksState.over = true;
+  if (tanksState._keyHandler) {
+    document.removeEventListener('keydown', tanksState._keyHandler);
+    document.removeEventListener('keyup', tanksState._keyHandler);
+  }
+  const w = document.getElementById('tanks-winner');
+  document.getElementById('tanks-winner-text').textContent = msg;
+  document.getElementById('tanks-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 11: CHECKERS
+// ============================================================
+let checkersState = {};
+
+function initCheckers() {
+  stopAllLoops();
+  const canvas = document.getElementById('checkers-canvas');
+  const ctx = canvas.getContext('2d');
+  const SIZE = 8, CELL = 70;
+
+  // Board: null or {color:'red'|'black', king:bool}
+  function makeBoard() {
+    const b = Array.from({length:8}, () => new Array(8).fill(null));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) {
+      if ((r+c)%2===1) b[r][c] = {color:'black', king:false};
+    }
+    for (let r = 5; r < 8; r++) for (let c = 0; c < 8; c++) {
+      if ((r+c)%2===1) b[r][c] = {color:'red', king:false};
+    }
+    return b;
+  }
+
+  checkersState = {
+    board: makeBoard(),
+    turn: 'red',
+    selected: null,
+    validMoves: [],
+    over: false,
+    mustJump: null // piece that must continue jumping
+  };
+
+  document.getElementById('checkers-winner').style.display = 'none';
+  document.getElementById('checkers-status').textContent = "Red's turn";
+
+  function getJumps(board, r, c, piece) {
+    const jumps = [];
+    const dirs = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] :
+      piece.color === 'red' ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+    dirs.forEach(([dr,dc]) => {
+      const mr = r+dr, mc = c+dc, lr = r+2*dr, lc = c+2*dc;
+      if (lr>=0&&lr<8&&lc>=0&&lc<8 && board[mr][mc] && board[mr][mc].color !== piece.color && !board[lr][lc]) {
+        jumps.push({r:lr, c:lc, capture:{r:mr,c:mc}});
+      }
+    });
+    return jumps;
+  }
+
+  function getMoves(board, r, c, piece) {
+    const moves = [];
+    const dirs = piece.king ? [[-1,-1],[-1,1],[1,-1],[1,1]] :
+      piece.color === 'red' ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+    dirs.forEach(([dr,dc]) => {
+      const nr = r+dr, nc = c+dc;
+      if (nr>=0&&nr<8&&nc>=0&&nc<8 && !board[nr][nc]) moves.push({r:nr,c:nc});
+    });
+    return moves;
+  }
+
+  function getAllJumps(board, color) {
+    const all = [];
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      if (board[r][c]?.color === color) {
+        const j = getJumps(board, r, c, board[r][c]);
+        if (j.length) all.push({r,c,moves:j});
+      }
+    }
+    return all;
+  }
+
+  function onClick(e) {
+    if (activeGame !== 'checkers' || checkersState.over) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const c = Math.floor(mx / CELL), r = Math.floor(my / CELL);
+    if (c<0||c>=8||r<0||r>=8) return;
+
+    const {board, turn, selected, validMoves, mustJump} = checkersState;
+
+    if (selected) {
+      const move = validMoves.find(m => m.r===r && m.c===c);
+      if (move) {
+        // Execute move
+        board[r][c] = board[selected.r][selected.c];
+        board[selected.r][selected.c] = null;
+        if (move.capture) board[move.capture.r][move.capture.c] = null;
+
+        // King promotion
+        if (board[r][c].color === 'red' && r === 0) board[r][c].king = true;
+        if (board[r][c].color === 'black' && r === 7) board[r][c].king = true;
+
+        // Check for additional jumps
+        if (move.capture) {
+          const moreJumps = getJumps(board, r, c, board[r][c]);
+          if (moreJumps.length) {
+            checkersState.selected = {r,c};
+            checkersState.validMoves = moreJumps;
+            checkersState.mustJump = {r,c};
+            drawCheckers();
+            return;
+          }
         }
 
-        function updateRedBar() {
-            redPosition = Math.max(0, Math.min(100, 50 + redScore));
-            redBar.style.width = redPosition + '%';
-            blackBar.style.width = (100 - redPosition) + '%';
-            redScoreEl.textContent = redScore;
+        checkersState.mustJump = null;
+        checkersState.selected = null;
+        checkersState.validMoves = [];
+        checkersState.turn = turn === 'red' ? 'black' : 'red';
+        document.getElementById('checkers-status').textContent = checkersState.turn === 'red' ? "Red's turn" : "Black's turn";
+        checkWin();
+        drawCheckers();
+        return;
+      }
+      checkersState.selected = null;
+      checkersState.validMoves = [];
+    }
+
+    // Select piece
+    if (board[r][c]?.color === turn) {
+      if (mustJump && (mustJump.r !== r || mustJump.c !== c)) return;
+      const allJumps = getAllJumps(board, turn);
+      let moves;
+      if (allJumps.length) {
+        const pj = allJumps.find(j => j.r===r && j.c===c);
+        moves = pj ? pj.moves : [];
+      } else {
+        moves = getMoves(board, r, c, board[r][c]);
+      }
+      if (moves.length) {
+        checkersState.selected = {r,c};
+        checkersState.validMoves = moves;
+      }
+    }
+    drawCheckers();
+  }
+
+  function checkWin() {
+    const {board} = checkersState;
+    let reds = 0, blacks = 0;
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      if (board[r][c]?.color==='red') reds++;
+      if (board[r][c]?.color==='black') blacks++;
+    }
+    if (reds === 0) endCheckers('⚫ BLACK WINS!', '#aaaaaa');
+    else if (blacks === 0) endCheckers('🔴 RED WINS!', '#ff5555');
+  }
+
+  canvas.addEventListener('click', onClick);
+  checkersState._clickHandler = onClick;
+
+  function drawCheckers() {
+    ctx.clearRect(0, 0, 560, 560);
+    const {board, selected, validMoves} = checkersState;
+
+    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+      const dark = (r+c)%2===1;
+      ctx.fillStyle = dark ? '#4a3728' : '#d4a96a';
+      ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
+
+      if (selected && selected.r===r && selected.c===c) {
+        ctx.fillStyle = 'rgba(255,255,0,0.3)';
+        ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
+      }
+
+      const vm = validMoves.find(m => m.r===r && m.c===c);
+      if (vm) {
+        ctx.fillStyle = 'rgba(0,255,100,0.35)';
+        ctx.fillRect(c*CELL, r*CELL, CELL, CELL);
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(c*CELL+1, r*CELL+1, CELL-2, CELL-2);
+      }
+
+      const piece = board[r][c];
+      if (piece) {
+        const px = c*CELL + CELL/2, py = r*CELL + CELL/2;
+        ctx.shadowColor = piece.color === 'red' ? '#ff4444' : '#888';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = piece.color === 'red' ? '#cc2222' : '#222';
+        ctx.beginPath(); ctx.arc(px, py, CELL/2 - 8, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = piece.color === 'red' ? '#ff8888' : '#666';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        if (piece.king) {
+          ctx.fillStyle = '#ffd700';
+          ctx.font = 'bold 20px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('♛', px, py + 7);
         }
+      }
+    }
+  }
 
-        function startRedCountdown() {
-            redState = 'counting';
-            redTimerEl.classList.add('show', 'countdown');
-            let timeLeft = 3;
-            redTimerEl.textContent = '3';
-            const countdownInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft > 0) {
-                    redTimerEl.textContent = timeLeft;
-                } else {
-                    redTimerEl.textContent = 'GO!';
-                    clearInterval(countdownInterval);
-                    setTimeout(() => {
-                        redTimerEl.classList.remove('countdown');
-                        setTimeout(() => {
-                            redTimerEl.classList.remove('show');
-                            redState = 'playing';
-                        }, 300);
-                    }, 200);
-                }
-            }, 1000);
+  drawCheckers();
+}
+
+function endCheckers(msg, color) {
+  checkersState.over = true;
+  if (checkersState._clickHandler) {
+    document.getElementById('checkers-canvas').removeEventListener('click', checkersState._clickHandler);
+  }
+  const w = document.getElementById('checkers-winner');
+  document.getElementById('checkers-winner-text').textContent = msg;
+  document.getElementById('checkers-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
+
+// ============================================================
+// GAME 12: DARTS
+// ============================================================
+let dartsState = {};
+
+function initDarts() {
+  stopAllLoops();
+  const canvas = document.getElementById('darts-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = 700, H = 480;
+
+  dartsState = {
+    over: false,
+    redScore: 0, blueScore: 0,
+    round: 1, maxRounds: 5,
+    dartsPerRound: 3,
+    redDartsLeft: 3, blueDartsLeft: 3,
+    turn: 'red',
+    cursor: {x: W/4, y: H/2, wobbleX: 0, wobbleY: 0, wobbleAngleX: 0, wobbleAngleY: 0},
+    darts: [], // thrown darts {x,y,color}
+    flashMsg: '', flashTimer: 0,
+    waitingForThrow: true
+  };
+
+  document.getElementById('darts-winner').style.display = 'none';
+
+  function dartScore(dx, dy, cx, cy) {
+    const dist = Math.sqrt((dx-cx)**2 + (dy-cy)**2);
+    const R = 120;
+    if (dist < R * 0.06) return 50;  // bullseye
+    if (dist < R * 0.13) return 25;  // inner bull
+    if (dist < R * 0.3)  return 20;
+    if (dist < R * 0.45) return 15;
+    if (dist < R * 0.6)  return 10;
+    if (dist < R * 0.75) return 5;
+    if (dist < R * 0.9)  return 3;
+    if (dist < R)        return 1;
+    return 0;
+  }
+
+  function throwDart() {
+    if (!dartsState.waitingForThrow || dartsState.over) return;
+    dartsState.waitingForThrow = false;
+    const {cursor, turn} = dartsState;
+    const CX = turn === 'red' ? W/4 : 3*W/4;
+    const CY = H/2;
+    const score = dartScore(cursor.x + cursor.wobbleX, cursor.y + cursor.wobbleY, CX, CY);
+    const tx = cursor.x + cursor.wobbleX;
+    const ty = cursor.y + cursor.wobbleY;
+
+    dartsState.darts.push({x:tx, y:ty, color: turn === 'red' ? '#ff4444' : '#4488ff', score});
+    dartsState.flashMsg = (turn === 'red' ? '🔴' : '🔵') + ' +' + score + (score === 50 ? ' BULLSEYE!' : score === 25 ? ' INNER BULL!' : '');
+    dartsState.flashTimer = 60;
+
+    if (turn === 'red') {
+      dartsState.redScore += score;
+      dartsState.redDartsLeft--;
+    } else {
+      dartsState.blueScore += score;
+      dartsState.blueDartsLeft--;
+    }
+
+    // Check round end
+    safeTimeout(() => {
+      if (dartsState.redDartsLeft === 0 && dartsState.blueDartsLeft === 0) {
+        if (dartsState.round >= dartsState.maxRounds) {
+          safeTimeout(() => {
+            if (dartsState.redScore > dartsState.blueScore) endDarts('🔴 RED WINS!\n' + dartsState.redScore + ' vs ' + dartsState.blueScore, '#ff5555');
+            else if (dartsState.blueScore > dartsState.redScore) endDarts('🔵 BLUE WINS!\n' + dartsState.blueScore + ' vs ' + dartsState.redScore, '#5599ff');
+            else endDarts('🤝 DRAW!\n' + dartsState.redScore + ' each', '#ffffff');
+          }, 1000);
+          return;
         }
+        dartsState.round++;
+        dartsState.redDartsLeft = dartsState.dartsPerRound;
+        dartsState.blueDartsLeft = dartsState.dartsPerRound;
+        dartsState.darts = [];
+        dartsState.turn = 'red';
+      } else if (dartsState.turn === 'red' && dartsState.redDartsLeft === 0) {
+        dartsState.turn = 'blue';
+      } else if (dartsState.turn === 'blue' && dartsState.blueDartsLeft === 0) {
+        dartsState.turn = 'red';
+      }
+      dartsState.waitingForThrow = true;
+    }, 600);
+  }
 
-        function showRedWin(winner) {
-            const color = winner.includes('RED') ? '#ff6b6b' : '#2c2c54';
-            redMessageEl.textContent = winner;
-            redMessageEl.style.color = color;
-            redMessageEl.classList.add('show');
-            setTimeout(() => {
-                showScreen('main-menu');
-            }, 3000);
-        }
+  function onKey(e) {
+    if (activeGame !== 'darts' || dartsState.over) return;
+    if (e.code === 'Space' && dartsState.turn === 'red') { e.preventDefault(); throwDart(); }
+    if (e.code === 'Enter' && dartsState.turn === 'blue') { e.preventDefault(); throwDart(); }
+  }
+  document.addEventListener('keydown', onKey);
+  dartsState._keyHandler = onKey;
 
-        // Yellow Game
-        let yellowState = 'waiting';
-        let yellowGameActive = false;
-        let yellowPoints = 0;
-        let blackPoints = 0;
-        let yellowPositives = [];
-        let blackPositives = [];
-        let yellowLastPress = 0;
-        let blackLastPress = 0;
-        let yellowGoal = {};
-        let blackGoal = {};
-        const colorList = ['red', 'green', 'blue', 'purple'];
-        const shapeList = ['circle', 'triangle', 'square', 'star'];
-        const colorValues = {
-            red: '#ff0000',
-            green: '#00ff00',
-            blue: '#0000ff',
-            purple: '#800080'
-        };
+  function drawBoard(cx, cy, R) {
+    // Rings
+    const rings = [
+      {r:R, color:'#1a0a0a'},
+      {r:R*0.9, color:'#cc2200'},
+      {r:R*0.75, color:'#2200cc'},
+      {r:R*0.6, color:'#cc2200'},
+      {r:R*0.45, color:'#2200cc'},
+      {r:R*0.3, color:'#cc2200'},
+      {r:R*0.13, color:'#00aa44'},
+      {r:R*0.06, color:'#ff4400'},
+    ];
+    rings.forEach(z => {
+      ctx.beginPath(); ctx.arc(cx, cy, z.r, 0, Math.PI*2);
+      ctx.fillStyle = z.color; ctx.fill();
+    });
+    // Sector lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    for (let i=0;i<20;i++) {
+      const a = (i/20)*Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+R*Math.cos(a), cy+R*Math.sin(a)); ctx.stroke();
+    }
+    // Numbers
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    const nums = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+    nums.forEach((n,i) => {
+      const a = (i/20)*Math.PI*2 - Math.PI/2;
+      ctx.fillText(n, cx + (R+10)*Math.cos(a), cy + (R+10)*Math.sin(a) + 4);
+    });
+  }
 
-        const yellowPointsEl = document.getElementById('yellow-points');
-        const blackPointsEl = document.getElementById('black-points');
-        const yellowTimerEl = document.getElementById('yellow-timer');
-        const yellowMessageEl = document.getElementById('yellow-message');
-        const yellowShapesContainer = document.getElementById('yellow-shapes');
-        const blackShapesContainer = document.getElementById('black-shapes');
+  function draw() {
+    if (activeGame !== 'darts') return;
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, W, H);
 
-        let yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
-        let blackNextCountdown = Math.floor(Math.random() * 5) + 2;
+    // Divider
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
 
-        function resetYellowGame() {
-            yellowState = 'waiting';
-            yellowGameActive = true;
-            yellowPoints = 0;
-            blackPoints = 0;
-            yellowPositives = [];
-            blackPositives = [];
-            yellowLastPress = 0;
-            blackLastPress = 0;
-            yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
-            blackNextCountdown = Math.floor(Math.random() * 5) + 2;
-            yellowMessageEl.classList.remove('show');
-            yellowMessageEl.textContent = '';
-            yellowTimerEl.classList.remove('show', 'countdown');
-            updateYellowPoints();
+    const R = 120;
+    drawBoard(W/4, H/2, R);
+    drawBoard(3*W/4, H/2, R);
 
-            // Random goals
-            yellowGoal.color = colorList[Math.floor(Math.random() * colorList.length)];
-            yellowGoal.shape = shapeList[Math.floor(Math.random() * shapeList.length)];
-            blackGoal.color = colorList[Math.floor(Math.random() * colorList.length)];
-            blackGoal.shape = shapeList[Math.floor(Math.random() * shapeList.length)];
+    // Wobble cursor
+    dartsState.cursor.wobbleAngleX += 0.07 + Math.random()*0.02;
+    dartsState.cursor.wobbleAngleY += 0.05 + Math.random()*0.02;
+    dartsState.cursor.wobbleX = Math.sin(dartsState.cursor.wobbleAngleX) * 18;
+    dartsState.cursor.wobbleY = Math.cos(dartsState.cursor.wobbleAngleY) * 14;
 
-            // Display goals
-            const yellowGoalShape = document.getElementById('yellow-goal-shape');
-            const yellowGoalText = document.getElementById('yellow-goal-text');
-            yellowGoalShape.className = 'goal-shape shape ' + yellowGoal.shape;
-            yellowGoalShape.style.setProperty('--shape-color', colorValues[yellowGoal.color]);
-            yellowGoalText.textContent = `${yellowGoal.color.charAt(0).toUpperCase() + yellowGoal.color.slice(1)} ${yellowGoal.shape.charAt(0).toUpperCase() + yellowGoal.shape.slice(1)}`;
+    const {turn, cursor} = dartsState;
+    const activeCX = turn === 'red' ? W/4 : 3*W/4;
+    cursor.x = activeCX;
+    cursor.y = H/2;
 
-            const blackGoalShape = document.getElementById('black-goal-shape');
-            const blackGoalText = document.getElementById('black-goal-text');
-            blackGoalShape.className = 'goal-shape shape ' + blackGoal.shape;
-            blackGoalShape.style.setProperty('--shape-color', colorValues[blackGoal.color]);
-            blackGoalText.textContent = `${blackGoal.color.charAt(0).toUpperCase() + blackGoal.color.slice(1)} ${blackGoal.shape.charAt(0).toUpperCase() + blackGoal.shape.slice(1)}`;
-        }
+    if (dartsState.waitingForThrow) {
+      const ax = cursor.x + cursor.wobbleX;
+      const ay = cursor.y + cursor.wobbleY;
+      ctx.strokeStyle = turn === 'red' ? '#ff4444' : '#4488ff';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = turn === 'red' ? '#ff4444' : '#4488ff';
+      ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.moveTo(ax-10, ay); ctx.lineTo(ax+10, ay); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax, ay-10); ctx.lineTo(ax, ay+10); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
 
-        function getDifficulty(points) {
-            let numShapes = 1 + Math.max(0, Math.floor(points / 3));
-            let duration = 500 - (points * 40);
-            if (points < 0) {
-                numShapes = 1;
-                duration = 500 + Math.min(400, Math.abs(points) * 40);
-            }
-            duration = Math.max(100, duration);
-            return { num: numShapes, dur: duration };
-        }
+    // Thrown darts
+    dartsState.darts.forEach(d => {
+      ctx.fillStyle = d.color;
+      ctx.shadowColor = d.color; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(d.x, d.y, 4, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    });
 
-        function flashYellow() {
-            if (!yellowGameActive || yellowState !== 'playing') return;
-            const { num, dur } = getDifficulty(yellowPoints);
-            const rect = yellowShapesContainer.getBoundingClientRect();
-            yellowShapesContainer.innerHTML = '';
-            yellowNextCountdown--;
-            let forceHasGoal = yellowNextCountdown <= 0;
-            if (forceHasGoal) {
-                yellowNextCountdown = Math.floor(Math.random() * 5) + 2;
-            }
-            let includedGoal = forceHasGoal;
-            for (let i = 0; i < num; i++) {
-                let color, shape;
-                if (forceHasGoal && i === 0) {
-                    color = yellowGoal.color;
-                    shape = yellowGoal.shape;
-                    forceHasGoal = false;
-                } else {
-                    do {
-                        color = colorList[Math.floor(Math.random() * colorList.length)];
-                        shape = shapeList[Math.floor(Math.random() * shapeList.length)];
-                    } while (color === yellowGoal.color && shape === yellowGoal.shape);
-                }
-                const div = document.createElement('div');
-                div.classList.add('shape', shape);
-                div.style.setProperty('--shape-color', colorValues[color]);
-                div.style.left = `${Math.random() * (rect.width - 60) + 30}px`;
-                div.style.top = `${Math.random() * (rect.height - 60) + 30}px`;
-                yellowShapesContainer.appendChild(div);
-            }
-            const start = Date.now();
-            if (includedGoal) {
-                yellowPositives.push(start);
-            }
-            setTimeout(() => {
-                yellowShapesContainer.innerHTML = '';
-            }, dur);
-            const pause = Math.random() * 1500 + 500;
-            setTimeout(flashYellow, dur + pause);
-        }
+    // HUD
+    ctx.font = 'bold 15px system-ui';
+    ctx.fillStyle = '#ff5555';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔴 RED: ' + dartsState.redScore, W/4, 30);
+    ctx.fillText('(' + dartsState.redDartsLeft + ' darts left)', W/4, 48);
+    ctx.fillStyle = '#5599ff';
+    ctx.fillText('🔵 BLUE: ' + dartsState.blueScore, 3*W/4, 30);
+    ctx.fillText('(' + dartsState.blueDartsLeft + ' darts left)', 3*W/4, 48);
+    ctx.fillStyle = '#888';
+    ctx.fillText('Round ' + dartsState.round + '/' + dartsState.maxRounds, W/2, 30);
 
-        function flashBlack() {
-            if (!yellowGameActive || yellowState !== 'playing') return;
-            const { num, dur } = getDifficulty(blackPoints);
-            const rect = blackShapesContainer.getBoundingClientRect();
-            blackShapesContainer.innerHTML = '';
-            blackNextCountdown--;
-            let forceHasGoal = blackNextCountdown <= 0;
-            if (forceHasGoal) {
-                blackNextCountdown = Math.floor(Math.random() * 5) + 2;
-            }
-            let includedGoal = forceHasGoal;
-            for (let i = 0; i < num; i++) {
-                let color, shape;
-                if (forceHasGoal && i === 0) {
-                    color = blackGoal.color;
-                    shape = blackGoal.shape;
-                    forceHasGoal = false;
-                } else {
-                    do {
-                        color = colorList[Math.floor(Math.random() * colorList.length)];
-                        shape = shapeList[Math.floor(Math.random() * shapeList.length)];
-                    } while (color === blackGoal.color && shape === blackGoal.shape);
-                }
-                const div = document.createElement('div');
-                div.classList.add('shape', shape);
-                div.style.setProperty('--shape-color', colorValues[color]);
-                div.style.left = `${Math.random() * (rect.width - 60) + 30}px`;
-                div.style.top = `${Math.random() * (rect.height - 60) + 30}px`;
-                blackShapesContainer.appendChild(div);
-            }
-            const start = Date.now();
-            if (includedGoal) {
-                blackPositives.push(start);
-            }
-            setTimeout(() => {
-                blackShapesContainer.innerHTML = '';
-            }, dur);
-            const pause = Math.random() * 1500 + 500;
-            setTimeout(flashBlack, dur + pause);
-        }
+    // Turn indicator
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = turn === 'red' ? '#ff5555' : '#5599ff';
+    ctx.fillText(turn.toUpperCase() + "'s turn — press " + (turn === 'red' ? 'Space' : 'Enter'), W/2, H - 15);
 
-        function updateYellowPoints() {
-            yellowPointsEl.textContent = yellowPoints;
-            blackPointsEl.textContent = blackPoints;
-        }
+    // Flash
+    if (dartsState.flashTimer > 0) {
+      dartsState.flashTimer--;
+      ctx.globalAlpha = dartsState.flashTimer / 60;
+      ctx.font = 'bold 22px system-ui';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(dartsState.flashMsg, W/2, H/2 - 20);
+      ctx.globalAlpha = 1;
+    }
 
-        function checkYellowWin() {
-            if (yellowPoints >= 10 || blackPoints <= -10) {
-                yellowWin('YELLOW WINS!');
-            } else if (blackPoints >= 10 || yellowPoints <= -10) {
-                yellowWin('BLACK WINS!');
-            }
-        }
+    _rafId = requestAnimationFrame(draw);
+  }
+  _rafId = requestAnimationFrame(draw);
+}
 
-        function yellowWin(winner) {
-            yellowGameActive = false;
-            const color = winner.includes('YELLOW') ? '#ffd700' : '#333';
-            yellowMessageEl.textContent = winner;
-            yellowMessageEl.style.color = color;
-            yellowMessageEl.classList.add('show');
-            setTimeout(() => {
-                showScreen('main-menu');
-            }, 3000);
-        }
+function endDarts(msg, color) {
+  dartsState.over = true;
+  if (dartsState._keyHandler) document.removeEventListener('keydown', dartsState._keyHandler);
+  const w = document.getElementById('darts-winner');
+  document.getElementById('darts-winner-text').textContent = msg;
+  document.getElementById('darts-winner-text').style.color = color;
+  w.style.display = 'flex';
+}
 
-        function startYellowCountdown() {
-            yellowState = 'counting';
-            yellowTimerEl.classList.add('show', 'countdown');
-            let timeLeft = 3;
-            yellowTimerEl.textContent = '3';
-            const countdownInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft > 0) {
-                    yellowTimerEl.textContent = timeLeft;
-                } else {
-                    yellowTimerEl.textContent = 'GO!';
-                    clearInterval(countdownInterval);
-                    setTimeout(() => {
-                        yellowTimerEl.classList.remove('countdown');
-                        setTimeout(() => {
-                            yellowTimerEl.classList.remove('show');
-                            yellowState = 'playing';
-                            flashYellow();
-                            flashBlack();
-                        }, 300);
-                    }, 200);
-                }
-            }, 1000);
-        }
+// ============================================================
+// GLOBAL KEY HANDLER — prevent default for game keys
+// ============================================================
+document.addEventListener('keydown', function(e) {
+  if (activeGame && ['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) {
+    e.preventDefault();
+  }
+});
 
-        // Green Game
-        let greenState = 'waiting';
-        let greenGameActive = false;
-        let greenPoints = 0;
-        let blackPointsG = 0; 
-        let greenChoice = null;
-        let blackChoice = null;
-        const greenKeysMap = { 'a': 'rock', 's': 'paper', 'd': 'scissors' };
-        const blackKeysMap = { 'j': 'rock', 'k': 'paper', 'l': 'scissors' };
-        const choiceEmojis = { rock: '✊', paper: '✋', scissors: '✌️' };
-
-        const greenPointsEl = document.getElementById('green-points');
-        const blackPointsElG = document.getElementById('green-black-points');
-        const greenChoiceEl = document.getElementById('green-choice');
-        const blackChoiceEl = document.getElementById('black-choice');
-        const greenStatusEl = document.getElementById('green-status');
-        const blackStatusEl = document.getElementById('black-status');
-        const greenTimerEl = document.getElementById('green-timer');
-        const greenMessageEl = document.getElementById('green-message');
-
-        function resetGreenGame() {
-            greenState = 'waiting';
-            greenGameActive = true;
-            greenPoints = 0;
-            blackPointsG = 0;
-            updateGreenPoints();
-            resetGreenRound();
-            greenTimerEl.classList.remove('show', 'countdown');
-            greenMessageEl.classList.remove('show');
-            greenMessageEl.textContent = '';
-        }
-
-        function updateGreenPoints() {
-            greenPointsEl.textContent = greenPoints;
-            blackPointsElG.textContent = blackPointsG;
-        }
-
-        function resetGreenRound() {
-            greenChoice = null;
-            blackChoice = null;
-            greenChoiceEl.textContent = '';
-            blackChoiceEl.textContent = '';
-            greenStatusEl.textContent = 'Waiting...';
-            blackStatusEl.textContent = 'Waiting...';
-        }
-
-        function startGreenCountdown() {
-            greenState = 'counting';
-            greenTimerEl.classList.add('show', 'countdown');
-            let timeLeft = 3;
-            greenTimerEl.textContent = '3';
-            const countdownInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft > 0) {
-                    greenTimerEl.textContent = timeLeft;
-                } else {
-                    greenTimerEl.textContent = 'GO!';
-                    clearInterval(countdownInterval);
-                    setTimeout(() => {
-                        greenTimerEl.classList.remove('countdown');
-                        setTimeout(() => {
-                            greenTimerEl.classList.remove('show');
-                            greenState = 'playing';
-                        }, 300);
-                    }, 200);
-                }
-            }, 1000);
-        }
-
-        function checkBothChosen() {
-            if (greenChoice !== null && blackChoice !== null) {
-                greenStatusEl.textContent = 'Chosen';
-                blackStatusEl.textContent = 'Chosen';
-                startFastCountdown();
-            }
-        }
-
-        function startFastCountdown() {
-            greenTimerEl.classList.add('show', 'countdown');
-            let timeLeft = 3;
-            greenTimerEl.textContent = '3';
-            const fastInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft > 0) {
-                    greenTimerEl.textContent = timeLeft;
-                } else {
-                    clearInterval(fastInterval);
-                    greenTimerEl.classList.remove('show', 'countdown');
-                    revealResults();
-                }
-            }, 500);
-        }
-
-        function revealResults() {
-            greenChoiceEl.textContent = choiceEmojis[greenChoice];
-            blackChoiceEl.textContent = choiceEmojis[blackChoice];
-            const winner = determineWinner(greenChoice, blackChoice);
-            if (winner === 'green') {
-                greenPoints++;
-                greenMessageEl.textContent = 'GREEN WINS ROUND!';
-                greenMessageEl.style.color = '#2ed573';
-            } else if (winner === 'black') {
-                blackPointsG++;
-                greenMessageEl.textContent = 'BLACK WINS ROUND!';
-                greenMessageEl.style.color = '#333';
-            } else {
-                greenMessageEl.textContent = 'TIE!';
-                greenMessageEl.style.color = '#fff';
-            }
-            greenMessageEl.classList.add('show');
-            updateGreenPoints();
-            setTimeout(() => {
-                greenMessageEl.classList.remove('show');
-                if (greenPoints >= 5 || blackPointsG >= 5) {
-                    greenGameActive = false;
-                    greenMessageEl.textContent = (greenPoints >= 5 ? 'GREEN WINS!' : 'BLACK WINS!');
-                    greenMessageEl.style.color = (greenPoints >= 5 ? '#2ed573' : '#333');
-                    greenMessageEl.classList.add('show');
-                    setTimeout(() => {
-                        showScreen('main-menu');
-                    }, 3000);
-                } else {
-                    resetGreenRound();
-                }
-            }, 2000);
-        }
-
-        function determineWinner(gChoice, bChoice) {
-            if (gChoice === bChoice) return 'tie';
-            if (
-                (gChoice === 'rock' && bChoice === 'scissors') ||
-                (gChoice === 'scissors' && bChoice === 'paper') ||
-                (gChoice === 'paper' && bChoice === 'rock')
-            ) {
-                return 'green';
-            }
-            return 'black';
-        }
-
-        // Blue Game
-        let blueState = 'waiting';
-        let blueGameActive = false;
-        const canvas = document.getElementById('blue-canvas');
-        const ctx = canvas.getContext('2d');
-        const blueTimerEl = document.getElementById('blue-timer');
-        const taggerInfoEl = document.getElementById('tagger-info');
-        const blueMessageEl = document.getElementById('blue-message');
-
-        let bluePlayer = { x: 100, y: 500, vx: 0, vy: 0, radius: 20, color: '#3742fa', onGround: false };
-        let blackPlayer = { x: 700, y: 500, vx: 0, vy: 0, radius: 20, color: '#2c2c54', onGround: false };
-        let platforms = [];
-        let tagger = null;
-        let immunityTime = 0;
-        let gameTime = 30;
-        let gameInterval = null;
-        let countdownInterval = null;
-        const gravity = 0.5;
-        const jumpStrength = -12;
-        const moveSpeed = 5;
-
-        const blueKeysDown = {};
-        const blackKeysDown = {};
-
-        function generatePlatforms() {
-            const plats = [];
-            const cw = canvas.width;
-            const ch = canvas.height;
-            const pw = 180;
-            const ph = 10;
-
-            // Ground
-            plats.push({x: 0, y: ch - ph, width: cw, height: ph});
-
-            // Upper quartile (top 150px)
-            plats.push({x: 80, y: 70, width: pw, height: ph});
-            plats.push({x: 540, y: 100, width: pw, height: ph});
-            plats.push({x: 310, y: 130, width: pw, height: ph});
-
-            // Middle section (y 150-450) - 5 platforms, 60px vertical spacing
-            const middleY = [190, 250, 310, 370, 430];
-            const middleX = [80, 540, 310, 80, 540];
-            for (let i = 0; i < 5; i++) {
-                plats.push({x: middleX[i], y: middleY[i], width: pw, height: ph});
-            }
-
-            // Bottom quartile (y 450-600) - 3 platforms
-            plats.push({x: 310, y: 470, width: pw, height: ph});
-            plats.push({x: 80, y: 520, width: pw, height: ph});
-            plats.push({x: 540, y: 560, width: pw, height: ph});
-
-            return plats;
-        }
-
-        function resetBlueGame() {
-            blueState = 'waiting';
-            blueGameActive = true;
-            bluePlayer = { x: 150, y: canvas.height - 30, vx: 0, vy: 0, radius: 20, color: '#3742fa', onGround: true };
-            blackPlayer = { x: canvas.width - 150, y: canvas.height - 30, vx: 0, vy: 0, radius: 20, color: '#2c2c54', onGround: true };
-            platforms = generatePlatforms();
-            tagger = null;
-            immunityTime = 0;
-            gameTime = 30;
-            if (gameInterval) clearInterval(gameInterval);
-            if (countdownInterval) clearInterval(countdownInterval);
-            blueTimerEl.classList.remove('show', 'countdown');
-            blueMessageEl.classList.remove('show');
-            blueMessageEl.textContent = '';
-            taggerInfoEl.textContent = '';
-            blueTimerEl.textContent = '';
-            requestAnimationFrame(drawBlueGame);
-        }
-
-        function drawBlueGame() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // Draw platforms
-            ctx.fillStyle = '#808080';
-            platforms.forEach(p => {
-                ctx.fillRect(p.x, p.y, p.width, p.height);
-            });
-            // Draw players
-            ctx.fillStyle = bluePlayer.color;
-            ctx.beginPath();
-            ctx.arc(bluePlayer.x, bluePlayer.y, bluePlayer.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = blackPlayer.color;
-            ctx.beginPath();
-            ctx.arc(blackPlayer.x, blackPlayer.y, blackPlayer.radius, 0, Math.PI * 2);
-            ctx.fill();
-            if (blueState === 'playing') requestAnimationFrame(drawBlueGame);
-        }
-
-        function updatePhysics(player) {
-            player.vy += gravity;
-            player.y += player.vy;
-            player.x += player.vx;
-            player.onGround = false;
-
-            // Collision with platforms
-            platforms.forEach(p => {
-                if (player.y + player.radius > p.y && player.y - player.radius < p.y + p.height &&
-                    player.x > p.x && player.x < p.x + p.width && player.vy >= 0) {
-                    player.y = p.y - player.radius;
-                    player.vy = 0;
-                    player.onGround = true;
-                }
-            });
-
-            // Boundaries
-            if (player.x < player.radius) player.x = player.radius;
-            if (player.x > canvas.width - player.radius) player.x = canvas.width - player.radius;
-            if (player.y > canvas.height - player.radius) {
-                player.y = canvas.height - player.radius;
-                player.vy = 0;
-                player.onGround = true;
-            }
-            if (player.y < player.radius) player.y = player.radius;
-
-            // Friction
-            if (player.onGround) player.vx *= 0.8;
-        }
-
-        function checkCollision() {
-            const dx = bluePlayer.x - blackPlayer.x;
-            const dy = bluePlayer.y - blackPlayer.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            return dist < bluePlayer.radius + blackPlayer.radius;
-        }
-
-        function startBlueCountdown() {
-            blueState = 'counting';
-            blueTimerEl.classList.add('show', 'countdown');
-            let timeLeft = 3;
-            blueTimerEl.textContent = '3';
-            const cdInterval = setInterval(() => {
-                timeLeft--;
-                if (timeLeft > 0) {
-                    blueTimerEl.textContent = timeLeft;
-                } else {
-                    blueTimerEl.textContent = 'GO!';
-                    clearInterval(cdInterval);
-                    setTimeout(() => {
-                        blueTimerEl.classList.remove('countdown');
-                        setTimeout(() => {
-                            blueTimerEl.classList.remove('show');
-                            blueState = 'playing';
-                            startBlueGame();
-                        }, 300);
-                    }, 200);
-                }
-            }, 1000);
-        }
-
-        function startBlueGame() {
-            tagger = Math.random() < 0.5 ? 'blue' : 'black';
-            taggerInfoEl.textContent = `${tagger.toUpperCase()} is the tagger!`;
-            blueTimerEl.classList.add('show');
-            blueTimerEl.textContent = gameTime;
-            countdownInterval = setInterval(() => {
-                gameTime--;
-                blueTimerEl.textContent = gameTime;
-                if (gameTime <= 0) {
-                    endBlueGame();
-                }
-            }, 1000);
-            gameInterval = setInterval(updateBlueGame, 16);
-            requestAnimationFrame(drawBlueGame);
-        }
-
-        function updateBlueGame() {
-            // Blue player movement
-            if (blueKeysDown['a']) bluePlayer.vx = -moveSpeed;
-            if (blueKeysDown['d']) bluePlayer.vx = moveSpeed;
-            if (blueKeysDown['w'] && bluePlayer.onGround) bluePlayer.vy = jumpStrength;
-            // Black player movement
-            if (blackKeysDown['j']) blackPlayer.vx = -moveSpeed;
-            if (blackKeysDown['l']) blackPlayer.vx = moveSpeed;
-            if (blackKeysDown['i'] && blackPlayer.onGround) blackPlayer.vy = jumpStrength;
-
-            updatePhysics(bluePlayer);
-            updatePhysics(blackPlayer);
-
-            if (immunityTime > 0) immunityTime--;
-
-            if (checkCollision() && immunityTime <= 0) {
-                tagger = tagger === 'blue' ? 'black' : 'blue';
-                taggerInfoEl.textContent = `${tagger.toUpperCase()} is the tagger!`;
-                immunityTime = 60;
-            }
-        }
-
-        function endBlueGame() {
-            clearInterval(gameInterval);
-            clearInterval(countdownInterval);
-            blueGameActive = false;
-            blueTimerEl.classList.remove('show');
-            taggerInfoEl.textContent = '';
-            const winner = tagger === 'blue' ? 'BLACK WINS!' : 'BLUE WINS!';
-            const color = tagger === 'blue' ? '#2c2c54' : '#3742fa';
-            blueMessageEl.textContent = winner;
-            blueMessageEl.style.color = color;
-            blueMessageEl.classList.add('show');
-            setTimeout(() => {
-                showScreen('main-menu');
-            }, 3000);
-        }
-
-        document.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            const now = Date.now();
-
-            if (currentScreen === 'red-game') {
-                if (redState === 'waiting') {
-                    if (redKeys.includes(key) || blackKeys.includes(key)) {
-                        startRedCountdown();
-                    }
-                    return;
-                }
-
-                if (redState !== 'playing') return;
-
-                if (redKeys.includes(key)) {
-                    redScore++;
-                    updateRedBar();
-                    if (redPosition >= 75) {
-                        redState = 'ended';
-                        showRedWin('RED WINS!');
-                    }
-                } else if (blackKeys.includes(key)) {
-                    redScore--;
-                    updateRedBar();
-                    if (redPosition <= 25) {
-                        redState = 'ended';
-                        showRedWin('BLACK WINS!');
-                    }
-                }
-            } else if (currentScreen === 'yellow-game' && yellowGameActive) {
-                if (yellowState === 'waiting') {
-                    if (redKeys.includes(key) || blackKeys.includes(key)) {
-                        startYellowCountdown();
-                    }
-                    return;
-                }
-
-                if (yellowState !== 'playing') return;
-
-                if (redKeys.includes(key)) {
-                    if (now - yellowLastPress < 100) return;
-                    yellowLastPress = now;
-                    yellowPositives = yellowPositives.filter(s => now - s < 500);
-                    if (yellowPositives.length > 0) {
-                        yellowPoints++;
-                        yellowPositives.shift();
-                    } else {
-                        yellowPoints--;
-                    }
-                    updateYellowPoints();
-                    checkYellowWin();
-                } else if (blackKeys.includes(key)) {
-                    if (now - blackLastPress < 100) return;
-                    blackLastPress = now;
-                    blackPositives = blackPositives.filter(s => now - s < 500);
-                    if (blackPositives.length > 0) {
-                        blackPoints++;
-                        blackPositives.shift();
-                    } else {
-                        blackPoints--;
-                    }
-                    updateYellowPoints();
-                    checkYellowWin();
-                }
-            } else if (currentScreen === 'green-game' && greenGameActive) {
-                if (greenState === 'waiting') {
-                    if (greenKeysMap[key] || blackKeysMap[key]) {
-                        startGreenCountdown();
-                    }
-                    return;
-                }
-
-                if (greenState !== 'playing') return;
-
-                if (greenChoice === null && greenKeysMap[key]) {
-                    greenChoice = greenKeysMap[key];
-                    greenStatusEl.textContent = 'Chosen';
-                    checkBothChosen();
-                } else if (blackChoice === null && blackKeysMap[key]) {
-                    blackChoice = blackKeysMap[key];
-                    blackStatusEl.textContent = 'Chosen';
-                    checkBothChosen();
-                }
-            } else if (currentScreen === 'blue-game' && blueGameActive) {
-                if (blueState === 'waiting') {
-                    if (['w','a','s','d','i','j','k','l'].includes(key)) {
-                        startBlueCountdown();
-                    }
-                }
-                blueKeysDown[key] = true;
-                blackKeysDown[key] = true;
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            const key = e.key.toLowerCase();
-            blueKeysDown[key] = false;
-            blackKeysDown[key] = false;
-            if (['a','d'].includes(key)) bluePlayer.vx = 0;
-            if (['j','l'].includes(key)) blackPlayer.vx = 0;
-        });
-
-        function showScreen(screenName) {
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.style.display = 'none';
-            });
-            document.getElementById(screenName).style.display = 'flex';
-            currentScreen = screenName;
-
-            if (screenName === 'red-game') {
-                resetRedGame();
-            } else if (screenName === 'yellow-game') {
-                resetYellowGame();
-            } else if (screenName === 'green-game') {
-                resetGreenGame();
-            } else if (screenName === 'blue-game') {
-                resetBlueGame();
-            }
-        }
-
-        // Init
-        showScreen('main-menu');
-    </script>
+</script>
 </body>
 </html>

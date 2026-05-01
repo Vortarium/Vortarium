@@ -217,11 +217,12 @@ function drawSpaceScene(t){
     ctx.restore();
   }
 
-  // Stars
+  // Stars — fixed to sky, NO parallax (depth=0)
   for(const s of stars){
     const blink = 0.5 + 0.5 * Math.sin(t * s.blinkSpeed * 0.001 + s.blinkOffset);
     const alpha = 0.4 + 0.6 * blink;
-    const [sx, sy] = screenPos(s.x, s.y, s.speed);
+    const sx = s.x * c2d.width;   // fixed screen position, no parallax
+    const sy = s.y * c2d.height;
     ctx.globalAlpha = alpha;
     ctx.fillStyle = s.color;
     ctx.beginPath();
@@ -564,7 +565,7 @@ function uploadBox(geo){
   const ib=gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,geo.idx,gl.STATIC_DRAW);
   return{posBuf:pb,normBuf:nb,uvBuf:ub,idxBuf:ib,count:geo.idx.length};
 }
-const platformGeo=uploadBox(createBox(3,0.3,3));
+const platformGeo=uploadBox(createBox(4,0.4,4));
 
 // Cache locations
 const aPos_p=gl.getAttribLocation(prog,'aPos');
@@ -583,15 +584,19 @@ let totalGenerated=0;
 const platforms=[];
 function newPlatform(prev,index){
   const moving=index>15&&Math.random()<0.35;
-  const dx=(Math.random()-0.5)*4.5, dy=(Math.random()-0.5)*3.0, dz=-(5+Math.random()*3);
+  // Spike platforms appear after index 20, ~20% chance
+  const spiked=index>20&&Math.random()<0.20;
+  const dx=(Math.random()-0.5)*5.5, dy=(Math.random()-0.5)*2.5, dz=-(7+Math.random()*4);
   return{
     x:prev.x+dx,y:prev.y+dy,z:prev.z+dz,
     baseX:prev.x+dx,baseY:prev.y+dy,
-    scored:false,moving,
+    scored:false,moving,spiked,
     moveAxis:Math.random()<0.5?'x':'y',
     moveAmp:1.0+Math.random()*1.5,
     moveSpeed:0.8+Math.random()*1.2,
     movePhase:Math.random()*Math.PI*2,
+    spikeAngle:0,  // current rotation angle in radians
+    spikeSpeed:(Math.random()<0.5?1:-1)*(0.4+Math.random()*0.6), // rad/s
   };
 }
 function initPlatforms(){
@@ -614,6 +619,10 @@ function extendPlatforms(time){
     const off=Math.sin(time*p.moveSpeed+p.movePhase)*p.moveAmp;
     if(p.moveAxis==='x') p.x=p.baseX+off; else p.y=p.baseY+off;
   }
+  // Rotate spike platforms
+  for(const p of platforms){
+    if(p.spiked) p.spikeAngle += p.spikeSpeed * 0.016;
+  }
 }
 
 // â”€â”€ Game state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -622,14 +631,15 @@ let yaw=0, pitch=0;
 let onGround=false,score=0,best=0,running=false;
 let keys={},wasMoving=false,crouchHeight=0;
 
-const GRAVITY=-28, SPEED_WALK=7, SPEED_SPRINT=14, SPEED_CROUCH=3.5;
-const JUMP_FORCE=11, STAND_H=1.0, CROUCH_H=0.5;
+const GRAVITY=-28, SPEED=12;  // always sprint speed
+const JUMP_FORCE=11, STAND_H=1.0;
 const ACCEL_GROUND=15, ACCEL_AIR=4, FRICTION_GROUND=10, FRICTION_AIR=1;
+const GROUND_POUND_FORCE = -55; // strong downward push
 
 // â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(['Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight'].includes(e.code)) e.preventDefault();
+  if(['Space'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup',e=>{ keys[e.code]=false; });
 document.addEventListener('mousemove',e=>{
@@ -674,9 +684,9 @@ function updateScoreUI(){
 
 // â”€â”€ Collision â€” full hitbox (full 1.5 half-width, no footprint shrink) â”€â”€â”€â”€â”€â”€â”€â”€
 function checkCollision(px,py,pz,isCrouching){
-  const ph=isCrouching?CROUCH_H:STAND_H;
+  const ph=STAND_H;
   for(const p of platforms){
-    const hw=1.5, hh=0.15, hd=1.5;
+    const hw=2.0, hh=0.2, hd=2.0;
     if(px>p.x-hw && px<p.x+hw && pz>p.z-hd && pz<p.z+hd &&
        py-ph >= p.y-hh-0.35 && py-ph <= p.y+hh+0.6)
       return{platform:p, top:p.y+hh};
@@ -690,16 +700,15 @@ function update(dt){
   if(!running) return;
   gameTime+=dt;
 
-  const isCrouching=keys['ControlLeft']||keys['ControlRight'];
-  const isSprinting=!isCrouching&&(keys['ShiftLeft']||keys['ShiftRight']);
-  crouchHeight+=((isCrouching?1:0)-crouchHeight)*Math.min(dt*12,1);
+  const isCrouching=false;
+  const isSprinting=true; // always sprint
 
-  const speed=isCrouching?SPEED_CROUCH:isSprinting?SPEED_SPRINT:SPEED_WALK;
+  const speed=SPEED;
   const fwdX=Math.sin(yaw), fwdZ=-Math.cos(yaw);
   const rgtX=Math.cos(yaw), rgtZ=Math.sin(yaw);
   let mx=0,mz=0;
   if(keys['KeyW']){mx+=fwdX;mz+=fwdZ;}
-  if(keys['KeyS']){mx-=fwdX;mz-=fwdZ;}
+  // S = ground pound (handled below, not movement)
   if(keys['KeyA']){mx-=rgtX;mz-=rgtZ;}
   if(keys['KeyD']){mx+=rgtX;mz+=rgtZ;}
   const ml=Math.sqrt(mx*mx+mz*mz);
@@ -722,26 +731,61 @@ function update(dt){
   if(!isMoving&&wasMoving) stopWalk();
   wasMoving=isMoving;
 
+  // Ground pound — S key slams player down hard
+  if(keys['KeyS'] && !onGround && player.vy > -20) {
+    player.vy = -20;
+  }
+
   if(keys['Space']&&onGround){ player.vy=JUMP_FORCE; onGround=false; playJump(); }
 
   player.vy+=GRAVITY*dt;
   player.x+=player.vx*dt; player.y+=player.vy*dt; player.z+=player.vz*dt;
 
   onGround=false;
-  const hit=checkCollision(player.x,player.y,player.z,isCrouching);
+  const hit=checkCollision(player.x,player.y,player.z,false);
   if(hit&&player.vy<=0){
-    player.y=hit.top+(isCrouching?CROUCH_H:STAND_H);
+    player.y=hit.top+STAND_H;
     player.vy=0; onGround=true;
+    // Carry player with moving platform
+    if(hit.platform.moving){
+      const off=Math.sin(gameTime*hit.platform.moveSpeed+hit.platform.movePhase)*hit.platform.moveAmp;
+      const prevOff=Math.sin((gameTime-dt)*hit.platform.moveSpeed+hit.platform.movePhase)*hit.platform.moveAmp;
+      const delta=off-prevOff;
+      if(hit.platform.moveAxis==='x') player.x+=delta;
+      else player.y+=delta;
+    }
     if(!hit.platform.scored&&hit.platform!==platforms[0]){
       hit.platform.scored=true; score++; updateScoreUI();
     }
   }
-  if(player.y<-40){ showFall(); gameOver(); return; }
+  if(player.y<-15){ showFall(); gameOver(); return; }
   extendPlatforms(gameTime);
 
-  document.getElementById('pill-crouch').className='state-pill'+(isCrouching?' active crouch':'');
-  document.getElementById('pill-walk').className='state-pill'+(isMoving&&!isSprinting&&!isCrouching?' active':'');
-  document.getElementById('pill-sprint').className='state-pill'+(isSprinting&&isMoving?' active sprint':'');
+  // Spike platform death check — spikes on bottom, rotated
+  for(const p of platforms){
+    if(!p.spiked) continue;
+    const dx=player.x-p.x, dz=player.z-p.z;
+    if(Math.abs(dx)<2.2&&Math.abs(dz)<2.2){
+      // Spike tip direction (rotates): spikes point downward from platform bottom
+      // Kill if player is below the platform and near a spike tip
+      const spikeY = p.y - 0.6; // spike tip below platform
+      if(player.y-STAND_H < spikeY+0.4 && player.y-STAND_H > spikeY-0.8){
+        // Check if player is near the spike tip angle
+        const angle = Math.atan2(dz, dx);
+        const relAngle = ((angle - p.spikeAngle) % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+        // Spikes at 0, PI/2, PI, 3PI/2 — kill if within 0.3 rad of any spike
+        const spikeAngles = [0, Math.PI/2, Math.PI, Math.PI*3/2];
+        for(const sa of spikeAngles){
+          const diff = Math.abs(((relAngle - sa + Math.PI) % (Math.PI*2)) - Math.PI);
+          if(diff < 0.35){ showFall(); gameOver(); return; }
+        }
+      }
+    }
+  }
+
+  document.getElementById('pill-crouch').className='state-pill';
+  document.getElementById('pill-walk').className='state-pill'+(isMoving?' active':'');
+  document.getElementById('pill-sprint').className='state-pill active sprint';
 }
 function showFall(){
   const el=document.getElementById('fall-msg');
@@ -780,7 +824,7 @@ function render(ts){
   gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
 
   perspective(proj,Math.PI/2,canvas.width/canvas.height,0.1,600);
-  const ph=STAND_H-crouchHeight*(STAND_H-CROUCH_H);
+  const ph=STAND_H;
   const camX=player.x, camY=player.y+ph*0.6, camZ=player.z;
   const lx=camX+Math.sin(yaw)*Math.cos(pitch);
   const ly=camY+Math.sin(pitch);

@@ -32,11 +32,11 @@ canvas{image-rendering:pixelated;image-rendering:crisp-edges;border:3px solid #2
 <body>
 <canvas id="c"></canvas>
 <div id="touch-controls">
-  <div class="touch-btn" id="btn-left">â—€</div>
-  <div class="touch-btn" id="btn-right">â–¶</div>
+  <div class="touch-btn" id="btn-left">&#9664;</div>
+  <div class="touch-btn" id="btn-right">&#9654;</div>
   <div class="touch-btn" id="btn-jump">JUMP</div>
 </div>
-<div id="btn-back-mobile">â—€ MENU</div>
+<div id="btn-back-mobile">&#9664; MENU</div>
 <script>
 
 // â”€â”€â”€ Audio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1075,7 +1075,7 @@ function updateGame(dt){
           plat.crumbling=plat.breakStartTime!==null&&(Date.now()-plat.breakStartTime>600);
         }
 
-        // Goal check: fires ONCE per landing
+        // Goal check: fires ONCE on touch — immediate teleport to next level
         if(plat.type==='goal'&&player.landedPlatId!==plat){
           player.landedPlatId=plat;
           levelComplete();return;
@@ -1302,6 +1302,8 @@ function updateGame(dt){
 }
 
 function levelComplete(){
+  if (gameState !== 'playing') return; // prevent double-trigger
+  gameState = 'transitioning';
   const lvlMs=getLevelMs();
   recordLevelComplete(level,levelDeaths,lvlMs);
   levelDeaths=0;
@@ -1310,11 +1312,12 @@ function levelComplete(){
     totalMs=getElapsedMs();timerRunning=false;
     saveTier(gameMode,getTier(totalMs,deaths));
     saveProgress();
-    startTransition('out',null,()=>{gameState='endscreen';setMusicTrack('ragebait 2_title.mp3');});
+    startTransition('out',0.025,()=>{gameState='endscreen';setMusicTrack('ragebait 2_title.mp3');});
   } else {
     level++;
     saveProgress();
-    startTransition('out',null,()=>{
+    startTransition('out',0.025,()=>{
+      gameState='playing';
       levelStartMs=getElapsedMs();
       initLevel();
       setMusicTrack(trackForLevel(level));
@@ -1896,12 +1899,12 @@ function drawWindIndicator(){
   const pulse=0.7+0.3*Math.sin(t*3);
   ctx.fillStyle=`rgba(150,210,255,${pulse})`;
   ctx.font='bold 10px monospace';ctx.textAlign='center';
-  ctx.fillText(windDir>0?'â—€â—€â—€ WIND â–¶â–¶â–¶':'â—€â—€â—€ WIND â–¶â–¶â–¶',W/2,H-8);
+  ctx.fillText(windDir>0?'>>> WIND <<<':'<<< WIND >>>',W/2,H-8);
   ctx.font='bold 8px monospace';ctx.textAlign='left';
   ctx.fillStyle=`rgba(150,210,255,${pulse*0.8})`;
-  ctx.fillText(windDir>0?'â–¶â–¶':'â—€â—€',4,H-8);
+  ctx.fillText(windDir>0?'>>':' <<',4,H-8);
   ctx.textAlign='right';
-  ctx.fillText(windDir>0?'â–¶â–¶':'â—€â—€',W-4,H-8);
+  ctx.fillText(windDir>0?'>>':'<<',W-4,H-8);
 }
 
 
@@ -1918,7 +1921,7 @@ function drawHUD(){
     ctx.fillStyle='#88ffcc';ctx.textAlign='center';ctx.font='bold 9px monospace';
     ctx.fillText('BEST: '+infiniteRecord,W/2,12);
     ctx.fillStyle='#ff6666';ctx.textAlign='right';ctx.font='bold 9px monospace';
-    ctx.fillText('âœ• '+deaths,W-4,12);
+    ctx.fillText('x '+deaths,W-4,12);
   } else {
     // Normal/hard/hardcore: LVL top-left, timer center, deaths top-right
     ctx.fillStyle='#cc88ff';ctx.font='bold 9px monospace';ctx.textAlign='left';
@@ -2076,7 +2079,7 @@ function drawMenu(){
   // Saved progress indicator
   if(hasSavedProgress()){
     ctx.fillStyle='rgba(100,255,150,0.7)';ctx.font='7px monospace';
-    ctx.fillText('â–¶ SAVED PROGRESS FOUND',W/2,descY+33);
+    ctx.fillText('> SAVED PROGRESS FOUND',W/2,descY+33);
   }
 
   // Mode toggle button (ONLY in menu, top right)
@@ -2094,7 +2097,7 @@ function drawMenu(){
   ctx.fillRect(BTN_PLAY.x,BTN_PLAY.y,BTN_PLAY.w,BTN_PLAY.h);
   ctx.fillStyle='rgba(180,100,255,0.4)';ctx.fillRect(BTN_PLAY.x,BTN_PLAY.y,BTN_PLAY.w,3);
   ctx.fillStyle='#ffffff';ctx.font='bold 10px monospace';ctx.textAlign='center';
-  ctx.fillText(hasSavedProgress()?'â–¶ CONTINUE':'â–¶ PLAY',W/2,BTN_PLAY.y+12);
+  ctx.fillText(hasSavedProgress()?'> CONTINUE':'> PLAY',W/2,BTN_PLAY.y+12);
 
   // RECORDS button
   const hoverRec=mouseX>=BTN_REC.x&&mouseX<=BTN_REC.x+BTN_REC.w&&mouseY>=BTN_REC.y&&mouseY<=BTN_REC.y+BTN_REC.h;

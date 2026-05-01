@@ -78,12 +78,44 @@
     maxPixels:100,
     placedThisLevel:0,
     requiredNext:10,
-    lastRegen:Date.now(),
+    lastRegen: Date.now(),
     selectedColor:PALETTE[3],
     grid:{},
     eraseMode:false,
     lockDrag:false
   };
+
+  // ── Load saved state ──────────────────────────────────────────────────────
+  function saveState() {
+    try { localStorage.setItem('vplace_state', JSON.stringify({
+      level: state.level, pixels: state.pixels, maxPixels: state.maxPixels,
+      placedThisLevel: state.placedThisLevel, requiredNext: state.requiredNext,
+      lastRegen: state.lastRegen, grid: state.grid
+    })); } catch(e) {}
+  }
+  function loadState() {
+    try {
+      const raw = localStorage.getItem('vplace_state');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      // Accumulate offline pixels (1 per second, capped at maxPixels)
+      const now = Date.now();
+      const offlineSecs = Math.floor((now - (s.lastRegen || now)) / 1000);
+      const earned = Math.min(offlineSecs, (s.maxPixels || 100) - (s.pixels || 0));
+      state.level = s.level || 1;
+      state.pixels = Math.min((s.pixels || 0) + Math.max(0, earned), s.maxPixels || 100);
+      state.maxPixels = s.maxPixels || 100;
+      state.placedThisLevel = s.placedThisLevel || 0;
+      state.requiredNext = s.requiredNext || 10;
+      state.lastRegen = now;
+      state.grid = s.grid || {};
+    } catch(e) {}
+  }
+  loadState();
+  // Auto-save every 5s and on hide
+  setInterval(saveState, 5000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveState(); });
+  window.addEventListener('beforeunload', saveState);
 
   // Map setup
   const map = L.map('map',{preferCanvas:true}).setView([20,0],3);
@@ -177,20 +209,19 @@
     }
   }
 
-  // Regen loop
+  // Regen: 1 pixel per second, runs even when tab is hidden via lastRegen timestamp
   setInterval(()=>{
-    const now=Date.now();
-    const elapsed=Math.floor((now-state.lastRegen)/1000);
-    const remain=REGEN_INTERVAL_SEC-(elapsed%REGEN_INTERVAL_SEC);
-    elRegen.textContent=remain+"s";
-    if(elapsed>=REGEN_INTERVAL_SEC){
-      state.lastRegen=now;
-      if(state.pixels<state.maxPixels){
-        state.pixels++;
-        updateUI();
-      }
+    const now = Date.now();
+    const elapsed = Math.floor((now - state.lastRegen) / 1000);
+    if (elapsed >= 1) {
+      const toAdd = Math.min(elapsed, state.maxPixels - state.pixels);
+      if (toAdd > 0) { state.pixels += toAdd; updateUI(); }
+      state.lastRegen = now - ((now - state.lastRegen) % 1000);
     }
-  },1000);
+    // Update countdown display
+    const remain = 1 - ((now - state.lastRegen) / 1000);
+    elRegen.textContent = remain.toFixed(1) + 's';
+  }, 200);
 
   // Events
   let dragging=false;
