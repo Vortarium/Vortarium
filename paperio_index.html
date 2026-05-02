@@ -1,0 +1,1567 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paper.io</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#1a1a2e;color:#fff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;user-select:none;}
+#homeScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(13,13,26,0.82);z-index:100;overflow:hidden;backdrop-filter:blur(2px);}
+#menuCanvas{display:none;}
+#homeScreen>*:not(#menuCanvas){position:relative;z-index:1;}
+#homeScreen h1{font-size:72px;font-weight:900;letter-spacing:4px;background:linear-gradient(90deg,#ff6b6b,#ffd93d,#6bcb77,#4d96ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;}
+.subtitle{color:#888;font-size:16px;margin-bottom:40px;letter-spacing:2px;}
+.home-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px 40px;width:440px;backdrop-filter:blur(10px);}
+.home-card label{display:block;font-size:12px;letter-spacing:1px;color:#aaa;margin-bottom:8px;text-transform:uppercase;}
+.home-card input[type=text]{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:12px 16px;color:#fff;font-size:16px;outline:none;transition:border-color 0.2s;margin-bottom:24px;}
+.home-card input[type=text]:focus{border-color:rgba(255,255,255,0.4);}
+.skin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:28px;}
+.skin-swatch{border-radius:10px;padding:10px 6px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;text-align:center;font-size:11px;font-weight:600;}
+.skin-swatch:hover{transform:scale(1.05);}
+.skin-swatch.selected{border-color:#fff;transform:scale(1.08);}
+.swatch-dot{width:28px;height:28px;border-radius:50%;margin:0 auto 6px;border:3px solid rgba(255,255,255,0.3);}
+.btn-play{width:100%;padding:16px;background:linear-gradient(135deg,#ff6b6b,#ff8e53);border:none;border-radius:10px;color:#fff;font-size:20px;font-weight:800;letter-spacing:2px;cursor:pointer;transition:all 0.2s;text-transform:uppercase;}
+.btn-play:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(255,107,107,0.4);}
+.home-bottom{display:flex;gap:16px;margin-top:20px;}
+.btn-secondary{flex:1;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#ccc;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;}
+.btn-secondary:hover{background:rgba(255,255,255,0.14);color:#fff;}
+.records-display{margin-top:20px;background:rgba(255,255,255,0.04);border-radius:10px;padding:16px 20px;width:440px;}
+.records-display h3{font-size:12px;letter-spacing:1px;color:#888;text-transform:uppercase;margin-bottom:12px;}
+.records-row{display:flex;justify-content:space-between;font-size:14px;color:#ccc;margin-bottom:6px;}
+.records-row span:last-child{color:#ffd93d;font-weight:700;}
+#achievementsPanel{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:none;align-items:center;justify-content:center;}
+#achievementsPanel.open{display:flex;}
+.ach-modal{background:#1a1a2e;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px;width:500px;max-height:80vh;overflow-y:auto;}
+.ach-modal h2{font-size:24px;margin-bottom:24px;color:#ffd93d;}
+.ach-item{display:flex;align-items:center;gap:16px;padding:14px;border-radius:10px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);}
+.ach-item.unlocked{background:rgba(255,217,61,0.08);border-color:rgba(255,217,61,0.2);}
+.ach-icon{font-size:28px;width:44px;text-align:center;filter:grayscale(1);opacity:0.4;}
+.ach-item.unlocked .ach-icon{filter:none;opacity:1;}
+.ach-info h4{font-size:15px;margin-bottom:3px;}
+.ach-info p{font-size:12px;color:#888;}
+.ach-item.unlocked .ach-info h4{color:#ffd93d;}
+.btn-close-ach{margin-top:20px;width:100%;padding:12px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#ccc;font-size:14px;cursor:pointer;}
+#gameScreen{position:fixed;inset:0;display:none;}
+#gameScreen.active{display:block;}
+canvas{display:block;}
+#gameCanvas{position:absolute;top:0;left:0;}
+#menuCanvas{position:absolute;top:0;left:0;}
+#minimap{position:fixed!important;bottom:20px!important;left:20px!important;top:auto!important;width:225px;height:225px;border:2px solid rgba(0,0,0,0.3);border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,0.25);image-rendering:pixelated;z-index:9999;background:#ddd;}
+#leaderboard{position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.93);border-radius:12px;padding:14px 18px;min-width:190px;box-shadow:0 4px 20px rgba(0,0,0,0.15);}
+#leaderboard h3{font-size:11px;letter-spacing:1.5px;color:#999;text-transform:uppercase;margin-bottom:10px;}
+.lb-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:13px;}
+.lb-rank{color:#bbb;width:16px;font-size:11px;}
+.lb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.lb-name{flex:1;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-name.me{color:#111;font-weight:700;}
+.lb-pct{color:#e67e22;font-weight:700;font-size:12px;}
+#statsBar{position:absolute;top:20px;left:20px;display:flex;flex-direction:column;gap:8px;}
+.stat-pill{background:rgba(255,255,255,0.93);border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;gap:8px;}
+.stat-label{color:#999;font-size:11px;font-weight:400;}
+.stat-val{color:#333;}
+#achPopup{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-120px);background:#fff;border:2px solid #ffd93d;border-radius:12px;padding:14px 22px;display:flex;align-items:center;gap:14px;z-index:300;transition:transform 0.35s cubic-bezier(0.34,1.4,0.64,1),opacity 0.35s;pointer-events:none;min-width:260px;box-shadow:0 8px 30px rgba(0,0,0,0.25);opacity:0;}
+#achPopup.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.pop-icon{font-size:32px;}
+.pop-label{font-size:10px;color:#999;letter-spacing:1px;text-transform:uppercase;}
+.pop-text h4{color:#e67e22;font-size:14px;margin-bottom:2px;}
+.pop-text p{color:#666;font-size:12px;}
+#deathScreen{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:150;display:none;align-items:center;justify-content:center;}
+#deathScreen.active{display:flex;}
+.death-card{background:#fff;border-radius:20px;padding:40px 48px;text-align:center;min-width:380px;color:#333;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+.death-card h2{font-size:36px;font-weight:900;color:#e74c3c;margin-bottom:6px;letter-spacing:2px;}
+.death-sub{color:#999;font-size:14px;margin-bottom:28px;}
+.death-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px;}
+.death-stat{background:#f8f8f8;border-radius:10px;padding:14px 10px;}
+.ds-val{font-size:24px;font-weight:800;color:#e67e22;display:block;}
+.ds-label{font-size:11px;color:#999;margin-top:4px;display:block;}
+.death-new-ach{margin-bottom:24px;}
+.death-new-ach h4{font-size:12px;color:#e67e22;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+.death-ach-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(230,126,34,0.1);border:1px solid rgba(230,126,34,0.3);border-radius:20px;padding:6px 14px;font-size:13px;margin:4px;color:#333;}
+.death-buttons{display:flex;gap:12px;}
+.death-buttons button{flex:1;padding:14px;border-radius:10px;border:none;font-size:15px;font-weight:700;cursor:pointer;transition:all 0.2s;}
+.btn-again{background:linear-gradient(135deg,#ff6b6b,#ff8e53);color:#fff;}
+.btn-again:hover{transform:translateY(-2px);}
+.btn-home-death{background:#f0f0f0;color:#666;}
+.btn-home-death:hover{background:#e0e0e0;}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px;}
+#hud{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:10;}
+</style>
+</head>
+<body>
+<div id="homeScreen">
+  <canvas id="menuCanvas"></canvas>
+  <h1>PAPER.IO</h1>
+  <p class="subtitle">CLAIM YOUR TERRITORY</p>
+  <div class="home-card">
+    <label for="nameInput">Your Name</label>
+    <input type="text" id="nameInput" maxlength="16" placeholder="Leave blank for random name...">
+    <label>Choose Your Skin</label>
+    <div class="skin-grid" id="skinGrid"></div>
+    <button class="btn-play" id="btnPlay">&#9654; PLAY</button>
+    <div class="home-bottom">
+      <button class="btn-secondary" id="btnAchievements">&#127942; Achievements</button>
+    </div>
+  </div>
+  <div class="records-display">
+    <h3>Personal Records</h3>
+    <div class="records-row"><span>Best Territory</span><span id="recTerritory">-</span></div>
+    <div class="records-row"><span>Most Kills</span><span id="recKills">-</span></div>
+    <div class="records-row"><span>Longest Survival</span><span id="recSurvival">-</span></div>
+  </div>
+</div>
+<div id="achievementsPanel">
+  <div class="ach-modal">
+    <h2>&#127942; Achievements</h2>
+    <div id="achList"></div>
+    <button class="btn-close-ach" id="btnCloseAch">Close</button>
+  </div>
+</div>
+<div id="gameScreen">
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud">
+    <div id="statsBar">
+      <div class="stat-pill"><span class="stat-label">TERRITORY</span><span class="stat-val" id="statTerritory">0%</span></div>
+      <div class="stat-pill"><span class="stat-label">KILLS</span><span class="stat-val" id="statKills">0</span></div>
+      <div class="stat-pill"><span class="stat-label">TIME</span><span class="stat-val" id="statTime">0:00</span></div>
+    </div>
+    <div id="leaderboard">
+      <h3>&#127942; Top Players</h3>
+      <div id="lbRows"></div>
+    </div>
+  </div>
+</div>
+<canvas id="minimap" width="250" height="250"></canvas>
+<div id="achPopup">
+  <div class="pop-icon" id="popIcon"></div>
+  <div class="pop-text">
+    <div class="pop-label">Achievement Unlocked!</div>
+    <h4 id="popName"></h4>
+    <p id="popDesc"></p>
+  </div>
+</div>
+<div id="deathScreen">
+  <div class="death-card">
+    <h2>GAME OVER</h2>
+    <p class="death-sub" id="deathSub">You were eliminated!</p>
+    <div class="death-stats">
+      <div class="death-stat"><span class="ds-val" id="dsBestTerritory">0%</span><span class="ds-label">Best Territory</span></div>
+      <div class="death-stat"><span class="ds-val" id="dsKills">0</span><span class="ds-label">Kills</span></div>
+      <div class="death-stat"><span class="ds-val" id="dsTime">0:00</span><span class="ds-label">Survived</span></div>
+    </div>
+    <div class="death-new-ach" id="deathNewAch" style="display:none">
+      <h4>&#127942; New Achievements</h4>
+      <div id="deathAchBadges"></div>
+    </div>
+    <div class="death-buttons">
+      <button class="btn-again" id="btnPlayAgain">&#9654; Play Again</button>
+      <button class="btn-home-death" id="btnGoHome">&#8962; Home</button>
+    </div>
+  </div>
+</div>
+<script>
+// ===== CONFIG =====
+const GRID_SIZE = 250;
+const CELL = 20;
+const MAX_BOTS = 30;
+const PLAYER_SPEED = 8;   // cells/sec
+const BOT_SPEED = 7;
+const SPAWN_INTERVAL = 5000;
+const MIN_SPAWN_DIST = 30;
+
+// ===== SKINS =====
+const SKINS = [
+  {name:'Crimson', fill:'rgba(220,50,50,0.28)', stroke:'#e03232', dot:'#e03232', light:'rgba(220,50,50,0.12)'},
+  {name:'Ocean',   fill:'rgba(30,144,255,0.28)', stroke:'#1e90ff', dot:'#1e90ff', light:'rgba(30,144,255,0.12)'},
+  {name:'Forest',  fill:'rgba(34,180,34,0.28)', stroke:'#22b422', dot:'#22b422', light:'rgba(34,180,34,0.12)'},
+  {name:'Galaxy',  fill:'rgba(160,0,255,0.28)', stroke:'#a000ff', dot:'#a000ff', light:'rgba(160,0,255,0.12)'},
+  {name:'Candy',   fill:'rgba(255,80,180,0.28)', stroke:'#ff50b4', dot:'#ff50b4', light:'rgba(255,80,180,0.12)'},
+  {name:'Gold',    fill:'rgba(220,170,0,0.28)', stroke:'#dcaa00', dot:'#dcaa00', light:'rgba(220,170,0,0.12)'},
+  {name:'Ice',     fill:'rgba(80,200,240,0.28)', stroke:'#50c8f0', dot:'#50c8f0', light:'rgba(80,200,240,0.12)'},
+  {name:'Lava',    fill:'rgba(255,100,0,0.28)', stroke:'#ff6400', dot:'#ff6400', light:'rgba(255,100,0,0.12)'},
+];
+
+// Generate a random dark/vivid RGB color for bots (avoid light colors)
+function randomBotColor(){
+  let r,g,b,brightness;
+  do {
+    r = Math.floor(Math.random()*200);
+    g = Math.floor(Math.random()*200);
+    b = Math.floor(Math.random()*200);
+    // Ensure at least one channel is vivid
+    const maxC = Math.max(r,g,b);
+    if(maxC < 80) continue;
+    // Perceived brightness: avoid colors that look washed out / too light
+    brightness = (r*299 + g*587 + b*114) / 1000;
+  } while(brightness > 160 || Math.max(r,g,b) < 80);
+  const hex = '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+  return {
+    name:'Bot',
+    fill:`rgba(${r},${g},${b},0.28)`,
+    stroke:hex,
+    dot:hex,
+    light:`rgba(${r},${g},${b},0.12)`
+  };
+}
+
+// ===== ACHIEVEMENTS (tiered) =====
+const ACHIEVEMENT_TRACKS = [
+  {
+    id:'territory', icon:'👑', name:'Conqueror',
+    tiers:[
+      {t:1, req:3,   desc:'Own 3% of the map'},
+      {t:2, req:5,   desc:'Own 5% of the map'},
+      {t:3, req:10,  desc:'Own 10% of the map'},
+      {t:4, req:15,  desc:'Own 15% of the map'},
+      {t:5, req:20,  desc:'Own 20% of the map'},
+      {t:6, req:25,  desc:'Own 25% of the map'},
+      {t:7, req:50,  desc:'Own 50% of the map'},
+      {t:8, req:80,  desc:'Own 80% of the map'},
+      {t:9, req:100, desc:'Own 100% of the map'},
+    ]
+  },
+  {
+    id:'kills', icon:'⚔️', name:'Killer',
+    tiers:[
+      {t:1, req:1,   desc:'Get 1 kill in a match'},
+      {t:2, req:3,   desc:'Get 3 kills in a match'},
+      {t:3, req:5,   desc:'Get 5 kills in a match'},
+      {t:4, req:10,  desc:'Get 10 kills in a match'},
+      {t:5, req:15,  desc:'Get 15 kills in a match'},
+      {t:6, req:20,  desc:'Get 20 kills in a match'},
+      {t:7, req:30,  desc:'Get 30 kills in a match'},
+      {t:8, req:50,  desc:'Get 50 kills in a match'},
+      {t:9, req:100, desc:'Get 100 kills in a match'},
+    ]
+  },
+  {
+    id:'survive', icon:'⏱️', name:'Survivor',
+    tiers:[
+      {t:1, req:60,   desc:'Survive 1 minute'},
+      {t:2, req:180,  desc:'Survive 3 minutes'},
+      {t:3, req:300,  desc:'Survive 5 minutes'},
+      {t:4, req:600,  desc:'Survive 10 minutes'},
+      {t:5, req:900,  desc:'Survive 15 minutes'},
+      {t:6, req:1200, desc:'Survive 20 minutes'},
+      {t:7, req:1500, desc:'Survive 25 minutes'},
+      {t:8, req:1800, desc:'Survive 30 minutes'},
+      {t:9, req:2700, desc:'Survive 45 minutes'},
+    ]
+  },
+];
+
+const TIER_NAMES=['','I','II','III','IV','V','VI','VII','VIII','IX'];
+const TIER_COLORS=['','#cd7f32','#c07830','#aaaaaa','#888888','#ffd700','#ffb700','#a0d8ef','#b9f2ff','#ff6bff'];
+
+function getAchState(){
+  try{return JSON.parse(localStorage.getItem('paperio_ach3')||'{}');}catch(e){return {};}
+}
+function saveAchState(s){localStorage.setItem('paperio_ach3',JSON.stringify(s));}
+function getTrackTier(trackId){ return getAchState()[trackId]||0; }
+function setTrackTier(trackId,tier){
+  const s=getAchState();
+  if((s[trackId]||0)>=tier)return false;
+  s[trackId]=tier; saveAchState(s); return true;
+}
+
+// Per-session tracking
+let sessionKills=0, sessionStartTime=0, sessionDeathFreeStart=0;
+
+function checkAchievements(human,elapsed,loopTime){
+  const pct=human.territoryPct;
+  // Territory
+  for(const tier of ACHIEVEMENT_TRACKS[0].tiers){
+    if(pct>=tier.req&&setTrackTier('territory',tier.t))
+      queueAchPopup(ACHIEVEMENT_TRACKS[0],tier);
+  }
+  // Kills
+  for(const tier of ACHIEVEMENT_TRACKS[1].tiers){
+    if(sessionKills>=tier.req&&setTrackTier('kills',tier.t))
+      queueAchPopup(ACHIEVEMENT_TRACKS[1],tier);
+  }
+  // Survive
+  for(const tier of ACHIEVEMENT_TRACKS[2].tiers){
+    if(elapsed>=tier.req&&setTrackTier('survive',tier.t))
+      queueAchPopup(ACHIEVEMENT_TRACKS[2],tier);
+  }
+}
+
+// Achievement popup — slides down from top, auto-hides
+let achQueue=[], achShowing=false;
+function queueAchPopup(track,tier){
+  achQueue.push({track,tier});
+  if(!achShowing) nextAchPopup();
+}
+function nextAchPopup(){
+  if(!achQueue.length){achShowing=false;return;}
+  achShowing=true;
+  const {track,tier}=achQueue.shift();
+  const col=TIER_COLORS[tier.t];
+  document.getElementById('popIcon').textContent=track.icon;
+  document.getElementById('popName').textContent=`${track.name} ${TIER_NAMES[tier.t]}`;
+  document.getElementById('popName').style.color=col;
+  document.getElementById('popDesc').textContent=tier.desc;
+  achPopup.classList.add('show');
+  setTimeout(()=>{
+    achPopup.classList.remove('show');
+    setTimeout(nextAchPopup,500);
+  },2800);
+}
+
+function buildAchList(){
+  const el=document.getElementById('achList');
+  el.innerHTML='';
+  for(const track of ACHIEVEMENT_TRACKS){
+    const cur=getTrackTier(track.id);
+    const wrap=document.createElement('div');
+    wrap.style.cssText='margin-bottom:20px;';
+    wrap.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:22px">${track.icon}</span>
+      <span style="font-size:15px;font-weight:700;color:#fff">${track.name}</span>
+      <span style="font-size:12px;color:${cur>0?TIER_COLORS[cur]:'#555'};margin-left:4px">${cur>0?'Tier '+TIER_NAMES[cur]+' unlocked':'Locked'}</span>
+    </div>`;
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:5px;flex-wrap:wrap;';
+    for(const tier of track.tiers){
+      const done=cur>=tier.t;
+      const pip=document.createElement('div');
+      pip.title=tier.desc;
+      pip.style.cssText=`width:30px;height:30px;border-radius:50%;border:2px solid ${done?TIER_COLORS[tier.t]:'#444'};background:${done?TIER_COLORS[tier.t]+'44':'transparent'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:${done?TIER_COLORS[tier.t]:'#555'};`;
+      pip.textContent=TIER_NAMES[tier.t];
+      row.appendChild(pip);
+    }
+    wrap.appendChild(row);
+    el.appendChild(wrap);
+  }
+}
+
+// Legacy stubs
+function unlockAch(){}
+const ACHIEVEMENTS_DEF=[];
+const ACH_ICONS={};
+
+// ===== NAMES =====
+const ADJS = ['Swift','Neon','Crimson','Shadow','Blazing','Frozen','Toxic','Cosmic','Hyper','Stealth','Turbo','Phantom','Rogue','Savage','Venom','Cyber','Lunar','Solar','Storm','Void','Rusty','Slick','Grim','Jolly','Sneaky'];
+const NOUNS = ['Fox','Shark','Bear','Wolf','Eagle','Tiger','Cobra','Hawk','Viper','Panther','Dragon','Falcon','Lynx','Raven','Puma','Jaguar','Manta','Hydra','Phoenix','Titan','Otter','Gecko','Moose','Dingo','Ferret'];
+function randomName(){return ADJS[Math.random()*ADJS.length|0]+NOUNS[Math.random()*NOUNS.length|0];}
+
+// ===== STORAGE =====
+function loadSave(){try{return JSON.parse(localStorage.getItem('paperio2')||'{}');}catch(e){return {};}}
+function writeSave(d){localStorage.setItem('paperio2',JSON.stringify(d));}
+function getRecords(){return loadSave().records||{territory:0,kills:0,survival:0};}
+function saveRecords(r){const d=loadSave();d.records=r;writeSave(d);}
+function getAchs(){return loadSave().achievements||[];}
+function saveAchs(a){const d=loadSave();d.achievements=a;writeSave(d);}
+
+// ===== DOM =====
+const homeScreen=document.getElementById('homeScreen');
+const gameScreen=document.getElementById('gameScreen');
+const deathScreen=document.getElementById('deathScreen');
+const achPanel=document.getElementById('achievementsPanel');
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const nameInput=document.getElementById('nameInput');
+const skinGridEl=document.getElementById('skinGrid');
+const lbRows=document.getElementById('lbRows');
+const statTerritory=document.getElementById('statTerritory');
+const statKills=document.getElementById('statKills');
+const statTime=document.getElementById('statTime');
+const achPopup=document.getElementById('achPopup');
+const popIcon=document.getElementById('popIcon');
+const popName=document.getElementById('popName');
+const popDesc=document.getElementById('popDesc');
+
+// ===== HOME SETUP =====
+let selectedSkin=0;
+function buildSkins(){
+  skinGridEl.innerHTML='';
+  SKINS.forEach((s,i)=>{
+    const d=document.createElement('div');
+    d.className='skin-swatch'+(i===selectedSkin?' selected':'');
+    d.style.background=s.light.replace('0.12','0.3');
+    d.innerHTML=`<div class="swatch-dot" style="background:${s.dot}"></div>${s.name}`;
+    d.onclick=()=>{selectedSkin=i;document.querySelectorAll('.skin-swatch').forEach((el,j)=>el.classList.toggle('selected',j===i));};
+    skinGridEl.appendChild(d);
+  });
+}
+function buildAchList_OLD_REMOVED(){}
+function updateRecords(){
+  const r=getRecords();
+  document.getElementById('recTerritory').textContent=r.territory>0?r.territory.toFixed(1)+'%':'-';
+  document.getElementById('recKills').textContent=r.kills>0?r.kills:'-';
+  document.getElementById('recSurvival').textContent=r.survival>0?fmtTime(r.survival):'-';
+}
+function fmtTime(s){return Math.floor(s/60)+':'+(''+(Math.floor(s)%60)).padStart(2,'0');}
+
+buildSkins(); buildAchList(); updateRecords();
+
+document.getElementById('btnAchievements').onclick=()=>{buildAchList();achPanel.classList.add('open');};
+document.getElementById('btnCloseAch').onclick=()=>achPanel.classList.remove('open');
+achPanel.onclick=e=>{if(e.target===achPanel)achPanel.classList.remove('open');};
+document.getElementById('btnPlay').onclick=startGame;
+document.getElementById('btnPlayAgain').onclick=()=>{
+  const human=players.find(p=>p.isHuman);
+  if(human){
+    respawnHuman(human);
+    gameScreen.classList.add('active');
+    homeScreen.style.display='none';
+  } else {
+    startGame();
+  }
+};
+document.getElementById('btnGoHome').onclick=goHome;
+
+// ===== GAME STATE =====
+let players=[], gameRunning=false, animId=null, lastTime=0, gameStartTime=0, pidCounter=0, newAchs=[];
+let camX=0, camY=0;
+const keys={};
+
+// grid[y][x] = player id who owns that territory (0=unclaimed)
+// tgrid[y][x] = player id whose trail is on that cell (0=none)
+let grid=[], tgrid=[], cellCounts={};
+
+function initGrid(){
+  grid=[]; tgrid=[]; cellCounts={};
+  for(let y=0;y<GRID_SIZE;y++){
+    grid.push(new Int32Array(GRID_SIZE));
+    tgrid.push(new Int32Array(GRID_SIZE));
+  }
+}
+function gCell(x,y){ return (x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)?0:grid[y][x]; }
+function sCell(x,y,id){
+  if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return;
+  const old=grid[y][x];
+  if(old===id)return;
+  if(old>0)cellCounts[old]=(cellCounts[old]||1)-1;
+  if(id>0)cellCounts[id]=(cellCounts[id]||0)+1;
+  grid[y][x]=id;
+}
+function gTrail(x,y){ return (x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)?0:tgrid[y][x]; }
+function sTrail(x,y,id){ if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return; tgrid[y][x]=id; }
+function countCells(id){ return cellCounts[id]||0; }
+
+// Find a free spawn point:
+// - Must be at least 20 cells from any border
+// - 10x10 area (±5 cells) must be completely free of territory
+// - No active trail within 5 cells of the spawn centre
+function findFreeSpawn(){
+  const BORDER = 30;  // stay 30 cells from map edges
+  const TERR_R = 5;
+  const TRAIL_R = 5;
+
+  for(let attempt=0;attempt<500;attempt++){
+    const cx=BORDER+Math.floor(Math.random()*(GRID_SIZE-BORDER*2));
+    const cy=BORDER+Math.floor(Math.random()*(GRID_SIZE-BORDER*2));
+
+    let ok=true;
+    outer: for(let dy=-TERR_R;dy<=TERR_R;dy++){
+      for(let dx=-TERR_R;dx<=TERR_R;dx++){
+        if(gCell(cx+dx,cy+dy)!==0){ok=false;break outer;}
+      }
+    }
+    if(!ok) continue;
+
+    for(const p of players){
+      if(!p.alive||p.trail.length===0) continue;
+      for(const c of p.trail){
+        if(Math.abs(c.cx-cx)<=TRAIL_R&&Math.abs(c.cy-cy)<=TRAIL_R){ok=false;break;}
+      }
+      if(!ok) break;
+    }
+    if(ok) return {cx,cy};
+  }
+  return null;
+}
+function findFreeSpawnOrNull(){ return findFreeSpawn(); }
+
+// ===== PLAYER CLASS =====
+class Player {
+  constructor(id,name,skin,isHuman){
+    this.id=id; this.name=name; this.skin=skin; this.isHuman=isHuman;
+    this.cx=0; this.cy=0;
+    this.dir={x:1,y:0}; this.nextDir={x:1,y:0};
+    this.trail=[];
+    this.inTrail=false;
+    this.kills=0; this.alive=true; this.deathCount=0;
+    this.maxTerritoryPct=0; this.lowTerritoryFlag=false;
+    this.respawnTimer=0; this.loopStartTime=0; this.moveTimer=0;
+    this.speed=isHuman?PLAYER_SPEED:(BOT_SPEED+(Math.random()-0.5)*2);
+    // Bot fields
+    this.botPhase='out';   // out | sweep | close | return
+    this.botOutDir={x:1,y:0};
+    this.botOutSteps=0;
+    this.botOutTarget=0;
+    this.botSweepDir={x:0,y:1};
+    this.botSweepSteps=0;
+    this.botSweepTarget=0;
+    this.botCloseDir={x:-1,y:0};
+    this.botCloseSteps=0;
+    this.botCloseTarget=0;
+    this.botDecideTimer=0;
+    this.aggression=Math.random();
+    this.straightCount=0;
+    this.lastOutDir=null;
+    this.trailTimer=0;
+    this.trailReturnAt=5000;
+    this.restTimer=0;
+    this.baseCx=0; this.baseCy=0;
+    this.huntTarget=null; this.huntOwner=null;
+  }
+  get territoryPct(){ return Math.min(100,countCells(this.id)/(GRID_SIZE*GRID_SIZE)*100); }
+  spawnAt(cx,cy){
+    this.cx=cx; this.cy=cy;
+    this.dir={x:1,y:0}; this.nextDir={x:1,y:0};
+    this.trail=[]; this.inTrail=false; this.alive=true; this.moveTimer=0;
+    this.trailTimer=0; this.trailReturnAt=5000; this.restTimer=300+Math.random()*200;
+    this.huntTarget=null; this.huntOwner=null;
+    if(!this.isHuman) assignPersonality(this);
+    // 11x11 starting territory
+    for(let dy=-5;dy<=5;dy++) for(let dx=-5;dx<=5;dx++) sCell(cx+dx,cy+dy,this.id);
+    this.botPhase='out';
+    this.botDecideTimer=0;
+    this.straightCount=0;
+    this._pickOutDir();
+  }
+  _pickOutDir(){
+    // Find territory centroid
+    let tcx=this.cx, tcy=this.cy, tn=0;
+    for(let y=0;y<GRID_SIZE;y+=3){
+      for(let x=0;x<GRID_SIZE;x+=3){
+        if(grid[y][x]===this.id){tcx+=x;tcy+=y;tn++;}
+      }
+    }
+    if(tn>0){tcx=Math.round(tcx/tn);tcy=Math.round(tcy/tn);}
+    this.baseCx=tcx; this.baseCy=tcy;
+
+    const mapCx=GRID_SIZE/2, mapCy=GRID_SIZE/2;
+    const allDirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+
+    // Score each direction: open space ahead, away from borders, toward map centre
+    let bestDir=null, bestScore=-Infinity;
+    for(const d of allDirs){
+      if(this.lastOutDir&&d.x===-this.lastOutDir.x&&d.y===-this.lastOutDir.y) continue;
+      let score=0;
+      for(let s=1;s<=25;s++){
+        const lx=tcx+d.x*s, ly=tcy+d.y*s;
+        if(lx<30||ly<30||lx>=GRID_SIZE-30||ly>=GRID_SIZE-30){score-=100;break;}
+        const v=gCell(lx,ly);
+        if(v===0) score+=4;
+        else if(v===this.id) score-=3;
+        else score+=2;
+      }
+      const fx=tcx+d.x*15, fy=tcy+d.y*15;
+      score-=(Math.abs(fx-mapCx)+Math.abs(fy-mapCy))*0.08;
+      if(score>bestScore){bestScore=score;bestDir=d;}
+    }
+    if(!bestDir) bestDir=allDirs[Math.floor(Math.random()*allDirs.length)];
+
+    this.botOutDir={x:bestDir.x,y:bestDir.y};
+    this.lastOutDir={x:bestDir.x,y:bestDir.y};
+
+    // Rectangle size from personality loopSize, or default
+    const sz=(this.loopSize?this.loopSize():22)+Math.floor(Math.random()*6);
+    const outLen=sz, sweepLen=sz;
+
+    this.botOutTarget=outLen;
+    this.botOutSteps=0;
+
+    // Pick sweep direction with more open space
+    const cw={x:-bestDir.y,y:bestDir.x};
+    const ccw={x:bestDir.y,y:-bestDir.x};
+    let cwScore=0, ccwScore=0;
+    for(let s=1;s<=sweepLen;s++){
+      if(gCell(tcx+cw.x*s,tcy+cw.y*s)===0) cwScore++;
+      if(gCell(tcx+ccw.x*s,tcy+ccw.y*s)===0) ccwScore++;
+    }
+    this.botSweepDir=cwScore>=ccwScore?cw:ccw;
+    this.botSweepTarget=sweepLen;
+    this.botSweepSteps=0;
+
+    // No close phase — just out→sweep→return. Flood fill handles the interior.
+    this.botPhase='out';
+    this.restTimer=150+Math.random()*150;
+  }
+}
+
+// ===== INPUT =====
+document.addEventListener('keydown',e=>{
+  keys[e.key]=true;
+  if(!gameRunning)return;
+  const h=players.find(p=>p.isHuman&&p.alive);
+  if(!h)return;
+  let nd=null;
+  if(e.key==='ArrowUp'||e.key==='w'||e.key==='W') nd={x:0,y:-1};
+  else if(e.key==='ArrowDown'||e.key==='s'||e.key==='S') nd={x:0,y:1};
+  else if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') nd={x:-1,y:0};
+  else if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') nd={x:1,y:0};
+  if(nd){
+    // Block 180 reversal only while in trail (would immediately cross own trail)
+    const is180 = nd.x===-h.dir.x && nd.y===-h.dir.y;
+    if(!is180 || !h.inTrail) h.nextDir=nd;
+  }
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup',e=>{keys[e.key]=false;});
+
+// ===== KILL =====
+function killPlayer(victim,killer){
+  if(!victim.alive)return;
+  victim.alive=false;
+  victim.deathCount++;
+  // Clear trail from tgrid
+  for(const c of victim.trail) sTrail(c.cx,c.cy,0);
+  victim.trail=[]; victim.inTrail=false;
+  // Clear all territory
+  for(let y=0;y<GRID_SIZE;y++) for(let x=0;x<GRID_SIZE;x++) if(grid[y][x]===victim.id) sCell(x,y,0);
+  if(killer&&killer.id!==victim.id){
+    killer.kills++;
+    if(killer.isHuman){
+      sessionKills++;
+    }
+  }
+  if(victim.isHuman){
+    sessionDeathFreeStart=performance.now(); // reset death-free timer
+    const elapsed=(performance.now()-gameStartTime)/1000;
+    const pct=victim.maxTerritoryPct;
+    const kills=victim.kills;
+    const rec=getRecords();
+    if(pct>rec.territory)rec.territory=pct;
+    if(kills>rec.kills)rec.kills=kills;
+    if(elapsed>rec.survival)rec.survival=elapsed;
+    saveRecords(rec);
+    if(victim.deathCount===1&&elapsed>30) unlockAch('untouchable');
+    // Show death screen — player must click to respawn, game keeps running in background
+    document.getElementById('dsBestTerritory').textContent=pct.toFixed(1)+'%';
+    document.getElementById('dsKills').textContent=kills;
+    document.getElementById('dsTime').textContent=fmtTime(elapsed);
+    document.getElementById('deathNewAch').style.display='none';
+    deathScreen.classList.add('active');
+  } else {
+    victim.respawnTimer=SPAWN_INTERVAL+Math.random()*3000;
+  }
+}
+
+// ===== FLOOD FILL CAPTURE =====
+// When a player returns to their territory, fill everything enclosed by trail+territory
+function floodFillCapture(player){
+  if(player.trail.length<1)return;
+
+  // Bounding box: scan ALL owned cells (sample every 2nd for performance) + trail cells
+  let minX=GRID_SIZE,maxX=0,minY=GRID_SIZE,maxY=0;
+  for(const c of player.trail){
+    if(c.cx<minX)minX=c.cx; if(c.cx>maxX)maxX=c.cx;
+    if(c.cy<minY)minY=c.cy; if(c.cy>maxY)maxY=c.cy;
+  }
+  // Expand bounding box to include all owned territory cells
+  for(let y=0;y<GRID_SIZE;y+=2){
+    for(let x=0;x<GRID_SIZE;x+=2){
+      if(grid[y][x]===player.id){
+        if(x<minX)minX=x; if(x>maxX)maxX=x;
+        if(y<minY)minY=y; if(y>maxY)maxY=y;
+      }
+    }
+  }
+  // Expand by 1 for flood fill seed
+  const x0=Math.max(0,minX-1), y0=Math.max(0,minY-1);
+  const x1=Math.min(GRID_SIZE-1,maxX+1), y1=Math.min(GRID_SIZE-1,maxY+1);
+
+  // A cell blocks flood fill if it's our territory OR our trail
+  function isWall(x,y){
+    if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return true;
+    return grid[y][x]===player.id || tgrid[y][x]===player.id;
+  }
+
+  // Flood fill from all border cells of the bounding box to find "outside"
+  // Use a flat Uint8Array for visited — much faster than Set
+  const W=x1-x0+1, H=y1-y0+1;
+  const visited=new Uint8Array(W*H);
+  const stack=[];
+
+  function push(x,y){
+    if(x<x0||x>x1||y<y0||y>y1)return;
+    const idx=(y-y0)*W+(x-x0);
+    if(visited[idx]||isWall(x,y))return;
+    visited[idx]=1;
+    stack.push(x,y);
+  }
+
+  // Seed from all 4 edges of bounding box
+  for(let x=x0;x<=x1;x++){ push(x,y0); push(x,y1); }
+  for(let y=y0+1;y<y1;y++){ push(x0,y); push(x1,y); }
+
+  while(stack.length){
+    const y=stack.pop(), x=stack.pop();
+    push(x+1,y); push(x-1,y); push(x,y+1); push(x,y-1);
+  }
+
+  // Everything NOT visited and NOT already ours gets claimed
+  for(let y=y0;y<=y1;y++){
+    for(let x=x0;x<=x1;x++){
+      const idx=(y-y0)*W+(x-x0);
+      if(!visited[idx]) sCell(x,y,player.id);
+    }
+  }
+  // Convert trail to territory, clear tgrid
+  for(const c of player.trail){
+    sCell(c.cx,c.cy,player.id);
+    sTrail(c.cx,c.cy,0);
+  }
+  // No encirclement kills — players are only killed by direct trail contact
+}
+
+// ===== BOT AI =====
+// Implements the 7-step decision hierarchy from the spec.
+// All movement is cardinal only (no diagonal).
+// Each bot has a unique personality affecting risk tolerance and aggression.
+
+// ── Personality assignment ──
+// Personalities: rusher, defender, sniper, expander, opportunist, cautious
+function assignPersonality(bot){
+  const types=['rusher','defender','sniper','expander','opportunist','cautious'];
+  const p=types[Math.floor(Math.random()*types.length)];
+  bot.personality=p;
+  // huntRange: how far (Manhattan) to look for enemy trails to attack
+  // dangerThresh: how close an enemy must be to trigger retreat
+  // maxTrailLen: max trail cells before forced return
+  // loopSize: function returning rectangle side length
+  // speed: cells per second
+  switch(p){
+    case 'rusher':
+      bot.huntRange=22; bot.dangerThresh=3; bot.maxTrailLen=50;
+      bot.loopSize=()=>22+Math.floor(Math.random()*10);
+      bot.speed=BOT_SPEED+2+Math.random(); break;
+    case 'defender':
+      bot.huntRange=8; bot.dangerThresh=14; bot.maxTrailLen=35;
+      bot.loopSize=()=>18+Math.floor(Math.random()*8);
+      bot.speed=BOT_SPEED+Math.random()*0.5; break;
+    case 'sniper':
+      bot.huntRange=30; bot.dangerThresh=5; bot.maxTrailLen=45;
+      bot.loopSize=()=>24+Math.floor(Math.random()*10);
+      bot.speed=BOT_SPEED+1+Math.random(); break;
+    case 'expander':
+      bot.huntRange=5; bot.dangerThresh=10; bot.maxTrailLen=60;
+      bot.loopSize=()=>30+Math.floor(Math.random()*12);
+      bot.speed=BOT_SPEED+0.5+Math.random()*0.5; break;
+    case 'opportunist':
+      bot.huntRange=16; bot.dangerThresh=7; bot.maxTrailLen=48;
+      bot.loopSize=()=>24+Math.floor(Math.random()*10);
+      bot.speed=BOT_SPEED+1+Math.random()*1.5; break;
+    case 'cautious':
+      bot.huntRange=5; bot.dangerThresh=16; bot.maxTrailLen=30;
+      bot.loopSize=()=>16+Math.floor(Math.random()*8);
+      bot.speed=Math.max(4,BOT_SPEED-0.5+Math.random()*0.5); break;
+  }
+}
+
+// Safe cardinal direction picker — HARD border exclusion at 30 cells from edge
+function safeDirFor(bot, preferred){
+  const BORDER=30; // never go within 30 cells of any edge
+  const cands=[
+    preferred,
+    {x:-preferred.y, y:preferred.x},
+    {x:preferred.y,  y:-preferred.x},
+    {x:-preferred.x, y:-preferred.y}
+  ];
+  for(const d of cands){
+    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
+    const nx=bot.cx+d.x, ny=bot.cy+d.y;
+    if(gTrail(nx,ny)===bot.id) continue;
+    // Hard border exclusion — always reject directions into the border zone
+    if(nx<BORDER||ny<BORDER||nx>=GRID_SIZE-BORDER||ny>=GRID_SIZE-BORDER) continue;
+    return d;
+  }
+  // Fallback: any direction that avoids own trail (border avoidance relaxed if trapped)
+  for(const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]){
+    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
+    if(gTrail(bot.cx+d.x,bot.cy+d.y)===bot.id) continue;
+    // Still try to move away from border even in fallback
+    const nx=bot.cx+d.x, ny=bot.cy+d.y;
+    const awayFromBorder=nx>=BORDER&&ny>=BORDER&&nx<GRID_SIZE-BORDER&&ny<GRID_SIZE-BORDER;
+    if(awayFromBorder) return d;
+  }
+  // Absolute last resort — just avoid own trail
+  for(const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]){
+    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
+    if(gTrail(bot.cx+d.x,bot.cy+d.y)===bot.id) continue;
+    return d;
+  }
+  return preferred;
+}
+
+// ── Find nearest own territory cell, biased toward map centre ──
+function nearestOwnCell(bot){
+  const mapCx=GRID_SIZE/2, mapCy=GRID_SIZE/2;
+  let best=Infinity, bx=bot.cx, by=bot.cy;
+  for(let y=0;y<GRID_SIZE;y+=2) for(let x=0;x<GRID_SIZE;x+=2){
+    if(grid[y][x]===bot.id){
+      const s=Math.abs(x-bot.cx)+Math.abs(y-bot.cy)
+             +(Math.abs(x-mapCx)+Math.abs(y-mapCy))*0.04;
+      if(s<best){best=s;bx=x;by=y;}
+    }
+  }
+  return {bx,by};
+}
+
+// ── Cardinal direction toward a target ──
+function cardinalToward(fx,fy,tx,ty){
+  const dx=tx-fx, dy=ty-fy;
+  if(dx===0&&dy===0) return {x:1,y:0};
+  return Math.abs(dx)>=Math.abs(dy)?{x:Math.sign(dx),y:0}:{x:0,y:Math.sign(dy)};
+}
+
+// ── Count enemies within radius ──
+function enemiesNearby(bot, radius){
+  let count=0;
+  for(const q of players){
+    if(!q.alive||q.id===bot.id) continue;
+    if(Math.abs(q.cx-bot.cx)+Math.abs(q.cy-bot.cy)<=radius) count++;
+  }
+  return count;
+}
+
+// ── Main per-step decision function ──
+function updateBotStep(bot){
+  if(!bot.alive) return;
+
+  const pct=bot.territoryPct;
+  const huntRange=bot.huntRange||12;
+  const dangerThresh=bot.dangerThresh||7;
+  const maxTrailLen=bot.maxTrailLen||20;
+
+  // ════════════════════════════════════════════
+  // SCAN — build situational awareness
+  // ════════════════════════════════════════════
+  const humanPlayer=players.find(p=>p.isHuman&&p.alive);
+  const humanPct=humanPlayer?humanPlayer.territoryPct:0;
+  const sortedAlive=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct);
+  const top3ids=new Set(sortedAlive.slice(0,3).map(p=>p.id));
+  const myRank=sortedAlive.findIndex(p=>p.id===bot.id); // 0 = first place
+  const isLeading=myRank<=2;
+  const isBehindHuman=pct<humanPct;
+  const nearbyEnemyCount=enemiesNearby(bot,12);
+
+  // Nearest enemy player (body)
+  let nearestEnemyDist=Infinity;
+  for(const q of players){
+    if(!q.alive||q.id===bot.id) continue;
+    const d=Math.abs(q.cx-bot.cx)+Math.abs(q.cy-bot.cy);
+    if(d<nearestEnemyDist) nearestEnemyDist=d;
+  }
+
+  // Nearest enemy trail cell
+  // Bots behind the human prioritise the human's trail (aggression toward leader)
+  let nearestTrailCell=null, nearestTrailDist=Infinity, nearestTrailOwner=null;
+  for(const q of players){
+    if(!q.alive||q.id===bot.id||q.trail.length<1) continue;
+    if(top3ids.has(q.id)&&!q.isHuman) continue; // never hunt top-3 bots
+    for(const c of q.trail){
+      let d=Math.abs(c.cx-bot.cx)+Math.abs(c.cy-bot.cy);
+      if(q.isHuman&&isBehindHuman) d*=0.5; // prioritise human when behind
+      if(d<nearestTrailDist){nearestTrailDist=d;nearestTrailCell=c;nearestTrailOwner=q;}
+    }
+  }
+
+  // Distance to nearest own territory cell
+  const {bx:homeCx,by:homeCy}=nearestOwnCell(bot);
+  const distToHome=Math.abs(bot.cx-homeCx)+Math.abs(bot.cy-homeCy);
+
+  // ════════════════════════════════════════════
+  // DECISION 1: Am I in immediate danger?
+  // Condition: trailing AND enemy within dangerThresh cells
+  // Action: abort everything, return home immediately
+  // ════════════════════════════════════════════
+  if(bot.inTrail&&nearestEnemyDist<=dangerThresh){
+    bot.botPhase='return';
+    bot.huntTarget=null;
+  }
+
+  // ════════════════════════════════════════════
+  // DECISION 2: Is my trail at risk?
+  // Adaptive risk: more enemies nearby = shorter loops, less risk
+  //               fewer enemies nearby = longer loops, more risk
+  // ════════════════════════════════════════════
+  const BORDER=30;
+  const nearBorder=bot.cx<BORDER||bot.cx>=GRID_SIZE-BORDER||bot.cy<BORDER||bot.cy>=GRID_SIZE-BORDER;
+
+  // Adaptive max trail length based on nearby enemies and rank
+  // 0 enemies nearby: full loop size (aggressive)
+  // 1-2 enemies: 80% of max
+  // 3-4 enemies: 60% of max
+  // 5+ enemies: 40% of max (very cautious)
+  // Also reduce when leading (defensive play)
+  let riskFactor=1.0;
+  if(nearbyEnemyCount===0) riskFactor=1.2;       // no one around — go big
+  else if(nearbyEnemyCount<=2) riskFactor=0.85;
+  else if(nearbyEnemyCount<=4) riskFactor=0.65;
+  else riskFactor=0.45;
+  if(isLeading) riskFactor*=0.7; // defensive when leading
+
+  const effectiveMax=Math.max(8, Math.floor(maxTrailLen*riskFactor));
+
+  // Force return if near border (hard exclusion)
+  if(nearBorder&&bot.inTrail){
+    bot.botPhase='return';
+    bot.huntTarget=null;
+  }
+
+  if(bot.inTrail&&bot.trail.length>=effectiveMax){
+    bot.botPhase='return';
+    bot.huntTarget=null;
+  }
+
+  // Adaptive hunt range: scale with risk factor
+  const effectiveHuntRange=Math.floor(huntRange*riskFactor);
+  // Adaptive danger threshold: more enemies = retreat sooner
+  const effectiveDanger=nearbyEnemyCount>=3
+    ? dangerThresh+4
+    : nearbyEnemyCount===0
+      ? Math.max(2,dangerThresh-2)
+      : dangerThresh;
+
+  // Re-check danger with effective threshold
+  if(bot.inTrail&&nearestEnemyDist<=effectiveDanger){
+    bot.botPhase='return';
+    bot.huntTarget=null;
+  }
+
+  // ════════════════════════════════════════════
+  // DECISION 4: Is there a safe attack opportunity?
+  // ════════════════════════════════════════════
+  if(!bot.inTrail&&nearestTrailDist>=2&&nearestTrailDist<=effectiveHuntRange&&nearestTrailCell){
+    const owner=nearestTrailOwner;
+    const enemyVulnerable=owner&&owner.trail.length>=4;
+    const safeReturn=distToHome<nearestTrailDist+12;
+    const notTooRisky=nearbyEnemyCount<=2;
+    if(enemyVulnerable&&safeReturn&&notTooRisky){
+      bot.botPhase='hunt';
+      bot.huntTarget=nearestTrailCell;
+      bot.huntOwner=nearestTrailOwner;
+    }
+  }
+
+  if(bot.botPhase==='hunt'){
+    const ownerAlive=bot.huntOwner&&bot.huntOwner.alive&&bot.huntOwner.trail.length>0;
+    if(!ownerAlive||nearestTrailDist>effectiveHuntRange+8){
+      bot.botPhase='out';
+      bot.huntTarget=null;
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // DECISION 5: PATH PLANNING — compute desired direction
+  // All directions are cardinal (no diagonal).
+  // ════════════════════════════════════════════
+  let desired=null;
+
+  if(bot.botPhase==='hunt'){
+    // Pathfind toward nearest enemy trail cell
+    const target=nearestTrailCell||bot.huntTarget;
+    if(target){
+      desired=cardinalToward(bot.cx,bot.cy,target.cx,target.cy);
+    } else {
+      bot.botPhase='out';
+    }
+  }
+
+  if(bot.botPhase==='out'){
+    // Move straight out from base in chosen direction
+    // Count steps only once outside own territory
+    if(gCell(bot.cx,bot.cy)!==bot.id) bot.botOutSteps++;
+    if(bot.botOutSteps>=bot.botOutTarget){
+      bot.botPhase='sweep';
+      bot.botSweepSteps=0;
+      desired=bot.botSweepDir;
+    } else {
+      desired=bot.botOutDir;
+    }
+  }
+
+  if(bot.botPhase==='sweep'){
+    // Move perpendicular to carve a rectangle
+    bot.botSweepSteps++;
+    if(bot.botSweepSteps>=bot.botSweepTarget){
+      bot.botPhase='return';
+    } else {
+      desired=bot.botSweepDir;
+    }
+  }
+
+  if(bot.botPhase==='return'){
+    if(!bot.inTrail&&bot.trail.length===0){
+      // Resting on own territory — hold position
+      desired={x:bot.dir.x,y:bot.dir.y};
+    } else {
+      // Shortest safe path home: head toward nearest own territory cell
+      // biased toward map centre (avoids border traps)
+      desired=cardinalToward(bot.cx,bot.cy,homeCx,homeCy);
+    }
+  }
+
+  // ════════════════════════════════════════════
+  // DECISION 6: ADAPTIVE RISK MANAGEMENT
+  // Already applied above via effectiveMax and hunt conditions.
+  // Final check: if desired direction leads into own trail, override.
+  // ════════════════════════════════════════════
+  if(!desired) desired={x:bot.dir.x,y:bot.dir.y};
+
+  // ════════════════════════════════════════════
+  // DECISION 7: SAFETY FILTER
+  // Ensure the chosen direction is safe before committing.
+  // ════════════════════════════════════════════
+  bot.nextDir=safeDirFor(bot,desired);
+}
+
+// ── Per-frame timer updates (trail timer, rest timer) ──
+function updateBotTimers(bot,dt){
+  if(!bot.alive) return;
+
+  if(bot.inTrail){
+    bot.trailTimer+=dt;
+    // Time-based hard cap: force return if trail timer exceeds travel time for maxTrailLen
+    const maxMs=(bot.maxTrailLen||20)*(1000/Math.max(1,bot.speed));
+    if(bot.trailTimer>=maxMs&&bot.botPhase!=='return'){
+      bot.botPhase='return';
+    }
+  } else {
+    bot.trailTimer=0;
+  }
+
+  // Rest between expansion cycles
+  if(bot.botPhase==='return'&&!bot.inTrail&&bot.trail.length===0){
+    bot.restTimer-=dt;
+    if(bot.restTimer<=0) bot._pickOutDir();
+  }
+}
+function respawnBot(bot){
+  const pos=findFreeSpawn();
+  if(!pos){
+    // No valid spawn right now — retry in 3 seconds
+    bot.respawnTimer=3000;
+    return;
+  }
+  bot.kills=0;
+  bot.spawnAt(pos.cx,pos.cy);
+}
+
+// ===== UPDATE =====
+function update(dt,now){
+  const elapsed=(now-gameStartTime)/1000;
+  players.forEach(p=>{
+    if(!p.alive){
+      if(!p.isHuman){ p.respawnTimer-=dt; if(p.respawnTimer<=0)respawnBot(p); }
+      return;
+    }
+    if(!p.isHuman) updateBotTimers(p,dt);
+
+    p.moveTimer+=dt;
+    const stepMs=1000/p.speed;
+    while(p.moveTimer>=stepMs){
+      p.moveTimer-=stepMs;
+      // Update bot direction once per grid step (accurate step counting)
+      if(!p.isHuman) updateBotStep(p);
+      p.dir={x:p.nextDir.x,y:p.nextDir.y};
+      let nx=p.cx+p.dir.x, ny=p.cy+p.dir.y;
+      // Bounce off walls
+      if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE){
+        p.nextDir={x:-p.dir.x,y:-p.dir.y};
+        p.dir={x:-p.dir.x,y:-p.dir.y};
+        nx=Math.max(0,Math.min(GRID_SIZE-1,p.cx+p.dir.x));
+        ny=Math.max(0,Math.min(GRID_SIZE-1,p.cy+p.dir.y));
+      }
+      p.cx=nx; p.cy=ny;
+
+      const terrOwner=gCell(p.cx,p.cy);
+      const trailOwner=gTrail(p.cx,p.cy);
+      const onOwn=(terrOwner===p.id);
+      const onOwnTrail=(trailOwner===p.id);
+
+      // ALWAYS check: if an enemy trail is on this cell, kill them (works inside your base too)
+      if(trailOwner>0&&trailOwner!==p.id){
+        const victim=players.find(q=>q.id===trailOwner);
+        if(victim&&victim.alive) killPlayer(victim,p);
+      }
+
+      if(onOwn&&p.inTrail){
+        // Returned home — fill enclosed area and start new cycle
+        const loopTime=(performance.now()-p.loopStartTime)/1000;
+        floodFillCapture(p);
+        p.trail=[]; p.inTrail=false;
+        if(!p.isHuman) p._pickOutDir();
+        if(p.isHuman){
+          const pct=p.territoryPct;
+          if(pct>p.maxTerritoryPct)p.maxTerritoryPct=pct;
+          checkAchievements(p,elapsed,loopTime);
+        } else {
+          const pct=p.territoryPct;
+          if(pct>p.maxTerritoryPct)p.maxTerritoryPct=pct;
+        }
+      } else if(onOwnTrail&&p.inTrail){
+        // Crossed own trail while actively trailing — die
+        killPlayer(p,p);
+        break;
+      } else if(!onOwn){
+        // On unclaimed or enemy territory — lay trail
+        if(!p.inTrail){ p.inTrail=true; p.loopStartTime=now; }
+        sTrail(p.cx,p.cy,p.id);
+        p.trail.push({cx:p.cx,cy:p.cy});
+      }
+
+      if(p.isHuman&&p.territoryPct<2)p.lowTerritoryFlag=true;
+      if(p.isHuman&&elapsed>=180)unlockAch('survivor');
+      // Periodic achievement check (every step)
+      if(p.isHuman) checkAchievements(p,elapsed,null);
+    }
+  });
+  updateLeaderboard();
+  updateHUD(elapsed);
+}
+
+// ===== HUD =====
+function updateHUD(elapsed){
+  const h=players.find(p=>p.isHuman);
+  if(!h||!h.alive){
+    statTerritory.textContent='—';
+    statKills.textContent='—';
+    statTime.textContent='—';
+    return;
+  }
+  statTerritory.textContent=h.territoryPct.toFixed(1)+'%';
+  statKills.textContent=h.kills;
+  statTime.textContent=fmtTime(elapsed);
+}
+
+function updateLeaderboard(){
+  const alive=players.filter(p=>p.alive);
+  alive.sort((a,b)=>b.territoryPct-a.territoryPct);
+  const top5=alive.slice(0,5);
+  lbRows.innerHTML='';
+  top5.forEach((p,i)=>{
+    const isMe=p.isHuman;
+    const crown=i===0?'<span style="font-size:13px;margin-right:3px;">&#128081;</span>':'';
+    const row=document.createElement('div');
+    row.className='lb-row';
+    row.innerHTML=`<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${p.skin.dot}"></span><span class="lb-name${isMe?' me':''}">${crown}${p.name}</span><span class="lb-pct">${p.territoryPct.toFixed(1)}%</span>`;
+    lbRows.appendChild(row);
+  });
+}
+
+// ===== RENDER =====
+function render(){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#e8e8e8';
+  ctx.fillRect(0,0,W,H);
+
+  const ox=-camX, oy=-camY;
+  const startCX=Math.max(0,Math.floor(camX/CELL));
+  const startCY=Math.max(0,Math.floor(camY/CELL));
+  const endCX=Math.min(GRID_SIZE-1,Math.ceil((camX+W)/CELL));
+  const endCY=Math.min(GRID_SIZE-1,Math.ceil((camY+H)/CELL));
+
+  const playerMap=new Map();
+  for(const p of players) playerMap.set(p.id,p);
+
+  // Draw territory and trails
+  for(let cy=startCY;cy<=endCY;cy++){
+    for(let cx=startCX;cx<=endCX;cx++){
+      const own=grid[cy][cx];
+      const tr=tgrid[cy][cx];
+      const px=cx*CELL+ox, py=cy*CELL+oy;
+      if(own===0&&tr===0){
+        ctx.fillStyle='#ffffff';
+        ctx.fillRect(px,py,CELL,CELL);
+      } else if(own>0){
+        const p=playerMap.get(own);
+        ctx.fillStyle=p?p.skin.fill.replace('0.28','0.75'):'#ccc';
+        ctx.fillRect(px,py,CELL,CELL);
+      }
+      if(tr>0){
+        const p=playerMap.get(tr);
+        if(p){ ctx.fillStyle=p.skin.dot; ctx.fillRect(px,py,CELL,CELL); }
+      }
+    }
+  }
+
+  // Grid lines
+  ctx.strokeStyle='rgba(0,0,0,0.1)';
+  ctx.lineWidth=0.5;
+  for(let cx=startCX;cx<=endCX+1;cx++){
+    const px=cx*CELL+ox;
+    ctx.beginPath();ctx.moveTo(px,startCY*CELL+oy);ctx.lineTo(px,(endCY+1)*CELL+oy);ctx.stroke();
+  }
+  for(let cy=startCY;cy<=endCY+1;cy++){
+    const py=cy*CELL+oy;
+    ctx.beginPath();ctx.moveTo(startCX*CELL+ox,py);ctx.lineTo((endCX+1)*CELL+ox,py);ctx.stroke();
+  }
+
+  // Players
+  const sortedByTerritory=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct);
+  for(const p of players){
+    if(!p.alive)continue;
+    const px=p.cx*CELL+ox+CELL/2, py=p.cy*CELL+oy+CELL/2;
+    const r=CELL*0.5;
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.beginPath();ctx.ellipse(px+2,py+3,r,r*0.55,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=p.skin.dot;
+    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();
+    // Direction dot
+    const da=Math.atan2(p.dir.y,p.dir.x);
+    ctx.fillStyle='rgba(255,255,255,0.9)';
+    ctx.beginPath();ctx.arc(px+Math.cos(da)*(r+4),py+Math.sin(da)*(r+4),3,0,Math.PI*2);ctx.fill();
+    // Name
+    ctx.font=p.isHuman?'bold 11px Segoe UI':'10px Segoe UI';
+    ctx.textAlign='center';
+    const tw=ctx.measureText(p.name).width;
+    ctx.fillStyle='rgba(0,0,0,0.6)';
+    ctx.beginPath();ctx.roundRect(px-tw/2-4,py-r-20,tw+8,14,3);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.fillText(p.name,px,py-r-9);
+    // Rank badge above name tag
+    const rankIdx=sortedByTerritory.indexOf(p);
+    if(rankIdx===0){ ctx.font='14px serif'; ctx.fillText('👑',px,py-r-24); }
+    else if(rankIdx===1){ ctx.font='13px serif'; ctx.fillText('🥈',px,py-r-24); }
+    else if(rankIdx===2){ ctx.font='13px serif'; ctx.fillText('🥉',px,py-r-24); }
+  }
+
+  // Map border
+  ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=3;
+  ctx.strokeRect(ox,oy,GRID_SIZE*CELL,GRID_SIZE*CELL);
+}
+
+// ===== MINIMAP =====
+const minimapCanvas=document.getElementById('minimap');
+const mmCtx=minimapCanvas.getContext('2d');
+let mmImageData=null;
+
+function renderMinimap(){
+  if(!gameRunning)return;
+  const human=players.find(p=>p.isHuman&&p.alive);
+  if(!mmImageData||mmImageData.width!==GRID_SIZE) mmImageData=mmCtx.createImageData(GRID_SIZE,GRID_SIZE);
+  const d=mmImageData.data;
+  const colorCache=new Map();
+  function rgb(id){
+    if(colorCache.has(id))return colorCache.get(id);
+    const p=players.find(q=>q.id===id);
+    if(!p){colorCache.set(id,[200,200,200]);return[200,200,200];}
+    const h=p.skin.dot.replace('#','');
+    const c=[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];
+    colorCache.set(id,c);return c;
+  }
+  for(let y=0;y<GRID_SIZE;y++){
+    for(let x=0;x<GRID_SIZE;x++){
+      const i=(y*GRID_SIZE+x)*4;
+      const t=tgrid[y][x];
+      const v=grid[y][x];
+      if(t>0){
+        d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=230;
+      } else if(v>0){
+        const [r,g,b]=rgb(v);
+        d[i]=r;d[i+1]=g;d[i+2]=b;
+        d[i+3]=human&&v===human.id?255:160;
+      } else {
+        d[i]=220;d[i+1]=220;d[i+2]=220;d[i+3]=255;
+      }
+    }
+  }
+  mmCtx.putImageData(mmImageData,0,0);
+  const dotPlayer=human||(players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct)[0]);
+  if(dotPlayer){
+    mmCtx.fillStyle='#fff';
+    mmCtx.beginPath();mmCtx.arc(dotPlayer.cx,dotPlayer.cy,4,0,Math.PI*2);mmCtx.fill();
+    mmCtx.strokeStyle=dotPlayer.skin.dot;mmCtx.lineWidth=2;mmCtx.stroke();
+  }
+}
+function respawnHuman(human){
+  deathScreen.classList.remove('active');
+  const pos=findFreeSpawn();
+  if(!pos){
+    // No valid spawn — show a waiting message and retry in 1s
+    document.getElementById('deathSub').textContent='Finding a safe spawn...';
+    deathScreen.classList.add('active');
+    setTimeout(()=>respawnHuman(human),1000);
+    return;
+  }
+  document.getElementById('deathSub').textContent='You were eliminated!';
+  human.kills=0;
+  human.maxTerritoryPct=0;
+  human.lowTerritoryFlag=false;
+  human.spawnAt(pos.cx,pos.cy);
+  gameStartTime=performance.now();
+  sessionKills=0;
+  sessionStartTime=performance.now();
+  sessionDeathFreeStart=performance.now();
+  sessionComebacks=0;
+  sessionLowFlag=false;
+  newAchs=[];
+  camX=human.cx*CELL+CELL/2-canvas.width/2;
+  camY=human.cy*CELL+CELL/2-canvas.height/2;
+}
+
+// ===== UPDATE CAMERA =====
+function updateCamera(){
+  const W=canvas.width,H=canvas.height;
+  const h=players.find(p=>p.isHuman&&p.alive);
+  if(h){
+    const tx=h.cx*CELL+CELL/2-W/2;
+    const ty=h.cy*CELL+CELL/2-H/2;
+    camX+=(tx-camX)*0.1;
+    camY+=(ty-camY)*0.1;
+  } else {
+    // Spectate #1 player
+    const top=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct)[0];
+    if(top){
+      const tx=top.cx*CELL+CELL/2-W/2;
+      const ty=top.cy*CELL+CELL/2-H/2;
+      camX+=(tx-camX)*0.05;
+      camY+=(ty-camY)*0.05;
+    }
+  }
+}
+
+// ===== GAME LOOP =====
+function gameLoop(ts){
+  if(!gameRunning)return;
+  const dt=Math.min(ts-lastTime,50);
+  lastTime=ts;
+  update(dt,ts);
+  updateCamera();
+  render();
+  renderMinimap();
+  animId=requestAnimationFrame(gameLoop);
+}
+
+// ===== START GAME =====
+// World is persistent — only initialised once. Calling startGame again just respawns the human.
+let worldInitialised=false;
+
+function initWorld(){
+  if(worldInitialised)return;
+  worldInitialised=true;
+  initGrid();
+  players=[]; pidCounter=0;
+  minimapCanvas.width=GRID_SIZE; minimapCanvas.height=GRID_SIZE;
+  mmImageData=null;
+  sessionKills=0; sessionStartTime=performance.now();
+  sessionDeathFreeStart=performance.now();
+  sessionComebacks=0; sessionLowFlag=false;
+  // Spawn bots — only in valid free spots
+  for(let i=0;i<MAX_BOTS;i++){
+    const bot=new Player(++pidCounter,randomName(),randomBotColor(),false);
+    const pos=findFreeSpawn();
+    if(pos){
+      bot.spawnAt(pos.cx,pos.cy);
+    } else {
+      // Defer spawn — bot will respawn via respawnTimer
+      bot.alive=false;
+      bot.respawnTimer=2000+Math.random()*3000;
+    }
+    players.push(bot);
+  }
+  gameStartTime=performance.now(); lastTime=gameStartTime;
+  gameRunning=true;
+  animId=requestAnimationFrame(gameLoop);
+}
+
+function startGame(){
+  homeScreen.style.display='none';
+  deathScreen.classList.remove('active');
+  gameScreen.classList.add('active');
+
+  // Find or create human player
+  let human=players.find(p=>p.isHuman);
+  if(!human){
+    const hName=nameInput.value.trim()||randomName();
+    human=new Player(++pidCounter,hName,SKINS[selectedSkin],true);
+    players.push(human);
+  } else {
+    human.name=nameInput.value.trim()||human.name;
+    human.skin=SKINS[selectedSkin];
+  }
+  if(!human.alive){
+    respawnHuman(human);
+  } else {
+    // Already alive — just snap camera
+    camX=human.cx*CELL+CELL/2-canvas.width/2;
+    camY=human.cy*CELL+CELL/2-canvas.height/2;
+  }
+}
+
+// ===== END GAME (legacy — no longer used for human death) =====
+function endGame(human){
+  // Not called anymore — human death handled by showDeathOverlay+respawnHuman
+}
+
+// ===== GO HOME =====
+function goHome(){
+  deathScreen.classList.remove('active');
+  gameScreen.classList.remove('active');
+  homeScreen.style.display='flex';
+  updateRecords();
+  buildAchList();
+}
+
+// ===== RESIZE =====
+window.addEventListener('resize',()=>{
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+});
+
+// ===== MENU PIXEL GRID ANIMATION =====
+const menuCanvas=document.getElementById('menuCanvas');
+const mctx=menuCanvas.getContext('2d');
+let menuAnimId=null;
+const MENU_CELL=18;
+const MENU_BOTS=14;
+let menuPlayers=[];
+let menuGrid=[];
+
+function resizeMenuCanvas(){
+  menuCanvas.width=window.innerWidth;
+  menuCanvas.height=window.innerHeight;
+}
+
+function initMenuGrid(){
+  const cols=Math.ceil(menuCanvas.width/MENU_CELL)+2;
+  const rows=Math.ceil(menuCanvas.height/MENU_CELL)+2;
+  menuGrid=[];
+  for(let y=0;y<rows;y++) menuGrid.push(new Int32Array(cols));
+  menuPlayers=[];
+  for(let i=0;i<MENU_BOTS;i++){
+    const color=randomBotColor();
+    const cx=2+Math.floor(Math.random()*(cols-4));
+    const cy=2+Math.floor(Math.random()*(rows-4));
+    const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+    const dir=dirs[Math.floor(Math.random()*4)];
+    const mp={id:i+1,cx,cy,dir:{...dir},nextDir:{...dir},color,trail:[],inTrail:false,moveTimer:0,speed:3+Math.random()*3};
+    // Starting territory
+    for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){
+      const nx=cx+dx,ny=cy+dy;
+      if(ny>=0&&ny<rows&&nx>=0&&nx<cols) menuGrid[ny][nx]=mp.id;
+    }
+    menuPlayers.push(mp);
+  }
+}
+
+function menuStep(dt){
+  const cols=menuGrid[0]?menuGrid[0].length:0;
+  const rows=menuGrid.length;
+  for(const p of menuPlayers){
+    p.moveTimer+=dt;
+    const stepMs=1000/p.speed;
+    while(p.moveTimer>=stepMs){
+      p.moveTimer-=stepMs;
+      // Occasionally change direction randomly
+      if(Math.random()<0.04){
+        const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+        const nd=dirs[Math.floor(Math.random()*4)];
+        if(!(nd.x===-p.dir.x&&nd.y===-p.dir.y)) p.nextDir=nd;
+      }
+      p.dir={...p.nextDir};
+      let nx=p.cx+p.dir.x, ny=p.cy+p.dir.y;
+      if(nx<0||ny<0||nx>=cols||ny>=rows){
+        p.dir={x:-p.dir.x,y:-p.dir.y};
+        p.nextDir={...p.dir};
+        nx=p.cx+p.dir.x; ny=p.cy+p.dir.y;
+        nx=Math.max(0,Math.min(cols-1,nx));
+        ny=Math.max(0,Math.min(rows-1,ny));
+      }
+      p.cx=nx; p.cy=ny;
+      const owner=menuGrid[p.cy][p.cx];
+      if(owner===p.id){
+        if(p.inTrail){
+          // Fill enclosed area
+          for(const c of p.trail) menuGrid[c.cy][c.cx]=p.id;
+          p.trail=[]; p.inTrail=false;
+        }
+      } else {
+        if(!p.inTrail) p.inTrail=true;
+        menuGrid[p.cy][p.cx]=-(p.id);
+        p.trail.push({cx:p.cx,cy:p.cy});
+      }
+    }
+  }
+}
+
+function renderMenu(){
+  const W=menuCanvas.width, H=menuCanvas.height;
+  mctx.clearRect(0,0,W,H);
+  mctx.fillStyle='#0d0d1a';
+  mctx.fillRect(0,0,W,H);
+  const rows=menuGrid.length, cols=menuGrid[0]?menuGrid[0].length:0;
+  for(let cy=0;cy<rows;cy++){
+    for(let cx=0;cx<cols;cx++){
+      const owner=menuGrid[cy][cx];
+      if(owner===0) continue;
+      const px=cx*MENU_CELL, py=cy*MENU_CELL;
+      if(owner>0){
+        const p=menuPlayers.find(q=>q.id===owner);
+        if(p){
+          mctx.fillStyle=p.color.fill.replace('0.28','0.5');
+          mctx.fillRect(px,py,MENU_CELL,MENU_CELL);
+        }
+      } else {
+        const p=menuPlayers.find(q=>q.id===-owner);
+        if(p){
+          mctx.fillStyle=p.color.dot;
+          mctx.fillRect(px,py,MENU_CELL,MENU_CELL);
+        }
+      }
+    }
+  }
+  // Grid lines
+  mctx.strokeStyle='rgba(255,255,255,0.04)';
+  mctx.lineWidth=0.5;
+  for(let cx=0;cx<=cols;cx++){mctx.beginPath();mctx.moveTo(cx*MENU_CELL,0);mctx.lineTo(cx*MENU_CELL,H);mctx.stroke();}
+  for(let cy=0;cy<=rows;cy++){mctx.beginPath();mctx.moveTo(0,cy*MENU_CELL);mctx.lineTo(W,cy*MENU_CELL);mctx.stroke();}
+}
+
+let menuLastTime=0;
+function menuLoop(ts){
+  if(!menuAnimId)return;
+  const dt=Math.min(ts-menuLastTime,50);
+  menuLastTime=ts;
+  menuStep(dt);
+  renderMenu();
+  menuAnimId=requestAnimationFrame(menuLoop);
+}
+
+function startMenuAnimation(){
+  if(menuAnimId)return;
+  resizeMenuCanvas();
+  initMenuGrid();
+  menuLastTime=performance.now();
+  menuAnimId=requestAnimationFrame(menuLoop);
+}
+
+function stopMenuAnimation(){
+  if(menuAnimId){cancelAnimationFrame(menuAnimId);menuAnimId=null;}
+}
+
+// ===== PERSISTENT MUSIC =====
+let bgMusic=null;
+function ensureMusic(){
+  if(!bgMusic){
+    bgMusic=new Audio('paperio_music.mp3');
+    bgMusic.loop=true;
+    bgMusic.volume=0.4;
+  }
+  if(bgMusic.paused) bgMusic.play().catch(()=>{});
+}
+// Start music on first user interaction
+document.addEventListener('click',()=>ensureMusic(),{once:false});
+document.addEventListener('keydown',()=>ensureMusic(),{once:false});
+
+// ===== INIT =====
+// Start world immediately — home screen shows as overlay on top of live game
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+minimapCanvas.width=GRID_SIZE; minimapCanvas.height=GRID_SIZE;
+// Show game screen behind home screen from the start
+gameScreen.classList.add('active');
+initWorld();
+updateRecords();
+</script>
+</body>
+</html>
