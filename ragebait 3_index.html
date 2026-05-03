@@ -84,8 +84,6 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 .diff-chaosplus{color:#ff6600;}
 .diff-void{color:#ffffff;text-shadow:0 0 8px #fff,0 0 16px #ff00ff;}
 .level-select-back{margin-top:20px;width:100%;max-width:820px;}
-#btnDecathlon:hover{background:linear-gradient(135deg,rgba(255,215,0,0.22),rgba(255,100,0,0.22));border-color:rgba(255,215,0,0.7);transform:translateY(-2px);box-shadow:0 4px 24px rgba(255,215,0,0.2);}
-#btnDecathlon:active{transform:translateY(0);}
 /* GAME SCREEN */
 #gameScreen{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;}
 #gameHeartsBar{color:#fff;font-size:1.3rem;letter-spacing:6px;margin-bottom:8px;text-align:center;font-family:'Rajdhani',sans-serif;}
@@ -187,12 +185,6 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 <div id="levelSelectScreen" class="screen">
   <div class="level-select-header">SELECT LEVEL</div>
   <div class="levels-grid" id="levelsGrid"></div>
-  <div id="decathlonWrap" style="width:100%;max-width:820px;margin-top:16px;">
-    <button id="btnDecathlon" style="width:100%;padding:18px;background:linear-gradient(135deg,rgba(255,215,0,0.12),rgba(255,100,0,0.12));border:1px solid rgba(255,215,0,0.4);border-radius:3px;color:#ffd700;font-family:'Press Start 2P',monospace;font-size:0.65rem;letter-spacing:2px;cursor:pointer;transition:all 0.2s;text-transform:uppercase;line-height:1.8;">
-      ★ DECATHLON — PLAY ALL 10 LEVELS ★<br>
-      <span style="font-size:0.45rem;color:rgba(255,215,0,0.6);margin-top:6px;display:block;">6 HEARTS · 250 SHARDS · 500 IF PERFECT</span>
-    </button>
-  </div>
   <div class="level-select-back">
     <button class="btn" id="btnLevelSelectBack">← BACK</button>
   </div>
@@ -263,30 +255,30 @@ const LEVELS=[
 // ============ COSMETICS DATA ============
 const COLOR_ITEMS=[
   {id:'white',   name:'White',   cost:0,   color:'#ffffff'},
-  {id:'red',     name:'Red',     cost:25,  color:'#ff4444'},
-  {id:'blue',    name:'Blue',    cost:40,  color:'#4488ff'},
-  {id:'green',   name:'Green',   cost:55,  color:'#44ff88'},
-  {id:'gold',    name:'Gold',    cost:70,  color:'#ffd700'},
-  {id:'cyan',    name:'Cyan',    cost:85,  color:'#44ffff'},
-  {id:'pink',    name:'Pink',    cost:100, color:'#ff44cc'},
-  {id:'orange',  name:'Orange',  cost:115, color:'#ff8833'},
-  {id:'purple',  name:'Purple',  cost:130, color:'#aa44ff'},
-  {id:'lime',    name:'Lime',    cost:145, color:'#aaff00'},
-  {id:'rainbow', name:'Rainbow', cost:200, color:'rainbow'}
+  {id:'red',     name:'Red',     cost:50,  color:'#ff4444'},
+  {id:'blue',    name:'Blue',    cost:80,  color:'#4488ff'},
+  {id:'green',   name:'Green',   cost:110, color:'#44ff88'},
+  {id:'gold',    name:'Gold',    cost:150, color:'#ffd700'},
+  {id:'cyan',    name:'Cyan',    cost:190, color:'#44ffff'},
+  {id:'pink',    name:'Pink',    cost:240, color:'#ff44cc'},
+  {id:'orange',  name:'Orange',  cost:290, color:'#ff8833'},
+  {id:'purple',  name:'Purple',  cost:350, color:'#aa44ff'},
+  {id:'lime',    name:'Lime',    cost:420, color:'#aaff00'},
+  {id:'rainbow', name:'Rainbow', cost:600, color:'rainbow'}
 ];
 const PARTICLE_ITEMS=[
   {id:'none',   name:'None',         cost:0,   desc:''},
-  {id:'sparks', name:'Sparks',       cost:60,  desc:'Tiny sparks burst off you'},
-  {id:'stars',  name:'Stars',        cost:80,  desc:'Little stars float away'},
-  {id:'trails', name:'Pixel Trail',  cost:100, desc:'Tiny pixels mark your path'},
-  {id:'trail2', name:'Glow Trail',   cost:150, desc:'Glowing colored dots fade behind you'},
-  {id:'trail3', name:'Fire Trail',   cost:220, desc:'Fiery embers streak behind you'},
-  {id:'trail4', name:'Rainbow Trail',cost:320, desc:'Rainbow pixels shimmer in your wake'}
+  {id:'sparks', name:'Sparks',       cost:120, desc:'Tiny sparks burst off you'},
+  {id:'stars',  name:'Stars',        cost:160, desc:'Little stars float away'},
+  {id:'trails', name:'Pixel Trail',  cost:200, desc:'Tiny pixels mark your path'},
+  {id:'trail2', name:'Glow Trail',   cost:300, desc:'Glowing colored dots fade behind you'},
+  {id:'trail3', name:'Fire Trail',   cost:450, desc:'Fiery embers streak behind you'},
+  {id:'trail4', name:'Rainbow Trail',cost:650, desc:'Rainbow pixels shimmer in your wake'}
 ];
 const DEATH_SOUNDS=[
   {n:1,name:'Classic',cost:0},
-  {n:2,name:'Crunch',cost:60},
-  {n:3,name:'Boom',cost:60}
+  {n:2,name:'Crunch',cost:120},
+  {n:3,name:'Boom',cost:120}
 ];
 
 // ============ AUDIO ============
@@ -427,18 +419,35 @@ function flashMessage(msg){
 function renderLevelSelect(){
   document.getElementById('levelSelectScreen').style.backgroundImage="url('ragebait 3_levels.gif')";
   const grid=document.getElementById('levelsGrid');grid.innerHTML='';
+
+  // All levels always unlocked — no locks
   LEVELS.forEach(lvl=>{
-    const unlocked=save.unlockedLevels.includes(lvl.num);
     const best=save.bestHearts[lvl.num];
     const completed=best!==undefined;
     const card=document.createElement('div');
-    card.className='level-card'+(!unlocked?' locked':'')+(completed?' completed':'');
-    const maxH=lvl.num===11?6:3;
+    card.className='level-card'+(completed?' completed':'');
+    const maxH=3;
     let bestStr=best!==undefined?`Best: ${'♥'.repeat(best)}${'♡'.repeat(maxH-best)}`:'Not completed';
-    card.innerHTML=`${!unlocked?'<div class="lock-icon">🔒</div>':''}<div class="level-num">LEVEL ${lvl.num}</div><div class="level-diff ${lvl.diffClass}">${lvl.diff}</div><div class="level-best">${bestStr}</div>`;
-    if(unlocked)card.addEventListener('click',()=>{wipeTransition(()=>startLevel(lvl.num));});
+    card.innerHTML=`<div class="level-num">LEVEL ${lvl.num}</div><div class="level-diff ${lvl.diffClass}">${lvl.diff}</div><div class="level-best">${bestStr}</div>`;
+    card.addEventListener('click',()=>{wipeTransition(()=>startLevel(lvl.num));});
     grid.appendChild(card);
   });
+
+  // Decathlon card — golden, sits right after level 15 in the grid
+  const decCard=document.createElement('div');
+  decCard.id='btnDecathlon';
+  decCard.className='level-card';
+  decCard.style.cssText='background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,140,0,0.08));border-color:rgba(255,215,0,0.5);box-shadow:0 0 16px rgba(255,215,0,0.12);cursor:pointer;';
+  const decBest=save.bestHearts['decathlon'];
+  const decBestStr=decBest!==undefined?`Best: ${'♥'.repeat(decBest)}${'♡'.repeat(6-decBest)}`:'Not completed';
+  decCard.innerHTML=`
+    <div class="level-num" style="color:rgba(255,215,0,0.4);">SPECIAL</div>
+    <div class="level-diff" style="color:#ffd700;text-shadow:0 0 8px #ffd70066;font-size:0.75rem;">DECATHLON</div>
+    <div class="level-best" style="color:rgba(255,215,0,0.5);font-size:0.65rem;">6 Hearts · 250–500 ✦</div>
+    <div class="level-best">${decBestStr}</div>
+  `;
+  decCard.addEventListener('click',()=>{wipeTransition(()=>startLevel(11));});
+  grid.appendChild(decCard);
 }
 
 // ============ GAME CONSTANTS ============
@@ -457,12 +466,12 @@ function createGameState(lvl){
     px:ARENA/2-PS/2,py:ARENA/2-PS/2,
     invincible:false,invTimer:0,
     shiftCooldown:0,shiftActive:false,shiftTimer:0,
-    SHIFT_CD:8000,SHIFT_DUR:2000,
+    SHIFT_CD:6000,SHIFT_DUR:2000,
     slowActive:false,slowTimer:0,slowCooldown:0,
-    SLOW_DUR:5000,SLOW_CD:10000,
+    SLOW_DUR:5000,SLOW_CD:7000,
     phase:'waiting',
     cdVal:3,cdTimer:0,
-    attacks:[],projectiles:[],explosions:[],boulders:[],gridLines:[],bouncyBalls:[],
+    attacks:[],projectiles:[],explosions:[],boulders:[],gridLines:[],bouncyBalls:[],heartPickups:[],
     particles:[],trailPts:[],
     spinAngle:0,
     atkTimer:0,atkInterval:1000,
@@ -615,6 +624,9 @@ function triggerDecathlonWin(){
   const perfect=ds.startedPerfect&&hearts===6;
   const earned=perfect?500:250;
   save.shards+=earned;save.totalShards+=earned;
+  // Save decathlon best hearts
+  const prevDec=save.bestHearts['decathlon'];
+  if(prevDec===undefined||hearts>prevDec)save.bestHearts['decathlon']=hearts;
   writeSave();
   document.getElementById('shardsEarned').textContent=`+${earned} SHARDS EARNED${perfect?' ★ PERFECT!':''}`;
   document.getElementById('winSub').textContent=`Hearts remaining: ${'❤️'.repeat(hearts)} — All 10 Levels Complete!`;
@@ -633,7 +645,7 @@ function gameLoop(ts){
   gameState.lastTime=ts;
   update(dt);render();
   const p=gameState.phase;
-  if(p!=='dead'&&p!=='won')requestAnimationFrame(gameLoop);
+  if(p!=='dead'&&p!=='won'&&p!=='paused')requestAnimationFrame(gameLoop);
 }
 
 function isMoving(){
@@ -674,7 +686,9 @@ function update(dt){
     updateGridLines(gameDt);
     updateBouncyBalls(gameDt);
     updateParticles(gameDt);
+    updateHeartPickups(gameDt);
     checkCollisions();
+    checkHeartPickups();
     if(gs.invincible){gs.invTimer-=dt;if(gs.invTimer<=0){gs.invincible=false;gs.impactFlashing=false;}}
     updateShiftBar();
     updateSlowBar();
@@ -811,7 +825,7 @@ function triggerWin(){
   const gs=gameState;if(gs.won)return;
   if(gs.decathlon){decathlonNextStage();return;} // decathlon handles its own win flow
   gs.won=true;gs.phase='won';
-  gs.attacks=[];gs.projectiles=[];gs.explosions=[];gs.boulders=[];gs.gridLines=[];
+  gs.attacks=[];gs.projectiles=[];gs.explosions=[];gs.boulders=[];gs.gridLines=[];gs.heartPickups=[];
   playWinSound();
   const base=15+(gs.lvl-1)*5;
   let earned=gs.hearts===3?base:gs.hearts===2?base-5:base-10;
@@ -819,12 +833,12 @@ function triggerWin(){
   save.shards+=earned;save.totalShards+=earned;
   const prev=save.bestHearts[gs.lvl];
   if(prev===undefined||gs.hearts>prev)save.bestHearts[gs.lvl]=gs.hearts;
-  if(gs.lvl<10&&!save.unlockedLevels.includes(gs.lvl+1))save.unlockedLevels.push(gs.lvl+1);
+  if(gs.lvl<15&&!save.unlockedLevels.includes(gs.lvl+1))save.unlockedLevels.push(gs.lvl+1);
   writeSave();
   document.getElementById('shardsEarned').textContent=`+${earned} SHARDS EARNED`;
   const musicPctVal=levelMusic&&levelMusic.duration?((levelMusic.currentTime/levelMusic.duration)*100).toFixed(1):'100.0';
   document.getElementById('winSub').textContent=`Hearts remaining: ${'❤️'.repeat(gs.hearts)} — ${musicPctVal}% survived`;
-  document.getElementById('btnNextLevel').style.display=gs.lvl<10?'':'none';
+  document.getElementById('btnNextLevel').style.display=gs.lvl<15?'':'none';
   setTimeout(()=>{
     document.getElementById('winOverlay').classList.add('visible');
     ensureTitleMusic();
@@ -836,6 +850,12 @@ function triggerWin(){
 // Spawn chance: level 1 = 30%, level 2 = 35%, ... level 15+ = 100%
 function spawnAttacks(dt){
   const gs=gameState,lvl=gs.lvl;
+
+  // Init bouncy balls once at level 12+ if not already spawned
+  if(lvl>=12&&(!gs.bouncyBalls||gs.bouncyBalls.length===0)){
+    spawnBouncyBall(); // 1 ball at lvl 12
+    if(lvl>=13)spawnBouncyBall(); // 2nd ball at lvl 13+
+  }
 
   // Spinning laser angle always updates (lvl 4+) — passive, always on
   // Each level after 3 adds 5% speed: lvl4=base, lvl5=+5%, lvl6=+10% etc.
@@ -886,6 +906,13 @@ function spawnAttacks(dt){
 }
 
 function spawnRandomAttack(lvl){
+  // Level 10+: rare 10% chance to spawn a heart pickup instead of an attack
+  // Heart only actually appears 50% of the time (so effective rate = 5%)
+  if(lvl>=10&&Math.random()<0.10){
+    if(Math.random()<0.5)spawnHeartPickup();
+    return; // skip attack this tick either way
+  }
+
   const pool=[];
   pool.push('beam','beam','beam');
   if(lvl>=2)pool.push('bars','bars');
@@ -915,12 +942,53 @@ function spawnRandomAttack(lvl){
   else if(pick==='diaggrid')spawnDiagGrid();
 }
 
+// ---- HEART PICKUP ----
+function spawnHeartPickup(){
+  const gs=gameState;
+  const margin=30;
+  gs.heartPickups.push({
+    x:margin+Math.random()*(ARENA-margin*2),
+    y:margin+Math.random()*(ARENA-margin*2),
+    timer:5000, // lives for 5 seconds
+    r:14
+  });
+}
+
+function updateHeartPickups(dt){
+  const gs=gameState;
+  if(!gs.heartPickups)return;
+  gs.heartPickups=gs.heartPickups.filter(h=>{
+    h.timer-=dt;
+    return h.timer>0;
+  });
+}
+
+function checkHeartPickups(){
+  const gs=gameState;
+  if(!gs.heartPickups||gs.heartPickups.length===0)return;
+  const px=gs.px+PS/2,py=gs.py+PS/2;
+  gs.heartPickups=gs.heartPickups.filter(h=>{
+    const dist=Math.hypot(px-h.x,py-h.y);
+    if(dist<h.r+PS/2){
+      // Collect — restore 1 heart up to max
+      const maxH=gs.decathlon?6:3;
+      if(gs.hearts<maxH){
+        gs.hearts++;
+        if(gs.decathlon&&decathlonState)decathlonState.hearts=gs.hearts;
+        updateHeartsDisplay(gs.hearts);
+      }
+      return false; // remove
+    }
+    return true;
+  });
+}
+
 function spawnBeam(){
   const gs=gameState,lvl=gs.lvl;
   const thick=Math.min(60,18+(lvl-1)*3);
   const warnDur=Math.max(800,2000-(lvl-1)*100);
   const type=Math.random()<0.5?'hline':'vline';
-  const atk={type,phase:'warning',timer:0,warnDur,fireDur:500,thick};
+  const atk={type,phase:'warning',timer:0,warnDur,fireDur:400,thick};
   if(type==='hline'){atk.y=Math.random()*(ARENA-thick);atk.x=0;atk.w=ARENA;atk.h=thick;}
   else{atk.x=Math.random()*(ARENA-thick);atk.y=0;atk.w=thick;atk.h=ARENA;}
   gs.attacks.push(atk);
@@ -938,12 +1006,12 @@ function spawnPrisonBars(){
   if(horiz){
     for(let y=-offset;y<ARENA;y+=gap+thick){
       if(y+thick<0||y>ARENA)continue;
-      bars.push({type:'hline',x:0,y,w:ARENA,h:thick,phase:'warning',timer:0,warnDur,fireDur:500,thick,group:true});
+      bars.push({type:'hline',x:0,y,w:ARENA,h:thick,phase:'warning',timer:0,warnDur,fireDur:400,thick,group:true});
     }
   } else {
     for(let x=-offset;x<ARENA;x+=gap+thick){
       if(x+thick<0||x>ARENA)continue;
-      bars.push({type:'vline',x,y:0,w:thick,h:ARENA,phase:'warning',timer:0,warnDur,fireDur:500,thick,group:true});
+      bars.push({type:'vline',x,y:0,w:thick,h:ARENA,phase:'warning',timer:0,warnDur,fireDur:400,thick,group:true});
     }
   }
   bars.forEach(b=>gs.attacks.push(b));
@@ -954,7 +1022,7 @@ function spawnHalfScreen(){
   // Quarter screen — pick one of 4 quadrants
   const quad=Math.floor(Math.random()*4);
   const warnDur=Math.max(700,1800-(lvl-3)*80);
-  let atk={type:'half',phase:'warning',timer:0,warnDur,fireDur:500};
+  let atk={type:'half',phase:'warning',timer:0,warnDur,fireDur:400};
   if(quad===0){atk.x=0;       atk.y=0;        atk.w=ARENA/2;atk.h=ARENA/2;} // top-left
   else if(quad===1){atk.x=ARENA/2;atk.y=0;    atk.w=ARENA/2;atk.h=ARENA/2;} // top-right
   else if(quad===2){atk.x=0;  atk.y=ARENA/2;  atk.w=ARENA/2;atk.h=ARENA/2;} // bottom-left
@@ -984,16 +1052,16 @@ function spawnExplosion(){
   const gs=gameState,lvl=gs.lvl;
   // 2x bigger than before
   const r=Math.min(160,80+(lvl-6)*16);
-  gs.explosions.push({x:Math.random()*(ARENA-r*2)+r,y:Math.random()*(ARENA-r*2)+r,r,timer:0,warnDur:3000,fireDur:500,phase:'warning'});
+  gs.explosions.push({x:Math.random()*(ARENA-r*2)+r,y:Math.random()*(ARENA-r*2)+r,r,timer:0,warnDur:3000,fireDur:400,phase:'warning'});
 }
 
 function spawnGrid(){
   const gs=gameState,lvl=gs.lvl;
-  const thick=8;const gap=Math.max(28,50-(lvl-7)*3);
+  const thick=8;const gap=Math.max(55,90-(lvl-7)*4); // much wider gaps
   const warnDur=1500;
   const lines=[];
-  for(let x=0;x<ARENA;x+=gap+thick)lines.push({type:'vline',x,y:0,w:thick,h:ARENA,phase:'warning',timer:0,warnDur,fireDur:600,thick});
-  for(let y=0;y<ARENA;y+=gap+thick)lines.push({type:'hline',x:0,y,w:ARENA,h:thick,phase:'warning',timer:0,warnDur,fireDur:600,thick});
+  for(let x=0;x<ARENA;x+=gap+thick)lines.push({type:'vline',x,y:0,w:thick,h:ARENA,phase:'warning',timer:0,warnDur,fireDur:400,thick});
+  for(let y=0;y<ARENA;y+=gap+thick)lines.push({type:'hline',x:0,y,w:ARENA,h:thick,phase:'warning',timer:0,warnDur,fireDur:400,thick});
   lines.forEach(l=>gs.attacks.push(l));
 }
 
@@ -1010,7 +1078,7 @@ function spawnDiagLaser(){
   const thick=Math.min(30,14+(lvl-9)*3);
   const warnDur=Math.max(700,1600-(lvl-9)*80);
   const diag=Math.floor(Math.random()*2);
-  gs.attacks.push({type:'diag',diag,phase:'warning',timer:0,warnDur,fireDur:500,thick});
+  gs.attacks.push({type:'diag',diag,phase:'warning',timer:0,warnDur,fireDur:400,thick});
 }
 
 function spawnMovingLaser(){
@@ -1034,13 +1102,13 @@ function spawnBorderAttack(){
     {x:0,y:0,w:margin,h:ARENA},            // left
     {x:ARENA-margin,y:0,w:margin,h:ARENA}  // right
   ];
-  strips.forEach(s=>gs.attacks.push({type:'hline',x:s.x,y:s.y,w:s.w,h:s.h,phase:'warning',timer:0,warnDur,fireDur:500,thick:margin,border:true}));
+  strips.forEach(s=>gs.attacks.push({type:'hline',x:s.x,y:s.y,w:s.w,h:s.h,phase:'warning',timer:0,warnDur,fireDur:400,thick:margin,border:true}));
 }
 
 // ---- LEVEL 12/13: Bouncy balls — spawned once, persist and bounce ----
 function spawnBouncyBall(){
   const gs=gameState,lvl=gs.lvl;
-  const r=10;
+  const r=20; // 2x bigger
   const spd=2.2;
   const angle=Math.random()*Math.PI*2;
   gs.bouncyBalls=gs.bouncyBalls||[];
@@ -1057,12 +1125,11 @@ function spawnBouncyBall(){
 function spawnDiagBars(){
   const gs=gameState,lvl=gs.lvl;
   const thick=Math.min(28,14+(lvl-14)*3);
-  const gap=Math.max(32,60-(lvl-14)*4);
+  const gap=Math.max(55,90-(lvl-14)*4); // wide gaps
   const warnDur=Math.max(600,1400-(lvl-14)*80);
   const offset=Math.floor(Math.random()*(gap+thick));
-  // Diagonal bars: lines at 45° spaced across the arena
   for(let d=-ARENA;d<ARENA*2;d+=gap+thick){
-    gs.attacks.push({type:'diagbar',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:500,thick});
+    gs.attacks.push({type:'diagbar',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:400,thick});
   }
 }
 
@@ -1070,12 +1137,12 @@ function spawnDiagBars(){
 function spawnDiagGrid(){
   const gs=gameState,lvl=gs.lvl;
   const thick=8;
-  const gap=Math.max(30,55-(lvl-15)*4);
+  const gap=Math.max(55,90-(lvl-15)*4); // wide gaps
   const warnDur=Math.max(600,1400-(lvl-15)*80);
   const offset=Math.floor(Math.random()*(gap+thick));
   for(let d=-ARENA;d<ARENA*2;d+=gap+thick){
-    gs.attacks.push({type:'diagbar', d:d+offset,phase:'warning',timer:0,warnDur,fireDur:600,thick});
-    gs.attacks.push({type:'diagbar2',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:600,thick});
+    gs.attacks.push({type:'diagbar', d:d+offset,phase:'warning',timer:0,warnDur,fireDur:400,thick});
+    gs.attacks.push({type:'diagbar2',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:400,thick});
   }
 }
 
@@ -1201,6 +1268,8 @@ function checkCollisions(){
       if(spinHitsPlayer(atk,px,py,pw,ph)){takeDamage();return;}
       continue;
     }
+    // diagbar handled separately below
+    if(atk.type==='diagbar'||atk.type==='diagbar2')continue;
     if(rectOverlap(px,py,pw,ph,ax,ay,aw,ah)){takeDamage();return;}
   }
   // Projectiles
@@ -1220,6 +1289,19 @@ function checkCollisions(){
   }
   // Spin laser
   if(checkSpinLaserCollision()){takeDamage();return;}
+  // Bouncy balls
+  if(gs.bouncyBalls){
+    for(const b of gs.bouncyBalls){
+      if(circleRectOverlap(b.x,b.y,b.r,px,py,pw,ph)){takeDamage();return;}
+    }
+  }
+  // Diagbars (lvl 14-15)
+  for(const atk of gs.attacks){
+    if(atk.phase!=='fire')continue;
+    if(atk.type==='diagbar'||atk.type==='diagbar2'){
+      if(diagBarHitsPlayer(atk,px,py,pw,ph)){takeDamage();return;}
+    }
+  }
 }
 
 function rectOverlap(ax,ay,aw,ah,bx,by,bw,bh){
@@ -1238,6 +1320,21 @@ function diagHitsPlayer(atk,px,py,pw,ph){
     if(atk.diag===0)d=Math.abs(y-x)/Math.SQRT2;
     else d=Math.abs(y-(ARENA-x))/Math.SQRT2;
     if(d<thick/2)return true;
+  }
+  return false;
+}
+
+// Collision for diagonal bars (45° lines offset by d)
+function diagBarHitsPlayer(atk,px,py,pw,ph){
+  const thick=atk.thick/2+1;
+  const pts=[[px,py],[px+pw,py],[px,py+ph],[px+pw,py+ph]];
+  for(const [x,y] of pts){
+    // diagbar:  line y = x - d  → distance = |y - x + d| / sqrt(2)
+    // diagbar2: line y = -x + d → distance = |y + x - d| / sqrt(2)
+    const d=atk.type==='diagbar'
+      ? Math.abs(y-x+atk.d)/Math.SQRT2
+      : Math.abs(y+x-atk.d)/Math.SQRT2;
+    if(d<thick)return true;
   }
   return false;
 }
@@ -1379,6 +1476,39 @@ function render(){
     drawBoulder(b);
   }
 
+  // Draw bouncy balls (lvl 12+)
+  if(gs.bouncyBalls){
+    for(const b of gs.bouncyBalls){
+      ctx.save();
+      ctx.fillStyle='#ff2222';
+      ctx.shadowColor='#ff0000';ctx.shadowBlur=10;
+      ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#880000';ctx.lineWidth=1.5;ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Draw heart pickups (lvl 10+)
+  if(gs.heartPickups&&gs.heartPickups.length>0){
+    for(const h of gs.heartPickups){
+      const alpha=Math.min(1,h.timer/500); // fade out last 500ms
+      ctx.save();
+      ctx.globalAlpha=alpha;
+      // Pulse scale
+      const pulse=1+0.08*Math.sin(Date.now()*0.006);
+      ctx.font=`${Math.round(h.r*2*pulse)}px serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor='#ff4488';ctx.shadowBlur=12;
+      ctx.fillText('❤️',h.x,h.y);
+      // Timer ring
+      const prog=h.timer/5000;
+      ctx.strokeStyle=`rgba(255,100,150,${alpha*0.7})`;
+      ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(h.x,h.y,h.r+6,0,Math.PI*2*prog);ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   // Draw trail — tiny pixels left along the walked path
   if(save.selectedParticle==='trails'&&gs.trailPts.length>0){
     ctx.save();
@@ -1484,6 +1614,7 @@ function drawAttack(atk){
     }
   }
   if(atk.type==='diag'){drawDiagLaser(atk);return;}
+  if(atk.type==='diagbar'||atk.type==='diagbar2'){drawDiagBar(atk);return;}
   if(atk.phase==='warning'){
     const prog=t/atk.warnDur;
     ctx.fillStyle=`rgba(255,40,40,${0.15+prog*0.25})`;
@@ -1514,6 +1645,31 @@ function drawDiagLaser(atk){
   ctx.beginPath();
   if(atk.diag===0){ctx.moveTo(0,0);ctx.lineTo(ARENA,ARENA);}
   else{ctx.moveTo(ARENA,0);ctx.lineTo(0,ARENA);}
+  ctx.stroke();ctx.restore();
+}
+
+// Draw diagonal prison bar — a line at 45° (diagbar) or 135° (diagbar2) offset by atk.d
+function drawDiagBar(atk){
+  ctx.save();
+  const prog=atk.phase==='warning'?atk.timer/atk.warnDur:1;
+  if(atk.phase==='warning'){
+    ctx.strokeStyle=`rgba(255,40,40,${0.15+prog*0.3})`;
+    ctx.lineWidth=atk.thick;
+  } else {
+    ctx.strokeStyle='rgba(255,30,30,0.92)';
+    ctx.lineWidth=atk.thick;
+    ctx.shadowColor='#ff0000';ctx.shadowBlur=8;
+  }
+  ctx.beginPath();
+  // diagbar: y = x - d  →  at x=0: y=-d, at x=ARENA: y=ARENA-d
+  // diagbar2: y = -x + d  →  at x=0: y=d, at x=ARENA: y=d-ARENA
+  if(atk.type==='diagbar'){
+    ctx.moveTo(0,-atk.d);
+    ctx.lineTo(ARENA,ARENA-atk.d);
+  } else {
+    ctx.moveTo(0,atk.d);
+    ctx.lineTo(ARENA,atk.d-ARENA);
+  }
   ctx.stroke();ctx.restore();
 }
 
@@ -1709,14 +1865,14 @@ document.getElementById('btnCosmeticsBack').addEventListener('click',()=>{
 document.getElementById('btnLevelSelectBack').addEventListener('click',()=>{
   wipeTransition(()=>{updateTitleBg();showScreen('title');updateTitleButtons();});
 });
-document.getElementById('btnDecathlon').addEventListener('click',()=>{
-  wipeTransition(()=>startLevel(11));
-});
+// Decathlon card is dynamically created in renderLevelSelect — click handled there
 document.getElementById('btnLeaveLevel').addEventListener('click',()=>{
   if(!gameState)return;
   gameState.phase='dead'; // stop the loop
   gameState.keys={};      // clear all held keys
   hideCountdown();        // dismiss any active countdown
+  if(pauseResumeTimer){clearInterval(pauseResumeTimer);pauseResumeTimer=null;}
+  gamePaused=false;
   stopLevelMusic();
   gameInProgress=false;
   decathlonState=null;    // cancel any active decathlon
@@ -1759,6 +1915,53 @@ updateTitleButtons();
 // Start title music on first user interaction (only if not in a level)
 document.addEventListener('click',()=>{if(!gameState)ensureTitleMusic();},{once:true});
 document.addEventListener('keydown',()=>{if(!gameState)ensureTitleMusic();},{once:true});
+
+// ============ TAB VISIBILITY PAUSE ============
+let gamePaused=false;
+let pauseResumeTimer=null;
+
+document.addEventListener('visibilitychange',()=>{
+  if(!gameState)return;
+  const phase=gameState.phase;
+
+  if(document.hidden){
+    // Tab hidden — pause only if actively playing
+    if(phase==='playing'&&!gamePaused){
+      gamePaused=true;
+      gameState.phase='paused';
+      if(levelMusic)levelMusic.pause();
+      // Show PAUSED on the countdown element
+      showCountdownText('PAUSED');
+      document.getElementById('countdown').classList.add('visible');
+    }
+  } else {
+    // Tab visible again — start 3s resume countdown
+    if(gamePaused){
+      gamePaused=false;
+      if(pauseResumeTimer){clearInterval(pauseResumeTimer);pauseResumeTimer=null;}
+      let count=3;
+      showCountdown(count);
+      pauseResumeTimer=setInterval(()=>{
+        count--;
+        if(count<=0){
+          clearInterval(pauseResumeTimer);
+          pauseResumeTimer=null;
+          hideCountdown();
+          gameState.phase='playing';
+          gameState.lastTime=performance.now();
+          if(levelMusic)levelMusic.play().catch(()=>{});
+          requestAnimationFrame(gameLoop);
+        } else {
+          showCountdown(count);
+        }
+      },1000);
+    }
+  }
+});
+
+function renderPauseScreen(label){
+  // No longer used — kept for safety
+}
 </script>
 </body>
 </html>
