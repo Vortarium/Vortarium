@@ -78,6 +78,11 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 .diff-extremeplus{color:#cc44ff;}
 .diff-abyssal{color:#8844ff;}
 .diff-abyssal2{color:#ff0088;}
+.diff-nightmare{color:#ff00ff;}
+.diff-nightmareplus{color:#ff44ff;}
+.diff-chaos{color:#ff2200;}
+.diff-chaosplus{color:#ff6600;}
+.diff-void{color:#ffffff;text-shadow:0 0 8px #fff,0 0 16px #ff00ff;}
 .level-select-back{margin-top:20px;width:100%;max-width:820px;}
 #btnDecathlon:hover{background:linear-gradient(135deg,rgba(255,215,0,0.22),rgba(255,100,0,0.22));border-color:rgba(255,215,0,0.7);transform:translateY(-2px);box-shadow:0 4px 24px rgba(255,215,0,0.2);}
 #btnDecathlon:active{transform:translateY(0);}
@@ -230,7 +235,7 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
   </div>
 </div>
 <script>// ============ STATE ============
-const DEFAULT_SAVE={shards:0,ownedColors:['white'],ownedParticles:['none'],selectedColor:'white',selectedParticle:'none',selectedDeathSound:1,ownedDeathSounds:[1],unlockedLevels:[1],bestHearts:{},totalShards:0};
+const DEFAULT_SAVE={shards:0,ownedColors:['white'],ownedParticles:['none'],selectedColor:'white',selectedParticle:'none',selectedDeathSound:1,ownedDeathSounds:[1],unlockedLevels:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],bestHearts:{},totalShards:0};
 let save=JSON.parse(JSON.stringify(DEFAULT_SAVE));
 function loadSave(){try{const r=localStorage.getItem('ragebait3_save');if(r){const p=JSON.parse(r);save=Object.assign(JSON.parse(JSON.stringify(DEFAULT_SAVE)),p);}}catch(e){save=JSON.parse(JSON.stringify(DEFAULT_SAVE));}}
 function writeSave(){localStorage.setItem('ragebait3_save',JSON.stringify(save));}
@@ -238,16 +243,21 @@ let currentScreen='title',gameInProgress=false,currentLevel=1,gameState=null;
 
 // ============ LEVELS ============
 const LEVELS=[
-  {num:1,diff:'Easy',diffClass:'diff-easy'},
-  {num:2,diff:'Normal',diffClass:'diff-normal'},
-  {num:3,diff:'Normal+',diffClass:'diff-normalplus'},
-  {num:4,diff:'Medium',diffClass:'diff-medium'},
-  {num:5,diff:'Hard',diffClass:'diff-hard'},
-  {num:6,diff:'Insane',diffClass:'diff-insane'},
-  {num:7,diff:'Extreme',diffClass:'diff-extreme'},
-  {num:8,diff:'Extreme+',diffClass:'diff-extremeplus'},
-  {num:9,diff:'Abyssal',diffClass:'diff-abyssal'},
-  {num:10,diff:'Abyssal II',diffClass:'diff-abyssal2'}
+  {num:1, diff:'Easy',        diffClass:'diff-easy'},
+  {num:2, diff:'Normal',      diffClass:'diff-normal'},
+  {num:3, diff:'Normal+',     diffClass:'diff-normalplus'},
+  {num:4, diff:'Medium',      diffClass:'diff-medium'},
+  {num:5, diff:'Hard',        diffClass:'diff-hard'},
+  {num:6, diff:'Insane',      diffClass:'diff-insane'},
+  {num:7, diff:'Extreme',     diffClass:'diff-extreme'},
+  {num:8, diff:'Extreme+',    diffClass:'diff-extremeplus'},
+  {num:9, diff:'Abyssal',     diffClass:'diff-abyssal'},
+  {num:10,diff:'Abyssal II',  diffClass:'diff-abyssal2'},
+  {num:11,diff:'Nightmare',   diffClass:'diff-nightmare'},
+  {num:12,diff:'Nightmare+',  diffClass:'diff-nightmareplus'},
+  {num:13,diff:'Chaos',       diffClass:'diff-chaos'},
+  {num:14,diff:'Chaos+',      diffClass:'diff-chaosplus'},
+  {num:15,diff:'VOID',        diffClass:'diff-void'}
 ];
 
 // ============ COSMETICS DATA ============
@@ -452,7 +462,7 @@ function createGameState(lvl){
     SLOW_DUR:5000,SLOW_CD:10000,
     phase:'waiting',
     cdVal:3,cdTimer:0,
-    attacks:[],projectiles:[],explosions:[],boulders:[],gridLines:[],
+    attacks:[],projectiles:[],explosions:[],boulders:[],gridLines:[],bouncyBalls:[],
     particles:[],trailPts:[],
     spinAngle:0,
     atkTimer:0,atkInterval:1000,
@@ -662,9 +672,10 @@ function update(dt){
     updateExplosions(gameDt);
     updateBoulders(gameDt);
     updateGridLines(gameDt);
+    updateBouncyBalls(gameDt);
     updateParticles(gameDt);
     checkCollisions();
-    if(gs.invincible){gs.invTimer-=dt;if(gs.invTimer<=0)gs.invincible=false;}
+    if(gs.invincible){gs.invTimer-=dt;if(gs.invTimer<=0){gs.invincible=false;gs.impactFlashing=false;}}
     updateShiftBar();
     updateSlowBar();
     updateWarnings();
@@ -772,10 +783,11 @@ function movePlayer(dt){
 function takeDamage(){
   const gs=gameState;
   if(gs.invincible||gs.shiftActive||gs.phase!=='playing')return;
-  gs.hearts--;gs.invincible=true;gs.invTimer=1500;
+  gs.hearts--;gs.invincible=true;gs.invTimer=3000; // 3s impact frames
+  gs.impactFlashing=true; // flag for flashing render
   if(decathlonState){
     decathlonState.hearts=gs.hearts;
-    decathlonState.startedPerfect=false; // took a hit — no longer perfect
+    decathlonState.startedPerfect=false;
   }
   updateHeartsDisplay(gs.hearts);
   triggerScreenFlash();
@@ -858,16 +870,17 @@ function spawnAttacks(dt){
     gs.spinLaser2=null;
   }
 
-  // Random-interval attack pool
+  // Random-interval attack pool — after lvl 5 max interval drops to 2s
   if(!gs.poolTimer)gs.poolTimer=0;
-  if(!gs.poolInterval)gs.poolInterval=500+Math.random()*1500; // 0.5–2s
+  const maxInterval=gs.lvl>=6?500+Math.random()*1500:500+Math.random()*1500;
+  if(!gs.poolInterval)gs.poolInterval=gs.lvl>=6?500+Math.random()*1500:500+Math.random()*1500;
   gs.poolTimer+=dt;
   if(gs.poolTimer>=gs.poolInterval){
     gs.poolTimer=0;
-    gs.poolInterval=500+Math.random()*1500; // pick next interval
-    const spawnChance=Math.min(1.0,0.25+lvl*0.05); // lvl1=30%, lvl2=35%...lvl15=100%
+    gs.poolInterval=gs.lvl>=6?200+Math.random()*1800:500+Math.random()*1500; // lvl6+: 0.2–2s
+    const spawnChance=Math.min(1.0,0.25+gs.lvl*0.05);
     if(Math.random()<spawnChance){
-      spawnRandomAttack(lvl);
+      spawnRandomAttack(gs.lvl);
     }
   }
 }
@@ -883,6 +896,9 @@ function spawnRandomAttack(lvl){
   if(lvl>=8)pool.push('boulder','boulder');
   if(lvl>=9)pool.push('diag','diag');
   if(lvl>=10)pool.push('moving','moving');
+  if(lvl>=11)pool.push('border','border');
+  if(lvl>=14)pool.push('diagbars','diagbars');
+  if(lvl>=15)pool.push('diaggrid','diaggrid');
 
   const pick=pool[Math.floor(Math.random()*pool.length)];
   if(pick==='beam')spawnBeam();
@@ -894,6 +910,9 @@ function spawnRandomAttack(lvl){
   else if(pick==='boulder')spawnBoulder();
   else if(pick==='diag')spawnDiagLaser();
   else if(pick==='moving')spawnMovingLaser();
+  else if(pick==='border')spawnBorderAttack();
+  else if(pick==='diagbars')spawnDiagBars();
+  else if(pick==='diaggrid')spawnDiagGrid();
 }
 
 function spawnBeam(){
@@ -997,10 +1016,67 @@ function spawnDiagLaser(){
 function spawnMovingLaser(){
   const gs=gameState,lvl=gs.lvl;
   const thick=Math.min(40,18+(lvl-10)*3);
-  const warnDur=1200;
+  const warnDur=1000; // 1s cooldown
   const dir=Math.floor(Math.random()*4);
   const atk={type:'moving',dir,phase:'warning',timer:0,warnDur,fireDur:2000,thick,pos:0};
   gs.attacks.push(atk);
+}
+
+// ---- LEVEL 11: Border attack — thin margin around all 4 edges ----
+function spawnBorderAttack(){
+  const gs=gameState,lvl=gs.lvl;
+  const margin=Math.min(60,30+(lvl-11)*5);
+  const warnDur=Math.max(600,1500-(lvl-11)*80);
+  // 4 border strips
+  const strips=[
+    {x:0,y:0,w:ARENA,h:margin},           // top
+    {x:0,y:ARENA-margin,w:ARENA,h:margin}, // bottom
+    {x:0,y:0,w:margin,h:ARENA},            // left
+    {x:ARENA-margin,y:0,w:margin,h:ARENA}  // right
+  ];
+  strips.forEach(s=>gs.attacks.push({type:'hline',x:s.x,y:s.y,w:s.w,h:s.h,phase:'warning',timer:0,warnDur,fireDur:500,thick:margin,border:true}));
+}
+
+// ---- LEVEL 12/13: Bouncy balls — spawned once, persist and bounce ----
+function spawnBouncyBall(){
+  const gs=gameState,lvl=gs.lvl;
+  const r=10;
+  const spd=2.2;
+  const angle=Math.random()*Math.PI*2;
+  gs.bouncyBalls=gs.bouncyBalls||[];
+  gs.bouncyBalls.push({
+    x:ARENA/2+(Math.random()-0.5)*100,
+    y:ARENA/2+(Math.random()-0.5)*100,
+    vx:Math.cos(angle)*spd,
+    vy:Math.sin(angle)*spd,
+    r
+  });
+}
+
+// ---- LEVEL 14: Diagonal prison bars ----
+function spawnDiagBars(){
+  const gs=gameState,lvl=gs.lvl;
+  const thick=Math.min(28,14+(lvl-14)*3);
+  const gap=Math.max(32,60-(lvl-14)*4);
+  const warnDur=Math.max(600,1400-(lvl-14)*80);
+  const offset=Math.floor(Math.random()*(gap+thick));
+  // Diagonal bars: lines at 45° spaced across the arena
+  for(let d=-ARENA;d<ARENA*2;d+=gap+thick){
+    gs.attacks.push({type:'diagbar',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:500,thick});
+  }
+}
+
+// ---- LEVEL 15: Diagonal grid (45° + 135°) ----
+function spawnDiagGrid(){
+  const gs=gameState,lvl=gs.lvl;
+  const thick=8;
+  const gap=Math.max(30,55-(lvl-15)*4);
+  const warnDur=Math.max(600,1400-(lvl-15)*80);
+  const offset=Math.floor(Math.random()*(gap+thick));
+  for(let d=-ARENA;d<ARENA*2;d+=gap+thick){
+    gs.attacks.push({type:'diagbar', d:d+offset,phase:'warning',timer:0,warnDur,fireDur:600,thick});
+    gs.attacks.push({type:'diagbar2',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:600,thick});
+  }
 }
 
 // ============ UPDATE ATTACKS ============
@@ -1053,6 +1129,21 @@ function updateBoulders(dt){
 }
 
 function updateGridLines(dt){}
+
+// ---- BOUNCY BALLS ----
+function updateBouncyBalls(dt){
+  const gs=gameState;
+  if(!gs.bouncyBalls||gs.bouncyBalls.length===0)return;
+  const scale=dt/16.667;
+  for(const b of gs.bouncyBalls){
+    b.x+=b.vx*scale;
+    b.y+=b.vy*scale;
+    if(b.x-b.r<=0){b.x=b.r;b.vx=Math.abs(b.vx);}
+    if(b.x+b.r>=ARENA){b.x=ARENA-b.r;b.vx=-Math.abs(b.vx);}
+    if(b.y-b.r<=0){b.y=b.r;b.vy=Math.abs(b.vy);}
+    if(b.y+b.r>=ARENA){b.y=ARENA-b.r;b.vy=-Math.abs(b.vy);}
+  }
+}
 
 // ============ WARNINGS UI ============
 function updateWarnings(){
@@ -1348,7 +1439,9 @@ function render(){
 
   // Draw player
   const col=getPlayerColor();
-  const blink=gs.invincible&&Math.floor(Date.now()/100)%2===0;
+  // Impact flashing: slower 150ms blink; shift invincibility: fast 80ms blink
+  const flashRate=gs.impactFlashing?150:80;
+  const blink=gs.invincible&&Math.floor(Date.now()/flashRate)%2===0;
   if(!blink){
     ctx.fillStyle=col;
     ctx.fillRect(gs.px,gs.py,PS,PS);
