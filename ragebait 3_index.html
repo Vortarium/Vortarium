@@ -95,7 +95,13 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 #shiftBar.ready #shiftFill{background:linear-gradient(90deg,#44ffaa,#44ffff);box-shadow:0 0 10px #44ffaa,0 0 20px #44ffaa88;animation:glow 1s infinite alternate;}
 @keyframes glow{from{box-shadow:0 0 6px #44ffaa;}to{box-shadow:0 0 18px #44ffaa,0 0 30px #44ffaa66;}}
 #shiftLabel{text-align:center;font-size:0.6rem;color:rgba(255,255,255,0.4);margin-top:3px;font-family:'Press Start 2P',monospace;letter-spacing:1px;}
-/* OVERLAYS */
+/* ---- SLOW MO BAR ---- */
+#slowBar{width:10px;height:500px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:2px;position:fixed;left:calc(50% - 270px);top:50%;transform:translateY(-50%);overflow:hidden;display:none;}
+#slowFill{width:100%;height:0%;background:linear-gradient(180deg,#00ccff,#0044ff);border-radius:2px;position:absolute;bottom:0;transition:height 0.1s linear;}
+#slowBar.ready #slowFill{background:linear-gradient(180deg,#00ffee,#00aaff);box-shadow:0 0 10px #00ffee,0 0 20px #00ffee88;animation:slowGlow 1s infinite alternate;}
+@keyframes slowGlow{from{box-shadow:0 0 6px #00ffee;}to{box-shadow:0 0 18px #00ffee,0 0 30px #00ffee66;}}
+#slowBar.active #slowFill{background:linear-gradient(180deg,#ffffff,#88eeff);box-shadow:0 0 14px #88eeff;}
+#slowLabel{position:fixed;left:calc(50% - 278px);top:50%;transform:translateY(calc(-50% + 260px));font-family:'Press Start 2P',monospace;font-size:0.4rem;color:rgba(255,255,255,0.4);letter-spacing:1px;writing-mode:vertical-rl;text-orientation:mixed;display:none;}
 .game-overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity 0.4s;background:rgba(0,0,0,0.8);}
 .game-overlay.visible{opacity:1;pointer-events:all;}
 .overlay-title{font-family:'Press Start 2P',monospace;font-size:2rem;color:#fff;text-shadow:0 0 30px rgba(255,80,80,0.9);letter-spacing:3px;margin-bottom:16px;}
@@ -199,6 +205,8 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
   <div id="risingWarnings"></div>
   <div id="shiftBar"><div id="shiftFill"></div></div>
   <div id="shiftLabel">SPACE — INVINCIBILITY</div>
+  <div id="slowBar"><div id="slowFill"></div></div>
+  <div id="slowLabel">SHIFT — SLOW MO</div>
   <button id="btnLeaveLevel" style="margin-top:12px;padding:8px 22px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:3px;color:rgba(255,255,255,0.5);font-size:0.7rem;font-weight:700;letter-spacing:2px;cursor:pointer;font-family:'Rajdhani',sans-serif;text-transform:uppercase;transition:all 0.2s;">← LEAVE LEVEL</button>
 </div>
 <!-- DEATH OVERLAY -->
@@ -282,7 +290,7 @@ function ensureTitleMusic(){
   titleMusic.play().catch(()=>{});
 }
 function stopLevelMusic(){
-  if(levelMusic){levelMusic.pause();levelMusic.currentTime=0;levelMusic=null;}
+  if(levelMusic){levelMusic.playbackRate=1.0;levelMusic.pause();levelMusic.currentTime=0;levelMusic=null;}
 }
 function fadeOutLevelMusic(cb){
   if(!levelMusic){if(cb)cb();return;}
@@ -440,6 +448,8 @@ function createGameState(lvl){
     invincible:false,invTimer:0,
     shiftCooldown:0,shiftActive:false,shiftTimer:0,
     SHIFT_CD:8000,SHIFT_DUR:2000,
+    slowActive:false,slowTimer:0,slowCooldown:0,
+    SLOW_DUR:5000,SLOW_CD:10000,
     phase:'waiting',
     cdVal:3,cdTimer:0,
     attacks:[],projectiles:[],explosions:[],boulders:[],gridLines:[],
@@ -474,6 +484,9 @@ function startLevel(num){
   // Reset music bar
   document.getElementById('musicBarFill').style.width='0%';
   document.getElementById('musicPct').textContent='0.0%';
+  // Show slow mo bar
+  document.getElementById('slowBar').style.display='block';
+  document.getElementById('slowLabel').style.display='block';
   updateHeartsDisplay(3);
   hideAllOverlays();
   showScreen('game');
@@ -521,6 +534,8 @@ function _launchDecathlonStage(stage,hearts){
   document.getElementById('gameLevelTitle').textContent=`DECATHLON — LEVEL ${stage}/10`;
   document.getElementById('musicBarFill').style.width='0%';
   document.getElementById('musicPct').textContent='0.0%';
+  document.getElementById('slowBar').style.display='block';
+  document.getElementById('slowLabel').style.display='block';
   updateHeartsDisplay(hearts);
   hideAllOverlays();
   showScreen('game');
@@ -635,18 +650,23 @@ function update(dt){
     movePlayer(dt);updateParticles(dt);return;
   }
   if(gs.phase==='playing'){
-    movePlayer(dt);
+    // Slow mo: game systems run at 25% speed, player moves at full speed
+    const slowScale=gs.slowActive?0.25:1.0;
+    const gameDt=dt*slowScale;
+    movePlayer(dt); // always full speed
     updateShift(dt);
-    spawnAttacks(dt);
-    updateAttacks(dt);
-    updateProjectiles(dt);
-    updateExplosions(dt);
-    updateBoulders(dt);
-    updateGridLines(dt);
-    updateParticles(dt);
+    updateSlowMo(dt);
+    spawnAttacks(gameDt);
+    updateAttacks(gameDt);
+    updateProjectiles(gameDt);
+    updateExplosions(gameDt);
+    updateBoulders(gameDt);
+    updateGridLines(gameDt);
+    updateParticles(gameDt);
     checkCollisions();
     if(gs.invincible){gs.invTimer-=dt;if(gs.invTimer<=0)gs.invincible=false;}
     updateShiftBar();
+    updateSlowBar();
     updateWarnings();
     if(decathlonState)updateMusicBarDecathlon();else updateMusicBar();
   }
@@ -685,6 +705,40 @@ function updateShiftBar(){
   fill.style.background='';
   fill.style.boxShadow='';
   if(pct>=100){bar.classList.add('ready');}else{bar.classList.remove('ready');}
+}
+
+// ============ SLOW MO MECHANIC ============
+function updateSlowMo(dt){
+  const gs=gameState;
+  if(gs.slowActive){
+    gs.slowTimer-=dt;
+    if(gs.slowTimer<=0){
+      gs.slowActive=false;
+      gs.slowCooldown=gs.SLOW_CD;
+      if(levelMusic)levelMusic.playbackRate=1.0; // restore normal speed
+    }
+  } else if(gs.slowCooldown>0){
+    gs.slowCooldown=Math.max(0,gs.slowCooldown-dt);
+  }
+}
+
+function updateSlowBar(){
+  const gs=gameState;
+  const bar=document.getElementById('slowBar');
+  const fill=document.getElementById('slowFill');
+  if(!bar)return;
+  if(gs.slowActive){
+    // Drain from 100% → 0% over SLOW_DUR
+    const pct=Math.round((gs.slowTimer/gs.SLOW_DUR)*100);
+    fill.style.height=pct+'%';
+    bar.classList.add('active');
+    bar.classList.remove('ready');
+    return;
+  }
+  bar.classList.remove('active');
+  const pct=gs.slowCooldown<=0?100:Math.round((1-gs.slowCooldown/gs.SLOW_CD)*100);
+  fill.style.height=pct+'%';
+  if(pct>=100)bar.classList.add('ready');else bar.classList.remove('ready');
 }
 
 // ============ PLAYER MOVEMENT ============
@@ -782,7 +836,7 @@ function spawnAttacks(dt){
   // Spin laser has its own warn/fire cycle (lvl 4+)
   // At lvl 7+ a second laser alternates: when laser1 fires, laser2 warns and vice versa
   if(lvl>=4){
-    if(!gs.spinLaser)gs.spinLaser={phase:'warning',timer:0,warnDur:2000,fireDur:3000};
+    if(!gs.spinLaser)gs.spinLaser={phase:'warning',timer:0,warnDur:3000,fireDur:1000};
     const sl=gs.spinLaser;
     sl.timer+=dt;
     if(sl.phase==='warning'&&sl.timer>=sl.warnDur){sl.phase='fire';sl.timer=0;}
@@ -1521,6 +1575,13 @@ document.addEventListener('keydown',e=>{
       gs.shiftActive=true;gs.shiftTimer=gs.SHIFT_DUR;gs.invincible=true;gs.invTimer=gs.SHIFT_DUR+100;
     }
   }
+  if(gameState&&e.key==='Shift'&&gameState.phase==='playing'){
+    const gs=gameState;
+    if(!gs.slowActive&&gs.slowCooldown<=0){
+      gs.slowActive=true;gs.slowTimer=gs.SLOW_DUR;
+      if(levelMusic)levelMusic.playbackRate=0.25;
+    }
+  }
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
 });
 document.addEventListener('keyup',e=>{if(gameState)gameState.keys[e.key]=false;});
@@ -1568,6 +1629,8 @@ document.getElementById('btnLeaveLevel').addEventListener('click',()=>{
   decathlonState=null;    // cancel any active decathlon
   gameState=null;         // null BEFORE ensureTitleMusic so guard doesn't block it
   hideAllOverlays();
+  document.getElementById('slowBar').style.display='none';
+  document.getElementById('slowLabel').style.display='none';
   wipeTransition(()=>{
     renderLevelSelect();
     showScreen('levelSelect');
