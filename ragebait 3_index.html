@@ -686,17 +686,19 @@ function updateShiftBar(){
 // ============ PLAYER MOVEMENT ============
 function movePlayer(dt){
   const gs=gameState;const k=gs.keys;
+  // Normalise to 60fps so speed is consistent regardless of frame timing
+  const scale=dt/16.667;
   let dx=0,dy=0;
   if(k['ArrowLeft']||k['a']||k['A'])dx-=SPD;
   if(k['ArrowRight']||k['d']||k['D'])dx+=SPD;
   if(k['ArrowUp']||k['w']||k['W'])dy-=SPD;
   if(k['ArrowDown']||k['s']||k['S'])dy+=SPD;
+  dx*=scale;dy*=scale;
   gs.moving=(dx!==0||dy!==0);
   gs.px=Math.max(0,Math.min(ARENA-PS,gs.px+dx));
   gs.py=Math.max(0,Math.min(ARENA-PS,gs.py+dy));
   if(gs.moving&&save.selectedParticle!=='none')spawnParticle(gs.px+PS/2,gs.py+PS/2);
   if(['trails','trail2','trail3','trail4'].includes(save.selectedParticle)&&gs.moving){
-    // Only drop a trail pixel every ~4px of movement
     if(!gs.trailDist)gs.trailDist=0;
     gs.trailDist+=Math.hypot(dx,dy);
     if(gs.trailDist>=4){
@@ -766,7 +768,11 @@ function spawnAttacks(dt){
   const gs=gameState,lvl=gs.lvl;
 
   // Spinning laser angle always updates (lvl 4+) — passive, always on
-  if(lvl>=4){gs.spinAngle=(gs.spinAngle+dt*0.0008)%(Math.PI*2);}
+  // Each level after 3 adds 5% speed: lvl4=base, lvl5=+5%, lvl6=+10% etc.
+  if(lvl>=4){
+    const spinSpeedMult=1+Math.max(0,(lvl-3))*0.05;
+    gs.spinAngle=(gs.spinAngle+dt*0.0008*spinSpeedMult)%(Math.PI*2);
+  }
 
   // Spin laser has its own warn/fire cycle (lvl 4+)
   if(lvl>=4){
@@ -864,14 +870,26 @@ function spawnHalfScreen(){
 
 function spawnFallingCircle(){
   const gs=gameState,lvl=gs.lvl;
-  const r=Math.min(30,12+(lvl-5)*2);
+  const r=Math.min(80,28+(lvl-5)*5);
   const warnDur=Math.max(800,2000-(lvl-5)*100);
-  gs.projectiles.push({x:Math.random()*(ARENA-r*2)+r,y:-r,r,vy:2+(lvl-5)*0.3,phase:'falling',warnDur,warnTimer:warnDur,active:true});
+  // Snapshot player position NOW — ball will fall toward where player was when spawned
+  const targetX=gs.px+PS/2;
+  const targetY=gs.py+PS/2;
+  const spd=3+(lvl-5)*0.4;
+  // Pick a random incoming direction (top, bottom, left, right)
+  const dir=Math.floor(Math.random()*4);
+  let sx,sy,vx=0,vy=0;
+  if(dir===0){sx=targetX;sy=-r;vy=spd;}            // from top → fall down
+  else if(dir===1){sx=targetX;sy=ARENA+r;vy=-spd;} // from bottom → rise up
+  else if(dir===2){sx=-r;sy=targetY;vx=spd;}        // from left → go right
+  else{sx=ARENA+r;sy=targetY;vx=-spd;}              // from right → go left
+  gs.projectiles.push({x:sx,y:sy,vx,vy,r,phase:'falling',warnDur,warnTimer:warnDur,targetX,targetY,active:true});
 }
 
 function spawnExplosion(){
   const gs=gameState,lvl=gs.lvl;
-  const r=Math.min(80,40+(lvl-6)*8);
+  // 2x bigger than before
+  const r=Math.min(160,80+(lvl-6)*16);
   gs.explosions.push({x:Math.random()*(ARENA-r*2)+r,y:Math.random()*(ARENA-r*2)+r,r,timer:0,warnDur:3000,fireDur:500,phase:'warning'});
 }
 
@@ -887,7 +905,8 @@ function spawnGrid(){
 
 function spawnBoulder(){
   const gs=gameState,lvl=gs.lvl;
-  const r=Math.min(25,10+(lvl-8)*3);
+  // Bigger — same scale as falling circles
+  const r=Math.min(60,22+(lvl-8)*6);
   gs.boulders.push({x:Math.random()*(ARENA-r*2)+r,y:ARENA+r,r,vy:-(2+(lvl-8)*0.4),warnTimer:2000,warned:false});
 }
 
@@ -926,9 +945,15 @@ function updateAttacks(dt){
 function updateProjectiles(dt){
   const gs=gameState;
   gs.projectiles=gs.projectiles.filter(p=>{
-    if(p.warnTimer>0){p.warnTimer-=dt;return true;}
-    p.y+=p.vy;
-    return p.y-p.r<ARENA;
+    if(p.warnTimer>0){
+      p.warnTimer-=dt;
+      // Do NOT update target — position was snapshotted at spawn time
+      return true;
+    }
+    // Move straight with fixed velocity (no homing)
+    p.x+=(p.vx||0);
+    p.y+=(p.vy||0);
+    return p.x+p.r>0&&p.x-p.r<ARENA&&p.y+p.r>0&&p.y-p.r<ARENA;
   });
 }
 
@@ -1049,18 +1074,21 @@ function checkSpinLaserCollision(){
   const gs=gameState;
   if(!gs.spinLaser||gs.spinLaser.phase!=='fire')return false;
   const cx=ARENA/2,cy=ARENA/2;
-  const px=gs.px+PS/2,py=gs.py+PS/2; // player center
-  const thick=14/2+2; // half lineWidth + margin
-  for(let i=0;i<2;i++){
-    const a=gs.spinAngle+i*Math.PI;
-    // Vector along laser arm
-    const dx=Math.cos(a),dy=Math.sin(a);
-    // Project player center onto laser line
-    const t=(px-cx)*dx+(py-cy)*dy;
-    if(t<0)continue; // behind center
-    const closestX=cx+dx*t,closestY=cy+dy*t;
-    const dist=Math.hypot(px-closestX,py-closestY);
-    if(dist<thick)return true;
+  const px=gs.px+PS/2,py=gs.py+PS/2;
+  const thick=14/2+2;
+  // Build list of angles to check: base laser + perpendicular if lvl 7+
+  const angles=[gs.spinAngle];
+  if(gs.lvl>=7)angles.push(gs.spinAngle+Math.PI/2);
+  for(const baseAngle of angles){
+    for(let i=0;i<2;i++){
+      const a=baseAngle+i*Math.PI;
+      const dx=Math.cos(a),dy=Math.sin(a);
+      const t=(px-cx)*dx+(py-cy)*dy;
+      if(t<0)continue;
+      const closestX=cx+dx*t,closestY=cy+dy*t;
+      const dist=Math.hypot(px-closestX,py-closestY);
+      if(dist<thick)return true;
+    }
   }
   return false;
 }
@@ -1140,6 +1168,10 @@ function render(){
   // Draw spinning laser (lvl 4+)
   if(gs.lvl>=4&&gs.spinLaser){
     drawSpinLaser(gs.spinAngle,gs.spinLaser);
+    // Second perpendicular laser (lvl 7+) — offset 90°
+    if(gs.lvl>=7){
+      drawSpinLaser(gs.spinAngle+Math.PI/2,gs.spinLaser);
+    }
   }
 
   // Draw attacks
@@ -1360,13 +1392,22 @@ function drawExplosion(e){
 function drawProjectile(p){
   ctx.save();
   if(p.warnTimer>0){
-    // Show X marker at landing position
-    ctx.strokeStyle='rgba(255,60,60,0.7)';ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(p.x-8,p.y-8);ctx.lineTo(p.x+8,p.y+8);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(p.x+8,p.y-8);ctx.lineTo(p.x-8,p.y+8);ctx.stroke();
+    // Show target circle at landing position (tracks player)
+    const tx=p.targetX||p.x,ty=p.targetY||p.y;
+    const prog=1-(p.warnTimer/(p.warnTimer+(p.warnDur-p.warnTimer)));
+    ctx.strokeStyle='rgba(255,60,60,0.8)';ctx.lineWidth=2;
+    // Outer ring showing impact radius
+    ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.arc(tx,ty,p.r,0,Math.PI*2);ctx.stroke();
+    ctx.setLineDash([]);
+    // X crosshair at center
+    const cs=10;
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(255,80,80,0.9)';
+    ctx.beginPath();ctx.moveTo(tx-cs,ty-cs);ctx.lineTo(tx+cs,ty+cs);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(tx+cs,ty-cs);ctx.lineTo(tx-cs,ty+cs);ctx.stroke();
   } else {
-    ctx.fillStyle='rgba(255,40,40,0.9)';
-    ctx.shadowColor='#ff0000';ctx.shadowBlur=8;
+    ctx.fillStyle='rgba(255,40,40,0.92)';
+    ctx.shadowColor='#ff0000';ctx.shadowBlur=12;
     ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
   }
   ctx.restore();
@@ -1375,14 +1416,21 @@ function drawProjectile(p){
 function drawBoulder(b){
   ctx.save();
   if(b.warnTimer>0){
-    ctx.strokeStyle='rgba(255,140,0,0.7)';ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(b.x-8,ARENA-8);ctx.lineTo(b.x+8,ARENA-8);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(b.x,ARENA-14);ctx.lineTo(b.x,ARENA-2);ctx.stroke();
+    ctx.strokeStyle='rgba(255,60,60,0.8)';ctx.lineWidth=2;
+    // Arrow pointing up from bottom edge
+    ctx.beginPath();ctx.moveTo(b.x-10,ARENA-6);ctx.lineTo(b.x+10,ARENA-6);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b.x,ARENA-16);ctx.lineTo(b.x,ARENA-2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b.x-6,ARENA-12);ctx.lineTo(b.x,ARENA-18);ctx.lineTo(b.x+6,ARENA-12);ctx.stroke();
   } else {
-    ctx.fillStyle='#cc6600';
-    ctx.shadowColor='#ff8800';ctx.shadowBlur=6;
+    // Red boulder
+    ctx.fillStyle='#dd2222';
+    ctx.shadowColor='#ff0000';ctx.shadowBlur=10;
     ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#884400';ctx.lineWidth=2;ctx.stroke();
+    ctx.strokeStyle='#880000';ctx.lineWidth=2;ctx.stroke();
+    // Crack detail
+    ctx.shadowBlur=0;ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(b.x-b.r*0.3,b.y-b.r*0.4);ctx.lineTo(b.x+b.r*0.1,b.y+b.r*0.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(b.x+b.r*0.2,b.y-b.r*0.3);ctx.lineTo(b.x-b.r*0.1,b.y+b.r*0.3);ctx.stroke();
   }
   ctx.restore();
 }
