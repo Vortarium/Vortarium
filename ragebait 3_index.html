@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -424,7 +424,7 @@ function renderLevelSelect(){
 }
 
 // ============ GAME CONSTANTS ============
-const ARENA=500,PS=14,SPD=3;
+const ARENA=500,PS=14,SPD=3.75;
 let rainbowHue=0;
 function getPlayerColor(){
   const c=save.selectedColor;
@@ -650,6 +650,10 @@ function update(dt){
     updateWarnings();
     if(decathlonState)updateMusicBarDecathlon();else updateMusicBar();
   }
+  // Also update music bar during waiting/countdown phases so it ticks from the start
+  if(!decathlonState&&(gameState.phase==='waiting'||gameState.phase==='countdown')){
+    updateMusicBar();
+  }
 }
 
 // ============ SHIFT MECHANIC ============
@@ -769,9 +773,10 @@ function spawnAttacks(dt){
 
   // Spinning laser angle always updates (lvl 4+) — passive, always on
   // Each level after 3 adds 5% speed: lvl4=base, lvl5=+5%, lvl6=+10% etc.
+  // Base speed halved from 0.0008 to 0.0004 so it's slower overall
   if(lvl>=4){
     const spinSpeedMult=1+Math.max(0,(lvl-3))*0.05;
-    gs.spinAngle=(gs.spinAngle+dt*0.0008*spinSpeedMult)%(Math.PI*2);
+    gs.spinAngle=(gs.spinAngle+dt*0.00044*spinSpeedMult)%(Math.PI*2);
   }
 
   // Spin laser has its own warn/fire cycle (lvl 4+)
@@ -998,10 +1003,17 @@ function updateWarnings(){
 }
 
 function updateMusicBar(){
-  if(!levelMusic||!levelMusic.duration||isNaN(levelMusic.duration))return;
+  const fill=document.getElementById('musicBarFill');
+  const pctEl=document.getElementById('musicPct');
+  if(!levelMusic||!levelMusic.duration||isNaN(levelMusic.duration)||!isFinite(levelMusic.duration)){
+    // Duration not ready yet — keep bar at 0
+    fill.style.width='0%';
+    pctEl.textContent='0.0%';
+    return;
+  }
   const pct=Math.min(100,(levelMusic.currentTime/levelMusic.duration)*100);
-  document.getElementById('musicBarFill').style.width=pct.toFixed(1)+'%';
-  document.getElementById('musicPct').textContent=pct.toFixed(1)+'%';
+  fill.style.width=pct.toFixed(1)+'%';
+  pctEl.textContent=pct.toFixed(1)+'%';
 }
 
 // ============ COLLISION ============
