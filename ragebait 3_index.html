@@ -192,8 +192,9 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 <!-- GAME -->
 <div id="gameScreen" class="screen">
   <div id="gameLevelTitle" style="font-family:'Press Start 2P',monospace;color:#fff;font-size:0.6rem;letter-spacing:3px;margin-bottom:6px;text-align:center;text-shadow:0 0 10px rgba(255,255,255,0.4);opacity:0.7;">LEVEL 1</div>
-  <div id="musicBarWrap" style="width:500px;height:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:2px;margin-bottom:6px;overflow:hidden;">
-    <div id="musicBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#4466ff,#aa44ff,#ff4466);border-radius:2px;transition:width 0.25s linear;"></div>
+  <div id="musicBarWrap" style="width:500px;height:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:2px;margin-bottom:6px;overflow:visible;position:relative;">
+    <div id="musicBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#4466ff,#aa44ff,#ff4466);border-radius:2px;"></div>
+    <div id="musicBarRecord" style="position:absolute;top:-2px;width:2px;height:10px;background:#ffcc00;border-radius:1px;display:none;box-shadow:0 0 4px #ffcc00;"></div>
   </div>
   <div id="musicPct" style="font-family:'Press Start 2P',monospace;font-size:0.45rem;color:rgba(255,255,255,0.35);text-align:center;margin-bottom:4px;letter-spacing:1px;">0.0%</div>
   <div id="gameHeartsBar">❤️❤️❤️</div>
@@ -227,7 +228,7 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
   </div>
 </div>
 <script>// ============ STATE ============
-const DEFAULT_SAVE={shards:0,ownedColors:['white'],ownedParticles:['none'],selectedColor:'white',selectedParticle:'none',selectedDeathSound:1,ownedDeathSounds:[1],unlockedLevels:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],bestHearts:{},totalShards:0};
+const DEFAULT_SAVE={shards:0,ownedColors:['white'],ownedParticles:['none'],selectedColor:'white',selectedParticle:'none',selectedDeathSound:1,ownedDeathSounds:[1],unlockedLevels:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],bestHearts:{},bestPct:{},totalShards:0};
 let save=JSON.parse(JSON.stringify(DEFAULT_SAVE));
 function loadSave(){try{const r=localStorage.getItem('ragebait3_save');if(r){const p=JSON.parse(r);save=Object.assign(JSON.parse(JSON.stringify(DEFAULT_SAVE)),p);}}catch(e){save=JSON.parse(JSON.stringify(DEFAULT_SAVE));}}
 function writeSave(){localStorage.setItem('ragebait3_save',JSON.stringify(save));}
@@ -235,50 +236,65 @@ let currentScreen='title',gameInProgress=false,currentLevel=1,gameState=null;
 
 // ============ LEVELS ============
 const LEVELS=[
-  {num:1, diff:'Easy',        diffClass:'diff-easy'},
-  {num:2, diff:'Normal',      diffClass:'diff-normal'},
-  {num:3, diff:'Normal+',     diffClass:'diff-normalplus'},
-  {num:4, diff:'Medium',      diffClass:'diff-medium'},
-  {num:5, diff:'Hard',        diffClass:'diff-hard'},
-  {num:6, diff:'Insane',      diffClass:'diff-insane'},
-  {num:7, diff:'Extreme',     diffClass:'diff-extreme'},
-  {num:8, diff:'Extreme+',    diffClass:'diff-extremeplus'},
-  {num:9, diff:'Abyssal',     diffClass:'diff-abyssal'},
-  {num:10,diff:'Abyssal II',  diffClass:'diff-abyssal2'},
-  {num:11,diff:'Nightmare',   diffClass:'diff-nightmare'},
-  {num:12,diff:'Nightmare+',  diffClass:'diff-nightmareplus'},
-  {num:13,diff:'Chaos',       diffClass:'diff-chaos'},
-  {num:14,diff:'Chaos+',      diffClass:'diff-chaosplus'},
-  {num:15,diff:'VOID',        diffClass:'diff-void'}
+  {num:1, diff:'Easy',       diffClass:'diff-easy'},
+  {num:2, diff:'Easy',       diffClass:'diff-easy'},
+  {num:3, diff:'Easy',       diffClass:'diff-easy'},
+  {num:4, diff:'Medium',     diffClass:'diff-medium'},
+  {num:5, diff:'Medium',     diffClass:'diff-medium'},
+  {num:6, diff:'Medium',     diffClass:'diff-medium'},
+  {num:7, diff:'Normal',     diffClass:'diff-normal'},
+  {num:8, diff:'Normal',     diffClass:'diff-normal'},
+  {num:9, diff:'Normal',     diffClass:'diff-normal'},
+  {num:10,diff:'Hard',       diffClass:'diff-hard'},
+  {num:11,diff:'Hard',       diffClass:'diff-hard'},
+  {num:12,diff:'Hard',       diffClass:'diff-hard'},
+  {num:13,diff:'Extreme',    diffClass:'diff-extreme'},
+  {num:14,diff:'Extreme',    diffClass:'diff-extreme'},
+  {num:15,diff:'Extreme',    diffClass:'diff-extreme'},
+  {num:16,diff:'Nightmare',  diffClass:'diff-nightmare'},
+  {num:17,diff:'Nightmare',  diffClass:'diff-nightmare'},
+  {num:18,diff:'Nightmare',  diffClass:'diff-nightmare'},
+  {num:19,diff:'Void',       diffClass:'diff-void'},
+  {num:20,diff:'Void',       diffClass:'diff-void'}
 ];
 
 // ============ COSMETICS DATA ============
 const COLOR_ITEMS=[
-  {id:'white',   name:'White',   cost:0,   color:'#ffffff'},
-  {id:'red',     name:'Red',     cost:50,  color:'#ff4444'},
-  {id:'blue',    name:'Blue',    cost:80,  color:'#4488ff'},
-  {id:'green',   name:'Green',   cost:110, color:'#44ff88'},
-  {id:'gold',    name:'Gold',    cost:150, color:'#ffd700'},
-  {id:'cyan',    name:'Cyan',    cost:190, color:'#44ffff'},
-  {id:'pink',    name:'Pink',    cost:240, color:'#ff44cc'},
-  {id:'orange',  name:'Orange',  cost:290, color:'#ff8833'},
-  {id:'purple',  name:'Purple',  cost:350, color:'#aa44ff'},
-  {id:'lime',    name:'Lime',    cost:420, color:'#aaff00'},
-  {id:'rainbow', name:'Rainbow', cost:600, color:'rainbow'}
+  {id:'white',    name:'White',          cost:0,    color:'#ffffff'},
+  {id:'red',      name:'Red',            cost:30,   color:'#ff4444'},
+  {id:'blue',     name:'Blue',           cost:55,   color:'#4488ff'},
+  {id:'green',    name:'Green',          cost:80,   color:'#44ff88'},
+  {id:'gold',     name:'Gold',           cost:110,  color:'#ffd700'},
+  {id:'cyan',     name:'Cyan',           cost:145,  color:'#44ffff'},
+  {id:'pink',     name:'Pink',           cost:185,  color:'#ff44cc'},
+  {id:'orange',   name:'Orange',         cost:230,  color:'#ff8833'},
+  {id:'purple',   name:'Purple',         cost:280,  color:'#aa44ff'},
+  {id:'lime',     name:'Lime',           cost:340,  color:'#aaff00'},
+  {id:'crimson',  name:'Crimson',        cost:410,  color:'#cc0033'},
+  {id:'sky',      name:'Sky Blue',       cost:490,  color:'#00ccff'},
+  {id:'mint',     name:'Mint',           cost:580,  color:'#00ffcc'},
+  {id:'rose',     name:'Rose Gold',      cost:680,  color:'#ffaacc'},
+  {id:'grad1',    name:'Sunset',         cost:800,  color:'grad_sunset'},
+  {id:'grad2',    name:'Ocean',          cost:950,  color:'grad_ocean'},
+  {id:'grad3',    name:'Neon',           cost:1100, color:'grad_neon'},
+  {id:'rainbow',  name:'Rainbow',        cost:1400, color:'rainbow'}
 ];
 const PARTICLE_ITEMS=[
-  {id:'none',   name:'None',         cost:0,   desc:''},
-  {id:'sparks', name:'Sparks',       cost:120, desc:'Tiny sparks burst off you'},
-  {id:'stars',  name:'Stars',        cost:160, desc:'Little stars float away'},
-  {id:'trails', name:'Pixel Trail',  cost:200, desc:'Tiny pixels mark your path'},
-  {id:'trail2', name:'Glow Trail',   cost:300, desc:'Glowing colored dots fade behind you'},
-  {id:'trail3', name:'Fire Trail',   cost:450, desc:'Fiery embers streak behind you'},
-  {id:'trail4', name:'Rainbow Trail',cost:650, desc:'Rainbow pixels shimmer in your wake'}
+  {id:'none',    name:'None',            cost:0,    desc:''},
+  {id:'sparks',  name:'Sparks',          cost:80,   desc:'Tiny sparks burst off you'},
+  {id:'stars',   name:'Stars',           cost:130,  desc:'Little stars float away'},
+  {id:'trails',  name:'Pixel Trail',     cost:190,  desc:'Tiny pixels mark your path'},
+  {id:'trail2',  name:'Glow Trail',      cost:280,  desc:'Glowing colored dots fade behind you'},
+  {id:'trail3',  name:'Fire Trail',      cost:400,  desc:'Fiery embers streak behind you'},
+  {id:'trail4',  name:'Rainbow Trail',   cost:560,  desc:'Rainbow pixels shimmer in your wake'},
+  {id:'trail5',  name:'Ghost Trail',     cost:760,  desc:'Fading white ghost echoes'},
+  {id:'trail6',  name:'Electric Trail',  cost:1000, desc:'Crackling blue sparks'},
+  {id:'trail7',  name:'Void Trail',      cost:1300, desc:'Dark void particles consume your path'}
 ];
 const DEATH_SOUNDS=[
   {n:1,name:'Classic',cost:0},
-  {n:2,name:'Crunch',cost:120},
-  {n:3,name:'Boom',cost:120}
+  {n:2,name:'Crunch',cost:60},
+  {n:3,name:'Boom',cost:60}
 ];
 
 // ============ AUDIO ============
@@ -361,7 +377,12 @@ function renderCosmetics(){
     const selected=save.selectedColor===item.id;
     const card=document.createElement('div');
     card.className='item-card'+(owned?' owned':'')+(selected?' selected':'');
-    let cs=item.color==='rainbow'?'background:linear-gradient(135deg,red,orange,yellow,green,blue,violet)':`background:${item.color}`;
+    let cs;
+    if(item.color==='rainbow')cs='background:linear-gradient(135deg,red,orange,yellow,green,blue,violet)';
+    else if(item.color==='grad_sunset')cs='background:linear-gradient(135deg,#ff6600,#ff0066,#ffcc00)';
+    else if(item.color==='grad_ocean')cs='background:linear-gradient(135deg,#0044ff,#00ffcc,#0088ff)';
+    else if(item.color==='grad_neon')cs='background:linear-gradient(135deg,#ff00ff,#00ffff,#ffff00)';
+    else cs=`background:${item.color}`;
     card.innerHTML=`<div class="color-preview" style="${cs}"></div><div class="item-name">${item.name}</div><div class="item-cost">${item.cost===0?'FREE':item.cost+' ✦'}</div><div class="item-status">${selected?'✓ EQUIPPED':owned?'OWNED':'LOCKED'}</div>`;
     card.addEventListener('click',()=>buyOrSelectColor(item));
     cg.appendChild(card);
@@ -446,8 +467,38 @@ function renderLevelSelect(){
     <div class="level-best" style="color:rgba(255,215,0,0.5);font-size:0.65rem;">6 Hearts · 250–500 ✦</div>
     <div class="level-best">${decBestStr}</div>
   `;
-  decCard.addEventListener('click',()=>{wipeTransition(()=>startLevel(11));});
+  decCard.addEventListener('click',()=>{wipeTransition(()=>startDecathlon());});
   grid.appendChild(decCard);
+
+  // Decathlon II card — levels 11-20
+  const dec2Card=document.createElement('div');
+  dec2Card.className='level-card';
+  dec2Card.style.cssText='background:linear-gradient(135deg,rgba(180,100,255,0.12),rgba(255,0,180,0.08));border-color:rgba(200,100,255,0.5);box-shadow:0 0 16px rgba(180,100,255,0.15);cursor:pointer;';
+  const dec2Best=save.bestHearts['decathlon2'];
+  const dec2BestStr=dec2Best!==undefined?`Best: ${'♥'.repeat(dec2Best)}${'♡'.repeat(6-dec2Best)}`:'Not completed';
+  dec2Card.innerHTML=`
+    <div class="level-num" style="color:rgba(200,100,255,0.5);">SPECIAL</div>
+    <div class="level-diff" style="color:#cc66ff;text-shadow:0 0 8px #cc66ff66;font-size:0.7rem;">DECATHLON II</div>
+    <div class="level-best" style="color:rgba(200,100,255,0.6);font-size:0.65rem;">Lvl 11-20 · 6 Hearts · 250–500 ✦</div>
+    <div class="level-best">${dec2BestStr}</div>
+  `;
+  dec2Card.addEventListener('click',()=>{wipeTransition(()=>startDecathlon2());});
+  grid.appendChild(dec2Card);
+
+  // Final Test card — all 20 levels, 10 hearts
+  const finalCard=document.createElement('div');
+  finalCard.className='level-card';
+  finalCard.style.cssText='background:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,0,0,0.08));border-color:rgba(255,255,255,0.6);box-shadow:0 0 20px rgba(255,255,255,0.15);cursor:pointer;';
+  const finalBest=save.bestHearts['finaltest'];
+  const finalBestStr=finalBest!==undefined?`Best: ${'♥'.repeat(finalBest)}${'♡'.repeat(10-finalBest)}`:'Not completed';
+  finalCard.innerHTML=`
+    <div class="level-num" style="color:rgba(255,255,255,0.4);">ULTIMATE</div>
+    <div class="level-diff" style="color:#ffffff;text-shadow:0 0 12px #fff,0 0 24px #ff00ff;font-size:0.6rem;">THE FINAL TEST</div>
+    <div class="level-best" style="color:rgba(255,255,255,0.5);font-size:0.65rem;">All 20 Levels · 10 Hearts · 500 ✦</div>
+    <div class="level-best">${finalBestStr}</div>
+  `;
+  finalCard.addEventListener('click',()=>{wipeTransition(()=>startFinalTest());});
+  grid.appendChild(finalCard);
 }
 
 // ============ GAME CONSTANTS ============
@@ -456,7 +507,12 @@ let rainbowHue=0;
 function getPlayerColor(){
   const c=save.selectedColor;
   if(c==='rainbow'){rainbowHue=(rainbowHue+2)%360;return `hsl(${rainbowHue},100%,60%)`;}
-  return {white:'#ffffff',red:'#ff4444',blue:'#4488ff',green:'#44ff88',gold:'#ffd700',cyan:'#44ffff',pink:'#ff44cc',orange:'#ff8833',purple:'#aa44ff',lime:'#aaff00'}[c]||'#ffffff';
+  if(c==='grad_sunset'){rainbowHue=(rainbowHue+1)%360;return `hsl(${(rainbowHue%60)+0},100%,60%)`;}
+  if(c==='grad_ocean'){rainbowHue=(rainbowHue+1)%360;return `hsl(${180+(rainbowHue%60)},100%,60%)`;}
+  if(c==='grad_neon'){rainbowHue=(rainbowHue+3)%360;return `hsl(${rainbowHue},100%,70%)`;}
+  return {white:'#ffffff',red:'#ff4444',blue:'#4488ff',green:'#44ff88',gold:'#ffd700',
+    cyan:'#44ffff',pink:'#ff44cc',orange:'#ff8833',purple:'#aa44ff',lime:'#aaff00',
+    crimson:'#cc0033',sky:'#00ccff',mint:'#00ffcc',rose:'#ffaacc'}[c]||'#ffffff';
 }
 
 // ============ GAME STATE ============
@@ -488,7 +544,6 @@ function createGameState(lvl){
 // ============ START LEVEL ============
 function startLevel(num){
   currentLevel=num;gameInProgress=true;
-  if(num===11){startDecathlon();return;}
   gameState=createGameState(num);
   stopLevelMusic();
   levelMusic=new Audio(`ragebait 3_${num}.mp3`);
@@ -529,9 +584,42 @@ function startDecathlon(){
     startedPerfect:true,
     breakTimer:0,
     inBreak:false,
-    totalSongs:10
+    totalSongs:10,
+    mode:'dec1', // levels 1-10
+    startStage:1,
+    endStage:10
   };
   _launchDecathlonStage(1,6);
+}
+
+function startDecathlon2(){
+  decathlonState={
+    currentStage:11,
+    hearts:6,
+    startedPerfect:true,
+    breakTimer:0,
+    inBreak:false,
+    totalSongs:10,
+    mode:'dec2', // levels 11-20
+    startStage:11,
+    endStage:20
+  };
+  _launchDecathlonStage(11,6);
+}
+
+function startFinalTest(){
+  decathlonState={
+    currentStage:1,
+    hearts:10,
+    startedPerfect:true,
+    breakTimer:0,
+    inBreak:false,
+    totalSongs:20,
+    mode:'final', // all 20 levels
+    startStage:1,
+    endStage:20
+  };
+  _launchDecathlonStage(1,10);
 }
 
 function _launchDecathlonStage(stage,hearts){
@@ -550,7 +638,21 @@ function _launchDecathlonStage(stage,hearts){
   levelMusic.addEventListener('ended',()=>{
     if(gameState&&gameState.decathlon&&gameState.phase==='playing')decathlonNextStage();
   });
-  document.getElementById('gameLevelTitle').textContent=`DECATHLON — LEVEL ${stage}/10`;
+  // Title and progress label based on mode
+  const ds=decathlonState;
+  const stageIndex=stage-ds.startStage+1;
+  let titleText,progressLabel;
+  if(ds.mode==='final'){
+    titleText=`THE FINAL TEST`;
+    progressLabel=`LEVEL ${stage}/20`;
+  } else if(ds.mode==='dec2'){
+    titleText=`DECATHLON II`;
+    progressLabel=`LEVEL ${stage}/20`;
+  } else {
+    titleText=`DECATHLON`;
+    progressLabel=`LEVEL ${stage}/10`;
+  }
+  document.getElementById('gameLevelTitle').textContent=`${titleText} — ${progressLabel}`;
   document.getElementById('musicBarFill').style.width='0%';
   document.getElementById('musicPct').textContent='0.0%';
   document.getElementById('slowBar').style.display='block';
@@ -568,7 +670,7 @@ function decathlonNextStage(){
   const hearts=gameState.hearts;
   ds.hearts=hearts;
   ds.currentStage++;
-  if(ds.currentStage>10){
+  if(ds.currentStage>ds.endStage){
     triggerDecathlonWin();
     return;
   }
@@ -579,7 +681,8 @@ function decathlonNextStage(){
   gameState.boulders=[];gameState.gridLines=[];
   ds.breakTimer=10000;
   ds.inBreak=true;
-  document.getElementById('gameLevelTitle').textContent=`BREAK — LEVEL ${ds.currentStage} NEXT`;
+  const modeLabel=ds.mode==='final'?'THE FINAL TEST':ds.mode==='dec2'?'DECATHLON II':'DECATHLON';
+  document.getElementById('gameLevelTitle').textContent=`${modeLabel} — BREAK`;
 }
 
 function updateDecathlonBreak(dt){
@@ -587,7 +690,9 @@ function updateDecathlonBreak(dt){
   const ds=decathlonState;
   ds.breakTimer=Math.max(0,ds.breakTimer-dt);
   const sec=Math.ceil(ds.breakTimer/1000);
-  document.getElementById('gameLevelTitle').textContent=`BREAK — LEVEL ${ds.currentStage} IN ${sec}s`;
+  const modeLabel2=ds.mode==='final'?'THE FINAL TEST':ds.mode==='dec2'?'DECATHLON II':'DECATHLON';
+  const endLabel=ds.mode==='final'?`${ds.currentStage}/20`:ds.mode==='dec2'?`${ds.currentStage}/20`:`${ds.currentStage}/10`;
+  document.getElementById('gameLevelTitle').textContent=`${modeLabel2} — LEVEL ${endLabel} IN ${sec}s`;
   if(ds.breakTimer<=0){
     ds.inBreak=false;
     _launchDecathlonStage(ds.currentStage,ds.hearts);
@@ -597,15 +702,16 @@ function updateDecathlonBreak(dt){
 function updateMusicBarDecathlon(){
   if(!decathlonState)return;
   const ds=decathlonState;
+  // stageIndex = how many stages completed out of totalSongs
+  const stageIndex=ds.currentStage-ds.startStage;
   if(ds.inBreak){
-    // Show overall progress frozen at stage boundary
-    const pct=((ds.currentStage-1)/ds.totalSongs)*100;
+    const pct=(stageIndex/ds.totalSongs)*100;
     document.getElementById('musicBarFill').style.width=pct.toFixed(1)+'%';
     document.getElementById('musicPct').textContent=pct.toFixed(1)+'%';
     return;
   }
   if(!levelMusic||!levelMusic.duration||isNaN(levelMusic.duration))return;
-  const stagePct=(ds.currentStage-1)/ds.totalSongs;
+  const stagePct=stageIndex/ds.totalSongs;
   const songPct=(levelMusic.currentTime/levelMusic.duration)/ds.totalSongs;
   const total=Math.min(100,(stagePct+songPct)*100);
   document.getElementById('musicBarFill').style.width=total.toFixed(1)+'%';
@@ -621,15 +727,21 @@ function triggerDecathlonWin(){
   gameState.boulders=[];gameState.gridLines=[];
   stopLevelMusic();
   playWinSound();
-  const perfect=ds.startedPerfect&&hearts===6;
-  const earned=perfect?500:250;
+  // Determine save key, max hearts, rewards, and label based on mode
+  const isFinal=ds.mode==='final';
+  const isDec2=ds.mode==='dec2';
+  const saveKey=isFinal?'finaltest':isDec2?'decathlon2':'decathlon';
+  const maxH=isFinal?10:6;
+  const perfect=ds.startedPerfect&&hearts===maxH;
+  const earned=isFinal?(perfect?500:250):perfect?500:250;
   save.shards+=earned;save.totalShards+=earned;
-  // Save decathlon best hearts
-  const prevDec=save.bestHearts['decathlon'];
-  if(prevDec===undefined||hearts>prevDec)save.bestHearts['decathlon']=hearts;
+  const prev=save.bestHearts[saveKey];
+  if(prev===undefined||hearts>prev)save.bestHearts[saveKey]=hearts;
   writeSave();
+  const modeLabel=isFinal?'THE FINAL TEST':isDec2?'DECATHLON II':'DECATHLON';
+  const totalLvls=isFinal?20:10;
   document.getElementById('shardsEarned').textContent=`+${earned} SHARDS EARNED${perfect?' ★ PERFECT!':''}`;
-  document.getElementById('winSub').textContent=`Hearts remaining: ${'❤️'.repeat(hearts)} — All 10 Levels Complete!`;
+  document.getElementById('winSub').textContent=`Hearts remaining: ${'❤️'.repeat(hearts)} — All ${totalLvls} Levels Complete!`;
   document.getElementById('btnNextLevel').style.display='none';
   setTimeout(()=>{
     document.getElementById('winOverlay').classList.add('visible');
@@ -813,12 +925,18 @@ function triggerScreenFlash(){
 }
 function triggerDeath(){
   const gs=gameState;gs.phase='dead';
+  // Save best % reached before dying
+  if(!gs.decathlon&&levelMusic&&levelMusic.duration&&isFinite(levelMusic.duration)){
+    const pct=(levelMusic.currentTime/levelMusic.duration)*100;
+    const prev=save.bestPct[gs.lvl];
+    if(prev===undefined||pct>prev){save.bestPct[gs.lvl]=Math.round(pct*10)/10;writeSave();}
+  }
   if(decathlonState){decathlonState.startedPerfect=false;}
   fadeOutLevelMusic(()=>playDeathSound());
   setTimeout(()=>{
     document.getElementById('deathOverlay').classList.add('visible');
     ensureTitleMusic();
-    decathlonState=null; // end decathlon run on death
+    decathlonState=null;
   },900);
 }
 function triggerWin(){
@@ -833,12 +951,12 @@ function triggerWin(){
   save.shards+=earned;save.totalShards+=earned;
   const prev=save.bestHearts[gs.lvl];
   if(prev===undefined||gs.hearts>prev)save.bestHearts[gs.lvl]=gs.hearts;
-  if(gs.lvl<15&&!save.unlockedLevels.includes(gs.lvl+1))save.unlockedLevels.push(gs.lvl+1);
+  if(gs.lvl<20&&!save.unlockedLevels.includes(gs.lvl+1))save.unlockedLevels.push(gs.lvl+1);
   writeSave();
   document.getElementById('shardsEarned').textContent=`+${earned} SHARDS EARNED`;
   const musicPctVal=levelMusic&&levelMusic.duration?((levelMusic.currentTime/levelMusic.duration)*100).toFixed(1):'100.0';
   document.getElementById('winSub').textContent=`Hearts remaining: ${'❤️'.repeat(gs.hearts)} — ${musicPctVal}% survived`;
-  document.getElementById('btnNextLevel').style.display=gs.lvl<15?'':'none';
+  document.getElementById('btnNextLevel').style.display=gs.lvl<20?'':'none';
   setTimeout(()=>{
     document.getElementById('winOverlay').classList.add('visible');
     ensureTitleMusic();
@@ -855,14 +973,15 @@ function spawnAttacks(dt){
   if(lvl>=12&&(!gs.bouncyBalls||gs.bouncyBalls.length===0)){
     spawnBouncyBall(); // 1 ball at lvl 12
     if(lvl>=13)spawnBouncyBall(); // 2nd ball at lvl 13+
+    if(lvl>=16)spawnBouncyBall(); // 3rd ball at lvl 16+
+    if(lvl>=19)spawnBouncyBall(); // 4th ball at lvl 19+
   }
 
-  // Spinning laser angle always updates (lvl 4+) — passive, always on
-  // Each level after 3 adds 5% speed: lvl4=base, lvl5=+5%, lvl6=+10% etc.
-  // Base speed halved from 0.0008 to 0.0004 so it's slower overall
+  // Spinning laser angle — slowed at lvl 18+ due to 8-way split
   if(lvl>=4){
+    const baseSpeed=lvl>=18?0.00028:0.00044;
     const spinSpeedMult=1+Math.max(0,(lvl-3))*0.05;
-    gs.spinAngle=(gs.spinAngle+dt*0.00044*spinSpeedMult)%(Math.PI*2);
+    gs.spinAngle=(gs.spinAngle+dt*baseSpeed*spinSpeedMult)%(Math.PI*2);
   }
 
   // Spin laser has its own warn/fire cycle (lvl 4+)
@@ -890,29 +1009,57 @@ function spawnAttacks(dt){
     gs.spinLaser2=null;
   }
 
-  // Random-interval attack pool — after lvl 5 max interval drops to 2s
+  // Lvl 18+: two extra lasers at 45° offsets splitting arena into 8ths
+  // Pattern: laser1(0°) + laser2(90°) = phase A; laser3(45°) + laser4(135°) = phase B (opposite)
+  // This gives: 0° ON, 45° OFF, 90° ON, 135° OFF → alternating + shape
+  if(lvl>=18){
+    const sl=gs.spinLaser;
+    const totalCycle=sl.warnDur+sl.fireDur;
+    const sl1Elapsed=(sl.phase==='warning'?sl.timer:sl.warnDur+sl.timer);
+    // spinLaser3 at 45° — OPPOSITE phase to spinLaser1 (so when 0°/90° fire, 45°/135° warn)
+    const sl3Elapsed=(sl1Elapsed+totalCycle/2)%totalCycle;
+    gs.spinLaser3={phase:sl3Elapsed<sl.warnDur?'warning':'fire',timer:sl3Elapsed<sl.warnDur?sl3Elapsed:sl3Elapsed-sl.warnDur,warnDur:sl.warnDur,fireDur:sl.fireDur};
+    // spinLaser4 at 135° — same phase as spinLaser3 (opposite to spinLaser1)
+    gs.spinLaser4=gs.spinLaser3;
+  } else {
+    gs.spinLaser3=null;gs.spinLaser4=null;
+  }
+
+  // Lvl 20: permanent horizontal laser that sweeps left-right, on 1s off 2s
+  if(lvl>=20){
+    if(!gs.permLaser)gs.permLaser={active:false,timer:0,onDur:1000,offDur:2000,pos:ARENA/2,dir:1};
+    const pl=gs.permLaser;
+    pl.timer+=dt;
+    if(!pl.active&&pl.timer>=pl.offDur){pl.active=true;pl.timer=0;}
+    if(pl.active&&pl.timer>=pl.onDur){pl.active=false;pl.timer=0;}
+    if(pl.active){
+      pl.pos+=pl.dir*0.12*dt;
+      if(pl.pos>=ARENA-10){pl.pos=ARENA-10;pl.dir=-1;}
+      if(pl.pos<=10){pl.pos=10;pl.dir=1;}
+    }
+  }
+
+  // Attack pool — 2s interval lvl 1-10, 3s lvl 11+
   if(!gs.poolTimer)gs.poolTimer=0;
-  const maxInterval=gs.lvl>=6?500+Math.random()*1500:500+Math.random()*1500;
-  if(!gs.poolInterval)gs.poolInterval=gs.lvl>=6?500+Math.random()*1500:500+Math.random()*1500;
   gs.poolTimer+=dt;
-  if(gs.poolTimer>=gs.poolInterval){
+  const poolInterval=gs.lvl>=11?2000:3000;
+  if(gs.poolTimer>=poolInterval){
     gs.poolTimer=0;
-    gs.poolInterval=gs.lvl>=6?200+Math.random()*1800:500+Math.random()*1500; // lvl6+: 0.2–2s
-    const spawnChance=Math.min(1.0,0.25+gs.lvl*0.05);
-    if(Math.random()<spawnChance){
-      spawnRandomAttack(gs.lvl);
+    spawnRandomAttack(gs.lvl);
+  }
+
+  // Heart pickup timer — spawns every 20s on lvl 10+ (3s display)
+  if(gs.lvl>=10){
+    if(!gs.heartTimer)gs.heartTimer=0;
+    gs.heartTimer+=dt;
+    if(gs.heartTimer>=20000){
+      gs.heartTimer=0;
+      spawnHeartPickup();
     }
   }
 }
 
 function spawnRandomAttack(lvl){
-  // Level 10+: rare 10% chance to spawn a heart pickup instead of an attack
-  // Heart only actually appears 50% of the time (so effective rate = 5%)
-  if(lvl>=10&&Math.random()<0.10){
-    if(Math.random()<0.5)spawnHeartPickup();
-    return; // skip attack this tick either way
-  }
-
   const pool=[];
   pool.push('beam','beam','beam');
   if(lvl>=2)pool.push('bars','bars');
@@ -926,6 +1073,7 @@ function spawnRandomAttack(lvl){
   if(lvl>=11)pool.push('border','border');
   if(lvl>=14)pool.push('diagbars','diagbars');
   if(lvl>=15)pool.push('diaggrid','diaggrid');
+  if(lvl>=17)pool.push('movinggrid','movinggrid');
 
   const pick=pool[Math.floor(Math.random()*pool.length)];
   if(pick==='beam')spawnBeam();
@@ -940,6 +1088,7 @@ function spawnRandomAttack(lvl){
   else if(pick==='border')spawnBorderAttack();
   else if(pick==='diagbars')spawnDiagBars();
   else if(pick==='diaggrid')spawnDiagGrid();
+  else if(pick==='movinggrid')spawnMovingGrid();
 }
 
 // ---- HEART PICKUP ----
@@ -949,7 +1098,7 @@ function spawnHeartPickup(){
   gs.heartPickups.push({
     x:margin+Math.random()*(ARENA-margin*2),
     y:margin+Math.random()*(ARENA-margin*2),
-    timer:5000, // lives for 5 seconds
+    timer:3000, // lives for 3 seconds
     r:14
   });
 }
@@ -986,9 +1135,10 @@ function checkHeartPickups(){
 function spawnBeam(){
   const gs=gameState,lvl=gs.lvl;
   const thick=Math.min(60,18+(lvl-1)*3);
-  const warnDur=Math.max(800,2000-(lvl-1)*100);
+  const warnDur=lvl>=11?2000:3000;
+  const fireDur=lvl>=11?300:400;
   const type=Math.random()<0.5?'hline':'vline';
-  const atk={type,phase:'warning',timer:0,warnDur,fireDur:400,thick};
+  const atk={type,phase:'warning',timer:0,warnDur,fireDur,thick};
   if(type==='hline'){atk.y=Math.random()*(ARENA-thick);atk.x=0;atk.w=ARENA;atk.h=thick;}
   else{atk.x=Math.random()*(ARENA-thick);atk.y=0;atk.w=thick;atk.h=ARENA;}
   gs.attacks.push(atk);
@@ -1084,9 +1234,9 @@ function spawnDiagLaser(){
 function spawnMovingLaser(){
   const gs=gameState,lvl=gs.lvl;
   const thick=Math.min(40,18+(lvl-10)*3);
-  const warnDur=1000; // 1s cooldown
+  const warnDur=lvl>=11?2000:3000;
   const dir=Math.floor(Math.random()*4);
-  const atk={type:'moving',dir,phase:'warning',timer:0,warnDur,fireDur:2000,thick,pos:0};
+  const atk={type:'moving',dir,phase:'warning',timer:0,warnDur,fireDur:1000,thick,pos:0};
   gs.attacks.push(atk);
 }
 
@@ -1094,15 +1244,15 @@ function spawnMovingLaser(){
 function spawnBorderAttack(){
   const gs=gameState,lvl=gs.lvl;
   const margin=Math.min(60,30+(lvl-11)*5);
-  const warnDur=Math.max(600,1500-(lvl-11)*80);
-  // 4 border strips
+  const warnDur=lvl>=11?2000:3000;
+  const fireDur=lvl>=11?300:400;
   const strips=[
-    {x:0,y:0,w:ARENA,h:margin},           // top
-    {x:0,y:ARENA-margin,w:ARENA,h:margin}, // bottom
-    {x:0,y:0,w:margin,h:ARENA},            // left
-    {x:ARENA-margin,y:0,w:margin,h:ARENA}  // right
+    {x:0,y:0,w:ARENA,h:margin},
+    {x:0,y:ARENA-margin,w:ARENA,h:margin},
+    {x:0,y:0,w:margin,h:ARENA},
+    {x:ARENA-margin,y:0,w:margin,h:ARENA}
   ];
-  strips.forEach(s=>gs.attacks.push({type:'hline',x:s.x,y:s.y,w:s.w,h:s.h,phase:'warning',timer:0,warnDur,fireDur:400,thick:margin,border:true}));
+  strips.forEach(s=>gs.attacks.push({type:'hline',x:s.x,y:s.y,w:s.w,h:s.h,phase:'warning',timer:0,warnDur,fireDur,thick:margin,border:true}));
 }
 
 // ---- LEVEL 12/13: Bouncy balls — spawned once, persist and bounce ----
@@ -1143,6 +1293,31 @@ function spawnDiagGrid(){
   for(let d=-ARENA;d<ARENA*2;d+=gap+thick){
     gs.attacks.push({type:'diagbar', d:d+offset,phase:'warning',timer:0,warnDur,fireDur:400,thick});
     gs.attacks.push({type:'diagbar2',d:d+offset,phase:'warning',timer:0,warnDur,fireDur:400,thick});
+  }
+}
+
+// ---- LEVEL 17: Moving grid lines (normal + diagonal) ----
+function spawnMovingGrid(){
+  const gs=gameState,lvl=gs.lvl;
+  const thick=8;
+  const warnDur=lvl>=11?2000:3000;
+  const fireDur=lvl>=11?300:400;
+  // Pick: normal hline, vline, or diagonal moving bar
+  const type=Math.floor(Math.random()*4);
+  if(type===0){
+    // Moving hline — sweeps top to bottom
+    gs.attacks.push({type:'moving',dir:0,phase:'warning',timer:0,warnDur,fireDur:1000,thick,pos:0});
+  } else if(type===1){
+    // Moving vline — sweeps left to right
+    gs.attacks.push({type:'moving',dir:3,phase:'warning',timer:0,warnDur,fireDur:1000,thick,pos:0});
+  } else if(type===2){
+    // Moving diagonal bar (45°)
+    const d=Math.random()*ARENA*2-ARENA;
+    gs.attacks.push({type:'diagbar',d,phase:'warning',timer:0,warnDur,fireDur,thick});
+  } else {
+    // Moving diagonal bar (135°)
+    const d=Math.random()*ARENA*2-ARENA;
+    gs.attacks.push({type:'diagbar2',d,phase:'warning',timer:0,warnDur,fireDur,thick});
   }
 }
 
@@ -1234,8 +1409,8 @@ function updateWarnings(){
 function updateMusicBar(){
   const fill=document.getElementById('musicBarFill');
   const pctEl=document.getElementById('musicPct');
+  const recLine=document.getElementById('musicBarRecord');
   if(!levelMusic||!levelMusic.duration||isNaN(levelMusic.duration)||!isFinite(levelMusic.duration)){
-    // Duration not ready yet — keep bar at 0
     fill.style.width='0%';
     pctEl.textContent='0.0%';
     return;
@@ -1243,6 +1418,25 @@ function updateMusicBar(){
   const pct=Math.min(100,(levelMusic.currentTime/levelMusic.duration)*100);
   fill.style.width=pct.toFixed(1)+'%';
   pctEl.textContent=pct.toFixed(1)+'%';
+  // Show record line
+  if(recLine&&gameState&&!gameState.decathlon){
+    const lvl=gameState.lvl;
+    const best=save.bestHearts[lvl]; // beaten = 100%
+    if(best!==undefined){
+      recLine.style.display='block';
+      recLine.style.left='calc(100% - 1px)';
+      recLine.title='100% — Completed!';
+    } else {
+      const rec=save.bestPct[lvl];
+      if(rec!==undefined&&rec>0){
+        recLine.style.display='block';
+        recLine.style.left=rec.toFixed(1)+'%';
+        recLine.title=`Record: ${rec.toFixed(1)}%`;
+      } else {
+        recLine.style.display='none';
+      }
+    }
+  }
 }
 
 // ============ COLLISION ============
@@ -1454,6 +1648,27 @@ function render(){
     if(gs.lvl>=7&&gs.spinLaser2){
       drawSpinLaser(gs.spinAngle+Math.PI/2,gs.spinLaser2);
     }
+    // 8th-split lasers (lvl 18+) — at 45° and 135°
+    if(gs.lvl>=18){
+      if(gs.spinLaser3)drawSpinLaser(gs.spinAngle+Math.PI/4,gs.spinLaser3);
+      if(gs.spinLaser4)drawSpinLaser(gs.spinAngle+Math.PI*3/4,gs.spinLaser4);
+    }
+  }
+  // Permanent laser (lvl 20)
+  if(gs.lvl>=20&&gs.permLaser&&gs.permLaser.active){
+    ctx.save();
+    ctx.strokeStyle='rgba(255,30,30,0.92)';
+    ctx.lineWidth=16;
+    ctx.shadowColor='#ff0000';ctx.shadowBlur=14;
+    ctx.beginPath();ctx.moveTo(0,gs.permLaser.pos);ctx.lineTo(ARENA,gs.permLaser.pos);ctx.stroke();
+    ctx.restore();
+  } else if(gs.lvl>=20&&gs.permLaser&&!gs.permLaser.active){
+    // Show faint warning of where it will be
+    ctx.save();
+    ctx.strokeStyle='rgba(255,40,40,0.15)';
+    ctx.lineWidth=16;
+    ctx.beginPath();ctx.moveTo(0,gs.permLaser.pos);ctx.lineTo(ARENA,gs.permLaser.pos);ctx.stroke();
+    ctx.restore();
   }
 
   // Draw attacks
@@ -1501,7 +1716,7 @@ function render(){
       ctx.shadowColor='#ff4488';ctx.shadowBlur=12;
       ctx.fillText('❤️',h.x,h.y);
       // Timer ring
-      const prog=h.timer/5000;
+      const prog=h.timer/3000;
       ctx.strokeStyle=`rgba(255,100,150,${alpha*0.7})`;
       ctx.lineWidth=2;
       ctx.beginPath();ctx.arc(h.x,h.y,h.r+6,0,Math.PI*2*prog);ctx.stroke();
