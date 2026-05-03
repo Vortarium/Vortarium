@@ -780,12 +780,28 @@ function spawnAttacks(dt){
   }
 
   // Spin laser has its own warn/fire cycle (lvl 4+)
+  // At lvl 7+ a second laser alternates: when laser1 fires, laser2 warns and vice versa
   if(lvl>=4){
     if(!gs.spinLaser)gs.spinLaser={phase:'warning',timer:0,warnDur:2000,fireDur:3000};
     const sl=gs.spinLaser;
     sl.timer+=dt;
     if(sl.phase==='warning'&&sl.timer>=sl.warnDur){sl.phase='fire';sl.timer=0;}
     if(sl.phase==='fire'&&sl.timer>=sl.fireDur){sl.phase='warning';sl.timer=0;}
+  }
+  if(lvl>=7){
+    // spinLaser2 is always in the opposite phase to spinLaser1
+    const sl=gs.spinLaser;
+    const totalCycle=sl.warnDur+sl.fireDur; // 5000ms
+    // Offset by half a cycle so they alternate
+    const sl1Elapsed=(sl.phase==='warning'?sl.timer:sl.warnDur+sl.timer);
+    const sl2Elapsed=(sl1Elapsed+totalCycle/2)%totalCycle;
+    gs.spinLaser2={
+      phase: sl2Elapsed<sl.warnDur?'warning':'fire',
+      timer: sl2Elapsed<sl.warnDur?sl2Elapsed:sl2Elapsed-sl.warnDur,
+      warnDur:sl.warnDur,fireDur:sl.fireDur
+    };
+  } else {
+    gs.spinLaser2=null;
   }
 
   // Random-interval attack pool
@@ -875,19 +891,19 @@ function spawnHalfScreen(){
 
 function spawnFallingCircle(){
   const gs=gameState,lvl=gs.lvl;
-  const r=Math.min(80,28+(lvl-5)*5);
+  // 1.5x smaller than previous size
+  const r=Math.min(53,Math.round((28+(lvl-5)*5)/1.5));
   const warnDur=Math.max(800,2000-(lvl-5)*100);
-  // Snapshot player position NOW — ball will fall toward where player was when spawned
   const targetX=gs.px+PS/2;
   const targetY=gs.py+PS/2;
-  const spd=3+(lvl-5)*0.4;
-  // Pick a random incoming direction (top, bottom, left, right)
+  // 1.5x slower speed
+  const spd=(3+(lvl-5)*0.4)/1.5;
   const dir=Math.floor(Math.random()*4);
   let sx,sy,vx=0,vy=0;
-  if(dir===0){sx=targetX;sy=-r;vy=spd;}            // from top → fall down
-  else if(dir===1){sx=targetX;sy=ARENA+r;vy=-spd;} // from bottom → rise up
-  else if(dir===2){sx=-r;sy=targetY;vx=spd;}        // from left → go right
-  else{sx=ARENA+r;sy=targetY;vx=-spd;}              // from right → go left
+  if(dir===0){sx=targetX;sy=-r;vy=spd;}
+  else if(dir===1){sx=targetX;sy=ARENA+r;vy=-spd;}
+  else if(dir===2){sx=-r;sy=targetY;vx=spd;}
+  else{sx=ARENA+r;sy=targetY;vx=-spd;}
   gs.projectiles.push({x:sx,y:sy,vx,vy,r,phase:'falling',warnDur,warnTimer:warnDur,targetX,targetY,active:true});
 }
 
@@ -910,9 +926,10 @@ function spawnGrid(){
 
 function spawnBoulder(){
   const gs=gameState,lvl=gs.lvl;
-  // Bigger — same scale as falling circles
-  const r=Math.min(60,22+(lvl-8)*6);
-  gs.boulders.push({x:Math.random()*(ARENA-r*2)+r,y:ARENA+r,r,vy:-(2+(lvl-8)*0.4),warnTimer:2000,warned:false});
+  // 1.5x smaller and 1.5x slower than previous
+  const r=Math.min(40,Math.round((22+(lvl-8)*6)/1.5));
+  const vy=-(2+(lvl-8)*0.4)/1.5;
+  gs.boulders.push({x:Math.random()*(ARENA-r*2)+r,y:ARENA+r,r,vy,warnTimer:2000,warned:false});
 }
 
 function spawnDiagLaser(){
@@ -1084,24 +1101,35 @@ function spinHitsPlayer(atk,px,py,pw,ph){return false;}
 // ============ SPIN LASER COLLISION ============
 function checkSpinLaserCollision(){
   const gs=gameState;
-  if(!gs.spinLaser||gs.spinLaser.phase!=='fire')return false;
+  if(!gs.spinLaser)return false;
   const cx=ARENA/2,cy=ARENA/2;
   const px=gs.px+PS/2,py=gs.py+PS/2;
   const thick=14/2+2;
-  // Build list of angles to check: base laser + perpendicular if lvl 7+
-  const angles=[gs.spinAngle];
-  if(gs.lvl>=7)angles.push(gs.spinAngle+Math.PI/2);
-  for(const baseAngle of angles){
+
+  // Check laser 1 (base angle) — only when firing
+  if(gs.spinLaser.phase==='fire'){
     for(let i=0;i<2;i++){
-      const a=baseAngle+i*Math.PI;
+      const a=gs.spinAngle+i*Math.PI;
       const dx=Math.cos(a),dy=Math.sin(a);
       const t=(px-cx)*dx+(py-cy)*dy;
       if(t<0)continue;
-      const closestX=cx+dx*t,closestY=cy+dy*t;
-      const dist=Math.hypot(px-closestX,py-closestY);
+      const dist=Math.hypot(px-(cx+dx*t),py-(cy+dy*t));
       if(dist<thick)return true;
     }
   }
+
+  // Check laser 2 (perpendicular, lvl 7+) — only when firing
+  if(gs.lvl>=7&&gs.spinLaser2&&gs.spinLaser2.phase==='fire'){
+    for(let i=0;i<2;i++){
+      const a=gs.spinAngle+Math.PI/2+i*Math.PI;
+      const dx=Math.cos(a),dy=Math.sin(a);
+      const t=(px-cx)*dx+(py-cy)*dy;
+      if(t<0)continue;
+      const dist=Math.hypot(px-(cx+dx*t),py-(cy+dy*t));
+      if(dist<thick)return true;
+    }
+  }
+
   return false;
 }
 
@@ -1180,9 +1208,9 @@ function render(){
   // Draw spinning laser (lvl 4+)
   if(gs.lvl>=4&&gs.spinLaser){
     drawSpinLaser(gs.spinAngle,gs.spinLaser);
-    // Second perpendicular laser (lvl 7+) — offset 90°
-    if(gs.lvl>=7){
-      drawSpinLaser(gs.spinAngle+Math.PI/2,gs.spinLaser);
+    // Second perpendicular laser (lvl 7+) — offset 90°, alternating phase
+    if(gs.lvl>=7&&gs.spinLaser2){
+      drawSpinLaser(gs.spinAngle+Math.PI/2,gs.spinLaser2);
     }
   }
 
