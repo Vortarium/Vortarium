@@ -1,0 +1,2123 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>VortaCode</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --sidebar-bg: #16213e;
+    --editor-bg: #1a1a2e;
+    --preview-bg: #ffffff;
+    --border: #2d2d4e;
+    --text: #d4d4f0;
+    --text-dim: #7070a0;
+    --accent: #9b59b6;
+    --accent2: #7c3aed;
+    --tab-active: #1a1a2e;
+    --tab-inactive: #0f0f23;
+    --hover: #252545;
+    --scrollbar: #3a3a6a;
+    --keyword: #c792ea;
+    --string: #f78c6c;
+    --comment: #546e7a;
+    --tag: #80cbc4;
+    --attr: #82aaff;
+    --number: #f78c6c;
+    --error: #ff5370;
+    --warning: #ffcb6b;
+    --resizer: #2d2d4e;
+    --purple-sel: rgba(155,89,182,0.35);
+    --line-err: rgba(255,83,112,0.15);
+    --line-active: rgba(155,89,182,0.08);
+  }
+
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── TITLE BAR ── */
+  #titlebar {
+    height: 30px;
+    background: #0f0f23;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+    user-select: none;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  #titlebar .logo { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: 1px; }
+  #titlebar .project-name { cursor: pointer; padding: 2px 8px; border-radius: 3px; }
+  #titlebar .project-name:hover { background: var(--hover); }
+  #titlebar .actions { display: flex; gap: 8px; align-items: center; }
+  #titlebar button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  #titlebar button:hover { opacity: .85; }
+
+  /* ── MENU TOOLBAR ── */
+  #toolbar {
+    height: 32px;
+    background: #13132b;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .tb-menu-item {
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background .1s, color .1s;
+    position: relative;
+  }
+  .tb-menu-item:hover { background: var(--hover); color: var(--text); }
+  .tb-sep { width: 1px; height: 16px; background: var(--border); margin: 0 6px; }
+  .tb-icon-btn {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; cursor: pointer; border-radius: 4px;
+    color: var(--text-dim); transition: background .1s, color .1s;
+  }
+  .tb-icon-btn:hover { background: var(--hover); color: var(--text); }
+
+  /* Dropdown menus */
+  .tb-menu-item { position: relative; }
+  .tb-dropdown {
+    display: none; position: absolute; top: 100%; left: 0;
+    background: #1e1e3a; border: 1px solid var(--accent);
+    border-radius: 6px; padding: 4px 0; min-width: 200px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.6); z-index: 500; font-size: 12px;
+  }
+  .tb-menu-item.open .tb-dropdown { display: block; }
+  .tb-dd-item {
+    padding: 6px 14px; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tb-dd-item:hover { background: var(--hover); color: var(--accent); }
+  .tb-dd-sep { height: 1px; background: var(--border); margin: 3px 0; }
+  .tb-shortcut { color: var(--text-dim); font-size: 10px; margin-left: auto; }
+
+  #toolbar-search-wrap {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    background: #1e1e3a;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2px 10px;
+    gap: 6px;
+    transition: border-color .2s;
+  }
+  #toolbar-search-wrap:focus-within { border-color: var(--accent); }
+  #toolbar-search { background: none; border: none; outline: none; color: var(--text); font-size: 12px; width: 180px; }
+  #toolbar-search::placeholder { color: var(--text-dim); }
+  #toolbar-search-icon { color: var(--text-dim); font-size: 13px; }
+
+  /* ── MAIN LAYOUT ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    min-width: 40px;
+  }
+
+  #panel-files  { width: 220px; background: var(--sidebar-bg); border-right: 1px solid var(--border); }
+  #panel-editor { flex: 1; background: var(--editor-bg); }
+  #panel-preview{ width: 340px; background: #13132b; border-left: 1px solid var(--border); }
+
+  .panel-header {
+    height: 35px;
+    background: #13132b;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .panel-header .panel-btns { display: flex; gap: 4px; }
+  .panel-header .panel-btns button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    line-height: 1;
+  }
+  .panel-header .panel-btns button:hover { background: var(--hover); color: var(--accent); }
+
+  /* ── RESIZERS ── */
+  .resizer {
+    width: 4px;
+    background: var(--resizer);
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background .15s;
+    z-index: 10;
+  }
+  .resizer:hover, .resizer.dragging { background: var(--accent); }
+
+  /* ── FILE EXPLORER ── */
+  #file-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: background .1s;
+    position: relative;
+  }
+  .file-item:hover { background: var(--hover); }
+  .file-item.active { background: rgba(155,89,182,.18); border-left-color: var(--accent); }
+  .file-item .file-icon { font-size: 14px; flex-shrink: 0; }
+  .file-item .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .file-del {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 2px;
+    border-radius: 2px;
+  }
+  .file-item:hover .file-del { display: block; }
+  .file-item .file-del:hover { color: var(--error); }
+
+  #upload-zone {
+    margin: 8px;
+    border: 1px dashed var(--border);
+    border-radius: 5px;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  #upload-zone:hover, #upload-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(155,89,182,.08);
+    color: var(--text);
+  }
+  #upload-zone .upload-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+  #file-input { display: none; }
+
+  /* ── EDITOR AREA ── */
+  #editor-tabs {
+    display: flex;
+    background: #0f0f23;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #editor-tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    height: 35px;
+    font-size: 12px;
+    cursor: pointer;
+    background: var(--tab-inactive);
+    border-right: 1px solid var(--border);
+    white-space: nowrap;
+    color: var(--text-dim);
+    transition: background .1s;
+    flex-shrink: 0;
+  }
+  .tab:hover { background: var(--hover); color: var(--text); }
+  .tab.active { background: var(--tab-active); color: var(--text); border-top: 2px solid var(--accent); }
+  .tab .tab-close {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 13px; padding: 0 2px; border-radius: 2px; line-height: 1;
+  }
+  .tab .tab-close:hover { background: rgba(155,89,182,.2); color: var(--text); }
+
+  /* ── EDITOR INNER WRAP ── */
+  #editor-wrap {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Line numbers — fixed width, perfectly aligned */
+  #line-numbers {
+    width: 52px;
+    min-width: 52px;
+    background: var(--editor-bg);
+    color: var(--text-dim);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 20.8px;
+    padding: 12px 8px 12px 4px;
+    text-align: right;
+    overflow: hidden;
+    user-select: none;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    white-space: pre;
+  }
+  .ln-error { color: var(--error) !important; font-weight: 700; }
+
+  /* Syntax highlight overlay + textarea stack */
+  #editor-inner {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+  }
+  #highlight-layer {
+    position: absolute;
+    inset: 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 20.8px;
+    padding: 12px;
+    white-space: pre;
+    overflow: hidden;
+    pointer-events: none;
+    color: transparent;
+    z-index: 1;
+    tab-size: 2;
+    word-break: normal;
+  }
+  #code-editor {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 20.8px;
+    padding: 12px;
+    border: none;
+    outline: none;
+    resize: none;
+    overflow: auto;
+    tab-size: 2;
+    white-space: pre;
+    caret-color: #c792ea;
+    z-index: 2;
+    background: transparent;
+  }
+  #code-editor::selection { background: var(--purple-sel); }
+
+  /* Minimap */
+  #minimap {
+    width: 80px;
+    min-width: 80px;
+    background: #13132b;
+    border-left: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #minimap canvas {
+    display: block;
+    width: 80px;
+  }
+  #minimap-viewport {
+    position: absolute;
+    left: 0; right: 0;
+    background: rgba(155,89,182,.15);
+    border: 1px solid rgba(155,89,182,.3);
+    pointer-events: none;
+  }
+
+  /* ── DIAGNOSTICS ── */
+  #diagnostics {
+    height: 120px;
+    background: #0f0f23;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  #diagnostics-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: #13132b;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .diag-count {
+    display: flex; align-items: center; gap: 4px;
+    padding: 1px 6px; border-radius: 10px; font-size: 11px;
+  }
+  .diag-count.errors { background: rgba(255,83,112,.2); color: var(--error); }
+  .diag-count.warnings { background: rgba(255,203,107,.2); color: var(--warning); }
+  #diag-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .diag-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 3px 10px; font-size: 12px; cursor: pointer;
+  }
+  .diag-item:hover { background: var(--hover); }
+  .diag-item .diag-icon { flex-shrink: 0; margin-top: 1px; }
+  .diag-item.error .diag-icon { color: var(--error); }
+  .diag-item.warning .diag-icon { color: var(--warning); }
+  .diag-item .diag-msg { flex: 1; }
+  .diag-item .diag-loc { color: var(--text-dim); font-size: 11px; }
+
+  /* ── PREVIEW ── */
+  #preview-frame {
+    flex: 1;
+    border: none;
+    background: #fff;
+  }
+  #preview-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #13132b;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #preview-toolbar button {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 14px; padding: 3px 5px; border-radius: 3px;
+  }
+  #preview-toolbar button:hover { background: var(--hover); color: var(--accent); }
+  #preview-url {
+    flex: 1; background: #1e1e3a; border: 1px solid var(--border); color: var(--text);
+    font-size: 11px; padding: 3px 8px; border-radius: 3px; outline: none;
+  }
+
+  /* ── MEDIA PREVIEW ── */
+  #media-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #111;
+    overflow: auto;
+    padding: 16px;
+  }
+  #media-preview img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; }
+  #media-preview video, #media-preview audio { max-width: 100%; border-radius: 4px; }
+  #media-preview .media-info { color: var(--text-dim); font-size: 12px; text-align: center; }
+  #media-preview .media-info .media-icon { font-size: 48px; display: block; margin-bottom: 8px; }
+
+  /* ── EMPTY STATE ── */
+  #empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    gap: 8px;
+  }
+  #empty-state .empty-icon { font-size: 48px; }
+  #empty-state p { font-size: 13px; }
+
+  /* ── STATUS BAR ── */
+  #statusbar {
+    height: 22px;
+    background: var(--accent2);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 11px;
+    color: #fff;
+    gap: 16px;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  #statusbar span { opacity: .9; }
+  #statusbar .status-right { margin-left: auto; display: flex; gap: 16px; }
+  #status-selection { color: #e0c0ff; font-style: italic; }
+
+  /* ── SCROLLBARS ── */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal {
+    background: #16213e; border: 1px solid var(--accent); border-radius: 8px;
+    padding: 20px; min-width: 300px; max-width: 400px;
+    box-shadow: 0 8px 32px rgba(155,89,182,.3);
+  }
+  .modal h3 { font-size: 14px; margin-bottom: 12px; color: var(--accent); }
+  .modal input {
+    width: 100%; background: #1e1e3a; border: 1px solid var(--border);
+    color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 13px;
+    outline: none; margin-bottom: 12px;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal .modal-btns button {
+    padding: 5px 14px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px;
+  }
+  .modal .btn-primary { background: var(--accent); color: #fff; }
+  .modal .btn-cancel { background: #2d2d4e; color: var(--text); }
+
+  /* ── MAXIMIZE ── */
+  .panel.maximized { position: absolute !important; inset: 0 !important; width: 100% !important; z-index: 20; }
+  .panel.hidden { display: none !important; }
+
+  /* ── CONTEXT MENU ── */
+  #ctx-menu {
+    position: fixed; z-index: 9999;
+    background: #1e1e3a; border: 1px solid var(--accent);
+    border-radius: 6px; padding: 4px 0; min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 12px;
+  }
+  .ctx-item {
+    padding: 6px 14px; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ctx-item:hover { background: var(--hover); color: var(--accent); }
+  .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+
+  /* ── FILE TREE ── */
+  .folder-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; font-size: 13px; cursor: pointer;
+    border-left: 2px solid transparent; transition: background .1s;
+    user-select: none;
+  }
+  .folder-item:hover { background: var(--hover); }
+  .folder-item .folder-arrow { font-size: 10px; width: 12px; flex-shrink: 0; transition: transform .15s; }
+  .folder-item.open .folder-arrow { transform: rotate(90deg); }
+  .folder-item .folder-icon { font-size: 14px; flex-shrink: 0; }
+  .folder-item .folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .folder-children { display: none; }
+  .folder-children.open { display: block; }
+  .folder-children .file-item { padding-left: 28px; }
+  .folder-children .folder-item { padding-left: 28px; }
+  .file-item.drag-over, .folder-item.drag-over { background: rgba(155,89,182,.3) !important; }
+  .file-item[draggable] { cursor: grab; }
+
+  /* ── IMAGE VIEWER ── */
+  #img-viewer {
+    flex: 1; display: flex; flex-direction: column;
+    background: #0d0d1a; overflow: hidden;
+  }
+  #img-viewer-toolbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; background: #13132b;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #img-viewer-toolbar button {
+    background: none; border: none; color: var(--text-dim);
+    cursor: pointer; font-size: 14px; padding: 3px 6px; border-radius: 3px;
+  }
+  #img-viewer-toolbar button:hover { background: var(--hover); color: var(--accent); }
+  #img-viewer-toolbar span { font-size: 11px; color: var(--text-dim); }
+  #img-canvas-wrap {
+    flex: 1; overflow: auto; display: flex;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #img-canvas-wrap img {
+    max-width: none; border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    transition: transform .1s;
+    cursor: zoom-in;
+  }
+</style>
+</head>
+<body>
+
+<!-- TITLE BAR -->
+<div id="titlebar">
+  <span class="logo">⚡ VortaCode</span>
+  <span class="project-name" id="project-name-display" title="Click to rename project">📁 my-project</span>
+  <div class="actions">
+    <button id="btn-new-file">＋ New File</button>
+    <button id="btn-download">⬇ Download Project</button>
+  </div>
+</div>
+
+<!-- MENU TOOLBAR -->
+<div id="toolbar">
+  <div class="tb-menu-item" id="menu-file" tabindex="0">File
+    <div class="tb-dropdown" id="dd-file">
+      <div class="tb-dd-item" onclick="createNewFile()">📄 New File <span class="tb-shortcut">Ctrl+N</span></div>
+      <div class="tb-dd-item" onclick="createNewFolder()">📁 New Folder</div>
+      <div class="tb-dd-item" onclick="fileInput.click()">⬆ Upload Files</div>
+      <div class="tb-dd-item" onclick="folderInput.click()">📂 Upload Folder</div>
+      <div class="tb-dd-item" onclick="zipInput.click()">🗜 Upload ZIP</div>
+      <div class="tb-dd-sep"></div>
+      <div class="tb-dd-item" onclick="saveCurrentFile()">💾 Save <span class="tb-shortcut">Ctrl+S</span></div>
+      <div class="tb-dd-item" onclick="downloadProject()">⬇ Download Project</div>
+    </div>
+  </div>
+  <div class="tb-menu-item" id="menu-edit" tabindex="0">Edit
+    <div class="tb-dropdown" id="dd-edit">
+      <div class="tb-dd-item" onclick="document.execCommand('undo')">↩ Undo <span class="tb-shortcut">Ctrl+Z</span></div>
+      <div class="tb-dd-item" onclick="document.execCommand('redo')">↪ Redo <span class="tb-shortcut">Ctrl+Y</span></div>
+      <div class="tb-dd-sep"></div>
+      <div class="tb-dd-item" onclick="toolbarSearch.focus()">🔍 Find <span class="tb-shortcut">Ctrl+F</span></div>
+      <div class="tb-dd-item" onclick="formatCode()">✦ Format Code</div>
+      <div class="tb-dd-item" onclick="toggleWordWrap()">⇌ Toggle Word Wrap</div>
+    </div>
+  </div>
+  <div class="tb-menu-item" id="menu-view" tabindex="0">View
+    <div class="tb-dropdown" id="dd-view">
+      <div class="tb-dd-item" onclick="toggleMaximize('panel-files')">◧ Toggle Explorer</div>
+      <div class="tb-dd-item" onclick="toggleMaximize('panel-preview')">◨ Toggle Preview</div>
+      <div class="tb-dd-item" onclick="toggleMaximize('panel-editor')">⬜ Maximize Editor</div>
+      <div class="tb-dd-sep"></div>
+      <div class="tb-dd-item" onclick="changeFontSize(1)">🔍+ Zoom In</div>
+      <div class="tb-dd-item" onclick="changeFontSize(-1)">🔍− Zoom Out</div>
+      <div class="tb-dd-item" onclick="changeFontSize(0)">↺ Reset Zoom</div>
+    </div>
+  </div>
+  <div class="tb-menu-item" id="menu-run" tabindex="0">Run
+    <div class="tb-dropdown" id="dd-run">
+      <div class="tb-dd-item" onclick="updatePreview()">▶ Run / Refresh Preview</div>
+      <div class="tb-dd-item" onclick="openPreviewTab()">⧉ Open in New Tab</div>
+    </div>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-icon-btn" title="New File (Ctrl+N)" onclick="createNewFile()">📄</div>
+  <div class="tb-icon-btn" title="Save (Ctrl+S)" onclick="saveCurrentFile()">💾</div>
+  <div class="tb-icon-btn" title="Undo" onclick="document.execCommand('undo')">↩</div>
+  <div class="tb-icon-btn" title="Redo" onclick="document.execCommand('redo')">↪</div>
+  <div class="tb-sep"></div>
+  <div class="tb-icon-btn" title="Toggle Word Wrap" onclick="toggleWordWrap()" id="btn-wrap">⇌</div>
+  <div class="tb-icon-btn" title="Format Code" onclick="formatCode()">✦</div>
+  <div class="tb-icon-btn" title="Zoom In" onclick="changeFontSize(1)">🔍</div>
+  <div class="tb-icon-btn" title="Download Project" onclick="downloadProject()">⬇</div>
+  <div id="toolbar-search-wrap">
+    <span id="toolbar-search-icon">🔍</span>
+    <input id="toolbar-search" placeholder="Search in file... (↵ next, ⇧↵ prev)" autocomplete="off" />
+    <span id="search-count" style="color:var(--text-dim);font-size:11px;white-space:nowrap"></span>
+    <button id="btn-search-close" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:0 2px" onclick="clearSearch()">✕</button>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu" style="display:none"></div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT: FILE EXPLORER -->
+  <div class="panel" id="panel-files">
+    <div class="panel-header">
+      Explorer
+      <div class="panel-btns">
+        <button title="New File" onclick="createNewFile()">📄</button>
+        <button title="New Folder" onclick="createNewFolder()">📁</button>
+        <button title="Maximize panel" onclick="toggleMaximize('panel-files')">⤢</button>
+      </div>
+    </div>
+    <div id="upload-zone" title="Click or drag files/folders/zips here">
+      <span class="upload-icon">📂</span>
+      Drop files, folders or .zip<br/>or click to upload
+    </div>
+    <input type="file" id="file-input" multiple accept="*/*" style="display:none" />
+    <input type="file" id="folder-input" multiple webkitdirectory style="display:none" />
+    <input type="file" id="zip-input" accept=".zip" style="display:none" />
+    <div id="file-list"></div>
+  </div>
+
+  <div class="resizer" id="resizer-left"></div>
+
+  <!-- MIDDLE: EDITOR -->
+  <div class="panel" id="panel-editor">
+    <div class="panel-header">
+      Editor
+      <div class="panel-btns">
+        <button title="Maximize panel" onclick="toggleMaximize('panel-editor')">⤢</button>
+      </div>
+    </div>
+    <div id="editor-tabs"></div>
+    <div id="editor-wrap">
+      <div id="line-numbers"></div>
+      <div id="editor-inner">
+        <div id="highlight-layer" aria-hidden="true"></div>
+        <textarea id="code-editor" spellcheck="false" placeholder="Select or upload a file to start editing..."></textarea>
+      </div>
+      <div id="minimap"><canvas id="minimap-canvas"></canvas><div id="minimap-viewport"></div></div>
+    </div>
+    <div id="diagnostics">
+      <div id="diagnostics-header">
+        <span style="font-weight:600;color:var(--text)">PROBLEMS</span>
+        <span class="diag-count errors" id="err-count">⛔ 0 errors</span>
+        <span class="diag-count warnings" id="warn-count">⚠ 0 warnings</span>
+      </div>
+      <div id="diag-list"></div>
+    </div>
+  </div>
+
+  <div class="resizer" id="resizer-right"></div>
+
+  <!-- RIGHT: PREVIEW -->
+  <div class="panel" id="panel-preview">
+    <div class="panel-header">
+      Preview
+      <div class="panel-btns">
+        <button title="Maximize panel" onclick="toggleMaximize('panel-preview')">⤢</button>
+      </div>
+    </div>
+    <div id="preview-toolbar">
+      <button title="Refresh" id="btn-refresh">↺</button>
+      <input id="preview-url" value="preview" readonly />
+      <button title="Open in new tab" id="btn-open-tab">⧉</button>
+    </div>
+    <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+  </div>
+
+</div>
+
+<!-- STATUS BAR -->
+<div id="statusbar">
+  <span id="status-file">No file open</span>
+  <span id="status-lang"></span>
+  <span id="status-selection"></span>
+  <div class="status-right">
+    <span id="status-chars">0 chars</span>
+    <span id="status-cursor">Ln 1, Col 1</span>
+    <span id="status-encoding">UTF-8</span>
+  </div>
+</div>
+
+<!-- PROJECT RENAME MODAL -->
+<div class="modal-overlay" id="rename-modal" style="display:none">
+  <div class="modal">
+    <h3>Rename Project</h3>
+    <input type="text" id="rename-input" placeholder="Project name..." />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeRenameModal()">Cancel</button>
+      <button class="btn-primary" onclick="confirmRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  VortaCode — State
+// ═══════════════════════════════════════════════════════
+const state = {
+  projectName: 'my-project',
+  // tree: { 'root': { type:'folder', children:{} }, ... }
+  // files stored flat: state.files['path/to/file'] = { content, dataUrl, blob }
+  tree: { __root: { type:'folder', name:'root', children:{} } },
+  files: {},
+  activeFile: null,
+  openTabs: [],
+  previewDebounce: null,
+  lintDebounce: null,
+  minimapDebounce: null,
+  errorLines: new Set(),
+  wordWrap: false,
+  searchMatches: [],
+  searchIndex: 0,
+  fontSize: 13,
+  imgZoom: 1,
+  dragSrc: null,
+};
+
+const $ = id => document.getElementById(id);
+const fileListEl     = $('file-list');
+const fileInput      = $('file-input');
+const folderInput    = $('folder-input');
+const zipInput       = $('zip-input');
+const uploadZone     = $('upload-zone');
+const codeEditor     = $('code-editor');
+const lineNumbers    = $('line-numbers');
+const editorTabs     = $('editor-tabs');
+const previewFrame   = $('preview-frame');
+const diagList       = $('diag-list');
+const errCount       = $('err-count');
+const warnCount      = $('warn-count');
+const statusFile     = $('status-file');
+const statusLang     = $('status-lang');
+const statusCursor   = $('status-cursor');
+const statusChars    = $('status-chars');
+const statusSel      = $('status-selection');
+const projectDisplay = $('project-name-display');
+const toolbarSearch  = $('toolbar-search');
+const searchCountEl  = $('search-count');
+const ctxMenu        = $('ctx-menu');
+const LINE_H         = 20.8;
+
+// ── File type helpers ──
+const ICONS = {
+  html:'🌐',htm:'🌐',css:'🎨',js:'📜',ts:'📘',jsx:'📜',tsx:'📘',
+  json:'📋',md:'📝',txt:'📄',py:'🐍',java:'☕',cpp:'⚙️',c:'⚙️',
+  cs:'💠',php:'🐘',rb:'💎',go:'🐹',rs:'🦀',sh:'🖥️',xml:'📰',
+  svg:'🖼️',png:'🖼️',jpg:'🖼️',jpeg:'🖼️',gif:'🖼️',webp:'🖼️',ico:'🖼️',
+  mp4:'🎬',webm:'🎬',mov:'🎬',avi:'🎬',mkv:'🎬',
+  mp3:'🎵',wav:'🎵',ogg:'🎵',flac:'🎵',aac:'🎵',
+  pdf:'📕',zip:'🗜️',rar:'🗜️','7z':'🗜️',ttf:'🔤',woff:'🔤',woff2:'🔤',
+};
+const extOf = n => n.split('.').pop().toLowerCase();
+const iconOf = n => ICONS[extOf(n)] || '📄';
+const isText = n => ['html','htm','css','js','ts','jsx','tsx','json','md','txt',
+  'py','java','cpp','c','cs','php','rb','go','rs','sh','xml','svg','yaml','yml',
+  'toml','ini','env','gitignore','sql','graphql','vue','svelte','scss','sass','less'].includes(extOf(n));
+const isImage = n => ['png','jpg','jpeg','gif','webp','svg','ico','bmp'].includes(extOf(n));
+const isVideo = n => ['mp4','webm','mov','avi','mkv','ogv'].includes(extOf(n));
+const isAudio = n => ['mp3','wav','ogg','flac','aac','m4a'].includes(extOf(n));
+const langOf = n => ({
+  html:'HTML',htm:'HTML',css:'CSS',js:'JavaScript',ts:'TypeScript',
+  jsx:'JSX',tsx:'TSX',json:'JSON',md:'Markdown',py:'Python',
+  java:'Java',cpp:'C++',c:'C',cs:'C#',php:'PHP',rb:'Ruby',
+  go:'Go',rs:'Rust',sh:'Shell',xml:'XML',svg:'SVG',sql:'SQL',
+  yaml:'YAML',yml:'YAML',vue:'Vue',svelte:'Svelte',scss:'SCSS',
+})[extOf(n)] || extOf(n).toUpperCase();
+
+// ═══════════════════════════════════════════════════════
+//  File Tree
+// ═══════════════════════════════════════════════════════
+function getNode(path) {
+  if (!path || path === '__root') return state.tree.__root;
+  const parts = path.split('/');
+  let node = state.tree.__root;
+  for (const p of parts) {
+    if (!node.children[p]) return null;
+    node = node.children[p];
+  }
+  return node;
+}
+
+function getParentPath(path) {
+  const i = path.lastIndexOf('/');
+  return i < 0 ? '__root' : path.substring(0, i);
+}
+
+function getBaseName(path) {
+  const i = path.lastIndexOf('/');
+  return i < 0 ? path : path.substring(i + 1);
+}
+
+function addFileToTree(path, content, dataUrl, blob) {
+  // Deduplicate
+  if (state.files[path]) {
+    const dot = path.lastIndexOf('.');
+    const base = dot > 0 ? path.substring(0, dot) : path;
+    const ext  = dot > 0 ? path.substring(dot) : '';
+    let i = 1;
+    while (state.files[`${base}(${i})${ext}`]) i++;
+    path = `${base}(${i})${ext}`;
+  }
+  // Ensure parent folders exist
+  const parts = path.split('/');
+  let node = state.tree.__root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!node.children[parts[i]]) {
+      node.children[parts[i]] = { type:'folder', name:parts[i], children:{}, open:true };
+    }
+    node = node.children[parts[i]];
+  }
+  const fname = parts[parts.length - 1];
+  node.children[fname] = { type:'file', name:fname, path };
+  state.files[path] = { content: content || '', dataUrl, blob };
+  renderFileTree();
+  openTab(path);
+  return path;
+}
+
+function addFolderToTree(path) {
+  const parts = path.split('/');
+  let node = state.tree.__root;
+  for (const p of parts) {
+    if (!node.children[p]) {
+      node.children[p] = { type:'folder', name:p, children:{}, open:true };
+    }
+    node = node.children[p];
+  }
+  renderFileTree();
+}
+
+function removeFromTree(path) {
+  const parentPath = getParentPath(path);
+  const parent = getNode(parentPath);
+  const base = getBaseName(path);
+  if (parent && parent.children[base]) {
+    // Remove all files under this path
+    Object.keys(state.files).forEach(fp => {
+      if (fp === path || fp.startsWith(path + '/')) {
+        delete state.files[fp];
+        state.openTabs = state.openTabs.filter(t => t !== fp);
+        if (state.activeFile === fp) state.activeFile = null;
+      }
+    });
+    delete parent.children[base];
+    renderFileTree();
+    renderTabs();
+    loadActiveFile();
+  }
+}
+
+function renameInTree(oldPath, newName) {
+  const parentPath = getParentPath(oldPath);
+  const parent = getNode(parentPath);
+  const oldBase = getBaseName(oldPath);
+  if (!parent || !parent.children[oldBase]) return;
+  const node = parent.children[oldBase];
+  const newPath = parentPath === '__root' ? newName : parentPath + '/' + newName;
+
+  if (node.type === 'file') {
+    const fileData = state.files[oldPath];
+    state.files[newPath] = fileData;
+    delete state.files[oldPath];
+    node.name = newName;
+    node.path = newPath;
+    parent.children[newName] = node;
+    delete parent.children[oldBase];
+    // Update tabs
+    const ti = state.openTabs.indexOf(oldPath);
+    if (ti >= 0) state.openTabs[ti] = newPath;
+    if (state.activeFile === oldPath) state.activeFile = newPath;
+  } else {
+    // Rename folder — update all child paths
+    const oldPrefix = oldPath + '/';
+    const newPrefix = newPath + '/';
+    Object.keys(state.files).forEach(fp => {
+      if (fp.startsWith(oldPrefix)) {
+        const newFp = newPrefix + fp.substring(oldPrefix.length);
+        state.files[newFp] = state.files[fp];
+        delete state.files[fp];
+        const ti = state.openTabs.indexOf(fp);
+        if (ti >= 0) state.openTabs[ti] = newFp;
+        if (state.activeFile === fp) state.activeFile = newFp;
+      }
+    });
+    node.name = newName;
+    parent.children[newName] = node;
+    delete parent.children[oldBase];
+  }
+  renderFileTree();
+  renderTabs();
+  loadActiveFile();
+}
+
+function moveToFolder(srcPath, destFolderPath) {
+  const srcBase = getBaseName(srcPath);
+  const srcParentPath = getParentPath(srcPath);
+  const srcParent = getNode(srcParentPath);
+  const destFolder = getNode(destFolderPath);
+  if (!srcParent || !destFolder || destFolder.type !== 'folder') return;
+
+  const newPath = destFolderPath === '__root' ? srcBase : destFolderPath + '/' + srcBase;
+  if (newPath === srcPath) return;
+
+  const srcNode = srcParent.children[srcBase];
+  if (!srcNode) return;
+
+  // Move file data
+  if (srcNode.type === 'file') {
+    state.files[newPath] = state.files[srcPath];
+    delete state.files[srcPath];
+    srcNode.path = newPath;
+    const ti = state.openTabs.indexOf(srcPath);
+    if (ti >= 0) state.openTabs[ti] = newPath;
+    if (state.activeFile === srcPath) state.activeFile = newPath;
+  } else {
+    // Move folder — update all child paths
+    const oldPrefix = srcPath + '/';
+    const newPrefix = newPath + '/';
+    Object.keys(state.files).forEach(fp => {
+      if (fp.startsWith(oldPrefix)) {
+        const nfp = newPrefix + fp.substring(oldPrefix.length);
+        state.files[nfp] = state.files[fp];
+        delete state.files[fp];
+        const ti = state.openTabs.indexOf(fp);
+        if (ti >= 0) state.openTabs[ti] = nfp;
+        if (state.activeFile === fp) state.activeFile = nfp;
+      }
+    });
+  }
+
+  delete srcParent.children[srcBase];
+  destFolder.children[srcBase] = srcNode;
+  renderFileTree();
+  renderTabs();
+  loadActiveFile();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Render File Tree
+// ═══════════════════════════════════════════════════════
+function renderFileTree() {
+  fileListEl.innerHTML = '';
+  const root = state.tree.__root;
+  if (!Object.keys(root.children).length) {
+    fileListEl.innerHTML = '<div style="padding:12px;font-size:11px;color:var(--text-dim);text-align:center">No files yet</div>';
+    return;
+  }
+  renderTreeNode(root, fileListEl, '__root');
+}
+
+function renderTreeNode(node, container, path) {
+  const sorted = Object.keys(node.children).sort((a, b) => {
+    const an = node.children[a], bn = node.children[b];
+    if (an.type !== bn.type) return an.type === 'folder' ? -1 : 1;
+    return a.localeCompare(b);
+  });
+  sorted.forEach(key => {
+    const child = node.children[key];
+    const childPath = path === '__root' ? key : path + '/' + key;
+    if (child.type === 'folder') {
+      renderFolderNode(child, container, childPath);
+    } else {
+      renderFileNode(child, container, childPath);
+    }
+  });
+}
+
+function renderFolderNode(node, container, path) {
+  const wrap = document.createElement('div');
+
+  const item = document.createElement('div');
+  item.className = 'folder-item' + (node.open ? ' open' : '');
+  item.dataset.path = path;
+  item.dataset.type = 'folder';
+  item.draggable = true;
+  item.innerHTML = `<span class="folder-arrow">▶</span><span class="folder-icon">${node.open ? '📂' : '📁'}</span><span class="folder-name">${node.name}</span>`;
+
+  item.addEventListener('click', e => {
+    e.stopPropagation();
+    node.open = !node.open;
+    renderFileTree();
+  });
+  item.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e, path, 'folder'); });
+  setupDragSource(item, path);
+  setupDropTarget(item, path);
+
+  const children = document.createElement('div');
+  children.className = 'folder-children' + (node.open ? ' open' : '');
+  renderTreeNode(node, children, path);
+
+  wrap.appendChild(item);
+  wrap.appendChild(children);
+  container.appendChild(wrap);
+}
+
+function renderFileNode(node, container, path) {
+  const item = document.createElement('div');
+  item.className = 'file-item' + (path === state.activeFile ? ' active' : '');
+  item.dataset.path = path;
+  item.dataset.type = 'file';
+  item.draggable = true;
+  item.innerHTML = `<span class="file-icon">${iconOf(node.name)}</span><span class="file-name" title="${path}">${node.name}</span>`;
+
+  item.addEventListener('click', e => { e.stopPropagation(); openTab(path); });
+  item.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e, path, 'file'); });
+  setupDragSource(item, path);
+  container.appendChild(item);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Drag & Drop (file tree)
+// ═══════════════════════════════════════════════════════
+function setupDragSource(el, path) {
+  el.addEventListener('dragstart', e => {
+    state.dragSrc = path;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', path);
+    setTimeout(() => el.style.opacity = '0.5', 0);
+  });
+  el.addEventListener('dragend', () => { el.style.opacity = ''; });
+}
+
+function setupDropTarget(el, folderPath) {
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    el.classList.remove('drag-over');
+    const src = state.dragSrc || e.dataTransfer.getData('text/plain');
+    if (src && src !== folderPath) moveToFolder(src, folderPath);
+    state.dragSrc = null;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Context Menu
+// ═══════════════════════════════════════════════════════
+function showCtxMenu(e, path, type) {
+  hideCtxMenu();
+  const items = type === 'file' ? [
+    { label: '✏️ Rename', action: () => promptRename(path) },
+    { label: '📋 Duplicate', action: () => duplicateFile(path) },
+    { sep: true },
+    { label: '🗑️ Delete', action: () => removeFromTree(path) },
+  ] : [
+    { label: '✏️ Rename Folder', action: () => promptRename(path) },
+    { label: '📄 New File Here', action: () => createNewFileIn(path) },
+    { label: '📁 New Subfolder', action: () => createNewFolderIn(path) },
+    { sep: true },
+    { label: '🗑️ Delete Folder', action: () => removeFromTree(path) },
+  ];
+
+  ctxMenu.innerHTML = '';
+  items.forEach(it => {
+    if (it.sep) { const s = document.createElement('div'); s.className = 'ctx-sep'; ctxMenu.appendChild(s); return; }
+    const d = document.createElement('div');
+    d.className = 'ctx-item';
+    d.textContent = it.label;
+    d.addEventListener('click', () => { hideCtxMenu(); it.action(); });
+    ctxMenu.appendChild(d);
+  });
+
+  const x = Math.min(e.clientX, window.innerWidth - 180);
+  const y = Math.min(e.clientY, window.innerHeight - ctxMenu.offsetHeight - 10);
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top  = y + 'px';
+  ctxMenu.style.display = 'block';
+  setTimeout(() => ctxMenu.style.top = Math.min(e.clientY, window.innerHeight - ctxMenu.offsetHeight - 10) + 'px', 0);
+}
+
+function hideCtxMenu() { ctxMenu.style.display = 'none'; }
+document.addEventListener('click', hideCtxMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCtxMenu(); });
+
+function promptRename(path) {
+  const oldName = getBaseName(path);
+  const newName = prompt('Rename to:', oldName);
+  if (newName && newName.trim() && newName.trim() !== oldName) renameInTree(path, newName.trim());
+}
+
+function duplicateFile(path) {
+  const file = state.files[path];
+  if (!file) return;
+  const dot = path.lastIndexOf('.');
+  const base = dot > 0 ? path.substring(0, dot) : path;
+  const ext  = dot > 0 ? path.substring(dot) : '';
+  addFileToTree(base + '-copy' + ext, file.content, file.dataUrl, file.blob);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Tabs
+// ═══════════════════════════════════════════════════════
+function openTab(path) {
+  if (!state.openTabs.includes(path)) state.openTabs.push(path);
+  state.activeFile = path;
+  renderTabs();
+  renderFileTree();
+  loadActiveFile();
+}
+
+function closeTab(path) {
+  state.openTabs = state.openTabs.filter(t => t !== path);
+  if (state.activeFile === path) state.activeFile = state.openTabs[state.openTabs.length - 1] || null;
+  renderTabs();
+  renderFileTree();
+  loadActiveFile();
+}
+
+function renderTabs() {
+  editorTabs.innerHTML = '';
+  state.openTabs.forEach(path => {
+    const name = getBaseName(path);
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (path === state.activeFile ? ' active' : '');
+    tab.innerHTML = `<span>${iconOf(name)}</span><span title="${path}">${name}</span><button class="tab-close">✕</button>`;
+    tab.addEventListener('click', () => openTab(path));
+    tab.querySelector('.tab-close').addEventListener('click', e => { e.stopPropagation(); closeTab(path); });
+    editorTabs.appendChild(tab);
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  Load file into editor / media viewer
+// ═══════════════════════════════════════════════════════
+function loadActiveFile() {
+  const path = state.activeFile;
+  const diagnostics = $('diagnostics');
+  const editorWrap  = $('editor-wrap');
+
+  // Clean up old media/image viewers
+  ['media-preview','img-viewer','right-media'].forEach(id => { const el=$(id); if(el) el.remove(); });
+  previewFrame.style.display = '';
+  codeEditor.style.display = '';
+  lineNumbers.style.display = '';
+  $('editor-inner').style.display = '';
+  $('minimap').style.display = '';
+  if (diagnostics) diagnostics.style.display = '';
+
+  if (!path || !state.files[path]) {
+    codeEditor.value = '';
+    codeEditor.disabled = true;
+    lineNumbers.innerHTML = '';
+    statusFile.textContent = 'No file open';
+    statusLang.textContent = '';
+    statusChars.textContent = '0 chars';
+    previewFrame.srcdoc = '';
+    diagList.innerHTML = '';
+    errCount.textContent = '⛔ 0 errors';
+    warnCount.textContent = '⚠ 0 warnings';
+    return;
+  }
+
+  const file = state.files[path];
+  const name = getBaseName(path);
+
+  if (isText(name)) {
+    codeEditor.disabled = false;
+    codeEditor.value = file.content;
+    state.errorLines = new Set();
+    updateLineNumbers();
+    statusFile.textContent = path;
+    statusLang.textContent = langOf(name);
+    statusChars.textContent = file.content.length + ' chars';
+    schedulePreview();
+    scheduleLint();
+    scheduleMinimapUpdate();
+  } else if (isImage(name) && file.dataUrl) {
+    // Hide editor, show image viewer
+    codeEditor.style.display = 'none';
+    lineNumbers.style.display = 'none';
+    $('editor-inner').style.display = 'none';
+    $('minimap').style.display = 'none';
+    if (diagnostics) diagnostics.style.display = 'none';
+    showImageViewer(name, file.dataUrl, editorWrap);
+    previewFrame.style.display = 'none';
+    statusFile.textContent = path;
+    statusLang.textContent = extOf(name).toUpperCase();
+  } else if ((isVideo(name) || isAudio(name)) && file.dataUrl) {
+    codeEditor.style.display = 'none';
+    lineNumbers.style.display = 'none';
+    $('editor-inner').style.display = 'none';
+    $('minimap').style.display = 'none';
+    if (diagnostics) diagnostics.style.display = 'none';
+    showMediaViewer(name, file.dataUrl, editorWrap);
+    previewFrame.style.display = 'none';
+    statusFile.textContent = path;
+    statusLang.textContent = extOf(name).toUpperCase();
+  } else {
+    codeEditor.style.display = 'none';
+    lineNumbers.style.display = 'none';
+    $('editor-inner').style.display = 'none';
+    $('minimap').style.display = 'none';
+    if (diagnostics) diagnostics.style.display = 'none';
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);flex-direction:column;gap:8px;font-size:13px;';
+    info.innerHTML = `<span style="font-size:48px">${iconOf(name)}</span><span>${name}</span><span style="font-size:11px">Binary file</span>`;
+    editorWrap.appendChild(info);
+    previewFrame.style.display = 'none';
+    statusFile.textContent = path;
+    statusLang.textContent = extOf(name).toUpperCase();
+  }
+}
+
+function showImageViewer(name, dataUrl, container) {
+  state.imgZoom = 1;
+  const viewer = document.createElement('div');
+  viewer.id = 'img-viewer';
+  viewer.innerHTML = `
+    <div id="img-viewer-toolbar">
+      <button onclick="imgZoom(0.25)" title="Zoom In">🔍+</button>
+      <button onclick="imgZoom(-0.25)" title="Zoom Out">🔍−</button>
+      <button onclick="imgZoomReset()" title="Reset">↺</button>
+      <button onclick="imgZoomFit()" title="Fit">⊡</button>
+      <span id="img-zoom-label">100%</span>
+      <span style="margin-left:8px;color:var(--text-dim)">${name}</span>
+    </div>
+    <div id="img-canvas-wrap">
+      <img id="img-preview-el" src="${dataUrl}" alt="${name}" draggable="false"/>
+    </div>`;
+  container.appendChild(viewer);
+  const img = $('img-preview-el');
+  img.addEventListener('wheel', e => { e.preventDefault(); imgZoom(e.deltaY < 0 ? 0.15 : -0.15); });
+  img.addEventListener('click', () => imgZoom(0.25));
+}
+
+function imgZoom(delta) {
+  state.imgZoom = Math.max(0.1, Math.min(10, state.imgZoom + delta));
+  const img = $('img-preview-el');
+  if (img) { img.style.transform = `scale(${state.imgZoom})`; $('img-zoom-label').textContent = Math.round(state.imgZoom*100)+'%'; }
+}
+function imgZoomReset() { state.imgZoom = 1; const img=$('img-preview-el'); if(img){img.style.transform='scale(1)';$('img-zoom-label').textContent='100%';} }
+function imgZoomFit() {
+  const wrap = $('img-canvas-wrap'), img = $('img-preview-el');
+  if (!wrap || !img) return;
+  const scale = Math.min(wrap.clientWidth/img.naturalWidth, wrap.clientHeight/img.naturalHeight, 1);
+  state.imgZoom = scale;
+  img.style.transform = `scale(${scale})`;
+  $('img-zoom-label').textContent = Math.round(scale*100)+'%';
+}
+
+function showMediaViewer(name, dataUrl, container) {
+  const wrap = document.createElement('div');
+  wrap.id = 'media-preview';
+  wrap.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;background:#0d0d1a;padding:16px;';
+  if (isVideo(name)) {
+    wrap.innerHTML = `<video src="${dataUrl}" controls style="max-width:100%;max-height:100%;border-radius:6px;"></video>`;
+  } else {
+    wrap.innerHTML = `<div style="text-align:center"><div style="font-size:48px;margin-bottom:12px">🎵</div><audio src="${dataUrl}" controls style="width:280px;"></audio><div style="margin-top:8px;color:var(--text-dim);font-size:12px">${name}</div></div>`;
+  }
+  container.appendChild(wrap);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Line Numbers — perfectly aligned
+// ═══════════════════════════════════════════════════════
+function updateLineNumbers() {
+  const lines = codeEditor.value.split('\n');
+  const total = lines.length;
+  let html = '';
+  for (let i = 1; i <= total; i++) {
+    const cls = state.errorLines.has(i) ? ' class="ln-error"' : '';
+    html += `<span${cls} data-ln="${i}">${i}</span>\n`;
+  }
+  lineNumbers.innerHTML = html;
+  lineNumbers.scrollTop = codeEditor.scrollTop;
+}
+
+// Click line number to select that line
+lineNumbers.addEventListener('click', e => {
+  const span = e.target.closest('[data-ln]');
+  if (!span) return;
+  const ln = parseInt(span.dataset.ln);
+  const lines = codeEditor.value.split('\n');
+  let start = 0;
+  for (let i = 0; i < ln - 1; i++) start += lines[i].length + 1;
+  const end = start + lines[ln - 1].length;
+  codeEditor.focus();
+  codeEditor.setSelectionRange(start, end);
+  updateCursorPos();
+});
+
+// Drag over line numbers to select multiple lines
+let lnDragStart = null;
+lineNumbers.addEventListener('mousedown', e => {
+  const span = e.target.closest('[data-ln]');
+  if (!span) return;
+  lnDragStart = parseInt(span.dataset.ln);
+  e.preventDefault();
+});
+lineNumbers.addEventListener('mousemove', e => {
+  if (lnDragStart === null) return;
+  const span = e.target.closest('[data-ln]');
+  if (!span) return;
+  const lnEnd = parseInt(span.dataset.ln);
+  const from = Math.min(lnDragStart, lnEnd);
+  const to   = Math.max(lnDragStart, lnEnd);
+  const lines = codeEditor.value.split('\n');
+  let start = 0;
+  for (let i = 0; i < from - 1; i++) start += lines[i].length + 1;
+  let end = start;
+  for (let i = from - 1; i < to; i++) end += lines[i].length + 1;
+  end = Math.max(start, end - 1);
+  codeEditor.focus();
+  codeEditor.setSelectionRange(start, end);
+  updateCursorPos();
+});
+document.addEventListener('mouseup', () => { lnDragStart = null; });
+
+// ═══════════════════════════════════════════════════════
+//  Minimap — canvas-based, no HTML injection
+// ═══════════════════════════════════════════════════════
+function scheduleMinimapUpdate() {
+  clearTimeout(state.minimapDebounce);
+  state.minimapDebounce = setTimeout(updateMinimap, 250);
+}
+
+function updateMinimap() {
+  const canvas = $('minimap-canvas');
+  const minimapEl = $('minimap');
+  if (!canvas || !minimapEl) return;
+  const code = codeEditor.value;
+  const lines = code.split('\n');
+  const W = 80, LSCALE = 2;
+  const H = Math.max(lines.length * LSCALE, minimapEl.clientHeight || 100);
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#13132b';
+  ctx.fillRect(0, 0, W, H);
+  const ext = state.activeFile ? extOf(getBaseName(state.activeFile)) : '';
+  lines.forEach((line, i) => {
+    const y = i * LSCALE;
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let color = '#3a3a6a';
+    if (['js','ts','jsx','tsx'].includes(ext)) {
+      if (/^\s*(\/\/|\/\*)/.test(line)) color = '#546e7a';
+      else if (/\b(const|let|var|function|class|return|if|for|while)\b/.test(line)) color = '#7c3aed';
+      else if (/["'`]/.test(line)) color = '#4a7a4a';
+      else color = '#4a4a8a';
+    } else if (['html','htm'].includes(ext)) {
+      if (/<!-/.test(line) && /-/.test(line)) color = '#546e7a';
+      else if (/<\/?[a-z]/i.test(line)) color = '#2a7a7a';
+      else color = '#4a4a8a';
+    } else if (ext === 'css') {
+      if (/[{}]/.test(line)) color = '#7c3aed';
+      else color = '#4a4a8a';
+    }
+    if (state.errorLines.has(i + 1)) color = '#7a2a3a';
+    const len = Math.min(trimmed.length * 0.5, W - 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(2, y, len, Math.max(1, LSCALE - 1));
+  });
+  // Viewport indicator
+  const totalH = lines.length * LSCALE;
+  const visibleFrac = codeEditor.clientHeight / Math.max(1, codeEditor.scrollHeight);
+  const scrollFrac  = codeEditor.scrollTop  / Math.max(1, codeEditor.scrollHeight - codeEditor.clientHeight);
+  const vpH   = Math.max(20, visibleFrac * H);
+  const vpTop = scrollFrac * (H - vpH);
+  const vp = $('minimap-viewport');
+  if (vp) { vp.style.top = vpTop + 'px'; vp.style.height = vpH + 'px'; }
+}
+
+$('minimap').addEventListener('click', e => {
+  const rect = $('minimap').getBoundingClientRect();
+  const frac = (e.clientY - rect.top) / rect.height;
+  codeEditor.scrollTop = frac * (codeEditor.scrollHeight - codeEditor.clientHeight);
+  updateMinimap();
+});
+
+// ═══════════════════════════════════════════════════════
+//  Live Preview — with asset injection
+// ═══════════════════════════════════════════════════════
+function schedulePreview() {
+  clearTimeout(state.previewDebounce);
+  state.previewDebounce = setTimeout(updatePreview, 350);
+}
+
+// ── Tag name helpers so HTML parser doesn't misread JS strings ──
+var T = { sc:'scr'+'ipt', st:'sty'+'le', lk:'li'+'nk', ht:'ht'+'ml', hd:'he'+'ad', bd:'bo'+'dy' };
+
+function mkDoc(head, body) {
+  return '<!DOCTYPE html><' + T.ht + '><' + T.hd + '>' + head + '</' + T.hd + '><' + T.bd + '>' + body + '</' + T.bd + '></' + T.ht + '>';
+}
+function mkStyle(css) { return '<' + T.st + '>' + css + '</' + T.st + '>'; }
+function mkScript(js) { return '<' + T.sc + '>' + js + '</' + T.sc + '>'; }
+
+function injectTextAsset(html, esc, type, content) {
+  if (type === 'css') {
+    var re = new RegExp('(<' + T.lk + ')([^>]*href=["\'])' + esc + '(["\'][^>]*\\/?>)', 'gi');
+    return html.replace(re, mkStyle(content));
+  } else {
+    var re2 = new RegExp('(<' + T.sc + ')([^>]*src=["\'])' + esc + '(["\'][^>]*><\\/' + T.sc + '>)', 'gi');
+    return html.replace(re2, mkScript(content));
+  }
+}
+
+function injectAssets(content) {
+  Object.keys(state.files).forEach(fp => {
+    const file = state.files[fp];
+    const fname = getBaseName(fp);
+    const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escFull = fp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (file.dataUrl) {
+      [esc, escFull].forEach(e => {
+        content = content.replace(new RegExp('(src=["\'])' + e + '(["\'])', 'g'), '$1' + file.dataUrl + '$2');
+        content = content.replace(new RegExp('(href=["\'])' + e + '(["\'])', 'g'), '$1' + file.dataUrl + '$2');
+        content = content.replace(new RegExp('(url\\(["\']?)' + e + '(["\']?\\))', 'g'), '$1' + file.dataUrl + '$2');
+      });
+    } else if (file.content) {
+      const ext = extOf(fname);
+      if (ext === 'css') content = injectTextAsset(content, esc, 'css', file.content);
+      else if (ext === 'js') content = injectTextAsset(content, esc, 'js', file.content);
+    }
+  });
+  return content;
+}
+
+function updatePreview() {
+  const path = state.activeFile;
+  if (!path || !isText(getBaseName(path))) return;
+  previewFrame.style.display = '';
+  const ext = extOf(getBaseName(path));
+  let content = injectAssets(codeEditor.value);
+  if (ext === 'html' || ext === 'htm') {
+    previewFrame.srcdoc = content;
+  } else if (ext === 'css') {
+    previewFrame.srcdoc = mkDoc(mkStyle(content), '<h2>CSS Preview</h2><p>Styles applied to this page.</p><div class="demo">Demo element</div>');
+  } else if (ext === 'js') {
+    var pre = '<pre id="out" style="font-family:monospace;font-size:13px;padding:12px;background:#1a1a2e;color:#d4d4f0;min-height:100vh;margin:0;white-space:pre-wrap;"></pre>';
+    var js = 'const out=document.getElementById(\'out\');console.log=(...a)=>{out.textContent+=a.map(x=>typeof x===\'object\'?JSON.stringify(x,null,2):x).join(\' \')+\'\\n\'};console.error=(...a)=>{out.textContent+=\'❌ \'+a.join(\' \')+\'\\n\'};console.warn=(...a)=>{out.textContent+=\'⚠ \'+a.join(\' \')+\'\\n\'};try{' + content.replace(/<\/script>/g,'<\\/script>') + '}catch(e){out.textContent+=\'❌ \'+e.message}';
+    previewFrame.srcdoc = mkDoc('', pre + mkScript(js));
+  } else if (ext === 'md') {
+    const h = content.replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/^- (.+)$/gm,'<li>$1</li>').replace(/\n\n/g,'<br><br>');
+    previewFrame.srcdoc = mkDoc(mkStyle('body{font-family:sans-serif;padding:20px;line-height:1.6;color:#333;max-width:700px;margin:0 auto}h1,h2,h3{margin-top:1em}code{background:#eee;padding:1px 4px;border-radius:3px}'), h);
+  } else if (ext === 'json') {
+    try {
+      previewFrame.srcdoc = mkDoc(mkStyle('body{margin:0;background:#1a1a2e}pre{color:#82aaff;font-family:monospace;font-size:13px;padding:16px;white-space:pre-wrap}'), '<pre>' + JSON.stringify(JSON.parse(content),null,2).replace(/</g,'&lt;') + '</pre>');
+    } catch(e) {
+      previewFrame.srcdoc = mkDoc('', '<p style="font-family:monospace;padding:16px;color:#ff5370">JSON Error: ' + e.message + '</p>');
+    }
+  } else if (ext === 'svg') {
+    previewFrame.srcdoc = mkDoc('', '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a2e">' + content + '</div>');
+  } else {
+    previewFrame.srcdoc = mkDoc(mkStyle('body{font-family:monospace;font-size:13px;padding:16px;background:#1a1a2e;color:#d4d4f0;white-space:pre-wrap}'), content.replace(/</g,'&lt;'));
+  }
+}
+
+function openPreviewTab() {
+  let doc = previewFrame.srcdoc || '';
+  if (!doc) return;
+  Object.keys(state.files).forEach(fp => {
+    const file = state.files[fp];
+    const fname = getBaseName(fp);
+    const esc = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escFull = fp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (file.dataUrl) {
+      [esc, escFull].forEach(e => {
+        doc = doc.replace(new RegExp('(src=["\'])' + e + '(["\'])', 'g'), '$1' + file.dataUrl + '$2');
+        doc = doc.replace(new RegExp('(href=["\'])' + e + '(["\'])', 'g'), '$1' + file.dataUrl + '$2');
+        doc = doc.replace(new RegExp('(url\\(["\']?)' + e + '(["\']?\\))', 'g'), '$1' + file.dataUrl + '$2');
+      });
+    } else if (file.content) {
+      const ext = extOf(fname);
+      if (ext === 'css') doc = injectTextAsset(doc, esc, 'css', file.content);
+      else if (ext === 'js') doc = injectTextAsset(doc, esc, 'js', file.content);
+    }
+  });
+  const blob = new Blob([doc], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+// ═══════════════════════════════════════════════════════
+//  Linter
+// ═══════════════════════════════════════════════════════
+function scheduleLint() { clearTimeout(state.lintDebounce); state.lintDebounce = setTimeout(runLint, 500); }
+
+function runLint() {
+  const path = state.activeFile;
+  if (!path || !isText(getBaseName(path))) return;
+  const code = codeEditor.value;
+  const ext = extOf(getBaseName(path));
+  const issues = [];
+  if (['html','htm'].includes(ext)) lintHTML(code, issues);
+  else if (ext === 'css') lintCSS(code, issues);
+  else if (['js','ts','jsx','tsx'].includes(ext)) lintJS(code, issues);
+  else if (ext === 'json') lintJSON(code, issues);
+  renderDiagnostics(issues);
+}
+
+function lintHTML(code, issues) {
+  const voidTags = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+  const tagStack = [];
+  const tagRe = /<\/?([a-zA-Z][a-zA-Z0-9]*)[^>]*>/g;
+  let m;
+  while ((m = tagRe.exec(code)) !== null) {
+    const full = m[0], tag = m[1].toLowerCase();
+    if (voidTags.has(tag)) continue;
+    if (full.startsWith('</')) {
+      if (tagStack.length && tagStack[tagStack.length-1].tag === tag) tagStack.pop();
+      else issues.push({ type:'error', msg:`Unexpected closing tag </${tag}>`, line: code.substring(0,m.index).split('\n').length });
+    } else if (!full.endsWith('/>')) {
+      tagStack.push({ tag, line: code.substring(0,m.index).split('\n').length });
+    }
+  }
+  tagStack.forEach(t => issues.push({ type:'error', msg:`Unclosed tag <${t.tag}>`, line: t.line }));
+  const imgRe = /<img(?![^>]*\balt\b)[^>]*>/gi;
+  while ((m = imgRe.exec(code)) !== null) issues.push({ type:'warning', msg:'<img> missing alt attribute', line: code.substring(0,m.index).split('\n').length });
+  if (!code.trim().toLowerCase().startsWith('<!doctype')) issues.push({ type:'warning', msg:'Missing <!DOCTYPE html>', line: 1 });
+  ['font','center','marquee','blink','strike'].forEach(tag => {
+    const re = new RegExp(`<${tag}[\\s>]`, 'gi');
+    while ((m = re.exec(code)) !== null) issues.push({ type:'warning', msg:`<${tag}> is deprecated`, line: code.substring(0,m.index).split('\n').length });
+  });
+}
+
+function lintCSS(code, issues) {
+  const lines = code.split('\n');
+  let open = 0, close = 0;
+  lines.forEach(l => { open += (l.match(/{/g)||[]).length; close += (l.match(/}/g)||[]).length; });
+  if (open !== close) issues.push({ type:'error', msg:`Mismatched braces: ${open} open, ${close} close`, line: 1 });
+  lines.forEach((line, i) => {
+    const t = line.trim();
+    if (t && t.includes(':') && !t.endsWith('{') && !t.endsWith('}') && !t.endsWith(';') && !t.startsWith('//') && !t.startsWith('/*'))
+      issues.push({ type:'warning', msg:'Possible missing semicolon', line: i+1 });
+  });
+  const imp = (code.match(/!important/gi)||[]).length;
+  if (imp > 2) issues.push({ type:'warning', msg:`${imp} uses of !important`, line: 1 });
+}
+
+function lintJS(code, issues) {
+  const lines = code.split('\n');
+  lines.forEach((line, i) => {
+    if (/\bvar\b/.test(line) && !line.trim().startsWith('//')) issues.push({ type:'warning', msg:"Use 'let' or 'const' instead of 'var'", line: i+1 });
+    if (/console\.log/.test(line) && !line.trim().startsWith('//')) issues.push({ type:'warning', msg:'console.log() found', line: i+1 });
+    if (/[^=!<>]==[^=]/.test(line) && !line.trim().startsWith('//')) issues.push({ type:'warning', msg:"Use '===' instead of '=='", line: i+1 });
+  });
+  const pairs = {'(':')',  '[':']', '{':'}'};
+  const stack = [];
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if ('([{'.includes(ch)) stack.push({ ch, pos: i });
+    else if (')]}'.includes(ch)) {
+      if (stack.length && pairs[stack[stack.length-1].ch] === ch) stack.pop();
+      else issues.push({ type:'error', msg:`Unexpected '${ch}'`, line: code.substring(0,i).split('\n').length });
+    }
+  }
+  stack.forEach(s => issues.push({ type:'error', msg:`Unclosed '${s.ch}'`, line: code.substring(0,s.pos).split('\n').length }));
+}
+
+function lintJSON(code, issues) {
+  try { JSON.parse(code); }
+  catch(e) {
+    const match = e.message.match(/position (\d+)/);
+    let line = 1;
+    if (match) line = code.substring(0, parseInt(match[1])).split('\n').length;
+    issues.push({ type:'error', msg:`JSON error: ${e.message}`, line });
+  }
+}
+
+function renderDiagnostics(issues) {
+  const errors = issues.filter(i => i.type === 'error');
+  const warnings = issues.filter(i => i.type === 'warning');
+  state.errorLines = new Set(errors.map(e => e.line));
+  errCount.textContent  = `⛔ ${errors.length} error${errors.length !== 1 ? 's' : ''}`;
+  warnCount.textContent = `⚠ ${warnings.length} warning${warnings.length !== 1 ? 's' : ''}`;
+  diagList.innerHTML = '';
+  if (!issues.length) {
+    diagList.innerHTML = '<div style="padding:8px 12px;font-size:11px;color:var(--text-dim)">✅ No problems detected</div>';
+    updateLineNumbers();
+    return;
+  }
+  issues.forEach(issue => {
+    const item = document.createElement('div');
+    item.className = `diag-item ${issue.type}`;
+    item.innerHTML = `<span class="diag-icon">${issue.type==='error'?'⛔':'⚠️'}</span><span class="diag-msg">${issue.msg}</span><span class="diag-loc">Ln ${issue.line}</span>`;
+    item.addEventListener('click', () => jumpToLine(issue.line));
+    diagList.appendChild(item);
+  });
+  updateLineNumbers();
+}
+
+function jumpToLine(lineNum) {
+  const lines = codeEditor.value.split('\n');
+  let pos = 0;
+  for (let i = 0; i < lineNum - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  codeEditor.focus();
+  codeEditor.setSelectionRange(pos, pos + (lines[lineNum-1]||'').length);
+  codeEditor.scrollTop = (lineNum - 5) * LINE_H;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Cursor / Status
+// ═══════════════════════════════════════════════════════
+function updateCursorPos() {
+  const val = codeEditor.value;
+  const pos = codeEditor.selectionStart;
+  const end = codeEditor.selectionEnd;
+  const text = val.substring(0, pos);
+  const lines = text.split('\n');
+  statusCursor.textContent = `Ln ${lines.length}, Col ${lines[lines.length-1].length+1}`;
+  statusChars.textContent  = `${val.length} chars`;
+  if (end > pos) {
+    const selLen = end - pos;
+    const selLines = val.substring(pos, end).split('\n').length;
+    statusSel.textContent = `(${selLen} selected${selLines > 1 ? ', '+selLines+' lines' : ''})`;
+  } else {
+    statusSel.textContent = '';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Editor input
+// ═══════════════════════════════════════════════════════
+function onEditorInput() {
+  const path = state.activeFile;
+  if (path && state.files[path]) state.files[path].content = codeEditor.value;
+  updateLineNumbers();
+  schedulePreview();
+  scheduleLint();
+  scheduleMinimapUpdate();
+  updateCursorPos();
+}
+
+codeEditor.addEventListener('input', onEditorInput);
+codeEditor.addEventListener('scroll', () => {
+  lineNumbers.scrollTop = codeEditor.scrollTop;
+  scheduleMinimapUpdate();
+});
+codeEditor.addEventListener('click', updateCursorPos);
+codeEditor.addEventListener('keyup', updateCursorPos);
+codeEditor.addEventListener('mouseup', updateCursorPos);
+codeEditor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = codeEditor.selectionStart, en = codeEditor.selectionEnd, v = codeEditor.value;
+    codeEditor.value = v.substring(0,s) + '  ' + v.substring(en);
+    codeEditor.selectionStart = codeEditor.selectionEnd = s + 2;
+    onEditorInput();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  File upload handlers
+// ═══════════════════════════════════════════════════════
+function handleFiles(fileObjs, basePath) {
+  Array.from(fileObjs).forEach(f => {
+    const path = basePath ? basePath + '/' + f.name : f.name;
+    if (isText(f.name)) {
+      const reader = new FileReader();
+      reader.onload = e => addFileToTree(path, e.target.result, null, f);
+      reader.readAsText(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => addFileToTree(path, '', e.target.result, f);
+      reader.readAsDataURL(f);
+    }
+  });
+}
+
+function handleFolderUpload(fileObjs) {
+  Array.from(fileObjs).forEach(f => {
+    const path = f.webkitRelativePath || f.name;
+    if (isText(f.name)) {
+      const reader = new FileReader();
+      reader.onload = e => addFileToTree(path, e.target.result, null, f);
+      reader.readAsText(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => addFileToTree(path, '', e.target.result, f);
+      reader.readAsDataURL(f);
+    }
+  });
+}
+
+async function handleZipUpload(file) {
+  if (typeof JSZip === 'undefined') { alert('JSZip not loaded yet, try again in a moment.'); return; }
+  const zip = await JSZip.loadAsync(file);
+  const promises = [];
+  zip.forEach((relPath, zipEntry) => {
+    if (zipEntry.dir) { addFolderToTree(relPath.replace(/\/$/, '')); return; }
+    const ext = extOf(relPath.split('/').pop());
+    const textExts = ['html','htm','css','js','ts','jsx','tsx','json','md','txt','py','java','cpp','c','cs','php','rb','go','rs','sh','xml','svg','yaml','yml','toml','ini','env','gitignore','sql','graphql','vue','svelte','scss','sass','less'];
+    if (textExts.includes(ext)) {
+      promises.push(zipEntry.async('string').then(content => addFileToTree(relPath, content, null, null)));
+    } else {
+      promises.push(zipEntry.async('base64').then(b64 => {
+        const mime = getMime(ext);
+        addFileToTree(relPath, '', `data:${mime};base64,${b64}`, null);
+      }));
+    }
+  });
+  await Promise.all(promises);
+}
+
+function getMime(ext) {
+  const map = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', svg:'image/svg+xml', mp4:'video/mp4', webm:'video/webm', mp3:'audio/mpeg', wav:'audio/wav', ogg:'audio/ogg', pdf:'application/pdf' };
+  return map[ext] || 'application/octet-stream';
+}
+
+// ═══════════════════════════════════════════════════════
+//  New file / folder
+// ═══════════════════════════════════════════════════════
+function createNewFile() {
+  const name = prompt('File name (e.g. index.html):');
+  if (!name || !name.trim()) return;
+  addFileToTree(name.trim(), '', null, null);
+}
+
+function createNewFolder() {
+  const name = prompt('Folder name:');
+  if (!name || !name.trim()) return;
+  addFolderToTree(name.trim());
+}
+
+function createNewFileIn(folderPath) {
+  const name = prompt('File name:');
+  if (!name || !name.trim()) return;
+  const path = folderPath === '__root' ? name.trim() : folderPath + '/' + name.trim();
+  addFileToTree(path, '', null, null);
+}
+
+function createNewFolderIn(folderPath) {
+  const name = prompt('Folder name:');
+  if (!name || !name.trim()) return;
+  const path = folderPath === '__root' ? name.trim() : folderPath + '/' + name.trim();
+  addFolderToTree(path);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Download project as ZIP
+// ═══════════════════════════════════════════════════════
+async function downloadProject() {
+  const names = Object.keys(state.files);
+  if (!names.length) { alert('No files to download.'); return; }
+  if (typeof JSZip !== 'undefined') {
+    const zip = new JSZip();
+    const folder = zip.folder(state.projectName);
+    for (const path of names) {
+      const file = state.files[path];
+      if (file.blob) folder.file(path, file.blob);
+      else if (file.dataUrl) {
+        const b64 = file.dataUrl.split(',')[1];
+        folder.file(path, b64, { base64: true });
+      } else folder.file(path, file.content);
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    triggerDownload(blob, `${state.projectName}.zip`);
+  } else {
+    names.forEach(path => {
+      const file = state.files[path];
+      if (isText(getBaseName(path))) {
+        triggerDownload(new Blob([file.content], { type: 'text/plain' }), getBaseName(path));
+      } else if (file.dataUrl) {
+        const a = document.createElement('a'); a.href = file.dataUrl; a.download = getBaseName(path); a.click();
+      }
+    });
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function saveCurrentFile() {
+  const path = state.activeFile;
+  if (!path) return;
+  const orig = statusFile.textContent;
+  statusFile.textContent = '✅ Saved: ' + getBaseName(path);
+  setTimeout(() => { statusFile.textContent = orig; }, 1200);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Panel resize — smooth, no flicker
+// ═══════════════════════════════════════════════════════
+function initResizers() {
+  setupResizer($('resizer-left'), $('panel-files'), 'left');
+  setupResizer($('resizer-right'), $('panel-preview'), 'right');
+}
+
+function setupResizer(resizer, panel, side) {
+  let startX, startW, animFrame;
+  resizer.addEventListener('mousedown', e => {
+    startX = e.clientX; startW = panel.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    // Disable iframe pointer events during resize to prevent capture
+    previewFrame.style.pointerEvents = 'none';
+    function onMove(e) {
+      cancelAnimationFrame(animFrame);
+      animFrame = requestAnimationFrame(() => {
+        let delta = e.clientX - startX;
+        if (side === 'right') delta = -delta;
+        const newW = Math.max(40, Math.min(startW + delta, window.innerWidth - 200));
+        panel.style.width = newW + 'px';
+        panel.style.flex = 'none';
+      });
+    }
+    function onUp() {
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      previewFrame.style.pointerEvents = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Maximize panels
+// ═══════════════════════════════════════════════════════
+const maximizedState = {};
+function toggleMaximize(panelId) {
+  const panel = $(panelId);
+  const allPanels = ['panel-files','panel-editor','panel-preview'];
+  const resizers = [$('resizer-left'), $('resizer-right')];
+  if (maximizedState[panelId]) {
+    panel.classList.remove('maximized');
+    allPanels.forEach(id => $(id).classList.remove('hidden'));
+    resizers.forEach(r => r.style.display = '');
+    maximizedState[panelId] = false;
+  } else {
+    allPanels.forEach(id => { if (id !== panelId) $(id).classList.add('hidden'); });
+    resizers.forEach(r => r.style.display = 'none');
+    panel.classList.add('maximized');
+    maximizedState[panelId] = true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Font size / zoom
+// ═══════════════════════════════════════════════════════
+function changeFontSize(delta) {
+  if (delta === 0) { state.fontSize = 13; }
+  else { state.fontSize = Math.max(8, Math.min(28, state.fontSize + delta)); }
+  codeEditor.style.fontSize = state.fontSize + 'px';
+  codeEditor.style.lineHeight = (state.fontSize * 1.6) + 'px';
+  lineNumbers.style.fontSize = state.fontSize + 'px';
+  lineNumbers.style.lineHeight = (state.fontSize * 1.6) + 'px';
+  updateLineNumbers();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Word wrap / format
+// ═══════════════════════════════════════════════════════
+function toggleWordWrap() {
+  state.wordWrap = !state.wordWrap;
+  codeEditor.style.whiteSpace = state.wordWrap ? 'pre-wrap' : 'pre';
+  const btn = $('btn-wrap');
+  if (btn) btn.style.color = state.wordWrap ? 'var(--accent)' : '';
+}
+
+function formatCode() {
+  if (!state.activeFile) return;
+  const ext = extOf(getBaseName(state.activeFile));
+  if (ext === 'json') {
+    try { codeEditor.value = JSON.stringify(JSON.parse(codeEditor.value), null, 2); onEditorInput(); } catch(e) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Search
+// ═══════════════════════════════════════════════════════
+function runSearch() {
+  const q = toolbarSearch.value;
+  state.searchMatches = []; state.searchIndex = 0;
+  if (!q) { searchCountEl.textContent = ''; return; }
+  const code = codeEditor.value;
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+  let m;
+  while ((m = re.exec(code)) !== null) state.searchMatches.push(m.index);
+  searchCountEl.textContent = state.searchMatches.length ? `${state.searchIndex+1}/${state.searchMatches.length}` : 'No results';
+  if (state.searchMatches.length) jumpToSearchMatch(0);
+}
+
+function jumpToSearchMatch(idx) {
+  if (!state.searchMatches.length) return;
+  state.searchIndex = (idx + state.searchMatches.length) % state.searchMatches.length;
+  const pos = state.searchMatches[state.searchIndex];
+  const q = toolbarSearch.value;
+  codeEditor.focus();
+  codeEditor.setSelectionRange(pos, pos + q.length);
+  const ln = codeEditor.value.substring(0, pos).split('\n').length;
+  codeEditor.scrollTop = (ln - 5) * LINE_H;
+  searchCountEl.textContent = `${state.searchIndex+1}/${state.searchMatches.length}`;
+}
+
+function clearSearch() { toolbarSearch.value = ''; searchCountEl.textContent = ''; }
+
+toolbarSearch.addEventListener('input', runSearch);
+toolbarSearch.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.shiftKey ? jumpToSearchMatch(state.searchIndex-1) : jumpToSearchMatch(state.searchIndex+1); }
+  if (e.key === 'Escape') clearSearch();
+});
+
+// ═══════════════════════════════════════════════════════
+//  Project rename
+// ═══════════════════════════════════════════════════════
+function openRenameModal() {
+  $('rename-input').value = state.projectName;
+  $('rename-modal').style.display = 'flex';
+  setTimeout(() => $('rename-input').focus(), 50);
+}
+function closeRenameModal() { $('rename-modal').style.display = 'none'; }
+function confirmRename() {
+  const val = $('rename-input').value.trim();
+  if (val) { state.projectName = val; projectDisplay.textContent = '📁 ' + val; }
+  closeRenameModal();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Toolbar dropdown menus
+// ═══════════════════════════════════════════════════════
+document.querySelectorAll('.tb-menu-item').forEach(item => {
+  item.addEventListener('click', e => {
+    e.stopPropagation();
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.tb-menu-item').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  });
+});
+document.addEventListener('click', () => {
+  document.querySelectorAll('.tb-menu-item').forEach(i => i.classList.remove('open'));
+});
+
+// ═══════════════════════════════════════════════════════
+//  Keyboard shortcuts
+// ═══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key === 's') { e.preventDefault(); saveCurrentFile(); }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'f') { e.preventDefault(); toolbarSearch.focus(); toolbarSearch.select(); }
+  if ((e.ctrlKey||e.metaKey) && e.key === 'n') { e.preventDefault(); createNewFile(); }
+  if ((e.ctrlKey||e.metaKey) && e.key === '=') { e.preventDefault(); changeFontSize(1); }
+  if ((e.ctrlKey||e.metaKey) && e.key === '-') { e.preventDefault(); changeFontSize(-1); }
+});
+
+// ═══════════════════════════════════════════════════════
+//  Upload zone events
+// ═══════════════════════════════════════════════════════
+uploadZone.addEventListener('click', () => {
+  // Show a small pick menu
+  const existing = $('upload-pick');
+  if (existing) { existing.remove(); return; }
+  const menu = document.createElement('div');
+  menu.id = 'upload-pick';
+  menu.style.cssText = 'position:absolute;left:8px;background:#1e1e3a;border:1px solid var(--accent);border-radius:6px;padding:4px 0;z-index:200;min-width:160px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.5);';
+  [
+    ['📄 Upload Files',   () => fileInput.click()],
+    ['📂 Upload Folder',  () => folderInput.click()],
+    ['🗜 Upload ZIP',     () => zipInput.click()],
+  ].forEach(([label, action]) => {
+    const d = document.createElement('div');
+    d.textContent = label;
+    d.style.cssText = 'padding:7px 14px;cursor:pointer;color:var(--text);';
+    d.onmouseenter = () => d.style.background = 'var(--hover)';
+    d.onmouseleave = () => d.style.background = '';
+    d.addEventListener('click', e => { e.stopPropagation(); menu.remove(); action(); });
+    menu.appendChild(d);
+  });
+  uploadZone.style.position = 'relative';
+  uploadZone.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
+});
+
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value=''; });
+folderInput.addEventListener('change', e => { handleFolderUpload(e.target.files); folderInput.value=''; });
+zipInput.addEventListener('change', e => { if(e.target.files[0]) handleZipUpload(e.target.files[0]); zipInput.value=''; });
+
+// Drag-drop on the whole left panel, not just the upload zone
+const panelFiles = $('panel-files');
+panelFiles.addEventListener('dragover', e => {
+  // Only handle external file drops (not internal tree drags)
+  if (e.dataTransfer.types.includes('Files')) {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadZone.classList.add('dragover');
+  }
+});
+panelFiles.addEventListener('dragleave', e => {
+  if (!panelFiles.contains(e.relatedTarget)) {
+    uploadZone.classList.remove('dragover');
+  }
+});
+panelFiles.addEventListener('drop', e => {
+  if (!e.dataTransfer.types.includes('Files')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.remove('dragover');
+  const items = e.dataTransfer.items;
+  if (items) {
+    Array.from(items).forEach(item => {
+      if (item.kind === 'file') {
+        const f = item.getAsFile();
+        if (!f) return;
+        if (f.name.endsWith('.zip')) handleZipUpload(f);
+        else handleFiles([f]);
+      }
+    });
+  } else {
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+// Also keep upload zone as a visual target
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', e => { e.stopPropagation(); uploadZone.classList.remove('dragover'); });
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); e.stopPropagation();
+  uploadZone.classList.remove('dragover');
+  const items = e.dataTransfer.items;
+  if (items) {
+    Array.from(items).forEach(item => {
+      if (item.kind === 'file') {
+        const f = item.getAsFile();
+        if (!f) return;
+        if (f.name.endsWith('.zip')) handleZipUpload(f);
+        else handleFiles([f]);
+      }
+    });
+  } else {
+    handleFiles(e.dataTransfer.files);
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  Buttons
+// ═══════════════════════════════════════════════════════
+$('btn-new-file').addEventListener('click', createNewFile);
+$('btn-download').addEventListener('click', downloadProject);
+$('btn-refresh').addEventListener('click', updatePreview);
+$('btn-open-tab').addEventListener('click', openPreviewTab);
+projectDisplay.addEventListener('click', openRenameModal);
+$('rename-modal').addEventListener('click', e => { if(e.target===$('rename-modal')) closeRenameModal(); });
+$('rename-input').addEventListener('keydown', e => { if(e.key==='Enter') confirmRename(); if(e.key==='Escape') closeRenameModal(); });
+
+// ═══════════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════════
+initResizers();
+
+// Load JSZip
+const zipScript = document.createElement('script');
+zipScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+document.head.appendChild(zipScript);
+
+// Start with a blank welcome file
+addFileToTree('index.html', '', null, null);
+
+</script>
+</body>
+</html>
