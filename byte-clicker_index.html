@@ -2001,7 +2001,7 @@ const ACHIEVEMENTS = [
   { id:'asc5', name:'Energy Charged',    desc:'Buy 3 Energy nodes.',                          icon:'⚡', condition: () => (G.webNodes['energy_0']||0)+(G.webNodes['energy_1']||0)+(G.webNodes['energy_2']||0) >= 3 },
   { id:'asc6', name:'Elemental Master',  desc:'Have at least 1 node in all 5 paths.',         icon:'🌟', condition: () => ['earth','water','fire','wind','energy'].every(p => wn(`${p}_0`) >= 1) },
   { id:'asc7', name:'Web Weaver',        desc:'Buy 20 web nodes total.',                      icon:'🕷️', condition: () => Object.values(G.webNodes).reduce((a,b)=>a+b,0) >= 20 },
-  { id:'asc8', name:'Inflation Fighter', desc:'Reduce inflation by 5% via Earth path.',       icon:'📉', condition: () => getEarthInflationReduction() >= 0.05 },
+  { id:'asc8', name:'Inflation Fighter', desc:'Reduce inflation via Earth path.',          icon:'📉', condition: () => getEarthInflationDivisor() > 1.0 },
   { id:'asc9', name:'Profit Prophet',    desc:'Double building profits via Water path.',      icon:'💰', condition: () => getWaterProfitMult() >= 2 },
   // ── CLICK MILESTONES (extended) ───────────────────────────────────────────
   { id:'c0',  name:'Click Immortal',     desc:'Click 1,000,000 times.',                       icon:'👆', condition: () => G.totalClicks >= 1e6 },
@@ -3387,7 +3387,8 @@ function renderBuildings() {
     const b  = BUILDINGS_DEF[i];
     const gs = G.buildings[i];
     const bestBytes = Math.max(G.bytes, G.totalBytesEver);
-    const unlocked  = gs.count > 0 || bestBytes >= b.baseCost / 10;
+    // Building 0 always visible; others unlock at 10% of their cost
+    const unlocked  = i === 0 || gs.count > 0 || bestBytes >= b.baseCost / 10;
     if (!unlocked) { fp += `${i}:locked;`; continue; }
     let totalCost = 0;
     for (let q = 0; q < qty; q++) {
@@ -3403,7 +3404,8 @@ function renderBuildings() {
     const b  = BUILDINGS_DEF[i];
     const gs = G.buildings[i];
     const bestBytes = Math.max(G.bytes, G.totalBytesEver);
-    const unlocked  = gs.count > 0 || bestBytes >= b.baseCost / 10;
+    // Building 0 always visible; others unlock at 10% of their cost
+    const unlocked  = i === 0 || gs.count > 0 || bestBytes >= b.baseCost / 10;
 
     // ── LOCKED card — show as ??? ──────────────────────────────────────────
     if (!unlocked) {
