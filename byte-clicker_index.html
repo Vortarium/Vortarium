@@ -1711,8 +1711,8 @@ function webNodeCost(id) {
   if (id === 'core') return 1;
   const [path, nStr] = id.split('_');
   const depth = parseInt(nStr);
-  const BASE  = { earth:3, water:3, fire:3, wind:3, energy:3 };
-  const SCALE = { earth:1.8, water:1.9, fire:2.0, wind:1.7, energy:2.1 };
+  const BASE  = { earth:3, water:3, fire:3, wind:3, energy:3, metal:4 };
+  const SCALE = { earth:1.8, water:1.9, fire:2.0, wind:1.7, energy:2.1, metal:2.2 };
   return Math.ceil((BASE[path] || 3) * Math.pow(SCALE[path] || 1.8, depth));
 }
 
@@ -1726,10 +1726,11 @@ function webNodeInfo(id) {
   const depth = parseInt(nStr);
 
   // Per-node multiplier values (what THIS node gives)
-  function earthNodeMult(d)  { return parseFloat((1.1 + d * 0.05).toFixed(2)); }  // ÷1.10, ÷1.15, ÷1.20...
-  function waterNodeMult(d)  { return parseFloat((2.0 + d * 0.5).toFixed(1)); }   // ×2.0, ×2.5, ×3.0...
-  function fireNodeMult(d)   { return parseFloat((1.5 + d * 0.5).toFixed(1)); }   // ×1.5, ×2.0, ×2.5...
-  function energyNodeMult(d) { return parseFloat((1.5 + d * 0.3).toFixed(1)); }   // ×1.5, ×1.8, ×2.1...
+  function earthNodeMult(d)  { return parseFloat((1.1 + d * 0.05).toFixed(2)); }
+  function waterNodeMult(d)  { return parseFloat((2.0 + d * 0.5).toFixed(1)); }
+  function fireNodeMult(d)   { return parseFloat((1.5 + d * 0.5).toFixed(1)); }
+  function energyNodeMult(d) { return parseFloat((1.5 + d * 0.3).toFixed(1)); }
+  function metalNodeMult(d)  { return parseFloat((1.5 + d * 0.25).toFixed(2)); } // ×1.5, ×1.75, ×2.0...
 
   const INFO = {
     earth: {
@@ -1777,6 +1778,15 @@ function webNodeInfo(id) {
         const totalEvt = ((0.001 + getEnergyEventBonus()) * 100).toFixed(3);
         const totalOff = getEnergyOfflineMult().toFixed(1);
         return `×${m} special event odds & offline income. (Event chance: ${totalEvt}%, Offline: ×${totalOff})`;
+      },
+    },
+    metal: {
+      icon:'⚙️', color:'#aec6cf',
+      label: (d) => `Metal ${d+1}`,
+      desc:  (d) => {
+        const m = metalNodeMult(d);
+        const total = getMetalQuarkMult().toFixed(2);
+        return `×${m} Quarks earned on next Ascension. (Total multiplier: ×${total})`;
       },
     },
   };
@@ -1867,6 +1877,17 @@ function getEnergyOfflineMult() {
 // Legacy aliases used elsewhere in the code
 function getEnergyEventBonus() { return (getEnergyEventMult() - 1) * 0.001; }
 function getEnergyOfflineBonus() { return getEnergyOfflineMult() - 1; }
+
+// Metal: Quark multiplier for next Ascension
+// Node 0: ×1.5, Node 1: ×1.75, Node 2: ×2.0 ... (grows by 0.25 per depth)
+function getMetalQuarkMult() {
+  let mult = 1;
+  for (let d = 0; d < 100; d++) {
+    if (!webNodeBought(`metal_${d}`)) break;
+    mult *= (1.5 + d * 0.25);
+  }
+  return mult;
+}
 
 // Effective inflation rate (divided by Earth path multiplier)
 function getInflationRate() {
@@ -2736,7 +2757,7 @@ let _lastPrestigeBytes = 0;
 function getQuarksForPrestige() {
   if (G.totalBytesEver < 1e9) return 0;
   const base = Math.floor(Math.log10(G.totalBytesEver / 1e9)) + 1;
-  return Math.max(0, Math.floor(base * getPuQuarkMult()));
+  return Math.max(0, Math.floor(base * getPuQuarkMult() * getMetalQuarkMult()));
 }
 
 document.getElementById('prestige-btn').addEventListener('click', () => {
@@ -2900,6 +2921,11 @@ document.getElementById('reincarnate-btn').addEventListener('click', () => {
   }
 });
 
+// View Web button — spectate mode (no buying)
+document.getElementById('view-web-btn').addEventListener('click', () => {
+  openAscensionScreen(true); // true = spectate
+});
+
 // ── WEB CANVAS ────────────────────────────────────────────────────────────────
 let _ascPan = { x: 0, y: 0 };
 let _ascDrag = null;
@@ -2907,17 +2933,18 @@ let _ascCanvas = null;
 let _ascCtx = null;
 let _ascNodes = []; // computed layout
 
-// Node layout: center + 5 arms, each arm has infinite nodes spaced outward
+// Node layout: center + 6 arms, each arm has infinite nodes spaced outward
 const PATH_ANGLES = {
   earth:  -90,   // up
-  water:  -18,   // upper-right
-  fire:    54,   // lower-right
-  wind:   126,   // lower-left
-  energy: 198,   // upper-left
+  water:  -30,   // upper-right
+  fire:    30,   // right
+  wind:    90,   // lower-right
+  energy: 150,   // lower-left
+  metal:  210,   // upper-left (new)
 };
 const PATH_COLORS = {
   earth: '#6bcb77', water: '#4d96ff', fire: '#ff6b6b',
-  wind: '#ffd93d', energy: '#ff9f43',
+  wind: '#ffd93d', energy: '#ff9f43', metal: '#aec6cf',
 };
 const NODE_R = 32;
 const NODE_SPACING = 110;
