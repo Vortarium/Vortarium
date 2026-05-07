@@ -172,8 +172,6 @@ html, body {
 }
 .cd-fast { animation-duration: 0.4s !important; }
 
-#click-particles { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-
 #cd-stats {
   text-align: center; margin-bottom: 12px;
 }
@@ -778,7 +776,6 @@ input[type=range] {
         <div id="cd-shimmer"></div>
         <div id="cd-label">BYTE<br>CLICKER</div>
       </div>
-      <svg id="click-particles" width="200" height="200"></svg>
     </div>
     <div id="cd-stats">
       <div id="bps-display">0 bytes/sec</div>
@@ -1212,37 +1209,28 @@ function addUpg(obj) {
 }
 
 // ── EARLY BOOST FACTOR per building ──────────────────────────────────────────
-// INVERTED: late buildings get BIGGER upgrade multipliers.
-// Building 0 (early) = 0.0, building 16 (late) = 1.0.
+// 0.0 for building 0 (Disk Space) → 1.0 for building 16 (Singularity)
+// Late buildings get MUCH bigger upgrade multipliers.
 function earlyFactor(bi) {
-  return bi / (BUILDINGS_DEF.length - 1); // 0.0 → 1.0
+  return bi / (BUILDINGS_DEF.length - 1);
 }
 
-// ── UPGRADE NERF FACTOR ───────────────────────────────────────────────────────
-// Buildings 0 & 1 keep full upgrade multipliers.
-// Buildings 2+ have all upgrade multipliers halved (their baseDps is 10× higher instead).
-function upgNerf(bi) {
-  return bi >= 2 ? 0.5 : 1.0;
-}
-
-// Helper: apply nerf to a computed multiplier.
-// For multipliers > 1: new = 1 + (mult - 1) * nerf  (shrinks the bonus portion by nerf)
-function applyNerf(mult, bi) {
-  if (bi < 2) return mult;
-  return 1 + (mult - 1) * 0.5;
-}
+// applyNerf no longer needed — scaling handled entirely by earlyFactor exponent
+function upgNerf(bi) { return 1.0; }
+function applyNerf(mult, bi) { return mult; }
 
 // ── TIER 1: Early building boosts (own ≥1) ───────────────────────────────────
-// earlyFactor now 0→1 (early→late), so late buildings get bigger multipliers.
-const T1_BASE_MULTS = [2.0, 3.0, 4.0];
+// Building 0: exponent=0.15 → ×3^0.15≈×1.18  (+18%)
+// Building 8: exponent=0.73 → ×3^0.73≈×2.4
+// Building 16: exponent=1.30 → ×3^1.30≈×4.2
+const T1_BASE_MULTS = [3.0, 4.0, 5.0];  // T1 is the biggest relative boost
 const T1_COSTS      = [50, 200, 800];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const b  = BUILDINGS_DEF[bi];
   const ef = earlyFactor(bi);
   T1_BASE_MULTS.forEach((baseMult, ti) => {
-    const exponent = 0.4 + ef * 0.9;  // early=0.4, late=1.3
-    const rawMult  = parseFloat(Math.pow(baseMult, exponent).toFixed(2));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(2));
+    const exponent = 0.15 + ef * 1.15;  // early=0.15, late=1.30
+    const mult     = parseFloat(Math.pow(baseMult, exponent).toFixed(2));
     const pctLabel = mult >= 2 ? `×${mult.toFixed(1)}` : `+${Math.round((mult-1)*100)}%`;
     ;(function(cBi, cMult, cPctLabel, cCost) {
       addUpg({
@@ -1258,16 +1246,16 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 }
 
 // ── TIER 2: Mid-game building boosts (own ≥10/25/50) ─────────────────────────
+// Smaller than T1 — T2 is about consistency, not big jumps
 const T2_MILESTONES  = [10, 25, 50];
-const T2_BASE_MULTS  = [3.0, 5.0, 8.0];
+const T2_BASE_MULTS  = [2.5, 3.0, 3.5];
 const T2_COST_MULT   = [2000, 20000, 200000];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const b  = BUILDINGS_DEF[bi];
   const ef = earlyFactor(bi);
   T2_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.35 + ef * 0.95;  // early=0.35, late=1.3
-    const rawMult  = parseFloat(Math.pow(T2_BASE_MULTS[ti], exponent).toFixed(2));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(2));
+    const exponent = 0.12 + ef * 1.08;  // early=0.12, late=1.20
+    const mult     = parseFloat(Math.pow(T2_BASE_MULTS[ti], exponent).toFixed(2));
     const pctLabel = `×${mult.toFixed(1)}`;
     ;(function(cBi, cMs, cMult, cPctLabel, cCostMult) {
       addUpg({
@@ -1283,16 +1271,16 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 }
 
 // ── TIER 3: Late-game building boosts (own ≥100/200/300) ─────────────────────
+// Smaller still — T3 gives modest boosts
 const T3_MILESTONES = [100, 200, 300];
-const T3_BASE_MULTS = [5, 10, 20];
+const T3_BASE_MULTS = [2.0, 2.5, 3.0];
 const T3_COST_MULT  = [5e6, 5e7, 5e8];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const b  = BUILDINGS_DEF[bi];
   const ef = earlyFactor(bi);
   T3_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.3 + ef * 1.0;  // early=0.3, late=1.3
-    const rawMult  = parseFloat(Math.pow(T3_BASE_MULTS[ti], exponent).toFixed(1));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(1));
+    const exponent = 0.10 + ef * 1.00;  // early=0.10, late=1.10
+    const mult     = parseFloat(Math.pow(T3_BASE_MULTS[ti], exponent).toFixed(1));
     ;(function(cBi, cMs, cMult, cCostMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Overdrive ${ROMAN[ti]}`,
@@ -1307,15 +1295,15 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 }
 
 // ── TIER 4: Endgame byte-threshold boosts ────────────────────────────────────
+// Smaller than T3 — endgame tiers are incremental
 const T4_THRESHOLDS = [1e12, 1e15, 1e18];
-const T4_BASE_MULTS = [20, 50, 100];
+const T4_BASE_MULTS = [1.8, 2.0, 2.2];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const b  = BUILDINGS_DEF[bi];
   const ef = earlyFactor(bi);
   T4_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.3 + ef * 0.9;  // early=0.3, late=1.2
-    const rawMult  = parseFloat(Math.pow(T4_BASE_MULTS[ti], exponent).toFixed(0));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(1));
+    const exponent = 0.10 + ef * 0.90;  // early=0.10, late=1.00
+    const mult     = parseFloat(Math.pow(T4_BASE_MULTS[ti], exponent).toFixed(1));
     ;(function(cBi, cThresh, cMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Singularity ${ROMAN[ti]}`,
@@ -1332,31 +1320,31 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 // ── GLOBAL DPS BOOSTS — spread across the full progression ───────────────────
 // Each one is meaningfully spaced so they don't all appear at once
 const GLOBAL_TIERS = [
-  { thresh:1e3,  mult:1.10, name:'Groovy Warmup',      icon:'🎵', cost:500       },
-  { thresh:1e4,  mult:1.15, name:'Vinyl Vibes',         icon:'💿', cost:5e3       },
-  { thresh:1e5,  mult:1.20, name:'Funky Flow',          icon:'🎸', cost:5e4       },
-  { thresh:1e6,  mult:1.25, name:'Psychedelic Pulse',   icon:'🎶', cost:5e5       },
-  { thresh:1e7,  mult:1.30, name:'Disco Drive',         icon:'🕺', cost:5e6       },
-  { thresh:1e8,  mult:1.50, name:'Retro Resonance',     icon:'📻', cost:5e7       },
-  { thresh:1e9,  mult:2.0,  name:'Groovy Overdrive',    icon:'⚡', cost:5e8       },
-  { thresh:1e10, mult:2.0,  name:'Neon Nexus',          icon:'💡', cost:5e9       },
-  { thresh:1e11, mult:2.5,  name:'Cosmic Cache',        icon:'🌌', cost:5e10      },
-  { thresh:1e12, mult:3.0,  name:'Terabyte Surge',      icon:'🔥', cost:5e11      },
-  { thresh:1e13, mult:3.0,  name:'Petabyte Power',      icon:'💥', cost:5e12      },
-  { thresh:1e15, mult:5.0,  name:'Exabyte Explosion',   icon:'🌟', cost:5e14      },
-  { thresh:1e18, mult:5.0,  name:'Zettabyte Zenith',    icon:'✨', cost:5e17      },
-  { thresh:1e21, mult:10.0, name:'Yottabyte Yonder',    icon:'🌀', cost:5e20      },
-  { thresh:1e24, mult:10.0, name:'Singularity Spark',   icon:'♾️', cost:5e23      },
-  { thresh:1e27, mult:15.0, name:'Brontobyte Blaze',    icon:'🦕', cost:5e26 },
-  { thresh:1e30, mult:20.0, name:'Geopbyte Glory',      icon:'🌍', cost:5e29 },
-  { thresh:1e33, mult:25.0, name:'Nu Nexus',            icon:'🔱', cost:5e32 },
-  { thresh:1e36, mult:30.0, name:'Xi Xplosion',         icon:'💠', cost:5e35 },
-  { thresh:1e39, mult:40.0, name:'Rho Rampage',         icon:'🌊', cost:5e38 },
-  { thresh:1e42, mult:50.0, name:'Sigma Storm',         icon:'⚡', cost:5e41 },
-  { thresh:1e45, mult:75.0, name:'Tau Tempest',         icon:'🌪️', cost:5e44 },
-  { thresh:1e48, mult:100.0,name:'Upsilon Uprising',    icon:'🔥', cost:5e47 },
-  { thresh:1e51, mult:150.0,name:'Phi Phenomenon',      icon:'💫', cost:5e50 },
-  { thresh:1e54, mult:200.0,name:'Chi Cascade',         icon:'🌟', cost:5e53 },
+  { thresh:1e3,  mult:1.20, name:'Groovy Warmup',      icon:'🎵', cost:500       },
+  { thresh:1e4,  mult:1.30, name:'Vinyl Vibes',         icon:'💿', cost:5e3       },
+  { thresh:1e5,  mult:1.40, name:'Funky Flow',          icon:'🎸', cost:5e4       },
+  { thresh:1e6,  mult:1.50, name:'Psychedelic Pulse',   icon:'🎶', cost:5e5       },
+  { thresh:1e7,  mult:1.60, name:'Disco Drive',         icon:'🕺', cost:5e6       },
+  { thresh:1e8,  mult:2.0,  name:'Retro Resonance',     icon:'📻', cost:5e7       },
+  { thresh:1e9,  mult:4.0,  name:'Groovy Overdrive',    icon:'⚡', cost:5e8       },
+  { thresh:1e10, mult:4.0,  name:'Neon Nexus',          icon:'💡', cost:5e9       },
+  { thresh:1e11, mult:5.0,  name:'Cosmic Cache',        icon:'🌌', cost:5e10      },
+  { thresh:1e12, mult:6.0,  name:'Terabyte Surge',      icon:'🔥', cost:5e11      },
+  { thresh:1e13, mult:6.0,  name:'Petabyte Power',      icon:'💥', cost:5e12      },
+  { thresh:1e15, mult:10.0, name:'Exabyte Explosion',   icon:'🌟', cost:5e14      },
+  { thresh:1e18, mult:10.0, name:'Zettabyte Zenith',    icon:'✨', cost:5e17      },
+  { thresh:1e21, mult:20.0, name:'Yottabyte Yonder',    icon:'🌀', cost:5e20      },
+  { thresh:1e24, mult:20.0, name:'Singularity Spark',   icon:'♾️', cost:5e23      },
+  { thresh:1e27, mult:30.0, name:'Brontobyte Blaze',    icon:'🦕', cost:5e26 },
+  { thresh:1e30, mult:40.0, name:'Geopbyte Glory',      icon:'🌍', cost:5e29 },
+  { thresh:1e33, mult:50.0, name:'Nu Nexus',            icon:'🔱', cost:5e32 },
+  { thresh:1e36, mult:60.0, name:'Xi Xplosion',         icon:'💠', cost:5e35 },
+  { thresh:1e39, mult:80.0, name:'Rho Rampage',         icon:'🌊', cost:5e38 },
+  { thresh:1e42, mult:100.0,name:'Sigma Storm',         icon:'⚡', cost:5e41 },
+  { thresh:1e45, mult:150.0,name:'Tau Tempest',         icon:'🌪️', cost:5e44 },
+  { thresh:1e48, mult:200.0,name:'Upsilon Uprising',    icon:'🔥', cost:5e47 },
+  { thresh:1e51, mult:300.0,name:'Phi Phenomenon',      icon:'💫', cost:5e50 },
+  { thresh:1e54, mult:400.0,name:'Chi Cascade',         icon:'🌟', cost:5e53 },
 ];
 for (const t of GLOBAL_TIERS) {
   ;(function(ct) {
@@ -1413,10 +1401,10 @@ for (const t of GLOBAL_TIERS) {
     for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
       const b   = BUILDINGS_DEF[bi];
       const ef  = earlyFactor(bi);
-      // Multiplier grows with decade: starts at ×1.5/×3.0, scales up every 10 decades
-      const decadeScale = 1 + Math.floor((decade - 1) / 10) * 0.5;
-      const rawMult = (1.5 + ef * 1.5) * decadeScale;
-      const mult    = parseFloat(applyNerf(rawMult, bi).toFixed(2));
+      // Building 0: rawMult≈1.2×decadeScale  |  Building 16: rawMult≈2.5×decadeScale
+      const decadeScale = 1 + Math.floor((decade - 1) / 10) * 0.3;
+      const rawMult = (1.2 + ef * 1.3) * decadeScale;
+      const mult    = parseFloat(rawMult.toFixed(2));
       const cost    = thresh * (0.5 + bi * 0.1);
       ;(function(cBi, cMult, cThresh, cCost, cName) {
         addUpg({
@@ -1438,10 +1426,10 @@ for (const t of GLOBAL_TIERS) {
     for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
       const b   = BUILDINGS_DEF[bi];
       const ef  = earlyFactor(bi);
-      // Multiplier grows with tier
-      const tierScale = 1 + Math.floor((tier - 1) / 10) * 0.8;
-      const rawMult = (1.4 + ef * 1.6) * tierScale;
-      const mult    = parseFloat(applyNerf(rawMult, bi).toFixed(2));
+      // Building 0: rawMult≈1.1×tierScale  |  Building 16: rawMult≈2.2×tierScale
+      const tierScale = 1 + Math.floor((tier - 1) / 10) * 0.3;
+      const rawMult = (1.1 + ef * 1.1) * tierScale;
+      const mult    = parseFloat(rawMult.toFixed(2));
       // Cost = baseCost × milestone^1.5 (scales with how many you own)
       const cost = Math.max(b.baseCost * milestone * 10, b.baseCost * Math.pow(milestone, 1.5));
       ;(function(cBi, cMult, cMs, cCost, cName) {
@@ -1463,7 +1451,7 @@ for (const t of GLOBAL_TIERS) {
     const name      = nameSuffix(NAMES_C, decade - 1);
     // Global DPS upgrades affect ALL buildings
     const decadeScale = 1 + Math.floor((decade - 1) / 8) * 0.6;
-    const globalMult  = parseFloat((1.2 * decadeScale).toFixed(2));
+    const globalMult  = parseFloat((2.4 * decadeScale).toFixed(2));
     const cost        = dpsThresh * 5;
     ;(function(cThresh, cMult, cCost, cName) {
       addUpg({
@@ -1524,13 +1512,12 @@ for (const t of CLICK_TIERS) {
 // ── LATE-GAME GLOBAL MULTIPLIERS (already in GLOBAL_TIERS above) ─────────────
 // Additional per-building legacy boosts at ZB/YB scale — early buildings get bigger boosts
 const LEGACY_THRESHOLDS = [1e21, 1e24, 1e27];
-const LEGACY_BASE_MULTS = [50, 200, 1000];
+const LEGACY_BASE_MULTS = [1.6, 1.8, 2.0];  // Legacy: small steady boosts
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const ef = earlyFactor(bi);
   LEGACY_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.25 + ef * 0.75;  // early=0.25, late=1.0
-    const rawMult  = parseFloat(Math.pow(LEGACY_BASE_MULTS[ti], exponent).toFixed(0));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(0));
+    const exponent = 0.08 + ef * 0.82;  // early=0.08, late=0.90
+    const mult     = parseFloat(Math.pow(LEGACY_BASE_MULTS[ti], exponent).toFixed(0));
     ;(function(cBi, cThresh, cMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Legacy ${ROMAN[ti]}`,
@@ -1546,13 +1533,12 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 
 // ── TIER 5: Ultra-late per-building boosts ────────────────────────────────────
 const T5_THRESHOLDS  = [1e30, 1e33, 1e36];
-const T5_BASE_MULTS  = [500, 2000, 10000];
+const T5_BASE_MULTS  = [1.5, 1.6, 1.7];  // T5: tiny incremental boosts
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const ef = earlyFactor(bi);
   T5_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.2 + ef * 0.7;  // T5: early=0.2, late=0.9
-    const rawMult  = parseFloat(Math.pow(T5_BASE_MULTS[ti], exponent).toFixed(0));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(0));
+    const exponent = 0.07 + ef * 0.73;  // T5: early=0.07, late=0.80
+    const mult     = parseFloat(Math.pow(T5_BASE_MULTS[ti], exponent).toFixed(0));
     ;(function(cBi, cThresh, cMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Transcendence ${ROMAN[ti]}`,
@@ -1568,15 +1554,14 @@ for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
 
 // ── TIER 6: Milestone building boosts (own ≥500/750/1000) ────────────────────
 const T6_MILESTONES  = [500, 750, 1000];
-const T6_BASE_MULTS  = [100, 500, 1000];
+const T6_BASE_MULTS  = [1.4, 1.5, 1.6];  // T6: smallest boosts, just keeping pace
 const T6_COST_MULT   = [5e9, 5e10, 5e11];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
   const b  = BUILDINGS_DEF[bi];
   const ef = earlyFactor(bi);
   T6_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.2 + ef * 0.7;  // T6: early=0.2, late=0.9
-    const rawMult  = parseFloat(Math.pow(T6_BASE_MULTS[ti], exponent).toFixed(0));
-    const mult     = parseFloat(applyNerf(rawMult, bi).toFixed(0));
+    const exponent = 0.07 + ef * 0.73;  // T6: early=0.07, late=0.80
+    const mult     = parseFloat(Math.pow(T6_BASE_MULTS[ti], exponent).toFixed(0));
     ;(function(cBi, cMs, cMult, cCostMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Ascension ${ROMAN[ti]}`,
@@ -2165,8 +2150,11 @@ function playSfx() {
   }
 
   let bgFrame = 0;
-  function drawBg() {
-    bgFrame++;
+  let _bgLastTime = 0;
+  function drawBg(now) {
+    const dt = _bgLastTime ? Math.min((now - _bgLastTime) / 16.667, 3) : 1; // dt=1 at 60fps, capped at 3×
+    _bgLastTime = now;
+    bgFrame += dt;
     // --- BG canvas ---
     ctx.clearRect(0,0,W,H);
     ctx.fillStyle = '#080818';
@@ -2174,13 +2162,13 @@ function playSfx() {
 
     // Orbs
     for (const orb of orbs) {
-      orb.x += orb.vx; orb.y += orb.vy; orb.phase += 0.005;
+      orb.x += orb.vx * dt; orb.y += orb.vy * dt; orb.phase += 0.005 * dt;
       if (orb.x < -orb.r) orb.x = W+orb.r;
       if (orb.x > W+orb.r) orb.x = -orb.r;
       if (orb.y < -orb.r) orb.y = H+orb.r;
       if (orb.y > H+orb.r) orb.y = -orb.r;
       const a = frenzyActive
-        ? 0.22 + 0.10*Math.sin(orb.phase)   // brighter during frenzy
+        ? 0.22 + 0.10*Math.sin(orb.phase)
         : 0.13 + 0.07*Math.sin(orb.phase);
       const g = ctx.createRadialGradient(orb.x,orb.y,0,orb.x,orb.y,orb.r);
       g.addColorStop(0, orb.color+a+')');
@@ -2198,7 +2186,6 @@ function playSfx() {
       goldenOverlay.addColorStop(1, 'rgba(255,80,0,0.02)');
       ctx.fillStyle = goldenOverlay;
       ctx.fillRect(0,0,W,H);
-      // Pulsing gold vignette
       const vignette = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.9);
       const pulse = 0.06 + 0.04*Math.sin(bgFrame*0.08);
       vignette.addColorStop(0, 'rgba(255,200,0,0)');
@@ -2209,7 +2196,7 @@ function playSfx() {
 
     // Floating discs
     for (const d of floatDiscs) {
-      d.x += d.vx; d.y += d.vy; d.rot += d.rotV;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.rotV * dt;
       if (d.x < -d.r*2) d.x = W+d.r*2;
       if (d.x > W+d.r*2) d.x = -d.r*2;
       if (d.y < -d.r*2) d.y = H+d.r*2;
@@ -2217,19 +2204,16 @@ function playSfx() {
       ctx.save();
       ctx.translate(d.x, d.y); ctx.rotate(d.rot);
       ctx.globalAlpha = d.alpha;
-      // disc body
       const dg = ctx.createRadialGradient(0,0,0,0,0,d.r);
       dg.addColorStop(0, `hsl(${d.hue},80%,60%)`);
       dg.addColorStop(0.5, `hsl(${(d.hue+60)%360},70%,40%)`);
       dg.addColorStop(1, `hsl(${(d.hue+120)%360},60%,20%)`);
       ctx.fillStyle = dg;
       ctx.beginPath(); ctx.arc(0,0,d.r,0,Math.PI*2); ctx.fill();
-      // grooves
       ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.5;
       for (let gr = d.r*0.3; gr < d.r*0.95; gr += d.r*0.12) {
         ctx.beginPath(); ctx.arc(0,0,gr,0,Math.PI*2); ctx.stroke();
       }
-      // center hole
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.beginPath(); ctx.arc(0,0,d.r*0.12,0,Math.PI*2); ctx.fill();
       ctx.restore();
@@ -2237,7 +2221,7 @@ function playSfx() {
 
     // Floating music notes
     for (const n of floatNotes) {
-      n.x += n.vx; n.y += n.vy; n.phase += 0.02;
+      n.x += n.vx * dt; n.y += n.vy * dt; n.phase += 0.02 * dt;
       n.x += Math.sin(n.phase)*0.4;
       if (n.y < -40) { n.y = H+20; n.x = Math.random()*W; }
       if (n.x < -20) n.x = W+20;
@@ -2254,10 +2238,9 @@ function playSfx() {
     spCtx.clearRect(0,0,W,H);
     const cx = W/2, cy = H/2;
     for (const sp of spots) {
-      sp.angle += sp.speed;
+      sp.angle += sp.speed * dt;
       const tx = cx + Math.cos(sp.angle)*sp.radius;
       const ty = cy + Math.sin(sp.angle)*sp.radius*0.5;
-      // beam from top
       spCtx.save();
       spCtx.globalAlpha = sp.alpha;
       const beam = spCtx.createLinearGradient(tx, 0, tx, ty);
@@ -2271,7 +2254,6 @@ function playSfx() {
       spCtx.lineTo(tx-60, ty);
       spCtx.closePath();
       spCtx.fill();
-      // glow at end
       const glow = spCtx.createRadialGradient(tx,ty,0,tx,ty,80);
       glow.addColorStop(0, sp.color+'0.3)');
       glow.addColorStop(1, sp.color+'0)');
@@ -2317,9 +2299,13 @@ function playSfx() {
 
   // Global beat clock — fires a "kick" every ~500ms
   let beatClock = 0;
-  let globalPulse = 0; // 0..1 decays after each beat
+  let globalPulse = 0;
+  let _bbLastTime = 0;
 
-  function draw() {
+  function draw(now) {
+    const dt = _bbLastTime ? Math.min((now - _bbLastTime) / 16.667, 3) : 1;
+    _bbLastTime = now;
+
     if (W === 0 || H === 0) { resize(); requestAnimationFrame(draw); return; }
 
     ctx.clearRect(0, 0, W, H);
@@ -2328,43 +2314,37 @@ function playSfx() {
 
     if (!beatBarsEnabled) { requestAnimationFrame(draw); return; }
 
-    beatClock += 0.018;
-    // Beat fires when sin crosses threshold — roughly every π/0.018 ≈ 175 frames ≈ 2.9s
-    // Use a faster secondary beat too
+    beatClock += 0.018 * dt;
     const kick1 = Math.sin(beatClock * 1.1);
     const kick2 = Math.sin(beatClock * 2.7);
     if (kick1 > 0.96 || kick2 > 0.98) {
       globalPulse = 1.0;
-      // Spike random bars on beat
       const spikes = 4 + Math.floor(Math.random() * 8);
       for (let s = 0; s < spikes; s++) {
         bar[Math.floor(Math.random() * N)].spike = 0.6 + Math.random() * 0.4;
       }
     }
-    globalPulse *= 0.90;
+    globalPulse *= Math.pow(0.90, dt);
 
     const frenzyMult = frenzyActive ? 1.5 : 1.0;
     const bw = W / N;
 
     for (let i = 0; i < N; i++) {
       const b = bar[i];
-      b.phase += b.speed;
-      b.spike *= 0.82; // decay spike
+      b.phase += b.speed * dt;
+      b.spike *= Math.pow(0.82, dt);
 
-      // Target = smooth wave + spike + global pulse
       const wave = (Math.sin(b.phase) * 0.45 + Math.sin(b.phase * 1.7 + 1.2) * 0.25 + 0.55);
       b.target = (wave + b.spike + globalPulse * 0.35) * H * 0.85 * frenzyMult;
       b.target = Math.max(b.target, 4);
 
-      // Smooth: fast up, slow down
       const diff = b.target - b.h;
-      b.h += diff * (diff > 0 ? 0.35 : 0.08);
+      b.h += diff * (diff > 0 ? Math.min(0.35 * dt, 1) : Math.min(0.08 * dt, 1));
 
       const barH = Math.max(b.h, 3);
       const x    = i * bw;
       const col  = COLORS[i % COLORS.length];
 
-      // Gradient bar
       const g = ctx.createLinearGradient(x, H - barH, x, H);
       g.addColorStop(0,   col);
       g.addColorStop(0.4, col + 'cc');
@@ -2384,11 +2364,9 @@ function playSfx() {
       ctx.closePath();
       ctx.fill();
 
-      // Bright cap
       ctx.fillStyle = col;
       ctx.fillRect(bx, by, bww, 2);
 
-      // Glow on tall bars
       if (barH > H * 0.6) {
         ctx.save();
         ctx.globalAlpha = 0.18;
@@ -2398,7 +2376,6 @@ function playSfx() {
       }
     }
 
-    // Frenzy golden wash
     if (frenzyActive) {
       ctx.fillStyle = `rgba(255,200,0,${0.04 + globalPulse * 0.06})`;
       ctx.fillRect(0, 0, W, H);
@@ -2410,44 +2387,90 @@ function playSfx() {
 })();
 
 // ============================================================
-//  PARTICLE EFFECTS ON CLICK
+//  PARTICLE EFFECTS ON CLICK — canvas-based, single shared loop
+//  All particles drawn in one rAF pass, no per-particle loops.
 // ============================================================
 const PARTICLE_COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#c77dff','#ff9f43','#00d2d3'];
-function spawnParticles(x, y) {
-  if (!particlesEnabled) return;
-  const container = document.getElementById('click-particles');
-  const count = 8;
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 0.5;
-    const speed = 40 + Math.random() * 60;
-    const color = PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)];
-    const size = 4 + Math.random() * 4;
 
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', x);
-    circle.setAttribute('cy', y);
-    circle.setAttribute('r', size);
-    circle.setAttribute('fill', color);
-    container.appendChild(circle);
+// Shared particle pool — avoids GC pressure
+const _particles = [];
+let   _particleCanvas = null;
+let   _particleCtx    = null;
+let   _particleRafId  = null;
+let   _particleLastTime = 0;
 
-    const dx = Math.cos(angle) * speed;
-    const dy = Math.sin(angle) * speed;
-    let t = 0;
-    const startX = x, startY = y;
+function _ensureParticleCanvas() {
+  if (_particleCanvas) return;
+  _particleCanvas = document.createElement('canvas');
+  _particleCanvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:50;width:100%;height:100%';
+  _particleCanvas.width  = window.innerWidth;
+  _particleCanvas.height = window.innerHeight;
+  document.body.appendChild(_particleCanvas);
+  _particleCtx = _particleCanvas.getContext('2d');
+  window.addEventListener('resize', () => {
+    _particleCanvas.width  = window.innerWidth;
+    _particleCanvas.height = window.innerHeight;
+  });
+}
 
-    function animParticle() {
-      t += 0.05;
-      if (t >= 1) { container.removeChild(circle); return; }
-      circle.setAttribute('cx', startX + dx * t);
-      circle.setAttribute('cy', startY + dy * t + 30 * t * t);
-      circle.setAttribute('opacity', 1 - t);
-      requestAnimationFrame(animParticle);
-    }
-    requestAnimationFrame(animParticle);
+function _particleLoop(now) {
+  const dt = _particleLastTime ? Math.min((now - _particleLastTime) / 16.667, 3) : 1;
+  _particleLastTime = now;
+
+  _particleCtx.clearRect(0, 0, _particleCanvas.width, _particleCanvas.height);
+
+  for (let i = _particles.length - 1; i >= 0; i--) {
+    const p = _particles[i];
+    p.t += 0.055 * dt;
+    if (p.t >= 1) { _particles.splice(i, 1); continue; }
+    const x = p.sx + p.dx * p.t;
+    const y = p.sy + p.dy * p.t + 40 * p.t * p.t;
+    const alpha = 1 - p.t;
+    _particleCtx.globalAlpha = alpha;
+    _particleCtx.fillStyle = p.color;
+    _particleCtx.beginPath();
+    _particleCtx.arc(x, y, p.r, 0, Math.PI * 2);
+    _particleCtx.fill();
+  }
+
+  _particleCtx.globalAlpha = 1;
+
+  if (_particles.length > 0) {
+    _particleRafId = requestAnimationFrame(_particleLoop);
+  } else {
+    _particleRafId = null;
+    _particleLastTime = 0;
+    _particleCtx.clearRect(0, 0, _particleCanvas.width, _particleCanvas.height);
   }
 }
 
+function spawnParticles(screenX, screenY) {
+  if (!particlesEnabled) return;
+  _ensureParticleCanvas();
+  const count = 6;
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i / count) + (Math.random() - 0.5) * 0.6;
+    const speed = 50 + Math.random() * 70;
+    _particles.push({
+      sx: screenX, sy: screenY,
+      dx: Math.cos(angle) * speed,
+      dy: Math.sin(angle) * speed,
+      r: 3 + Math.random() * 3,
+      color: PARTICLE_COLORS[Math.floor(Math.random() * PARTICLE_COLORS.length)],
+      t: 0,
+    });
+  }
+  if (!_particleRafId) {
+    _particleRafId = requestAnimationFrame(_particleLoop);
+  }
+}
+
+let _lastFloatTime = 0;
 function spawnClickFloat(x, y, amount) {
+  // Throttle to max one float every 80ms — prevents DOM spam on rapid clicks
+  const now = performance.now();
+  if (now - _lastFloatTime < 80) return;
+  _lastFloatTime = now;
   const el = document.createElement('div');
   el.className = 'click-float';
   el.textContent = '+' + formatBytes(amount);
@@ -2480,7 +2503,7 @@ document.getElementById('cd-wrapper').addEventListener('click', function(e) {
   clearTimeout(cdSpeedTimeout);
   cdSpeedTimeout = setTimeout(() => { cdEl.style.animationDuration = '4s'; }, 300);
 
-  spawnParticles(cx, cy);
+  spawnParticles(e.clientX, e.clientY);
   spawnClickFloat(e.clientX, e.clientY, power);
   playSfx();
   checkAchievements();
