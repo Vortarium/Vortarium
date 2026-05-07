@@ -1208,143 +1208,119 @@ function addUpg(obj) {
   UPGRADES.push(obj);
 }
 
-// ── EARLY BOOST FACTOR per building ──────────────────────────────────────────
-// 0.0 for building 0 (Disk Space) → 1.0 for building 16 (Singularity)
-// Late buildings get MUCH bigger upgrade multipliers.
-function earlyFactor(bi) {
-  return bi / (BUILDINGS_DEF.length - 1);
-}
-
-// applyNerf no longer needed — scaling handled entirely by earlyFactor exponent
+// ── EARLY BOOST FACTOR — kept for compatibility but no longer affects multipliers
+function earlyFactor(bi) { return bi / (BUILDINGS_DEF.length - 1); }
 function upgNerf(bi) { return 1.0; }
 function applyNerf(mult, bi) { return mult; }
 
-// ── TIER 1: Early building boosts (own ≥1) ───────────────────────────────────
-// Building 0: exponent=0.15 → ×3^0.15≈×1.18  (+18%)
-// Building 8: exponent=0.73 → ×3^0.73≈×2.4
-// Building 16: exponent=1.30 → ×3^1.30≈×4.2
-const T1_BASE_MULTS = [3.0, 4.0, 5.0];  // T1 is the biggest relative boost
-const T1_COSTS      = [50, 200, 800];
+// ── ALL BUILDING UPGRADE TIERS ────────────────────────────────────────────────
+// Every upgrade gives a flat ×1.15 to its building. No scaling by tier, building,
+// or wealth. Progression comes from buying MORE buildings, not stacking multipliers.
+// Costs scale up so you can't spam them all at once.
+
+// T1: own ≥1 — three cheap upgrades per building, ×1.10 / ×1.15 / ×1.20
+const T1_MULTS  = [1.10, 1.15, 1.20];
+const T1_COSTS  = [50, 200, 800];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const b  = BUILDINGS_DEF[bi];
-  const ef = earlyFactor(bi);
-  T1_BASE_MULTS.forEach((baseMult, ti) => {
-    const exponent = 0.15 + ef * 1.15;  // early=0.15, late=1.30
-    const mult     = parseFloat(Math.pow(baseMult, exponent).toFixed(2));
-    const pctLabel = mult >= 2 ? `×${mult.toFixed(1)}` : `+${Math.round((mult-1)*100)}%`;
-    ;(function(cBi, cMult, cPctLabel, cCost) {
+  const b = BUILDINGS_DEF[bi];
+  T1_MULTS.forEach((mult, ti) => {
+    ;(function(cBi, cMult, cCost) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Tune-Up ${ROMAN[ti]}`,
-        description: `${cPctLabel} output for all ${BUILDINGS_DEF[cBi].name}s.`,
+        description: `+${Math.round((cMult-1)*100)}% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: Math.max(1, Math.round(b.baseCost * cCost)),
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: cMult,
         condition: () => G.buildings[cBi].count >= 1,
       });
-    })(bi, mult, pctLabel, T1_COSTS[ti]);
+    })(bi, mult, T1_COSTS[ti]);
   });
 }
 
-// ── TIER 2: Mid-game building boosts (own ≥10/25/50) ─────────────────────────
-// Smaller than T1 — T2 is about consistency, not big jumps
-const T2_MILESTONES  = [10, 25, 50];
-const T2_BASE_MULTS  = [2.5, 3.0, 3.5];
-const T2_COST_MULT   = [2000, 20000, 200000];
+// T2: own ≥10/25/50 — ×1.15 / ×1.20 / ×1.25
+const T2_MILESTONES = [10, 25, 50];
+const T2_MULTS      = [1.15, 1.20, 1.25];
+const T2_COST_MULT  = [2000, 20000, 200000];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const b  = BUILDINGS_DEF[bi];
-  const ef = earlyFactor(bi);
+  const b = BUILDINGS_DEF[bi];
   T2_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.12 + ef * 1.08;  // early=0.12, late=1.20
-    const mult     = parseFloat(Math.pow(T2_BASE_MULTS[ti], exponent).toFixed(2));
-    const pctLabel = `×${mult.toFixed(1)}`;
-    ;(function(cBi, cMs, cMult, cPctLabel, cCostMult) {
+    const mult = T2_MULTS[ti];
+    ;(function(cBi, cMs, cMult, cCostMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Upgrade ${ROMAN[ti]}`,
-        description: `${cPctLabel} output for all ${BUILDINGS_DEF[cBi].name}s.`,
+        description: `+${Math.round((cMult-1)*100)}% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: Math.max(1, Math.round(b.baseCost * cCostMult)),
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: cMult,
         condition: () => G.buildings[cBi].count >= cMs,
       });
-    })(bi, ms, mult, pctLabel, T2_COST_MULT[ti]);
+    })(bi, ms, mult, T2_COST_MULT[ti]);
   });
 }
 
-// ── TIER 3: Late-game building boosts (own ≥100/200/300) ─────────────────────
-// Smaller still — T3 gives modest boosts
+// T3: own ≥100/200/300 — ×1.15 / ×1.20 / ×1.25
 const T3_MILESTONES = [100, 200, 300];
-const T3_BASE_MULTS = [2.0, 2.5, 3.0];
+const T3_MULTS      = [1.15, 1.20, 1.25];
 const T3_COST_MULT  = [5e6, 5e7, 5e8];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const b  = BUILDINGS_DEF[bi];
-  const ef = earlyFactor(bi);
+  const b = BUILDINGS_DEF[bi];
   T3_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.10 + ef * 1.00;  // early=0.10, late=1.10
-    const mult     = parseFloat(Math.pow(T3_BASE_MULTS[ti], exponent).toFixed(1));
+    const mult = T3_MULTS[ti];
     ;(function(cBi, cMs, cMult, cCostMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Overdrive ${ROMAN[ti]}`,
-        description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s.`,
+        description: `+${Math.round((cMult-1)*100)}% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: Math.max(1, Math.round(b.baseCost * cCostMult)),
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: cMult,
         condition: () => G.buildings[cBi].count >= cMs,
       });
     })(bi, ms, mult, T3_COST_MULT[ti]);
   });
 }
 
-// ── TIER 4: Endgame byte-threshold boosts ────────────────────────────────────
-// Smaller than T3 — endgame tiers are incremental
+// T4: totalBytesEver thresholds — ×1.15 / ×1.20 / ×1.25
 const T4_THRESHOLDS = [1e12, 1e15, 1e18];
-const T4_BASE_MULTS = [1.8, 2.0, 2.2];
+const T4_MULTS      = [1.15, 1.20, 1.25];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const b  = BUILDINGS_DEF[bi];
-  const ef = earlyFactor(bi);
   T4_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.10 + ef * 0.90;  // early=0.10, late=1.00
-    const mult     = parseFloat(Math.pow(T4_BASE_MULTS[ti], exponent).toFixed(1));
+    const mult = T4_MULTS[ti];
     ;(function(cBi, cThresh, cMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Singularity ${ROMAN[ti]}`,
-        description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s. Endgame tier.`,
+        description: `+${Math.round((cMult-1)*100)}% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: cThresh * 50,
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: cMult,
         condition: () => G.totalBytesEver >= cThresh && G.buildings[cBi].count >= 1,
       });
     })(bi, thresh, mult);
   });
 }
 
-// ── GLOBAL DPS BOOSTS — spread across the full progression ───────────────────
-// Each one is meaningfully spaced so they don't all appear at once
+// ── GLOBAL DPS BOOSTS — flat ×1.15 each, spaced across progression ───────────
 const GLOBAL_TIERS = [
-  { thresh:1e3,  mult:1.20, name:'Groovy Warmup',      icon:'🎵', cost:500       },
-  { thresh:1e4,  mult:1.30, name:'Vinyl Vibes',         icon:'💿', cost:5e3       },
-  { thresh:1e5,  mult:1.40, name:'Funky Flow',          icon:'🎸', cost:5e4       },
-  { thresh:1e6,  mult:1.50, name:'Psychedelic Pulse',   icon:'🎶', cost:5e5       },
-  { thresh:1e7,  mult:1.60, name:'Disco Drive',         icon:'🕺', cost:5e6       },
-  { thresh:1e8,  mult:2.0,  name:'Retro Resonance',     icon:'📻', cost:5e7       },
-  { thresh:1e9,  mult:4.0,  name:'Groovy Overdrive',    icon:'⚡', cost:5e8       },
-  { thresh:1e10, mult:4.0,  name:'Neon Nexus',          icon:'💡', cost:5e9       },
-  { thresh:1e11, mult:5.0,  name:'Cosmic Cache',        icon:'🌌', cost:5e10      },
-  { thresh:1e12, mult:6.0,  name:'Terabyte Surge',      icon:'🔥', cost:5e11      },
-  { thresh:1e13, mult:6.0,  name:'Petabyte Power',      icon:'💥', cost:5e12      },
-  { thresh:1e15, mult:10.0, name:'Exabyte Explosion',   icon:'🌟', cost:5e14      },
-  { thresh:1e18, mult:10.0, name:'Zettabyte Zenith',    icon:'✨', cost:5e17      },
-  { thresh:1e21, mult:20.0, name:'Yottabyte Yonder',    icon:'🌀', cost:5e20      },
-  { thresh:1e24, mult:20.0, name:'Singularity Spark',   icon:'♾️', cost:5e23      },
-  { thresh:1e27, mult:30.0, name:'Brontobyte Blaze',    icon:'🦕', cost:5e26 },
-  { thresh:1e30, mult:40.0, name:'Geopbyte Glory',      icon:'🌍', cost:5e29 },
-  { thresh:1e33, mult:50.0, name:'Nu Nexus',            icon:'🔱', cost:5e32 },
-  { thresh:1e36, mult:60.0, name:'Xi Xplosion',         icon:'💠', cost:5e35 },
-  { thresh:1e39, mult:80.0, name:'Rho Rampage',         icon:'🌊', cost:5e38 },
-  { thresh:1e42, mult:100.0,name:'Sigma Storm',         icon:'⚡', cost:5e41 },
-  { thresh:1e45, mult:150.0,name:'Tau Tempest',         icon:'🌪️', cost:5e44 },
-  { thresh:1e48, mult:200.0,name:'Upsilon Uprising',    icon:'🔥', cost:5e47 },
-  { thresh:1e51, mult:300.0,name:'Phi Phenomenon',      icon:'💫', cost:5e50 },
-  { thresh:1e54, mult:400.0,name:'Chi Cascade',         icon:'🌟', cost:5e53 },
+  { thresh:1e3,  mult:1.15, name:'Groovy Warmup',      icon:'🎵', cost:500   },
+  { thresh:1e4,  mult:1.15, name:'Vinyl Vibes',         icon:'💿', cost:5e3   },
+  { thresh:1e5,  mult:1.15, name:'Funky Flow',          icon:'🎸', cost:5e4   },
+  { thresh:1e6,  mult:1.15, name:'Psychedelic Pulse',   icon:'🎶', cost:5e5   },
+  { thresh:1e7,  mult:1.15, name:'Disco Drive',         icon:'🕺', cost:5e6   },
+  { thresh:1e8,  mult:1.15, name:'Retro Resonance',     icon:'📻', cost:5e7   },
+  { thresh:1e9,  mult:1.15, name:'Groovy Overdrive',    icon:'⚡', cost:5e8   },
+  { thresh:1e10, mult:1.15, name:'Neon Nexus',          icon:'💡', cost:5e9   },
+  { thresh:1e11, mult:1.15, name:'Cosmic Cache',        icon:'🌌', cost:5e10  },
+  { thresh:1e12, mult:1.15, name:'Terabyte Surge',      icon:'🔥', cost:5e11  },
+  { thresh:1e13, mult:1.15, name:'Petabyte Power',      icon:'💥', cost:5e12  },
+  { thresh:1e15, mult:1.15, name:'Exabyte Explosion',   icon:'🌟', cost:5e14  },
+  { thresh:1e18, mult:1.15, name:'Zettabyte Zenith',    icon:'✨', cost:5e17  },
+  { thresh:1e21, mult:1.15, name:'Yottabyte Yonder',    icon:'🌀', cost:5e20  },
+  { thresh:1e24, mult:1.15, name:'Singularity Spark',   icon:'♾️', cost:5e23  },
+  { thresh:1e27, mult:1.15, name:'Brontobyte Blaze',    icon:'🦕', cost:5e26  },
+  { thresh:1e30, mult:1.15, name:'Geopbyte Glory',      icon:'🌍', cost:5e29  },
+  { thresh:1e33, mult:1.15, name:'Nu Nexus',            icon:'🔱', cost:5e32  },
+  { thresh:1e36, mult:1.15, name:'Xi Xplosion',         icon:'💠', cost:5e35  },
+  { thresh:1e39, mult:1.15, name:'Rho Rampage',         icon:'🌊', cost:5e38  },
+  { thresh:1e42, mult:1.15, name:'Sigma Storm',         icon:'⚡', cost:5e41  },
+  { thresh:1e45, mult:1.15, name:'Tau Tempest',         icon:'🌪️', cost:5e44  },
+  { thresh:1e48, mult:1.15, name:'Upsilon Uprising',    icon:'🔥', cost:5e47  },
+  { thresh:1e51, mult:1.15, name:'Phi Phenomenon',      icon:'💫', cost:5e50  },
+  { thresh:1e54, mult:1.15, name:'Chi Cascade',         icon:'🌟', cost:5e53  },
 ];
 for (const t of GLOBAL_TIERS) {
   ;(function(ct) {
@@ -1394,22 +1370,18 @@ for (const t of GLOBAL_TIERS) {
     return gen > 0 ? `${base} ${gen + 1}` : base;
   }
 
-  // ── Series A: totalBytesEver thresholds (1e3 … 1e300) ────────────────────
+  // ── Series A: totalBytesEver thresholds — flat ×1.15 per building per decade ─
   for (let decade = 1; decade <= 100; decade++) {
     const thresh = Math.pow(10, decade * 3);
     const name   = nameSuffix(NAMES_A, decade - 1);
     for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-      const b   = BUILDINGS_DEF[bi];
-      const ef  = earlyFactor(bi);
-      // Building 0: rawMult≈1.2×decadeScale  |  Building 16: rawMult≈2.5×decadeScale
-      const decadeScale = 1 + Math.floor((decade - 1) / 10) * 0.3;
-      const rawMult = (1.2 + ef * 1.3) * decadeScale;
-      const mult    = parseFloat(rawMult.toFixed(2));
-      const cost    = thresh * (0.5 + bi * 0.1);
+      const b    = BUILDINGS_DEF[bi];
+      const mult = 1.15;
+      const cost = thresh * (0.5 + bi * 0.1);
       ;(function(cBi, cMult, cThresh, cCost, cName) {
         addUpg({
           name: `${BUILDINGS_DEF[cBi].name} ${cName}`,
-          description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s.`,
+          description: `+15% output for all ${BUILDINGS_DEF[cBi].name}s.`,
           cost: cCost,
           icon: BUILD_ICONS[cBi],
           buildingIdx: cBi, buildingMult: cMult,
@@ -1419,23 +1391,18 @@ for (const t of GLOBAL_TIERS) {
     }
   }
 
-  // ── Series B: building count milestones (25, 50, 75 … 2500 per building) ──
+  // ── Series B: building count milestones — flat ×1.15 per milestone ───────
   for (let tier = 1; tier <= 100; tier++) {
     const milestone = tier * 25;
     const name      = nameSuffix(NAMES_B, tier - 1);
     for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-      const b   = BUILDINGS_DEF[bi];
-      const ef  = earlyFactor(bi);
-      // Building 0: rawMult≈1.1×tierScale  |  Building 16: rawMult≈2.2×tierScale
-      const tierScale = 1 + Math.floor((tier - 1) / 10) * 0.3;
-      const rawMult = (1.1 + ef * 1.1) * tierScale;
-      const mult    = parseFloat(rawMult.toFixed(2));
-      // Cost = baseCost × milestone^1.5 (scales with how many you own)
+      const b    = BUILDINGS_DEF[bi];
+      const mult = 1.15;
       const cost = Math.max(b.baseCost * milestone * 10, b.baseCost * Math.pow(milestone, 1.5));
       ;(function(cBi, cMult, cMs, cCost, cName) {
         addUpg({
           name: `${BUILDINGS_DEF[cBi].name} ${cName}`,
-          description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s. (Own ${cMs})`,
+          description: `+15% output for all ${BUILDINGS_DEF[cBi].name}s. (Own ${cMs})`,
           cost: cCost,
           icon: BUILD_ICONS[cBi],
           buildingIdx: cBi, buildingMult: cMult,
@@ -1445,24 +1412,21 @@ for (const t of GLOBAL_TIERS) {
     }
   }
 
-  // ── Series C: global DPS milestones (every 3 decades of DPS) ─────────────
+  // ── Series C: global DPS milestones — flat ×1.15 global per decade ────────
   for (let decade = 1; decade <= 100; decade++) {
     const dpsThresh = Math.pow(10, decade * 3);
     const name      = nameSuffix(NAMES_C, decade - 1);
-    // Global DPS upgrades affect ALL buildings
-    const decadeScale = 1 + Math.floor((decade - 1) / 8) * 0.6;
-    const globalMult  = parseFloat((2.4 * decadeScale).toFixed(2));
-    const cost        = dpsThresh * 5;
-    ;(function(cThresh, cMult, cCost, cName) {
+    const cost      = dpsThresh * 5;
+    ;(function(cThresh, cCost, cName) {
       addUpg({
         name: `Data ${cName}`,
-        description: `×${cMult} global byte production.`,
+        description: `+15% global byte production.`,
         cost: cCost,
         icon: '🌐',
-        globalDpsMult: cMult,
+        globalDpsMult: 1.15,
         condition: () => getTotalDps() >= cThresh,
       });
-    })(dpsThresh, globalMult, cost, name);
+    })(dpsThresh, cost, name);
   }
 })();
 
@@ -1512,66 +1476,51 @@ for (const t of CLICK_TIERS) {
 // ── LATE-GAME GLOBAL MULTIPLIERS (already in GLOBAL_TIERS above) ─────────────
 // Additional per-building legacy boosts at ZB/YB scale — early buildings get bigger boosts
 const LEGACY_THRESHOLDS = [1e21, 1e24, 1e27];
-const LEGACY_BASE_MULTS = [1.6, 1.8, 2.0];  // Legacy: small steady boosts
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const ef = earlyFactor(bi);
   LEGACY_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.08 + ef * 0.82;  // early=0.08, late=0.90
-    const mult     = parseFloat(Math.pow(LEGACY_BASE_MULTS[ti], exponent).toFixed(0));
-    ;(function(cBi, cThresh, cMult) {
+    ;(function(cBi, cThresh) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Legacy ${ROMAN[ti]}`,
-        description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s. Prestige-era boost.`,
+        description: `+15% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: cThresh * 10,
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: 1.15,
         condition: () => G.totalBytesEver >= cThresh && G.buildings[cBi].count >= 1,
       });
-    })(bi, thresh, mult);
+    })(bi, thresh);
   });
 }
 
 // ── TIER 5: Ultra-late per-building boosts ────────────────────────────────────
 const T5_THRESHOLDS  = [1e30, 1e33, 1e36];
-const T5_BASE_MULTS  = [1.5, 1.6, 1.7];  // T5: tiny incremental boosts
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const ef = earlyFactor(bi);
   T5_THRESHOLDS.forEach((thresh, ti) => {
-    const exponent = 0.07 + ef * 0.73;  // T5: early=0.07, late=0.80
-    const mult     = parseFloat(Math.pow(T5_BASE_MULTS[ti], exponent).toFixed(0));
-    ;(function(cBi, cThresh, cMult) {
+    ;(function(cBi, cThresh) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Transcendence ${ROMAN[ti]}`,
-        description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s. Ultra-late tier.`,
+        description: `+15% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: cThresh * 5,
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: 1.15,
         condition: () => G.totalBytesEver >= cThresh && G.buildings[cBi].count >= 1,
       });
-    })(bi, thresh, mult);
+    })(bi, thresh);
   });
 }
 
 // ── TIER 6: Milestone building boosts (own ≥500/750/1000) ────────────────────
 const T6_MILESTONES  = [500, 750, 1000];
-const T6_BASE_MULTS  = [1.4, 1.5, 1.6];  // T6: smallest boosts, just keeping pace
 const T6_COST_MULT   = [5e9, 5e10, 5e11];
 for (let bi = 0; bi < BUILDINGS_DEF.length; bi++) {
-  const b  = BUILDINGS_DEF[bi];
-  const ef = earlyFactor(bi);
+  const b = BUILDINGS_DEF[bi];
   T6_MILESTONES.forEach((ms, ti) => {
-    const exponent = 0.07 + ef * 0.73;  // T6: early=0.07, late=0.80
-    const mult     = parseFloat(Math.pow(T6_BASE_MULTS[ti], exponent).toFixed(0));
-    ;(function(cBi, cMs, cMult, cCostMult) {
+    ;(function(cBi, cMs, cCostMult) {
       addUpg({
         name: `${BUILDINGS_DEF[cBi].name} Ascension ${ROMAN[ti]}`,
-        description: `×${cMult} output for all ${BUILDINGS_DEF[cBi].name}s.`,
+        description: `+15% output for all ${BUILDINGS_DEF[cBi].name}s.`,
         cost: Math.max(1, Math.round(b.baseCost * cCostMult)),
-        icon: BUILD_ICONS[cBi],
-        buildingIdx: cBi, buildingMult: cMult,
+        icon: BUILD_ICONS[cBi], buildingIdx: cBi, buildingMult: 1.15,
         condition: () => G.buildings[cBi].count >= cMs,
       });
-    })(bi, ms, mult, T6_COST_MULT[ti]);
+    })(bi, ms, T6_COST_MULT[ti]);
   });
 }
 
