@@ -882,10 +882,15 @@ function selectDifficulty(difficulty) {
 
 function selectCategory(category) {
     GameState.selectedCategory = category;
-    generatePuzzle();
-    showScreen('game-screen');
-    startTimer();
-    updateHeaderDisplay();
+    showScreen('loading-screen');
+    
+    // Use setTimeout to allow the loading screen to render before generating puzzle
+    setTimeout(() => {
+        generatePuzzle();
+        showScreen('game-screen');
+        startTimer();
+        updateHeaderDisplay();
+    }, 100);
 }
 
 function closeDifficulty() {
@@ -1204,6 +1209,11 @@ function generatePuzzle(seed = null) {
     GameState.gridWidth = config.gridSize;
     GameState.gridHeight = config.gridSize;
     
+    const maxDimension = Math.max(config.gridSize, config.gridSize);
+    
+    // Override maxWordLength to use grid size
+    config.maxWordLength = maxDimension;
+    
     initializeGrid(config, seed);
 }
 
@@ -1212,12 +1222,14 @@ function generateJourneyPuzzle(tierConfig) {
     GameState.gridWidth = tierConfig.gridWidth;
     GameState.gridHeight = tierConfig.gridHeight;
     
+    const maxDimension = Math.max(tierConfig.gridWidth, tierConfig.gridHeight);
+    
     const config = {
         gridSize: GameState.gridSize,
         wordCount: tierConfig.wordCount,
         directions: ['horizontal', 'vertical', 'diagonal'], // Use same 3 directions for 33% split
         minWordLength: 3,
-        maxWordLength: 10
+        maxWordLength: maxDimension
     };
     
     initializeGrid(config, null);
@@ -1253,17 +1265,36 @@ function initializeGrid(config, seed) {
     }
     
     // Collect potential words first - ensure they fit in grid
-    while (selectedWords.length < config.wordCount * 5) { // More candidates
-        const category = categoriesToUse[Math.floor(randomFunc() * categoriesToUse.length)];
-        const wordsInCategory = WordDictionary[category].filter(word => 
-            word.length >= config.minWordLength && 
-            word.length <= config.maxWordLength &&
-            word.length <= maxDimension && // Must fit in grid
-            !selectedWords.includes(word.toUpperCase())
+    // Simplified approach for performance: collect all valid words
+    const allValidWords = [];
+    for (const category of categoriesToUse) {
+        const validWordsInCategory = WordDictionary[category].filter(word => 
+            word.length >= 3 && 
+            word.length <= maxDimension
         );
-        
-        if (wordsInCategory.length > 0) {
-            const word = wordsInCategory[Math.floor(randomFunc() * wordsInCategory.length)];
+        allValidWords.push(...validWordsInCategory);
+    }
+    
+    // If selected category doesn't have enough words, use all categories
+    if (allValidWords.length < config.wordCount * 2 && GameState.selectedCategory && GameState.selectedCategory !== 'all') {
+        categoriesToUse = categories;
+        allValidWords.length = 0;
+        for (const category of categoriesToUse) {
+            const validWordsInCategory = WordDictionary[category].filter(word => 
+                word.length >= 3 && 
+                word.length <= maxDimension
+            );
+            allValidWords.push(...validWordsInCategory);
+        }
+    }
+    
+    // Shuffle and select words
+    allValidWords.sort(() => randomFunc() - 0.5);
+    
+    // Select unique words
+    for (const word of allValidWords) {
+        if (selectedWords.length >= config.wordCount * 5) break;
+        if (!selectedWords.includes(word.toUpperCase())) {
             selectedWords.push(word.toUpperCase());
         }
     }
@@ -1578,13 +1609,13 @@ function updateHeaderForMenu() {
 }
 
 function updateMainMenuDisplay() {
-    document.getElementById('total-xp-display').textContent = `Total Score: ${PlayerData.totalScore}`;
+    document.getElementById('total-score-display').textContent = `Total Score: ${PlayerData.totalScore}`;
     updateHintDisplay();
 }
 
 function updateStatisticsDisplay() {
     document.getElementById('stat-longest-streak').textContent = PlayerData.longestStreak;
-    document.getElementById('stat-total-xp').textContent = PlayerData.totalScore;
+    document.getElementById('stat-total-score').textContent = PlayerData.totalScore;
     document.getElementById('stat-puzzles-completed').textContent = PlayerData.puzzlesCompleted;
     document.getElementById('stat-playtime').textContent = formatPlaytime(GameState.playtime);
 }
@@ -1818,6 +1849,9 @@ function completePuzzle() {
     PlayerData.totalScore += totalScore;
     PlayerData.puzzlesCompleted++;
     
+    // Store totalScore for display
+    GameState.finalScore = totalScore;
+    
     // Only update streak for daily puzzles
     if (GameState.gameMode === 'daily') {
         PlayerData.dailyCompletedToday = true;
@@ -1856,9 +1890,8 @@ function completePuzzle() {
     
     saveData();
     
+    document.getElementById('complete-score').textContent = `+${GameState.finalScore}`;
     document.getElementById('complete-time').textContent = formatTime(GameState.timer);
-    document.getElementById('complete-score').textContent = GameState.score;
-    document.getElementById('complete-xp').textContent = `+${totalScore}`;
     document.getElementById('complete-combo').textContent = `x${GameState.combo}`;
     
     showScreen('complete-screen');
