@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenWords - A Peaceful Word Search Journey</title>
+    <link rel="stylesheet" href="zen_styles.css">
+</head>
+<body>
+    <!-- Atmospheric Background -->
+    <div class="background-container">
+        <div class="rain-container"></div>
+        <div class="fog-layer"></div>
+        <div class="lantern-glow"></div>
+        
+        <!-- Zen Theme Decor -->
+        <div class="zen-decor">
+            <div class="bamboo-decoration bamboo-1"></div>
+            <div class="bamboo-decoration bamboo-2"></div>
+            <div class="bamboo-decoration bamboo-3"></div>
+            <div class="bamboo-decoration bamboo-4"></div>
+            <div class="bamboo-leaf leaf-1"></div>
+            <div class="bamboo-leaf leaf-2"></div>
+            <div class="bamboo-leaf leaf-3"></div>
+            <div class="bamboo-leaf leaf-4"></div>
+            <div class="bamboo-leaf leaf-5"></div>
+            <div class="bamboo-leaf leaf-6"></div>
+            <div class="leafy-branch left-branch"></div>
+            <div class="leafy-branch right-branch"></div>
+        </div>
+        
+        <!-- Wild Theme Decor -->
+        <div class="wild-decor">
+            <div class="mountain mountain-1"></div>
+            <div class="mountain mountain-2"></div>
+            <div class="mountain mountain-3"></div>
+            <div class="tree tree-1"></div>
+            <div class="tree tree-2"></div>
+            <div class="tree tree-3"></div>
+            <div class="tree tree-4"></div>
+        </div>
+        
+        <!-- Space Theme Decor -->
+        <div class="space-decor">
+            <div class="star star-1"></div>
+            <div class="star star-2"></div>
+            <div class="star star-3"></div>
+            <div class="star star-4"></div>
+            <div class="star star-5"></div>
+            <div class="planet planet-1"></div>
+            <div class="planet planet-2"></div>
+            <div class="planet planet-3"></div>
+        </div>
+        
+        <!-- City Theme Decor -->
+        <div class="city-decor">
+            <div class="skyscraper skyscraper-1"></div>
+            <div class="skyscraper skyscraper-2"></div>
+            <div class="skyscraper skyscraper-3"></div>
+            <div class="skyscraper skyscraper-4"></div>
+            <div class="streetlamp streetlamp-1"></div>
+            <div class="streetlamp streetlamp-2"></div>
+            <div class="streetlamp streetlamp-3"></div>
+            <div class="firework firework-1"></div>
+            <div class="firework firework-2"></div>
+        </div>
+        
+        <!-- Ocean Theme Decor -->
+        <div class="ocean-decor">
+            <div class="bubble bubble-1"></div>
+            <div class="bubble bubble-2"></div>
+            <div class="bubble bubble-3"></div>
+            <div class="bubble bubble-4"></div>
+            <div class="bubble bubble-5"></div>
+            <div class="fish fish-1"></div>
+            <div class="fish fish-2"></div>
+            <div class="fish fish-3"></div>
+            <div class="coral coral-1"></div>
+            <div class="coral coral-2"></div>
+            <div class="kelp kelp-1"></div>
+            <div class="kelp kelp-2"></div>
+        </div>
+    </div>
+
+    <!-- Permanent Header -->
+    <div class="permanent-header">
+        <div class="header-left">
+            <button class="back-btn" id="header-back-btn" onclick="returnToMenu()" style="display: none;">←</button>
+        </div>
+        <div class="header-center">
+            <div class="header-info">
+                <div class="header-stat">
+                    <span class="header-stat-label" id="header-mode-label">Mode</span>
+                    <span class="header-stat-value" id="header-mode-value">Journey</span>
+                </div>
+                <div class="header-stat">
+                    <span class="header-stat-label" id="header-level-label">Level</span>
+                    <span class="header-stat-value" id="header-level-value">1</span>
+                </div>
+            </div>
+            <div class="header-info">
+                <div class="header-stat">
+                    <span class="header-stat-label">Time</span>
+                    <span class="header-stat-value" id="header-timer">00:00</span>
+                </div>
+                <div class="header-stat">
+                    <span class="header-stat-label">Words</span>
+                    <span class="header-stat-value"><span id="header-words-found">0</span>/<span id="header-total-words">5</span></span>
+                </div>
+                <div class="header-stat">
+                    <span class="header-stat-label">Score</span>
+                    <span class="header-stat-value" id="header-score">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="hint-button" id="hint-button" onclick="useHint()">
+                <span>💡</span>
+                <span class="hint-counter" id="hint-counter">5/5</span>
+            </button>
+            <div class="hint-recharge" id="hint-recharge" style="display: none;"></div>
+            <button class="control-btn" id="pause-btn" onclick="pauseGame()" title="Pause" style="display: none;">⏸️</button>
+        </div>
+    </div>
+
+    <!-- Main Game Container -->
+    <div class="game-container">
+        <!-- Main Menu Screen -->
+        <div id="main-menu" class="screen active">
+            <div class="menu-content">
+                <h1 class="game-title">ZenWords</h1>
+                <p class="game-subtitle">Find peace in every letter</p>
+                
+                <div class="menu-buttons">
+                    <button class="menu-btn primary" onclick="startJourneyMode()">
+                        <span class="btn-icon">🏔️</span>
+                        Journey Mode
+                    </button>
+                    <button class="menu-btn secondary" onclick="startEndlessMode()">
+                        <span class="btn-icon">♾️</span>
+                        Endless Mode
+                    </button>
+                    <button class="menu-btn daily" onclick="startDailyPuzzle()">
+                        <span class="btn-icon">🌸</span>
+                        Daily Puzzle
+                        <span class="daily-timer" id="daily-button-timer">--h --m --s</span>
+                        <span class="streak-badge" id="daily-streak">0 🔥</span>
+                    </button>
+                    <button class="menu-btn" onclick="showSettings()">
+                        <span class="btn-icon">⚙️</span>
+                        Settings
+                    </button>
+                    <button class="menu-btn" onclick="showStatistics()">
+                        <span class="btn-icon">📊</span>
+                        Statistics
+                    </button>
+                    <button class="menu-btn" onclick="showMarket()">
+                        <span class="btn-icon">🛒</span>
+                        Market
+                    </button>
+                </div>
+
+                <div class="player-info">
+                    <div class="rank-display">
+                        <span class="rank-icon">💎</span>
+                        <span class="rank-title" id="total-xp-display">Total XP: 0</span>
+                    </div>
+                    <div class="level-display">
+                        <span id="hint-recharge-display">Hints: 5/5</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-content">
+                <div class="word-list-container">
+                    <h3>Words to Find</h3>
+                    <div id="word-list" class="word-list"></div>
+                </div>
+
+                <div class="grid-container">
+                    <div id="word-grid" class="word-grid"></div>
+                </div>
+            </div>
+
+            <div class="combo-display" id="combo-display"></div>
+        </div>
+
+        <!-- Pause Screen -->
+        <div id="pause-screen" class="screen overlay">
+            <div class="pause-content">
+                <h2>Paused</h2>
+                <div class="pause-buttons">
+                    <button class="menu-btn primary" onclick="resumeGame()">Resume</button>
+                    <button class="menu-btn secondary" onclick="restartPuzzle()">Restart</button>
+                    <button class="menu-btn" onclick="returnToMenu()">Main Menu</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level Complete Screen -->
+        <div id="complete-screen" class="screen overlay">
+            <div class="complete-content">
+                <div class="complete-animation">🎋</div>
+                <h2>Puzzle Complete!</h2>
+                <div class="complete-stats">
+                    <div class="stat-row">
+                        <span>Time:</span>
+                        <span id="complete-time">00:00</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Score:</span>
+                        <span id="complete-score">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>XP Earned:</span>
+                        <span id="complete-xp">+0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Combo Bonus:</span>
+                        <span id="complete-combo">x1</span>
+                    </div>
+                </div>
+                <div class="complete-buttons">
+                    <button class="menu-btn primary" onclick="nextLevel()">Next Level</button>
+                    <button class="menu-btn secondary" onclick="restartPuzzle()">Replay</button>
+                    <button class="menu-btn" onclick="returnToMenu()">Main Menu</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen overlay">
+            <div class="settings-content">
+                <h2>Settings</h2>
+                <div class="settings-section">
+                    <h3>Audio</h3>
+                    <div class="setting-row">
+                        <label>Music Volume</label>
+                        <input type="range" id="music-volume" min="0" max="100" value="50" onchange="updateSettings()">
+                    </div>
+                    <div class="setting-row">
+                        <label>Ambience Volume</label>
+                        <input type="range" id="ambience-volume" min="0" max="100" value="70" onchange="updateSettings()">
+                    </div>
+                    <div class="setting-row">
+                        <label>UI Sounds</label>
+                        <input type="range" id="ui-volume" min="0" max="100" value="80" onchange="updateSettings()">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Display</h3>
+                    <div class="setting-row">
+                        <label>Fullscreen</label>
+                        <input type="checkbox" id="fullscreen-toggle" onchange="toggleFullscreen()">
+                    </div>
+                    <div class="setting-row">
+                        <label>Reduced Motion</label>
+                        <input type="checkbox" id="reduced-motion" onchange="updateSettings()">
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Gameplay</h3>
+                    <div class="setting-row">
+                        <label>Reset Save File</label>
+                        <button class="reset-btn" onclick="resetSaveFile()">Reset</button>
+                    </div>
+                </div>
+                <button class="menu-btn" onclick="closeSettings()">Close</button>
+            </div>
+        </div>
+
+        <!-- Market Screen -->
+        <div id="market-screen" class="screen overlay">
+            <div class="market-content">
+                <h2>Market</h2>
+                <div class="score-display">Your Score: <span id="market-score">0</span></div>
+                <div class="market-section">
+                    <h3>Hints</h3>
+                    <div class="market-item">
+                        <span class="item-name">Buy Hint</span>
+                        <span class="item-cost">5,000 Score</span>
+                        <button class="buy-btn" onclick="buyHint()">Buy</button>
+                    </div>
+                </div>
+                <div class="market-section">
+                    <h3>Themes</h3>
+                    <div class="theme-grid">
+                        <div class="theme-item" data-theme="zen">
+                            <span class="theme-emoji">🧘</span>
+                            <span class="theme-name">Zen</span>
+                            <span class="theme-cost">FREE</span>
+                            <button class="theme-btn" onclick="selectTheme('zen')">Equip</button>
+                        </div>
+                        <div class="theme-item" data-theme="wild">
+                            <span class="theme-emoji">🌲</span>
+                            <span class="theme-name">Wild</span>
+                            <span class="theme-cost">10,000</span>
+                            <button class="theme-btn" onclick="buyTheme('wild')">Buy</button>
+                        </div>
+                        <div class="theme-item" data-theme="space">
+                            <span class="theme-emoji">🚀</span>
+                            <span class="theme-name">Space</span>
+                            <span class="theme-cost">30,000</span>
+                            <button class="theme-btn" onclick="buyTheme('space')">Buy</button>
+                        </div>
+                        <div class="theme-item" data-theme="city">
+                            <span class="theme-emoji">🏙️</span>
+                            <span class="theme-name">City</span>
+                            <span class="theme-cost">50,000</span>
+                            <button class="theme-btn" onclick="buyTheme('city')">Buy</button>
+                        </div>
+                        <div class="theme-item" data-theme="ocean">
+                            <span class="theme-emoji">🌊</span>
+                            <span class="theme-name">Ocean</span>
+                            <span class="theme-cost">80,000</span>
+                            <button class="theme-btn" onclick="buyTheme('ocean')">Buy</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-section">
+                    <h3>Promo Code</h3>
+                    <div class="promo-section">
+                        <input type="text" id="promo-input" maxlength="6" placeholder="Enter 6-digit code" oninput="this.value = this.value.toUpperCase()">
+                        <button class="promo-btn" onclick="redeemPromoCode()">Redeem</button>
+                    </div>
+                </div>
+                <button class="menu-btn" onclick="closeMarket()">Close</button>
+            </div>
+        </div>
+
+        <!-- Category Selection Screen -->
+        <div id="category-screen" class="screen overlay">
+            <div class="category-content">
+                <h2>Select Category</h2>
+                <div class="category-grid" id="category-grid">
+                    <button class="category-btn" onclick="selectCategory('all')"><span class="category-emoji">🎲</span><span class="category-name">ALL</span></button>
+                    <button class="category-btn" onclick="selectCategory('nature')"><span class="category-emoji">🌿</span><span class="category-name">Nature</span></button>
+                    <button class="category-btn" onclick="selectCategory('weather')"><span class="category-emoji">🌤️</span><span class="category-name">Weather</span></button>
+                    <button class="category-btn" onclick="selectCategory('tea')"><span class="category-emoji">🍵</span><span class="category-name">Tea</span></button>
+                    <button class="category-btn" onclick="selectCategory('zen')"><span class="category-emoji">🧘</span><span class="category-name">Zen</span></button>
+                    <button class="category-btn" onclick="selectCategory('emotions')"><span class="category-emoji">😊</span><span class="category-name">Emotions</span></button>
+                    <button class="category-btn" onclick="selectCategory('animals')"><span class="category-emoji">🐾</span><span class="category-name">Animals</span></button>
+                    <button class="category-btn" onclick="selectCategory('seasons')"><span class="category-emoji">🍂</span><span class="category-name">Seasons</span></button>
+                    <button class="category-btn" onclick="selectCategory('philosophy')"><span class="category-emoji">🤔</span><span class="category-name">Philosophy</span></button>
+                    <button class="category-btn" onclick="selectCategory('astronomy')"><span class="category-emoji">🌟</span><span class="category-name">Astronomy</span></button>
+                    <button class="category-btn" onclick="selectCategory('food')"><span class="category-emoji">🍽️</span><span class="category-name">Food</span></button>
+                    <button class="category-btn" onclick="selectCategory('mythology')"><span class="category-emoji">🐉</span><span class="category-name">Mythology</span></button>
+                    <button class="category-btn" onclick="selectCategory('music')"><span class="category-emoji">🎵</span><span class="category-name">Music</span></button>
+                    <button class="category-btn" onclick="selectCategory('art')"><span class="category-emoji">🎨</span><span class="category-name">Art</span></button>
+                    <button class="category-btn" onclick="selectCategory('sports')"><span class="category-emoji">⚽</span><span class="category-name">Sports</span></button>
+                    <button class="category-btn" onclick="selectCategory('technology')"><span class="category-emoji">💻</span><span class="category-name">Technology</span></button>
+                    <button class="category-btn" onclick="selectCategory('geography')"><span class="category-emoji">🌍</span><span class="category-name">Geography</span></button>
+                    <button class="category-btn" onclick="selectCategory('science')"><span class="category-emoji">🔬</span><span class="category-name">Science</span></button>
+                    <button class="category-btn" onclick="selectCategory('history')"><span class="category-emoji">📜</span><span class="category-name">History</span></button>
+                    <button class="category-btn" onclick="selectCategory('literature')"><span class="category-emoji">📚</span><span class="category-name">Literature</span></button>
+                    <button class="category-btn" onclick="selectCategory('colors')"><span class="category-emoji">🎨</span><span class="category-name">Colors</span></button>
+                    <button class="category-btn" onclick="selectCategory('business')"><span class="category-emoji">💼</span><span class="category-name">Business</span></button>
+                    <button class="category-btn" onclick="selectCategory('architecture')"><span class="category-emoji">🏛️</span><span class="category-name">Architecture</span></button>
+                    <button class="category-btn" onclick="selectCategory('medicine')"><span class="category-emoji">⚕️</span><span class="category-name">Medicine</span></button>
+                    <button class="category-btn" onclick="selectCategory('fashion')"><span class="category-emoji">👗</span><span class="category-name">Fashion</span></button>
+                    <button class="category-btn" onclick="selectCategory('gardening')"><span class="category-emoji">🌻</span><span class="category-name">Gardening</span></button>
+                    <button class="category-btn" onclick="selectCategory('cooking')"><span class="category-emoji">👨‍🍳</span><span class="category-name">Cooking</span></button>
+                    <button class="category-btn" onclick="selectCategory('transportation')"><span class="category-emoji">🚗</span><span class="category-name">Transportation</span></button>
+                    <button class="category-btn" onclick="selectCategory('education')"><span class="category-emoji">📚</span><span class="category-name">Education</span></button>
+                    <button class="category-btn" onclick="selectCategory('hobbies')"><span class="category-emoji">🎨</span><span class="category-name">Hobbies</span></button>
+                </div>
+                <button class="menu-btn" onclick="closeDifficulty()">Back</button>
+            </div>
+        </div>
+
+        <!-- Statistics Screen -->
+        <div id="statistics-screen" class="screen overlay">
+            <div class="statistics-content">
+                <h2>Your Journey</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-value" id="stat-longest-streak">0</div>
+                        <div class="stat-label">Daily Streak</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💎</div>
+                        <div class="stat-value" id="stat-total-xp">0</div>
+                        <div class="stat-label">Total XP</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-value" id="stat-puzzles-completed">0</div>
+                        <div class="stat-label">Puzzles Completed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-value" id="stat-playtime">0m 0s</div>
+                        <div class="stat-label">Total Playtime</div>
+                    </div>
+                </div>
+                <button class="menu-btn" onclick="closeStatistics()">Close</button>
+            </div>
+        </div>
+
+        <!-- Journey Map Screen -->
+        <div id="journey-map-screen" class="screen">
+            <div class="journey-map-container">
+                <div class="journey-path" id="journey-path"></div>
+            </div>
+        </div>
+
+        <!-- Daily Puzzle Screen -->
+        <div id="daily-puzzle-screen" class="screen">
+            <div class="daily-door-container">
+                <div class="daily-countdown" id="daily-countdown">--:--:--</div>
+                <div class="daily-door" id="daily-door" onclick="startDailyPuzzle()"></div>
+                <div class="daily-stats">
+                    <div class="daily-stat">
+                        <div class="daily-stat-value" id="daily-streak-display">0 🔥</div>
+                        <div class="daily-stat-label">Current Streak</div>
+                    </div>
+                    <div class="daily-stat">
+                        <div class="daily-stat-value" id="daily-completed-display">0</div>
+                        <div class="daily-stat-label">Completed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Difficulty Selection Screen -->
+        <div id="difficulty-screen" class="screen overlay">
+            <div class="difficulty-content">
+                <h2>Select Difficulty</h2>
+                <div class="difficulty-options">
+                    <button class="difficulty-btn easy" onclick="selectDifficulty('easy')">
+                        <div class="diff-icon">🌱</div>
+                        <div class="diff-name">Easy</div>
+                        <div class="diff-details">8×8 grid • 5 words</div>
+                    </button>
+                    <button class="difficulty-btn medium" onclick="selectDifficulty('medium')">
+                        <div class="diff-icon">🎋</div>
+                        <div class="diff-name">Medium</div>
+                        <div class="diff-details">10×10 grid • 8 words</div>
+                    </button>
+                    <button class="difficulty-btn hard" onclick="selectDifficulty('hard')">
+                        <div class="diff-icon">🏔️</div>
+                        <div class="diff-name">Hard</div>
+                        <div class="diff-details">12×12 grid • 12 words</div>
+                    </button>
+                    <button class="difficulty-btn expert" onclick="selectDifficulty('expert')">
+                        <div class="diff-icon">🌸</div>
+                        <div class="diff-name">Expert</div>
+                        <div class="diff-details">15×15 grid • 18 words</div>
+                    </button>
+                </div>
+                <button class="menu-btn" onclick="closeDifficulty()">Back</button>
+            </div>
+        </div>
+
+        <!-- Focus Mode Overlay -->
+        <div id="focus-overlay" class="focus-mode hidden">
+            <button class="exit-focus" onclick="toggleFocusMode()">✕</button>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="bg-music" loop>
+        <source src="zen_music.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="correct-sound">
+        <source src="zen_correct.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="incorrect-sound">
+        <source src="zen_incorrect.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="ui-sound">
+        <source src="zen_ui.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="zen_game.js"></script>
+</body>
+</html>
