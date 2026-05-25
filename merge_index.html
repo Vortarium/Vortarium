@@ -1,0 +1,1476 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Circle Merge — Cosmic Orbit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-deep: #030510;
+      --glass: rgba(8, 12, 32, 0.78);
+      --text: #e8f4ff;
+      --gold: #ffe566;
+      --mint: #5dffb8;
+      --cyan: #4de8ff;
+      --nebula: #8b5cf6;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: "Rajdhani", system-ui, sans-serif;
+      font-weight: 600;
+      background: var(--bg-deep);
+      color: var(--text);
+      padding: 24px 16px 32px;
+      gap: 18px;
+      overflow-x: hidden;
+    }
+
+    #starfield {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -3;
+      pointer-events: none;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 90% 60% at 15% 20%, rgba(88, 28, 135, 0.35), transparent 50%),
+        radial-gradient(ellipse 70% 50% at 85% 75%, rgba(14, 116, 144, 0.28), transparent 45%),
+        radial-gradient(ellipse 50% 40% at 50% 100%, rgba(59, 7, 100, 0.4), transparent 55%),
+        radial-gradient(ellipse 40% 30% at 75% 15%, rgba(236, 72, 153, 0.25), transparent 40%),
+        radial-gradient(ellipse 35% 25% at 25% 85%, rgba(34, 197, 94, 0.2), transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(20, 30, 80, 0.5), #030510 85%);
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    .planet {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: -2;
+      filter: blur(1px);
+    }
+
+    .planet-1 {
+      width: 120px;
+      height: 120px;
+      top: 8%;
+      right: 6%;
+      background: radial-gradient(circle at 35% 30%, #6ee7ff, #1e3a8a 55%, #0f172a);
+      box-shadow: 0 0 60px rgba(110, 231, 255, 0.25);
+      animation: floatPlanet 28s ease-in-out infinite;
+    }
+
+    .planet-2 {
+      width: 48px;
+      height: 48px;
+      bottom: 12%;
+      left: 8%;
+      background: radial-gradient(circle at 40% 35%, #fda4af, #9f1239);
+      box-shadow: 0 0 30px rgba(253, 164, 175, 0.3);
+      animation: floatPlanet 18s ease-in-out infinite reverse;
+    }
+
+    .planet-3 {
+      width: 32px;
+      height: 32px;
+      top: 25%;
+      left: 15%;
+      background: radial-gradient(circle at 45% 30%, #a78bfa, #6d28d9);
+      box-shadow: 0 0 25px rgba(167, 139, 250, 0.35);
+      animation: floatPlanet 22s ease-in-out infinite;
+    }
+
+    .planet-4 {
+      width: 64px;
+      height: 64px;
+      bottom: 25%;
+      right: 12%;
+      background: radial-gradient(circle at 35% 40%, #34d399, #059669);
+      box-shadow: 0 0 40px rgba(52, 211, 153, 0.3);
+      animation: floatPlanet 25s ease-in-out infinite reverse;
+    }
+
+    .planet-5 {
+      width: 24px;
+      height: 24px;
+      top: 60%;
+      right: 25%;
+      background: radial-gradient(circle at 50% 50%, #fbbf24, #d97706);
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+      animation: floatPlanet 15s ease-in-out infinite;
+    }
+
+    @keyframes floatPlanet {
+      0%, 100% { transform: translate(0, 0); }
+      50% { transform: translate(12px, -18px); }
+    }
+
+    h1 {
+      font-family: "Orbitron", sans-serif;
+      font-size: 1.5rem;
+      font-weight: 900;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #fff 0%, var(--cyan) 40%, var(--nebula) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 0 20px rgba(77, 232, 255, 0.5));
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px 24px;
+      padding: 12px 22px;
+      background: var(--glass);
+      border: 1px solid rgba(120, 180, 255, 0.12);
+      border-radius: 16px;
+      backdrop-filter: blur(14px);
+      font-size: 1.05rem;
+    }
+
+    .stat-label { color: rgba(232, 244, 255, 0.5); font-weight: 500; }
+
+    .stats .value {
+      font-family: "Orbitron", sans-serif;
+      font-weight: 700;
+      color: var(--mint);
+      text-shadow: 0 0 10px rgba(93, 255, 184, 0.6);
+    }
+
+    .stats .value.gold {
+      color: var(--gold);
+      text-shadow: 0 0 10px rgba(255, 229, 102, 0.6);
+    }
+
+    .tick-panel {
+      width: 100%;
+      max-width: 420px;
+      padding: 12px 16px;
+      background: var(--glass);
+      border: 1px solid rgba(77, 232, 255, 0.15);
+      border-radius: 14px;
+      backdrop-filter: blur(12px);
+      position: relative;
+      overflow: visible;
+    }
+
+    .tick-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(200, 220, 255, 0.65);
+    }
+
+    .tick-header span:last-child {
+      font-family: "Orbitron", sans-serif;
+      color: var(--cyan);
+      font-size: 0.75rem;
+    }
+
+    .progress-track {
+      height: 10px;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #2ed4ff, #a78bfa, #ff6bcb);
+      box-shadow: 0 0 16px rgba(77, 232, 255, 0.7);
+      transition: width 0.05s linear;
+    }
+
+    .progress-fill.complete-flash {
+      box-shadow: 0 0 28px rgba(255, 229, 102, 1);
+      filter: brightness(1.4);
+    }
+
+    .earn-popup {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(0.6);
+      font-family: "Orbitron", sans-serif;
+      font-size: 1.35rem;
+      font-weight: 900;
+      color: var(--gold);
+      text-shadow: 0 0 20px rgba(255, 229, 102, 0.9);
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .earn-popup.show {
+      animation: earnFloat 1.1s ease-out forwards;
+    }
+
+    @keyframes earnFloat {
+      0% { opacity: 0; transform: translate(-50%, -20%) scale(0.5); }
+      20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      100% { opacity: 0; transform: translate(-50%, -120%) scale(1); }
+    }
+
+    .combo-badge {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: rgba(255, 180, 100, 0.9);
+      text-align: center;
+      min-height: 1em;
+    }
+
+    .spawn-timer {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: rgba(167, 139, 250, 0.85);
+      text-align: center;
+      font-family: "Orbitron", sans-serif;
+    }
+
+    .selection-hint {
+      font-size: 0.9rem;
+      color: rgba(199, 125, 255, 0.85);
+      min-height: 1.1em;
+    }
+
+    .play-area {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .grid-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .grid-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .grid-nav-btn {
+      background: linear-gradient(135deg, rgba(100, 150, 255, 0.3), rgba(50, 100, 200, 0.25));
+      border: 1px solid rgba(120, 160, 255, 0.3);
+      color: #fff;
+      padding: 12px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.2rem;
+      transition: all 0.2s;
+    }
+
+    .grid-nav-btn:hover:not(:disabled) {
+      background: linear-gradient(135deg, rgba(120, 170, 255, 0.4), rgba(70, 120, 220, 0.3));
+      transform: scale(1.05);
+    }
+
+    .grid-nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .page-indicator {
+      font-size: 0.85rem;
+      color: rgba(180, 200, 255, 0.8);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 18px;
+      background: var(--glass);
+      border-radius: 18px;
+      border: 1px solid rgba(120, 160, 255, 0.12);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 0 50px rgba(80, 120, 255, 0.12);
+      min-width: 340px;
+    }
+
+    .trash-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 12px;
+      background: rgba(12, 8, 24, 0.85);
+      border-radius: 16px;
+      border: 1px dashed rgba(255, 100, 140, 0.3);
+    }
+
+    .trash-label {
+      font-family: "Orbitron", sans-serif;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      color: rgba(255, 130, 160, 0.8);
+    }
+
+    .trash-sublabel {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.3);
+      text-align: center;
+      max-width: 88px;
+      line-height: 1.25;
+    }
+
+    .cell {
+      width: 72px;
+      height: 72px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(100, 140, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .cell.drag-over {
+      border-color: rgba(77, 232, 255, 0.5);
+      box-shadow: inset 0 0 20px rgba(77, 232, 255, 0.15);
+    }
+
+    .cell.locked {
+      background: rgba(20, 15, 35, 0.4);
+      border: 1px solid rgba(60, 70, 100, 0.15);
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .cell.trash-cell.drag-over {
+      border-color: rgba(255, 100, 120, 0.5);
+    }
+
+    .cell:has(.circle.selected) {
+      border-color: rgba(255, 255, 255, 0.3);
+      box-shadow: inset 0 0 20px var(--cell-glow, rgba(167, 139, 250, 0.25));
+    }
+
+    .trash-stack-hint {
+      position: absolute;
+      bottom: 5px;
+      font-size: 0.6rem;
+      color: rgba(255, 140, 160, 0.7);
+      pointer-events: none;
+    }
+
+    .circle {
+      --glow: rgba(255, 255, 255, 0.5);
+      --core: #888;
+      --rim: #aaa;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Orbitron", sans-serif;
+      font-weight: 900;
+      font-size: 1.15rem;
+      color: #fff;
+      cursor: grab;
+      user-select: none;
+      position: relative;
+      z-index: 1;
+      background: radial-gradient(circle at 32% 28%, #fff8 0%, var(--core) 35%, #0008 100%);
+      border: 2px solid var(--rim);
+      text-shadow: 0 0 12px var(--glow);
+      box-shadow: 0 0 20px var(--glow), inset 0 -5px 14px rgba(0, 0, 0, 0.45);
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .circle::before {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.45), transparent 55%);
+      pointer-events: none;
+    }
+
+    .circle.in-trash { opacity: 0.85; filter: saturate(0.7); }
+    .circle.selected { transform: scale(1.07); border-color: #fff; }
+    .circle.dragging { opacity: 0.4; cursor: grabbing; }
+    .circle.merge-flash { animation: mergePop 0.45s ease-out; }
+
+    @keyframes mergePop {
+      0% { transform: scale(0.5); filter: brightness(2); }
+      50% { transform: scale(1.18); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes wealthPulse {
+      50% { text-shadow: 0 0 22px rgba(255, 229, 102, 1); }
+    }
+
+    .wealth-pulse { animation: wealthPulse 0.35s ease-out; }
+
+    .actions { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; }
+
+    .btn {
+      padding: 11px 16px;
+      font-family: "Rajdhani", sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: transform 0.1s, opacity 0.1s;
+      text-align: left;
+      line-height: 1.25;
+    }
+
+    .btn small { display: block; font-size: 0.72rem; font-weight: 500; opacity: 0.75; text-transform: none; margin-top: 2px; }
+
+    .btn:hover:not(:disabled) { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .purchase-btn {
+      width: 100%;
+      text-align: center;
+      background: linear-gradient(135deg, rgba(93, 255, 184, 0.3), rgba(0, 140, 100, 0.2));
+      box-shadow: 0 0 24px rgba(93, 255, 184, 0.2);
+    }
+
+    .upgrades-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
+    .btn.up-warp { background: linear-gradient(135deg, rgba(77, 232, 255, 0.35), rgba(30, 80, 200, 0.25)); }
+    .btn.up-quantum { background: linear-gradient(135deg, rgba(255, 200, 80, 0.35), rgba(200, 80, 40, 0.25)); }
+    .btn.up-magnet { background: linear-gradient(135deg, rgba(167, 139, 250, 0.35), rgba(80, 40, 160, 0.25)); }
+    .btn.up-lucky { background: linear-gradient(135deg, rgba(255, 120, 200, 0.35), rgba(160, 40, 120, 0.25)); }
+    .btn.up-fusion { background: linear-gradient(135deg, rgba(255, 100, 60, 0.4), rgba(180, 40, 80, 0.3)); }
+    .btn.up-scanner { background: linear-gradient(135deg, rgba(120, 200, 255, 0.3), rgba(40, 100, 180, 0.25)); }
+    .btn.up-combo { background: linear-gradient(135deg, rgba(100, 255, 200, 0.3), rgba(40, 160, 120, 0.25)); }
+  </style>
+</head>
+<body>
+  <audio id="bgMusic" loop autoplay>
+    <source src="merge_music.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="mergeSound">
+    <source src="merge_merge.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="buySound">
+    <source src="merge_buy.mp3" type="audio/mpeg">
+  </audio>
+  <canvas id="starfield" width="1320" height="925"></canvas>
+  <div class="planet planet-1" aria-hidden="true"></div>
+  <div class="planet planet-2" aria-hidden="true"></div>
+  <div class="planet planet-3" aria-hidden="true"></div>
+  <div class="planet planet-4" aria-hidden="true"></div>
+  <div class="planet planet-5" aria-hidden="true"></div>
+
+  <h1>Cosmic Merge</h1>
+
+  <div class="stats">
+    <div><span class="stat-label">Wealth</span> $<span class="value gold wealth-pulse" id="wealth">0</span></div>
+    <div><span class="stat-label">Orbit</span> $<span class="value" id="income">0</span> / <span class="value" id="tickInterval">2.00</span>s</div>
+    <div><span class="stat-label">Grid</span> <span class="value" id="gridCount">0</span>/16</div>
+  </div>
+
+  <div class="tick-panel">
+    <div class="tick-header">
+      <span>Orbit payout cycle</span>
+      <span id="tickCountdown">0.00s</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+    </div>
+    <div class="earn-popup" id="earnPopup">+$0</div>
+    <div class="combo-badge" id="comboBadge">Merge within 6s to build combo</div>
+    <div class="spawn-timer" id="spawnTimer" hidden>☄ Meteor in --s</div>
+  </div>
+
+  <p class="selection-hint" id="selectionHint"></p>
+
+  <div class="play-area">
+    <div class="grid-container">
+      <button class="grid-nav-btn" id="prevPageBtn">◀</button>
+      <div class="grid-wrapper">
+        <div class="page-indicator" id="pageIndicator">Page 1</div>
+        <div class="grid" id="grid">
+        </div>
+      </div>
+      <button class="grid-nav-btn" id="nextPageBtn">▶</button>
+    </div>
+    <div class="trash-panel">
+      <span class="trash-label">Void Storage</span>
+      <div class="cell trash-cell" id="trashCell">
+        </div>
+      <span class="trash-sublabel">No income · drag to stash</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn purchase-btn" id="purchaseBtn">
+      Deploy 3 Orbs — $<span id="purchaseCost">10</span>
+    </button>
+    <button class="btn" id="autoTrashBtn" style="background: linear-gradient(135deg, rgba(255, 100, 100, 0.3), rgba(180, 40, 40, 0.25));">
+      Auto Trash All
+    </button>
+    <div class="upgrades-grid" id="upgradesGrid">
+      </div>
+  </div>
+
+<script>
+    const GRID_SIZE = 4;
+    const BASE_GRID_SLOTS = GRID_SIZE * GRID_SIZE;
+    const MERGE_COUNT = 3;
+    const PURCHASE_BALL_COUNT = 3;
+    const BASE_TICK_MS = 2000;
+    const SPEED_REDUCE_MS = 50;
+    const MIN_TICK_MS = 500;
+    const TIER_INCOME_MULT = 2;
+    const PURCHASE_BASE_COST = 10;
+    const PURCHASE_COST_SCALE = 1.35;
+    const UPGRADE_BASE_COST = 25;
+    const UPGRADE_COST_SCALE = 1.48;
+    const SPAWN_MIN_MS = 10000;
+    const SPAWN_MAX_MS = 20000;
+    const COMBO_BASE_WINDOW_MS = 2000;
+    
+    // Generate random RGB colors for levels 11-100
+    const randomColors = [];
+    for (let i = 0; i < 90; i++) {
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      randomColors.push({
+        core: `rgb(${r}, ${g}, ${b})`,
+        rim: `rgb(${Math.min(255, r + 40)}, ${Math.min(255, g + 40)}, ${Math.min(255, b + 40)})`,
+        glow: `rgba(${r}, ${g}, ${b}, 0.9)`
+      });
+    }
+
+    const TIER_STYLES = [
+      { core: "#ff3d6b", rim: "#ff8fab", glow: "rgba(255, 61, 107, 0.9)" },
+      { core: "#ff6b2e", rim: "#ffb347", glow: "rgba(255, 140, 50, 0.9)" },
+      { core: "#ffd426", rim: "#fff176", glow: "rgba(255, 220, 60, 0.95)" },
+      { core: "#39e86a", rim: "#8aff9e", glow: "rgba(70, 255, 130, 0.9)" },
+      { core: "#2ed4ff", rim: "#8ee8ff", glow: "rgba(46, 212, 255, 0.95)" },
+      { core: "#6b5cff", rim: "#b8a8ff", glow: "rgba(120, 100, 255, 0.95)" },
+      { core: "#e040ff", rim: "#f0a0ff", glow: "rgba(224, 80, 255, 0.95)" },
+      { core: "#00f5d4", rim: "#7fffe8", glow: "rgba(0, 245, 212, 0.9)" },
+      { core: "#ff2ecf", rim: "#ff8ae0", glow: "rgba(255, 60, 210, 0.95)" },
+      { core: "#ffffff", rim: "#e0e8ff", glow: "rgba(255, 255, 255, 1)" },
+      ...randomColors
+    ];
+    
+    const UPGRADE_DEFS = [
+      { id: "speed", cls: "up-warp", name: "Warp Drive", desc: "−0.05s orbit time", getDesc: (l) => `−${(l * 0.05).toFixed(2)}s total` },
+      { id: "yield", cls: "up-quantum", name: "Quantum Yield", desc: "+1% all orbit income", getDesc: (l) => `+${(l * 1)}% income` },
+      { id: "magnet", cls: "up-magnet", name: "Meteor Magnet", desc: "Free meteors arrive faster", getDesc: (l) => `+${l * 1}% faster spawns` },
+      { id: "fusion", cls: "up-fusion", name: "Fusion Surge", desc: "Chance merge skips a tier", getDesc: (l) => `${l * 1}% +2 tier merge` },
+      { id: "combo", cls: "up-combo", name: "Combo Nebula", desc: "Merge window +0.1s", getDesc: (l) => `${(COMBO_BASE_WINDOW_MS / 1000 + l * 0.1).toFixed(1)}s window` },
+      { id: "plates", cls: "up-scanner", name: "Void Plates", desc: "+1 extra cell slot", getDesc: (l) => `+${l} extra cells` },
+    ];
+    
+    let wealth = 0;
+    let purchaseCount = 0;
+    let upgradeLevels = Object.fromEntries(UPGRADE_DEFS.map((u) => [u.id, 0]));
+    let selected = [];
+    let selectedTrash = false;
+    let dragSource = null;
+    let spawnTimer = null;
+    let nextSpawnAt = 0;
+    let tickStart = performance.now();
+    let mergeCombo = 0;
+    let comboUntil = 0;
+    let rafId = null;
+    let highestLevelEver = 1;
+
+    let cells = Array(BASE_GRID_SLOTS).fill(null);
+    const trash = { top: null, bottom: null };
+
+    const gridEl = document.getElementById("grid");
+    const trashCellEl = document.getElementById("trashCell");
+    const wealthEl = document.getElementById("wealth");
+    const incomeEl = document.getElementById("income");
+    const tickIntervalEl = document.getElementById("tickInterval");
+    const tickCountdownEl = document.getElementById("tickCountdown");
+    const gridCountEl = document.getElementById("gridCount");
+    const progressFill = document.getElementById("progressFill");
+    const earnPopup = document.getElementById("earnPopup");
+    const comboBadge = document.getElementById("comboBadge");
+    const spawnTimerEl = document.getElementById("spawnTimer");
+    const purchaseBtn = document.getElementById("purchaseBtn");
+    const purchaseCostEl = document.getElementById("purchaseCost");
+    const selectionHintEl = document.getElementById("selectionHint");
+    const upgradesGrid = document.getElementById("upgradesGrid");
+    const autoTrashBtn = document.getElementById("autoTrashBtn");
+    const prevPageBtn = document.getElementById("prevPageBtn");
+    const nextPageBtn = document.getElementById("nextPageBtn");
+    const pageIndicator = document.getElementById("pageIndicator");
+    let currentPage = 0;
+    
+    function fusionChance(level = upgradeLevels.fusion) {
+      return level * 0.01;
+    }
+
+    function styleForLevel(level) {
+      return TIER_STYLES[(level - 1) % TIER_STYLES.length];
+    }
+
+    function applyCircleStyle(el, level) {
+      const { core, rim, glow } = styleForLevel(level);
+      el.style.setProperty("--core", core);
+      el.style.setProperty("--rim", rim);
+      el.style.setProperty("--glow", glow);
+    }
+
+    function getTotalGridSlots() {
+      return BASE_GRID_SLOTS + upgradeLevels.plates;
+    }
+
+    function getTotalPages() {
+      return Math.floor((upgradeLevels.plates + BASE_GRID_SLOTS - 1) / BASE_GRID_SLOTS) + 1;
+    }
+
+    function getSlotsOnPage(page) {
+      const totalSlots = getTotalGridSlots();
+      const startSlot = page * BASE_GRID_SLOTS;
+      const endSlot = Math.min(startSlot + BASE_GRID_SLOTS, totalSlots);
+      return endSlot - startSlot;
+    }
+
+    function getUnlockedSlotsOnPage(page) {
+      if (page === 0) return BASE_GRID_SLOTS;
+      const totalSlots = getTotalGridSlots();
+      const startSlot = page * BASE_GRID_SLOTS;
+      const unlockedSlots = Math.max(0, totalSlots - startSlot);
+      return Math.min(unlockedSlots, BASE_GRID_SLOTS);
+    }
+
+    function getUpgradeCost(id) {
+      const baseCost = id === "plates" ? UPGRADE_BASE_COST * 100 : UPGRADE_BASE_COST;
+      const scale = id === "plates" ? 100 : UPGRADE_COST_SCALE;
+      return Math.floor(baseCost * Math.pow(scale, upgradeLevels[id]));
+    }
+
+    function getPurchaseCost() {
+      return Math.floor(PURCHASE_BASE_COST * Math.pow(PURCHASE_COST_SCALE, purchaseCount));
+    }
+
+    function tickIntervalMs() {
+      return Math.max(MIN_TICK_MS, BASE_TICK_MS - upgradeLevels.speed * SPEED_REDUCE_MS);
+    }
+
+    function tickIntervalSec() {
+      return (tickIntervalMs() / 1000).toFixed(2);
+    }
+
+    function yieldMultiplier() {
+      return Math.pow(1.05, upgradeLevels.yield);
+    }
+
+    function comboMultiplier() {
+      if (performance.now() > comboUntil) {
+        mergeCombo = 0;
+        return 1;
+      }
+      return 1 + (mergeCombo * 0.01);
+    }
+
+    function incomeForLevel(level) {
+      return Math.floor(2 * Math.pow(3.5, level - 1));
+    }
+
+    function maxLevelOnGrid() {
+      return cells.reduce((max, c) => (c ? Math.max(max, c.level) : max), 0);
+    }
+
+    function randomSpawnLevel() {
+      const max = Math.max(1, highestLevelEver);
+      const offset = Math.random() < 0.5 ? 2 : 3;
+      return Math.max(1, max - offset);
+    }
+
+    function gridBallCount() {
+      return cells.filter(Boolean).length;
+    }
+
+    function findEmptyGridIndex() {
+      return cells.findIndex((c) => c === null);
+    }
+
+    function expandGrid() {
+      const currentSlots = cells.length;
+      const targetSlots = getTotalGridSlots();
+      if (targetSlots > currentSlots) {
+        cells = cells.concat(Array(targetSlots - currentSlots).fill(null));
+        // Check if we need to move to a new page
+        const totalPages = getTotalPages();
+        if (currentPage >= totalPages) {
+          currentPage = totalPages - 1;
+        }
+        renderAllGrid();
+      }
+    }
+
+    function baseIncomePerTick() {
+      return cells.reduce((sum, c) => sum + (c ? incomeForLevel(c.level) : 0), 0);
+    }
+
+    function incomePerTick() {
+      return baseIncomePerTick() * yieldMultiplier() * comboMultiplier();
+    }
+
+    function formatMoney(n) {
+      const suffixes = ["", "K", "M", "B", "T", "Q", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+      
+      if (n >= 1e33) {
+        // Beyond decillion, use AA, AB, AC... format
+        const tier = Math.floor(Math.log10(n) / 3) - 11;
+        const first = String.fromCharCode(65 + Math.floor(tier / 26));
+        const second = String.fromCharCode(65 + (tier % 26));
+        const scale = Math.pow(10, (tier + 11) * 3);
+        return (n / scale).toFixed(2) + first + second;
+      }
+      
+      for (let i = suffixes.length - 1; i >= 0; i--) {
+        const threshold = Math.pow(10, i * 3);
+        if (n >= threshold && i > 0) {
+          return (n / threshold).toFixed(2) + suffixes[i];
+        }
+      }
+      
+      if (Math.abs(n - Math.round(n)) < 0.001) return Math.round(n).toLocaleString();
+      return n.toFixed(1);
+    }
+
+    function showEarnPopup(amount) {
+      earnPopup.textContent = `+$${formatMoney(amount)}`;
+      earnPopup.classList.remove("show");
+      void earnPopup.offsetWidth;
+      earnPopup.classList.add("show");
+      progressFill.classList.add("complete-flash");
+      setTimeout(() => progressFill.classList.remove("complete-flash"), 400);
+    }
+
+    function addMergeCombo() {
+      const now = performance.now();
+      if (now > comboUntil) mergeCombo = 0;
+      mergeCombo = Math.min(12, mergeCombo + 1);
+      const windowMs = COMBO_BASE_WINDOW_MS + upgradeLevels.combo * 100;
+      comboUntil = now + windowMs;
+      updateComboBadge();
+    }
+
+    function updateComboBadge() {
+      if (mergeCombo > 0 && performance.now() <= comboUntil) {
+        comboBadge.textContent = `Combo ×${mergeCombo} — next orbit +${Math.round((comboMultiplier() - 1) * 100)}%`;
+      } else {
+        const windowSec = (COMBO_BASE_WINDOW_MS / 1000 + upgradeLevels.combo * 0.1).toFixed(1);
+        comboBadge.textContent = upgradeLevels.combo > 0 ? `Merge within ${windowSec}s to build combo` : "";
+      }
+    }
+
+    function clearSelection() {
+      selected = [];
+      selectedTrash = false;
+      document.querySelectorAll(".circle.selected").forEach((el) => el.classList.remove("selected"));
+      document.querySelectorAll("#grid .cell").forEach((c) => c.style.removeProperty("--cell-glow"));
+      updateSelectionHint();
+    }
+
+    function updateSelectionHint() {
+      selectionHintEl.textContent = "";
+      if (selected.length === 0 && !selectedTrash) return;
+      let level;
+      if (selectedTrash) {
+        level = trash.top?.level;
+      } else {
+        level = cells[selected[0]]?.level;
+      }
+      if (!level) return;
+      const { glow } = styleForLevel(level);
+      document.querySelectorAll("#grid .cell:has(.circle.selected)").forEach((cell) => {
+        cell.style.setProperty("--cell-glow", glow);
+      });
+    }
+
+    function buildUpgradeButtons() {
+      upgradesGrid.innerHTML = "";
+      UPGRADE_DEFS.forEach((def) => {
+        const btn = document.createElement("button");
+        btn.className = `btn ${def.cls}`;
+        btn.dataset.upgrade = def.id;
+        btn.innerHTML = `${def.name} <small id="desc-${def.id}">${def.desc}</small><small>Lv <span id="lv-${def.id}">0</span> · $<span id="cost-${def.id}">25</span></small>`;
+        btn.addEventListener("click", () => buyUpgrade(def.id));
+        upgradesGrid.appendChild(btn);
+      });
+    }
+
+    function updateUI() {
+      wealthEl.textContent = formatMoney(wealth);
+      incomeEl.textContent = formatMoney(incomePerTick());
+      tickIntervalEl.textContent = tickIntervalSec();
+      gridCountEl.textContent = `${gridBallCount()}/${getTotalGridSlots()}`;
+
+      purchaseCostEl.textContent = formatMoney(getPurchaseCost());
+      purchaseBtn.disabled = wealth < getPurchaseCost();
+      
+      UPGRADE_DEFS.forEach((def) => {
+        const lv = upgradeLevels[def.id];
+        const cost = getUpgradeCost(def.id);
+        document.getElementById(`lv-${def.id}`).textContent = lv;
+        document.getElementById(`cost-${def.id}`).textContent = formatMoney(cost);
+        const descEl = document.getElementById(`desc-${def.id}`);
+        if (descEl) descEl.textContent = lv > 0 && def.getDesc ? def.getDesc(lv) : def.desc;
+        const btn = upgradesGrid.querySelector(`[data-upgrade="${def.id}"]`);
+        if (btn) btn.disabled = wealth < cost;
+      });
+
+      spawnTimerEl.hidden = false;
+      updateComboBadge();
+    }
+
+    function stackBallOnTrash(ball) {
+      trash.bottom = null;
+      if (trash.top) {
+        trash.bottom = trash.top;
+        // Auto-sell the destroyed orb for 1 round of cash
+        const sellValue = incomeForLevel(trash.bottom.level) * yieldMultiplier() * comboMultiplier();
+        wealth += sellValue;
+        showEarnPopup(sellValue);
+      }
+      trash.top = ball;
+    }
+
+    function takeTrashTop() {
+      const ball = trash.top;
+      trash.top = null;
+      trash.bottom = null;
+      return ball;
+    }
+
+    function placeIncomingBall(level) {
+      const idx = findEmptyGridIndex();
+      if (idx !== -1) {
+        cells[idx] = { level };
+        renderGridCell(idx);
+        return true;
+      }
+      stackBallOnTrash({ level });
+      renderTrash();
+      return true;
+    }
+
+    function removeFromGrid(index) {
+      const ball = cells[index];
+      cells[index] = null;
+      selected = selected.filter((i) => i !== index);
+      return ball;
+    }
+
+    function createCircle(level, zone, index) {
+      const el = document.createElement("div");
+      el.className = "circle" + (zone === "trash" ? " in-trash" : "");
+      el.draggable = true;
+      el.textContent = level;
+      el.dataset.level = String(level);
+      el.dataset.zone = zone;
+      el.dataset.index = zone === "grid" ? String(index) : "";
+      applyCircleStyle(el, level);
+      el.addEventListener("dragstart", onDragStart);
+      el.addEventListener("dragend", onDragEnd);
+      if (zone === "grid") {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (dragSource) return;
+          onCircleClick(index);
+        });
+      } else if (zone === "trash") {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (dragSource) return;
+          onTrashCircleClick();
+        });
+      }
+      return el;
+    }
+
+    function renderGridCell(index) {
+      const pageIndex = Math.floor(index / BASE_GRID_SLOTS);
+      const slotIndex = index % BASE_GRID_SLOTS;
+      
+      // Only render if on current page
+      if (pageIndex !== currentPage) return;
+      
+      // Ensure cell exists on current page
+      while (gridEl.children.length <= slotIndex) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        setupDropTarget(cell, "grid", pageIndex * BASE_GRID_SLOTS + gridEl.children.length);
+        cell.addEventListener("click", () => { if (selected.length > 0) clearSelection(); });
+        gridEl.appendChild(cell);
+      }
+      
+      const cell = gridEl.children[slotIndex];
+      cell.innerHTML = "";
+      
+      // Check if this slot is unlocked
+      const unlockedSlots = getUnlockedSlotsOnPage(currentPage);
+      if (slotIndex >= unlockedSlots) {
+        cell.classList.add("locked");
+        return;
+      }
+      
+      cell.classList.remove("locked");
+      
+      const data = cells[index];
+      if (!data) return;
+      const circle = createCircle(data.level, "grid", index);
+      if (selected.includes(index)) circle.classList.add("selected");
+      cell.appendChild(circle);
+    }
+
+    function renderTrash() {
+      trashCellEl.innerHTML = "";
+      if (trash.bottom) {
+        const hint = document.createElement("span");
+        hint.className = "trash-stack-hint";
+        hint.textContent = "+1 hidden";
+        trashCellEl.appendChild(hint);
+      }
+      if (trash.top) {
+        const circle = createCircle(trash.top.level, "trash", null);
+        if (selectedTrash) circle.classList.add("selected");
+        trashCellEl.appendChild(circle);
+      }
+    }
+
+    function renderAllGrid() {
+      gridEl.innerHTML = "";
+      const startSlot = currentPage * BASE_GRID_SLOTS;
+      const endSlot = Math.min(startSlot + BASE_GRID_SLOTS, cells.length);
+      for (let i = startSlot; i < endSlot; i++) renderGridCell(i);
+      if (selected.length > 0) updateSelectionHint();
+      updatePageIndicator();
+    }
+
+    function updatePageIndicator() {
+      const totalPages = getTotalPages();
+      pageIndicator.textContent = `Page ${currentPage + 1}/${totalPages}`;
+      prevPageBtn.disabled = currentPage === 0;
+      nextPageBtn.disabled = currentPage >= totalPages - 1;
+    }
+
+    function goToPage(page) {
+      const totalPages = getTotalPages();
+      if (page < 0 || page >= totalPages) return;
+      currentPage = page;
+      clearSelection();
+      renderAllGrid();
+    }
+
+    function goToPrevPage() {
+      goToPage(currentPage - 1);
+    }
+
+    function goToNextPage() {
+      goToPage(currentPage + 1);
+    }
+
+    function moveOrbToNextPage(sourceIndex) {
+      const targetPage = currentPage + 1;
+      const totalPages = getTotalPages();
+      if (targetPage >= totalPages) return false;
+
+      // Find empty slot on target page
+      const targetStartSlot = targetPage * BASE_GRID_SLOTS;
+      const targetEndSlot = Math.min(targetStartSlot + BASE_GRID_SLOTS, cells.length);
+      let targetIndex = -1;
+      for (let i = targetStartSlot; i < targetEndSlot; i++) {
+        if (!cells[i]) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) return false; // Target page is full
+
+      // Move the orb
+      cells[targetIndex] = cells[sourceIndex];
+      cells[sourceIndex] = null;
+      
+      // Update selection if the moved orb was selected
+      const pos = selected.indexOf(sourceIndex);
+      if (pos !== -1) {
+        selected[pos] = targetIndex;
+      }
+      
+      return true;
+    }
+
+    function moveOrbToPrevPage(sourceIndex) {
+      const targetPage = currentPage - 1;
+      if (targetPage < 0) return false;
+
+      // Find empty slot on target page
+      const targetStartSlot = targetPage * BASE_GRID_SLOTS;
+      const targetEndSlot = Math.min(targetStartSlot + BASE_GRID_SLOTS, cells.length);
+      let targetIndex = -1;
+      for (let i = targetStartSlot; i < targetEndSlot; i++) {
+        if (!cells[i]) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) return false; // Target page is full
+
+      // Move the orb
+      cells[targetIndex] = cells[sourceIndex];
+      cells[sourceIndex] = null;
+      
+      // Update selection if the moved orb was selected
+      const pos = selected.indexOf(sourceIndex);
+      if (pos !== -1) {
+        selected[pos] = targetIndex;
+      }
+      
+      return true;
+    }
+
+    function onTrashCircleClick() {
+      if (!trash.top) return;
+      if (selectedTrash) {
+        selectedTrash = false;
+        renderTrash();
+        updateSelectionHint();
+        return;
+      }
+      if (selected.length > 0 && trash.top.level !== cells[selected[0]]?.level) clearSelection();
+      const totalCount = selected.length + (selectedTrash ? 1 : 0);
+      if (totalCount >= MERGE_COUNT) return;
+      selectedTrash = true;
+      renderTrash();
+      updateSelectionHint();
+      if (selected.length + 1 === MERGE_COUNT) tryMergeSelected();
+    }
+
+    function onCircleClick(index) {
+      const cell = cells[index];
+      if (!cell) return;
+      const pos = selected.indexOf(index);
+      if (pos !== -1) {
+        selected.splice(pos, 1);
+        renderGridCell(index);
+        updateSelectionHint();
+        return;
+      }
+      if (selectedTrash && cell.level !== trash.top?.level) clearSelection();
+      if (selected.length > 0 && cell.level !== cells[selected[0]]?.level) clearSelection();
+      const totalCount = selected.length + (selectedTrash ? 1 : 0);
+      if (totalCount >= MERGE_COUNT) return;
+      selected.push(index);
+      renderGridCell(index);
+      updateSelectionHint();
+      if (selected.length + (selectedTrash ? 1 : 0) === MERGE_COUNT) tryMergeSelected();
+    }
+
+    function onCircleClickFromPage(index, page) {
+      // Selection works with global indices, so no need to switch pages
+      onCircleClick(index);
+    }
+
+    function tryMergeSelected() {
+      let level;
+      let targetIndex;
+      
+      if (selectedTrash) {
+        level = trash.top?.level;
+        if (!level) {
+          clearSelection();
+          return;
+        }
+        // Check if all selected grid orbs match the trash orb level
+        if (selected.some((i) => !cells[i] || cells[i].level !== level)) {
+          clearSelection();
+          return;
+        }
+        targetIndex = selected.length > 0 ? selected[0] : findEmptyGridIndex();
+        if (targetIndex === -1) {
+          clearSelection();
+          return;
+        }
+      } else {
+        level = cells[selected[0]]?.level;
+        if (!level || selected.some((i) => !cells[i] || cells[i].level !== level)) {
+          clearSelection();
+          return;
+        }
+        targetIndex = selected[0];
+      }
+      
+      let newLevel = level + 1;
+      if (Math.random() < fusionChance()) newLevel = level + 2;
+
+      selected.forEach((i) => { cells[i] = null; });
+      if (selectedTrash) {
+        trash.top = null;
+        trash.bottom = null;
+      }
+      cells[targetIndex] = { level: newLevel };
+      
+      // Track highest level ever achieved
+      if (newLevel > highestLevelEver) highestLevelEver = newLevel;
+      
+      clearSelection();
+      addMergeCombo();
+      renderAllGrid();
+      renderTrash();
+      gridEl.children[targetIndex].querySelector(".circle")?.classList.add("merge-flash");
+      
+      // Play merge sound
+      const mergeSound = document.getElementById("mergeSound");
+      mergeSound.currentTime = 0;
+      mergeSound.play().catch(e => console.log("Merge sound play failed:", e));
+      
+      updateUI();
+    }
+
+    function onDragStart(e) {
+      const circle = e.target.closest(".circle");
+      if (!circle) return;
+      clearSelection();
+      dragSource = {
+        zone: circle.dataset.zone,
+        index: circle.dataset.zone === "grid" ? parseInt(circle.dataset.index, 10) : null,
+      };
+      circle.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(dragSource));
+    }
+
+    function onDragEnd(e) {
+      e.target.closest(".circle")?.classList.remove("dragging");
+      document.querySelectorAll(".cell.drag-over").forEach((c) => c.classList.remove("drag-over"));
+      dragSource = null;
+    }
+
+    function setupDropTarget(cellEl, zone, index) {
+      cellEl.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        cellEl.classList.add("drag-over");
+      });
+      cellEl.addEventListener("dragleave", () => cellEl.classList.remove("drag-over"));
+      cellEl.addEventListener("drop", (e) => {
+        e.preventDefault();
+        cellEl.classList.remove("drag-over");
+        const src = dragSource ?? JSON.parse(e.dataTransfer.getData("text/plain") || "null");
+        if (src) handleDrop(src, zone, index);
+      });
+    }
+
+    function handleDrop(src, destZone, destIndex) {
+      if (src.zone === "grid" && destZone === "grid" && src.index === destIndex) return;
+      if (src.zone === "trash" && destZone === "trash") return;
+      if (destZone === "trash") handleDropOnTrash(src);
+      else if (destZone === "grid") handleDropOnGrid(src, destIndex);
+      else if (destZone === "nextPage") handleDropOnNextPage(src);
+      else if (destZone === "prevPage") handleDropOnPrevPage(src);
+    }
+
+    function handleDropOnTrash(src) {
+      let ball;
+      if (src.zone === "grid") {
+        ball = removeFromGrid(src.index);
+        renderGridCell(src.index);
+      } else ball = takeTrashTop();
+      if (!ball) return;
+      stackBallOnTrash(ball);
+      renderTrash();
+      updateUI();
+    }
+
+    function handleDropOnGrid(src, destIndex) {
+      const destBall = cells[destIndex];
+      if (src.zone === "trash") {
+        const ball = takeTrashTop();
+        if (!ball) return;
+        if (!destBall) cells[destIndex] = ball;
+        else {
+          cells[destIndex] = ball;
+          stackBallOnTrash(destBall);
+        }
+        renderGridCell(destIndex);
+        renderTrash();
+        updateUI();
+        return;
+      }
+      
+      const srcBall = cells[src.index];
+      if (!srcBall) return;
+      
+      if (!destBall) {
+        cells[destIndex] = srcBall;
+        cells[src.index] = null;
+        selected = selected.filter((i) => i !== src.index).map((i) => (i === src.index ? destIndex : i));
+      } else {
+        cells[destIndex] = srcBall;
+        cells[src.index] = destBall;
+        selected = selected.map((i) => {
+          if (i === src.index) return destIndex;
+          if (i === destIndex) return src.index;
+          return i;
+        });
+      }
+      renderGridCell(src.index);
+      renderGridCell(destIndex);
+      updateSelectionHint();
+      updateUI();
+    }
+
+    function handleDropOnNextPage(src) {
+      if (src.zone !== "grid") return;
+      const moved = moveOrbToNextPage(src.index);
+      if (moved) {
+        renderAllGrid();
+        updateSelectionHint();
+        updateUI();
+      }
+    }
+
+    function handleDropOnPrevPage(src) {
+      if (src.zone !== "grid") return;
+      const moved = moveOrbToPrevPage(src.index);
+      if (moved) {
+        renderAllGrid();
+        updateSelectionHint();
+        updateUI();
+      }
+    }
+
+    function setupGridCell(index) {
+      // Cells are now created dynamically in renderGridCell
+    }
+
+    function purchaseCircles() {
+      const cost = getPurchaseCost();
+      if (wealth < cost) return;
+      wealth -= cost;
+      purchaseCount++;
+      for (let i = 0; i < PURCHASE_BALL_COUNT; i++) placeIncomingBall(randomSpawnLevel());
+      
+      // Play buy sound
+      const buySound = document.getElementById("buySound");
+      buySound.currentTime = 0;
+      buySound.play().catch(e => console.log("Buy sound play failed:", e));
+      
+      updateUI();
+    }
+
+    function autoTrashAll() {
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i]) {
+          stackBallOnTrash(cells[i]);
+          cells[i] = null;
+        }
+      }
+      clearSelection();
+      renderAllGrid();
+      renderTrash();
+      updateUI();
+    }
+
+    function buyUpgrade(id) {
+      const cost = getUpgradeCost(id);
+      if (wealth < cost) return;
+      wealth -= cost;
+      upgradeLevels[id]++;
+      if (id === "speed") tickStart = performance.now();
+      if (id === "plates") expandGrid();
+      
+      // Play buy sound
+      const buySound = document.getElementById("buySound");
+      buySound.currentTime = 0;
+      buySound.play().catch(e => console.log("Buy sound play failed:", e));
+      
+      updateUI();
+    }
+
+    function onTickPayout(earned) {
+      wealth += earned;
+      wealthEl.classList.add("wealth-pulse");
+      wealthEl.addEventListener("animationend", () => wealthEl.classList.remove("wealth-pulse"), { once: true });
+      if (performance.now() > comboUntil) mergeCombo = 0;
+      updateUI();
+    }
+
+    function tickLoop(now) {
+      const interval = tickIntervalMs();
+      const elapsed = now - tickStart;
+      const progress = Math.min(1, elapsed / interval);
+      progressFill.style.width = `${progress * 100}%`;
+      const remaining = Math.max(0, interval - elapsed);
+      tickCountdownEl.textContent = `${(remaining / 1000).toFixed(2)}s`;
+      
+      if (elapsed >= interval) {
+        const earned = incomePerTick();
+        showEarnPopup(earned);
+        onTickPayout(earned);
+        tickStart = now;
+      }
+
+      if (nextSpawnAt > 0) {
+        const left = Math.max(0, nextSpawnAt - now);
+        spawnTimerEl.textContent = `☄ Meteor in ${(left / 1000).toFixed(1)}s`;
+      }
+
+      rafId = requestAnimationFrame(tickLoop);
+    }
+
+    function scheduleRandomSpawn() {
+      if (spawnTimer) clearTimeout(spawnTimer);
+      const speedBonus = 1 - (upgradeLevels.magnet * 0.01);
+      const delay = (SPAWN_MIN_MS + Math.random() * (SPAWN_MAX_MS - SPAWN_MIN_MS)) * speedBonus;
+      nextSpawnAt = performance.now() + delay;
+      
+      spawnTimer = setTimeout(() => {
+        placeIncomingBall(randomSpawnLevel());
+        updateUI();
+        scheduleRandomSpawn();
+      }, delay);
+    }
+
+    function initStarfield() {
+      const canvas = document.getElementById("starfield");
+      const ctx = canvas.getContext("2d");
+      let stars = [];
+      const STAR_COUNT = 350;
+
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        stars = Array.from({ length: STAR_COUNT }, () => ({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          r: Math.random() * 2.2 + 0.3,
+          a: Math.random(),
+          tw: Math.random() * 0.025 + 0.003,
+          vx: (Math.random() - 0.5) * 0.1,
+          vy: (Math.random() - 0.5) * 0.07,
+          color: Math.random() < 0.7 ? '220, 235, 255' : 
+                 Math.random() < 0.5 ? '167, 139, 250' : 
+                 Math.random() < 0.5 ? '251, 191, 36' : '236, 72, 153',
+        }));
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const s of stars) {
+          s.a += s.tw;
+          if (s.a > 1 || s.a < 0.12) s.tw *= -1;
+          s.x += s.vx;
+          s.y += s.vy;
+          if (s.x < 0) s.x = canvas.width;
+          if (s.x > canvas.width) s.x = 0;
+          if (s.y < 0) s.y = canvas.height;
+          if (s.y > canvas.height) s.y = 0;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${s.color}, ${s.a})`;
+          ctx.fill();
+        }
+        requestAnimationFrame(draw);
+      }
+
+      resize();
+      window.addEventListener("resize", resize);
+      draw();
+    }
+
+    purchaseBtn.addEventListener("click", purchaseCircles);
+    autoTrashBtn.addEventListener("click", autoTrashAll);
+    prevPageBtn.addEventListener("click", goToPrevPage);
+    nextPageBtn.addEventListener("click", goToNextPage);
+    
+    // Setup drag and drop on navigation arrows
+    setupDropTarget(prevPageBtn, "prevPage", null);
+    setupDropTarget(nextPageBtn, "nextPage", null);
+    
+    setupDropTarget(trashCellEl, "trash", null);
+    buildUpgradeButtons();
+
+    // Initialize base grid cells
+    renderAllGrid();
+    
+    // Initialize exactly 3 starting balls as intended
+    placeIncomingBall(1);
+    placeIncomingBall(1);
+    placeIncomingBall(1);
+
+    initStarfield();
+    tickStart = performance.now();
+    rafId = requestAnimationFrame(tickLoop);
+    scheduleRandomSpawn();
+    updateUI();
+    
+    // Play background music - try multiple approaches to ensure it plays
+    const bgMusic = document.getElementById("bgMusic");
+    bgMusic.volume = 0.3;
+    
+    function tryPlayMusic() {
+      bgMusic.play().catch(e => {
+        console.log("Audio autoplay blocked, will retry on interaction");
+        document.addEventListener("click", () => {
+          bgMusic.play().catch(e2 => console.log("Still blocked:", e2));
+        }, { once: true });
+      });
+    }
+    tryPlayMusic();
+    
+    // Also try on first user interaction
+    document.addEventListener("click", () => {
+      if (bgMusic.paused) {
+        bgMusic.play().catch(e => console.log("Play on click failed:", e));
+      }
+    }, { once: true });
+  </script>
+</body>
+</html>
