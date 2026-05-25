@@ -534,6 +534,7 @@ body {
     padding: 20px;
     border-radius: 10px;
     min-width: 200px;
+    max-height: none;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
     border: 3px solid var(--wood-dark);
 }
@@ -548,11 +549,9 @@ body {
 }
 
 .word-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 400px;
-    overflow-y: auto;
+    column-count: 2;
+    column-gap: 16px;
+    column-fill: balance;
 }
 
 .word-list.multi-column {
@@ -688,6 +687,7 @@ body {
 /* Pause Screen */
 .pause-content,
 .complete-content,
+.loading-content,
 .settings-content,
 .statistics-content,
 .difficulty-content {
@@ -702,6 +702,7 @@ body {
 
 .pause-content h2,
 .complete-content h2,
+.loading-content h2,
 .settings-content h2,
 .statistics-content h2,
 .difficulty-content h2 {

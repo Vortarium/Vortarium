@@ -163,7 +163,7 @@
                 <div class="player-info">
                     <div class="rank-display">
                         <span class="rank-icon">💎</span>
-                        <span class="rank-title" id="total-xp-display">Total XP: 0</span>
+                        <span class="rank-title" id="total-score-display">Total Score: 0</span>
                     </div>
                     <div class="level-display">
                         <span id="hint-recharge-display">Hints: 5/5</span>
@@ -207,16 +207,12 @@
                 <h2>Puzzle Complete!</h2>
                 <div class="complete-stats">
                     <div class="stat-row">
+                        <span>Score Earned:</span>
+                        <span id="complete-score">+0</span>
+                    </div>
+                    <div class="stat-row">
                         <span>Time:</span>
                         <span id="complete-time">00:00</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Score:</span>
-                        <span id="complete-score">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>XP Earned:</span>
-                        <span id="complete-xp">+0</span>
                     </div>
                     <div class="stat-row">
                         <span>Combo Bonus:</span>
@@ -228,6 +224,14 @@
                     <button class="menu-btn secondary" onclick="restartPuzzle()">Replay</button>
                     <button class="menu-btn" onclick="returnToMenu()">Main Menu</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen overlay" style="display: none;">
+            <div class="loading-content">
+                <div class="loading-animation">🎋</div>
+                <h2>Generating Puzzle...</h2>
             </div>
         </div>
 
@@ -383,8 +387,8 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">💎</div>
-                        <div class="stat-value" id="stat-total-xp">0</div>
-                        <div class="stat-label">Total XP</div>
+                        <div class="stat-value" id="stat-total-score">0</div>
+                        <div class="stat-label">Total Score</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon">🏆</div>
