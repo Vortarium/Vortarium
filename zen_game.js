@@ -23,6 +23,7 @@ const GameState = {
     isPaused: false,
     combo: 0,
     comboTimer: null,
+    inactivityTimer: null,
     hintsRemaining: 5,
     maxHints: 5,
     hintRechargeTime: 30 * 60 * 1000, // 30 minutes in milliseconds
@@ -1302,10 +1303,28 @@ function initializeGrid(config, seed) {
     // Shuffle and try to place words
     selectedWords.sort(() => randomFunc() - 0.5);
     
-    // Split directions evenly: 1/3 horizontal, 1/3 vertical, 1/3 diagonal
-    const horizontalWords = Math.floor(config.wordCount / 3);
-    const verticalWords = Math.floor(config.wordCount / 3);
-    const diagonalWords = config.wordCount - horizontalWords - verticalWords;
+    // Determine direction distribution based on game mode
+    let horizontalWords, verticalWords, diagonalWords;
+    
+    if (GameState.gameMode === 'journey') {
+        // Use rotation cycle: 1=vertical, 2=horizontal, 3=diagonal, then repeat
+        const directions = ['vertical', 'horizontal', 'diagonal'];
+        horizontalWords = 0;
+        verticalWords = 0;
+        diagonalWords = 0;
+        
+        for (let i = 0; i < config.wordCount; i++) {
+            const direction = directions[i % 3];
+            if (direction === 'vertical') verticalWords++;
+            else if (direction === 'horizontal') horizontalWords++;
+            else diagonalWords++;
+        }
+    } else {
+        // Split directions evenly: 1/3 horizontal, 1/3 vertical, 1/3 diagonal
+        horizontalWords = Math.floor(config.wordCount / 3);
+        verticalWords = Math.floor(config.wordCount / 3);
+        diagonalWords = config.wordCount - horizontalWords - verticalWords;
+    }
     
     let wordIndex = 0;
     let placedHorizontal = 0;
@@ -1778,10 +1797,6 @@ function checkSelection() {
         AudioSystem.playCorrect();
         
         GameState.combo++;
-        clearTimeout(GameState.comboTimer);
-        GameState.comboTimer = setTimeout(() => {
-            GameState.combo = 0;
-        }, 5000);
         
         const baseScore = foundWord.length * 2;
         const comboMultiplier = 1 + (GameState.combo - 1) * 0.05;
@@ -1792,6 +1807,15 @@ function checkSelection() {
         if (GameState.combo > 1) {
             showCombo(GameState.combo);
         }
+        
+        // Reset inactivity timer - 15 seconds to make next move
+        if (GameState.inactivityTimer) {
+            clearTimeout(GameState.inactivityTimer);
+        }
+        GameState.inactivityTimer = setTimeout(() => {
+            GameState.combo = 0;
+            updateHeaderDisplay();
+        }, 15000); // 15 seconds
         
         updateHeaderDisplay();
         
@@ -1823,27 +1847,59 @@ function markWordAsFound(word) {
 
 function showCombo(combo) {
     const comboDisplay = document.getElementById('combo-display');
-    comboDisplay.textContent = `${combo}x Combo!`;
-    comboDisplay.classList.add('show');
     
-    setTimeout(() => {
-        comboDisplay.classList.remove('show');
-    }, 1000);
+    // Determine supportive text based on multiplier
+    const multiplier = Math.min(combo, 5);
+    const messages = {
+        1: '',
+        2: 'Good!',
+        3: 'Great!',
+        4: 'Amazing!',
+        5: 'FANTASTIC!'
+    };
+    
+    const message = messages[multiplier];
+    if (message) {
+        comboDisplay.textContent = message;
+        comboDisplay.classList.add('show');
+        
+        setTimeout(() => {
+            comboDisplay.classList.remove('show');
+        }, 1000);
+    }
 }
 
 // ==================== GAME COMPLETION ====================
 function completePuzzle() {
     stopTimer();
     
-    // Calculate score based on difficulty ranges
-    const difficultyRanges = {
-        easy: { min: 100, max: 300 },
-        medium: { min: 200, max: 500 },
-        hard: { min: 400, max: 800 },
-        expert: { min: 700, max: 1000 }
-    };
-    const range = difficultyRanges[GameState.difficulty] || difficultyRanges.medium;
-    const totalScore = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+    // Clear inactivity timer
+    if (GameState.inactivityTimer) {
+        clearTimeout(GameState.inactivityTimer);
+        GameState.inactivityTimer = null;
+    }
+    
+    let totalScore;
+    
+    // Calculate score based on game mode
+    if (GameState.gameMode === 'journey') {
+        // Journey mode: level number = base score
+        totalScore = GameState.currentLevel;
+    } else {
+        // Other modes: use difficulty ranges
+        const difficultyRanges = {
+            easy: { min: 100, max: 300 },
+            medium: { min: 200, max: 500 },
+            hard: { min: 400, max: 800 },
+            expert: { min: 700, max: 1000 }
+        };
+        const range = difficultyRanges[GameState.difficulty] || difficultyRanges.medium;
+        totalScore = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+    }
+    
+    // Apply multiplier (capped at 5x)
+    const multiplier = Math.min(GameState.combo, 5);
+    totalScore = totalScore * multiplier;
     
     PlayerData.score += totalScore;
     PlayerData.totalScore += totalScore;
@@ -1949,6 +2005,13 @@ function formatTime(seconds) {
 // ==================== PAUSE ====================
 function pauseGame() {
     GameState.isPaused = true;
+    
+    // Clear inactivity timer
+    if (GameState.inactivityTimer) {
+        clearTimeout(GameState.inactivityTimer);
+        GameState.inactivityTimer = null;
+    }
+    
     showScreen('pause-screen');
 }
 
