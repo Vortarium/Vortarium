@@ -85,6 +85,7 @@
     <!-- Permanent Header -->
     <div class="permanent-header">
         <div class="header-left">
+            <button class="header-icon-btn" id="devtools-btn" onclick="showDevtools()" style="display: none;">🛠️</button>
             <button class="back-btn" id="header-back-btn" onclick="returnToMenu()" style="display: none;">←</button>
             <button class="header-icon-btn" onclick="showSettings()">⚙️</button>
             <span class="daily-header-timer" id="daily-header-timer" style="display: none;">Next Daily: --h --m</span>
@@ -116,6 +117,10 @@
             </div>
         </div>
         <div class="header-right">
+            <div class="header-gems-charms">
+                <span class="header-charms">✨ <span id="header-total-charms">0</span></span>
+                <span class="header-gems">💎 <span id="header-total-gems">0</span></span>
+            </div>
             <button class="hint-button" id="hint-button" onclick="useHint()">
                 <span>💡</span>
                 <span class="hint-counter" id="hint-counter">5/5</span>
@@ -157,20 +162,6 @@
                         <span class="btn-icon">📊</span>
                         Statistics
                     </button>
-                </div>
-
-                <div class="player-info">
-                    <div class="rank-display">
-                        <span class="rank-icon">✨</span>
-                        <span class="rank-title" id="total-score-display">Total Charms: 0</span>
-                    </div>
-                    <div class="rank-display">
-                        <span class="rank-icon">💎</span>
-                        <span class="rank-title" id="total-gems-display">Gems: 0</span>
-                    </div>
-                    <div class="level-display">
-                        <span id="hint-recharge-display">Hints: 5/5</span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -442,6 +433,7 @@
                 <div class="name-input-container">
                     <input type="text" id="player-name-input" placeholder="Enter your name" maxlength="15">
                     <button class="save-name-btn" onclick="savePlayerName()">Save</button>
+                    <button class="save-name-btn" onclick="refreshLeague()">Refresh</button>
                 </div>
                 <div class="leaderboard" id="leaderboard"></div>
                 <button class="menu-btn" onclick="closeLeague()">Close</button>
@@ -506,6 +498,21 @@
         <!-- Focus Mode Overlay -->
         <div id="focus-overlay" class="focus-mode hidden">
             <button class="exit-focus" onclick="toggleFocusMode()">✕</button>
+        </div>
+
+        <!-- Devtools Screen -->
+        <div id="devtools-screen" class="screen overlay">
+            <div class="devtools-content">
+                <h2>🛠️ Devtools</h2>
+                <button class="devtools-btn" onclick="devtoolsAddGems()">+100 Gems</button>
+                <button class="devtools-btn" onclick="devtoolsAddCharms()">+10000 Charms</button>
+                <button class="devtools-btn" onclick="devtoolsEndLeague()">End League Early</button>
+                <button class="devtools-btn" onclick="devtoolsToggleAutocomplete()">Autocomplete Levels: <span id="autocomplete-status">OFF</span></button>
+                <button class="devtools-btn" onclick="devtoolsCompleteDaily()">Complete Daily</button>
+                <button class="devtools-btn" onclick="devtoolsEndStreak()">End Streak (+2 days)</button>
+                <button class="devtools-btn" onclick="devtoolsAddStreak()">Add +1 to Streak</button>
+                <button class="menu-btn" onclick="closeDevtools()">Close</button>
+            </div>
         </div>
     </div>
 

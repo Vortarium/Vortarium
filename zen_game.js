@@ -1,6 +1,10 @@
 // ZenWords - Peaceful Word Search Game
 // A calming word search experience themed around a zen tea house
 
+// ==================== DEVTOOLS TOGGLE ====================
+// Set to true for testing, false for release
+const ENABLE_DEVTOOLS = true;
+
 // ==================== GAME STATE ====================
 const GameState = {
     currentScreen: 'main-menu',
@@ -36,6 +40,7 @@ const GameState = {
     isTabActive: true,
     selectedCategory: 'all',
     isReadOnly: false,
+    autocompleteEnabled: false,
     leagueTimerInterval: null
 };
 
@@ -632,6 +637,7 @@ let PlayerData = {
     dailyStreak: 0,
     totalDailyCompleted: 0,
     lastDailyDate: null,
+    previousStreak: 0,
     dailyCompletedToday: false,
     hintsUsed: 0,
     hintsRemaining: 5,
@@ -669,74 +675,74 @@ const LeagueConfig = {
     wood: {
         name: 'Wood League',
         icon: '🪵',
-        promotionSlots: 12,
+        promotionSlots: 8,
         demotionSlots: 0,
         botMinDaily: 0,
-        botMaxDaily: 6
+        botMaxDaily: 0.05
     },
     stone: {
         name: 'Stone League',
         icon: '🪨',
-        promotionSlots: 11,
-        demotionSlots: 8,
+        promotionSlots: 7,
+        demotionSlots: 9,
         botMinDaily: 0,
-        botMaxDaily: 8
+        botMaxDaily: 0.1
     },
     bronze: {
         name: 'Bronze League',
         icon: '🥉',
-        promotionSlots: 10,
-        demotionSlots: 9,
-        botMinDaily: 1,
-        botMaxDaily: 10
+        promotionSlots: 6,
+        demotionSlots: 10,
+        botMinDaily: 0,
+        botMaxDaily: 0.15
     },
     silver: {
         name: 'Silver League',
         icon: '🥈',
-        promotionSlots: 9,
-        demotionSlots: 10,
-        botMinDaily: 2,
-        botMaxDaily: 12
+        promotionSlots: 5,
+        demotionSlots: 11,
+        botMinDaily: 0,
+        botMaxDaily: 0.2
     },
     gold: {
         name: 'Gold League',
         icon: '🥇',
-        promotionSlots: 8,
-        demotionSlots: 11,
-        botMinDaily: 3,
-        botMaxDaily: 14
+        promotionSlots: 4,
+        demotionSlots: 12,
+        botMinDaily: 0,
+        botMaxDaily: 0.25
     },
     emerald: {
         name: 'Emerald League',
         icon: '💚',
-        promotionSlots: 7,
-        demotionSlots: 12,
-        botMinDaily: 4,
-        botMaxDaily: 16
+        promotionSlots: 3,
+        demotionSlots: 13,
+        botMinDaily: 0,
+        botMaxDaily: 0.3
     },
     sapphire: {
         name: 'Sapphire League',
         icon: '💠',
-        promotionSlots: 6,
-        demotionSlots: 13,
-        botMinDaily: 5,
-        botMaxDaily: 20
+        promotionSlots: 2,
+        demotionSlots: 14,
+        botMinDaily: 0,
+        botMaxDaily: 0.4
     },
     ruby: {
         name: 'Ruby League',
         icon: '♦️',
-        promotionSlots: 5,
-        demotionSlots: 14,
-        botMinDaily: 10,
-        botMaxDaily: 30
+        promotionSlots: 1,
+        demotionSlots: 15,
+        botMinDaily: 0,
+        botMaxDaily: 0.6
     },
     diamond: {
         name: 'Diamond League',
         icon: '💎',
         promotionSlots: 0,
         demotionSlots: 25,
-        botMinDaily: 15,
-        botMaxDaily: 50
+        botMinDaily: 0,
+        botMaxDaily: 0.85
     }
 };
 
@@ -975,9 +981,9 @@ function startEndlessMode() {
 
 function startDailyPuzzle() {
     const now = new Date();
-    const day = now.getDate();
-    const month = now.getMonth() + 1; // Months are 0-indexed
-    const year = now.getFullYear();
+    const day = now.getUTCDate();
+    const month = now.getUTCMonth() + 1; // Months are 0-indexed
+    const year = now.getUTCFullYear();
     
     // Create seed string in day month year format (e.g., 5262026 for May 5th 2026)
     const seedString = `${day}${month}${year}`;
@@ -999,7 +1005,16 @@ function startDailyPuzzle() {
     
     // Check if already completed today
     if (PlayerData.dailyCompletedToday) {
-        // Allow viewing completed puzzle (read-only)
+        // Load saved progress to view completed puzzle
+        if (PlayerData.dailyProgress && PlayerData.dailyProgress.seed === seedString) {
+            loadDailyProgress();
+            GameState.isReadOnly = true;
+            showScreen('game-screen');
+            updateHeaderDisplay();
+            showDailyCountdown();
+            return;
+        }
+        // If no saved progress, generate and mark as read-only
         GameState.dailySeed = seedString;
         generatePuzzle(GameState.dailySeed);
         GameState.isReadOnly = true;
@@ -1025,8 +1040,8 @@ function showDailyCountdown() {
 function updateDailyCountdown() {
     const now = new Date();
     const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
     
     const diff = tomorrow - now;
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -1054,14 +1069,19 @@ function loadDailyProgress() {
     
     renderGrid();
     renderWordList();
+    
+    // Highlight found words on the grid
+    progress.foundWords.forEach(word => {
+        markWordAsFound(word);
+    });
 }
 
 function saveDailyProgress() {
     if (GameState.gameMode === 'daily' && !GameState.isReadOnly && !PlayerData.dailyCompletedToday) {
         const now = new Date();
-        const day = now.getDate();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
+        const day = now.getUTCDate();
+        const month = now.getUTCMonth() + 1;
+        const year = now.getUTCFullYear();
         const seedString = `${day}${month}${year}`;
         
         PlayerData.dailyProgress = {
@@ -1128,8 +1148,13 @@ function updateMarketDisplay() {
     const streakEmberBtn = document.getElementById('streak-ember-btn');
     if (streakEmberBtn) {
         if (PlayerData.streakEmber >= 1) {
-            streakEmberBtn.disabled = true;
-            streakEmberBtn.textContent = 'Owned';
+            if (PlayerData.dailyStreak === 0) {
+                streakEmberBtn.disabled = false;
+                streakEmberBtn.textContent = 'Use Streak Ember';
+            } else {
+                streakEmberBtn.disabled = true;
+                streakEmberBtn.textContent = 'Owned';
+            }
         } else {
             streakEmberBtn.disabled = false;
             streakEmberBtn.textContent = 'Buy';
@@ -1205,19 +1230,30 @@ function buyTheme(theme) {
 
 function buyStreakEmber() {
     if (PlayerData.streakEmber >= 1) {
-        alert('You already have a Streak Ember!');
-        return;
-    }
-    
-    if (PlayerData.gems >= 25) {
-        PlayerData.gems -= 25;
-        PlayerData.streakEmber++;
-        saveData();
-        updateMainMenuDisplay();
-        updateMarketDisplay();
-        alert('Streak Ember purchased successfully!');
+        // Use streak ember to restore previous streak
+        if (PlayerData.dailyStreak === 0 && PlayerData.previousStreak > 0) {
+            PlayerData.dailyStreak = PlayerData.previousStreak;
+            PlayerData.streakEmber--;
+            PlayerData.previousStreak = 0;
+            saveData();
+            alert('Streak ember used! Streak restored to ' + PlayerData.dailyStreak);
+            updateMainMenuDisplay();
+            updateMarketDisplay();
+        } else {
+            alert('Cannot use streak ember - you have an active streak');
+        }
     } else {
-        alert('Not enough gems! You need 25 gems.');
+        // Buy streak ember
+        if (PlayerData.gems >= 25) {
+            PlayerData.gems -= 25;
+            PlayerData.streakEmber++;
+            saveData();
+            updateMainMenuDisplay();
+            updateMarketDisplay();
+            alert('Streak Ember purchased successfully!');
+        } else {
+            alert('Not enough gems! You need 25 gems.');
+        }
     }
 }
 
@@ -1341,17 +1377,20 @@ function calculateOfflineBotGains() {
             bot.lastUpdate = now;
         }
         
-        // Calculate offline gains based on minutes passed
+        // Calculate offline gains based on seconds passed
         const timeSinceLastUpdate = now - bot.lastUpdate;
-        const minutesPassed = Math.floor(timeSinceLastUpdate / 60000);
+        const secondsPassed = Math.floor(timeSinceLastUpdate / 1000);
         
-        if (minutesPassed > 0) {
-            // Each minute, bot gains a random amount within league range
-            const totalGain = 0;
-            for (let i = 0; i < minutesPassed; i++) {
-                const gain = Math.floor(Math.random() * (config.botMaxDaily - config.botMinDaily + 1)) + config.botMinDaily;
-                bot.charms += gain;
+        if (secondsPassed > 0) {
+            // Each second, bot gains a random amount within league range (decimal)
+            let totalGain = 0;
+            for (let i = 0; i < secondsPassed; i++) {
+                const gain = Math.random() * (config.botMaxDaily - config.botMinDaily) + config.botMinDaily;
+                totalGain += gain;
             }
+            
+            // Only add the integer part to charms, keep decimal as invisible stat
+            bot.charms += Math.floor(totalGain);
             
             bot.lastUpdate = now;
         }
@@ -1388,7 +1427,7 @@ function updateLeagueDisplay() {
 function updateLeagueTimer() {
     const now = Date.now();
     const weekStart = PlayerData.leagueWeekStart || now;
-    const weekEnd = weekStart + (7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
+    const weekEnd = weekStart + (3 * 24 * 60 * 60 * 1000); // 3 days in milliseconds
     const remaining = weekEnd - now;
     
     if (remaining <= 0) {
@@ -1402,6 +1441,24 @@ function updateLeagueTimer() {
     const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
     
     document.getElementById('league-timer').textContent = `${days}d ${hours}h ${minutes}m`;
+}
+
+function refreshLeague() {
+    const config = LeagueConfig[PlayerData.league] || LeagueConfig.wood;
+    
+    PlayerData.bots.forEach(bot => {
+        // Ensure bot has required properties
+        if (!bot.lastUpdate) {
+            bot.lastUpdate = Date.now();
+        }
+        
+        // Add random charms based on league range (simulate 1 second of progress)
+        const gain = Math.random() * (config.botMaxDaily - config.botMinDaily) + config.botMinDaily;
+        bot.charms += Math.floor(gain);
+    });
+    
+    saveData();
+    renderLeaderboard();
 }
 
 function renderLeaderboard() {
@@ -1534,6 +1591,9 @@ function resetLeagueWeek() {
         }
     }
     
+    // If staying in same league (not promoted or demoted), just reset timer
+    // This is the default behavior - no league change needed
+    
     // Reset charms for new week
     PlayerData.leagueCharms = 0;
     PlayerData.bots.forEach(bot => {
@@ -1556,16 +1616,17 @@ function startLeagueTimer() {
     GameState.leagueTimerInterval = setInterval(() => {
         updateBotCharms();
         updateLeagueTimer();
-    }, 60000); // Update every minute
+    }, 1000); // Update every second
 }
 
 function updateBotCharms() {
     const config = LeagueConfig[PlayerData.league] || LeagueConfig.wood;
     
     PlayerData.bots.forEach(bot => {
-        // Each bot gains a random amount of charms per minute based on league
-        const gain = Math.floor(Math.random() * (config.botMaxDaily - config.botMinDaily + 1)) + config.botMinDaily;
-        bot.charms += gain;
+        // Each bot gains a random amount of charms per second based on league (decimal)
+        const gain = Math.random() * (config.botMaxDaily - config.botMinDaily) + config.botMinDaily;
+        // Only add the integer part to charms, keep decimal as invisible stat
+        bot.charms += Math.floor(gain);
     });
     
     saveData();
@@ -1696,7 +1757,9 @@ function resetSaveFile() {
         PlayerData.hintsUsed = 0;
         PlayerData.totalDailyCompleted = 0;
         PlayerData.lastDailyDate = null;
+        PlayerData.previousStreak = 0;
         PlayerData.dailyCompletedToday = false;
+        PlayerData.dailyProgress = null;
         PlayerData.ownedThemes = ['zen'];
         PlayerData.currentTheme = 'zen';
         PlayerData.usedPromoCodes = [];
@@ -1759,6 +1822,25 @@ function generatePuzzle(seed = null) {
     config.maxWordLength = maxDimension;
     
     initializeGrid(config, seed);
+    
+    // Autocomplete if enabled for infinite/journey modes
+    if (GameState.autocompleteEnabled && (GameState.gameMode === 'endless' || GameState.gameMode === 'journey')) {
+        setTimeout(() => {
+            GameState.words.forEach(word => {
+                if (!GameState.foundWords.includes(word)) {
+                    markWordAsFound(word);
+                    GameState.foundWords.push(word);
+                }
+            });
+            
+            const baseScore = 10;
+            const multiplier = 5;
+            const wordScore = baseScore * multiplier;
+            GameState.score = wordScore * GameState.words.length;
+            
+            completePuzzle();
+        }, 100);
+    }
 }
 
 function generateJourneyPuzzle(tierConfig) {
@@ -2196,8 +2278,8 @@ function updateHeaderForMenu() {
 }
 
 function updateMainMenuDisplay() {
-    document.getElementById('total-score-display').textContent = `Total Charms: ${PlayerData.totalScore}`;
-    document.getElementById('total-gems-display').textContent = `Gems: ${PlayerData.gems}`;
+    document.getElementById('header-total-charms').textContent = PlayerData.totalScore;
+    document.getElementById('header-total-gems').textContent = PlayerData.gems;
     updateHintDisplay();
 }
 
@@ -2408,6 +2490,32 @@ function checkSelection() {
         GameState.combo = 0;
         updateHeaderDisplay();
     }
+    
+    // Autocomplete if enabled
+    if (GameState.autocompleteEnabled && GameState.words.length > 0) {
+        const unfoundWords = GameState.words.filter(word => !GameState.foundWords.includes(word));
+        if (unfoundWords.length > 0) {
+            const wordToFind = unfoundWords[0];
+            // Find the word position
+            const wordPos = GameState.wordPositions.find(wp => wp.word === wordToFind);
+            if (wordPos) {
+                // Mark all cells in the word as found
+                markWordAsFound(wordToFind);
+                GameState.foundWords.push(wordToFind);
+                AudioSystem.playCorrect();
+                GameState.combo++;
+                const baseScore = 10;
+                const multiplier = Math.min(GameState.combo, 5);
+                const wordScore = baseScore * multiplier;
+                GameState.score += wordScore;
+                updateHeaderDisplay();
+                
+                if (GameState.foundWords.length === GameState.words.length) {
+                    setTimeout(completePuzzle, 500);
+                }
+            }
+        }
+    }
 }
 
 function markWordAsFound(word) {
@@ -2452,6 +2560,93 @@ function showCombo(combo) {
     }
 }
 
+// ==================== DEVTOOLS ====================
+function showDevtools() {
+    showScreen('devtools-screen');
+    updateDevtoolsDisplay();
+}
+
+function closeDevtools() {
+    showScreen('main-menu');
+}
+
+function updateDevtoolsDisplay() {
+    const autocompleteStatus = document.getElementById('autocomplete-status');
+    if (autocompleteStatus) {
+        autocompleteStatus.textContent = GameState.autocompleteEnabled ? 'ON' : 'OFF';
+    }
+}
+
+function devtoolsAddGems() {
+    PlayerData.gems += 100;
+    PlayerData.totalGems += 100;
+    saveData();
+    updateMainMenuDisplay();
+    alert('Added 100 gems');
+}
+
+function devtoolsAddCharms() {
+    PlayerData.totalScore += 10000;
+    PlayerData.score += 10000;
+    PlayerData.netWorth += 10000;
+    addCharmsToLeague(10000);
+    saveData();
+    updateMainMenuDisplay();
+    alert('Added 10000 charms');
+}
+
+function devtoolsEndLeague() {
+    resetLeagueWeek();
+    alert('League week ended');
+}
+
+function devtoolsToggleAutocomplete() {
+    GameState.autocompleteEnabled = !GameState.autocompleteEnabled;
+    updateDevtoolsDisplay();
+    alert(`Autocomplete is now ${GameState.autocompleteEnabled ? 'ON' : 'OFF'}`);
+}
+
+function devtoolsCompleteDaily() {
+    // Start daily puzzle first
+    startDailyPuzzle();
+    
+    // Complete all words
+    GameState.words.forEach(word => {
+        if (!GameState.foundWords.includes(word)) {
+            markWordAsFound(word);
+            GameState.foundWords.push(word);
+        }
+    });
+    
+    // Calculate score
+    const baseScore = 10;
+    const multiplier = 5;
+    const wordScore = baseScore * multiplier;
+    GameState.score = wordScore * GameState.words.length;
+    
+    // Complete the puzzle
+    completePuzzle();
+    
+    alert('Daily completed');
+}
+
+function devtoolsEndStreak() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 2);
+    PlayerData.lastDailyDate = yesterday.toDateString();
+    saveData();
+    alert('Streak ended (set to 2 days ago)');
+}
+
+function devtoolsAddStreak() {
+    PlayerData.dailyStreak++;
+    if (PlayerData.dailyStreak > PlayerData.longestStreak) {
+        PlayerData.longestStreak = PlayerData.dailyStreak;
+    }
+    saveData();
+    alert('Added +1 to streak');
+}
+
 // ==================== GAME COMPLETION ====================
 function completePuzzle() {
     console.log('completePuzzle called');
@@ -2494,7 +2689,10 @@ function completePuzzle() {
             if (PlayerData.lastDailyDate === yesterday.toDateString()) {
                 PlayerData.dailyStreak++;
             } else {
-                // First daily or missed days, start at 1
+                // First daily or missed days, save previous streak and start at 1
+                if (PlayerData.dailyStreak > 0) {
+                    PlayerData.previousStreak = PlayerData.dailyStreak;
+                }
                 PlayerData.dailyStreak = 1;
             }
             
@@ -2754,13 +2952,9 @@ function startDailyCountdown() {
         }
         
         if (dailyButton) {
-            if (PlayerData.dailyCompletedToday) {
-                dailyButton.disabled = true;
-                dailyButton.style.opacity = '0.5';
-            } else {
-                dailyButton.disabled = false;
-                dailyButton.style.opacity = '1';
-            }
+            // Don't disable the button - allow viewing completed puzzle
+            dailyButton.disabled = false;
+            dailyButton.style.opacity = '1';
         }
         
         if (streakDisplay) {
@@ -2858,6 +3052,11 @@ function init() {
     showDailyCountdown();
     startLeagueTimer();
     updateHeaderForMenu();
+    
+    // Show devtools button if enabled
+    if (ENABLE_DEVTOOLS) {
+        document.getElementById('devtools-btn').style.display = 'inline-block';
+    }
     
     document.addEventListener('mouseup', () => {
         if (GameState.isSelecting) {

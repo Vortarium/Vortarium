@@ -711,7 +711,7 @@ body {
     width: 90vw;
     max-height: 90vh;
     text-align: center;
-    color: var(--ink);
+    color: var(--parchment-light);
 }
 
 .league-content::-webkit-scrollbar {
@@ -1003,6 +1003,10 @@ body {
     font-size: 2.5rem;
 }
 
+#league-name {
+    color: var(--ink);
+}
+
 .league-timer {
     font-size: 1.2rem;
     font-weight: bold;
@@ -1065,6 +1069,8 @@ body {
 .leaderboard-item.is-user {
     border-color: #FFD700;
     border-width: 3px;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: var(--ink);
 }
 
 .leaderboard-item.rank-1 {
@@ -1214,6 +1220,22 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
+}
+
+.header-gems-charms {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+.header-charms {
+    color: var(--wood-light);
+}
+
+.header-gems {
+    color: var(--wood-light);
 }
 
 .header-info {
@@ -1430,6 +1452,46 @@ body {
 
 .category-btn:first-child:hover {
     background: var(--lantern-inner);
+}
+
+/* Devtools Screen */
+.devtools-content {
+    background: var(--parchment);
+    padding: 40px;
+    border-radius: 15px;
+    border: 4px solid var(--wood-dark);
+    max-width: 500px;
+    text-align: center;
+    color: var(--ink);
+}
+
+.devtools-content h2 {
+    margin-bottom: 30px;
+    color: var(--wood-dark);
+}
+
+.devtools-btn {
+    display: block;
+    width: 100%;
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    background: var(--wood-light);
+    border: 3px solid var(--wood-dark);
+    border-radius: 10px;
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.devtools-btn:hover {
+    background: var(--wood-medium);
+    transform: translateY(-2px);
+}
+
+.devtools-btn:active {
+    transform: translateY(0);
 }
 
 /* Market Screen */
