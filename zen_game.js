@@ -3,7 +3,7 @@
 
 // ==================== DEVTOOLS TOGGLE ====================
 // Set to true for testing, false for release
-const ENABLE_DEVTOOLS = true;
+const ENABLE_DEVTOOLS = false;
 
 // ==================== GAME STATE ====================
 const GameState = {
