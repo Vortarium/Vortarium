@@ -2681,6 +2681,9 @@ function completePuzzle() {
         PlayerData.totalDailyCompleted++;
         const today = new Date().toDateString();
         
+        // Save daily progress so it can be loaded as completed
+        saveDailyProgress();
+        
         // Increment streak on completion
         if (PlayerData.lastDailyDate !== today) {
             const yesterday = new Date();
