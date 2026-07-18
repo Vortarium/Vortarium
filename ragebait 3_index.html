@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -192,6 +192,7 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 <!-- GAME -->
 <div id="gameScreen" class="screen">
   <div id="gameLevelTitle" style="font-family:'Press Start 2P',monospace;color:#fff;font-size:0.6rem;letter-spacing:3px;margin-bottom:6px;text-align:center;text-shadow:0 0 10px rgba(255,255,255,0.4);opacity:0.7;">LEVEL 1</div>
+  <div id="musicRecordPct" style="font-family:'Press Start 2P',monospace;font-size:0.4rem;color:#ffd700;text-align:center;margin-bottom:2px;letter-spacing:1px;text-shadow:0 0 8px #ffd70088;"></div>
   <div id="musicBarWrap" style="width:500px;height:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);border-radius:2px;margin-bottom:6px;overflow:visible;position:relative;">
     <div id="musicBarFill" style="height:100%;width:0%;background:linear-gradient(90deg,#4466ff,#aa44ff,#ff4466);border-radius:2px;"></div>
     <div id="musicBarRecord" style="position:absolute;top:-2px;width:2px;height:10px;background:#ffcc00;border-radius:1px;display:none;box-shadow:0 0 4px #ffcc00;"></div>
@@ -211,6 +212,7 @@ body{background:#000;font-family:'Rajdhani',Arial,sans-serif;overflow:hidden;wid
 <div class="game-overlay" id="deathOverlay">
   <div class="overlay-title">YOU DIED</div>
   <div class="overlay-sub" id="deathSub">Better luck next time.</div>
+  <div id="deathPct" style="color:#ffd700;font-size:1.1rem;font-weight:700;margin-bottom:8px;font-family:'Rajdhani',sans-serif;letter-spacing:2px;text-shadow:0 0 10px #ffd70088;"></div>
   <div class="overlay-btns">
     <button class="overlay-btn" id="btnRestartLevel">RESTART LEVEL</button>
     <button class="overlay-btn" id="btnDeathMenu">MAIN MENU</button>
@@ -449,7 +451,16 @@ function renderLevelSelect(){
     card.className='level-card'+(completed?' completed':'');
     const maxH=3;
     let bestStr=best!==undefined?`Best: ${'♥'.repeat(best)}${'♡'.repeat(maxH-best)}`:'Not completed';
-    card.innerHTML=`<div class="level-num">LEVEL ${lvl.num}</div><div class="level-diff ${lvl.diffClass}">${lvl.diff}</div><div class="level-best">${bestStr}</div>`;
+    let pctStr='';
+    if(completed){
+      pctStr='<div class="level-pct" style="color:#ffd700;font-size:0.7rem;font-family:Rajdhani,sans-serif;letter-spacing:1px;margin-top:4px;">100%</div>';
+    } else {
+      const rec=save.bestPct[lvl.num];
+      if(rec!==undefined&&rec>0){
+        pctStr=`<div class="level-pct" style="color:rgba(255,255,255,0.5);font-size:0.7rem;font-family:Rajdhani,sans-serif;letter-spacing:1px;margin-top:4px;">${rec.toFixed(1)}%</div>`;
+      }
+    }
+    card.innerHTML=`<div class="level-num">LEVEL ${lvl.num}</div><div class="level-diff ${lvl.diffClass}">${lvl.diff}</div><div class="level-best">${bestStr}</div>${pctStr}`;
     card.addEventListener('click',()=>{wipeTransition(()=>startLevel(lvl.num));});
     grid.appendChild(card);
   });
@@ -558,6 +569,8 @@ function startLevel(num){
   // Reset music bar
   document.getElementById('musicBarFill').style.width='0%';
   document.getElementById('musicPct').textContent='0.0%';
+  document.getElementById('musicRecordPct').textContent='';
+  document.getElementById('musicBarRecord').style.display='none';
   // Show slow mo bar
   document.getElementById('slowBar').style.display='block';
   document.getElementById('slowLabel').style.display='block';
@@ -655,6 +668,8 @@ function _launchDecathlonStage(stage,hearts){
   document.getElementById('gameLevelTitle').textContent=`${titleText} — ${progressLabel}`;
   document.getElementById('musicBarFill').style.width='0%';
   document.getElementById('musicPct').textContent='0.0%';
+  document.getElementById('musicRecordPct').textContent='';
+  document.getElementById('musicBarRecord').style.display='none';
   document.getElementById('slowBar').style.display='block';
   document.getElementById('slowLabel').style.display='block';
   updateHeartsDisplay(hearts);
@@ -930,6 +945,10 @@ function triggerDeath(){
     const pct=(levelMusic.currentTime/levelMusic.duration)*100;
     const prev=save.bestPct[gs.lvl];
     if(prev===undefined||pct>prev){save.bestPct[gs.lvl]=Math.round(pct*10)/10;writeSave();}
+    // Set death percentage display
+    document.getElementById('deathPct').textContent=`DIED AT ${pct.toFixed(1)}%`;
+  } else {
+    document.getElementById('deathPct').textContent='';
   }
   if(decathlonState){decathlonState.startedPerfect=false;}
   fadeOutLevelMusic(()=>playDeathSound());
@@ -1410,6 +1429,7 @@ function updateMusicBar(){
   const fill=document.getElementById('musicBarFill');
   const pctEl=document.getElementById('musicPct');
   const recLine=document.getElementById('musicBarRecord');
+  const recPctEl=document.getElementById('musicRecordPct');
   if(!levelMusic||!levelMusic.duration||isNaN(levelMusic.duration)||!isFinite(levelMusic.duration)){
     fill.style.width='0%';
     pctEl.textContent='0.0%';
@@ -1418,22 +1438,25 @@ function updateMusicBar(){
   const pct=Math.min(100,(levelMusic.currentTime/levelMusic.duration)*100);
   fill.style.width=pct.toFixed(1)+'%';
   pctEl.textContent=pct.toFixed(1)+'%';
-  // Show record line
-  if(recLine&&gameState&&!gameState.decathlon){
+  // Show record line and percentage text
+  if(recLine&&recPctEl&&gameState&&!gameState.decathlon){
     const lvl=gameState.lvl;
     const best=save.bestHearts[lvl]; // beaten = 100%
     if(best!==undefined){
       recLine.style.display='block';
       recLine.style.left='calc(100% - 1px)';
       recLine.title='100% — Completed!';
+      recPctEl.textContent='RECORD: 100%';
     } else {
       const rec=save.bestPct[lvl];
       if(rec!==undefined&&rec>0){
         recLine.style.display='block';
         recLine.style.left=rec.toFixed(1)+'%';
         recLine.title=`Record: ${rec.toFixed(1)}%`;
+        recPctEl.textContent=`RECORD: ${rec.toFixed(1)}%`;
       } else {
         recLine.style.display='none';
+        recPctEl.textContent='';
       }
     }
   }
@@ -2102,10 +2125,12 @@ document.getElementById('btnLeaveLevel').addEventListener('click',()=>{
   });
 });
 document.getElementById('btnRestartLevel').addEventListener('click',()=>{
+  document.getElementById('deathPct').textContent='';
   hideAllOverlays();
   wipeTransition(()=>startLevel(currentLevel));
 });
 document.getElementById('btnDeathMenu').addEventListener('click',()=>{
+  document.getElementById('deathPct').textContent='';
   gameInProgress=false;gameState=null;
   goToTitle();
 });
