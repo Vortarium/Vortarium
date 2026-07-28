@@ -256,7 +256,7 @@ class Ball {
             return; // Don't move if frozen
         }
         
-        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier;
+        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier * 0.5;
         const damageMultiplier = ballPower;
         
         // Use deltaTime for consistent movement across refresh rates
@@ -511,7 +511,7 @@ class Laser {
         
         // Move laser across — bottom and right move opposite to top and left
         const movementScale = deltaTime * 60; // Scale to 60fps baseline
-        const laserSpeed = this.speed * 2 * window.speedMultiplier; // 2x faster
+        const laserSpeed = this.speed * window.speedMultiplier;
         if (this.position === 'top') {
             this.x += laserSpeed * movementScale;
             if (this.x > canvas.width) this.x = -20;
@@ -875,7 +875,7 @@ function loadGame() {
             ballPurchaseCounts = data.ballPurchaseCounts;
             // Recalculate current costs based on purchase counts
             for (let type in ballPurchaseCounts) {
-                ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+                ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.5, ballPurchaseCounts[type]));
             }
         }
         
@@ -1497,6 +1497,12 @@ function updateUI() {
         }
     });
     
+    // Show/hide prestige shop section based on whether player has prestiged
+    const prestigeShopSection = document.getElementById('prestigeShopSection');
+    if (prestigeShopSection) {
+        prestigeShopSection.style.display = (prestigeLevel > 0 || gold > 0) ? 'block' : 'none';
+    }
+    
     // Show/hide laser damage upgrade button based on laser purchases
     const hasLaser = laserPurchases.laser1 || laserPurchases.laser2 || laserPurchases.laser3 || laserPurchases.laser4;
     const laserDamageBtn = document.getElementById('laserDamageUpgradeBtn');
@@ -1622,12 +1628,12 @@ function updateUI() {
 
 // Buy ball
 function buyBall(type) {
-    const cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+    const cost = Math.floor(ballBaseCosts[type] * Math.pow(1.5, ballPurchaseCounts[type]));
     if (money >= cost && balls.length < maxBalls) {
         money -= cost;
         balls.push(new Ball(type));
         ballPurchaseCounts[type]++;
-        ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+        ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.5, ballPurchaseCounts[type]));
         playSound('buy');
         updateUI();
     }
@@ -1636,14 +1642,16 @@ function buyBall(type) {
 // Sell ball
 function sellBall(type) {
     const ballIndex = balls.findIndex(ball => ball.type === type);
-    if (ballIndex !== -1 && ballPurchaseCounts[type] > 0) {
+    if (ballIndex !== -1) {
         balls.splice(ballIndex, 1);
         // Refund 50% of the current price
-        const currentCost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+        const currentCost = Math.floor(ballBaseCosts[type] * Math.pow(1.5, ballPurchaseCounts[type]));
         const refund = Math.floor(currentCost * 0.5);
         money += refund;
-        ballPurchaseCounts[type]--;
-        ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+        if (ballPurchaseCounts[type] > 0) {
+            ballPurchaseCounts[type]--;
+            ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.5, ballPurchaseCounts[type]));
+        }
         playSound('buy');
         updateUI();
     }
