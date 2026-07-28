@@ -319,7 +319,7 @@ class Ball {
                     update: function() {
                         this.x += this.dx * (ballSpeed / 2.8) * window.speedMultiplier;
                         this.y += this.dy * (ballSpeed / 2.8) * window.speedMultiplier;
-                        this.lifetime--;
+                        this.lifetime -= window.speedMultiplier;
                     },
                     draw: function() {
                         ctx.beginPath();
@@ -472,7 +472,7 @@ class Laser {
     }
     
     update() {
-        this.timer++;
+        this.timer += window.speedMultiplier;
         
         if (this.timer >= this.fireInterval && !this.firing) {
             this.fire();
@@ -481,7 +481,7 @@ class Laser {
         }
         
         if (this.firing) {
-            this.fireDuration--;
+            this.fireDuration -= window.speedMultiplier;
             if (this.fireDuration <= 0) {
                 this.firing = false;
                 this.fireDuration = 10;
@@ -656,12 +656,12 @@ class Brick {
 
     updatePoison() {
         if (this.poisoned) {
-            this.poisonTimer--;
+            this.poisonTimer -= window.speedMultiplier;
             if (this.poisonTimer <= 0) {
                 this.poisoned = false;
                 this.poisonMultiplier = 1; // Reset multiplier
-            } else if (this.poisonTimer % 60 === 0) {
-                // Take poison damage every second
+            } else if (this.poisonTimer % (60 / window.speedMultiplier) < window.speedMultiplier) {
+                // Take poison damage every second (adjusted for speed multiplier)
                 this.health -= ballPower * this.poisonBonus;
                 // Auto-destroy bricks with health < 1
                 if (this.health < 1 && this.health > 0) {
