@@ -1,35 +1,11 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Refresh rate detection and speed multiplier
-let refreshRate = 60; // Default to 60
-window.speedMultiplier = 2; // Default to 2x speed (global for access in classes)
+// Dev mode - set to true for cheat keys
+const DEV_MODE = true;
 
-// Detect refresh rate
-function detectRefreshRate() {
-    // Try to get refresh rate from screen API
-    if (window.screen && window.screen.refreshRate) {
-        refreshRate = window.screen.refreshRate;
-        console.log(`Screen API reports refresh rate: ${refreshRate}hz`);
-    } else {
-        // Fallback: assume 60hz
-        refreshRate = 60;
-        console.log(`Screen API not available, assuming 60hz`);
-    }
-    
-    // Apply speed multipliers
-    // 144hz: 0.5x speed (2x slower)
-    // Other refresh rates: 2x speed (2x faster)
-    if (refreshRate === 144) {
-        window.speedMultiplier = 0.5;
-        console.log(`144hz detected - applying 0.5x speed multiplier`);
-    } else {
-        window.speedMultiplier = 2;
-        console.log(`Non-144hz detected (${refreshRate}hz) - applying 2x speed multiplier`);
-    }
-    
-    console.log(`Final - Detected refresh rate: ${refreshRate}hz, Speed multiplier: ${window.speedMultiplier}x`);
-}
+// Global speed multiplier - simple 2x speed for everything
+window.speedMultiplier = 2;
 
 // Audio
 let soundEnabled = true;
@@ -120,10 +96,10 @@ let clickPower = 1;
 let gameRunning = true;
 let bbCurrency = 0;
 let maxBalls = 50;
-let bbMaxSpeedBonus = 1;
-let bbMaxPowerBonus = 1;
-let sfxVolume = 0.1;
-let musicVolume = 0.1;
+let bbMaxSpeedBonus = 0; // starts at 0, each upgrade adds +0.10 (10%)
+let bbMaxPowerBonus = 1; // removed, no longer used
+let sfxVolume = 0.01;
+let musicVolume = 0.01;
 
 // Damage tracking
 let damageStats = {
@@ -169,6 +145,17 @@ let prestigeUpgradeCosts = {
     prestigeMaxBalls: 10,
     goldBoost: 10
 };
+
+// Boss rush system
+let bossRushLevel = 1;
+let bossRushCost = 1000;
+let inBossRush = false;
+let bossRushProgress = 0; // Current boss in the rush
+let bossRushBosses = []; // Array of boss objects for current rush
+let bossRushTimer = 0; // Timer in seconds
+let bossRushMaxTime = 0; // Max time for current boss
+let bossRushGoldReward = 0; // Gold earned in current rush
+let savedLevel = 1; // Save level before boss rush
 
 // Ball types and costs
 const ballTypes = {
@@ -235,10 +222,21 @@ class Ball {
         this.poisonedBricks = new Set();
         this.targetBrick = null; // For sniper targeting
         this.hasAimed = false; // Track if sniper has aimed at current target
+        this.frozen = false; // For boss freeze mechanic
+        this.freezeTimer = 0;
     }
 
     update() {
-        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * bbMaxSpeedBonus * window.speedMultiplier;
+        // Handle freeze timer
+        if (this.frozen) {
+            this.freezeTimer -= window.speedMultiplier;
+            if (this.freezeTimer <= 0) {
+                this.frozen = false;
+            }
+            return; // Don't move if frozen
+        }
+        
+        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier;
         const damageMultiplier = ballPower;
         
         this.x += this.dx * speedMultiplier;
@@ -269,7 +267,6 @@ class Ball {
         // Update scatter balls
         this.scatterBalls = this.scatterBalls.filter(ball => {
             ball.update();
-            ball.draw();
             // Remove if out of bounds or lifetime expired
             if (ball.x <= 0 || ball.x >= canvas.width || ball.y <= 0 || ball.y >= canvas.height || ball.lifetime <= 0) {
                 return false;
@@ -346,21 +343,36 @@ class Ball {
         ctx.fillStyle = this.color;
         ctx.fill();
         ctx.closePath();
+        
+        // Draw scatter balls
+        for (let scatterBall of this.scatterBalls) {
+            scatterBall.draw();
+        }
     }
 
-    getDamage() {
+    getDamage(targetBrick = null) {
         const powerLevel = ballUpgrades[this.type].power;
-        const prestigeDamageMultiplier = 1 + (prestigeBuffs.damage * 0.10);
-        return (this.baseDamage * (powerLevel + 1)) * ballPower * bbMaxPowerBonus * prestigeDamageMultiplier;
+        const prestigeBaseDamage = prestigeBuffs.damage * 2; // +2 flat base damage per prestige upgrade
+        let damage = ((this.baseDamage + prestigeBaseDamage) * (powerLevel + 1)) * ballPower;
+        
+        // Apply boss debuffs if target is a boss
+        if (targetBrick && targetBrick.isBoss && targetBrick.bossDebuffs) {
+            const debuff = targetBrick.bossDebuffs.find(d => d.type === this.type);
+            if (debuff) {
+                damage *= debuff.multiplier;
+            }
+        }
+        
+        return damage;
     }
     
     getSpeedMultiplier() {
         if (this.type === 'basic' || this.type === 'cannonball' || this.type === 'sniper') {
             const speedBonus = ballUpgrades[this.type].special * 0.05;
-            const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.10);
+            const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.25); // +25% per prestige upgrade
             return (1 + speedBonus) * prestigeSpeedMultiplier;
         }
-        const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.10);
+        const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.25); // +25% per prestige upgrade
         return prestigeSpeedMultiplier;
     }
     
@@ -445,14 +457,14 @@ class Laser {
             this.x = 0;
             this.y = 0;
         } else if (this.position === 'bottom') {
-            this.x = 0;
+            this.x = canvas.width; // starts at right, moves left
             this.y = canvas.height - 20;
         } else if (this.position === 'left') {
             this.x = 0;
-            this.y = 0;
+            this.y = canvas.height; // starts at bottom, moves up
         } else if (this.position === 'right') {
             this.x = canvas.width - 20;
-            this.y = 0;
+            this.y = 0; // starts at top, moves down
         }
     }
     
@@ -473,17 +485,19 @@ class Laser {
             }
         }
         
-        // Move laser across
-        if (this.position === 'top' || this.position === 'bottom') {
+        // Move laser across — bottom and right move opposite to top and left
+        if (this.position === 'top') {
             this.x += this.speed * window.speedMultiplier;
-            if (this.x > canvas.width) {
-                this.x = -20;
-            }
-        } else {
+            if (this.x > canvas.width) this.x = -20;
+        } else if (this.position === 'bottom') {
+            this.x -= this.speed * window.speedMultiplier;
+            if (this.x < -20) this.x = canvas.width;
+        } else if (this.position === 'left') {
+            this.y -= this.speed * window.speedMultiplier;
+            if (this.y < -20) this.y = canvas.height;
+        } else if (this.position === 'right') {
             this.y += this.speed * window.speedMultiplier;
-            if (this.y > canvas.height) {
-                this.y = -20;
-            }
+            if (this.y > canvas.height) this.y = -20;
         }
     }
     
@@ -510,19 +524,15 @@ class Laser {
             }
             
             if (hit) {
-                damageStats.laser += laserDamage;
-                brick.hit(laserDamage);
+                let damage = laserDamage;
+                
+                // Apply boss debuffs if target is a boss (lasers don't have a type, so they're not affected by ball-specific debuffs)
+                // Lasers are unaffected by debuffs per the spec
+                
+                damageStats.laser += damage;
+                brick.hit(damage);
                 if (!brick.alive) {
-                    if (brick.isBB) {
-                        bbCurrency += 1;
-                    } else {
-                        money += brick.maxHealth;
-                        if (brick.isBoss) {
-                            bossesKilled++;
-                            const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
-                            goldEarnedThisPrestige += 1 + goldMultiplier;
-                        }
-                    }
+                    awardBrickKill(brick);
                 }
             }
         }
@@ -605,14 +615,34 @@ class Brick {
         
         if (this.isBB) {
             ctx.fillText(simplifyNumber(this.health) + ' BB', this.x + this.width / 2, this.y + this.height / 2 + 5);
-        } else {
-            ctx.fillText(simplifyNumber(this.health), this.x + this.width / 2, this.y + this.height / 2 + (this.isBoss ? 10 : 5));
-        }
-        
-        if (this.isBoss) {
-            ctx.fillStyle = '#ffd700';
+        } else if (this.isBoss) {
+            // Draw boss name above
             ctx.font = '16px Arial';
-            ctx.fillText('BOSS', this.x + this.width / 2, this.y - 10);
+            ctx.fillText(`Boss Level ${this.bossLevel || '?'}`, this.x + this.width / 2, this.y - 10);
+            
+            // Draw HP inside
+            ctx.font = '24px Arial';
+            ctx.fillText(simplifyNumber(this.health), this.x + this.width / 2, this.y + this.height / 2 + 10);
+            
+            // Draw debuffs below
+            if (this.bossDebuffs && this.bossDebuffs.length > 0) {
+                ctx.font = '12px Arial';
+                let debuffY = this.y + this.height + 15;
+                for (let debuff of this.bossDebuffs) {
+                    const color = debuff.multiplier < 1 ? '#e74c3c' : '#2ecc71';
+                    ctx.fillStyle = color;
+                    ctx.fillText(`${capitalizeFirstLetter(debuff.type)}: ${debuff.multiplier}x`, this.x + this.width / 2, debuffY);
+                    debuffY += 15;
+                }
+            }
+            
+            // Draw freeze indicator
+            if (this.hasFreeze) {
+                ctx.fillStyle = '#3498db';
+                ctx.fillText('❄️ Freeze Active', this.x + this.width / 2, debuffY + 5);
+            }
+        } else {
+            ctx.fillText(simplifyNumber(this.health), this.x + this.width / 2, this.y + this.height / 2 + 5);
         }
     }
 
@@ -654,9 +684,27 @@ class Brick {
                 }
                 if (this.health <= 0) {
                     this.alive = false;
+                    // Award currency when poison kills a brick
+                    awardBrickKill(this);
+                    updateUI();
                 }
             }
         }
+    }
+}
+
+// Award currency when a brick is destroyed - single source of truth
+function awardBrickKill(brick) {
+    // All bricks give money equal to their max health
+    money += brick.maxHealth;
+    if (brick.isBB) {
+        // BB bricks additionally give +1 BB currency
+        bbCurrency += 1;
+    }
+    if (brick.isBoss) {
+        bossesKilled++;
+        const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
+        goldEarnedThisPrestige += 1 + goldMultiplier;
     }
 }
 
@@ -715,8 +763,10 @@ function initBricks() {
             // Chance to be BB after level 100
             if (level >= 100 && Math.random() < bbChance) {
                 brick.isBB = true;
-                brick.health = level * 10;
-                brick.maxHealth = level * 10;
+                // BB health multiplier: 10x at level 100, 20x at 200, 30x at 300, etc.
+                const bbMultiplier = Math.floor(level / 100) * 10;
+                brick.health = level * bbMultiplier;
+                brick.maxHealth = level * bbMultiplier;
             }
             
             bricks.push(brick);
@@ -751,8 +801,11 @@ function saveGame() {
         prestigeLevel: prestigeLevel,
         prestigeBuffs: prestigeBuffs,
         laserDamage: laserDamage,
+        laserUpgradeCost: laserUpgradeCost,
         laserPurchases: laserPurchases,
         prestigeUpgradeCosts: prestigeUpgradeCosts,
+        bossRushLevel: bossRushLevel,
+        bossRushCost: bossRushCost,
         lastSaveTime: Date.now()
     };
     localStorage.setItem('idleBreakoutSave', JSON.stringify(saveData));
@@ -772,7 +825,7 @@ function loadGame() {
         clickPower = data.clickPower || 1;
         bbCurrency = data.bbCurrency || 0;
         maxBalls = data.maxBalls || 50;
-        bbMaxSpeedBonus = data.bbMaxSpeedBonus || 1;
+        bbMaxSpeedBonus = data.bbMaxSpeedBonus || 0;
         bbMaxPowerBonus = data.bbMaxPowerBonus || 1;
         
         if (data.ballTypes) {
@@ -837,6 +890,10 @@ function loadGame() {
             laserDamage = data.laserDamage;
         }
         
+        if (data.laserUpgradeCost !== undefined) {
+            laserUpgradeCost = data.laserUpgradeCost;
+        }
+        
         if (data.laserPurchases) {
             laserPurchases = data.laserPurchases;
             // Rebuild lasers
@@ -849,6 +906,14 @@ function loadGame() {
         
         if (data.prestigeUpgradeCosts) {
             prestigeUpgradeCosts = data.prestigeUpgradeCosts;
+        }
+        
+        if (data.bossRushLevel !== undefined) {
+            bossRushLevel = data.bossRushLevel;
+        }
+        
+        if (data.bossRushCost !== undefined) {
+            bossRushCost = data.bossRushCost;
         }
         
         // Ensure goldBoost cost is set if not present in save
@@ -881,7 +946,7 @@ function loadGame() {
                 let totalDPS = 0;
                 for (let ball of balls) {
                     const damage = ball.getDamage();
-                    const speed = ball.baseSpeed * ballSpeed * ball.getSpeedMultiplier() * bbMaxSpeedBonus * window.speedMultiplier;
+                    const speed = ball.baseSpeed * ballSpeed * ball.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier;
                     totalDPS += damage * speed * 10; // Rough estimate of hits per second
                 }
                 
@@ -920,8 +985,8 @@ function resetGame() {
     clickPower = 1;
     bbCurrency = 0;
     maxBalls = 50;
-    bbMaxSpeedBonus = 1;
-    bbMaxPowerBonus = 1;
+    bbMaxSpeedBonus = 0;
+    bbMaxPowerBonus = 1; // unused now but keep for save compatibility
     sfxVolume = 0.1;
     musicVolume = 0.1;
     
@@ -977,13 +1042,52 @@ function resetGame() {
         maxPower: 25
     };
     
+    // Reset prestige
+    gold = 0;
+    goldEarnedThisPrestige = 0;
+    bossesKilled = 0;
+    prestigeLevel = 0;
+    prestigeBuffs = {
+        speed: 0,
+        damage: 0,
+        maxBalls: 0,
+        goldBoost: 0
+    };
+    prestigeUpgradeCosts = {
+        prestigeSpeed: 10,
+        prestigeDamage: 10,
+        prestigeMaxBalls: 10,
+        goldBoost: 10
+    };
+    
+    // Reset lasers
+    lasers = [];
+    laserDamage = 1;
+    laserUpgradeCost = 100;
+    laserPurchases = {
+        laser1: false,
+        laser2: false,
+        laser3: false,
+        laser4: false
+    };
+    
+    // Reset boss rush
+    bossRushLevel = 1;
+    bossRushCost = 1000;
+    inBossRush = false;
+    bossRushProgress = 0;
+    bossRushBosses = [];
+    bossRushTimer = 0;
+    bossRushMaxTime = 0;
+    bossRushGoldReward = 0;
+    savedLevel = 1;
+    
     initBricks();
     updateUI();
 }
 
 // Initialize game
 function initGame() {
-    detectRefreshRate();
     loadGame();
     if (balls.length === 0) {
         initBricks();
@@ -1041,7 +1145,7 @@ function checkBallCollision(ball) {
             ball.y - ball.radius < brick.y + brick.height) {
             
             // Apply damage
-            let damage = ball.getDamage();
+            let damage = ball.getDamage(brick);
             
             // Apply poison multiplier if brick is poisoned and ball is not poison
             if (brick.poisoned && ball.type !== 'poison') {
@@ -1067,6 +1171,9 @@ function checkBallCollision(ball) {
                             if (dist < radius) {
                                 const splashPercent = 0.25 * (1 - dist / radius);
                                 otherBrick.hit(damage * Math.max(0, splashPercent));
+                                if (!otherBrick.alive) {
+                                    awardBrickKill(otherBrick);
+                                }
                             }
                         }
                     }
@@ -1081,17 +1188,7 @@ function checkBallCollision(ball) {
                 playSound('hit');
                 
                 if (!brick.alive) {
-                    if (brick.isBB) {
-                        bbCurrency += 1;
-                    } else {
-                        money += brick.maxHealth;
-                        // Track boss kills for gold
-                        if (brick.isBoss) {
-                            bossesKilled++;
-                            const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
-                            goldEarnedThisPrestige += 1 + goldMultiplier;
-                        }
-                    }
+                    awardBrickKill(brick);
                 }
                 
                 updateUI();
@@ -1130,9 +1227,6 @@ function checkBallCollision(ball) {
                 ball.targetBrick = null;
             }
             
-            // Track damage (bounce case)
-            damageStats[ball.type] += damage;
-            
             // Plasma ball splash damage - scales 25% to 0% based on distance
             if (ball.type === 'plasma') {
                 const radius = ball.getPlasmaRadius();
@@ -1142,6 +1236,9 @@ function checkBallCollision(ball) {
                         if (dist < radius) {
                             const splashPercent = 0.25 * (1 - dist / radius);
                             otherBrick.hit(damage * Math.max(0, splashPercent));
+                            if (!otherBrick.alive) {
+                                awardBrickKill(otherBrick);
+                            }
                         }
                     }
                 }
@@ -1156,17 +1253,7 @@ function checkBallCollision(ball) {
             playSound('hit');
             
             if (!brick.alive) {
-                if (brick.isBB) {
-                    bbCurrency += 1;
-                } else {
-                    money += brick.maxHealth;
-                    // Track boss kills for gold
-                    if (brick.isBoss) {
-                        bossesKilled++;
-                        const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
-                        goldEarnedThisPrestige += 1 + goldMultiplier;
-                    }
-                }
+                awardBrickKill(brick);
             }
             
             updateUI();
@@ -1186,6 +1273,14 @@ function checkScatterBallCollision(scatterBall) {
             
             let damage = scatterBall.damage;
             
+            // Apply boss debuffs if target is a boss
+            if (brick.isBoss && brick.bossDebuffs) {
+                const debuff = brick.bossDebuffs.find(d => d.type === 'scatter');
+                if (debuff) {
+                    damage *= debuff.multiplier;
+                }
+            }
+            
             // Apply poison multiplier if brick is poisoned
             if (brick.poisoned) {
                 damage *= brick.poisonMultiplier;
@@ -1200,11 +1295,7 @@ function checkScatterBallCollision(scatterBall) {
                 playSound('hit');
                 
                 if (!brick.alive) {
-                    if (brick.isBB) {
-                        bbCurrency += 1;
-                    } else {
-                        money += brick.maxHealth;
-                    }
+                    awardBrickKill(brick);
                 }
                 
                 updateUI();
@@ -1214,15 +1305,8 @@ function checkScatterBallCollision(scatterBall) {
             brick.hit(damage);
             playSound('hit');
             
-            // Track damage (bounce case)
-            damageStats.scatter += damage;
-            
             if (!brick.alive) {
-                if (brick.isBB) {
-                    bbCurrency += 1;
-                } else {
-                    money += brick.maxHealth;
-                }
+                awardBrickKill(brick);
             }
             
             updateUI();
@@ -1264,7 +1348,7 @@ canvas.addEventListener('click', (e) => {
             damageStats.click += clickPower;
             
             if (!brick.alive) {
-                money += brick.maxHealth;
+                awardBrickKill(brick);
             }
             
             updateUI();
@@ -1349,6 +1433,20 @@ function updateUI() {
         const laserDamageUpgradeBtn = document.querySelector('.upgrade-btn[data-upgrade="laserDamage"]');
         if (laserDamageUpgradeBtn) {
             laserDamageUpgradeBtn.disabled = money < laserDamageCost;
+            const nameEl = laserDamageUpgradeBtn.querySelector('.upgrade-name');
+            if (nameEl) {
+                nameEl.textContent = `Laser Damage: ${simplifyNumber(laserDamage)} (+500)`;
+            }
+        }
+    }
+    
+    // Update boss rush button
+    const bossRushBtn = document.getElementById('bossRushBtn');
+    if (bossRushBtn) {
+        bossRushBtn.disabled = bbCurrency < bossRushCost || inBossRush;
+        const bossRushCostEl = document.getElementById('bossRushCost');
+        if (bossRushCostEl) {
+            bossRushCostEl.textContent = `${simplifyNumber(bossRushCost)} BB`;
         }
     }
     
@@ -1383,7 +1481,7 @@ function updateUI() {
     for (let type in ballTypes) {
         const costEl = document.querySelector(`.ball-item[data-ball="${type}"] .ball-cost`);
         if (costEl) {
-            costEl.textContent = `$${ballTypes[type].cost.toLocaleString()}`;
+            costEl.textContent = `$${simplifyNumber(ballTypes[type].cost)}`;
         }
     }
     
@@ -1415,7 +1513,7 @@ function updateUI() {
                 }
                 
                 btn.querySelector('.upgrade-boost').textContent = boostText;
-                btn.querySelector('.upgrade-cost').textContent = `$${cost.toLocaleString()}`;
+                btn.querySelector('.upgrade-cost').textContent = `$${simplifyNumber(cost)}`;
             }
         }
     }
@@ -1426,7 +1524,7 @@ function updateUI() {
         if (btn) {
             const cost = upgradeCosts[upgrade];
             btn.disabled = money < cost;
-            btn.querySelector('.upgrade-cost').textContent = `$${cost.toLocaleString()}`;
+            btn.querySelector('.upgrade-cost').textContent = `$${simplifyNumber(cost)}`;
         }
     }
     
@@ -1436,7 +1534,7 @@ function updateUI() {
         if (btn) {
             const cost = bbUpgradeCosts[upgrade];
             btn.disabled = bbCurrency < cost;
-            btn.querySelector('.upgrade-cost').textContent = `${cost} BB`;
+            btn.querySelector('.upgrade-cost').textContent = `${simplifyNumber(cost)} BB`;
         }
     }
 }
@@ -1488,10 +1586,13 @@ function upgradeBB(upgradeType) {
             maxBalls += 10;
             bbUpgradeCosts.maxBalls = Math.ceil(cost * 1.5);
         } else if (upgradeType === 'maxSpeed') {
-            bbMaxSpeedBonus *= 1.05;
+            bbMaxSpeedBonus += 0.10; // +10% flat speed boost
             bbUpgradeCosts.maxSpeed = Math.ceil(cost * 1.5);
         } else if (upgradeType === 'maxPower') {
-            bbMaxPowerBonus *= 1.05;
+            // +1 base damage to all ball types
+            for (let type in ballTypes) {
+                ballTypes[type].damage += 1;
+            }
             bbUpgradeCosts.maxPower = Math.ceil(cost * 1.5);
         }
         
@@ -1604,9 +1705,191 @@ document.getElementById('prestigeBtn').addEventListener('click', () => {
 document.querySelectorAll('.prestige-upgrade-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const upgradeType = btn.dataset.prestige;
-        buyPrestigeUpgrade(upgradeType);
+        if (upgradeType) {
+            buyPrestigeUpgrade(upgradeType);
+        }
     });
 });
+
+document.getElementById('bossRushBtn').addEventListener('click', () => {
+    startBossRush();
+});
+
+// Boss rush functions
+function startBossRush() {
+    if (bbCurrency < bossRushCost || inBossRush) return;
+    
+    bbCurrency -= bossRushCost;
+    inBossRush = true;
+    bossRushProgress = 0;
+    bossRushGoldReward = 0;
+    savedLevel = level; // Save current level
+    
+    // Generate boss pattern for this rush
+    generateBossRushPattern();
+    
+    // Spawn first boss
+    spawnNextBoss();
+    
+    updateUI();
+    saveGame();
+}
+
+function generateBossRushPattern() {
+    bossRushBosses = [];
+    
+    // Pattern: rush N has N level 1 bosses, N-1 level 2 bosses, ... 1 level N boss
+    for (let bossLevel = 1; bossLevel <= bossRushLevel; bossLevel++) {
+        const count = bossRushLevel - bossLevel + 1;
+        for (let i = 0; i < count; i++) {
+            bossRushBosses.push({
+                level: bossLevel,
+                hp: getBossHP(bossLevel),
+                maxHp: getBossHP(bossLevel),
+                debuffs: generateBossDebuffs(bossLevel),
+                timer: getBossTimer(bossLevel),
+                maxTimer: getBossTimer(bossLevel),
+                hasFreeze: bossLevel >= 10
+            });
+        }
+    }
+}
+
+function getBossHP(bossLevel) {
+    const baseHP = [10000, 50000, 100000, 250000, 500000, 1000000, 2000000, 4000000, 10000000, 25000000, 50000000];
+    
+    if (bossLevel <= 11) {
+        return baseHP[bossLevel - 1];
+    }
+    
+    // Boss 12+: 100M base, 2x more health for each level above 11
+    return 100000000 * Math.pow(2, bossLevel - 11);
+}
+
+function generateBossDebuffs(bossLevel) {
+    const debuffs = [];
+    const ballTypes = ['basic', 'plasma', 'sniper', 'scatter', 'cannonball', 'poison'];
+    
+    if (bossLevel === 2) {
+        debuffs.push({ type: 'sniper', multiplier: 0.5 });
+    } else if (bossLevel === 3) {
+        debuffs.push({ type: 'plasma', multiplier: 0.5 });
+        debuffs.push({ type: 'cannonball', multiplier: 0.5 });
+    } else if (bossLevel === 4) {
+        const random1 = ballTypes[Math.floor(Math.random() * ballTypes.length)];
+        const random2 = ballTypes.filter(t => t !== random1)[Math.floor(Math.random() * (ballTypes.length - 1))];
+        debuffs.push({ type: random1, multiplier: 0.5 });
+        debuffs.push({ type: random2, multiplier: 2.0 });
+    } else if (bossLevel === 5) {
+        const random1 = ballTypes[Math.floor(Math.random() * ballTypes.length)];
+        const random2 = ballTypes.filter(t => t !== random1)[Math.floor(Math.random() * (ballTypes.length - 1))];
+        const random3 = ballTypes.filter(t => t !== random1 && t !== random2)[Math.floor(Math.random() * (ballTypes.length - 2))];
+        debuffs.push({ type: random1, multiplier: 0.5 });
+        debuffs.push({ type: random2, multiplier: 0.5 });
+        debuffs.push({ type: random3, multiplier: 2.0 });
+    } else if (bossLevel === 6) {
+        const random1 = ballTypes[Math.floor(Math.random() * ballTypes.length)];
+        const random2 = ballTypes.filter(t => t !== random1)[Math.floor(Math.random() * (ballTypes.length - 1))];
+        const random3 = ballTypes.filter(t => t !== random1 && t !== random2)[Math.floor(Math.random() * (ballTypes.length - 2))];
+        debuffs.push({ type: random1, multiplier: 0.5 });
+        debuffs.push({ type: random2, multiplier: 0.5 });
+        debuffs.push({ type: random3, multiplier: 0.1 });
+    } else if (bossLevel >= 7) {
+        // Always 2 random balls with 0.5x
+        const random1 = ballTypes[Math.floor(Math.random() * ballTypes.length)];
+        const random2 = ballTypes.filter(t => t !== random1)[Math.floor(Math.random() * (ballTypes.length - 1))];
+        debuffs.push({ type: random1, multiplier: 0.5 });
+        debuffs.push({ type: random2, multiplier: 0.5 });
+        
+        // Additional debuffs based on level
+        if (bossLevel === 8) {
+            const random3 = ballTypes.filter(t => t !== random1 && t !== random2)[Math.floor(Math.random() * (ballTypes.length - 2))];
+            debuffs.push({ type: random3, multiplier: 2.0 });
+        } else if (bossLevel === 9) {
+            const random3 = ballTypes.filter(t => t !== random1 && t !== random2)[Math.floor(Math.random() * (ballTypes.length - 2))];
+            debuffs.push({ type: random3, multiplier: 0.1 });
+        } else if (bossLevel >= 12) {
+            // 50% chance for 2x, 25% chance for 0.1x
+            if (Math.random() < 0.5) {
+                const random3 = ballTypes.filter(t => t !== random1 && t !== random2)[Math.floor(Math.random() * (ballTypes.length - 2))];
+                debuffs.push({ type: random3, multiplier: 2.0 });
+            }
+            if (Math.random() < 0.25) {
+                const random4 = ballTypes.filter(t => t !== random1 && t !== random2 && t !== (debuffs[2]?.type || ''))[Math.floor(Math.random() * (ballTypes.length - 3))];
+                debuffs.push({ type: random4, multiplier: 0.1 });
+            }
+        }
+    }
+    
+    return debuffs;
+}
+
+function getBossTimer(bossLevel) {
+    if (bossLevel < 7) return 0; // No timer
+    if (bossLevel === 7) return 300; // 5 minutes
+    if (bossLevel === 8 || bossLevel === 9) return 360; // 6 minutes
+    if (bossLevel >= 10) return 300; // 5 minutes for all bosses after 10
+    return 0;
+}
+
+function spawnNextBoss() {
+    if (bossRushProgress >= bossRushBosses.length) {
+        // All bosses defeated - win the rush
+        winBossRush();
+        return;
+    }
+    
+    const bossData = bossRushBosses[bossRushProgress];
+    bossRushTimer = bossData.timer;
+    bossRushMaxTime = bossData.maxTimer;
+    
+    // Clear existing bricks and spawn boss
+    bricks = [];
+    const boss = new Brick(canvas.width / 2 - 233.5, canvas.height / 2 - 83.5, bossData.hp);
+    boss.width = 467;
+    boss.height = 167;
+    boss.isBoss = true;
+    boss.health = bossData.hp;
+    boss.maxHealth = bossData.maxHp;
+    boss.bossLevel = bossData.level;
+    boss.bossDebuffs = bossData.debuffs;
+    boss.hasFreeze = bossData.hasFreeze;
+    boss.freezeTimer = 0;
+    bricks.push(boss);
+}
+
+function winBossRush() {
+    inBossRush = false;
+    
+    // Calculate gold reward: round 1 = 1, round 2 = 3, round 3 = 6, round 4 = 10, etc. (triangular numbers)
+    const goldReward = (bossRushLevel * (bossRushLevel + 1)) / 2;
+    gold += goldReward;
+    goldEarnedThisPrestige += goldReward; // Add to prestige earnings
+    
+    // Increase boss rush level and cost
+    bossRushLevel++;
+    bossRushCost += 1000;
+    
+    alert(`Boss Rush Complete! You earned ${goldReward} gold!`);
+    
+    // Return to normal game at saved level
+    level = savedLevel;
+    initBricks();
+    updateUI();
+    saveGame();
+}
+
+function loseBossRush() {
+    inBossRush = false;
+    
+    alert(`Boss Rush Failed! Your BB was wasted.`);
+    
+    // Return to normal game at saved level
+    level = savedLevel;
+    initBricks();
+    updateUI();
+    saveGame();
+}
 
 function prestige() {
     gold += goldEarnedThisPrestige;
@@ -1622,8 +1905,8 @@ function prestige() {
     clickPower = 1;
     bbCurrency = 0;
     maxBalls = 50 + (prestigeBuffs.maxBalls * 10);
-    bbMaxSpeedBonus = 1;
-    bbMaxPowerBonus = 1;
+    bbMaxSpeedBonus = 0;
+    bbMaxPowerBonus = 1; // unused now
     
     // Reset ball costs
     ballTypes.basic.cost = 10;
@@ -1706,6 +1989,10 @@ function buyPrestigeUpgrade(upgradeType) {
         gold -= cost;
         prestigeBuffs.damage++;
         prestigeUpgradeCosts.prestigeDamage = 10 + (prestigeBuffs.damage * 25);
+        // Buy 2 power upgrades for every ball type
+        for (let type in ballUpgrades) {
+            ballUpgrades[type].power += 2;
+        }
     } else if (upgradeType === 'prestigeMaxBalls' && gold >= cost) {
         gold -= cost;
         prestigeBuffs.maxBalls++;
@@ -1776,32 +2063,83 @@ function showAchievements() {
     }
 }
 
-// Game loop
-function gameLoop() {
+// Game loop - split into logic (runs in background) and render (rAF)
+const TARGET_FPS = 60;
+const FRAME_MS = 1000 / TARGET_FPS;
+let lastLogicTime = 0;
+
+function logicLoop() {
     if (!gameRunning) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw background
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Update and draw bricks
+    // Update bricks (poison ticks)
     for (let brick of bricks) {
         brick.updatePoison();
-        brick.draw();
+        
+        // Update boss freeze timer
+        if (brick.isBoss && brick.hasFreeze) {
+            brick.freezeTimer += (FRAME_MS / 1000) * window.speedMultiplier;
+            if (brick.freezeTimer >= 3) {
+                brick.freezeTimer = 0;
+                // Randomly freeze/unfreeze balls touching the boss
+                for (let ball of balls) {
+                    if (ball.x + ball.radius > brick.x && ball.x - ball.radius < brick.x + brick.width &&
+                        ball.y + ball.radius > brick.y && ball.y - ball.radius < brick.y + brick.height) {
+                        // Ball is touching boss - randomly freeze or unfreeze
+                        if (Math.random() < 0.5) {
+                            ball.frozen = true;
+                            ball.freezeTimer = 60; // Freeze for 1 second
+                        } else {
+                            ball.frozen = false;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Push balls outward if inside boss hitbox
+        if (brick.isBoss) {
+            for (let ball of balls) {
+                if (ball.x + ball.radius > brick.x && ball.x - ball.radius < brick.x + brick.width &&
+                    ball.y + ball.radius > brick.y && ball.y - ball.radius < brick.y + brick.height) {
+                    // Ball is inside boss - push outward
+                    const centerX = brick.x + brick.width / 2;
+                    const centerY = brick.y + brick.height / 2;
+                    const dx = ball.x - centerX;
+                    const dy = ball.y - centerY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist > 0) {
+                        // Normalize and push outward
+                        const pushSpeed = 5;
+                        ball.dx = (dx / dist) * pushSpeed;
+                        ball.dy = (dy / dist) * pushSpeed;
+                        
+                        // Move ball outside immediately
+                        ball.x = centerX + (dx / dist) * (brick.width / 2 + ball.radius + 5);
+                        ball.y = centerY + (dy / dist) * (brick.height / 2 + ball.radius + 5);
+                    }
+                }
+            }
+        }
     }
 
-    // Update and draw balls
+    // Update boss rush timer
+    if (inBossRush && bossRushMaxTime > 0) {
+        bossRushTimer -= (FRAME_MS / 1000) * window.speedMultiplier;
+        if (bossRushTimer <= 0) {
+            loseBossRush();
+            return;
+        }
+    }
+
+    // Update balls
     for (let ball of balls) {
         ball.update();
-        ball.draw();
     }
 
-    // Update and draw lasers
+    // Update lasers
     for (let laser of lasers) {
         laser.update();
-        laser.draw();
     }
 
     // Check collisions
@@ -1810,13 +2148,84 @@ function gameLoop() {
     // Check if level complete - auto advance
     const aliveBricks = bricks.filter(b => b.alive);
     if (aliveBricks.length === 0) {
-        level++;
-        initBricks();
+        if (inBossRush) {
+            // Boss defeated - spawn next boss
+            bossRushProgress++;
+            spawnNextBoss();
+        } else {
+            // Normal level complete
+            level++;
+            initBricks();
+        }
         updateUI();
         saveGame();
     }
 
-    requestAnimationFrame(gameLoop);
+    setTimeout(logicLoop, FRAME_MS);
+}
+
+function renderLoop() {
+    if (!gameRunning) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw bricks
+    for (let brick of bricks) {
+        brick.draw();
+    }
+
+    // Draw balls
+    for (let ball of balls) {
+        ball.draw();
+    }
+
+    // Draw lasers
+    for (let laser of lasers) {
+        laser.draw();
+    }
+
+    // Draw boss rush timer
+    if (inBossRush && bossRushMaxTime > 0) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        const minutes = Math.floor(bossRushTimer / 60);
+        const seconds = Math.floor(bossRushTimer % 60);
+        ctx.fillText(`Boss ${bossRushProgress + 1}/${bossRushBosses.length} - ${minutes}:${seconds.toString().padStart(2, '0')}`, canvas.width / 2, 30);
+    }
+
+    requestAnimationFrame(renderLoop);
+}
+
+function gameLoop() {
+    logicLoop();
+    renderLoop();
+}
+
+// Dev mode cheat keys
+if (DEV_MODE) {
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '1') {
+            money *= 2;
+            alert('Money doubled!');
+            updateUI();
+            saveGame();
+        } else if (e.key === '2') {
+            bbCurrency *= 2;
+            alert('BB doubled!');
+            updateUI();
+            saveGame();
+        } else if (e.key === '3') {
+            gold *= 2;
+            alert('Gold doubled!');
+            updateUI();
+            saveGame();
+        }
+    });
 }
 
 // Start game
