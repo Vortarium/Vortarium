@@ -1,6 +1,51 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// Refresh rate detection and speed multiplier
+let refreshRate = 60; // Default to 60
+window.speedMultiplier = 1; // Default speed multiplier (global for access in classes)
+
+// Detect refresh rate
+function detectRefreshRate() {
+    // Try to get refresh rate from screen API
+    if (window.screen && window.screen.refreshRate) {
+        refreshRate = window.screen.refreshRate;
+    } else {
+        // Fallback: measure actual frame rate
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let measuredFPS = 60;
+        
+        function measureFPS() {
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime - lastTime >= 1000) {
+                measuredFPS = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+                refreshRate = measuredFPS;
+                
+                // Apply 2x speed if 60fps detected
+                if (refreshRate === 60) {
+                    window.speedMultiplier = 2;
+                } else {
+                    window.speedMultiplier = 1;
+                }
+            }
+            requestAnimationFrame(measureFPS);
+        }
+        measureFPS();
+        return;
+    }
+    
+    // Apply 2x speed if 60fps detected
+    if (refreshRate === 60) {
+        window.speedMultiplier = 2;
+    } else {
+        window.speedMultiplier = 1;
+    }
+}
+
 // Audio
 let soundEnabled = true;
 let audioContext;
@@ -208,7 +253,7 @@ class Ball {
     }
 
     update() {
-        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * bbMaxSpeedBonus;
+        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * bbMaxSpeedBonus * window.speedMultiplier;
         const damageMultiplier = ballPower;
         
         this.x += this.dx * speedMultiplier;
@@ -269,11 +314,11 @@ class Ball {
                     radius: 4,
                     damage: this.baseDamage * 0.5 * ballPower,
                     color: this.color,
-                    lifetime: 300, // 5 seconds at 60fps
+                    lifetime: 600, // 10 seconds at 60fps
                     lastHitTime: 0,
                     update: function() {
-                        this.x += this.dx * (ballSpeed / 2.8);
-                        this.y += this.dy * (ballSpeed / 2.8);
+                        this.x += this.dx * (ballSpeed / 2.8) * window.speedMultiplier;
+                        this.y += this.dy * (ballSpeed / 2.8) * window.speedMultiplier;
                         this.lifetime--;
                     },
                     draw: function() {
@@ -445,12 +490,12 @@ class Laser {
         
         // Move laser across
         if (this.position === 'top' || this.position === 'bottom') {
-            this.x += this.speed;
+            this.x += this.speed * window.speedMultiplier;
             if (this.x > canvas.width) {
                 this.x = -20;
             }
         } else {
-            this.y += this.speed;
+            this.y += this.speed * window.speedMultiplier;
             if (this.y > canvas.height) {
                 this.y = -20;
             }
@@ -915,6 +960,7 @@ function resetGame() {
 
 // Initialize game
 function initGame() {
+    detectRefreshRate();
     loadGame();
     if (balls.length === 0) {
         initBricks();
