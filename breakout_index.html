@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idle Breakout</title>
+    <link rel="stylesheet" href="breakout_style.css">
+</head>
+<body>
+    <div class="game-info">
+        <div class="level-display" id="levelDisplay">Level 1</div>
+        <div class="money-display" id="moneyDisplay">Money: $0</div>
+        <div class="gold-display" id="goldDisplay">Gold: 0</div>
+    </div>
+    <div class="game-container">
+        <div class="canvas-container">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="sidebar">
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-label">BB:</span>
+                    <span class="stat-value" id="bb">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Balls:</span>
+                    <span class="stat-value" id="ballCount">0/50</span>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Balls</h3>
+                <div class="ball-shop">
+                    <div class="ball-item" data-ball="basic">
+                        <span class="ball-name">Basic Ball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="basic">-</button>
+                            <span class="ball-count" id="count-basic">0</span>
+                            <button class="ball-buy" data-ball="basic">+</button>
+                        </div>
+                        <span class="ball-cost">$10</span>
+                    </div>
+                    <div class="ball-item" data-ball="plasma">
+                        <span class="ball-name">Plasma Ball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="plasma">-</button>
+                            <span class="ball-count" id="count-plasma">0</span>
+                            <button class="ball-buy" data-ball="plasma">+</button>
+                        </div>
+                        <span class="ball-cost">$200</span>
+                    </div>
+                    <div class="ball-item" data-ball="sniper">
+                        <span class="ball-name">Sniper Ball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="sniper">-</button>
+                            <span class="ball-count" id="count-sniper">0</span>
+                            <button class="ball-buy" data-ball="sniper">+</button>
+                        </div>
+                        <span class="ball-cost">$1,500</span>
+                    </div>
+                    <div class="ball-item" data-ball="scatter">
+                        <span class="ball-name">Scatter Ball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="scatter">-</button>
+                            <span class="ball-count" id="count-scatter">0</span>
+                            <button class="ball-buy" data-ball="scatter">+</button>
+                        </div>
+                        <span class="ball-cost">$10,000</span>
+                    </div>
+                    <div class="ball-item" data-ball="cannonball">
+                        <span class="ball-name">Cannonball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="cannonball">-</button>
+                            <span class="ball-count" id="count-cannonball">0</span>
+                            <button class="ball-buy" data-ball="cannonball">+</button>
+                        </div>
+                        <span class="ball-cost">$75,000</span>
+                    </div>
+                    <div class="ball-item" data-ball="poison">
+                        <span class="ball-name">Poison Ball</span>
+                        <div class="ball-controls">
+                            <button class="ball-sell" data-ball="poison">-</button>
+                            <span class="ball-count" id="count-poison">0</span>
+                            <button class="ball-buy" data-ball="poison">+</button>
+                        </div>
+                        <span class="ball-cost">$75,000</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Upgrades</h3>
+                <div class="upgrade-grid">
+                    <div class="upgrade-column" data-ball="basic">
+                        <h4>Basic</h4>
+                        <button class="ball-upgrade-btn" data-ball="basic" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">1</span>
+                            <span class="upgrade-cost">$50</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="basic" data-type="special">
+                            <span class="upgrade-name">Speed</span>
+                            <span class="upgrade-boost">+0%</span>
+                            <span class="upgrade-cost">$75</span>
+                        </button>
+                    </div>
+                    <div class="upgrade-column" data-ball="plasma">
+                        <h4>Plasma</h4>
+                        <button class="ball-upgrade-btn" data-ball="plasma" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">3</span>
+                            <span class="upgrade-cost">$100</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="plasma" data-type="special">
+                            <span class="upgrade-name">Radius</span>
+                            <span class="upgrade-boost">+0%</span>
+                            <span class="upgrade-cost">$150</span>
+                        </button>
+                    </div>
+                    <div class="upgrade-column" data-ball="sniper">
+                        <h4>Sniper</h4>
+                        <button class="ball-upgrade-btn" data-ball="sniper" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">3</span>
+                            <span class="upgrade-cost">$100</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="sniper" data-type="special">
+                            <span class="upgrade-name">Speed</span>
+                            <span class="upgrade-boost">+0%</span>
+                            <span class="upgrade-cost">$150</span>
+                        </button>
+                    </div>
+                    <div class="upgrade-column" data-ball="scatter">
+                        <h4>Scatter</h4>
+                        <button class="ball-upgrade-btn" data-ball="scatter" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">10</span>
+                            <span class="upgrade-cost">$100</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="scatter" data-type="special">
+                            <span class="upgrade-name">Mini Balls</span>
+                            <span class="upgrade-boost">3</span>
+                            <span class="upgrade-cost">$150</span>
+                        </button>
+                    </div>
+                    <div class="upgrade-column" data-ball="cannonball">
+                        <h4>Cannon</h4>
+                        <button class="ball-upgrade-btn" data-ball="cannonball" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">50</span>
+                            <span class="upgrade-cost">$200</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="cannonball" data-type="special">
+                            <span class="upgrade-name">Speed</span>
+                            <span class="upgrade-boost">+0%</span>
+                            <span class="upgrade-cost">$300</span>
+                        </button>
+                    </div>
+                    <div class="upgrade-column" data-ball="poison">
+                        <h4>Poison</h4>
+                        <button class="ball-upgrade-btn" data-ball="poison" data-type="power">
+                            <span class="upgrade-name">Power</span>
+                            <span class="upgrade-boost">5</span>
+                            <span class="upgrade-cost">$200</span>
+                        </button>
+                        <button class="ball-upgrade-btn" data-ball="poison" data-type="special">
+                            <span class="upgrade-name">Poison</span>
+                            <span class="upgrade-boost">2.0x</span>
+                            <span class="upgrade-cost">$300</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Global Upgrades</h3>
+                <div class="global-upgrades">
+                    <button class="upgrade-btn" data-upgrade="click">
+                        <span class="upgrade-name">Click Power</span>
+                        <span class="upgrade-cost">$100</span>
+                    </button>
+                    <button class="upgrade-btn" data-upgrade="laserDamage" id="laserDamageUpgradeBtn" style="display: none;">
+                        <span class="upgrade-name">Laser Damage +500</span>
+                        <span class="upgrade-cost" id="laserDamageUpgradeCost">$250K</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>BB Shop</h3>
+                <div class="bb-shop">
+                    <button class="bb-upgrade-btn" data-bb-upgrade="maxBalls">
+                        <span class="upgrade-name">Max Balls +10</span>
+                        <span class="upgrade-cost">100 BB</span>
+                    </button>
+                    <button class="bb-upgrade-btn" data-bb-upgrade="maxSpeed">
+                        <span class="upgrade-name">Max Speed +5%</span>
+                        <span class="upgrade-cost">25 BB</span>
+                    </button>
+                    <button class="bb-upgrade-btn" data-bb-upgrade="maxPower">
+                        <span class="upgrade-name">Max Power +5%</span>
+                        <span class="upgrade-cost">25 BB</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Controls</h3>
+                <div class="volume-control">
+                    <label for="sfxSlider">SFX Volume:</label>
+                    <input type="range" id="sfxSlider" min="0" max="100" value="10">
+                    <span id="sfxValue">10%</span>
+                </div>
+                <div class="volume-control">
+                    <label for="musicSlider">Music Volume:</label>
+                    <input type="range" id="musicSlider" min="0" max="100" value="10">
+                    <span id="musicValue">10%</span>
+                </div>
+                <button id="resetBtn">Reset Game</button>
+            </div>
+            
+            <div class="section">
+                <button id="achievementsBtn">Achievements</button>
+            </div>
+            
+            <div class="section">
+                <button id="prestigeBtn">Prestige</button>
+            </div>
+            
+            <div class="section">
+                <h3>Prestige Shop</h3>
+                <div class="prestige-shop">
+                    <button class="prestige-upgrade-btn" data-prestige="laser1">
+                        <span class="upgrade-name">Laser Top</span>
+                        <span class="upgrade-cost">10 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="laser2">
+                        <span class="upgrade-name">Laser Bottom</span>
+                        <span class="upgrade-cost">25 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="laser3">
+                        <span class="upgrade-name">Laser Left</span>
+                        <span class="upgrade-cost">50 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="laser4">
+                        <span class="upgrade-name">Laser Right</span>
+                        <span class="upgrade-cost">100 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="prestigeSpeed">
+                        <span class="upgrade-name">Prestige Speed +10%</span>
+                        <span class="upgrade-cost" id="prestigeSpeedCost">10 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="prestigeDamage">
+                        <span class="upgrade-name">Prestige Damage +10%</span>
+                        <span class="upgrade-cost" id="prestigeDamageCost">10 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="prestigeMaxBalls">
+                        <span class="upgrade-name">Prestige Max Balls +10</span>
+                        <span class="upgrade-cost" id="prestigeMaxBallsCost">10 Gold</span>
+                    </button>
+                    <button class="prestige-upgrade-btn" data-prestige="goldBoost">
+                        <span class="upgrade-name">Gold Boost 2x</span>
+                        <span class="upgrade-cost" id="goldBoostCost">10 Gold</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="achievementsPopup" class="achievements-popup">
+        <div class="achievements-content">
+            <button id="closeAchievements" class="close-btn">X</button>
+            <h2>Achievements</h2>
+            <div id="achievementsList"></div>
+        </div>
+    </div>
+    
+    <script src="breakout_game.js"></script>
+</body>
+</html>
