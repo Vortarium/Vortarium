@@ -2,7 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Dev mode - set to true for cheat keys
-const DEV_MODE = true;
+const DEV_MODE = false;
 
 // Global speed multiplier - simple 2x speed for everything
 window.speedMultiplier = 2;
@@ -354,9 +354,9 @@ class Ball {
         
         if (nearestBrick) {
             const angle = Math.atan2(nearestBrick.y - this.y, nearestBrick.x - this.x);
-            const speed = Math.sqrt(this.dx ** 2 + this.dy ** 2);
-            this.dx = Math.cos(angle) * speed;
-            this.dy = Math.sin(angle) * speed;
+            // Keep direction normalized to unit vector
+            this.dx = Math.cos(angle);
+            this.dy = Math.sin(angle);
         }
     }
 
@@ -1497,12 +1497,6 @@ function updateUI() {
         }
     });
     
-    // Show/hide prestige shop section based on whether player has prestiged
-    const prestigeShopSection = document.getElementById('prestigeShopSection');
-    if (prestigeShopSection) {
-        prestigeShopSection.style.display = (prestigeLevel > 0 || gold > 0) ? 'block' : 'none';
-    }
-    
     // Show/hide laser damage upgrade button based on laser purchases
     const hasLaser = laserPurchases.laser1 || laserPurchases.laser2 || laserPurchases.laser3 || laserPurchases.laser4;
     const laserDamageBtn = document.getElementById('laserDamageUpgradeBtn');
@@ -1808,13 +1802,10 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('prestigeBtn').addEventListener('click', () => {
-    showPopup('Prestige', `Are you sure you want to prestige? You will earn ${goldEarnedThisPrestige} gold and reset all progress except prestige upgrades.<br><br><button id="confirmPrestige" style="background: #4caf50; margin-top: 10px;">Confirm Prestige</button>`);
-    
-    document.getElementById('confirmPrestige').addEventListener('click', () => {
-        hidePopup();
+document.getElementById('prestigeBtn').addEventListener('click', function() {
+    if (confirm(`Are you sure you want to prestige? You will earn ${goldEarnedThisPrestige} gold and reset all progress except prestige upgrades.`)) {
         prestige();
-    });
+    }
 });
 
 document.querySelectorAll('.prestige-upgrade-btn').forEach(btn => {
