@@ -2,48 +2,34 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Refresh rate detection and speed multiplier
-let refreshRate = 60; // Default to 60
+let refreshRate = 144; // Default to 144 (safe default)
 window.speedMultiplier = 1; // Default speed multiplier (global for access in classes)
 
 // Detect refresh rate
 function detectRefreshRate() {
+    // Check for iOS devices (typically 60hz)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
     // Try to get refresh rate from screen API
     if (window.screen && window.screen.refreshRate) {
         refreshRate = window.screen.refreshRate;
+    } else if (isIOS) {
+        // iOS devices are typically 60hz
+        refreshRate = 60;
     } else {
-        // Fallback: measure actual frame rate
-        let frameCount = 0;
-        let lastTime = performance.now();
-        let measuredFPS = 60;
-        
-        function measureFPS() {
-            frameCount++;
-            const currentTime = performance.now();
-            if (currentTime - lastTime >= 1000) {
-                measuredFPS = frameCount;
-                frameCount = 0;
-                lastTime = currentTime;
-                refreshRate = measuredFPS;
-                
-                // Apply 2x speed if 60fps detected
-                if (refreshRate === 60) {
-                    window.speedMultiplier = 2;
-                } else {
-                    window.speedMultiplier = 1;
-                }
-            }
-            requestAnimationFrame(measureFPS);
-        }
-        measureFPS();
-        return;
+        // Fallback: assume 144hz (safe default - won't accidentally speed up)
+        refreshRate = 144;
     }
     
-    // Apply 2x speed if 60fps detected
-    if (refreshRate === 60) {
+    // Apply 2x speed ONLY if 50-70hz range OR iOS device
+    // 144hz and other high refresh rates stay at 1x
+    if ((refreshRate >= 50 && refreshRate <= 70) || isIOS) {
         window.speedMultiplier = 2;
     } else {
         window.speedMultiplier = 1;
     }
+    
+    console.log(`Detected refresh rate: ${refreshRate}hz, Speed multiplier: ${window.speedMultiplier}x`);
 }
 
 // Audio
@@ -767,7 +753,8 @@ function saveGame() {
         prestigeBuffs: prestigeBuffs,
         laserDamage: laserDamage,
         laserPurchases: laserPurchases,
-        prestigeUpgradeCosts: prestigeUpgradeCosts
+        prestigeUpgradeCosts: prestigeUpgradeCosts,
+        lastSaveTime: Date.now()
     };
     localStorage.setItem('idleBreakoutSave', JSON.stringify(saveData));
     localStorage.setItem('idleBreakoutSfxVolume', Math.round(sfxVolume * 100));
@@ -882,6 +869,43 @@ function loadGame() {
         
         initBricks();
         updateUI();
+        
+        // Calculate offline progress
+        if (data.lastSaveTime) {
+            const now = Date.now();
+            const offlineTime = (now - data.lastSaveTime) / 1000; // Convert to seconds
+            const maxOfflineTime = 8 * 60 * 60; // Max 8 hours of offline progress
+            const effectiveOfflineTime = Math.min(offlineTime, maxOfflineTime);
+            
+            if (effectiveOfflineTime > 60) { // Only if offline for more than 1 minute
+                // Calculate average DPS (damage per second)
+                let totalDPS = 0;
+                for (let ball of balls) {
+                    const damage = ball.getDamage();
+                    const speed = ball.baseSpeed * ballSpeed * ball.getSpeedMultiplier() * bbMaxSpeedBonus * window.speedMultiplier;
+                    totalDPS += damage * speed * 10; // Rough estimate of hits per second
+                }
+                
+                // Add laser damage
+                for (let laser of lasers) {
+                    totalDPS += laserDamage * (1 / 3); // Lasers fire every 3 seconds
+                }
+                
+                // Calculate offline earnings
+                const offlineMoney = totalDPS * effectiveOfflineTime * 0.5; // 50% efficiency offline
+                const offlineLevels = Math.floor(effectiveOfflineTime / 300); // Rough estimate: 5 minutes per level
+                
+                if (offlineMoney > 0) {
+                    money += offlineMoney;
+                    level += offlineLevels;
+                    
+                    // Show offline progress notification
+                    setTimeout(() => {
+                        alert(`Welcome back! You were away for ${Math.floor(effectiveOfflineTime / 60)} minutes.\nYou earned $${simplifyNumber(offlineMoney)} and completed ${offlineLevels} levels while offline.`);
+                    }, 500);
+                }
+            }
+        }
     }
 }
 
@@ -1263,12 +1287,16 @@ function updateUI() {
         
         if (upgradeType === 'laser1') {
             btn.disabled = laserPurchases.laser1 || gold < 10;
+            btn.style.display = laserPurchases.laser1 ? 'none' : 'block';
         } else if (upgradeType === 'laser2') {
             btn.disabled = laserPurchases.laser2 || gold < 25;
+            btn.style.display = laserPurchases.laser2 ? 'none' : 'block';
         } else if (upgradeType === 'laser3') {
             btn.disabled = laserPurchases.laser3 || gold < 50;
+            btn.style.display = laserPurchases.laser3 ? 'none' : 'block';
         } else if (upgradeType === 'laser4') {
             btn.disabled = laserPurchases.laser4 || gold < 100;
+            btn.style.display = laserPurchases.laser4 ? 'none' : 'block';
         } else if (upgradeType === 'prestigeSpeed') {
             const cost = prestigeUpgradeCosts.prestigeSpeed;
             btn.disabled = gold < cost;
