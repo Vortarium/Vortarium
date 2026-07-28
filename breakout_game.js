@@ -2,34 +2,33 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Refresh rate detection and speed multiplier
-let refreshRate = 144; // Default to 144 (safe default)
-window.speedMultiplier = 1; // Default speed multiplier (global for access in classes)
+let refreshRate = 60; // Default to 60
+window.speedMultiplier = 2; // Default to 2x speed (global for access in classes)
 
 // Detect refresh rate
 function detectRefreshRate() {
-    // Check for iOS devices (typically 60hz)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    
     // Try to get refresh rate from screen API
     if (window.screen && window.screen.refreshRate) {
         refreshRate = window.screen.refreshRate;
-    } else if (isIOS) {
-        // iOS devices are typically 60hz
-        refreshRate = 60;
+        console.log(`Screen API reports refresh rate: ${refreshRate}hz`);
     } else {
-        // Fallback: assume 144hz (safe default - won't accidentally speed up)
-        refreshRate = 144;
+        // Fallback: assume 60hz
+        refreshRate = 60;
+        console.log(`Screen API not available, assuming 60hz`);
     }
     
-    // Apply 2x speed ONLY if 50-70hz range OR iOS device
-    // 144hz and other high refresh rates stay at 1x
-    if ((refreshRate >= 50 && refreshRate <= 70) || isIOS) {
-        window.speedMultiplier = 2;
+    // Apply speed multipliers - everything slowed down by 2x
+    // 144hz: 0.25x speed (very slow)
+    // Other refresh rates: 1x speed (normal)
+    if (refreshRate === 144) {
+        window.speedMultiplier = 0.25;
+        console.log(`144hz detected - applying 0.25x speed multiplier`);
     } else {
         window.speedMultiplier = 1;
+        console.log(`Non-144hz detected (${refreshRate}hz) - applying 1x speed multiplier`);
     }
     
-    console.log(`Detected refresh rate: ${refreshRate}hz, Speed multiplier: ${window.speedMultiplier}x`);
+    console.log(`Final - Detected refresh rate: ${refreshRate}hz, Speed multiplier: ${window.speedMultiplier}x`);
 }
 
 // Audio
@@ -646,8 +645,8 @@ class Brick {
             if (this.poisonTimer <= 0) {
                 this.poisoned = false;
                 this.poisonMultiplier = 1; // Reset multiplier
-            } else if (this.poisonTimer % (60 / window.speedMultiplier) < window.speedMultiplier) {
-                // Take poison damage every second (adjusted for speed multiplier)
+            } else if (this.poisonTimer % (120 / window.speedMultiplier) < window.speedMultiplier) {
+                // Take poison damage every 2 seconds (doubled cooldown, adjusted for speed multiplier)
                 this.health -= ballPower * this.poisonBonus;
                 // Auto-destroy bricks with health < 1
                 if (this.health < 1 && this.health > 0) {
@@ -999,12 +998,20 @@ function initGame() {
         sfxVolume = parseInt(savedSfxVolume) / 100;
         document.getElementById('sfxSlider').value = savedSfxVolume;
         document.getElementById('sfxValue').textContent = savedSfxVolume + '%';
+        // Update all sound volumes
+        if (sounds.hit) sounds.hit.volume = sfxVolume;
+        if (sounds.buy) sounds.buy.volume = sfxVolume;
+        if (sounds.button) sounds.button.volume = sfxVolume;
+        if (sounds.zap) sounds.zap.volume = sfxVolume;
+        if (sounds.quest) sounds.quest.volume = sfxVolume;
     }
     
     if (savedMusicVolume) {
         musicVolume = parseInt(savedMusicVolume) / 100;
         document.getElementById('musicSlider').value = savedMusicVolume;
         document.getElementById('musicValue').textContent = savedMusicVolume + '%';
+        // Update music volume
+        if (sounds.music) sounds.music.volume = musicVolume;
     }
     
     // Auto-save every 10 seconds
