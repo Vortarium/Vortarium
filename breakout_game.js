@@ -17,15 +17,15 @@ function detectRefreshRate() {
         console.log(`Screen API not available, assuming 60hz`);
     }
     
-    // Apply speed multipliers - everything slowed down by 2x
-    // 144hz: 0.25x speed (very slow)
-    // Other refresh rates: 1x speed (normal)
+    // Apply speed multipliers
+    // 144hz: 0.5x speed (2x slower)
+    // Other refresh rates: 2x speed (2x faster)
     if (refreshRate === 144) {
-        window.speedMultiplier = 0.25;
-        console.log(`144hz detected - applying 0.25x speed multiplier`);
+        window.speedMultiplier = 0.5;
+        console.log(`144hz detected - applying 0.5x speed multiplier`);
     } else {
-        window.speedMultiplier = 1;
-        console.log(`Non-144hz detected (${refreshRate}hz) - applying 1x speed multiplier`);
+        window.speedMultiplier = 2;
+        console.log(`Non-144hz detected (${refreshRate}hz) - applying 2x speed multiplier`);
     }
     
     console.log(`Final - Detected refresh rate: ${refreshRate}hz, Speed multiplier: ${window.speedMultiplier}x`);
