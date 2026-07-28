@@ -229,18 +229,20 @@ class Ball {
     update() {
         // Handle freeze timer
         if (this.frozen) {
-            this.freezeTimer -= window.speedMultiplier;
+            this.freezeTimer -= deltaTime * 60; // Convert to frames for compatibility
             if (this.freezeTimer <= 0) {
                 this.frozen = false;
             }
             return; // Don't move if frozen
         }
         
-        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier;
+        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier * 2; // 2x faster base speed
         const damageMultiplier = ballPower;
         
-        this.x += this.dx * speedMultiplier;
-        this.y += this.dy * speedMultiplier;
+        // Use deltaTime for consistent movement across refresh rates
+        const movementScale = deltaTime * 60; // Scale to 60fps baseline
+        this.x += this.dx * speedMultiplier * movementScale;
+        this.y += this.dy * speedMultiplier * movementScale;
 
         // Wall collisions
         if (this.x - this.radius < 0) {
@@ -281,37 +283,6 @@ class Ball {
             this.targetNearestBrick();
             if (this.targetBrick) {
                 this.aimAtTarget();
-            }
-        }
-        
-        if (this.type === 'scatter') {
-            // Create scatter balls
-            const ballCount = this.getScatterBallCount();
-            for (let i = 0; i < ballCount; i++) {
-                const scatterBall = {
-                    x: this.x,
-                    y: this.y,
-                    dx: (Math.random() - 0.5) * 6,
-                    dy: (Math.random() - 0.5) * 6,
-                    radius: 4,
-                    damage: this.baseDamage * 0.5 * ballPower,
-                    color: this.color,
-                    lifetime: 600, // 10 seconds at 60fps
-                    lastHitTime: 0,
-                    update: function() {
-                        this.x += this.dx * (ballSpeed / 2.8) * window.speedMultiplier;
-                        this.y += this.dy * (ballSpeed / 2.8) * window.speedMultiplier;
-                        this.lifetime -= window.speedMultiplier;
-                    },
-                    draw: function() {
-                        ctx.beginPath();
-                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                        ctx.fillStyle = this.color;
-                        ctx.fill();
-                        ctx.closePath();
-                    }
-                };
-                this.scatterBalls.push(scatterBall);
             }
         }
     }
@@ -445,7 +416,7 @@ class Laser {
         this.height = 20;
         this.speed = 2;
         this.timer = 0;
-        this.fireInterval = 180; // 3 seconds at 60fps
+        this.fireInterval = 90; // 1.5 seconds at 60fps
         this.firing = false;
         this.fireDuration = 10; // How long the beam lasts
         
@@ -469,7 +440,7 @@ class Laser {
     }
     
     update() {
-        this.timer += window.speedMultiplier;
+        this.timer += deltaTime * 60; // Convert to frames for compatibility
         
         if (this.timer >= this.fireInterval && !this.firing) {
             this.fire();
@@ -478,7 +449,7 @@ class Laser {
         }
         
         if (this.firing) {
-            this.fireDuration -= window.speedMultiplier;
+            this.fireDuration -= deltaTime * 60;
             if (this.fireDuration <= 0) {
                 this.firing = false;
                 this.fireDuration = 10;
@@ -486,17 +457,19 @@ class Laser {
         }
         
         // Move laser across — bottom and right move opposite to top and left
+        const movementScale = deltaTime * 60; // Scale to 60fps baseline
+        const laserSpeed = this.speed * 2 * window.speedMultiplier; // 2x faster
         if (this.position === 'top') {
-            this.x += this.speed * window.speedMultiplier;
+            this.x += laserSpeed * movementScale;
             if (this.x > canvas.width) this.x = -20;
         } else if (this.position === 'bottom') {
-            this.x -= this.speed * window.speedMultiplier;
+            this.x -= laserSpeed * movementScale;
             if (this.x < -20) this.x = canvas.width;
         } else if (this.position === 'left') {
-            this.y -= this.speed * window.speedMultiplier;
+            this.y -= laserSpeed * movementScale;
             if (this.y < -20) this.y = canvas.height;
         } else if (this.position === 'right') {
-            this.y += this.speed * window.speedMultiplier;
+            this.y += laserSpeed * movementScale;
             if (this.y > canvas.height) this.y = -20;
         }
     }
@@ -671,12 +644,12 @@ class Brick {
 
     updatePoison() {
         if (this.poisoned) {
-            this.poisonTimer -= window.speedMultiplier;
+            this.poisonTimer -= deltaTime * 60; // Convert to frames for compatibility
             if (this.poisonTimer <= 0) {
                 this.poisoned = false;
                 this.poisonMultiplier = 1; // Reset multiplier
-            } else if (this.poisonTimer % (120 / window.speedMultiplier) < window.speedMultiplier) {
-                // Take poison damage every 2 seconds (doubled cooldown, adjusted for speed multiplier)
+            } else if (this.poisonTimer % 240 < deltaTime * 60) {
+                // Take poison damage every 4 seconds (240 frames at 60fps)
                 this.health -= ballPower * this.poisonBonus;
                 // Auto-destroy bricks with health < 1
                 if (this.health < 1 && this.health > 0) {
@@ -1179,9 +1152,53 @@ function checkBallCollision(ball) {
                     }
                 }
                 
+                // Scatter ball - spawn mini balls on brick hit
+                if (ball.type === 'scatter') {
+                    const ballCount = ball.getScatterBallCount();
+                    for (let i = 0; i < ballCount; i++) {
+                        const scatterBall = {
+                            x: ball.x,
+                            y: ball.y,
+                            dx: (Math.random() - 0.5) * 6,
+                            dy: (Math.random() - 0.5) * 6,
+                            radius: 4,
+                            damage: ball.baseDamage * 0.5 * ballPower,
+                            color: ball.color,
+                            lifetime: 600, // 10 seconds at 60fps
+                            lastHitTime: 0,
+                            update: function() {
+                                const movementScale = deltaTime * 60; // Scale to 60fps baseline
+                                this.x += this.dx * (ballSpeed / 2.8) * window.speedMultiplier * movementScale;
+                                this.y += this.dy * (ballSpeed / 2.8) * window.speedMultiplier * movementScale;
+                                this.lifetime -= deltaTime * 60; // Convert to frames
+                            },
+                            draw: function() {
+                                ctx.beginPath();
+                                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                                ctx.fillStyle = this.color;
+                                ctx.fill();
+                                ctx.closePath();
+                            }
+                        };
+                        ball.scatterBalls.push(scatterBall);
+                    }
+                }
+                
                 // Poison ball
                 if (ball.type === 'poison') {
                     brick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
+                    
+                    // Small chance to spread poison to nearby bricks
+                    if (Math.random() < 0.2) { // 20% chance
+                        for (let otherBrick of bricks) {
+                            if (otherBrick !== brick && otherBrick.alive && !otherBrick.poisoned) {
+                                const dist = Math.sqrt((otherBrick.x - brick.x) ** 2 + (otherBrick.y - brick.y) ** 2);
+                                if (dist < 150) { // Spread radius
+                                    otherBrick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
+                                }
+                            }
+                        }
+                    }
                 }
 
                 brick.hit(damage);
@@ -2067,9 +2084,18 @@ function showAchievements() {
 const TARGET_FPS = 60;
 const FRAME_MS = 1000 / TARGET_FPS;
 let lastLogicTime = 0;
+let deltaTime = 0; // Delta time in seconds for consistent speeds across refresh rates
 
 function logicLoop() {
     if (!gameRunning) return;
+    
+    // Calculate delta time
+    const currentTime = performance.now();
+    deltaTime = (currentTime - lastLogicTime) / 1000; // Convert to seconds
+    lastLogicTime = currentTime;
+    
+    // Cap delta time to prevent huge jumps (e.g., when tab was inactive)
+    if (deltaTime > 0.1) deltaTime = 0.1;
 
     // Update bricks (poison ticks)
     for (let brick of bricks) {
@@ -2077,7 +2103,7 @@ function logicLoop() {
         
         // Update boss freeze timer
         if (brick.isBoss && brick.hasFreeze) {
-            brick.freezeTimer += (FRAME_MS / 1000) * window.speedMultiplier;
+            brick.freezeTimer += deltaTime * window.speedMultiplier;
             if (brick.freezeTimer >= 3) {
                 brick.freezeTimer = 0;
                 // Randomly freeze/unfreeze balls touching the boss
@@ -2125,7 +2151,7 @@ function logicLoop() {
 
     // Update boss rush timer
     if (inBossRush && bossRushMaxTime > 0) {
-        bossRushTimer -= (FRAME_MS / 1000) * window.speedMultiplier;
+        bossRushTimer -= deltaTime * window.speedMultiplier;
         if (bossRushTimer <= 0) {
             loseBossRush();
             return;
