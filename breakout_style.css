@@ -416,3 +416,43 @@ button:disabled {
     transform: scale(1.02);
     box-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
 }
+
+.game-popup {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.game-popup.active {
+    display: flex;
+}
+
+.popup-content {
+    background: #16213e;
+    border: 2px solid #e94560;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+}
+
+.popup-content h2 {
+    color: #e94560;
+    margin-top: 0;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+#popupMessage {
+    color: #fff;
+    text-align: center;
+    line-height: 1.6;
+}

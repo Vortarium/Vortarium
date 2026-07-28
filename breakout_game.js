@@ -167,6 +167,26 @@ const ballTypes = {
     poison: { cost: 75000, damage: 10, speed: 3.0, color: '#27ae60', radius: 9 }
 };
 
+// Track purchase count for each ball type
+let ballPurchaseCounts = {
+    basic: 0,
+    plasma: 0,
+    sniper: 0,
+    scatter: 0,
+    cannonball: 0,
+    poison: 0
+};
+
+// Base costs for price calculation
+const ballBaseCosts = {
+    basic: 10,
+    plasma: 200,
+    sniper: 1500,
+    scatter: 10000,
+    cannonball: 75000,
+    poison: 75000
+};
+
 // Ball-specific upgrades
 let ballUpgrades = {
     basic: { power: 0, special: 0 },
@@ -211,11 +231,11 @@ class Ball {
         this.baseDamage = config.damage;
         this.color = config.color;
         
-        // Random direction (not perfectly horizontal or vertical)
+        // Random direction (not perfectly horizontal or vertical) - normalized to unit vector
         const angle = (Math.random() * Math.PI / 2) + Math.PI / 4;
         const direction = Math.random() < 0.5 ? 1 : -1;
-        this.dx = Math.cos(angle) * this.baseSpeed * direction;
-        this.dy = -Math.sin(angle) * this.baseSpeed;
+        this.dx = Math.cos(angle) * direction;
+        this.dy = -Math.sin(angle);
         
         // Special abilities
         this.scatterBalls = [];
@@ -236,7 +256,7 @@ class Ball {
             return; // Don't move if frozen
         }
         
-        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier * 2; // 2x faster base speed
+        const speedMultiplier = (ballSpeed / 0.5) * this.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier;
         const damageMultiplier = ballPower;
         
         // Use deltaTime for consistent movement across refresh rates
@@ -285,6 +305,38 @@ class Ball {
                 this.aimAtTarget();
             }
         }
+        
+        // Scatter ball spawns mini balls on wall bounce
+        if (this.type === 'scatter') {
+            const ballCount = this.getScatterBallCount();
+            for (let i = 0; i < ballCount; i++) {
+                const scatterBall = {
+                    x: this.x,
+                    y: this.y,
+                    dx: (Math.random() - 0.5) * 6,
+                    dy: (Math.random() - 0.5) * 6,
+                    radius: 4,
+                    damage: this.baseDamage * 0.5 * ballPower,
+                    color: this.color,
+                    lifetime: 600, // 10 seconds at 60fps
+                    lastHitTime: 0,
+                    update: function() {
+                        const movementScale = deltaTime * 60; // Scale to 60fps baseline
+                        this.x += this.dx * (ballSpeed / 2.8) * window.speedMultiplier * movementScale;
+                        this.y += this.dy * (ballSpeed / 2.8) * window.speedMultiplier * movementScale;
+                        this.lifetime -= deltaTime * 60; // Convert to frames
+                    },
+                    draw: function() {
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                };
+                this.scatterBalls.push(scatterBall);
+            }
+        }
     }
 
     targetNearestBrick() {
@@ -324,7 +376,8 @@ class Ball {
     getDamage(targetBrick = null) {
         const powerLevel = ballUpgrades[this.type].power;
         const prestigeBaseDamage = prestigeBuffs.damage * 2; // +2 flat base damage per prestige upgrade
-        let damage = ((this.baseDamage + prestigeBaseDamage) * (powerLevel + 1)) * ballPower;
+        // Power upgrades add base damage each time (current base value per upgrade)
+        let damage = ((this.baseDamage * (1 + powerLevel)) + prestigeBaseDamage) * ballPower;
         
         // Apply boss debuffs if target is a boss
         if (targetBrick && targetBrick.isBoss && targetBrick.bossDebuffs) {
@@ -589,9 +642,11 @@ class Brick {
         if (this.isBB) {
             ctx.fillText(simplifyNumber(this.health) + ' BB', this.x + this.width / 2, this.y + this.height / 2 + 5);
         } else if (this.isBoss) {
-            // Draw boss name above
+            // Draw gold reward above
+            const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
+            const goldReward = 1 + goldMultiplier;
             ctx.font = '16px Arial';
-            ctx.fillText(`Boss Level ${this.bossLevel || '?'}`, this.x + this.width / 2, this.y - 10);
+            ctx.fillText(`+${goldReward} Gold`, this.x + this.width / 2, this.y - 10);
             
             // Draw HP inside
             ctx.font = '24px Arial';
@@ -648,8 +703,8 @@ class Brick {
             if (this.poisonTimer <= 0) {
                 this.poisoned = false;
                 this.poisonMultiplier = 1; // Reset multiplier
-            } else if (this.poisonTimer % 240 < deltaTime * 60) {
-                // Take poison damage every 4 seconds (240 frames at 60fps)
+            } else if (this.poisonTimer % 120 < deltaTime * 60) {
+                // Take poison damage every 2 seconds (120 frames at 60fps)
                 this.health -= ballPower * this.poisonBonus;
                 // Auto-destroy bricks with health < 1
                 if (this.health < 1 && this.health > 0) {
@@ -779,6 +834,7 @@ function saveGame() {
         prestigeUpgradeCosts: prestigeUpgradeCosts,
         bossRushLevel: bossRushLevel,
         bossRushCost: bossRushCost,
+        ballPurchaseCounts: ballPurchaseCounts,
         lastSaveTime: Date.now()
     };
     localStorage.setItem('idleBreakoutSave', JSON.stringify(saveData));
@@ -813,6 +869,14 @@ function loadGame() {
         
         if (data.ballUpgradeCosts) {
             ballUpgradeCosts = data.ballUpgradeCosts;
+        }
+        
+        if (data.ballPurchaseCounts) {
+            ballPurchaseCounts = data.ballPurchaseCounts;
+            // Recalculate current costs based on purchase counts
+            for (let type in ballPurchaseCounts) {
+                ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+            }
         }
         
         if (data.upgradeCosts) {
@@ -938,7 +1002,7 @@ function loadGame() {
                     
                     // Show offline progress notification
                     setTimeout(() => {
-                        alert(`Welcome back! You were away for ${Math.floor(effectiveOfflineTime / 60)} minutes.\nYou earned $${simplifyNumber(offlineMoney)} and completed ${offlineLevels} levels while offline.`);
+                        showPopup('Welcome Back!', `You were away for ${Math.floor(effectiveOfflineTime / 60)} minutes.<br><br>You earned:<br>$${simplifyNumber(offlineMoney)}<br>${offlineLevels} levels<br>while offline.`);
                     }, 500);
                 }
             }
@@ -1152,8 +1216,25 @@ function checkBallCollision(ball) {
                     }
                 }
                 
-                // Scatter ball - spawn mini balls on brick hit
-                if (ball.type === 'scatter') {
+                // Poison ball
+                if (ball.type === 'poison') {
+                    brick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
+                    
+                    // Small chance to spread poison to nearby bricks
+                    if (Math.random() < 0.2) { // 20% chance
+                        for (let otherBrick of bricks) {
+                            if (otherBrick !== brick && otherBrick.alive && !otherBrick.poisoned) {
+                                const dist = Math.sqrt((otherBrick.x - brick.x) ** 2 + (otherBrick.y - brick.y) ** 2);
+                                if (dist < 150) { // Spread radius
+                                    otherBrick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Scatter ball - spawn mini balls on boss brick destruction
+                if (ball.type === 'scatter' && brick.isBoss) {
                     const ballCount = ball.getScatterBallCount();
                     for (let i = 0; i < ballCount; i++) {
                         const scatterBall = {
@@ -1181,23 +1262,6 @@ function checkBallCollision(ball) {
                             }
                         };
                         ball.scatterBalls.push(scatterBall);
-                    }
-                }
-                
-                // Poison ball
-                if (ball.type === 'poison') {
-                    brick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
-                    
-                    // Small chance to spread poison to nearby bricks
-                    if (Math.random() < 0.2) { // 20% chance
-                        for (let otherBrick of bricks) {
-                            if (otherBrick !== brick && otherBrick.alive && !otherBrick.poisoned) {
-                                const dist = Math.sqrt((otherBrick.x - brick.x) ** 2 + (otherBrick.y - brick.y) ** 2);
-                                if (dist < 150) { // Spread radius
-                                    otherBrick.poison(ball.getPoisonBonus(), ball.getPoisonMultiplier());
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -1558,11 +1622,12 @@ function updateUI() {
 
 // Buy ball
 function buyBall(type) {
-    const cost = ballTypes[type].cost;
+    const cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
     if (money >= cost && balls.length < maxBalls) {
         money -= cost;
         balls.push(new Ball(type));
-        ballTypes[type].cost = Math.floor(ballTypes[type].cost * 1.15);
+        ballPurchaseCounts[type]++;
+        ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
         playSound('buy');
         updateUI();
     }
@@ -1571,11 +1636,14 @@ function buyBall(type) {
 // Sell ball
 function sellBall(type) {
     const ballIndex = balls.findIndex(ball => ball.type === type);
-    if (ballIndex !== -1) {
+    if (ballIndex !== -1 && ballPurchaseCounts[type] > 0) {
         balls.splice(ballIndex, 1);
-        const refund = Math.floor(ballTypes[type].cost * 0.5);
+        // Refund 50% of the current price
+        const currentCost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
+        const refund = Math.floor(currentCost * 0.5);
         money += refund;
-        ballTypes[type].cost = Math.floor(ballTypes[type].cost * 0.85);
+        ballPurchaseCounts[type]--;
+        ballTypes[type].cost = Math.floor(ballBaseCosts[type] * Math.pow(1.15, ballPurchaseCounts[type]));
         playSound('buy');
         updateUI();
     }
@@ -1655,6 +1723,25 @@ function nextLevel() {
     updateUI();
 }
 
+// Popup system
+function showPopup(title, message) {
+    const popup = document.getElementById('gamePopup');
+    const titleEl = document.getElementById('popupTitle');
+    const messageEl = document.getElementById('popupMessage');
+    
+    titleEl.textContent = title;
+    messageEl.innerHTML = message;
+    popup.classList.add('active');
+}
+
+function hidePopup() {
+    const popup = document.getElementById('gamePopup');
+    popup.classList.remove('active');
+}
+
+// Close popup button
+document.getElementById('closePopup').addEventListener('click', hidePopup);
+
 // Event listeners
 document.querySelectorAll('.ball-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1714,9 +1801,12 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 document.getElementById('prestigeBtn').addEventListener('click', () => {
-    if (confirm(`Are you sure you want to prestige? You will earn ${goldEarnedThisPrestige} gold and reset all progress except prestige upgrades.`)) {
+    showPopup('Prestige', `Are you sure you want to prestige? You will earn ${goldEarnedThisPrestige} gold and reset all progress except prestige upgrades.<br><br><button id="confirmPrestige" style="background: #4caf50; margin-top: 10px;">Confirm Prestige</button>`);
+    
+    document.getElementById('confirmPrestige').addEventListener('click', () => {
+        hidePopup();
         prestige();
-    }
+    });
 });
 
 document.querySelectorAll('.prestige-upgrade-btn').forEach(btn => {
@@ -1729,7 +1819,7 @@ document.querySelectorAll('.prestige-upgrade-btn').forEach(btn => {
 });
 
 document.getElementById('bossRushBtn').addEventListener('click', () => {
-    startBossRush();
+    showPopup('Boss Rush', 'Boss Rush is currently in development and coming soon!');
 });
 
 // Boss rush functions
@@ -1887,7 +1977,7 @@ function winBossRush() {
     bossRushLevel++;
     bossRushCost += 1000;
     
-    alert(`Boss Rush Complete! You earned ${goldReward} gold!`);
+    showPopup('Boss Rush Complete!', `You earned ${goldReward} gold!`);
     
     // Return to normal game at saved level
     level = savedLevel;
@@ -1899,7 +1989,7 @@ function winBossRush() {
 function loseBossRush() {
     inBossRush = false;
     
-    alert(`Boss Rush Failed! Your BB was wasted.`);
+    showPopup('Boss Rush Failed', 'Your BB was wasted.');
     
     // Return to normal game at saved level
     level = savedLevel;
