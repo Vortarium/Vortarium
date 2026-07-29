@@ -2,7 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Dev mode - set to true for cheat keys
-const DEV_MODE = true;
+const DEV_MODE = false;
 
 // Global speed multiplier - simple 2x speed for everything
 window.speedMultiplier = 2;
@@ -804,11 +804,15 @@ function initBricks() {
                 brick.isBB = true;
                 // BB health multiplier: 10x at level 100, 20x at 200, 30x at 300, etc.
                 const bbMultiplier = Math.floor(level / 100) * 10;
-                // Additional scaling: +100x every 1000 levels, +1000x every 10000 levels
-                const thousandBonus = Math.floor(level / 1000) * 100;
-                const tenThousandBonus = Math.floor(level / 10000) * 1000;
-                brick.health = level * (bbMultiplier + thousandBonus + tenThousandBonus);
-                brick.maxHealth = level * (bbMultiplier + thousandBonus + tenThousandBonus);
+                // Additional scaling: +10x per 100, +100x per 1000, +1000x per 10000, etc. (every power of 10)
+                let powerOfTenBonus = 0;
+                for (let exp = 2; exp <= 15; exp++) { // Up to 10^15 to cover reasonable level ranges
+                    const threshold = Math.pow(10, exp);
+                    const bonus = Math.pow(10, exp - 1);
+                    powerOfTenBonus += Math.floor(level / threshold) * bonus;
+                }
+                brick.health = level * (bbMultiplier + powerOfTenBonus);
+                brick.maxHealth = level * (bbMultiplier + powerOfTenBonus);
             }
             
             bricks.push(brick);
@@ -1532,8 +1536,7 @@ function updateUI() {
             }
         } else if (upgradeType === 'goldBoost') {
             const cost = prestigeUpgradeCosts.goldBoost;
-            const goldBoostCosts = [10, 50, 100, 250, 500, 1000];
-            btn.disabled = gold < cost || prestigeBuffs.goldBoost >= goldBoostCosts.length; // Cap at 6 upgrades
+            btn.disabled = gold < cost;
             if (costEl && costEl.id === 'goldBoostCost') {
                 costEl.textContent = `${cost} Gold`;
             }
@@ -2184,11 +2187,11 @@ function buyPrestigeUpgrade(upgradeType) {
     } else if (upgradeType === 'prestigeSpeed' && gold >= cost) {
         gold -= cost;
         prestigeBuffs.speed++;
-        prestigeUpgradeCosts.prestigeSpeed = 10 + (prestigeBuffs.speed * 25);
+        prestigeUpgradeCosts.prestigeSpeed = Math.ceil(10 * Math.pow(1.5, prestigeBuffs.speed));
     } else if (upgradeType === 'prestigeDamage' && gold >= cost) {
         gold -= cost;
         prestigeBuffs.damage++;
-        prestigeUpgradeCosts.prestigeDamage = 10 + (prestigeBuffs.damage * 25);
+        prestigeUpgradeCosts.prestigeDamage = Math.ceil(10 * Math.pow(1.5, prestigeBuffs.damage));
         // Increase base damage by current base value for each ball type
         for (let type in ballTypes) {
             ballTypes[type].damage *= 2;
@@ -2197,17 +2200,11 @@ function buyPrestigeUpgrade(upgradeType) {
         gold -= cost;
         prestigeBuffs.maxBalls++;
         maxBalls += 10;
-        prestigeUpgradeCosts.prestigeMaxBalls = 10 + (prestigeBuffs.maxBalls * 25);
+        prestigeUpgradeCosts.prestigeMaxBalls = Math.ceil(10 * Math.pow(1.5, prestigeBuffs.maxBalls));
     } else if (upgradeType === 'goldBoost' && gold >= cost) {
         gold -= cost;
         prestigeBuffs.goldBoost++;
-        // Gold boost costs: 10, 50, 100, 250, 500, 1000
-        const goldBoostCosts = [10, 50, 100, 250, 500, 1000];
-        if (prestigeBuffs.goldBoost < goldBoostCosts.length) {
-            prestigeUpgradeCosts.goldBoost = goldBoostCosts[prestigeBuffs.goldBoost];
-        } else {
-            prestigeUpgradeCosts.goldBoost = 1000; // Cap at 1000
-        }
+        prestigeUpgradeCosts.goldBoost = Math.ceil(10 * Math.pow(1.5, prestigeBuffs.goldBoost));
     } else if (upgradeType === 'levelMoneyBonus' && gold >= cost) {
         gold -= cost;
         prestigeBuffs.levelMoneyBonus++;
