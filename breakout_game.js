@@ -2,7 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // Dev mode - set to true for cheat keys
-const DEV_MODE = false;
+const DEV_MODE = true;
 
 // Global speed multiplier - simple 2x speed for everything
 window.speedMultiplier = 2;
@@ -96,7 +96,7 @@ let clickPower = 1;
 let gameRunning = true;
 let bbCurrency = 0;
 let maxBalls = 50;
-let bbMaxSpeedBonus = 0; // starts at 0, each upgrade adds +0.10 (10%)
+let bbMaxSpeedBonus = 0; // starts at 0, each upgrade adds +0.25 (25%)
 let bbMaxPowerBonus = 1; // removed, no longer used
 let sfxVolume = 0.01;
 let musicVolume = 0.01;
@@ -124,8 +124,16 @@ let prestigeBuffs = {
     speed: 0,
     damage: 0,
     maxBalls: 0,
-    goldBoost: 0
+    goldBoost: 0,
+    levelMoneyBonus: 0
 };
+
+// Floating text for level completion bonus
+let floatingText = null;
+let floatingTextTimer = 0;
+
+// Momentum check timer
+let momentumCheckTimer = 0;
 
 // Laser system
 let lasers = [];
@@ -143,7 +151,8 @@ let prestigeUpgradeCosts = {
     prestigeSpeed: 10,
     prestigeDamage: 10,
     prestigeMaxBalls: 10,
-    goldBoost: 10
+    goldBoost: 10,
+    levelMoneyBonus: 15
 };
 
 // Boss rush system
@@ -158,13 +167,13 @@ let bossRushGoldReward = 0; // Gold earned in current rush
 let savedLevel = 1; // Save level before boss rush
 
 // Ball types and costs
-const ballTypes = {
+let ballTypes = {
     basic: { cost: 10, damage: 1, speed: 1.0, color: '#e94560', radius: 8 },
     plasma: { cost: 200, damage: 3, speed: 1.0, color: '#9b59b6', radius: 10 },
     sniper: { cost: 1500, damage: 3, speed: 2.0, color: '#3498db', radius: 7 },
-    scatter: { cost: 10000, damage: 10, speed: 0.4, color: '#f1c40f', radius: 6 },
+    scatter: { cost: 10000, damage: 10, speed: 1.0, color: '#f1c40f', radius: 6 },
     cannonball: { cost: 75000, damage: 50, speed: 0.5, color: '#808080', radius: 15 },
-    poison: { cost: 75000, damage: 10, speed: 3.0, color: '#27ae60', radius: 9 }
+    poison: { cost: 75000, damage: 10, speed: 1.0, color: '#27ae60', radius: 9 }
 };
 
 // Track purchase count for each ball type
@@ -376,8 +385,10 @@ class Ball {
     getDamage(targetBrick = null) {
         const powerLevel = ballUpgrades[this.type].power;
         const prestigeBaseDamage = prestigeBuffs.damage * 2; // +2 flat base damage per prestige upgrade
+        // Use current ballTypes damage (updated by BB shop) instead of cached baseDamage
+        const currentBaseDamage = ballTypes[this.type].damage;
         // Power upgrades add base damage each time (current base value per upgrade)
-        let damage = ((this.baseDamage * (1 + powerLevel)) + prestigeBaseDamage) * ballPower;
+        let damage = ((currentBaseDamage * (1 + powerLevel)) + prestigeBaseDamage) * ballPower;
         
         // Apply boss debuffs if target is a boss
         if (targetBrick && targetBrick.isBoss && targetBrick.bossDebuffs) {
@@ -392,11 +403,11 @@ class Ball {
     
     getSpeedMultiplier() {
         if (this.type === 'basic' || this.type === 'cannonball' || this.type === 'sniper') {
-            const speedBonus = ballUpgrades[this.type].special * 0.05;
-            const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.25); // +25% per prestige upgrade
+            const speedBonus = ballUpgrades[this.type].special * 0.10;
+            const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.50); // +50% per prestige upgrade
             return (1 + speedBonus) * prestigeSpeedMultiplier;
         }
-        const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.25); // +25% per prestige upgrade
+        const prestigeSpeedMultiplier = 1 + (prestigeBuffs.speed * 0.50); // +50% per prestige upgrade
         return prestigeSpeedMultiplier;
     }
     
@@ -644,7 +655,7 @@ class Brick {
         } else if (this.isBoss) {
             // Draw gold reward above
             const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
-            const goldReward = 1 + goldMultiplier;
+            const goldReward = goldMultiplier;
             ctx.font = '16px Arial';
             ctx.fillText(`+${goldReward} Gold`, this.x + this.width / 2, this.y - 10);
             
@@ -732,7 +743,7 @@ function awardBrickKill(brick) {
     if (brick.isBoss) {
         bossesKilled++;
         const goldMultiplier = Math.pow(2, prestigeBuffs.goldBoost);
-        goldEarnedThisPrestige += 1 + goldMultiplier;
+        goldEarnedThisPrestige += goldMultiplier;
     }
 }
 
@@ -793,8 +804,11 @@ function initBricks() {
                 brick.isBB = true;
                 // BB health multiplier: 10x at level 100, 20x at 200, 30x at 300, etc.
                 const bbMultiplier = Math.floor(level / 100) * 10;
-                brick.health = level * bbMultiplier;
-                brick.maxHealth = level * bbMultiplier;
+                // Additional scaling: +100x every 1000 levels, +1000x every 10000 levels
+                const thousandBonus = Math.floor(level / 1000) * 100;
+                const tenThousandBonus = Math.floor(level / 10000) * 1000;
+                brick.health = level * (bbMultiplier + thousandBonus + tenThousandBonus);
+                brick.maxHealth = level * (bbMultiplier + thousandBonus + tenThousandBonus);
             }
             
             bricks.push(brick);
@@ -921,6 +935,10 @@ function loadGame() {
             if (prestigeBuffs.goldBoost === undefined) {
                 prestigeBuffs.goldBoost = 0;
             }
+            // Ensure levelMoneyBonus exists in loaded data
+            if (prestigeBuffs.levelMoneyBonus === undefined) {
+                prestigeBuffs.levelMoneyBonus = 0;
+            }
         }
         
         if (data.laserDamage !== undefined) {
@@ -956,6 +974,11 @@ function loadGame() {
         // Ensure goldBoost cost is set if not present in save
         if (!prestigeUpgradeCosts.goldBoost) {
             prestigeUpgradeCosts.goldBoost = 10;
+        }
+        
+        // Ensure levelMoneyBonus cost is set if not present in save
+        if (!prestigeUpgradeCosts.levelMoneyBonus) {
+            prestigeUpgradeCosts.levelMoneyBonus = 15;
         }
         
         balls = [];
@@ -1088,19 +1111,21 @@ function resetGame() {
         speed: 0,
         damage: 0,
         maxBalls: 0,
-        goldBoost: 0
+        goldBoost: 0,
+        levelMoneyBonus: 0
     };
     prestigeUpgradeCosts = {
         prestigeSpeed: 10,
         prestigeDamage: 10,
         prestigeMaxBalls: 10,
-        goldBoost: 10
+        goldBoost: 10,
+        levelMoneyBonus: 15
     };
     
     // Reset lasers
     lasers = [];
-    laserDamage = 1;
-    laserUpgradeCost = 100;
+    laserDamage = 500;
+    laserUpgradeCost = 250000;
     laserPurchases = {
         laser1: false,
         laser2: false,
@@ -1118,6 +1143,24 @@ function resetGame() {
     bossRushMaxTime = 0;
     bossRushGoldReward = 0;
     savedLevel = 1;
+    
+    // Reset ball costs to base values
+    ballTypes.basic.cost = 10;
+    ballTypes.plasma.cost = 200;
+    ballTypes.sniper.cost = 1500;
+    ballTypes.scatter.cost = 10000;
+    ballTypes.cannonball.cost = 75000;
+    ballTypes.poison.cost = 75000;
+    
+    // Reset ball purchase counts
+    ballPurchaseCounts = {
+        basic: 0,
+        plasma: 0,
+        sniper: 0,
+        scatter: 0,
+        cannonball: 0,
+        poison: 0
+    };
     
     initBricks();
     updateUI();
@@ -1494,6 +1537,17 @@ function updateUI() {
             if (costEl && costEl.id === 'goldBoostCost') {
                 costEl.textContent = `${cost} Gold`;
             }
+        } else if (upgradeType === 'levelMoneyBonus') {
+            const cost = prestigeUpgradeCosts.levelMoneyBonus || 15;
+            btn.disabled = gold < cost;
+            if (costEl && costEl.id === 'levelMoneyBonusCost') {
+                costEl.textContent = `${cost} Gold`;
+            }
+            const nameEl = document.getElementById('levelMoneyBonusName');
+            if (nameEl) {
+                const multiplier = prestigeBuffs.levelMoneyBonus || 0;
+                nameEl.textContent = `Level Money Bonus x${multiplier}`;
+            }
         }
     });
     
@@ -1673,7 +1727,7 @@ function upgradeBB(upgradeType) {
             maxBalls += 10;
             bbUpgradeCosts.maxBalls = Math.ceil(cost * 1.5);
         } else if (upgradeType === 'maxSpeed') {
-            bbMaxSpeedBonus += 0.10; // +10% flat speed boost
+            bbMaxSpeedBonus += 0.25; // +25% flat speed boost
             bbUpgradeCosts.maxSpeed = Math.ceil(cost * 1.5);
         } else if (upgradeType === 'maxPower') {
             // +1 base damage to all ball types
@@ -1717,9 +1771,37 @@ function upgrade(type) {
     }
 }
 
+// Normalize ball speeds to ensure they're moving at correct speeds
+function normalizeBallSpeeds() {
+    for (let ball of balls) {
+        // Calculate current speed magnitude
+        const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+        
+        // Calculate expected speed multiplier
+        const speedMultiplier = (ballSpeed / 0.5) * ball.getSpeedMultiplier() * (1 + bbMaxSpeedBonus) * window.speedMultiplier * 0.5;
+        const expectedSpeed = ball.baseSpeed * speedMultiplier;
+        
+        // Normalize direction and apply correct speed
+        if (currentSpeed > 0) {
+            ball.dx = (ball.dx / currentSpeed) * expectedSpeed;
+            ball.dy = (ball.dy / currentSpeed) * expectedSpeed;
+        }
+    }
+}
+
 // Next level
 function nextLevel() {
     level++;
+    // Add level completion money bonus: (10000 * level) * upgrade level
+    const bonus = level * 10000 * prestigeBuffs.levelMoneyBonus;
+    money += bonus;
+    
+    // Show floating text if bonus > 0
+    if (bonus > 0) {
+        floatingText = `+$${simplifyNumber(bonus)}`;
+        floatingTextTimer = 120; // 2 seconds at 60fps
+    }
+    
     initBricks();
     document.getElementById('nextLevel').style.display = 'none';
     updateUI();
@@ -2022,6 +2104,16 @@ function prestige() {
     ballTypes.cannonball.cost = 75000;
     ballTypes.poison.cost = 75000;
     
+    // Reset ball purchase counts
+    ballPurchaseCounts = {
+        basic: 0,
+        plasma: 0,
+        sniper: 0,
+        scatter: 0,
+        cannonball: 0,
+        poison: 0
+    };
+    
     // Reset ball upgrades
     ballUpgrades = {
         basic: { power: 0, special: 0 },
@@ -2058,6 +2150,8 @@ function prestige() {
     
     // Reset lasers (keep purchases)
     lasers = [];
+    laserDamage = 500;
+    laserUpgradeCost = 250000;
     if (laserPurchases.laser1) lasers.push(new Laser('top'));
     if (laserPurchases.laser2) lasers.push(new Laser('bottom'));
     if (laserPurchases.laser3) lasers.push(new Laser('left'));
@@ -2095,9 +2189,9 @@ function buyPrestigeUpgrade(upgradeType) {
         gold -= cost;
         prestigeBuffs.damage++;
         prestigeUpgradeCosts.prestigeDamage = 10 + (prestigeBuffs.damage * 25);
-        // Buy 2 power upgrades for every ball type
-        for (let type in ballUpgrades) {
-            ballUpgrades[type].power += 2;
+        // Increase base damage by current base value for each ball type
+        for (let type in ballTypes) {
+            ballTypes[type].damage *= 2;
         }
     } else if (upgradeType === 'prestigeMaxBalls' && gold >= cost) {
         gold -= cost;
@@ -2114,6 +2208,10 @@ function buyPrestigeUpgrade(upgradeType) {
         } else {
             prestigeUpgradeCosts.goldBoost = 1000; // Cap at 1000
         }
+    } else if (upgradeType === 'levelMoneyBonus' && gold >= cost) {
+        gold -= cost;
+        prestigeBuffs.levelMoneyBonus++;
+        prestigeUpgradeCosts.levelMoneyBonus = Math.ceil(15 * Math.pow(1.5, prestigeBuffs.levelMoneyBonus));
     }
     
     playSound('buy');
@@ -2260,6 +2358,13 @@ function logicLoop() {
     // Check collisions
     checkCollisions();
 
+    // Momentum check every second
+    momentumCheckTimer += deltaTime * window.speedMultiplier;
+    if (momentumCheckTimer >= 1) {
+        momentumCheckTimer = 0;
+        normalizeBallSpeeds();
+    }
+
     // Check if level complete - auto advance
     const aliveBricks = bricks.filter(b => b.alive);
     if (aliveBricks.length === 0) {
@@ -2311,6 +2416,16 @@ function renderLoop() {
         const minutes = Math.floor(bossRushTimer / 60);
         const seconds = Math.floor(bossRushTimer % 60);
         ctx.fillText(`Boss ${bossRushProgress + 1}/${bossRushBosses.length} - ${minutes}:${seconds.toString().padStart(2, '0')}`, canvas.width / 2, 30);
+    }
+
+    // Draw floating text for level completion bonus
+    if (floatingText && floatingTextTimer > 0) {
+        const alpha = Math.min(1, floatingTextTimer / 30); // Fade out in last 0.5 seconds
+        ctx.fillStyle = `rgba(46, 204, 113, ${alpha})`; // Green color
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(floatingText, canvas.width / 2, canvas.height / 2);
+        floatingTextTimer--;
     }
 
     requestAnimationFrame(renderLoop);
