@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HELEN KELLER SIMULATOR</title>
+    <link rel="stylesheet" href="helen_style.css">
+</head>
+<body>
+    <audio id="bg-music" loop>
+        <source src="helen_music.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="ui-sound">
+        <source src="helen_ui.mp3" type="audio/mpeg">
+    </audio>
+    
+    <div id="main-menu">
+        <h1>HELEN KELLER SIMULATOR</h1>
+        <button id="play-btn">PLAY</button>
+        <button id="settings-btn">SETTINGS</button>
+        <button id="achievements-btn">ACHIEVEMENTS</button>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div id="game-content"></div>
+        <div id="fps-counter" class="hidden">FPS: 0</div>
+        <div id="death-screen" class="hidden">
+            <h2>YOU DIED</h2>
+            <button id="restart-btn">RESTART</button>
+        </div>
+        <div id="pause-screen" class="hidden">
+            <h2>PAUSED</h2>
+            <button id="resume-btn">RESUME</button>
+            <button id="skip-cutscene-btn">SKIP CUTSCENE</button>
+            <button id="pause-settings-btn">SETTINGS</button>
+            <button id="pause-achievements-btn">ACHIEVEMENTS</button>
+            <button id="return-to-menu-btn">RETURN TO MENU</button>
+        </div>
+    </div>
+
+    <div id="settings-menu" class="hidden">
+        <h2>SETTINGS</h2>
+        <button id="back-btn">BACK</button>
+        
+        <div class="settings-section">
+            <h3>Quality Settings</h3>
+            <div class="slider-container">
+                <label>Quality: <span id="quality-value">Medium</span></label>
+                <input type="range" id="quality-slider" min="1" max="5" value="2">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Sound Settings</h3>
+            <div class="slider-container">
+                <label>SFX Volume: <span id="sfx-value">50%</span></label>
+                <input type="range" id="sfx-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Music Volume: <span id="music-value">50%</span></label>
+                <input type="range" id="music-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Background Volume: <span id="bg-value">50%</span></label>
+                <input type="range" id="bg-slider" min="0" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Graphics Settings</h3>
+            <div class="slider-container">
+                <label>Bloom Intensity: <span id="bloom-value">50%</span></label>
+                <input type="range" id="bloom-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Motion Blur: <span id="blur-value">50%</span></label>
+                <input type="range" id="blur-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Ambient Occlusion: <span id="ao-value">50%</span></label>
+                <input type="range" id="ao-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Anti-Aliasing: <span id="aa-value">50%</span></label>
+                <input type="range" id="aa-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Shadow Quality: <span id="shadow-value">50%</span></label>
+                <input type="range" id="shadow-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Reflection Quality: <span id="reflection-value">50%</span></label>
+                <input type="range" id="reflection-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Refraction Quality: <span id="refraction-value">50%</span></label>
+                <input type="range" id="refraction-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Texture Resolution: <span id="texture-value">50%</span></label>
+                <input type="range" id="texture-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Geometry Detail: <span id="geometry-value">50%</span></label>
+                <input type="range" id="geometry-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Particle Density: <span id="particle-value">50%</span></label>
+                <input type="range" id="particle-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Water Quality: <span id="water-value">50%</span></label>
+                <input type="range" id="water-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Foliage Density: <span id="foliage-value">50%</span></label>
+                <input type="range" id="foliage-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Lighting Quality: <span id="lighting-value">50%</span></label>
+                <input type="range" id="lighting-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Post Processing: <span id="post-value">50%</span></label>
+                <input type="range" id="post-slider" min="0" max="100" value="50">
+            </div>
+            <div class="slider-container">
+                <label>Volumetric Fog: <span id="fog-value">50%</span></label>
+                <input type="range" id="fog-slider" min="0" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="settings-section scrollable">
+            <h3>Keybinds</h3>
+            <button id="reset-keybinds-btn" class="reset-btn">Reset Keybinds</button>
+            <div class="keybind-row">
+                <label>Move Forward:</label>
+                <button class="keybind-btn" data-action="forward">W</button>
+            </div>
+            <div class="keybind-row">
+                <label>Move Left:</label>
+                <button class="keybind-btn" data-action="left">A</button>
+            </div>
+            <div class="keybind-row">
+                <label>Move Backward:</label>
+                <button class="keybind-btn" data-action="backward">S</button>
+            </div>
+            <div class="keybind-row">
+                <label>Move Right:</label>
+                <button class="keybind-btn" data-action="right">D</button>
+            </div>
+            <div class="keybind-row">
+                <label>Use Weapon:</label>
+                <button class="keybind-btn" data-action="weapon">Left Click</button>
+            </div>
+            <div class="keybind-row">
+                <label>Activate:</label>
+                <button class="keybind-btn" data-action="activate">Right Click</button>
+            </div>
+            <div class="keybind-row">
+                <label>Jump:</label>
+                <button class="keybind-btn" data-action="jump">Space</button>
+            </div>
+            <div class="keybind-row">
+                <label>Inventory:</label>
+                <button class="keybind-btn" data-action="inventory">E</button>
+            </div>
+            <div class="keybind-row">
+                <label>Heal:</label>
+                <button class="keybind-btn" data-action="heal">Z</button>
+            </div>
+            <div class="keybind-row">
+                <label>Sprint:</label>
+                <button class="keybind-btn" data-action="sprint">Shift</button>
+            </div>
+            <div class="keybind-row">
+                <label>Sneak:</label>
+                <button class="keybind-btn" data-action="sneak">Ctrl</button>
+            </div>
+            <div class="keybind-row">
+                <label>Scope:</label>
+                <button class="keybind-btn" data-action="scope">X</button>
+            </div>
+            <div class="keybind-row">
+                <label>Change Perspective:</label>
+                <button class="keybind-btn" data-action="perspective">Arrow Keys</button>
+            </div>
+            <div class="keybind-row">
+                <label>Change FOV:</label>
+                <button class="keybind-btn" data-action="fov">1-10</button>
+            </div>
+            <div class="keybind-row">
+                <label>Reload:</label>
+                <button class="keybind-btn" data-action="reload">R</button>
+            </div>
+            <div class="keybind-row">
+                <label>Crouch:</label>
+                <button class="keybind-btn" data-action="crouch">C</button>
+            </div>
+            <div class="keybind-row">
+                <label>Prone:</label>
+                <button class="keybind-btn" data-action="prone">V</button>
+            </div>
+            <div class="keybind-row">
+                <label>Melee:</label>
+                <button class="keybind-btn" data-action="melee">F</button>
+            </div>
+            <div class="keybind-row">
+                <label>Throw Grenade:</label>
+                <button class="keybind-btn" data-action="grenade">G</button>
+            </div>
+            <div class="keybind-row">
+                <label>Use Item:</label>
+                <button class="keybind-btn" data-action="useitem">H</button>
+            </div>
+            <div class="keybind-row">
+                <label>Drop Item:</label>
+                <button class="keybind-btn" data-action="drop">Q</button>
+            </div>
+            <div class="keybind-row">
+                <label>Interact:</label>
+                <button class="keybind-btn" data-action="interact">F</button>
+            </div>
+            <div class="keybind-row">
+                <label>Map:</label>
+                <button class="keybind-btn" data-action="map">M</button>
+            </div>
+            <div class="keybind-row">
+                <label>Compass:</label>
+                <button class="keybind-btn" data-action="compass">N</button>
+            </div>
+            <div class="keybind-row">
+                <label>Flashlight:</label>
+                <button class="keybind-btn" data-action="flashlight">T</button>
+            </div>
+            <div class="keybind-row">
+                <label>Night Vision:</label>
+                <button class="keybind-btn" data-action="nightvision">B</button>
+            </div>
+        </div>
+
+        <div class="settings-section scrollable">
+            <h3>Gameplay Options</h3>
+            <div class="toggle-grid">
+                <div class="toggle-row">
+                    <label>Enhanced Realism</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle1">
+                </div>
+                <div class="toggle-row">
+                    <label>Cinematic Experience</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle2">
+                </div>
+                <div class="toggle-row">
+                    <label>Immersive Audio</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle3">
+                </div>
+                <div class="toggle-row">
+                    <label>Dynamic Lighting</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle4">
+                </div>
+                <div class="toggle-row">
+                    <label>Particle Effects</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle5">
+                </div>
+                <div class="toggle-row">
+                    <label>Physics Simulation</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle6">
+                </div>
+                <div class="toggle-row">
+                    <label>Weather System</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle7">
+                </div>
+                <div class="toggle-row">
+                    <label>Day/Night Cycle</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle8">
+                </div>
+                <div class="toggle-row">
+                    <label>AI Intelligence</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle9">
+                </div>
+                <div class="toggle-row">
+                    <label>Network Optimization</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle10">
+                </div>
+                <div class="toggle-row">
+                    <label>Texture Streaming</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle11">
+                </div>
+                <div class="toggle-row">
+                    <label>LOD System</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle12">
+                </div>
+                <div class="toggle-row">
+                    <label>Occlusion Culling</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle13">
+                </div>
+                <div class="toggle-row">
+                    <label>Frustum Culling</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle14">
+                </div>
+                <div class="toggle-row">
+                    <label>Object Pooling</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle15">
+                </div>
+                <div class="toggle-row">
+                    <label>Memory Management</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle16">
+                </div>
+                <div class="toggle-row">
+                    <label>Thread Optimization</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle17">
+                </div>
+                <div class="toggle-row">
+                    <label>GPU Acceleration</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle18">
+                </div>
+                <div class="toggle-row">
+                    <label>Shader Compilation</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle19">
+                </div>
+                <div class="toggle-row">
+                    <label>Asset Compression</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle20">
+                </div>
+                <div class="toggle-row">
+                    <label>V-Sync</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle21">
+                </div>
+                <div class="toggle-row">
+                    <label>Vertical Fix</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle22">
+                </div>
+                <div class="toggle-row">
+                    <label>Screen Tearing Fix</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle23">
+                </div>
+                <div class="toggle-row">
+                    <label>Unlock FPS</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle24">
+                </div>
+                <div class="toggle-row">
+                    <label>Show FPS</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle25">
+                </div>
+                <div class="toggle-row">
+                    <label>No Gore</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle26">
+                </div>
+                <div class="toggle-row">
+                    <label>No Music</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle27">
+                </div>
+                <div class="toggle-row">
+                    <label>No SFX</label>
+                    <input type="checkbox" class="toggle-checkbox" id="toggle28">
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section scrollable">
+            <h3>Character Customization</h3>
+            <div class="slider-container">
+                <label>Eye Color: <span id="eye-value">Blue</span></label>
+                <input type="range" id="eye-slider" min="1" max="10" value="1">
+            </div>
+            <div class="slider-container">
+                <label>Hair Color: <span id="hair-value">Brown</span></label>
+                <input type="range" id="hair-slider" min="1" max="10" value="2">
+            </div>
+            <div class="slider-container">
+                <label>Skin Tone: <span id="skin-value">Medium</span></label>
+                <input type="range" id="skin-slider" min="1" max="10" value="5">
+            </div>
+            <div class="slider-container">
+                <label>Height: <span id="height-value">Average</span></label>
+                <input type="range" id="height-slider" min="1" max="10" value="5">
+            </div>
+            <div class="slider-container">
+                <label>Body Type: <span id="body-value">Athletic</span></label>
+                <input type="range" id="body-slider" min="1" max="10" value="5">
+            </div>
+            <div class="slider-container">
+                <label>Facial Hair: <span id="facial-value">Clean</span></label>
+                <input type="range" id="facial-slider" min="1" max="10" value="1">
+            </div>
+            <div class="slider-container">
+                <label>Hairstyle: <span id="hairstyle-value">Short</span></label>
+                <input type="range" id="hairstyle-slider" min="1" max="10" value="3">
+            </div>
+            <div class="slider-container">
+                <label>Scars: <span id="scars-value">None</span></label>
+                <input type="range" id="scars-slider" min="1" max="10" value="1">
+            </div>
+            <div class="slider-container">
+                <label>Tattoos: <span id="tattoos-value">None</span></label>
+                <input type="range" id="tattoos-slider" min="1" max="10" value="1">
+            </div>
+            <div class="slider-container">
+                <label>Clothing Style: <span id="clothing-value">Casual</span></label>
+                <input type="range" id="clothing-slider" min="1" max="10" value="3">
+            </div>
+        </div>
+    </div>
+
+    <div id="achievements-menu" class="hidden">
+        <h2>ACHIEVEMENTS</h2>
+        <button id="achievements-back-btn">BACK</button>
+        <div id="achievements-list"></div>
+    </div>
+
+    <script src="helen_game.js"></script>
+</body>
+</html>

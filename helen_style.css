@@ -1,0 +1,466 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #000;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}
+
+#main-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    transition: opacity 0.5s ease;
+}
+
+#main-menu h1 {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+}
+
+#main-menu button, #settings-menu button, #achievements-menu button {
+    background-color: #fff;
+    color: #000;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    margin: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#main-menu button:hover, #settings-menu button:hover, #achievements-menu button:hover {
+    background-color: #333;
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.hidden {
+    display: none !important;
+}
+
+#game-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.5s ease;
+}
+
+#game-content {
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+}
+
+#fps-counter {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    color: #00ff00;
+    font-size: 1rem;
+    font-weight: bold;
+    z-index: 50;
+    text-shadow: 1px 1px 2px #000;
+}
+
+#death-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+#death-screen h2 {
+    font-size: 4rem;
+    color: #ff0000;
+    margin-bottom: 2rem;
+}
+
+#death-screen button {
+    background-color: #fff;
+    color: #000;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+}
+
+#pause-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    transition: opacity 0.5s ease;
+}
+
+#pause-screen h2 {
+    font-size: 4rem;
+    color: #fff;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+}
+
+#pause-screen button {
+    background-color: #fff;
+    color: #000;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    margin: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    min-width: 300px;
+}
+
+#pause-screen button:hover {
+    background-color: #333;
+    color: #fff;
+    transform: scale(1.05);
+}
+
+#pause-screen button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#settings-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    padding: 0.3rem;
+    overflow: hidden;
+    transition: opacity 0.5s ease;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: auto 1fr;
+    gap: 0.3rem;
+}
+
+#achievements-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    padding: 1rem;
+    overflow: hidden;
+    transition: opacity 0.5s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-menu h2, #achievements-menu h2 {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+}
+
+#settings-menu h2 {
+    grid-column: 1 / -1;
+}
+
+#back-btn {
+    grid-column: 1 / -1;
+    padding: 8px 20px;
+    font-size: 0.9rem;
+    margin: 0.2rem;
+}
+
+.settings-section {
+    padding: 0.3rem;
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 100%;
+}
+
+.settings-section.scrollable {
+    overflow-y: auto;
+    max-height: calc(100vh - 150px);
+}
+
+.settings-section h3 {
+    font-size: 0.7rem;
+    margin-bottom: 0.2rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.slider-container {
+    margin: 0.1rem 0;
+}
+
+.slider-container label {
+    display: block;
+    margin-bottom: 0.1rem;
+    font-size: 0.6rem;
+}
+
+.slider-container input[type="range"] {
+    width: 100%;
+    height: 6px;
+    background: #333;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.slider-container input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.slider-container input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    cursor: pointer;
+    border: none;
+}
+
+.keybind-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0.05rem 0;
+    padding: 0.1rem;
+}
+
+.keybind-row label {
+    font-size: 0.55rem;
+}
+
+.keybind-btn {
+    background-color: #333;
+    color: #fff;
+    border: 1px solid #fff;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 50px;
+    font-size: 0.55rem;
+}
+
+.keybind-btn:hover {
+    background-color: #fff;
+    color: #000;
+}
+
+.keybind-btn.listening {
+    background-color: #ff0000;
+    animation: pulse 0.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+#achievements-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.5rem;
+    overflow-y: auto;
+}
+
+.achievement {
+    background-color: #111;
+    border: 1px solid #333;
+    padding: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.achievement.locked {
+    opacity: 0.5;
+    filter: grayscale(100%);
+}
+
+.achievement-icon {
+    width: 35px;
+    height: 35px;
+    background-color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.achievement.locked .achievement-icon {
+    background-color: #222;
+    color: #666;
+}
+
+.achievement-info {
+    flex: 1;
+}
+
+.achievement-title {
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-bottom: 0.2rem;
+}
+
+.achievement-description {
+    font-size: 0.7rem;
+    color: #888;
+}
+
+.achievement.locked .achievement-description {
+    color: #444;
+}
+
+.fade-out {
+    opacity: 0;
+}
+
+.fade-in {
+    opacity: 1;
+}
+
+.reset-btn {
+    background-color: #ff0000 !important;
+    color: #fff !important;
+    padding: 5px 15px !important;
+    font-size: 0.8rem !important;
+    margin: 0.3rem 0 !important;
+}
+
+.reset-btn:hover {
+    background-color: #cc0000 !important;
+}
+
+.toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.2rem;
+}
+
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.2rem;
+}
+
+.toggle-row label {
+    font-size: 0.65rem;
+}
+
+.toggle-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.achievement-toast {
+    position: fixed;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 20px #ffd700, 0 0 40px #ffd700, inset 0 0 20px rgba(255, 215, 0, 0.1);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1000;
+    animation: toastFall 0.5s ease-out forwards, toastFloat 0.5s ease-in 4s forwards;
+}
+
+.achievement-toast .achievement-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #ffd700 0%, #ffaa00 100%);
+    color: #000;
+    font-size: 1.5rem;
+}
+
+.achievement-toast .achievement-title {
+    color: #ffd700;
+    font-size: 1rem;
+    margin-bottom: 0.2rem;
+}
+
+.achievement-toast .achievement-description {
+    color: #ccc;
+    font-size: 0.8rem;
+}
+
+@keyframes toastFall {
+    0% {
+        top: -100px;
+        opacity: 0;
+    }
+    100% {
+        top: 50px;
+        opacity: 1;
+    }
+}
+
+@keyframes toastFloat {
+    0% {
+        top: 50px;
+        opacity: 1;
+    }
+    100% {
+        top: -100px;
+        opacity: 0;
+    }
+}
