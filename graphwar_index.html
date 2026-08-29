@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graphwar</title>
+    <link rel="stylesheet" href="graphwar_style.css">
+</head>
+<body>
+    <div class="logo">Graphwar</div>
+    
+    <div class="audio-controls">
+        <button id="sfxToggle" class="audio-btn">SFX: ON</button>
+        <button id="musicToggle" class="audio-btn">Music: ON</button>
+    </div>
+
+    <div class="game-container">
+        <div class="game-sidebar">
+            <div class="game-info">
+                <h3>Level</h3>
+                <div class="level-select">
+                    <button id="prevLevelBtn">←</button>
+                    <button id="currentLevel">1</button>
+                    <button id="nextLevelBtn">→</button>
+                </div>
+                <div id="bestScore">Uncompleted</div>
+                
+                <h3>Moves</h3>
+                <div id="moveCount">0</div>
+                
+                <h3>Enemies Remaining</h3>
+                <div id="enemiesRemaining">0</div>
+            </div>
+
+            <div class="function-input">
+                <h3>Enter Function</h3>
+                <p id="functionHint">y = f(x)</p>
+                <input type="text" id="functionInput" placeholder="EQUATION HERE">
+                <button id="fireBtn">Fire!</button>
+                <div id="errorMessage" class="error"></div>
+                
+                <div class="history-section">
+                    <h3>History</h3>
+                    <div id="equationHistory"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="game-main">
+            <canvas id="gameCanvas" width="1000" height="600"></canvas>
+        </div>
+    </div>
+
+
+    <!-- Audio Elements -->
+    <audio id="shootSound" src="graphwar_shoot.mp3" preload="auto"></audio>
+    <audio id="shotSound" src="graphwar_shot.mp3" preload="auto"></audio>
+    <audio id="ballSound" src="graphwar_ball.mp3" preload="auto"></audio>
+    <audio id="uiSound" src="graphwar_ui.mp3" preload="auto"></audio>
+    <audio id="musicSound" src="graphwar_music.mp3" preload="auto" loop></audio>
+
+    <script src="graphwar_game.js"></script>
+</body>
+</html>
