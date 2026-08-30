@@ -552,6 +552,15 @@ class GraphwarGame {
         
         const currentPoint = this.currentTrajectory[Math.floor(this.animationIndex)];
         
+        // Check if all enemies are dead - if so, stop animation
+        const enemiesAlive = this.enemies.filter(e => e.alive).length;
+        if (enemiesAlive === 0) {
+            this.isAnimating = false;
+            this.currentTrajectory = [];
+            this.checkWinCondition();
+            return;
+        }
+        
         // Check collisions during animation
         const collisionResult = this.checkCollisions(currentPoint);
         if (collisionResult === 'obstacle' || collisionResult === 'boundary') {
@@ -650,10 +659,10 @@ class GraphwarGame {
                 localStorage.setItem('graphwar_bestScores', JSON.stringify(this.levelBestScores));
             }
             
+            // Show popup instead of alert
             setTimeout(() => {
-                alert(`Level ${this.currentLevel} Complete! You destroyed all enemies in ${this.moveCount} moves!`);
-                this.currentLevel++;
-                this.initializeGame();
+                document.getElementById('popupMoveCount').textContent = this.moveCount;
+                document.getElementById('levelCompletePopup').classList.add('active');
             }, 500);
         }
     }
@@ -717,6 +726,20 @@ class GraphwarGame {
         
         document.getElementById('nextLevelBtn').addEventListener('click', () => {
             this.playUISound();
+            this.currentLevel++;
+            this.initializeGame();
+        });
+        
+        // Popup buttons
+        document.getElementById('repeatRoundBtn').addEventListener('click', () => {
+            this.playUISound();
+            document.getElementById('levelCompletePopup').classList.remove('active');
+            this.initializeGame();
+        });
+        
+        document.getElementById('nextRoundBtn').addEventListener('click', () => {
+            this.playUISound();
+            document.getElementById('levelCompletePopup').classList.remove('active');
             this.currentLevel++;
             this.initializeGame();
         });

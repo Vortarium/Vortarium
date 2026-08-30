@@ -60,6 +60,18 @@
     <audio id="uiSound" src="graphwar_ui.mp3" preload="auto"></audio>
     <audio id="musicSound" src="graphwar_music.mp3" preload="auto" loop></audio>
 
+    <!-- Level Complete Popup -->
+    <div id="levelCompletePopup" class="popup-overlay">
+        <div class="popup-content">
+            <h2 class="popup-title">Congratulations!</h2>
+            <div class="popup-moves">Completed in <span id="popupMoveCount">0</span> moves</div>
+            <div class="popup-buttons">
+                <button id="repeatRoundBtn" class="popup-btn">Repeat Round</button>
+                <button id="nextRoundBtn" class="popup-btn">Next Round</button>
+            </div>
+        </div>
+    </div>
+
     <script src="graphwar_game.js"></script>
 </body>
 </html>
