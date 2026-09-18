@@ -94,6 +94,15 @@
     <div class="tb-hint" id="tb-hint"></div>
     <button class="btn sm ghost" id="tb-skip">Skip training</button>
   </div>
+
+  <div id="scuttle" class="hidden">
+    <svg viewBox="0 0 180 180">
+      <circle class="sc-track" cx="90" cy="90" r="78"></circle>
+      <circle class="sc-ring" id="sc-ring" cx="90" cy="90" r="78"></circle>
+    </svg>
+    <div class="sc-num mono" id="sc-num">5</div>
+    <div class="sc-label mono">SCUTTLE IN PROGRESS · RELEASE TO CANCEL</div>
+  </div>
 </div>
 
 <!-- ============ PANELS ============ -->
@@ -101,6 +110,7 @@
   <div class="panel" id="p-cargo"><header><h3>Cargo hold</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-market"><header><h3>Trade terminal</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-shop"><header><h3 id="shop-title">Shop</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-gear"><header><h3>Stats &amp; gear</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-hangar"><header><h3>Hangar</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-refit"><header><h3>Ship refit</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-craft"><header><h3>Fabricator</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>

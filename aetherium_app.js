@@ -363,12 +363,19 @@ const MAT = {
   rod:       { n: 'Fishing Rod',   v: 540,  c: '#8fe09f', t: 2, cat: 'tool', tool: 'fish' },
   blaster:   { n: 'Bolt Caster',   v: 1400, c: '#ff6a4d', t: 4, cat: 'tool', tool: 'gun' },
   /* personal weapons — holding one unlocks it in the weapon wheel */
-  g_sidearm: { n: 'Service Sidearm', v: 700,   c: '#9fe4ff', t: 2, cat: 'weapon', gun: 'sidearm' },
-  g_scatter: { n: 'Scatter Gun',     v: 2600,  c: '#ffc46b', t: 3, cat: 'weapon', gun: 'scatter' },
-  g_pulse:   { n: 'Pulse Repeater',  v: 7400,  c: '#6cff8f', t: 4, cat: 'weapon', gun: 'pulse' },
-  g_rail:    { n: 'Rail Lance',      v: 19000, c: '#c0f0ff', t: 5, cat: 'weapon', gun: 'rail' },
-  g_ray:     { n: 'Ray Emitter',     v: 26000, c: '#d484ff', t: 5, cat: 'weapon', gun: 'ray' },
+  g_sidearm: { wt: 0.03, n: 'Service Sidearm', v: 700,   c: '#9fe4ff', t: 2, cat: 'weapon', gun: 'sidearm' },
+  g_scatter: { wt: 0.09, n: 'Scatter Gun',     v: 2600,  c: '#ffc46b', t: 3, cat: 'weapon', gun: 'scatter' },
+  g_pulse:   { wt: 0.11, n: 'Pulse Repeater',  v: 7400,  c: '#6cff8f', t: 4, cat: 'weapon', gun: 'pulse' },
+  g_rail:    { wt: 0.2, n: 'Rail Lance',      v: 19000, c: '#c0f0ff', t: 5, cat: 'weapon', gun: 'rail' },
+  g_ray:     { wt: 0.13, n: 'Ray Emitter',     v: 26000, c: '#d484ff', t: 5, cat: 'weapon', gun: 'ray' },
   g_bomb:    { n: 'Seismic Charges', v: 12000, c: '#ff6a4d', t: 4, cat: 'weapon', gun: 'bombgun' },
+  /* spacesuits — carrying one lets you wear it from the gear screen */
+  s_scav:    { n: 'Scavenger Weave',  v: 900,    c: '#9fb3c8', t: 1, cat: 'suit', suit: 'scav' },
+  s_recon:   { n: 'Recon Skin',       v: 6200,   c: '#6cff8f', t: 3, cat: 'suit', suit: 'recon' },
+  s_therm:   { n: 'Thermal Shell',    v: 14000,  c: '#ffc46b', t: 3, cat: 'suit', suit: 'therm' },
+  s_void:    { n: 'Void Carapace',    v: 68000,  c: '#6fd8ff', t: 4, cat: 'suit', suit: 'void' },
+  s_bastion: { n: 'Bastion Plate',    v: 152000, c: '#c0f0ff', t: 5, cat: 'suit', suit: 'bastion' },
+  s_null:    { n: 'Null Shroud',      v: 940000, c: '#d484ff', t: 5, cat: 'suit', suit: 'null_' },
   medkit:    { n: 'Med Kit',       v: 220,  c: '#ff9fb4', t: 2, cat: 'consumable', heal: 60 },
   ration:    { n: 'Ration Pack',   v: 90,   c: '#ffd9a0', t: 1, cat: 'consumable', food: 1 },
   oxtank:    { n: 'Air Canister',  v: 150,  c: '#9fe4ff', t: 2, cat: 'consumable', air: 100 },
@@ -453,6 +460,12 @@ const RECIPES = [
   { o: 'g_bomb',   n: 1, in: { servo: 2, sulphur: 30, alloy: 4 },    cat: 'Weapons' },
   { o: 'g_rail',   n: 1, in: { lens: 2, powercell: 2, iridium: 12 }, cat: 'Weapons' },
   { o: 'g_ray',    n: 1, in: { lens: 3, powercell: 2, indium: 8 },   cat: 'Weapons' },
+  { o: 's_scav',    n: 1, in: { fibre: 14, leather: 2, alloy: 1 },     cat: 'Suits' },
+  { o: 's_recon',   n: 1, in: { leather: 4, circuit: 2, fibre: 20 },   cat: 'Suits' },
+  { o: 's_therm',   n: 1, in: { alloy: 8, coolant: 3, glass: 4 },      cat: 'Suits' },
+  { o: 's_void',    n: 1, in: { nanotube: 3, coolant: 5, indium: 6 },  cat: 'Suits' },
+  { o: 's_bastion', n: 1, in: { frame: 2, titanium: 30, nanotube: 4 }, cat: 'Suits' },
+  { o: 's_null',    n: 1, in: { voidcrystal: 6, stellarite: 2, chitin: 40 }, cat: 'Suits' },
   { o: 'medkit',   n: 2, in: { mold: 6, fibre: 6, algae: 4 },        cat: 'Consumables' },
   { o: 'ration',   n: 4, in: { grain: 3, algae: 2 },                 cat: 'Consumables' },
   { o: 'oxtank',   n: 2, in: { oxygen: 25, alloy: 1 },               cat: 'Consumables' },
@@ -553,15 +566,74 @@ const MODULE_KEYS = Object.keys(MODULES);
    so there is no single best pick for every situation.
 ------------------------------------------------------------ */
 const GUNS = {
-  fists:   { n: 'Bare hands',      mode: 'melee', dmg: 7,  rate: 0.55, range: 46,  spd: 0,    col: '#8fa9b4', sz: 0,   knock: 40,  d: 'Last resort. Short reach and it makes everything angry.' },
+  fists:   { wt: 0, n: 'Bare hands',      mode: 'melee', dmg: 7,  rate: 0.55, range: 46,  spd: 0,    col: '#8fa9b4', sz: 0,   knock: 40,  d: 'Last resort. Short reach and it makes everything angry.' },
   sidearm: { n: 'Service Sidearm', mode: 'bolt',  dmg: 15, rate: 0.30, range: 620, spd: 940,  col: '#9fe4ff', sz: 2.4, d: 'Standard issue. Accurate, quiet, unremarkable.' },
   scatter: { n: 'Scatter Gun',     mode: 'shot',  dmg: 11, rate: 0.72, range: 300, spd: 780,  col: '#ffc46b', sz: 2.2, pellets: 6, spread: 0.38, d: 'Six pellets at once. Devastating up close, useless at range.' },
   pulse:   { n: 'Pulse Repeater',  mode: 'bolt',  dmg: 8,  rate: 0.085, range: 560, spd: 1180, col: '#6cff8f', sz: 1.8, spread: 0.07, heat: 1.6, d: 'Empties fast and overheats faster, but nothing else lays down this much fire.' },
   rail:    { n: 'Rail Lance',      mode: 'pierce',dmg: 62, rate: 1.25, range: 1150, spd: 2200, col: '#c0f0ff', sz: 3.2, d: 'Punches through everything in a line. One shot, then a long wait.' },
   ray:     { n: 'Ray Emitter',     mode: 'beam',  dmg: 46, rate: 0,    range: 460, col: '#d484ff', heat: 1.0, d: 'A held beam that burns whatever it touches. Drains the cell while you hold it.' },
-  bombgun: { n: 'Seismic Charges', mode: 'bomb',  dmg: 88, rate: 1.05, range: 520, spd: 620,  col: '#ff6a4d', sz: 4, blast: 130, fuse: 0.9, d: 'Lobbed charges with a blast radius. Levels structures. Do not stand close.' }
+  bombgun: { wt: 0.22, n: 'Seismic Charges', mode: 'bomb',  dmg: 88, rate: 1.05, range: 520, spd: 620,  col: '#ff6a4d', sz: 4, blast: 130, fuse: 0.9, d: 'Lobbed charges with a blast radius. Levels structures. Do not stand close.' }
 };
 const GUN_KEYS = Object.keys(GUNS);
+
+/* ------------------------------------------------------------
+   8b-ii. SPACESUITS
+   What you are wearing decides how long the air lasts, how much
+   punishment you can take and how fast you can walk. Every suit
+   is a trade: the ones that shrug off a caustic sky are heavy,
+   and the ones that let you cover ground are made of nothing.
+   Weight is the cost of everything good, exactly as it is on
+   the ship.
+------------------------------------------------------------ */
+const SUITS = {
+  standard: { n: 'Standard Voidsuit', hp: 100, air: 100, haz: 0,    armour: 0,     weight: 0,
+              d: 'Issue kit. No strengths, no failings, and it has kept you alive so far.' },
+  scav:     { n: 'Scavenger Weave',   hp: 80,  air: 90,  haz: -0.1, armour: 0,     weight: -0.18,
+              d: 'Patched from three dead suits. Lighter on its feet than issue kit, and noticeably worse at keeping a hostile sky out.' },
+  recon:    { n: 'Recon Skin',        hp: 90,  air: 150, haz: 0.15, armour: -0.06, weight: -0.34,
+              d: 'A membrane with a big scrubber. You will outrun anything on the ground and regret the first thing that lands a hit.' },
+  therm:    { n: 'Thermal Shell',     hp: 140, air: 120, haz: 0.36, armour: 0.12,  weight: 0.26,
+              d: 'Layered for heat and cold both. The obvious first upgrade, and you will feel the extra mass in your legs.' },
+  void:     { n: 'Void Carapace',     hp: 190, air: 190, haz: 0.58, armour: 0.24,  weight: 0.42,
+              d: 'Sealed for the places that are actively trying to get in. Slow, but you can stand in almost anything.' },
+  bastion:  { n: 'Bastion Plate',     hp: 320, air: 110, haz: 0.3,  armour: 0.48,  weight: 0.8,
+              d: 'Armour first and everything else second. You will walk like you are wading, and you will walk away from things that kill other people.' },
+  null_:    { n: 'Null Shroud',       hp: 270, air: 270, haz: 0.86, armour: 0.38,  weight: -0.12,
+              d: 'Grown rather than sewn, and it weighs less than the issue suit while doing everything better. Nobody will tell you what it is made of.' }
+};
+const SUIT_KEYS = Object.keys(SUITS);
+function suitDef(k) { return SUITS[k || G.suitKey] || SUITS.standard; }
+/* every suit you are carrying, plus the issue kit you can never lose */
+function ownedSuits() {
+  const out = ['standard'];
+  for (const k in G.cargo) if (G.cargo[k] > 0 && MAT[k] && MAT[k].suit && out.indexOf(MAT[k].suit) < 0) out.push(MAT[k].suit);
+  return out;
+}
+/* how much the suit and the weapon in your hands slow you down together */
+function carryLoad() {
+  return suitDef().weight + (curGun().wt || 0);
+}
+function walkSpeedMul() { return clamp(1 - carryLoad() * 0.52, 0.34, 1.45); }
+function suitArmour() { return clamp(suitDef().armour, -0.5, 0.85); }
+function suitHaz() { return clamp(suitDef().haz, -0.6, 0.95); }
+/* keep the live pools in step with whatever is being worn */
+function syncSuit() {
+  const d = suitDef();
+  G.suit.max = d.hp + (G.suit.bonus || 0);
+  G.suit.airMax = d.air;
+  G.suit.hp = clamp(G.suit.hp, 0, G.suit.max);
+  G.suit.air = clamp(G.suit.air, 0, G.suit.airMax);
+}
+function wearSuit(k) {
+  if (!SUITS[k]) return false;
+  if (ownedSuits().indexOf(k) < 0) { say('You are not carrying that suit.', 'warn'); return false; }
+  if (G.suitKey === k) return false;
+  G.suitKey = k;
+  syncSuit();
+  say('Sealed into the ' + SUITS[k].n.toLowerCase() + '.', 'good');
+  AU.play('upgrade', 0.6);
+  return true;
+}
 
 const SLOT_NAMES = { engine: 'Engine', shield: 'Shields', weapon: 'Weapons', cargo: 'Cargo', mining: 'Mining', warp: 'Warp drive', plate: 'Plating', scan: 'Scanner' };
 
@@ -681,12 +753,12 @@ const ROLES = [
   { n: 'Archivist',  shop: null,       hire: 0.4,  talk: 'lore', skill: 'science' }
 ];
 const SHOP_TYPES = {
-  general: { n: 'General store',  pool: ['ferrite','carbon','silicate','oxygen','tritium','ration','medkit','oxtank','glass','wiring','alloy'] },
-  ship:    { n: 'Ship outfitter', pool: ['alloy','circuit','servo','coolant','powercell','frame','nanotube'], modules: true },
+  general: { n: 'General store',  pool: ['ferrite','carbon','silicate','oxygen','tritium','ration','medkit','oxtank','glass','wiring','alloy','s_scav'] },
+  ship:    { n: 'Ship outfitter', pool: ['alloy','circuit','servo','coolant','powercell','frame','nanotube','s_therm','s_recon'], modules: true },
   seed:    { n: 'Seed merchant',  pool: ['seed_grain','seed_starfruit','seed_lumina','seed_frostmelon','seed_emberpep','seed_gloomcap','seed_voidbloom','hoe','can','fibre'] },
   fish:    { n: 'Fish market',    pool: ['silverfin','glasseel','stonecarp','emberkoi','rod','ration'] },
-  weapon:  { n: 'Gunsmith',       pool: ['g_sidearm','g_scatter','g_pulse','g_bomb','g_rail','g_ray','blaster','multitool','iridium','servo','lens'], modules: true },
-  black:   { n: 'Black market',   pool: ['relic','glyph','core','antimatter','voidcrystal','stellarite','uranite'], markup: 1.45 }
+  weapon:  { n: 'Gunsmith',       pool: ['g_sidearm','g_scatter','g_pulse','g_bomb','g_rail','g_ray','blaster','multitool','iridium','servo','lens','s_bastion'], modules: true },
+  black:   { n: 'Black market',   pool: ['relic','glyph','core','antimatter','voidcrystal','stellarite','uranite','s_void','s_null'], markup: 1.45 }
 };
 
 /* ------------------------------------------------------------
@@ -695,19 +767,60 @@ const SHOP_TYPES = {
    is a nuisance. A citadel is a place.
 ------------------------------------------------------------ */
 const VTIERS = {
-  fighter: { n: 'Fighter',      rank: 1, hp: 90,   gun: 10, sp: 420, scale: 0.8,  rad: 34,  guns: ['bolt'],               pay: 4200,    d: 'Single-seat interceptor. Fast, flimsy, everywhere.' },
-  milita:  { n: 'Militia Lance',rank: 2, hp: 300,  gun: 19, sp: 760, scale: 1.05, rad: 46,  guns: ['twin'],               pay: 18000,   d: 'Twin emitters at double the muzzle speed. Flown by people who were trained.' },
-  mother:  { n: 'Mothership',   rank: 3, hp: 2600, gun: 46, sp: 150, scale: 3.4,  rad: 165, guns: ['beam','bolt'],        pay: 220000,  summon: [15, 30], d: 'Carrier hull with a spinal beam. Hostile ones keep launching fighters; friendly ones sell you things.' },
-  citadel: { n: 'Floating city',rank: 4, hp: 16000,gun: 70, sp: 44,  scale: 9,    rad: 460, guns: ['beam','bomb','ray'],  pay: 1800000, summon: [10, 18], shieldable: true, d: 'A city that never touched a planet. Land on it and you are walking through somebody\u2019s streets.' }
+  /* --- rung one: single seats --- */
+  fighter: { n: 'Fighter',      rank: 1, hp: 50,   gun: 10, sp: 420, scale: 0.8,  rad: 34,  guns: ['bolt'],       pay: 4200,   d: 'Single-seat interceptor. Fast, flimsy, everywhere.' },
+  seeker:  { n: 'Seeker',       rank: 1, hp: 50,   gun: 10, sp: 390, scale: 0.85, rad: 36,  guns: ['seekpod'],    pay: 5400,   d: 'Carries a rack of homing pods instead of a gun. Lobs one every three seconds and lets it do the aiming.' },
+
+  /* --- rung two: trained crews --- */
+  milita:  { n: 'Militia Lance',rank: 2, hp: 200,  gun: 19, sp: 760, scale: 1.05, rad: 46,  guns: ['twin'],       pay: 18000,  d: 'Twin emitters at double the muzzle speed. Flown by people who were trained.' },
+  nova:    { n: 'Nova Lance',   rank: 2, hp: 200,  gun: 19, sp: 600, scale: 1.1,  rad: 50,  guns: ['ring16'],     pay: 22000,  d: 'Emitters ringing the whole hull. Every two seconds it throws sixteen bolts outward at once and does not care where you are.' },
+
+  /* --- rung three: carriers --- */
+  mother:  { n: 'Mothership',   rank: 3, hp: 1000, gun: 46, sp: 150, scale: 3.4,  rad: 165, guns: ['beam','bolt'],  pay: 220000, summon: [10, 10], summonTier: 'fighter',
+             d: 'Carrier hull with a spinal beam. Hostile ones put a fighter in the sky every ten seconds; friendly ones sell you things.' },
+  broodmother: { n: 'Brood Carrier', rank: 3, hp: 1000, gun: 46, sp: 150, scale: 3.4, rad: 165, guns: ['swarm','bolt'], pay: 245000, summon: [10, 10], summonTier: 'fighter',
+             d: 'The same hull with the beam mount stripped out for missile racks. Five homing rounds every three seconds, and bolt fire in between.' },
+
+  /* --- rung four: planetary scale --- */
+  citadel: { n: 'World Bastion', rank: 4, hp: 25000, gun: 70, sp: 44, scale: 9, rad: 460, guns: ['worldlance'], pay: 1800000,
+             shieldable: true, forcefield: 500, ffCool: 60,
+             waves: [['fighter', 5], ['milita', 15], ['mother', 45]],
+             d: 'A city the size of a small world. Threaten it and a forcefield comes up; break the field and it needs a minute to raise another. The spinal lance tracks you before it fires.' },
+  warworld:{ n: 'War World',     rank: 4, hp: 25000, gun: 70, sp: 52, scale: 9, rad: 460, guns: ['streamtwin'], pay: 2150000,
+             waves: [['fighter', 2.5], ['milita', 7.5], ['mother', 22.5]],
+             d: 'The same tonnage with the shield generators torn out and the hangars doubled. No field, no pause in the fire, and it empties its bays twice as fast.' }
 };
 const VTIER_KEYS = Object.keys(VTIERS);
+/* rank lookups, so behaviour keys off the rung rather than a ship name */
+function tierRank(k) { return (VTIERS[k] || VTIERS.fighter).rank; }
+function isRank(t, n) { return t && tierRank(t.tier) === n; }
+/* only the bastion is a place you can set down on; the war world is not */
+function isLandable(t) { return t && t.tier === 'citadel'; }
+const TIER_SHIPS = { citadel: 'singularity', warworld: 'singularity', mother: 'leviathan', broodmother: 'leviathan', milita: 'wraith', nova: 'wraith' };
+/* the pool a given rung draws from when something bigger calls for help */
+const TIER_VARIANTS = { 1: ['fighter', 'seeker'], 2: ['milita', 'nova'], 3: ['mother', 'broodmother'], 4: ['citadel', 'warworld'] };
 /* NPC weapon behaviours */
 const NPC_GUNS = {
   bolt: { cd: [0.85, 1.55], spd: 1050, dmg: 0.5,  col: '#ff6a4d', n: 1, sz: 3 },
   twin: { cd: [0.55, 0.95], spd: 2100, dmg: 0.42, col: '#ffc46b', n: 2, sz: 3, sep: 13 },
   ray:  { cd: [1.9, 2.8],   spd: 1500, dmg: 0.85, col: '#d484ff', n: 1, sz: 5, pierce: true },
-  beam: { cd: [4.5, 7.0],   dmg: 1.9,  col: '#c0f0ff', beam: true, dur: 1.4 },
-  bomb: { cd: [2.6, 4.2],   spd: 460,  dmg: 1.5,  col: '#ff8a5f', n: 1, sz: 6, blast: 240, fuse: 1.6 }
+  beam: { cd: [4.5, 7.0],   dmg: 1.9,  col: '#c0f0ff', beam: true, dur: 1.4, width: 9, hitRad: 30 },
+  bomb: { cd: [2.6, 4.2],   spd: 460,  dmg: 1.5,  col: '#ff8a5f', n: 1, sz: 6, blast: 240, fuse: 1.6 },
+
+  /* a single homing pod, fired on a fixed three-second rhythm */
+  seekpod: { cd: [3, 3], spd: 340, dmg: 1.15, col: '#ff8a5f', n: 1, sz: 5.5,
+             blast: 180, fuse: 7, homing: 2.0, accel: 260, maxSpd: 900, missile: true },
+  /* sixteen bolts thrown outward at once, every two seconds, aimed at nobody */
+  ring16:  { cd: [2, 2], spd: 880, dmg: 0.5, col: '#ffc46b', ring: 16, sz: 3.2 },
+  /* five pods at a time from a carrier that gave up its beam for the racks */
+  swarm:   { cd: [3, 3], spd: 300, dmg: 0.95, col: '#d484ff', n: 5, sz: 5,
+             blast: 160, fuse: 7.5, homing: 2.3, accel: 240, maxSpd: 860, arc: 1.15, missile: true },
+  /* the war world never stops firing: two locked rows, straight down your throat */
+  streamtwin: { cd: [0.17, 0.17], spd: 1500, dmg: 0.5, col: '#ff5f8f', n: 2, sz: 4.2, sep: 40 },
+  /* the bastion's spinal lance: locks on, charges where you can see it, then
+     burns for a full second at three times a mothership beam and four times the width */
+  worldlance: { cd: [8.5, 8.5], dmg: 5.7, col: '#ff5f8f', beam: true, dur: 1.0,
+                charge: 1.5, width: 44, hitRad: 46, lock: true, contact: true }
 };
 
 const MOODS = ['guarded','friendly','bored','wary','cheerful','tired','sharp','distracted'];
@@ -752,6 +865,12 @@ const GOSSIP = [
    11. STATE
 ------------------------------------------------------------ */
 const GALSEED = 90210, GAL_CELL = 2600, SURF_CELL = 560;
+/* A star system reads as roughly 250 units across on the chart. A collapse
+   is ten times that, which is nearly the whole galactic cell. */
+const BLACKHOLE_R = 2500;
+/* how far out the pull is felt, and how close the point of no return sits */
+const BLACKHOLE_REACH = BLACKHOLE_R * 3.0;
+const BLACKHOLE_CORE = BLACKHOLE_R * 0.12;
 const DAY_LEN = 240; /* seconds per cycle */
 
 const DEFAULT_SET = {
@@ -767,7 +886,8 @@ const G = {
   ship: 'vagrant', owned: ['vagrant'], fit: { vagrant: {} }, paint: { vagrant: '#9fb3c8' },
   shipNames: { vagrant: 'The Last Errand' },
   hull: 120, shield: 60, fuel: 26, maxFuelBase: 100,
-  suit: { hp: 100, max: 100, air: 100, airMax: 100 },
+  suit: { hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 },
+  suitKey: 'standard', homeId: '0|0:0',
   crew: [], colonies: {}, bases: {}, farms: {}, stash: {},
   codex: {}, codexN: 0, research: 0, quests: [], questDone: 0,
   rep: {}, relations: {}, knownNpcs: {},
@@ -879,6 +999,29 @@ function systemAt(cx, cy) {
   const r = rng(h);
   const home = (cx === 0 && cy === 0);
   let s = null;
+
+  /* One cell in a hundred that would have held a star holds a collapsed one
+     instead. The roll uses its own hash so adding this did not reshuffle a
+     single existing system in the galaxy. */
+  const hole = !home && (hash2(cx, cy, 0xb1ac01) % 1000) < 10;
+  if (hole) {
+    const hr = rng(hash2(cx, cy, 0x5171e5));
+    const R = BLACKHOLE_R;
+    s = {
+      key: key, cx: cx, cy: cy, blackhole: true,
+      x: cx * GAL_CELL + 0.5 * GAL_CELL,
+      y: cy * GAL_CELL + 0.5 * GAL_CELL,
+      name: sysName(hr) + ' Collapse',
+      r: R, seed: h,
+      star: { n: 'Collapsed singularity', c: '#160a26', r: R, t: 9, mass: 40 },
+      faction: 'none', danger: 5, wealth: 0, hasStation: false, belt: false,
+      scanned: false, planets: [], price: {},
+      spin: hr() < 0.5 ? 1 : -1, tilt: hr() * TAU
+    };
+    for (const k of MAT_KEYS) s.price[k] = 1;
+    sysCache.set(key, s);
+    return s;
+  }
 
   if (home || r() < 0.6) {
     const STARS = [
@@ -1247,13 +1390,18 @@ function rimFactor(s, x, y) {
   return clamp(d / systemEdge(s), 0, 3.2);
 }
 function rollTier(r, rim, danger) {
-  /* rim 0 = on top of the star, 1 = the outermost orbit, >1 = the dark */
-  const heavy = clamp((rim - 0.75) * 0.55 + danger * 0.06, 0, 0.9);
+  /* rim 0 = on top of the star, 1 = the outermost orbit, >1 = the dark.
+     Weight climbs with the square of how far out you have drifted, so the
+     inner system stays survivable and the deep dark does not. */
+  const out = clamp(rim - 0.6, 0, 2.6);
+  const heavy = clamp(out * out * 0.34 + danger * 0.06, 0, 0.95);
   const x = r();
-  if (x < heavy * 0.05) return 'citadel';
-  if (x < heavy * 0.24) return 'mother';
-  if (x < 0.18 + heavy * 0.5) return 'milita';
-  return 'fighter';
+  let rung;
+  if (x < heavy * 0.06) rung = 4;
+  else if (x < heavy * 0.26) rung = 3;
+  else if (x < 0.18 + heavy * 0.52) rung = 2;
+  else rung = 1;
+  return pick(r, TIER_VARIANTS[rung]);
 }
 function makeTraffic(r, s, x, y, opts) {
   opts = opts || {};
@@ -1264,9 +1412,8 @@ function makeTraffic(r, s, x, y, opts) {
   /* the inner system is policed, so pirates only really own the rim */
   if (s && s.danger === 0 && rim < 1 && kind === 'pirate' && !opts.force) kind = 'trader';
   const tierKey = opts.tier || rollTier(r, rim, danger);
-  const T = VTIERS[tierKey];
-  const shipKey = tierKey === 'citadel' ? 'singularity' : tierKey === 'mother' ? 'leviathan'
-    : tierKey === 'milita' ? 'wraith' : pick(r, ['vagrant','kestrel','wraith','nomad']);
+  const T = VTIERS[tierKey] || VTIERS.fighter;
+  const shipKey = TIER_SHIPS[tierKey] || pick(r, ['vagrant','kestrel','wraith','nomad']);
   const b = SHIPS[shipKey];
   const fkeys = FACTION_KEYS.filter(f => f !== 'none');
   /* a system with an owner is flown almost entirely by that owner */
@@ -1279,17 +1426,23 @@ function makeTraffic(r, s, x, y, opts) {
   const hostile = opts.hostile !== undefined ? opts.hostile : (kind === 'pirate');
   const guns = T.guns.slice();
   if (tierKey === 'fighter' && r() < 0.18) guns[0] = 'ray';
-  const hp = T.hp * rr(r, 0.8, 1.25) * (1 + danger * 0.12);
+  /* the listed hull figure is the figure — no random spread on it, so a
+     fighter is always 50 and a bastion is always 25,000 */
+  const hp = T.hp;
   return {
-    id: 'tr' + ((r() * 1e9) | 0), kind: kind, tier: tierKey, name: tierKey === 'citadel' ? settleName(r) + ' Reach' : shipName(r),
+    id: 'tr' + ((r() * 1e9) | 0), kind: kind, tier: tierKey, name: tierKey === 'citadel' ? settleName(r) + ' Reach' : tierKey === 'warworld' ? settleName(r) + ' Ascendant' : shipName(r),
     capt: personName(r), fac: fac === 'none' ? pick(r, fkeys) : fac,
     shipKey: shipKey, col: hostile ? '#ff6a4d' : b.col, shape: b.s,
     x: x, y: y, vx: 0, vy: 0, ang: r() * TAU,
     hp: hp, max: hp, sp: T.sp * rr(r, 0.85, 1.15), rad: T.rad, scale: T.scale,
     gun: T.gun * rr(r, 0.8, 1.2) * (1 + danger * 0.1), cd: rr(r, 0.5, 2),
-    guns: guns, gi: 0, beamT: 0, beamAng: 0,
+    guns: guns, gi: 0, beamT: 0, beamAng: 0, chargeT: 0, lockAng: 0,
     summonCd: T.summon ? rr(r, T.summon[0], T.summon[1]) : 0, brood: 0,
-    barrier: 0, barrierMax: T.shieldable ? hp * 0.6 : 0,
+    /* a rung-four hull runs its hangars on three independent clocks */
+    waveCd: T.waves ? T.waves.map(w => w[1] * rr(r, 0.4, 1)) : null,
+    /* the forcefield is a flat pool that only exists once something threatens it */
+    barrier: 0, barrierMax: T.forcefield || 0, ffDown: 0, ffSeen: false,
+    ally: false, foe: null, foeT: 0,
     state: hostile ? 'hunt' : 'cruise', t: 0, hostile: hostile,
     tx: x + rr(r, -3000, 3000), ty: y + rr(r, -3000, 3000),
     hailed: false, cargo: pick(r, MAT_KEYS), mood: pick(r, MOODS), scanned: false,
@@ -1312,6 +1465,8 @@ function addRes(k, n) {
   if (MAT[k].tool) G.tools[MAT[k].tool] = true;
   /* draw the first real weapon you acquire rather than leaving you empty-handed */
   if (MAT[k].gun && G.gun === 'fists') { G.gun = MAT[k].gun; say('Drew the ' + GUNS[G.gun].n.toLowerCase() + '.', ''); }
+  /* likewise, the first real suit you come by goes straight on */
+  if (MAT[k].suit && G.suitKey === 'standard') wearSuit(MAT[k].suit);
   return take;
 }
 function takeRes(k, n) {
@@ -1374,8 +1529,12 @@ function repChange(fac, n) {
   if (!fac || fac === 'none' || !(fac in G.rep)) return;
   const before = G.rep[fac];
   G.rep[fac] = clamp(G.rep[fac] + n, -100, 100);
-  if (Math.abs(G.rep[fac] - before) >= 1)
-    say(FACTIONS[fac].n + ' standing ' + (n > 0 ? 'up' : 'down') + ' ' + Math.abs(Math.round(G.rep[fac] - before)) + ' (' + Math.round(G.rep[fac]) + ')', n > 0 ? 'good' : 'warn');
+  const moved = G.rep[fac] - before;
+  /* standing moves in small steps now, so report it to one decimal and keep
+     quiet about changes too small to matter */
+  if (Math.abs(moved) >= 0.05)
+    say(FACTIONS[fac].n + ' standing ' + (moved > 0 ? 'up' : 'down') + ' ' +
+      Math.abs(moved).toFixed(Math.abs(moved) < 1 ? 1 : 0) + ' (' + G.rep[fac].toFixed(1) + ')', moved > 0 ? 'good' : 'warn');
 }
 function repTitle(v) {
   if (v >= 75) return 'Honoured'; if (v >= 40) return 'Trusted'; if (v >= 15) return 'Friendly';
@@ -1815,7 +1974,11 @@ function leaveSystem() {
 function spawnTraffic(s) {
   if (!s) return;
   const r = rng(hash2(s.cx, s.cy, (G.day * 31 + Math.floor(G.t / 90)) | 0));
-  const n = ri(r, 1, 3) + (s.hasStation ? 1 : 0);
+  /* arriving inside the orbits is quiet: nought to three contacts. Coming in
+     from the dark, the count climbs with the square of how far out you are. */
+  const arriveRim = rimFactor(s, P.x, P.y);
+  const outward = clamp(arriveRim - 0.6, 0, 2.6);
+  const n = ri(r, 0, 3) + (s.hasStation ? 1 : 0) + Math.round(outward * outward * 1.6);
   for (let i = 0; i < n; i++) {
     const a = r() * TAU, d = 1800 + r() * 3400;
     const t = makeTraffic(r, s, Math.cos(a) * d, Math.sin(a) * d);
@@ -1837,7 +2000,8 @@ function spawnTraffic(s) {
     for (let i = 0; i < wave; i++) {
       const a = Math.random() * TAU, d = 2200 + Math.random() * 1800;
       const t = makeTraffic(hr, s, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d,
-        { tier: rep <= -80 && i === 0 ? 'mother' : 'milita', fac: s.faction, hostile: true, kind: 'patrol', force: true });
+        { tier: rep <= -80 && i === 0 ? pick(hr, TIER_VARIANTS[3]) : pick(hr, TIER_VARIANTS[2]),
+          fac: s.faction, hostile: true, kind: 'patrol', force: true });
       t.state = 'hunt'; hostiles.push(t);
     }
     say(FACTIONS[s.faction].n + ' has a standing order out on you. They are already moving.', 'bad');
@@ -1853,18 +2017,21 @@ function rimSpawn(dt) {
   rimAcc -= dt;
   if (rimAcc > 0) return;
   const rim = rimFactor(sys, P.x, P.y);
-  /* nothing much happens inside the orbits; past the rim it stacks up fast */
-  const pressure = clamp((rim - 0.55) * 1.35, 0, 3.4) * (1 + (sys.danger || 0) * 0.28);
-  rimAcc = pressure <= 0.02 ? 6 : clamp(13 / pressure, 2.2, 26);
+  /* Nothing much happens inside the orbits. Past the last orbit the rate and
+     the ceiling both climb with the square of the distance, so drifting twice
+     as far out of the system is four times the traffic, not twice. */
+  const out = clamp(rim - 0.55, 0, 2.7);
+  const pressure = out * out * 1.5 * (1 + (sys.danger || 0) * 0.28);
+  rimAcc = pressure <= 0.02 ? 6 : clamp(13 / pressure, 0.9, 26);
   if (pressure <= 0.02) return;
-  if (hostiles.length >= Math.round(2 + pressure * 3.2)) return;
+  if (hostiles.length >= Math.round(3 + pressure * 3.6)) return;
   const r = rng((Math.random() * 1e9) | 0);
   const a = Math.random() * TAU, d = 2600 + Math.random() * 2200;
   const t = makeTraffic(r, sys, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d,
     { rim: rim, hostile: r() < clamp(0.3 + rim * 0.26, 0.3, 0.92), kind: 'pirate', force: true });
   t.state = 'hunt';
   if (t.hostile) hostiles.push(t); else neutrals.push(t);
-  if (t.tier === 'mother' || t.tier === 'citadel') say('Something very large just lit up on the far scanner.', 'bad');
+  if (tierRank(t.tier) >= 3) say('Something very large just lit up on the far scanner.', 'bad');
 }
 
 /* ------------------------------------------------------------
@@ -1879,6 +2046,8 @@ function hurt(n, src) {
   if (G.hull <= 0 && !G.over) death(src);
 }
 function hurtSuit(n) {
+  n = n * (1 - suitArmour());
+  if (n <= 0) return;
   if (G.set.shake) cam.shake = Math.min(18, cam.shake + n * 0.2);
   screenFlash();
   G.suit.hp -= n; float(P.x, P.y - 24, '-' + Math.round(n), '#ff6a4d');
@@ -1887,13 +2056,33 @@ function hurtSuit(n) {
     /* on foot you black out and wake at the ship instead of dying outright */
     if (shipAnchor) { P.x = shipAnchor.x; P.y = shipAnchor.y; }
     G.onFoot = false; shipAnchor = null;
-    G.suit.hp = G.suit.max * 0.4; G.suit.air = G.suit.airMax;
+    syncSuit(); G.suit.hp = G.suit.max * 0.4; G.suit.air = G.suit.airMax;
     const lost = Math.round(cargoUsed() * 0.15);
     let rem = lost; for (const k in G.cargo) { const t = Math.min(G.cargo[k], rem); takeRes(k, t); rem -= t; if (rem <= 0) break; }
     AU.play('lose');
     say('You blacked out. The suit auto-recalled you to the ship. Some cargo was left behind.', 'bad');
   }
 }
+/* Where you wake up. Always the world the run started on, so a bad fight
+   never strands you in open space with an empty tank. */
+function homeWorld() {
+  const pl = planetById(G.homeId || '0|0:0');
+  if (pl) return pl;
+  setSystem('0|0');
+  return sys && sys.planets.length ? sys.planets[0] : null;
+}
+function homeWorldName() { const pl = homeWorld(); return pl ? pl.name : null; }
+function respawnHome() {
+  G.over = false;
+  G.hull = ST().hull; G.shield = ST().shield; G.fuel = Math.max(G.fuel, 30);
+  G.suit.hp = G.suit.max; G.suit.air = G.suit.airMax;
+  hostiles = []; bullets = []; neutrals = []; beams.length = 0;
+  G.onFoot = false; shipAnchor = null; G.docked = false;
+  const pl = homeWorld();
+  if (pl) { setSystem(pl.sys); landOn(pl, true); say('You come round on ' + pl.name + '. The ship is patched and the hold is empty.', 'warn'); return; }
+  setSystem('0|0'); enterSystem(sys);
+}
+
 function death(src) {
   G.over = true; G.deaths++;
   AU.play('lose');
@@ -1905,14 +2094,7 @@ function death(src) {
   showEvent('systems failure', 'The ship comes apart around you',
     'The escape pod fires on the last of its charge. A salvage crew finds you eleven hours later and bills you for the trouble. You lose ' +
     fmt(lost) + ' units and ' + cargoLost + ' units of cargo' + (src ? ' — cause of loss: ' + src : '') + '.',
-    [{ l: 'Wake up in a repair bay', f: () => {
-        G.over = false; G.hull = ST().hull; G.shield = ST().shield; G.fuel = Math.max(G.fuel, 30);
-        G.suit.hp = G.suit.max; G.suit.air = G.suit.airMax;
-        hostiles = []; bullets = []; neutrals = []; G.onFoot = false; shipAnchor = null;
-        const homes = Object.keys(G.colonies).concat(Object.keys(G.bases));
-        if (homes.length) { const pl = planetById(homes[0]); if (pl) { setSystem(pl.sys); landOn(pl); return; } }
-        setSystem('0|0'); enterSystem(sys);
-      } }]);
+    [{ l: 'Wake up on ' + (homeWorldName() || 'the home world'), f: () => { respawnHome(); } }]);
 }
 
 /* ------------------------------------------------------------
@@ -2032,40 +2214,119 @@ function surfaceContact(near) {
    attack, flee, follow. Behaviour depends on its kind, your
    reputation with its faction, and how hard you hit it.
 ------------------------------------------------------------ */
+/* Who a given hull is currently shooting at. A hostile keeps the player as
+   its default quarry but will turn on an escort that is closer and in the
+   way; a friendly hull that has taken your side goes after hostiles and
+   ignores you entirely. Targets are cached for a moment so ships do not
+   flicker between two equally close enemies every frame. */
+function allyOf(t) {
+  if (!t || t.hostile || t.dead) return false;
+  if (t.allyForced) return true;
+  const rep = G.rep[t.fac] || 0;
+  if (rep >= 20) return true;
+  return rep >= 0 && (t.kind === 'patrol' || t.kind === 'city' || t.kind === 'escort');
+}
+function allyShips() {
+  const out = [];
+  for (const t of neutrals) if (!t.dead && t.ally) out.push(t);
+  return out;
+}
+function nearestOf(list, x, y, maxD) {
+  let best = null, bd = maxD * maxD;
+  for (const o of list) {
+    if (o.dead) continue;
+    const dd = (o.x - x) * (o.x - x) + (o.y - y) * (o.y - y);
+    if (dd < bd) { bd = dd; best = o; }
+  }
+  return best;
+}
+function shipFoe(t, isHostile, dt) {
+  t.foeT -= dt;
+  if (t.foe && (t.foe.dead || t.foe.gone)) t.foe = null;
+  if (t.foeT > 0 && (t.foe || !isHostile)) {
+    if (t.foe) return { x: t.foe.x, y: t.foe.y, ref: t.foe };
+    if (isHostile) return { x: P.x, y: P.y, ref: null };
+  }
+  t.foeT = 1.2;
+  if (isHostile) {
+    /* an escort or a friendly hull standing between you and them is fair game */
+    const allies = allyShips();
+    const near = nearestOf(allies, t.x, t.y, 4200);
+    const dPlayer = Math.hypot(P.x - t.x, P.y - t.y);
+    if (near && Math.hypot(near.x - t.x, near.y - t.y) < dPlayer * 0.7) { t.foe = near; return { x: near.x, y: near.y, ref: near }; }
+    t.foe = null;
+    return { x: P.x, y: P.y, ref: null };
+  }
+  /* friendlies only pick a fight if they are on your side */
+  if (!t.ally) { t.foe = null; return null; }
+  const h = nearestOf(hostiles, t.x, t.y, 6000);
+  t.foe = h;
+  return h ? { x: h.x, y: h.y, ref: h } : null;
+}
+
+/* something bigger calling a smaller hull into the fight */
+function launchEscort(t, tierKey) {
+  if (hostiles.length > 44) return null;
+  const r2 = rng((Math.random() * 1e9) | 0);
+  const a = Math.random() * TAU;
+  const off = (t.rad || 60) + 90;
+  const f = makeTraffic(r2, sys, t.x + Math.cos(a) * off, t.y + Math.sin(a) * off,
+    { tier: tierKey, fac: t.fac, hostile: t.hostile, kind: 'escort', force: true });
+  f.parent = t; f.state = t.hostile ? 'hunt' : 'cruise';
+  f.allyForced = !t.hostile;
+  t.brood++;
+  if (t.hostile) hostiles.push(f); else neutrals.push(f);
+  return f;
+}
+
 function aiShip(t, dt, isHostile) {
   t.t += dt;
-  const dx = P.x - t.x, dy = P.y - t.y, d = Math.hypot(dx, dy) || 1;
+  const T = VTIERS[t.tier] || VTIERS.fighter;
   const rep = G.rep[t.fac] || 0;
+  t.ally = allyOf(t);
+
+  const foe = shipFoe(t, isHostile, dt);
+  const fx = foe ? foe.x : P.x, fy = foe ? foe.y : P.y;
+  const dx = fx - t.x, dy = fy - t.y, d = Math.hypot(dx, dy) || 1;
+  /* how far the player is, separately — several reactions key off that */
+  const pd = Math.hypot(P.x - t.x, P.y - t.y) || 1;
 
   if (!isHostile) {
-    if (t.state === 'cruise') {
+    if (t.ally && foe) {
+      /* on your side and something to shoot */
+      t.state = t.hp < t.max * 0.2 ? 'flee' : 'attack';
+      if (t.state === 'flee') { t.tx = t.x - dx * 4; t.ty = t.y - dy * 4; }
+      else { t.tx = fx; t.ty = fy; }
+    } else if (t.state === 'attack' && !foe) {
+      t.state = 'cruise';
+    } else if (t.state === 'cruise') {
       if (Math.hypot(t.tx - t.x, t.ty - t.y) < 260 || t.t > 24) {
         t.t = 0;
         t.tx = t.x + rr(Math.random, -3600, 3600); t.ty = t.y + rr(Math.random, -3600, 3600);
       }
-      if (t.kind === 'follower' && d < 2600) t.state = 'follow';
-      if (t.kind === 'patrol' && rep < -40 && d < 2200) { t.state = 'attack'; t.hostile = true; say(t.name + ' is moving to intercept.', 'bad'); }
-      if (t.kind === 'trader' && d < 700 && !t.hailed) { t.hailed = true; t.state = 'hail'; }
+      if (t.kind === 'follower' && pd < 2600) t.state = 'follow';
+      if (t.kind === 'patrol' && rep < -40 && pd < 2200) { t.state = 'attack'; t.hostile = true; say(t.name + ' is moving to intercept.', 'bad'); }
+      if (t.kind === 'trader' && pd < 700 && !t.hailed) { t.hailed = true; t.state = 'hail'; }
     } else if (t.state === 'follow') {
-      if (d > 3400) t.state = 'cruise';
+      if (pd > 3400) t.state = 'cruise';
       t.tx = P.x - Math.cos(P.ang) * 420; t.ty = P.y - Math.sin(P.ang) * 420;
       if (t.t > 18) { t.t = 0; if (Math.random() < 0.3) { t.state = 'cruise'; } }
     } else if (t.state === 'hail') {
-      t.tx = P.x + dx * 0.2; t.ty = P.y + dy * 0.2;
+      t.tx = P.x + (P.x - t.x) * 0.2; t.ty = P.y + (P.y - t.y) * 0.2;
       if (t.t > 5) t.state = 'cruise';
     } else if (t.state === 'flee') {
-      t.tx = t.x - dx * 4; t.ty = t.y - dy * 4;
-      if (d > 3000) { t.state = 'cruise'; t.t = 0; }
+      t.tx = t.x - (P.x - t.x) * 4; t.ty = t.y - (P.y - t.y) * 4;
+      if (pd > 3000) { t.state = 'cruise'; t.t = 0; }
     } else if (t.state === 'attack') {
       t.tx = P.x; t.ty = P.y;
       if (t.hp < t.max * 0.28) t.state = 'flee';
     }
   } else {
-    if (t.hp < t.max * 0.22 && t.kind !== 'pirate') t.state = 'flee';
+    if (t.hp < t.max * 0.22 && t.kind !== 'pirate' && tierRank(t.tier) < 3) t.state = 'flee';
     else if (d < 1700) t.state = 'attack';
     else t.state = 'hunt';
     if (t.state === 'flee') { t.tx = t.x - dx * 4; t.ty = t.y - dy * 4; }
-    else { t.tx = P.x; t.ty = P.y; }
+    else { t.tx = fx; t.ty = fy; }
   }
 
   const want = Math.atan2(t.ty - t.y, t.tx - t.x);
@@ -2075,55 +2336,105 @@ function aiShip(t, dt, isHostile) {
   const push = dTarget > keep ? 1 : -0.5;
   t.vx += Math.cos(t.ang) * t.sp * dt * 2.4 * push;
   t.vy += Math.sin(t.ang) * t.sp * dt * 2.4 * push;
-  const sp = Math.hypot(t.vx, t.vy);
-  if (sp > t.sp) { t.vx *= t.sp / sp; t.vy *= t.sp / sp; }
+  const spNow = Math.hypot(t.vx, t.vy);
+  if (spNow > t.sp) { t.vx *= t.sp / spNow; t.vy *= t.sp / spNow; }
   t.vx -= t.vx * 0.5 * dt; t.vy -= t.vy * 0.5 * dt;
   t.x += t.vx * dt; t.y += t.vy * dt;
 
-  /* barrier regen on anything big enough to carry one */
-  if (t.barrierMax) t.barrier = Math.min(t.barrierMax, t.barrier + t.barrierMax * 0.05 * dt);
+  /* ---- forcefields ----
+     A rung-four bastion has no field until something threatens it. The field
+     is a flat pool that soaks everything; once it is broken the generators
+     need a full minute before another one can be raised. */
+  if (T.forcefield) {
+    t.ffDown = Math.max(0, t.ffDown - dt);
+    const threatened = t.alarmed || (isHostile && pd < t.rad * 6);
+    if (threatened && t.barrier <= 0 && t.ffDown <= 0) {
+      t.barrierMax = T.forcefield;
+      t.barrier = T.forcefield;
+      if (pd < 9000) say(t.name + ' raised a forcefield. Nothing gets through until it drops.', 'bad');
+    }
+  } else if (t.barrierMax) {
+    t.barrier = Math.min(t.barrierMax, t.barrier + t.barrierMax * 0.05 * dt);
+  }
 
-  /* motherships and citadels keep putting fighters in the sky */
-  if (VTIERS[t.tier] && VTIERS[t.tier].summon) {
+  /* ---- carrier launches ---- */
+  if (T.summon) {
     t.summonCd -= dt;
-    const near = d < 6000;
-    if (t.summonCd <= 0 && near && t.brood < (t.tier === 'citadel' ? 8 : 5)) {
-      const sm = VTIERS[t.tier].summon;
-      t.summonCd = rr(Math.random, sm[0], sm[1]);
+    const near = d < 6000 || pd < 6000;
+    if (t.summonCd <= 0 && near && t.brood < 6) {
+      t.summonCd = rr(Math.random, T.summon[0], T.summon[1]);
       if (t.hostile || t.alarmed) {
-        const r2 = rng((Math.random() * 1e9) | 0);
-        const a = Math.random() * TAU;
-        const f = makeTraffic(r2, sys, t.x + Math.cos(a) * (t.rad + 70), t.y + Math.sin(a) * (t.rad + 70),
-          { tier: 'fighter', fac: t.fac, hostile: true, kind: 'escort', force: true });
-        f.parent = t; f.state = 'hunt';
-        t.brood++;
-        hostiles.push(f);
-        if (near && d < 4000) say(t.name + ' launched a fighter.', 'bad');
+        const f = launchEscort(t, pick(Math.random, TIER_VARIANTS[1]));
+        if (f && pd < 4000) say(t.name + ' launched a ' + (VTIERS[f.tier] || VTIERS.fighter).n.toLowerCase() + '.', 'bad');
       }
     }
   }
+  /* ---- rung-four hangars: three separate clocks, one per rung ---- */
+  if (T.waves && t.waveCd && (t.hostile || t.alarmed)) {
+    for (let i = 0; i < T.waves.length; i++) {
+      t.waveCd[i] -= dt;
+      if (t.waveCd[i] > 0) continue;
+      t.waveCd[i] = T.waves[i][1];
+      if (pd > 12000) continue;
+      const rung = tierRank(T.waves[i][0]);
+      const f = launchEscort(t, pick(Math.random, TIER_VARIANTS[rung]));
+      if (f && pd < 7000 && rung >= 2) say(t.name + ' put a ' + (VTIERS[f.tier] || VTIERS.fighter).n.toLowerCase() + ' in the sky.', 'bad');
+    }
+  }
 
+  /* ---- guns ---- */
   const gunKey = t.guns && t.guns.length ? t.guns[t.gi % t.guns.length] : 'bolt';
   const W2 = NPC_GUNS[gunKey] || NPC_GUNS.bolt;
-  const reach = W2.beam ? 2600 : gunKey === 'twin' ? 2200 : 1500;
-  if (t.state === 'attack' && d < reach) {
-    t.cd -= dt;
-    if (t.cd <= 0) {
-      t.cd = rr(Math.random, W2.cd[0], W2.cd[1]);
-      t.gi++;
-      fireNpcGun(t, gunKey, P.x, P.y);
+  const reach = W2.beam ? (W2.lock ? 5200 : 2600) : W2.ring ? 1400 : W2.missile ? 3400 : gunKey === 'twin' ? 2200 : 1500;
+  const canFire = foe !== null || isHostile;
+  if (canFire && t.state === 'attack' && d < reach) {
+    if (W2.charge) {
+      /* the lance announces itself: it locks on, glows for a beat, then fires */
+      if (t.chargeT > 0) {
+        t.chargeT -= dt;
+        t.lockAng = Math.atan2(fy - t.y, fx - t.x);   /* keeps tracking while charging */
+        t.lockRef = foe ? foe.ref : null;
+        if (t.chargeT <= 0) {
+          t.beamT = W2.dur; t.beamAng = t.lockAng; t.beamGun = gunKey;
+          AU.play('attack', 1);
+        }
+      } else {
+        t.cd -= dt;
+        if (t.cd <= 0) {
+          t.cd = rr(Math.random, W2.cd[0], W2.cd[1]);
+          t.chargeT = W2.charge;
+          if (pd < 8000) say(t.name + ' is charging its lance. Break the lock.', 'bad');
+        }
+      }
+    } else {
+      t.cd -= dt;
+      if (t.cd <= 0) {
+        t.cd = rr(Math.random, W2.cd[0], W2.cd[1]);
+        t.gi++;
+        fireNpcGun(t, gunKey, fx, fy, foe ? foe.ref : null);
+      }
     }
   }
   /* an active beam keeps burning for its duration */
   if (t.beamT > 0) {
     t.beamT -= dt;
-    const bd = NPC_GUNS.beam;
-    beams.push({ x1: t.x, y1: t.y, x2: t.x + Math.cos(t.beamAng) * 2600, y2: t.y + Math.sin(t.beamAng) * 2600, c: bd.col, w: 9 });
-    if (!G.onFoot && segDist(t.x, t.y, t.x + Math.cos(t.beamAng) * 2600, t.y + Math.sin(t.beamAng) * 2600, P.x, P.y) < 30) {
-      hurt(t.gun * bd.dmg * dt, t.name + '\u2019s beam');
+    const bd = NPC_GUNS[t.beamGun || 'beam'] || NPC_GUNS.beam;
+    const len = bd.lock ? 5200 : 2600;
+    const ex = t.x + Math.cos(t.beamAng) * len, ey = t.y + Math.sin(t.beamAng) * len;
+    beams.push({ x1: t.x, y1: t.y, x2: ex, y2: ey, c: bd.col, w: bd.width || 9 });
+    const hitR = bd.hitRad || 30;
+    if (t.hostile && !G.onFoot && segDist(t.x, t.y, ex, ey, P.x, P.y) < hitR) {
+      hurt(t.gun * bd.dmg * dt, t.name + '\u2019s ' + (bd.lock ? 'lance' : 'beam'));
+    }
+    /* the beam does not care whose hull it crosses */
+    const others = t.hostile ? allyShips() : hostiles;
+    for (const o of others) {
+      if (o.dead) continue;
+      if (segDist(t.x, t.y, ex, ey, o.x, o.y) < hitR + (o.rad || 30) * 0.5)
+        hitShip(o, t.gun * bd.dmg * dt, o.x, o.y, t.hostile ? 'hostile' : 'ally');
     }
   }
-  if (t.tier === 'citadel') { t.gone = false; return; }
+  if (tierRank(t.tier) >= 4) { t.gone = false; return; }
   if (Math.abs(t.x - P.x) > 16000 || Math.abs(t.y - P.y) > 16000) t.gone = true;
 }
 
@@ -2136,19 +2447,38 @@ function segDist(x1, y1, x2, y2, px, py) {
   return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
 }
 
-function fireNpcGun(t, key, tx, ty) {
+function fireNpcGun(t, key, tx, ty, foeRef) {
   const W2 = NPC_GUNS[key] || NPC_GUNS.bolt;
   const ang = Math.atan2(ty - t.y, tx - t.x);
-  if (W2.beam) { t.beamT = W2.dur; t.beamAng = ang; AU.play('attack', 0.9); return; }
+  if (W2.beam) { t.beamT = W2.dur; t.beamAng = ang; t.beamGun = key; AU.play('attack', 0.9); return; }
+  /* side decides who the round is allowed to hurt: 'h' rounds come from a
+     hostile and hurt you and anything flying with you, 'p' rounds come from
+     a friendly hull and only hurt hostiles */
+  const side = t.hostile ? 'h' : 'p';
+  /* a homing round needs to know what it is chasing — the player is stored
+     as the string 'P' so a stale ship reference can never keep it alive */
+  const tgt = W2.homing ? (foeRef ? foeRef : (t.hostile ? 'P' : null)) : null;
+  const mk = (a, spd, off) => {
+    bullets.push({
+      x: t.x + Math.cos(a + Math.PI / 2) * (off || 0), y: t.y + Math.sin(a + Math.PI / 2) * (off || 0),
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      l: W2.blast ? (W2.fuse || 1.6) : 2.2, d: t.gun * W2.dmg, mine: false, side: side, c: W2.col,
+      sz: W2.sz || 3, blast: W2.blast || 0, pierce: !!W2.pierce,
+      homing: W2.homing || 0, accel: W2.accel || 0, maxSpd: W2.maxSpd || 0,
+      missile: !!W2.missile, tgt: tgt, owner: t
+    });
+  };
+  if (W2.ring) {
+    /* every emitter at once, straight outward, aimed at nothing in particular */
+    for (let i = 0; i < W2.ring; i++) mk((i / W2.ring) * TAU + t.ang, W2.spd, 0);
+    AU.play('attack', 0.55);
+    return;
+  }
   const n = W2.n || 1;
   for (let i = 0; i < n; i++) {
-    const off = n > 1 ? (i - (n - 1) / 2) * (W2.sep || 12) : 0;
-    bullets.push({
-      x: t.x + Math.cos(ang + Math.PI / 2) * off, y: t.y + Math.sin(ang + Math.PI / 2) * off,
-      vx: Math.cos(ang) * W2.spd, vy: Math.sin(ang) * W2.spd,
-      l: W2.blast ? (W2.fuse || 1.6) : 2.2, d: t.gun * W2.dmg, mine: false, c: W2.col,
-      sz: W2.sz || 3, blast: W2.blast || 0, pierce: !!W2.pierce
-    });
+    const spread = W2.arc ? (n > 1 ? (i - (n - 1) / 2) * (W2.arc / n) : 0) : 0;
+    const off = (!W2.arc && n > 1) ? (i - (n - 1) / 2) * (W2.sep || 12) : 0;
+    mk(ang + spread, W2.spd, off);
   }
   AU.play('shoot', 0.5);
 }
@@ -2173,6 +2503,24 @@ function combat(dt) {
       vx: Math.cos(P.ang) * 1550 + P.vx, vy: Math.sin(P.ang) * 1550 + P.vy, l: 1.4, d: s.gun, mine: true, c: s.col });
   }
   for (const b of bullets) {
+    /* a homing round steers toward whatever it was fired at, and keeps
+       accelerating up to its own ceiling while it does */
+    if (b.homing) {
+      let tx = null, ty = null;
+      if (b.tgt === 'P') { tx = P.x; ty = P.y; }
+      else if (b.tgt && !b.tgt.dead && !b.tgt.gone) { tx = b.tgt.x; ty = b.tgt.y; }
+      if (tx !== null) {
+        const wa = Math.atan2(ty - b.y, tx - b.x);
+        let a = Math.atan2(b.vy, b.vx);
+        a += angDiff(a, wa) * b.homing * dt;
+        let sp = Math.hypot(b.vx, b.vy) || 1;
+        if (b.accel) sp = Math.min(b.maxSpd || 900, sp + b.accel * dt);
+        b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
+      }
+      /* a visible trail, so a missile reads differently from a bolt */
+      if (G.set.quality > 0 && Math.random() < 0.7)
+        parts.push({ x: b.x, y: b.y, vx: -b.vx * 0.06, vy: -b.vy * 0.06, l: 0, m: 0.35, c: b.c, sz: 2.6 });
+    }
     b.x += b.vx * dt; b.y += b.vy * dt; b.l -= dt;
     if (b.mine) {
       const all = hostiles.concat(neutrals);
@@ -2180,17 +2528,40 @@ function combat(dt) {
         if (t.dead) continue;
         const rad = (t.rad || 36) + 4;
         if ((t.x - b.x) * (t.x - b.x) + (t.y - b.y) * (t.y - b.y) < rad * rad) {
-          hitShip(t, b.d, b.x, b.y);
+          hitShip(t, b.d, b.x, b.y, 'player');
           if (!b.pierce) b.l = 0;
           boom(b.x, b.y, 5, '#ffc46b', 90);
           if (!b.pierce) break;
         }
       }
-      if (b.blast && b.l <= 0) blastAt(b.x, b.y, b.blast, b.d, true);
+      if (b.blast && b.l <= 0) blastAt(b.x, b.y, b.blast, b.d, true, 'player');
+    } else if (b.side === 'p') {
+      /* friendly fire from a hull flying with you — hostiles only */
+      for (const t of hostiles) {
+        if (t.dead) continue;
+        const rad = (t.rad || 36) + 4;
+        if ((t.x - b.x) * (t.x - b.x) + (t.y - b.y) * (t.y - b.y) < rad * rad) {
+          hitShip(t, b.d, b.x, b.y, 'ally');
+          if (!b.pierce) b.l = 0;
+          boom(b.x, b.y, 5, '#9fe4b4', 90);
+          if (!b.pierce) break;
+        }
+      }
+      if (b.blast && b.l <= 0) blastAt(b.x, b.y, b.blast, b.d, false, 'ally');
     } else {
-      const hitMe = (P.x - b.x) * (P.x - b.x) + (P.y - b.y) * (P.y - b.y) < 28 * 28;
-      if (hitMe || (b.blast && b.l <= 0)) {
-        if (b.blast) blastAt(b.x, b.y, b.blast, b.d, false);
+      const hitMe = !G.onFoot && (P.x - b.x) * (P.x - b.x) + (P.y - b.y) * (P.y - b.y) < 28 * 28;
+      /* hostile rounds also take out the escorts flying with you */
+      let hitAlly = null;
+      if (!hitMe) {
+        for (const t of neutrals) {
+          if (t.dead || !t.ally) continue;
+          const rad = (t.rad || 36) + 4;
+          if ((t.x - b.x) * (t.x - b.x) + (t.y - b.y) * (t.y - b.y) < rad * rad) { hitAlly = t; break; }
+        }
+      }
+      if (hitMe || hitAlly || (b.blast && b.l <= 0)) {
+        if (b.blast) blastAt(b.x, b.y, b.blast, b.d, false, 'hostile');
+        else if (hitAlly) { hitShip(hitAlly, b.d, b.x, b.y, 'hostile'); boom(b.x, b.y, 6, '#ff6a4d', 100); }
         else { hurt(b.d, 'weapons fire'); boom(b.x, b.y, 6, '#ff6a4d', 100); }
         b.l = 0;
       }
@@ -2202,52 +2573,93 @@ function combat(dt) {
 }
 
 /* damage one vessel, stripping its barrier first */
-function hitShip(t, dmg, fx, fy) {
+/* What an act of violence actually costs you with the people who own the
+   hull. Standing runs -100 to 100 and everybody starts at nought, so these
+   are deliberately small: one body barely registers, and it takes a very
+   long campaign of it before a faction turns on you. */
+const REP_COST = {
+  civilian: -0.1,     /* one person, on the ground */
+  ship1:    -0.2,     /* a rung-one hull */
+  ship2:    -0.5,     /* a rung-two hull */
+  ship3:    -1,       /* a carrier */
+  ship4:    -10,      /* a whole world brought down */
+  structure: -0.1,    /* one building levelled */
+  settlement: -1,     /* an entire settlement razed */
+  provoke:  -0.2      /* opening fire on someone who was not hostile */
+};
+function shipRepCost(tier) {
+  const r = tierRank(tier);
+  return r >= 4 ? REP_COST.ship4 : r === 3 ? REP_COST.ship3 : r === 2 ? REP_COST.ship2 : REP_COST.ship1;
+}
+
+function hitShip(t, dmg, fx, fy, src) {
+  src = src || 'player';
+  const T = VTIERS[t.tier] || VTIERS.fighter;
   if (t.barrier > 0) {
     const a = Math.min(t.barrier, dmg);
     t.barrier -= a; dmg -= a;
-    float(t.x, t.y - (t.rad || 30) - 10, 'barrier ' + Math.round(t.barrier), '#6fd8ff');
+    float(t.x, t.y - (t.rad || 30) - 10, 'field ' + Math.round(t.barrier), '#6fd8ff');
+    if (t.barrier <= 0) {
+      /* the field is down and the generators need their minute */
+      if (T.forcefield) {
+        t.ffDown = T.ffCool || 60;
+        say(t.name + '\u2019s forcefield collapsed. It cannot raise another for a minute.', 'good');
+      }
+      boom(t.x, t.y, 40, '#6fd8ff', (t.rad || 60) * 2.6);
+    }
     if (dmg <= 0) return;
   }
   t.hp -= dmg;
   float(t.x, t.y - (t.rad || 30) - 10, '-' + Math.round(dmg), '#ffc46b');
   t.alarmed = true;
-  if (!t.hostile) {
-    t.hostile = true; t.state = 'attack';
-    repChange(t.fac, t.tier === 'citadel' ? -22 : t.tier === 'mother' ? -14 : -6);
+  if (!t.hostile && src === 'player') {
+    t.hostile = true; t.state = 'attack'; t.ally = false; t.allyForced = false;
+    repChange(t.fac, REP_COST.provoke);
     say(t.name + ' returns fire. ' + FACTIONS[t.fac].n + ' will remember this.', 'bad');
   }
   if (t.hp <= 0 && !t.dead) {
-    t.dead = true; G.stat.kills++;
-    if (t.tier === 'mother') G.stat.motherKills = (G.stat.motherKills || 0) + 1;
-    if (t.tier === 'citadel') G.stat.cityKills = (G.stat.cityKills || 0) + 1;
+    t.dead = true;
+    const rank = tierRank(t.tier);
     if (t.parent) t.parent.brood = Math.max(0, t.parent.brood - 1);
-    boom(t.x, t.y, t.tier === 'citadel' ? 220 : t.tier === 'mother' ? 90 : 36, '#ff6a4d', 280 + (t.rad || 30) * 2);
-    const T = VTIERS[t.tier] || VTIERS.fighter;
+    boom(t.x, t.y, rank >= 4 ? 220 : rank === 3 ? 90 : 36, '#ff6a4d', 280 + (t.rad || 30) * 2);
+    if (src !== 'player') {
+      /* somebody else got the kill — no salvage, no standing hit for you */
+      say(t.name + ' went down. Not your kill.', '');
+      return;
+    }
+    G.stat.kills++;
+    if (rank === 3) G.stat.motherKills = (G.stat.motherKills || 0) + 1;
+    if (rank >= 4) G.stat.cityKills = (G.stat.cityKills || 0) + 1;
     const pay = Math.round(T.pay * rr(Math.random, 0.7, 1.4));
     G.credits += pay;
-    const drops = t.tier === 'citadel' ? 6 : t.tier === 'mother' ? 3 : 1;
+    const drops = rank >= 4 ? 6 : rank === 3 ? 3 : 1;
     for (let i = 0; i < drops; i++) addRes(pick(Math.random, ORE_KEYS), 12 + Math.floor(Math.random() * 22));
-    if (t.kind === 'pirate') {
-      repChange('outlaw', -4);
-      repChange(sys && sys.faction !== 'none' ? sys.faction : 'free', 2);
-    }
-    say(t.name + ' destroyed. Salvage worth ' + fmt(pay) + '.', t.tier === 'fighter' ? 'good' : 'rare');
-    if (t.tier === 'citadel') discover('city:' + t.id, t.name, 'Vessel', 'A floating city brought down. Nobody does this twice in one lifetime.', 90000);
+    /* the owners take note, in proportion to what you just destroyed */
+    repChange(t.fac, shipRepCost(t.tier));
+    if (t.kind === 'pirate') repChange(sys && sys.faction !== 'none' ? sys.faction : 'free', 0.2);
+    say(t.name + ' destroyed. Salvage worth ' + fmt(pay) + '.', rank === 1 ? 'good' : 'rare');
+    if (rank >= 4) discover('city:' + t.id, t.name, 'Vessel', 'A hull the size of a world brought down. Nobody does this twice in one lifetime.', 90000);
   }
 }
 
 /* a blast hurts everything near it, including you */
-function blastAt(x, y, rad, dmg, mine) {
+function blastAt(x, y, rad, dmg, mine, src) {
+  src = src || (mine ? 'player' : 'hostile');
   boom(x, y, 30, '#ff8a5f', rad * 2.4);
   if (G.set.shake) cam.shake = Math.min(30, cam.shake + 10);
-  for (const t of hostiles.concat(neutrals)) {
+  /* who the blast is allowed to touch depends on who set it off */
+  const list = src === 'player' ? hostiles.concat(neutrals)
+             : src === 'ally'   ? hostiles
+             : hostiles.concat(neutrals).filter(t => t.ally);
+  for (const t of list) {
     if (t.dead) continue;
     const d = Math.hypot(t.x - x, t.y - y);
-    if (d < rad + (t.rad || 30)) hitShip(t, dmg * clamp(1 - d / (rad * 1.6), 0.25, 1), x, y);
+    if (d < rad + (t.rad || 30)) hitShip(t, dmg * clamp(1 - d / (rad * 1.6), 0.25, 1), x, y, src);
   }
-  const pd = Math.hypot(P.x - x, P.y - y);
-  if (pd < rad) hurt(dmg * clamp(1 - pd / (rad * 1.6), 0.2, 1) * (mine ? 0.5 : 1), 'blast');
+  if (src !== 'ally' && !G.onFoot) {
+    const pd = Math.hypot(P.x - x, P.y - y);
+    if (pd < rad) hurt(dmg * clamp(1 - pd / (rad * 1.6), 0.2, 1) * (mine ? 0.5 : 1), 'blast');
+  }
 }
 
 /* ------------------------------------------------------------
@@ -2529,7 +2941,7 @@ function hurtGround(tgt, dmg, col) {
       o.dead = true;
       if (st.lone) G.civState['wdead:' + o.id] = 1; else { const m = civMem(st); m.npcDead[o.id] = 1; }
       boom(o.x, o.y, 14, o.col, 140);
-      repChange(o.fac, -9); civBump(st, -14);
+      repChange(o.fac, REP_COST.civilian); civBump(st, -14);
       G.bounty += 2500;
       say('You killed ' + o.name + '. ' + FACTIONS[o.fac].n + ' will hear about it.', 'bad');
       /* the rest of them stop pretending they are not armed */
@@ -2554,7 +2966,7 @@ function hurtGround(tgt, dmg, col) {
       for (let i = 0; i < 3; i++) got += addRes(pick(Math.random, loot), ri(Math.random, 12, 40));
       G.credits += 3000 + Math.floor(Math.random() * 7000);
       say('Structure levelled. Stripped ' + got + ' units out of the rubble.', 'warn');
-      repChange(st.fac, -6);
+      repChange(st.fac, REP_COST.structure);
       checkRazed(st);
     }
   }
@@ -2567,7 +2979,7 @@ function checkRazed(st) {
   st.razed = true;
   G.stat.razed = (G.stat.razed || 0) + 1;
   const m = civMem(st); m.razed = true;
-  repChange(st.fac, -25);
+  repChange(st.fac, REP_COST.settlement);
   G.bounty += 40000;
   const haul = {};
   for (const k of (planet ? planet.res : ['ferrite'])) haul[k] = ri(Math.random, 60, 200);
@@ -2714,11 +3126,50 @@ let mineTarget = null, nodeTarget = null, talkTarget = null, structTarget = null
 let waterTarget = null, plotTarget = null, critTarget = null, baseTarget = null;
 let talkTown = null;
 
+/* The pull of a collapse. It starts as a nudge at the edge of reach and
+   turns into something you cannot out-burn well before the middle; past the
+   core radius there is no escape and no survival. */
+let holeNear = null, holeWarn = 0;
+function blackHoleTick(dt) {
+  holeNear = null;
+  holeWarn = Math.max(0, holeWarn - dt);
+  for (const s of nearbySystems(P.x, P.y, 2)) {
+    if (!s || !s.blackhole) continue;
+    const dx = s.x - P.x, dy = s.y - P.y;
+    const d = Math.hypot(dx, dy) || 1;
+    if (d > BLACKHOLE_REACH) continue;
+    const k = 1 - d / BLACKHOLE_REACH;          /* 0 at the edge, 1 at the middle */
+    const a = 120 + k * k * k * 4200;
+    P.vx += (dx / d) * a * dt;
+    P.vy += (dy / d) * a * dt;
+    /* a little sideways drag, so you spiral rather than fall straight in */
+    P.vx += (-dy / d) * a * 0.22 * dt * s.spin;
+    P.vy += (dx / d) * a * 0.22 * dt * s.spin;
+    if (!holeNear || d < holeNear.d) holeNear = { s: s, d: d, k: k };
+    if (G.set.shake) cam.shake = Math.min(26, cam.shake + k * k * 40 * dt);
+    if (d < BLACKHOLE_CORE && !G.over) {
+      G.hull = 0; G.shield = 0;
+      boom(P.x, P.y, 60, '#d484ff', 400);
+      death('the ' + s.name);
+      return;
+    }
+  }
+  if (holeNear && holeWarn <= 0) {
+    holeWarn = 6;
+    if (holeNear.k > 0.6) say('You are not going to out-burn this. Turn now.', 'bad');
+    else if (holeNear.k > 0.28) say('The ' + holeNear.s.name + ' has you. Burn away from it.', 'bad');
+    else say('Something ahead is bending the starlight. Give it a wide berth.', 'warn');
+  }
+}
+
 function updGalaxy(dt) {
   flyControls(dt, { drag: 0.08, boostMul: 4.2 });
   G.shield = Math.min(ST().shield, G.shield + ST().regen * dt);
+  blackHoleTick(dt);
+  if (G.over) return;
   galTarget = null; let best = 1e18;
   for (const s of nearbySystems(P.x, P.y, 2)) {
+    if (s.blackhole) continue;   /* there is nothing to enter */
     const d = (s.x - P.x) * (s.x - P.x) + (s.y - P.y) * (s.y - P.y);
     if (d < 460 * 460 && d < best) { best = d; galTarget = s; }
   }
@@ -2728,8 +3179,14 @@ function updGalaxy(dt) {
     for (const s of nearbySystems(P.x, P.y, 1)) {
       if ((s.x - P.x) * (s.x - P.x) + (s.y - P.y) * (s.y - P.y) < 2400 * 2400 && !G.codex['sys:' + s.key]) {
         n++; G.stat.scans++;
-        discover('sys:' + s.key, s.name + ' system', 'System',
-          s.star.n + ' · ' + s.planets.length + ' worlds · ' + FACTIONS[s.faction].n, 2400);
+        if (s.blackhole) {
+          discover('sys:' + s.key, s.name, 'System',
+            'A collapsed star. No orbits, no light, and a gravity well that reaches ten times further than it looks. ' +
+            'Nothing that has crossed the middle has come back.', 9000);
+        } else {
+          discover('sys:' + s.key, s.name + ' system', 'System',
+            s.star.n + ' · ' + s.planets.length + ' worlds · ' + FACTIONS[s.faction].n, 2400);
+        }
       }
     }
     if (!n) say('Long-range scan returns nothing new.', '');
@@ -2760,10 +3217,10 @@ function updSystem(dt) {
   }
   cityTarget = null;
   for (const t of neutrals) {
-    const reach = t.tier === 'citadel' ? (t.rad + 260) : t.tier === 'mother' ? (t.rad + 200) : 520;
+    const reach = tierRank(t.tier) >= 4 ? (t.rad + 260) : tierRank(t.tier) === 3 ? (t.rad + 200) : 520;
     const d = (t.x - P.x) * (t.x - P.x) + (t.y - P.y) * (t.y - P.y);
     if (d < reach * reach) {
-      if (t.tier === 'citadel') { cityTarget = t; sysTarget = null; stTarget = false; }
+      if (isLandable(t)) { cityTarget = t; sysTarget = null; stTarget = false; }
       else if (!hailTarget) hailTarget = t;
     }
   }
@@ -2910,7 +3367,7 @@ function board() {
 
 function updOnFoot(dt, b, cells) {
   /* direct walking control */
-  const sp = 210 * (1 + crewBonus('piloting') * 0.02);
+  const sp = 210 * (1 + crewBonus('piloting') * 0.02) * walkSpeedMul();
   let ax = 0, ay = 0;
   if (down('KeyA') || down('ArrowLeft')) ax -= 1;
   if (down('KeyD') || down('ArrowRight')) ax += 1;
@@ -2928,7 +3385,8 @@ function updOnFoot(dt, b, cells) {
   /* air + hazard — a weather stabiliser holds all of it off inside the ring */
   const shelter = sheltered(P.x, P.y);
   if (b.haz > 0.05 && !shelter) {
-    G.suit.air = Math.max(0, G.suit.air - (6 + b.haz * 14) * dt);
+    /* a better-sealed suit simply loses less of it */
+    G.suit.air = Math.max(0, G.suit.air - (6 + b.haz * 14) * (1 - suitHaz()) * dt);
     if (G.suit.air <= 0) hurtSuit(9 * dt);
     else if (G.suit.air < 25 && Math.random() < dt * 0.6) say('Air supply low. Return to the ship or use a canister.', 'warn');
   } else {
@@ -3089,21 +3547,30 @@ function relBump(id, n) { G.relations[id] = clamp(relOf(id) + n, -100, 100); }
 /* Standing has to be earned over time, not farmed by clicking the same
    line forty times. Each way of pleasing someone has its own cooldown,
    and repeated goodwill inside one window is worth steadily less. */
-const REL_WAIT = { news: 70, chat: 90, gift: 160, work: 120 };
+/* Conversation has a short breather on it so the same line is not worth
+   farming, but giving somebody something they want has no limit at all —
+   if you are willing to keep handing over goods, they will keep warming to
+   you, and that is the fast road to a friendship. */
+const REL_WAIT = { news: 15, chat: 20, gift: 0, work: 35 };
+/* tags that ignore the diminishing-returns curve entirely */
+const REL_UNCAPPED = { gift: true };
 function relCooldown(id, tag) {
+  if (!REL_WAIT[tag]) return 0;
   const last = G.talkCd[id + ':' + tag];
   if (last === undefined) return 0;
-  return Math.max(0, (REL_WAIT[tag] || 80) - (G.t - last));
+  return Math.max(0, REL_WAIT[tag] - (G.t - last));
 }
 function relGain(npc, n, tag) {
   const key = npc.id + ':' + tag;
   if (relCooldown(npc.id, tag) > 0) return 0;
   G.talkCd[key] = G.t;
+  if (REL_UNCAPPED[tag]) { relBump(npc.id, n); return n; }
   const rec = G.talkGain[npc.id] || { t: -1e9, n: 0 };
-  if (G.t - rec.t > 260) rec.n = 0;
+  if (G.t - rec.t > 120) rec.n = 0;
   rec.t = G.t; rec.n++;
   G.talkGain[npc.id] = rec;
-  const got = n * Math.pow(0.68, Math.max(0, rec.n - 1));
+  /* a gentler falloff than before, and it resets twice as quickly */
+  const got = n * Math.pow(0.82, Math.max(0, rec.n - 1));
   relBump(npc.id, got);
   return got;
 }
@@ -3225,20 +3692,46 @@ function talkOptions(npc) {
       updRel(npc); talkOptions(npc);
     } });
 
+  /* Gifts: no cooldown, no cap, and you pick what to hand over. Their
+     favourite is always offered first when you are carrying any. */
   const giftable = Object.keys(G.cargo).filter(k => G.cargo[k] >= 1 && MAT[k] && MAT[k].v >= 40);
   if (giftable.length) {
-    const best = giftable.indexOf(npc.likes) >= 0 ? npc.likes : giftable.sort((a, b) => MAT[b].v - MAT[a].v)[0];
-    opts.push({ l: 'Offer a gift: 1 ' + MAT[best].n + coolText(npc.id, 'gift'), f: () => {
-        if (relCooldown(npc.id, 'gift') > 0) { setTalkLine('You have already been generous today. Stop trying to buy me.'); return; }
-        takeRes(best, 1);
-        const loved = best === npc.likes;
-        relGain(npc, loved ? 18 : 7, 'gift');
-        repChange(npc.fac, loved ? 2 : 1);
-        if (st && !st.lone) civBump(st, loved ? 3 : 1);
-        setTalkLine(loved ? 'You remembered. That is exactly what I like. Consider us friends.'
-                          : 'Generous. Not necessary, but noted.');
-        updRel(npc); talkOptions(npc);
-      } });
+    const byValue = giftable.slice().sort((a, b) => MAT[b].v - MAT[a].v);
+    const list = [];
+    if (giftable.indexOf(npc.likes) >= 0) list.push(npc.likes);
+    for (const k of byValue) { if (list.length >= 3) break; if (list.indexOf(k) < 0) list.push(k); }
+    const giveOne = (k) => {
+      if ((G.cargo[k] || 0) < 1) { setTalkLine('You are not carrying any of that.'); talkOptions(npc); return; }
+      takeRes(k, 1);
+      const loved = k === npc.likes;
+      const before = relOf(npc.id);
+      relGain(npc, loved ? 18 : 7, 'gift');
+      repChange(npc.fac, loved ? 0.2 : 0.1);
+      if (st && !st.lone) civBump(st, loved ? 3 : 1);
+      const now = relOf(npc.id);
+      if (now >= 100 && before >= 100) setTalkLine('There is nothing further to win here. We are as close as two people get.');
+      else setTalkLine(loved ? 'You remembered. That is exactly what I like. Keep them coming.'
+                             : 'Generous. Not necessary, but noted.');
+      updRel(npc); talkOptions(npc);
+    };
+    for (const k of list) {
+      opts.push({ l: 'Offer a gift: 1 ' + MAT[k].n + (k === npc.likes ? ' (their favourite)' : '') +
+        ' · ' + Math.floor(G.cargo[k]) + ' held', f: () => giveOne(k) });
+    }
+    /* hand over ten at once when you are trying to buy a friendship quickly */
+    const bulk = list[0];
+    if ((G.cargo[bulk] || 0) >= 10) {
+      opts.push({ l: 'Hand over 10 ' + MAT[bulk].n + ' at once', f: () => {
+          const loved = bulk === npc.likes;
+          let n = 0;
+          for (let i = 0; i < 10 && (G.cargo[bulk] || 0) >= 1; i++) { takeRes(bulk, 1); relBump(npc.id, loved ? 18 : 7); n++; }
+          repChange(npc.fac, loved ? 1 : 0.5);
+          if (st && !st.lone) civBump(st, loved ? 8 : 4);
+          setTalkLine(n ? 'All of it? ' + (loved ? 'You and I are going to get along.' : 'Well. That settles that.')
+                        : 'You have nothing to give.');
+          updRel(npc); talkOptions(npc);
+        } });
+    }
   }
 
   /* contracts */
@@ -3303,7 +3796,7 @@ function talkOptions(npc) {
         } });
     }
     opts.push({ l: 'Threaten them', ghost: true, f: () => {
-        civBump(st, -22); repChange(npc.fac, -8);
+        civBump(st, -22); repChange(npc.fac, -0.5);
         if (relOf(npc.id) > 40 || civRel(st) > 20) {
           setTalkLine('After everything? Get off our ground.');
         } else {
@@ -3344,12 +3837,12 @@ function hailShip(t) {
   const opts = [];
   const price = Math.round(priceOf(t.cargo, sys) * 0.72);
   /* a friendly carrier is a market with engines — small stock, good prices */
-  if (t.tier === 'mother' || t.tier === 'citadel') {
+  if (tierRank(t.tier) >= 3) {
     opts.push({ l: 'Ask to come aboard and trade', f: () => {
         if (!t.stock) {
           const sr = rng(t.tipSeed >>> 0);
           const pool = MAT_KEYS.filter(k => MAT[k].cat !== 'alloy' && MAT[k].cat !== 'artifact');
-          t.stock = shuffle(sr, pool).slice(0, t.tier === 'citadel' ? ri(sr, 8, 12) : ri(sr, 4, 6));
+          t.stock = shuffle(sr, pool).slice(0, tierRank(t.tier) >= 4 ? ri(sr, 8, 12) : ri(sr, 4, 6));
         }
         closeTalk();
         activeShop = { id: t.id, name: t.capt, fac: t.fac, seed: t.tipSeed,
@@ -3553,7 +4046,7 @@ const ENCOUNTERS = [
           const roll = Math.random();
           if (roll < 0.4) { G.maxFuelBase += 20; G.fuel = maxFuel(); say('Warp cell capacity increased to ' + maxFuel() + '.', 'rare'); }
           else if (roll < 0.75) { const k = pick(Math.random, ['voidcrystal','antimatter','glyph']); addRes(k, 30); say('The stone gives up 30 ' + MAT[k].n + '.', 'rare'); }
-          else { G.suit.max += 25; G.suit.hp = G.suit.max; say('Your suit feels heavier and stronger. Integrity now ' + G.suit.max + '.', 'rare'); }
+          else { G.suit.bonus = (G.suit.bonus || 0) + 25; syncSuit(); G.suit.hp = G.suit.max; say('Your suit feels heavier and stronger. Integrity now ' + G.suit.max + '.', 'rare'); }
           discover('mono:' + Math.floor(P.x / 900), 'Monolith of unknown make', 'Ancient', 'Predates local stellar formation. Purpose unresolved.', 9000);
         } },
        { l: 'Keep your distance', ghost: true }]);
@@ -4242,6 +4735,81 @@ function renderSystem() {
   drawShip(ctx, P.x, P.y, P.ang, ST().col, 1.0 / cam.z, P.thrust > 0, ST().s);
   drawFloaters();
   end();
+  drawHoleWarning();
+}
+
+/* A collapse: an absolutely black disc, a bright accretion ring leaning on
+   its own axis, and lensed light smeared around the rim. Everything here is
+   drawn in world units because the galaxy view is already transformed. */
+function drawBlackHole(s) {
+  const R = s.r, t = G.t * 0.12 * s.spin;
+  /* the far reach of the well — a faint darkening of everything around it */
+  const halo = ctx.createRadialGradient(s.x, s.y, R * 0.8, s.x, s.y, BLACKHOLE_REACH);
+  halo.addColorStop(0, 'rgba(24,8,44,.85)');
+  halo.addColorStop(0.35, 'rgba(14,4,26,.45)');
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(s.x, s.y, BLACKHOLE_REACH, 0, TAU); ctx.fill();
+
+  /* accretion disc, drawn as leaning ellipses behind and in front of the hole */
+  ctx.save();
+  ctx.translate(s.x, s.y); ctx.rotate(s.tilt);
+  for (let i = 0; i < 26; i++) {
+    const f = i / 26;
+    const rad = R * (1.16 + f * 1.5);
+    ctx.globalAlpha = (1 - f) * 0.5;
+    ctx.strokeStyle = i % 3 === 0 ? '#d484ff' : i % 3 === 1 ? '#ffc46b' : '#6fd8ff';
+    ctx.lineWidth = R * 0.035;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rad, rad * 0.26, 0, t + f * 2.2, t + f * 2.2 + 2.4 + f);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  /* photon ring, then the event horizon itself */
+  const ring = ctx.createRadialGradient(s.x, s.y, R * 0.92, s.x, s.y, R * 1.2);
+  ring.addColorStop(0, 'rgba(255,238,200,0)');
+  ring.addColorStop(0.45, 'rgba(255,226,170,.85)');
+  ring.addColorStop(1, 'rgba(212,132,255,0)');
+  ctx.fillStyle = ring;
+  ctx.beginPath(); ctx.arc(s.x, s.y, R * 1.2, 0, TAU); ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, TAU); ctx.fill();
+
+  /* matter still falling in */
+  for (let i = 0; i < 9; i++) {
+    const a = t * 5 + (i / 9) * TAU;
+    const rr2 = R * (1.24 + ((i * 7) % 5) * 0.16);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#ffd9a0';
+    ctx.beginPath(); ctx.arc(s.x + Math.cos(a) * rr2, s.y + Math.sin(a) * rr2 * 0.42, R * 0.016, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = '#c9a8ff';
+  ctx.font = (16 / cam.z) + 'px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(s.name, s.x, s.y + R * 1.5);
+  ctx.font = (11 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.fillStyle = '#8f6fb4';
+  ctx.fillText('collapsed singularity · do not approach', s.x, s.y + R * 1.5 + 22 / cam.z);
+  ctx.textAlign = 'left';
+}
+
+/* the screen-space warning while a collapse has hold of you */
+function drawHoleWarning() {
+  if (!holeNear) return;
+  const k = holeNear.k;
+  const g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(24,4,40,' + (0.2 + k * 0.7).toFixed(3) + ')');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = k > 0.55 ? '#ff5f8f' : '#d484ff';
+  ctx.font = '600 15px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('GRAVITY WELL · ' + Math.round(k * 100) + '% · ' + holeNear.s.name.toUpperCase(), W / 2, 92);
+  ctx.font = '11px "IBM Plex Mono", monospace'; ctx.fillStyle = 'rgba(207,230,238,.75)';
+  ctx.fillText(k > 0.6 ? 'escape velocity exceeded' : 'burn away from the singularity', W / 2, 112);
+  ctx.textAlign = 'left';
 }
 function drawBeams() {
   for (const bm of beams) {
@@ -4253,15 +4821,26 @@ function drawBeams() {
 }
 function drawCitadel(t, hostile) {
   const R = t.rad;
+  const war = t.tier === 'warworld';
   ctx.save(); ctx.translate(t.x, t.y);
   /* hull disc */
   const g = ctx.createRadialGradient(-R * 0.3, -R * 0.3, R * 0.1, 0, 0, R);
-  g.addColorStop(0, hostile ? '#5b2a22' : '#1d4452');
+  g.addColorStop(0, war ? '#4a1420' : hostile ? '#5b2a22' : '#1d4452');
   g.addColorStop(1, '#070d14');
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
-  ctx.strokeStyle = FACTIONS[t.fac].c; ctx.lineWidth = 3 / cam.z;
+  ctx.strokeStyle = war ? '#ff5f8f' : FACTIONS[t.fac].c; ctx.lineWidth = (war ? 5 : 3) / cam.z;
   ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.stroke();
+  /* a war world wears its hangar mouths on the outside */
+  if (war) {
+    ctx.strokeStyle = 'rgba(255,95,143,.55)'; ctx.lineWidth = 2.4 / cam.z;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU + G.t * 0.05;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 0.86, a - 0.13, a + 0.13);
+      ctx.stroke();
+    }
+  }
   /* districts of the city, spun slowly */
   ctx.rotate(G.t * 0.06);
   for (let i = 0; i < 14; i++) {
@@ -4275,13 +4854,41 @@ function drawCitadel(t, hostile) {
     ctx.fillRect(Math.cos(a) * rr2 - w * 0.2, Math.sin(a) * rr2 - h * 0.2, w * 0.4, h * 0.4);
   }
   ctx.restore();
-  /* barrier bubble */
+  /* the forcefield, when one is up */
   if (t.barrier > 1) {
-    ctx.strokeStyle = '#6fd8ff'; ctx.globalAlpha = 0.16 + (t.barrier / Math.max(1, t.barrierMax)) * 0.3;
-    ctx.lineWidth = 6 / cam.z;
+    const f = t.barrier / Math.max(1, t.barrierMax);
+    ctx.strokeStyle = '#6fd8ff'; ctx.globalAlpha = 0.2 + f * 0.4;
+    ctx.lineWidth = 7 / cam.z;
     ctx.beginPath(); ctx.arc(t.x, t.y, R * 1.32, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.1 + f * 0.12;
+    ctx.fillStyle = '#6fd8ff';
+    ctx.beginPath(); ctx.arc(t.x, t.y, R * 1.32, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
   }
+  drawLanceCharge(t);
+}
+
+/* the lock-on line and the swelling muzzle glow while a lance spins up —
+   this is the whole warning the player gets, so it has to be unmissable */
+function drawLanceCharge(t) {
+  if (!t.chargeT || t.chargeT <= 0) return;
+  const W2 = NPC_GUNS[(t.guns && t.guns[t.gi % t.guns.length]) || 'worldlance'] || NPC_GUNS.worldlance;
+  const full = W2.charge || 1.5;
+  const k = 1 - clamp(t.chargeT / full, 0, 1);
+  const len = 5200;
+  const ex = t.x + Math.cos(t.lockAng) * len, ey = t.y + Math.sin(t.lockAng) * len;
+  ctx.save();
+  ctx.strokeStyle = W2.col; ctx.globalAlpha = 0.25 + k * 0.5;
+  ctx.lineWidth = Math.max(1, (1 + k * 4) / cam.z);
+  ctx.setLineDash([26 / cam.z, 18 / cam.z]);
+  ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.35 + k * 0.6;
+  ctx.fillStyle = W2.col;
+  const mx = t.x + Math.cos(t.lockAng) * (t.rad || 60) * 0.9;
+  const my = t.y + Math.sin(t.lockAng) * (t.rad || 60) * 0.9;
+  ctx.beginPath(); ctx.arc(mx, my, 10 + k * 46, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1; ctx.restore();
 }
 function drawMother(t, hostile) {
   const R = t.rad;
@@ -4300,9 +4907,21 @@ function drawMother(t, hostile) {
   ctx.restore();
 }
 function drawTraffic(t, hostile) {
-  if (t.tier === 'citadel') drawCitadel(t, hostile);
-  else if (t.tier === 'mother') drawMother(t, hostile);
-  else drawShip(ctx, t.x, t.y, t.ang, t.col, (t.scale || 0.85) / cam.z, true, t.shape);
+  if (tierRank(t.tier) >= 4) drawCitadel(t, hostile);
+  else if (tierRank(t.tier) === 3) drawMother(t, hostile);
+  else {
+    drawShip(ctx, t.x, t.y, t.ang, t.col, (t.scale || 0.85) / cam.z, true, t.shape);
+    /* missile racks on a seeker, an emitter ring on a nova */
+    if (t.tier === 'seeker') {
+      ctx.fillStyle = '#ff8a5f';
+      for (let i = -1; i <= 1; i += 2)
+        ctx.fillRect(t.x - 3 / cam.z + Math.cos(t.ang + Math.PI / 2) * i * 12 / cam.z,
+                     t.y - 3 / cam.z + Math.sin(t.ang + Math.PI / 2) * i * 12 / cam.z, 6 / cam.z, 6 / cam.z);
+    } else if (t.tier === 'nova') {
+      ctx.strokeStyle = 'rgba(255,196,107,.7)'; ctx.lineWidth = 1.6 / cam.z;
+      ctx.beginPath(); ctx.arc(t.x, t.y, (t.rad || 46) * 0.62, 0, TAU); ctx.stroke();
+    }
+  }
   const p = t.hp / t.max;
   const bw = Math.max(36, (t.rad || 36) * 1.1);
   const by = (t.rad || 30) + 16;
@@ -4327,6 +4946,7 @@ function renderGalaxy() {
 
   begin();
   for (const s of nearbySystems(cam.x, cam.y, 2)) {
+    if (s.blackhole) { drawBlackHole(s); continue; }
     const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, 250);
     g.addColorStop(0, s.star.c); g.addColorStop(0.16, s.star.c);
     g.addColorStop(0.42, 'rgba(255,220,180,.14)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -4442,10 +5062,24 @@ function renderScanner() {
     blip(0, 0, sys.star.c, 5);
     for (const pl of sys.planets) { const pp = planetPos(pl, G.t); blip(pp[0], pp[1], BIOMES[pl.biome].acc, 3.4); }
     if (sys.hasStation) { const sp = stationPos(sys, G.t); blip(sp[0], sp[1], '#6fd8ff', 3.6); }
-    for (const t of neutrals) blip(t.x, t.y, t.tier === 'citadel' ? '#6fd8ff' : '#9fe4b4', t.tier === 'citadel' ? 6 : t.tier === 'mother' ? 4.4 : 2.6);
-    for (const t of hostiles) blip(t.x, t.y, '#ff6a4d', t.tier === 'citadel' ? 6 : t.tier === 'mother' ? 4.4 : 3);
+    for (const t of neutrals) blip(t.x, t.y, tierRank(t.tier) >= 4 ? '#6fd8ff' : t.ally ? '#4fe3d0' : '#9fe4b4', tierRank(t.tier) >= 4 ? 6 : tierRank(t.tier) === 3 ? 4.4 : 2.6);
+    for (const t of hostiles) blip(t.x, t.y, '#ff6a4d', tierRank(t.tier) >= 4 ? 6 : tierRank(t.tier) === 3 ? 4.4 : 3);
   } else {
-    for (const s of nearbySystems(P.x, P.y, 2)) blip(s.x, s.y, s.star.c, 3.4);
+    for (const s of nearbySystems(P.x, P.y, 2)) {
+      if (s.blackhole) {
+        /* drawn to scale, so a collapse swallows most of the scanner face */
+        const hx = cx + (s.x - P.x) * scale, hy = cy + (s.y - P.y) * scale;
+        const hr = Math.max(6, s.r * scale);
+        ctx.strokeStyle = 'rgba(212,132,255,.5)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(hx, hy, Math.max(hr, BLACKHOLE_REACH * scale), 0, TAU); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,214,150,.85)';
+        ctx.beginPath(); ctx.arc(hx, hy, hr * 1.18, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(hx, hy, hr, 0, TAU); ctx.fill();
+        continue;
+      }
+      blip(s.x, s.y, s.star.c, 3.4);
+    }
     if (G.waypoint) blip(G.waypoint.x, G.waypoint.y, '#d484ff', 4.2);
     for (const t of neutrals) blip(t.x, t.y, '#9fe4b4', 2.6);
     for (const t of hostiles) blip(t.x, t.y, '#ff6a4d', 3);
@@ -4643,6 +5277,7 @@ function keyList() {
 
   /* panels are always reachable */
   add('I', 'Cargo hold');
+  if (G.onFoot) add('Y', 'Stats and gear', true); else add('Y', 'Stats and gear');
   add('Q', 'Journal');
   add('M', 'Star chart');
   add('K', 'Fabricator');
@@ -4652,6 +5287,7 @@ function keyList() {
   add('G', 'Empire');
   add('C', 'Codex');
   if (G.docked) add('T', 'Trade terminal', true);
+  add('Z', 'Hold 5s to scuttle');
   add('Esc', 'Pause');
   return L;
 }
@@ -4858,6 +5494,44 @@ overlay.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (a) { doAction(a.dataset.act, a.dataset.k, a.dataset.n); return; }
 });
+/* dragging a weapon or a suit onto its slot. The panel body is rebuilt from
+   a string on every refresh, so all of this is delegated from the overlay
+   rather than bound to the rows themselves. */
+let dragPayload = null;
+overlay.addEventListener('dragstart', e => {
+  const el = e.target.closest && e.target.closest('[data-drag]');
+  if (!el) return;
+  dragPayload = el.dataset.drag;
+  el.classList.add('dragging');
+  if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragPayload); } catch (err) {} }
+});
+overlay.addEventListener('dragend', e => {
+  dragPayload = null;
+  const all = overlay.querySelectorAll('.dragging,.over');
+  for (let i = 0; i < all.length; i++) all[i].classList.remove('dragging', 'over');
+});
+overlay.addEventListener('dragover', e => {
+  const z = e.target.closest && e.target.closest('[data-drop]');
+  if (!z || !dragPayload || dragPayload.split(':')[0] !== z.dataset.drop) return;
+  e.preventDefault();
+  z.classList.add('over');
+});
+overlay.addEventListener('dragleave', e => {
+  const z = e.target.closest && e.target.closest('[data-drop]');
+  if (z) z.classList.remove('over');
+});
+overlay.addEventListener('drop', e => {
+  const z = e.target.closest && e.target.closest('[data-drop]');
+  const payload = dragPayload || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : '');
+  if (!z || !payload) return;
+  e.preventDefault();
+  z.classList.remove('over');
+  const bits = payload.split(':');
+  if (bits[0] !== z.dataset.drop) return;
+  doAction(bits[0] === 'gun' ? 'equipgun' : 'equipsuit', bits[1]);
+  dragPayload = null;
+  refresh();
+});
 overlay.addEventListener('input', e => {
   const a = e.target.closest('[data-set]');
   if (a) { G.set[a.dataset.set] = parseFloat(a.value); AU.sync(); renderPanel(openId); }
@@ -4874,6 +5548,7 @@ function renderPanel(id) {
   else if (id === 'craft') body.innerHTML = uiCraft();
   else if (id === 'build') body.innerHTML = uiBuild();
   else if (id === 'farm') body.innerHTML = uiFarm();
+  else if (id === 'gear') body.innerHTML = uiGear();
   else if (id === 'crew') body.innerHTML = uiCrew();
   else if (id === 'empire') body.innerHTML = uiEmpire();
   else if (id === 'codex') body.innerHTML = uiCodex();
@@ -5416,6 +6091,90 @@ function uiFarm() {
   return h;
 }
 
+/* a signed stat line: green when the number helps you, rust when it does not */
+function gearStat(label, txt, good) {
+  const col = good === 0 ? 'var(--dim)' : good > 0 ? 'var(--leaf)' : 'var(--rust)';
+  return '<div class="stat"><i>' + label + '</i><b style="color:' + col + '">' + txt + '</b></div>';
+}
+function pctTxt(v, digits) {
+  const n = v * 100;
+  return (n > 0 ? '+' : '') + n.toFixed(digits === undefined ? 0 : digits) + '%';
+}
+function gunStatBits(g) {
+  const bits = [];
+  if (g.mode === 'melee') bits.push('melee');
+  bits.push(g.dmg + ' damage');
+  if (g.pellets) bits.push(g.pellets + ' pellets');
+  if (g.mode === 'beam') bits.push('continuous beam');
+  else if (g.rate) bits.push(g.rate.toFixed(2) + 's between shots');
+  bits.push(g.range + ' reach');
+  if (g.blast) bits.push(g.blast + ' blast');
+  if (g.heat) bits.push('runs hot');
+  bits.push('weight ' + ((g.wt || 0) === 0 ? 'none' : (g.wt || 0).toFixed(2)));
+  return bits.join(' · ');
+}
+function suitStatBits(d) {
+  return [d.hp + ' integrity', d.air + ' air',
+    'hazard ' + pctTxt(d.haz), 'armour ' + pctTxt(d.armour),
+    'weight ' + (d.weight === 0 ? 'none' : (d.weight > 0 ? '+' : '') + d.weight.toFixed(2))].join(' · ');
+}
+function uiGear() {
+  const g = curGun(), d = suitDef();
+  const speed = walkSpeedMul();
+  let h = '<div class="stats">' +
+    gearStat('Suit integrity', Math.round(G.suit.hp) + ' / ' + Math.round(G.suit.max), 0) +
+    gearStat('Air supply', Math.round(G.suit.air) + ' / ' + Math.round(G.suit.airMax), 0) +
+    gearStat('Hazard tolerance', pctTxt(d.haz), d.haz > 0 ? 1 : d.haz < 0 ? -1 : 0) +
+    gearStat('Armour', pctTxt(d.armour), d.armour > 0 ? 1 : d.armour < 0 ? -1 : 0) +
+    gearStat('Carried load', carryLoad().toFixed(2), carryLoad() > 0 ? -1 : carryLoad() < 0 ? 1 : 0) +
+    gearStat('Move speed', pctTxt(speed - 1), speed > 1 ? 1 : speed < 1 ? -1 : 0) +
+    '</div>';
+
+  h += '<p class="note">Drag a weapon or a suit onto its slot to equip it, or just click Equip. ' +
+    'Everything you are carrying is listed below. Heavier kit protects you better and slows you down — the move speed figure above is the whole story.</p>';
+
+  /* --- the two equipped slots, both drop targets --- */
+  h += '<div class="gearslots">';
+  h += '<div class="gearslot" data-drop="gun"><div class="gs-lbl">Main hand</div>' +
+    '<div class="gs-name" style="color:' + g.col + '">' + g.n + '</div>' +
+    '<div class="gs-sub">' + gunStatBits(g) + '</div>' +
+    (G.gun === 'fists' ? '<div class="gs-note">Nothing in your hands.</div>' : '') + '</div>';
+  h += '<div class="gearslot" data-drop="suit"><div class="gs-lbl">Spacesuit</div>' +
+    '<div class="gs-name" style="color:var(--cyan)">' + d.n + '</div>' +
+    '<div class="gs-sub">' + suitStatBits(d) + '</div>' +
+    '<div class="gs-note">' + d.d + '</div></div>';
+  h += '</div>';
+
+  /* --- weapons --- */
+  h += '<h4 class="sec">Weapons carried</h4>';
+  const guns = ownedGuns();
+  for (const k of guns) {
+    const w = GUNS[k], on = G.gun === k;
+    h += '<div class="row ' + (on ? 'sel' : '') + '" draggable="true" data-drag="gun:' + k + '">' +
+      '<span class="dot" style="background:' + w.col + '"></span>' +
+      '<span class="nm">' + w.n + '<small>' + gunStatBits(w) + '</small>' +
+      '<small class="cost">' + w.d + '</small></span>' +
+      '<span class="acts"><button class="btn xs ' + (on ? '' : 'ghost') + '" data-act="equipgun" data-k="' + k + '">' +
+      (on ? 'In hand' : 'Equip') + '</button></span></div>';
+  }
+
+  /* --- suits --- */
+  h += '<h4 class="sec">Suits carried</h4>';
+  const suits = ownedSuits();
+  for (const k of suits) {
+    const sd = SUITS[k], on = G.suitKey === k;
+    h += '<div class="row ' + (on ? 'sel' : '') + '" draggable="true" data-drag="suit:' + k + '">' +
+      '<span class="dot" style="background:var(--cyan)"></span>' +
+      '<span class="nm">' + sd.n + '<small>' + suitStatBits(sd) + '</small>' +
+      '<small class="cost">' + sd.d + '</small></span>' +
+      '<span class="acts"><button class="btn xs ' + (on ? '' : 'ghost') + '" data-act="equipsuit" data-k="' + k + '">' +
+      (on ? 'Worn' : 'Wear') + '</button></span></div>';
+  }
+  if (suits.length === 1)
+    h += '<p class="empty">Only the issue suit. Better ones are sold by outfitters and gunsmiths, or built in the fabricator under Suits.</p>';
+  return h;
+}
+
 function uiCrew() {
   let h = '<div class="tabs">' +
     '<button class="tab ' + (crewTab === 'roster' ? 'on' : '') + '" data-act="crtab" data-k="roster">Roster</button>' +
@@ -5675,6 +6434,24 @@ function drawChart() {
     if (x < -30 || x > CW + 30 || y < -30 || y > CH + 30) continue;
     seen.push({ s: s, x: x, y: y });
     const known = !!G.codex['sys:' + s.key];
+    if (s.blackhole) {
+      const hr = Math.max(5, s.r * scale);
+      g.globalAlpha = known ? 1 : 0.5;
+      g.strokeStyle = 'rgba(212,132,255,.35)'; g.lineWidth = 1; g.setLineDash([4, 4]);
+      g.beginPath(); g.arc(x, y, Math.max(hr * 1.6, BLACKHOLE_REACH * scale), 0, TAU); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = 'rgba(255,214,150,.8)';
+      g.beginPath(); g.arc(x, y, hr * 1.2, 0, TAU); g.fill();
+      g.fillStyle = '#000';
+      g.beginPath(); g.arc(x, y, hr, 0, TAU); g.fill();
+      g.globalAlpha = 1;
+      if (chartZoom > 0.7) {
+        g.fillStyle = '#c9a8ff'; g.font = '10px "IBM Plex Mono", monospace'; g.textAlign = 'center';
+        g.fillText(s.name, x, y + hr + 13);
+        g.textAlign = 'left';
+      }
+      continue;
+    }
     let owned = 0; for (const pl of s.planets) if (G.colonies[pl.id]) owned++;
     g.globalAlpha = known ? 1 : 0.4;
     g.fillStyle = s.star.c;
@@ -5702,9 +6479,12 @@ function drawChart() {
   }
   chartHits = seen;
   $('chart-info').innerHTML = (chartSel
-    ? '<b style="color:var(--teal)">' + chartSel.name + '</b> · ' + chartSel.star.n + ' · ' + chartSel.planets.length + ' worlds · ' +
+    ? (chartSel.blackhole
+      ? '<b style="color:var(--orchid)">' + chartSel.name + '</b> · collapsed singularity · no orbits, no survivors' +
+        '<br>The well reaches roughly ' + fmtN(Math.round(BLACKHOLE_REACH)) + ' units out. Plot a course around it, not through it.'
+      : '<b style="color:var(--teal)">' + chartSel.name + '</b> · ' + chartSel.star.n + ' · ' + chartSel.planets.length + ' worlds · ' +
       FACTIONS[chartSel.faction].n + (chartSel.hasStation ? ' · trade station' : '') + ' · threat ' + chartSel.danger +
-      '<br>Click it again to set it as your waypoint.'
+      '<br>Click it again to set it as your waypoint.')
     : 'Drag to pan, scroll to zoom, click a star for details. Teal rings are worlds you own; squares are stations.') +
     '<div class="chartbar"><button class="btn xs ghost" data-act="chartzoom" data-n="1">Zoom in</button>' +
     '<button class="btn xs ghost" data-act="chartzoom" data-n="-1">Zoom out</button>' +
@@ -5775,6 +6555,13 @@ function doAction(act, k, n) {
     case 'btab': buildTab = k; break;
     case 'kxtab': codexTab = decodeURIComponent(k); break;
     case 'crtab': crewTab = k; break;
+    case 'equipgun': {
+      if (!GUNS[k]) break;
+      if (ownedGuns().indexOf(k) < 0) { say('You are not carrying that.', 'warn'); break; }
+      G.gun = k; say('Drew the ' + GUNS[k].n.toLowerCase() + '.', '');
+      break;
+    }
+    case 'equipsuit': wearSuit(k); break;
     case 'qtab': questTab = k; break;
     case 'trackm': if (G.trackMain[k]) delete G.trackMain[k]; else G.trackMain[k] = 1; break;
     case 'tracks': if (G.trackSide[k]) delete G.trackSide[k]; else G.trackSide[k] = 1; break;
@@ -6204,7 +6991,8 @@ const SAVE_KEY = 'aetherium2';
 const SAVE_FIELDS = ['credits','cargo','mined','minedN','ship','owned','fit','paint','shipNames','hull','shield','fuel',
   'maxFuelBase','suit','crew','colonies','bases','farms','stash','codex','codexN','quests','questDone','rep','relations',
   'knownNpcs','waypoint','thrustersFixed','deaths','crashes','objIdx','tools','alloysMade','day','dayT','mode','onFoot','stat','set','sysKey','planetId',
-  'parts','ownedParts','gun','civRel','civState','talkCd','talkGain','trackMain','trackSide','mainDone','citadels','bounty'];
+  'parts','ownedParts','gun','civRel','civState','talkCd','talkGain','trackMain','trackSide','mainDone','citadels','bounty',
+  'homeId','suitKey','ownedSuits'];
 function save(quiet) {
   try {
     const o = {};
@@ -6235,10 +7023,14 @@ function load() {
     G.trackMain = G.trackMain || {}; G.trackSide = G.trackSide || {};
     G.mainDone = G.mainDone || {}; G.citadels = G.citadels || {};
     G.bounty = G.bounty || 0; G.gunHeat = 0;
+    G.suit = Object.assign({ hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 }, G.suit || {});
+    G.suitKey = SUITS[G.suitKey] ? G.suitKey : 'standard';
+    syncSuit();
     for (const k in G.colonies) if (!G.colonies[k].districts) G.colonies[k].districts = [];
     for (const f of FACTION_KEYS) if (G.rep[f] === undefined) G.rep[f] = 0;
     if (o.alloyDefs) for (const k in o.alloyDefs) MAT[k] = o.alloyDefs[k];
     G.tutorial = false; G.over = false;
+    G.homeId = G.homeId || '0|0:0';
     setSystem(G.sysKey || '0|0');
     if (!sys) { setSystem('0|0'); }
     if (G.mode === 'surface') {
@@ -6269,7 +7061,8 @@ function newGame() {
   G.ship = 'vagrant'; G.owned = ['vagrant']; G.fit = { vagrant: {} };
   G.paint = { vagrant: '#9fb3c8' }; G.shipNames = { vagrant: 'The Last Errand' };
   G.maxFuelBase = 100; G.fuel = 26;
-  G.suit = { hp: 100, max: 100, air: 100, airMax: 100 };
+  G.suit = { hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 };
+  G.suitKey = 'standard'; syncSuit();
   G.crew = []; G.colonies = {}; G.bases = {}; G.farms = {}; G.stash = {};
   G.codex = {}; G.codexN = 0; G.quests = []; G.questDone = 0;
   G.relations = {}; G.knownNpcs = {}; G.waypoint = null;
@@ -6289,6 +7082,7 @@ function newGame() {
   sysCache.delete('0|0');
   setSystem('0|0');
   const home = sys.planets[0];
+  G.homeId = home.id;
   landOn(home, true);
   G.hull = ST().hull; G.shield = ST().shield;
   cam.x = P.x; cam.y = P.y; cam.z = 1;
@@ -6326,10 +7120,13 @@ function frame(now) {
     objCheck();
     tutTick();
     hotkeys();
+    scuttleTick(dt);
   } else if (fishing) {
     updFishing(dt);
   } else if (busy) {
     if (tap('Escape')) { if (talkOpen) closeTalk(); else if (openId) closePanel(); }
+    scuttleT = 0;
+    const scEl = $('scuttle'); if (scEl) scEl.classList.add('hidden');
   }
 
   cam.shake *= Math.pow(0.0015, dt);
@@ -6347,8 +7144,43 @@ function frame(now) {
   renderHUD(dt);
 }
 
+/* Holding the scuttle key for a full five seconds writes the ship off on
+   purpose. It costs exactly what dying costs — a fifth of your units and the
+   whole hold — but it gets you off a rock or out of a well you cannot climb. */
+let scuttleT = 0;
+const SCUTTLE_HOLD = 5;
+function scuttleTick(dt) {
+  const el = $('scuttle');
+  if (!el) return;
+  const held = down('KeyZ') && !G.over && G.started;
+  if (held) scuttleT = Math.min(SCUTTLE_HOLD, scuttleT + dt);
+  else scuttleT = Math.max(0, scuttleT - dt * 3.5);
+
+  if (scuttleT <= 0.001) { if (!el.classList.contains('hidden')) el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const k = clamp(scuttleT / SCUTTLE_HOLD, 0, 1);
+  const ring = $('sc-ring');
+  if (ring) {
+    const C = 2 * Math.PI * 78;
+    ring.style.strokeDasharray = C;
+    ring.style.strokeDashoffset = C * (1 - k);
+  }
+  const num = $('sc-num');
+  if (num) num.textContent = Math.max(0, Math.ceil(SCUTTLE_HOLD - scuttleT));
+  el.classList.toggle('imminent', k > 0.8);
+
+  if (scuttleT >= SCUTTLE_HOLD && held) {
+    scuttleT = 0;
+    el.classList.add('hidden');
+    G.shield = 0; G.hull = 0;
+    boom(P.x, P.y, 70, '#ff6a4d', 340);
+    if (!G.over) death('a deliberate scuttle');
+  }
+}
+
 function hotkeys() {
-  if (tap('KeyM')) openPanel('chart');
+  if (tap('KeyY')) openPanel('gear');
+  else if (tap('KeyM')) openPanel('chart');
   else if (tap('KeyI')) openPanel('cargo');
   else if (tap('KeyC')) openPanel('codex');
   else if (tap('KeyG')) openPanel('empire');

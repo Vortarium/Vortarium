@@ -139,8 +139,12 @@ kbd{font-family:var(--mono);font-size:10.5px;color:var(--teal);background:rgba(7
 /* control list — sits above the scanner in the bottom-right corner */
 #hints{position:absolute;right:34px;bottom:214px;width:236px;font-size:10.5px;color:var(--dim);
   background:var(--plate);backdrop-filter:blur(7px);clip-path:var(--notch);
-  box-shadow:inset 0 0 0 1px var(--line);padding:10px 13px 11px;max-height:46vh;overflow:hidden;text-align:left;
-  line-height:1.75;letter-spacing:.05em;max-width:330px}
+  box-shadow:inset 0 0 0 1px var(--line);padding:10px 13px 11px;max-height:46vh;overflow-y:auto;overflow-x:hidden;text-align:left;
+  line-height:1.75;letter-spacing:.05em;max-width:330px;pointer-events:auto}
+#hints::-webkit-scrollbar{width:6px}
+#hints::-webkit-scrollbar-track{background:transparent}
+#hints::-webkit-scrollbar-thumb{background:rgba(79,227,208,.32)}
+#hints::-webkit-scrollbar-thumb:hover{background:rgba(79,227,208,.5)}
 #hints b{color:var(--teal);font-weight:500}
 .keyhead{font-size:9.5px;letter-spacing:.2em;color:var(--teal);margin-bottom:7px}
 .keygrid{display:flex;flex-direction:column;gap:3px}
@@ -306,6 +310,35 @@ h4.sec:first-child{margin-top:0}
 #modal-body{margin:0 0 22px;font-size:14px;line-height:1.75;color:#a9c2cc;max-width:58ch}
 #modal-choices{display:flex;flex-direction:column;gap:8px}
 #modal-choices .btn{text-align:left;width:100%;padding:13px 18px;font-size:13px;letter-spacing:.02em}
+
+/* ============ STATS & GEAR ============ */
+.gearslots{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+@media (max-width:760px){.gearslots{grid-template-columns:1fr}}
+.gearslot{padding:14px 16px;box-shadow:inset 0 0 0 1px rgba(79,227,208,.22);
+  background:rgba(79,227,208,.03);transition:box-shadow .15s,background .15s}
+.gearslot.over{box-shadow:inset 0 0 0 2px var(--teal);background:rgba(79,227,208,.1)}
+.gs-lbl{font-size:9.5px;letter-spacing:.18em;color:var(--dim);margin-bottom:6px}
+.gs-name{font-size:15px;font-weight:600;letter-spacing:.02em}
+.gs-sub{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:5px;line-height:1.6}
+.gs-note{font-size:11.5px;color:#8fa9b4;margin-top:8px;line-height:1.55;font-style:italic}
+.row[draggable="true"]{cursor:grab}
+.row[draggable="true"]:active{cursor:grabbing}
+.row.dragging{opacity:.35}
+
+/* ============ SCUTTLE COUNTDOWN ============ */
+#scuttle{position:fixed;inset:0;z-index:45;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;background:rgba(2,4,8,.55);pointer-events:none}
+#scuttle svg{width:180px;height:180px;transform:rotate(-90deg)}
+.sc-track{fill:none;stroke:rgba(255,106,77,.16);stroke-width:6}
+.sc-ring{fill:none;stroke:var(--rust);stroke-width:6;stroke-linecap:round;
+  stroke-dasharray:490;stroke-dashoffset:490;transition:stroke-dashoffset .05s linear}
+.sc-num{position:absolute;font-family:var(--mono);font-size:52px;font-weight:600;color:var(--bone);
+  text-shadow:0 0 24px rgba(255,106,77,.6)}
+.sc-label{font-size:11px;letter-spacing:.22em;color:var(--rust);margin-top:96px}
+#scuttle.imminent .sc-ring{stroke:#ff3a1f}
+#scuttle.imminent .sc-num{color:#ff3a1f}
+#scuttle.imminent{animation:scpulse .5s ease-in-out infinite}
+@keyframes scpulse{50%{background:rgba(40,4,4,.55)}}
 
 @media (max-width:900px){
   #topbar{flex-wrap:wrap;justify-content:center;width:min(96vw,660px)}
