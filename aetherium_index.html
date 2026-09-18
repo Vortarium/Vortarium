@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>AETHERIUM — Infinite Frontier</title>
+<link rel="stylesheet" href="aetherium_style.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="grain" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+<div id="flash" aria-hidden="true"></div>
+
+<!-- ============ TITLE ============ -->
+<section id="title">
+  <div class="title-wrap">
+    <div class="sig">incoming signal · sector 000.000 · source unknown</div>
+    <h1>AETHERIUM</h1>
+    <p class="sub">Infinite Frontier</p>
+    <p class="lede">
+      Your ship is broken-backed in the ash of a world that died screaming.
+      Cut ferrite out of the wreck, burn tritium in the thrusters, and climb.
+      Up there is a galaxy nobody has finished counting — worlds with weather and
+      wildlife, people who will trade with you or shoot at you, soil that grows food,
+      and enough empty space to build an empire in.
+    </p>
+    <div class="menu">
+      <button id="btn-tutorial" class="btn btn-lg">Run the training flight</button>
+      <button id="btn-start" class="btn btn-lg ghost">Skip to the wreck</button>
+      <button id="btn-continue" class="btn btn-lg ghost hidden">Continue last run</button>
+      <button id="btn-settings" class="btn btn-lg ghost">Settings</button>
+    </div>
+    <div class="galaxy-stat mono" id="gal-stat"></div>
+  </div>
+</section>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+
+  <div class="frame tl"></div><div class="frame tr"></div>
+  <div class="frame bl"></div><div class="frame br"></div>
+
+  <div id="topbar">
+    <div class="readout wide"><span class="lbl">Units</span><b id="r-credits" class="num gold">0</b></div>
+    <div class="readout"><span class="lbl">Net worth</span><b id="r-worth" class="num">0</b></div>
+    <div class="readout"><span class="lbl">Standing</span><b id="r-rank" class="num">—</b></div>
+    <div class="readout"><span class="lbl">Population</span><b id="r-pop" class="num">0</b></div>
+    <div class="readout"><span class="lbl">Empire flow</span><b id="r-income" class="num green">0/s</b></div>
+    <div class="readout"><span class="lbl">Cycle</span><b id="r-day" class="num">1</b></div>
+  </div>
+
+  <div id="locbar">
+    <div id="loc-name">—</div>
+    <div id="loc-sub">—</div>
+    <div id="loc-coord" class="mono">—</div>
+    <div id="loc-weather" class="mono"></div>
+  </div>
+
+  <div id="vitals">
+    <div class="bar" data-k="hull"><i class="tag">Hull</i><div class="track"><div class="fill" id="f-hull"></div></div><i class="val mono" id="v-hull">0</i></div>
+    <div class="bar" data-k="shield"><i class="tag">Shield</i><div class="track"><div class="fill" id="f-shield"></div></div><i class="val mono" id="v-shield">0</i></div>
+    <div class="bar" data-k="fuel"><i class="tag">Warp cells</i><div class="track"><div class="fill" id="f-fuel"></div></div><i class="val mono" id="v-fuel">0</i></div>
+    <div class="bar" data-k="cargo"><i class="tag">Hold</i><div class="track"><div class="fill" id="f-cargo"></div></div><i class="val mono" id="v-cargo">0</i></div>
+    <div class="bar hidden" data-k="suit" id="b-suit"><i class="tag">Suit</i><div class="track"><div class="fill" id="f-suit"></div></div><i class="val mono" id="v-suit">0</i></div>
+    <div class="bar hidden" data-k="air" id="b-air"><i class="tag">Air</i><div class="track"><div class="fill" id="f-air"></div></div><i class="val mono" id="v-air">0</i></div>
+    <div id="shipline"><span id="ship-name">—</span><span id="ship-class">—</span></div>
+    <div id="crewline" class="mono"></div>
+    <div id="weapline" class="hidden"><b id="weap-name">—</b><span class="heat"><i id="weap-heat"></i></span></div>
+  </div>
+
+  <div id="objective">
+    <div class="obj-head">Current task</div>
+    <div id="obj-text">—</div>
+    <div id="obj-prog" class="mono"></div>
+  </div>
+
+  <div id="landing" class="hidden">
+    <div class="ld-row"><span>Altitude</span><b id="ld-alt" class="mono">—</b></div>
+    <div class="ld-row"><span>Descent</span><b id="ld-vel" class="mono">—</b></div>
+    <div id="ld-warn"></div>
+  </div>
+
+  <div id="prompt" class="hidden"><kbd id="prompt-key">E</kbd><span id="prompt-text"></span></div>
+  <div id="prompt2" class="hidden"><kbd id="prompt2-key">F</kbd><span id="prompt2-text"></span></div>
+
+  <div id="log"></div>
+  <div id="hints" class="mono"></div>
+
+  <div id="tutband" class="hidden">
+    <div class="tb-step mono" id="tb-step">Step 1 / 9</div>
+    <div class="tb-text" id="tb-text"></div>
+    <div class="tb-hint" id="tb-hint"></div>
+    <button class="btn sm ghost" id="tb-skip">Skip training</button>
+  </div>
+</div>
+
+<!-- ============ PANELS ============ -->
+<div id="overlay" class="hidden">
+  <div class="panel" id="p-cargo"><header><h3>Cargo hold</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-market"><header><h3>Trade terminal</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-shop"><header><h3 id="shop-title">Shop</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-hangar"><header><h3>Hangar</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-refit"><header><h3>Ship refit</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-craft"><header><h3>Fabricator</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-build"><header><h3>Construction</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-farm"><header><h3>Farmland</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-crew"><header><h3>Crew</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-empire"><header><h3>Empire</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-codex"><header><h3>Codex</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-quests"><header><h3>Journal</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide" id="p-chart"><header><h3>Star chart</h3><button class="x" data-close>close</button></header>
+    <div class="pbody"><canvas id="chart" width="900" height="520"></canvas><div id="chart-info"></div></div></div>
+  <div class="panel wide" id="p-settings"><header><h3>Settings</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel" id="p-pause"><header><h3>Paused</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+</div>
+
+<!-- ============ DIALOGUE ============ -->
+<div id="talk" class="hidden">
+  <div class="talk-box">
+    <div class="talk-head">
+      <canvas id="face" width="120" height="120"></canvas>
+      <div class="talk-id">
+        <h3 id="talk-name">—</h3>
+        <div id="talk-role" class="mono">—</div>
+        <div class="rel"><span class="rel-track"><span class="rel-fill" id="talk-rel"></span></span><i id="talk-relv" class="mono">0</i></div>
+      </div>
+    </div>
+    <p id="talk-line"></p>
+    <div id="talk-opts"></div>
+  </div>
+</div>
+
+<!-- ============ FISHING ============ -->
+<div id="fish" class="hidden">
+  <div class="fish-box">
+    <h3 id="fish-title">Cast</h3>
+    <div class="fish-track"><div class="fish-zone" id="fish-zone"></div><div class="fish-cursor" id="fish-cursor"></div></div>
+    <p class="note" id="fish-note">Press Space when the marker is inside the lit band.</p>
+  </div>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal" class="hidden">
+  <div class="modal-box">
+    <div id="modal-kind"></div>
+    <h3 id="modal-title"></h3>
+    <p id="modal-body"></p>
+    <div id="modal-choices"></div>
+  </div>
+</div>
+
+<script src="aetherium_app.js"></script>
+</body>
+</html>
