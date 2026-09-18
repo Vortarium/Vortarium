@@ -129,7 +129,11 @@ const AU = {
     const a = p.list[p.i]; p.i = (p.i + 1) % p.list.length;
     try {
       a.currentTime = 0;
-      a.playbackRate = def.rate ? rr(Math.random, def.rate[0], def.rate[1]) : 1;
+      const pitch = def.rate ? rr(Math.random, def.rate[0], def.rate[1]) : 1;
+      a.playbackRate = 1;
+      try { a.preservesPitch = false; } catch(e) {}
+      const baseFreq = a.mozPreservesPitch !== undefined ? 1 : 1;
+      a.playbackRate = pitch;
       a.volume = clamp((def.vol || 0.6) * (volScale === undefined ? 1 : volScale) * G.set.sfxVol * G.set.master, 0, 1);
       const pr = a.play();
       if (pr && pr.catch) pr.catch(() => {});
@@ -318,6 +322,78 @@ const MAT = {
   aurum:     { n: 'Aurum',         v: 240,  c: '#ffd97a', t: 3, cat: 'ore' },
   iridium:   { n: 'Iridium',       v: 395,  c: '#c9d8ff', t: 4, cat: 'ore' },
   uranite:   { n: 'Uranite',       v: 520,  c: '#c8ff6b', t: 4, cat: 'ore' },
+  lithium:   { n: 'Lithium',       v: 95,   c: '#ff6fb4', t: 2, cat: 'ore' },
+  beryllium: { n: 'Beryllium',    v: 140,  c: '#c4ffb4', t: 2, cat: 'ore' },
+  scandium:  { n: 'Scandium',      v: 185,  c: '#b4d4ff', t: 3, cat: 'ore' },
+  vanadium:  { n: 'Vanadium',      v: 210,  c: '#ffb4b4', t: 3, cat: 'ore' },
+  chromium:  { n: 'Chromium',      v: 245,  c: '#e6ffb4', t: 3, cat: 'ore' },
+  manganese: { n: 'Manganese',    v: 270,  c: '#ffb4e6', t: 3, cat: 'ore' },
+  zinc:      { n: 'Zinc',         v: 165,  c: '#b4ffb4', t: 2, cat: 'ore' },
+  gallium:   { n: 'Gallium',      v: 320,  c: '#d4b4ff', t: 3, cat: 'ore' },
+  germanium: { n: 'Germanium',    v: 380,  c: '#b4e6ff', t: 3, cat: 'ore' },
+  arsenic:   { n: 'Arsenic',      v: 290,  c: '#c8ffb4', t: 3, cat: 'ore' },
+  selenium:  { n: 'Selenium',     v: 340,  c: '#ffb4c8', t: 3, cat: 'ore' },
+  bromine:   { n: 'Bromine',      v: 310,  c: '#ffb4ff', t: 3, cat: 'ore' },
+  krypton:   { n: 'Krypton',      v: 420,  c: '#d4ffb4', t: 3, cat: 'ore' },
+  rubidium:  { n: 'Rubidium',     v: 390,  c: '#ffb4d4', t: 3, cat: 'ore' },
+  strontium: { n: 'Strontium',    v: 440,  c: '#e6ffb4', t: 3, cat: 'ore' },
+  yttrium:   { n: 'Yttrium',      v: 490,  c: '#b4ffcc', t: 4, cat: 'ore' },
+  zirconium: { n: 'Zirconium',    v: 540,  c: '#ffb4b4', t: 4, cat: 'ore' },
+  niobium:   { n: 'Niobium',      v: 590,  c: '#c8ffb4', t: 4, cat: 'ore' },
+  molybdenum:{ n: 'Molybdenum',   v: 640,  c: '#b4e6ff', t: 4, cat: 'ore' },
+  technetium:{ n: 'Technetium',   v: 720,  c: '#ffb4e6', t: 4, cat: 'ore' },
+  ruthenium: { n: 'Ruthenium',    v: 780,  c: '#d4b4ff', t: 4, cat: 'ore' },
+  rhodium:   { n: 'Rhodium',      v: 850,  c: '#ffb4ff', t: 4, cat: 'ore' },
+  palladium: { n: 'Palladium',    v: 920,  c: '#ffd4b4', t: 4, cat: 'ore' },
+  silver:    { n: 'Silver',        v: 180,  c: '#e6e6ff', t: 2, cat: 'ore' },
+  cadmium:   { n: 'Cadmium',      v: 280,  c: '#b4ffb4', t: 3, cat: 'ore' },
+  tin:       { n: 'Tin',          v: 195,  c: '#c8e6ff', t: 2, cat: 'ore' },
+  antimony:  { n: 'Antimony',     v: 360,  c: '#ffb4c8', t: 3, cat: 'ore' },
+  tellurium: { n: 'Tellurium',    v: 410,  c: '#e6ffb4', t: 3, cat: 'ore' },
+  iodine:    { n: 'Iodine',       v: 380,  c: '#ffb4ff', t: 3, cat: 'ore' },
+  xenon:     { n: 'Xenon',        v: 520,  c: '#d4ffb4', t: 3, cat: 'ore' },
+  cesium:    { n: 'Cesium',       v: 480,  c: '#ffb4d4', t: 3, cat: 'ore' },
+  barium:    { n: 'Barium',       v: 560,  c: '#ffb4b4', t: 4, cat: 'ore' },
+  lanthanum: { n: 'Lanthanum',    v: 620,  c: '#c8ffb4', t: 4, cat: 'ore' },
+  cerium:    { n: 'Cerium',       v: 680,  c: '#b4e6ff', t: 4, cat: 'ore' },
+  praseodymium:{ n: 'Praseodymium',v: 740, c: '#ffb4e6', t: 4, cat: 'ore' },
+  neodymium: { n: 'Neodymium',    v: 800,  c: '#d4b4ff', t: 4, cat: 'ore' },
+  promethium:{ n: 'Promethium',   v: 880,  c: '#ffb4ff', t: 4, cat: 'ore' },
+  samarium:  { n: 'Samarium',     v: 940,  c: '#ffd4b4', t: 4, cat: 'ore' },
+  europium:  { n: 'Europium',     v: 1000, c: '#e6e6ff', t: 5, cat: 'ore' },
+  gadolinium: { n: 'Gadolinium',   v: 1080, c: '#b4ffb4', t: 5, cat: 'ore' },
+  terbium:   { n: 'Terbium',      v: 1160, c: '#c8e6ff', t: 5, cat: 'ore' },
+  dysprosium: { n: 'Dysprosium',   v: 1240, c: '#ffb4c8', t: 5, cat: 'ore' },
+  holmium:   { n: 'Holmium',      v: 1320, c: '#e6ffb4', t: 5, cat: 'ore' },
+  erbium:    { n: 'Erbium',       v: 1400, c: '#ffb4ff', t: 5, cat: 'ore' },
+  thulium:   { n: 'Thulium',      v: 1500, c: '#d4ffb4', t: 5, cat: 'ore' },
+  ytterbium: { n: 'Ytterbium',    v: 1600, c: '#ffb4d4', t: 5, cat: 'ore' },
+  lutetium:  { n: 'Lutetium',     v: 1720, c: '#ffb4b4', t: 5, cat: 'ore' },
+  hafnium:   { n: 'Hafnium',      v: 1840, c: '#c8ffb4', t: 5, cat: 'ore' },
+  tantalum:  { n: 'Tantalum',     v: 1980, c: '#b4e6ff', t: 5, cat: 'ore' },
+  tungsten:  { n: 'Tungsten',     v: 2120, c: '#ffb4e6', t: 5, cat: 'ore' },
+  rhenium:   { n: 'Rhenium',      v: 2280, c: '#d4b4ff', t: 5, cat: 'ore' },
+  osmium:    { n: 'Osmium',       v: 2460, c: '#ffb4ff', t: 5, cat: 'ore' },
+  mercury:   { n: 'Mercury',      v: 320,  c: '#c8e6ff', t: 3, cat: 'ore' },
+  thallium:  { n: 'Thallium',     v: 540,  c: '#b4ffb4', t: 4, cat: 'ore' },
+  lead:      { n: 'Lead',         v: 280,  c: '#b4b4c8', t: 2, cat: 'ore' },
+  bismuth:   { n: 'Bismuth',      v: 420,  c: '#e6e6ff', t: 3, cat: 'ore' },
+  polonium:  { n: 'Polonium',     v: 880,  c: '#ffb4b4', t: 4, cat: 'ore' },
+  astatine:  { n: 'Astatine',     v: 940,  c: '#c8ffb4', t: 4, cat: 'ore' },
+  radon_gas: { n: 'Radon Gas',     v: 620,  c: '#b4ffcc', t: 4, cat: 'gas' },
+  francium:  { n: 'Francium',     v: 1200, c: '#ffb4e6', t: 5, cat: 'ore' },
+  radium:    { n: 'Radium',       v: 1400, c: '#d4b4ff', t: 5, cat: 'ore' },
+  actinium:  { n: 'Actinium',     v: 1600, c: '#ffb4ff', t: 5, cat: 'ore' },
+  thorium:   { n: 'Thorium',      v: 1800, c: '#ffd4b4', t: 5, cat: 'ore' },
+  protactinium:{ n: 'Protactinium', v: 2000, c: '#e6e6ff', t: 5, cat: 'ore' },
+  neptunium: { n: 'Neptunium',    v: 2200, c: '#b4ffb4', t: 5, cat: 'ore' },
+  plutonium: { n: 'Plutonium',    v: 2400, c: '#c8e6ff', t: 5, cat: 'ore' },
+  americium: { n: 'Americium',    v: 2600, c: '#ffb4c8', t: 5, cat: 'ore' },
+  curium:    { n: 'Curium',       v: 2800, c: '#e6ffb4', t: 5, cat: 'ore' },
+  berkelium: { n: 'Berkelium',    v: 3000, c: '#ffb4ff', t: 5, cat: 'ore' },
+  californium:{ n: 'Californium',  v: 3200, c: '#d4ffb4', t: 5, cat: 'ore' },
+  einsteinium:{ n: 'Einsteinium',  v: 3400, c: '#ffb4d4', t: 5, cat: 'ore' },
+  fermium:   { n: 'Fermium',      v: 3600, c: '#ffb4b4', t: 5, cat: 'ore' },
   /* gases */
   oxygen:    { n: 'Oxygen',        v: 27,   c: '#8fe9ff', t: 1, cat: 'gas' },
   hydrogen:  { n: 'Hydrogen',      v: 22,   c: '#bfe6ff', t: 1, cat: 'gas' },
@@ -543,9 +619,16 @@ const MODULES = {
   shl1: { n: 'Deflector I',      slot: 'shield', cr: 30000,  in: { circuit: 1, glass: 3 },          shield: 0.3, shieldFlat: 60 },
   shl2: { n: 'Deflector II',     slot: 'shield', cr: 160000, in: { circuit: 3, coolant: 2, indium: 2 }, shield: 0.7, shieldFlat: 190, regen: 4 },
   shl3: { n: 'Phase Barrier',    slot: 'shield', cr: 840000, in: { lens: 2, powercell: 2, voidcrystal: 2 }, shield: 1.4, shieldFlat: 520, regen: 10 },
-  wpn1: { n: 'Bolt Array I',     slot: 'weapon', cr: 26000,  in: { wiring: 3, alloy: 2 },           gun: 0.4, gunFlat: 9 },
-  wpn2: { n: 'Bolt Array II',    slot: 'weapon', cr: 180000, in: { circuit: 2, lens: 1, iridium: 3 },gun: 1.0, gunFlat: 26, rate: 0.25 },
-  wpn3: { n: 'Singularity Lance',slot: 'weapon', cr: 960000, in: { lens: 3, powercell: 3, antimatter: 2 }, gun: 2.4, gunFlat: 64, rate: 0.4 },
+  /* Weapon modules with type toggles */
+  wpn1_bolt: { n: 'Bolt Array I',     slot: 'weapon', type: 'bolt', cr: 26000,  in: { wiring: 3, alloy: 2 },           gun: 0.4, gunFlat: 9 },
+  wpn2_bolt: { n: 'Bolt Array II',    slot: 'weapon', type: 'bolt', cr: 180000, in: { circuit: 2, lens: 1, iridium: 3 },gun: 1.0, gunFlat: 26, rate: 0.25 },
+  wpn3_bolt: { n: 'Singularity Lance',slot: 'weapon', type: 'bolt', cr: 960000, in: { lens: 3, powercell: 3, antimatter: 2 }, gun: 2.4, gunFlat: 64, rate: 0.4 },
+  wpn1_beam: { n: 'Beam Emitter I',   slot: 'weapon', type: 'beam', cr: 28000,  in: { lens: 2, circuit: 1 },           gun: 0.35, gunFlat: 8, rate: -0.1 },
+  wpn2_beam: { n: 'Beam Emitter II',  slot: 'weapon', type: 'beam', cr: 190000, in: { lens: 3, powercell: 2, indium: 2 },gun: 0.9, gunFlat: 22, rate: -0.2 },
+  wpn3_beam: { n: 'Plasma Lance',     slot: 'weapon', type: 'beam', cr: 980000, in: { lens: 4, powercell: 4, voidcrystal: 2 }, gun: 2.2, gunFlat: 58, rate: -0.35 },
+  wpn1_missile: { n: 'Missile Rack I',  slot: 'weapon', type: 'missile', cr: 30000,  in: { alloy: 3, wiring: 2 },          gun: 0.3, gunFlat: 7, rate: 0.15 },
+  wpn2_missile: { n: 'Missile Rack II', slot: 'weapon', type: 'missile', cr: 200000, in: { alloy: 8, circuit: 2, emeril: 4 },gun: 0.8, gunFlat: 20, rate: 0.3 },
+  wpn3_missile: { n: 'Homing Swarm',    slot: 'weapon', type: 'missile', cr: 1000000, in: { alloy: 12, powercell: 3, antimatter: 3 }, gun: 1.8, gunFlat: 50, rate: 0.5 },
   cgo1: { n: 'Hold Expansion I', slot: 'cargo',  cr: 34000,  in: { alloy: 4, frame: 0 },            cargo: 0.35 },
   cgo2: { n: 'Hold Expansion II',slot: 'cargo',  cr: 210000, in: { alloy: 10, frame: 1 },           cargo: 0.8 },
   min1: { n: 'Beam Focus I',     slot: 'mining', cr: 28000,  in: { lens: 1, wiring: 2 },            mine: 0.45 },
@@ -772,8 +855,8 @@ const VTIERS = {
   seeker:  { n: 'Seeker',       rank: 1, hp: 50,   gun: 10, sp: 390, scale: 0.85, rad: 36,  guns: ['seekpod'],    pay: 5400,   d: 'Carries a rack of homing pods instead of a gun. Lobs one every three seconds and lets it do the aiming.' },
 
   /* --- rung two: trained crews --- */
-  milita:  { n: 'Militia Lance',rank: 2, hp: 200,  gun: 19, sp: 760, scale: 1.05, rad: 46,  guns: ['twin'],       pay: 18000,  d: 'Twin emitters at double the muzzle speed. Flown by people who were trained.' },
-  nova:    { n: 'Nova Lance',   rank: 2, hp: 200,  gun: 19, sp: 600, scale: 1.1,  rad: 50,  guns: ['ring16'],     pay: 22000,  d: 'Emitters ringing the whole hull. Every two seconds it throws sixteen bolts outward at once and does not care where you are.' },
+  milita:  { n: 'Militia Lance',rank: 2, hp: 250,  gun: 19, sp: 760, scale: 1.05, rad: 46,  guns: ['twin'],       pay: 18000,  d: 'Twin emitters at double the muzzle speed. Flown by people who were trained.' },
+  nova:    { n: 'Nova Lance',   rank: 2, hp: 250,  gun: 19, sp: 600, scale: 1.1,  rad: 50,  guns: ['ring16'],     pay: 22000,  d: 'Emitters ringing the whole hull. Every two seconds it throws sixteen bolts outward at once and does not care where you are.' },
 
   /* --- rung three: carriers --- */
   mother:  { n: 'Mothership',   rank: 3, hp: 1000, gun: 46, sp: 150, scale: 3.4,  rad: 165, guns: ['beam','bolt'],  pay: 220000, summon: [10, 10], summonTier: 'fighter',
@@ -807,6 +890,12 @@ const NPC_GUNS = {
   beam: { cd: [4.5, 7.0],   dmg: 1.9,  col: '#c0f0ff', beam: true, dur: 1.4, width: 9, hitRad: 30 },
   bomb: { cd: [2.6, 4.2],   spd: 460,  dmg: 1.5,  col: '#ff8a5f', n: 1, sz: 6, blast: 240, fuse: 1.6 },
 
+  /* New weapon types */
+  /* Double beam: two parallel beams with higher damage */
+  doublebeam: { cd: [3.2, 5.5], dmg: 2.4, col: '#a8e6ff', beam: true, dur: 1.2, width: 6, hitRad: 28, n: 2, sep: 18 },
+  /* Laser: continuous beam with lock-on capability */
+  laser: { cd: [0.3, 0.3], dmg: 0.35, col: '#ff44ff', beam: true, dur: 0.15, width: 4, hitRad: 25, lock: true, continuous: true },
+  
   /* a single homing pod, fired on a fixed three-second rhythm */
   seekpod: { cd: [3, 3], spd: 340, dmg: 1.15, col: '#ff8a5f', n: 1, sz: 5.5,
              blast: 180, fuse: 7, homing: 2.0, accel: 260, maxSpd: 900, missile: true },
@@ -891,7 +980,7 @@ const G = {
   crew: [], colonies: {}, bases: {}, farms: {}, stash: {},
   codex: {}, codexN: 0, research: 0, quests: [], questDone: 0,
   rep: {}, relations: {}, knownNpcs: {},
-  waypoint: null, thrustersFixed: false, deaths: 0, crashes: 0,
+  waypoint: null, thrustersFixed: false, deaths: 0, crashes: 0, weaponType: 'bolt',
   objIdx: 0, encTimer: 45, raidTimer: 420, hailTimer: 30,
   tools: {}, alloysMade: 0,
   parts: Object.assign({}, DEFAULT_PARTS), ownedParts: {},
@@ -940,6 +1029,24 @@ function ST() {
      mass gets a bonus, a heavy one pays for it in thrust and turning rate. */
   const m = shipMass();
   const agility = clamp(3.0 / (m + 1.4), 0.45, 1.5);
+  
+  /* Determine ship shape based on refit stats */
+  let shape = 'hauler';
+  const cargoBonus = modSum('cargo');
+  const thrustBonus = modSum('thrust');
+  const hullBonus = modSum('hull');
+  const gunBonus = modSum('gun');
+  const maxBonus = modSum('max');
+  
+  if (cargoBonus > 0.5) shape = 'cargo';
+  else if (thrustBonus > 0.5) shape = 'speed';
+  else if (hullBonus > 0.5) shape = 'heavy';
+  else if (gunBonus > 0.5) shape = 'fighter';
+  else if (maxBonus > 0.5) shape = 'explorer';
+  else if (modSum('shield') > 0.5) shape = 'living';
+  else if (modSum('mine') > 0.5) shape = 'scout';
+  else shape = 'stealth';
+  
   return {
     thrust: drive.thrust * agility * (1 + modSum('thrust')),
     max: drive.max * clamp(3.4 / (m + 2.0), 0.55, 1.3) * (1 + modSum('max')),
@@ -953,9 +1060,10 @@ function ST() {
     gun: (6 + modSum('gunFlat')) * (1 + modSum('gun')) * (1 + crewBonus('gunnery') * 0.45),
     rate: 0.16 / (1 + modSum('rate')),
     impact: clamp((hullP.impact || 0) + modSum('impact'), 0, 0.9),
+    s: shape,
     scan: 1 + modSum('scan') + crewBonus('science') * 0.5,
     mass: m, agility: agility, slots: moduleSlots(),
-    col: G.paint[G.ship] || b.col, s: b.s
+    col: G.paint[G.ship] || b.col
   };
 }
 function maxFuel() { return partOf('warp').fuel + modSum('fuel'); }
@@ -984,7 +1092,7 @@ function cargoUsed() { let s = 0; for (const k in G.cargo) s += G.cargo[k]; retu
 function cargoCap() { return ST().cargo; }
 function crewBonus(skill) {
   let s = 0;
-  for (const c of G.crew) if (c.skill === skill && c.hp > 0) s += (c.level * (0.55 + c.morale / 200));
+  for (const c of G.crew) if (c.skill === skill && c.hp > 0) s += (c.level * (c.morale / 100));
   return s;
 }
 function hasTool(t) { return !!G.tools[t]; }
@@ -1003,7 +1111,7 @@ function systemAt(cx, cy) {
   /* One cell in a hundred that would have held a star holds a collapsed one
      instead. The roll uses its own hash so adding this did not reshuffle a
      single existing system in the galaxy. */
-  const hole = !home && (hash2(cx, cy, 0xb1ac01) % 1000) < 10;
+  const hole = !home && (hash2(cx, cy, 0xb1ac01) % 1000) < 1;
   if (hole) {
     const hr = rng(hash2(cx, cy, 0x5171e5));
     const R = BLACKHOLE_R;
@@ -1071,7 +1179,7 @@ function systemAt(cx, cy) {
         biome: biome, r: rad, mass: (rad / 110) * (rad / 110) * rr(pr, 0.7, 1.35),
         orbit: 900 + i * rr(pr, 680, 1000),
         phase: pr() * TAU, speed: rr(pr, 0.010, 0.042) * (pr() < 0.5 ? 1 : -1),
-        res: (home && i === 0) ? ['ferrite','tritium','carbon','copper','magnetite'] : res,
+        res: (home && i === 0) ? ['ferrite','tritium','silicate','copper','magnetite'] : res,
         scanned: false, moons: ri(pr, 0, 3), rings: pr() < 0.22,
         life: b.life, hazard: b.haz, weather: b.wx,
         rich: (home && i === 0) ? true : pr() < 0.16,
@@ -1080,6 +1188,10 @@ function systemAt(cx, cy) {
       });
     }
     if (s.hasStation) { s.stOrbit = 900 + n * 1000 + 600; s.stPhase = r() * TAU; s.stName = settleName(r) + ' Station'; }
+    /* 0.3% barbarian spawn chance near star systems */
+    if (!home && (hash2(cx, cy, 0xb1ac02) % 1000) < 3) {
+      s.barbarianCamp = true;
+    }
   }
   sysCache.set(key, s);
   if (sysCache.size > 2600) { const k0 = sysCache.keys().next().value; if (k0 !== '0|0') sysCache.delete(k0); }
@@ -1168,6 +1280,17 @@ function surfCell(pl, cx, cy) {
   }
   /* settlement — deliberately rare. You have to go looking. */
   if (pl.settled && r() < 0.0055) settlement = makeSettlement(rng(hash2(cx, cy, pl.seed ^ 0x51717)), pl, ox + SURF_CELL / 2, oy + SURF_CELL / 2, cx, cy);
+  /* rare barbarian camp - aggressive civilization */
+  if (!settlement && !pl.settled && r() < 0.003) {
+    settlement = makeSettlement(rng(hash2(cx, cy, pl.seed ^ 0x8b8b8)), pl, ox + SURF_CELL / 2, oy + SURF_CELL / 2, cx, cy);
+    settlement.hostile = true;
+    settlement.barbarian = true;
+    for (const npc of settlement.npcs) {
+      npc.hostile = true;
+      npc.weapon = pick(rng(hash2(cx, cy, npc.id)), ['bolt','ray','bomb']);
+      npc.dmg = 15 + npc.level * 8;
+    }
+  }
   /* ancient structure */
   if (!settlement && r() < 0.045) {
     const stype = pick(r, ['monolith','ruin','wreck','beacon','cache']);
@@ -1424,6 +1547,9 @@ function makeTraffic(r, s, x, y, opts) {
     else fac = pick(r, fkeys);
   }
   const hostile = opts.hostile !== undefined ? opts.hostile : (kind === 'pirate');
+  /* AI archetypes: defensive, offensive, common, progressive, brutality (1 in 5 chance each) */
+  const archetypes = ['defensive', 'offensive', 'common', 'progressive', 'brutality'];
+  const archetype = archetypes[Math.floor(Math.random() * 5)];
   const guns = T.guns.slice();
   if (tierKey === 'fighter' && r() < 0.18) guns[0] = 'ray';
   /* the listed hull figure is the figure — no random spread on it, so a
@@ -1449,7 +1575,8 @@ function makeTraffic(r, s, x, y, opts) {
     /* an NPC's opinion of where the money is must not change every time
        you ask them — bake it in when the ship is created */
     tipSeed: (r() * 1e9) | 0,
-    stock: null
+    stock: null,
+    archetype: archetype
   };
 }
 
@@ -1518,6 +1645,11 @@ function screenFlash(heal) {
 ------------------------------------------------------------ */
 function discover(id, title, kind, detail, reward) {
   if (G.codex[id]) return false;
+  /* Prevent scanning while on floating cities to prevent money abuse */
+  if (planet && planet.citadel) {
+    say('You cannot scan anything while on a floating city.', 'warn');
+    return false;
+  }
   G.codex[id] = { t: title, k: kind, d: detail, at: G.day };
   G.codexN++;
   const pay = Math.round((reward || 2000) * ST().scan);
@@ -1975,12 +2107,12 @@ function spawnTraffic(s) {
   if (!s) return;
   const r = rng(hash2(s.cx, s.cy, (G.day * 31 + Math.floor(G.t / 90)) | 0));
   /* arriving inside the orbits is quiet: nought to three contacts. Coming in
-     from the dark, the count climbs with the square of how far out you are. */
+     from the dark, the count climbs linearly with how far out you are. */
   const arriveRim = rimFactor(s, P.x, P.y);
   const outward = clamp(arriveRim - 0.6, 0, 2.6);
-  const n = ri(r, 0, 3) + (s.hasStation ? 1 : 0) + Math.round(outward * outward * 1.6);
+  const n = ri(r, 0, 3) + (s.hasStation ? 1 : 0) + Math.round(outward * 1.6);
   for (let i = 0; i < n; i++) {
-    const a = r() * TAU, d = 1800 + r() * 3400;
+    const a = r() * TAU, d = 4000 + r() * 5000;
     const t = makeTraffic(r, s, Math.cos(a) * d, Math.sin(a) * d);
     if (t.hostile) hostiles.push(t); else neutrals.push(t);
   }
@@ -2026,7 +2158,7 @@ function rimSpawn(dt) {
   if (pressure <= 0.02) return;
   if (hostiles.length >= Math.round(3 + pressure * 3.6)) return;
   const r = rng((Math.random() * 1e9) | 0);
-  const a = Math.random() * TAU, d = 2600 + Math.random() * 2200;
+  const a = Math.random() * TAU, d = 5000 + Math.random() * 4000;
   const t = makeTraffic(r, sys, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d,
     { rim: rim, hostile: r() < clamp(0.3 + rim * 0.26, 0.3, 0.92), kind: 'pirate', force: true });
   t.state = 'hunt';
@@ -2088,6 +2220,24 @@ function death(src) {
   AU.play('lose');
   const lost = Math.round(G.credits * 0.2);
   G.credits -= lost;
+  
+  /* Drop all items on ground at death location */
+  const deathX = P.x, deathY = P.y;
+  for (const k in G.cargo) {
+    const amt = G.cargo[k];
+    if (amt > 0) {
+      for (let i = 0; i < amt; i++) {
+        piles.push({
+          x: deathX + (Math.random() - 0.5) * 200,
+          y: deathY + (Math.random() - 0.5) * 200,
+          k: k,
+          t: G.t + 300, /* 5 minutes despawn time */
+          planetId: planet ? planet.id : null,
+          sysId: sys ? sys.key : null
+        });
+      }
+    }
+  }
   const cargoLost = Math.round(cargoUsed());
   G.cargo = {}; refreshTools();
   boom(P.x, P.y, 90, '#ff6a4d', 320);
@@ -2284,6 +2434,7 @@ function aiShip(t, dt, isHostile) {
   const T = VTIERS[t.tier] || VTIERS.fighter;
   const rep = G.rep[t.fac] || 0;
   t.ally = allyOf(t);
+  const arch = t.archetype || 'common';
 
   const foe = shipFoe(t, isHostile, dt);
   const fx = foe ? foe.x : P.x, fy = foe ? foe.y : P.y;
@@ -2294,7 +2445,10 @@ function aiShip(t, dt, isHostile) {
   if (!isHostile) {
     if (t.ally && foe) {
       /* on your side and something to shoot */
-      t.state = t.hp < t.max * 0.2 ? 'flee' : 'attack';
+      let fleeThreshold = t.max * 0.2;
+      if (arch === 'defensive') fleeThreshold = t.max * 0.4;
+      else if (arch === 'brutality') fleeThreshold = t.max * 0.05;
+      t.state = t.hp < fleeThreshold ? 'flee' : 'attack';
       if (t.state === 'flee') { t.tx = t.x - dx * 4; t.ty = t.y - dy * 4; }
       else { t.tx = fx; t.ty = fy; }
     } else if (t.state === 'attack' && !foe) {
@@ -2319,11 +2473,21 @@ function aiShip(t, dt, isHostile) {
       if (pd > 3000) { t.state = 'cruise'; t.t = 0; }
     } else if (t.state === 'attack') {
       t.tx = P.x; t.ty = P.y;
-      if (t.hp < t.max * 0.28) t.state = 'flee';
+      let attackThreshold = t.max * 0.28;
+      if (arch === 'offensive') attackThreshold = t.max * 0.1;
+      else if (arch === 'defensive') attackThreshold = t.max * 0.5;
+      else if (arch === 'brutality') attackThreshold = t.max * 0.02;
+      if (t.hp < attackThreshold) t.state = 'flee';
     }
   } else {
-    if (t.hp < t.max * 0.22 && t.kind !== 'pirate' && tierRank(t.tier) < 3) t.state = 'flee';
-    else if (d < 1700) t.state = 'attack';
+    let fleeThreshold = t.max * 0.22;
+    let attackRange = 1700;
+    if (arch === 'defensive') { fleeThreshold = t.max * 0.4; attackRange = 2200; }
+    else if (arch === 'offensive') { fleeThreshold = t.max * 0.1; attackRange = 1200; }
+    else if (arch === 'progressive') { fleeThreshold = t.max * 0.3; attackRange = 2000; }
+    else if (arch === 'brutality') { fleeThreshold = t.max * 0.05; attackRange = 1000; }
+    if (t.hp < fleeThreshold && t.kind !== 'pirate' && tierRank(t.tier) < 3) t.state = 'flee';
+    else if (d < attackRange) t.state = 'attack';
     else t.state = 'hunt';
     if (t.state === 'flee') { t.tx = t.x - dx * 4; t.ty = t.y - dy * 4; }
     else { t.tx = fx; t.ty = fy; }
@@ -2520,6 +2684,26 @@ function combat(dt) {
       /* a visible trail, so a missile reads differently from a bolt */
       if (G.set.quality > 0 && Math.random() < 0.7)
         parts.push({ x: b.x, y: b.y, vx: -b.vx * 0.06, vy: -b.vy * 0.06, l: 0, m: 0.35, c: b.c, sz: 2.6 });
+      
+      /* 3 second auto-blowup for homing missiles */
+      b.missileTime = (b.missileTime || 0) + dt;
+      if (b.missileTime >= 3) {
+        b.l = 0;
+        if (b.blast) blastAt(b.x, b.y, b.blast, b.d, b.side === 'h', b.side === 'p' ? 'ally' : 'hostile');
+        boom(b.x, b.y, 12, b.c, 140);
+        continue;
+      }
+      
+      /* Missiles can be shot to destroy instantly */
+      for (const ob of bullets) {
+        if (ob === b || ob.missile) continue;
+        const dx = b.x - ob.x, dy = b.y - ob.y;
+        if (dx * dx + dy * dy < 36) {
+          b.l = 0;
+          boom(b.x, b.y, 8, b.c, 80);
+          break;
+        }
+      }
     }
     b.x += b.vx * dt; b.y += b.vy * dt; b.l -= dt;
     if (b.mine) {
@@ -2846,6 +3030,11 @@ function pileTick(dt) {
   for (let i = piles.length - 1; i >= 0; i--) {
     const q = piles[i];
     q.t += dt;
+    /* Despawn after 5 minutes (300 seconds) */
+    if (q.t > 300) {
+      piles.splice(i, 1);
+      continue;
+    }
     if ((q.x - P.x) * (q.x - P.x) + (q.y - P.y) * (q.y - P.y) < 46 * 46 && q.t > 1.2) {
       const got = addRes(q.k, q.n);
       if (got > 0) {
@@ -3167,6 +3356,40 @@ function updGalaxy(dt) {
   G.shield = Math.min(ST().shield, G.shield + ST().regen * dt);
   blackHoleTick(dt);
   if (G.over) return;
+  
+  /* Deep space random spawns */
+  if (!G.tutorial) {
+    const roll = Math.random();
+    if (roll < 0.05 * dt) {
+      const r = rng((Math.random() * 1e9) | 0);
+      const a = Math.random() * TAU, d = 2000 + Math.random() * 3000;
+      const t = makeTraffic(r, null, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d, { tier: 'fighter', hostile: true, kind: 'pirate', force: true });
+      t.state = 'hunt'; hostiles.push(t);
+    } else if (roll < 0.07 * dt) {
+      const r = rng((Math.random() * 1e9) | 0);
+      const a = Math.random() * TAU, d = 2000 + Math.random() * 3000;
+      const t = makeTraffic(r, null, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d, { tier: 'milita', hostile: true, kind: 'pirate', force: true });
+      t.state = 'hunt'; hostiles.push(t);
+    } else if (roll < 0.071 * dt) {
+      /* Barbarian army: 1 tier 3, 3 tier 2s, 6 tier 1s */
+      const r = rng((Math.random() * 1e9) | 0);
+      const baseX = P.x + (Math.random() - 0.5) * 4000, baseY = P.y + (Math.random() - 0.5) * 4000;
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * TAU, d = 500 + Math.random() * 800;
+        const t = makeTraffic(r, null, baseX + Math.cos(a) * d, baseY + Math.sin(a) * d, { tier: 'fighter', hostile: true, kind: 'barbarian', force: true });
+        t.state = 'hunt'; hostiles.push(t);
+      }
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * TAU, d = 800 + Math.random() * 600;
+        const t = makeTraffic(r, null, baseX + Math.cos(a) * d, baseY + Math.sin(a) * d, { tier: 'milita', hostile: true, kind: 'barbarian', force: true });
+        t.state = 'hunt'; hostiles.push(t);
+      }
+      const a = Math.random() * TAU, d = 1000 + Math.random() * 500;
+      const t = makeTraffic(r, null, baseX + Math.cos(a) * d, baseY + Math.sin(a) * d, { tier: 'mother', hostile: true, kind: 'barbarian', force: true });
+      t.state = 'hunt'; hostiles.push(t);
+      say('A barbarian armada has appeared on sensors!', 'bad');
+    }
+  }
   galTarget = null; let best = 1e18;
   for (const s of nearbySystems(P.x, P.y, 2)) {
     if (s.blackhole) continue;   /* there is nothing to enter */
@@ -3200,6 +3423,24 @@ function updSystem(dt) {
   flyControls(dt, { drag: 0.10, boostMul: 3.4 });
   const s = ST();
   G.shield = Math.min(s.shield, G.shield + s.regen * dt);
+  
+  /* Ship shield regeneration when not in combat */
+  const inCombat = gunCd > 0 || hostiles.some(t => !t.dead && Math.hypot(t.x - P.x, t.y - P.y) < 3000);
+  if (!inCombat) {
+    const shieldRegen = 1 + Math.random() * 9;
+    G.shield = Math.min(s.shield, G.shield + shieldRegen * dt);
+  }
+  
+  /* Enemy ship regeneration */
+  for (const t of [...hostiles, ...neutrals]) {
+    if (t.dead) continue;
+    const enemyInCombat = t.cd > 0 || (t.state === 'attack' || t.state === 'hunt');
+    if (!enemyInCombat && t.hp < t.max) {
+      const regen = 1 + Math.random() * 9;
+      t.hp = Math.min(t.max, t.hp + regen * dt);
+    }
+  }
+  
   const near = applyGravity(dt);
   surfaceContact(near);
   G.nearPlanet = near;
@@ -3551,7 +3792,7 @@ function relBump(id, n) { G.relations[id] = clamp(relOf(id) + n, -100, 100); }
    farming, but giving somebody something they want has no limit at all —
    if you are willing to keep handing over goods, they will keep warming to
    you, and that is the fast road to a friendship. */
-const REL_WAIT = { news: 15, chat: 20, gift: 0, work: 35 };
+const REL_WAIT = { news: 1, chat: 1, gift: 0, work: 1 };
 /* tags that ignore the diminishing-returns curve entirely */
 const REL_UNCAPPED = { gift: true };
 function relCooldown(id, tag) {
@@ -3655,6 +3896,8 @@ function startTalk(npc, st) {
   drawFace(npc);
   const first = !G.knownNpcs[npc.id];
   G.knownNpcs[npc.id] = true;
+  /* Each time you talk to an NPC, increase friendship by +1 point */
+  relGain(npc, 1, 'chat');
   const pool = GREET[npc.roleDef.talk] || GREET.trade;
   const rec = G.talkGain[npc.id];
   const pestered = rec && G.t - rec.t < 30 && rec.n > 2;
@@ -3876,7 +4119,7 @@ function hailShip(t) {
       relBump(t.id, 1);
     } });
   opts.push({ l: 'Demand they hand over cargo', f: () => {
-      repChange(t.fac, -12); repChange('outlaw', 5);
+      repChange(t.fac, -0.02); repChange('outlaw', 5);
       if (Math.random() < 0.45) {
         const got = addRes(t.cargo, 60);
         setTalkLine('Fine. Take it. I want no part of you.');
@@ -4175,6 +4418,16 @@ function shipPath(g, s) {
       g.quadraticCurveTo(-18, -6, -10, -15); g.quadraticCurveTo(6, -12, 24, 0); break;
     case 'exotic':
       g.moveTo(24, 0); g.lineTo(0, 9); g.lineTo(-18, 14); g.lineTo(-12, 0); g.lineTo(-18, -14); g.lineTo(0, -9); g.closePath(); break;
+    case 'heavy':
+      g.moveTo(18, 0); g.lineTo(14, 12); g.lineTo(-8, 16); g.lineTo(-16, 8); g.lineTo(-20, 0);
+      g.lineTo(-16, -8); g.lineTo(-8, -16); g.lineTo(14, -12); g.closePath(); break;
+    case 'stealth':
+      g.moveTo(28, 0); g.lineTo(8, 4); g.lineTo(-12, 6); g.lineTo(-16, 0); g.lineTo(-12, -6); g.lineTo(8, -4); g.closePath(); break;
+    case 'cargo':
+      g.moveTo(16, 0); g.lineTo(12, 14); g.lineTo(-4, 18); g.lineTo(-14, 10); g.lineTo(-14, -10);
+      g.lineTo(-4, -18); g.lineTo(12, -14); g.closePath(); break;
+    case 'speed':
+      g.moveTo(30, 0); g.lineTo(6, 5); g.lineTo(-10, 4); g.lineTo(-18, 0); g.lineTo(-10, -4); g.lineTo(6, -5); g.closePath(); break;
     default:
       g.moveTo(20, 0); g.lineTo(12, 9); g.lineTo(-12, 11); g.lineTo(-18, 6); g.lineTo(-18, -6);
       g.lineTo(-12, -11); g.lineTo(12, -9); g.closePath();
@@ -4967,10 +5220,34 @@ function renderGalaxy() {
     ctx.fillText(FACTIONS[s.faction].n, s.x, s.y + 100 / cam.z);
     ctx.textAlign = 'left';
   }
-  if (G.waypoint) {
+  /* Waypoint system: 6 colors (red/orange/yellow/green/blue/purple), dotted lines, distance indicators */
+  if (G.waypoints && G.waypoints.length > 0) {
+    const wpColors = ['#ff4444', '#ff8844', '#ffff44', '#44ff44', '#4488ff', '#8844ff'];
+    for (let i = 0; i < G.waypoints.length; i++) {
+      const wp = G.waypoints[i];
+      const color = wpColors[i % wpColors.length];
+      ctx.strokeStyle = color; ctx.lineWidth = 2 / cam.z; ctx.globalAlpha = 0.5; ctx.setLineDash([8, 6]);
+      ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(wp.x, wp.y); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+      
+      /* Distance indicator */
+      const dist = Math.hypot(wp.x - P.x, wp.y - P.y);
+      ctx.fillStyle = color; ctx.font = (10 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
+      ctx.fillText(fmt(dist), (P.x + wp.x) / 2, (P.y + wp.y) / 2 - 10 / cam.z);
+      ctx.textAlign = 'left';
+      
+      /* Waypoint marker */
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(wp.x, wp.y, 8 / cam.z, 0, TAU); ctx.fill();
+    }
+  } else if (G.waypoint) {
+    /* Legacy single waypoint support */
     ctx.strokeStyle = '#d484ff'; ctx.lineWidth = 2 / cam.z; ctx.globalAlpha = 0.5; ctx.setLineDash([16, 14]);
     ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(G.waypoint.x, G.waypoint.y); ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
+    const dist = Math.hypot(G.waypoint.x - P.x, G.waypoint.y - P.y);
+    ctx.fillStyle = '#d484ff'; ctx.font = (10 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
+    ctx.fillText(fmt(dist), (P.x + G.waypoint.x) / 2, (P.y + G.waypoint.y) / 2 - 10 / cam.z);
+    ctx.textAlign = 'left';
   }
   for (const t of neutrals) drawTraffic(t, false);
   for (const t of hostiles) drawTraffic(t, true);
@@ -5806,38 +6083,44 @@ function uiHangar(inline) {
   for (const slot in PART_SLOTS) {
     const cur = G.parts[slot];
     h += '<h4 class="sec">' + PART_SLOTS[slot].n + '</h4>';
-    for (const k of PART_KEYS) {
-      const pt = PARTS[k];
-      if (pt.slot !== slot || k === cur) continue;
-      const owned = !!G.ownedParts[k];
-      const price = Math.round(pt.cr * (G.docked ? (1.05 - (sys.wealth || 2) * 0.03) : 1.25));
-      const canBuy = G.credits >= price;
-      const canMake = hasAll(pt.in) && Object.keys(pt.in).length > 0;
-      const pv = previewWith(slot, k);
-      const newFuel = slot === 'warp' ? pt.fuel + modSum('fuel') : maxFuel();
-      const bits2 = [];
-      const push2 = (lbl, d) => { if (d) bits2.push(lbl + ' ' + d); };
-      push2('speed', delta(s.max, pv.max));
-      push2('thrust', delta(s.thrust, pv.thrust));
-      push2('turn', delta(s.turn, pv.turn, 1));
-      push2('hold', delta(s.cargo, pv.cargo));
-      push2('hull', delta(s.hull, pv.hull));
-      push2('cells', delta(maxFuel(), newFuel));
-      push2('mass', delta(s.mass, pv.mass, 1, true));
-      const cmp = bits2.length ? '<small class="cost">' + bits2.join(' · ') + '</small>'
-        : '<small class="cost">no change to how she flies</small>';
-      h += '<div class="row ' + (owned ? '' : (canBuy || canMake ? '' : 'locked')) + '">' +
-        '<span class="dot" style="background:#6fd8ff"></span>' +
-        '<span class="nm">' + pt.n + (owned ? '<span class="pill e">owned</span>' : '<span class="pill c">tier ' + pt.tier + '</span>') +
-        '<small>' + pt.d + '</small><small class="cost">' + partBits(pt) + '</small>' + cmp +
-        (Object.keys(pt.in).length ? '<small class="cost">' + costText(pt.in) + '</small>' : '') + '</span>' +
-        '<span class="pr">' + (owned ? '—' : fmt(price)) + '</span><span class="acts">' +
-        (owned
-          ? '<button class="btn xs" data-act="partfit" data-k="' + k + '">Fit</button>'
-          : '<button class="btn xs ghost" data-act="partbuy" data-k="' + k + '" data-n="' + price + '"' + (canBuy ? '' : ' disabled') + '>Buy</button>' +
-            '<button class="btn xs" data-act="partmake" data-k="' + k + '"' + (canMake ? '' : ' disabled') + '>Build</button>') +
-        '</span></div>';
-    }
+    /* Group parts by slot and show only tier 1 (or next tier) */
+    const slotParts = PART_KEYS.filter(k => PARTS[k].slot === slot).map(k => ({ k, pt: PARTS[k] }));
+    slotParts.sort((a, b) => a.pt.tier - b.pt.tier); // Sort by tier
+    const currentTier = cur ? slotParts.findIndex(x => x.k === cur) : -1;
+    const nextTierIdx = currentTier + 1;
+    
+    /* Show next tier if current is fitted, otherwise show tier 1 */
+    const showIdx = currentTier >= 0 && nextTierIdx < slotParts.length ? nextTierIdx : 0;
+    const { k, pt } = slotParts[showIdx];
+    
+    if (cur === k) continue; /* Skip if already fitted */
+    const owned = !!G.ownedParts[k];
+    const price = Math.round(pt.cr * (G.docked ? (1.05 - (sys.wealth || 2) * 0.03) : 1.25));
+    const canBuy = G.credits >= price;
+    const canMake = hasAll(pt.in) && Object.keys(pt.in).length > 0;
+    const pv = previewWith(slot, k);
+    const newFuel = slot === 'warp' ? pt.fuel + modSum('fuel') : maxFuel();
+    const bits2 = [];
+    const push2 = (lbl, d) => { if (d) bits2.push(lbl + ' ' + d); };
+    push2('speed', delta(s.max, pv.max));
+    push2('thrust', delta(s.thrust, pv.thrust));
+    push2('turn', delta(s.turn, pv.turn, 1));
+    push2('hold', delta(s.cargo, pv.cargo));
+    push2('hull', delta(s.hull, pv.hull));
+    push2('cells', delta(maxFuel(), newFuel));
+    push2('mass', delta(s.mass, pv.mass, 1, true));
+    const cmp = bits2.length ? '<small class="cost">' + bits2.join(' · ') + '</small>'
+      : '<small class="cost">no change to how she flies</small>';
+    const tierLabel = showIdx === 0 ? 'Tier 1' : 'Tier ' + (showIdx + 1);
+    h += '<div class="row ' + (owned ? '' : 'locked') + '">' +
+      '<span class="dot" style="background:#6fd8ff"></span>' +
+      '<span class="nm">' + pt.n + (owned ? '<span class="pill e">owned</span>' : '<span class="pill c">' + tierLabel + '</span>') +
+      '<small>' + pt.d + '</small><small class="cost">' + partBits(pt) + '</small>' + cmp +
+      (Object.keys(pt.in).length ? '<small class="cost">' + costText(pt.in) + '</small>' : '') +
+      '<small class="cost">Buy at trade stations</small></span>' +
+      '<span class="pr">' + (owned ? '—' : fmt(price)) + '</span><span class="acts">' +
+      (owned ? '<button class="btn xs" data-act="partfit" data-k="' + k + '">Fit</button>' : '') +
+      '</span></div>';
   }
   return h;
 }
@@ -5865,11 +6148,59 @@ function uiRefit(inline) {
       '<span class="acts"><button class="btn xs ghost" data-act="unfit" data-k="' + slot + '">Remove</button></span></div>';
   }
   h += '<h4 class="sec">Available modules</h4>';
+  /* Group modules by slot and show only tier 1 for each */
+  const modulesBySlot = {};
   for (const k of MODULE_KEYS) {
     const m = MODULES[k];
-    const inUse = f[m.slot] === k;
-    if (inUse) continue;
-    const full = Object.keys(f).length >= s.slots && !f[m.slot];
+    if (!modulesBySlot[m.slot]) modulesBySlot[m.slot] = [];
+    modulesBySlot[m.slot].push({ k, m });
+  }
+  for (const slot in modulesBySlot) {
+    const slotModules = modulesBySlot[slot].sort((a, b) => a.m.cr - b.m.cr); // Sort by cost (tier)
+    const inUse = f[slot];
+    const currentTier = inUse ? slotModules.findIndex(x => x.k === inUse) : -1;
+    const nextTierIdx = currentTier + 1;
+    
+    /* For weapon slot, show type toggles */
+    if (slot === 'weapon') {
+      const weaponTypes = ['bolt', 'beam', 'missile'];
+      const currentType = inUse && MODULES[inUse] ? MODULES[inUse].type || G.weaponType || 'bolt' : G.weaponType || 'bolt';
+      h += '<div class="row"><span class="nm">Weapon type<small>Choose your main class</small></span><span class="acts">';
+      for (const wt of weaponTypes) {
+        h += '<button class="btn xs' + (currentType === wt ? ' sel' : '') + '" data-act="weapontype" data-k="' + wt + '">' + wt.toUpperCase() + '</button>';
+      }
+      h += '</span></div>';
+      
+      /* Show only modules of selected type */
+      const typeModules = slotModules.filter(x => x.m.type === currentType || (!x.m.type && currentType === 'bolt'));
+      if (typeModules.length > 0) {
+        const showIdx = currentTier >= 0 ? Math.min(currentTier + 1, typeModules.length - 1) : 0;
+        const { k, m } = typeModules[showIdx];
+        if (inUse !== k) {
+          const full = Object.keys(f).length >= s.slots && !f[slot];
+          const canBuy = G.credits >= m.cr;
+          const canMake = hasAll(m.in);
+          const bits = [];
+          if (m.gun) bits.push('damage +' + Math.round(m.gun * 100) + '%');
+          if (m.rate) bits.push('fire rate +' + Math.round(m.rate * 100) + '%');
+          const tierLabel = showIdx === 0 ? 'Tier 1' : 'Tier ' + (showIdx + 1);
+          h += '<div class="row ' + (full ? 'locked' : '') + '"><span class="dot" style="background:#6fd8ff"></span>' +
+            '<span class="nm">' + m.n + '<small>' + tierLabel + ' · ' + SLOT_NAMES[slot] + ' · ' + bits.join(' · ') + '</small>' +
+            '<small class="cost">' + costText(m.in) + ' · ' + fmt(m.cr) + ' units</small></span>' +
+            '<span class="acts">' +
+            '<button class="btn xs" data-act="fitmake" data-k="' + k + '"' + (!canMake || !canBuy || full ? ' disabled' : '') + '>Build</button>' +
+            '</span></div>';
+        }
+      }
+      continue;
+    }
+    
+    /* Show next tier if current is fitted, otherwise show tier 1 */
+    const showIdx = currentTier >= 0 && nextTierIdx < slotModules.length ? nextTierIdx : 0;
+    const { k, m } = slotModules[showIdx];
+    
+    if (inUse === k) continue; /* Skip if already fitted */
+    const full = Object.keys(f).length >= s.slots && !f[slot];
     const canBuy = G.credits >= m.cr;
     const canMake = hasAll(m.in);
     const bits = [];
@@ -5887,13 +6218,12 @@ function uiRefit(inline) {
     if (m.hull) bits.push('hull +' + Math.round(m.hull * 100) + '%');
     if (m.impact) bits.push('crash armour +' + Math.round(m.impact * 100) + '%');
     if (m.scan) bits.push('scan payout +' + Math.round(m.scan * 100) + '%');
+    const tierLabel = showIdx === 0 ? 'Tier 1' : 'Tier ' + (showIdx + 1);
     h += '<div class="row ' + (full ? 'locked' : '') + '"><span class="dot" style="background:#6fd8ff"></span>' +
-      '<span class="nm">' + m.n + '<small>' + SLOT_NAMES[m.slot] + ' · ' + bits.join(' · ') + '</small>' +
-      '<small class="cost">' + costText(m.in) + '</small></span>' +
-      '<span class="pr">' + fmt(m.cr) + '</span>' +
+      '<span class="nm">' + m.n + '<small>' + tierLabel + ' · ' + SLOT_NAMES[slot] + ' · ' + bits.join(' · ') + '</small>' +
+      '<small class="cost">' + costText(m.in) + ' · ' + fmt(m.cr) + ' units</small></span>' +
       '<span class="acts">' +
-      '<button class="btn xs ghost" data-act="fitbuy" data-k="' + k + '"' + (!canBuy || full ? ' disabled' : '') + '>Buy</button>' +
-      '<button class="btn xs" data-act="fitmake" data-k="' + k + '"' + (!canMake || full ? ' disabled' : '') + '>Build</button>' +
+      '<button class="btn xs" data-act="fitmake" data-k="' + k + '"' + (!canMake || !canBuy || full ? ' disabled' : '') + '>Build</button>' +
       '</span></div>';
   }
   h += '<h4 class="sec">Paint</h4><div class="row"><span class="nm">Hull colour<small>cosmetic only, and worth it</small></span><span class="acts">' +
@@ -6733,7 +7063,13 @@ function doAction(act, k, n) {
       const f = G.fit[G.ship] = G.fit[G.ship] || {};
       if (Object.keys(f).length >= moduleSlots() && !f[m.slot]) { say('No free slots on this hull. A heavier hull carries more.', 'warn'); break; }
       if (act === 'fitbuy') { if (G.credits < m.cr) break; G.credits -= m.cr; }
-      else { if (!hasAll(m.in)) break; payAll(m.in); refreshTools(); }
+      else { 
+        if (!hasAll(m.in)) { say('Not enough materials in the hold.', 'warn'); break; }
+        if (G.credits < m.cr) { say('Not enough units.', 'warn'); break; }
+        payAll(m.in); 
+        G.credits -= m.cr;
+        refreshTools(); 
+      }
       const old = f[m.slot];
       f[m.slot] = k;
       G.hull = clamp(G.hull, 1, ST().hull);
@@ -6768,7 +7104,23 @@ function doAction(act, k, n) {
       AU.play('upgrade');
       break;
     }
-    case 'partfit': fitPart(k); break;
+    case 'partfit': {
+      const pt = PARTS[k]; if (!pt) break;
+      /* Require resources and money to fit/upgrade parts */
+      if (!hasAll(pt.in)) { say('Not enough materials in the hold.', 'warn'); break; }
+      if (G.credits < pt.cr) { say('Not enough units.', 'warn'); break; }
+      payAll(pt.in);
+      G.credits -= pt.cr;
+      fitPart(k);
+      AU.play('upgrade');
+      break;
+    }
+    case 'weapontype': {
+      /* Store selected weapon type preference */
+      G.weaponType = k;
+      renderPanel('refit');
+      break;
+    }
 
     case 'craft': {
       const r = RECIPES.find(x => x.o === k); if (!r) break;
