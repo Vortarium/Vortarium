@@ -562,6 +562,35 @@ const RECIPES = [
 ];
 
 /* ------------------------------------------------------------
+   5b. ELEMENTAL CRAFTING LINE
+   Every element, gas, fuel and crystal in the game gets pulled into
+   its own small family of recipes — a weapon coil, a suit plate and
+   a ship-grade component apiece — so nothing mined ever sits in the
+   hold with nowhere to spend it. ~90 elements × 3 families is close
+   to three hundred new craftable items on top of the hand-built list
+   above.
+------------------------------------------------------------ */
+const ELEMENT_FAMILIES = [
+  { key: 'coil',  suf: ' Coil',    cat: 'Weapons',   extra: { wiring: 2, alloy: 1 },  outMul: 1,   amtDiv: 3 },
+  { key: 'plate', suf: ' Plating', cat: 'Suits',     extra: { ferrite: 10, fibre: 4 },outMul: 1,   amtDiv: 2.4 },
+  { key: 'cell',  suf: ' Cell',    cat: 'Components',extra: { glass: 2 },             outMul: 2,   amtDiv: 4 }
+];
+for (const ek of ORE_KEYS) {
+  const E = MAT[ek];
+  if (!E || !E.v) continue;
+  for (const fam of ELEMENT_FAMILIES) {
+    const outKey = 'x_' + fam.key + '_' + ek;
+    if (MAT[outKey]) continue;
+    const amt = clamp(Math.round(30 / (fam.amtDiv * Math.max(1, E.t))), 2, 24);
+    MAT[outKey] = { n: E.n + fam.suf, v: Math.round(E.v * 2.1 + 30), c: E.c, t: E.t, cat: 'component' };
+    const inputs = { [ek]: amt };
+    for (const k in fam.extra) inputs[k] = fam.extra[k];
+    RECIPES.push({ o: outKey, n: fam.outMul, in: inputs, cat: fam.cat });
+  }
+}
+const RECIPE_KEYS_ELEMENTAL = RECIPES.length;
+
+/* ------------------------------------------------------------
    6. CROPS + FISH
 ------------------------------------------------------------ */
 const CROPS = {
@@ -608,7 +637,11 @@ const SHIPS = {
   nomad:      { n: 'Nomad LR',      cl: 'Explorer',     price: 680000,   thrust: 460, turn: 3.7, max: 740, cargo: 380, hull: 270, shield: 190, mine: 2.0, warp: 2.6, gun: 16, mass: 1.3, slots: 6, col: '#6cff8f', s: 'explorer', d: 'Long-range survey vessel. The mining laser is rated for continuous burn.' },
   leviathan:  { n: 'Leviathan H9',  cl: 'Hauler',       price: 1450000,  thrust: 330, turn: 2.5, max: 560, cargo: 1200,hull: 580, shield: 300, mine: 1.7, warp: 1.9, gun: 14, mass: 2.6, slots: 7, col: '#ffc46b', s: 'hauler', d: 'A warehouse with engines. Turns like a moon, pays for itself in one run.' },
   chrysalis:  { n: 'Chrysalis',     cl: 'Living ship',  price: 5400000,  thrust: 590, turn: 5.1, max: 870, cargo: 660, hull: 620, shield: 480, mine: 2.5, warp: 3.2, gun: 34, mass: 1.4, slots: 8, col: '#d484ff', s: 'living', d: 'Grown, not built. It heals its own hull and dislikes being left in atmosphere.' },
-  singularity:{ n: 'Singularity',   cl: 'Exotic',       price: 21000000, thrust: 800, turn: 5.7, max: 1200,cargo: 1500,hull: 1020,shield: 860, mine: 3.6, warp: 4.8, gun: 58, mass: 1.1, slots: 9, col: '#c0f0ff', s: 'exotic', d: 'Nobody sells these. Somebody sold you this one. Do not ask the broker twice.' }
+  singularity:{ n: 'Singularity',   cl: 'Exotic',       price: 21000000, thrust: 800, turn: 5.7, max: 1200,cargo: 1500,hull: 1020,shield: 860, mine: 3.6, warp: 4.8, gun: 58, mass: 1.1, slots: 9, col: '#c0f0ff', s: 'exotic', d: 'Nobody sells these. Somebody sold you this one. Do not ask the broker twice.' },
+  /* two more purely-cosmetic hulls, one per rung, so the rim doesn't look
+     like it only ever ships four silhouettes */
+  interdart:  { n: 'Interdart',     cl: 'Interceptor',  price: 210000,   thrust: 470, turn: 4.6, max: 720, cargo: 190, hull: 150, shield: 90,  mine: 1.1, warp: 1.4, gun: 11, mass: 0.9, slots: 4, col: '#ff9fd0', s: 'interceptor', d: 'A forked-tail needle built for one job: getting somewhere before anyone else notices you left.' },
+  corsair:    { n: 'Corsair MK-7',  cl: 'Corvette',      price: 540000,   thrust: 500, turn: 4.0, max: 750, cargo: 260, hull: 340, shield: 240, mine: 1.4, warp: 1.6, gun: 26, mass: 1.3, slots: 5, col: '#8fe09f', s: 'corvette', d: 'Double-hulled and squat. Looks slow. Is not.' }
 };
 const SHIP_KEYS = Object.keys(SHIPS);
 
@@ -665,6 +698,12 @@ const SHIP_WEAPONS = {
   ] }
 };
 const SHIP_WEAPON_KEYS = Object.keys(SHIP_WEAPONS);
+/* double the board, then make Mk III+ cost quadratically more than a flat
+   multiplier would give — the far end of a weapon ladder should feel like
+   an actual investment, not the third item in a shopping list */
+for (const fam of SHIP_WEAPON_KEYS) {
+  SHIP_WEAPONS[fam].tiers.forEach((t, i) => { t.cr = Math.round(t.cr * 2 * Math.pow(i + 1, 1.6)); });
+}
 /* highest tier index (0-based) owned for a weapon family, or -1 if never bought */
 function gunTierOwned(fam) { return (G.shipWeapons && G.shipWeapons[fam] !== undefined) ? G.shipWeapons[fam] : -1; }
 function curShipGun() { return SHIP_WEAPONS[G.shipGun] ? G.shipGun : 'bullet'; }
@@ -796,8 +835,42 @@ const PARTS = {
   w_res:     { slot: 'warp', n: 'Resonance Core',    tier: 3, cr: 880000,  in: { lens: 3, powercell: 3, voidcrystal: 3 }, fuel: 520,  warp: 3.6, mine: 2.9, mass: 1.1, d: 'Sings when it spins up. Cuts rock like it is not there.' },
   w_void:    { slot: 'warp', n: 'Void Core',         tier: 5, cr: 7200000, in: { antimatter: 8, stellarite: 6, frame: 3 },fuel: 950,  warp: 5.4, mine: 4.2, mass: 1.4, d: 'Crosses the galaxy on a quarter tank and strips a deposit in seconds.' }
 };
-const PART_KEYS = Object.keys(PARTS);
+let PART_KEYS = Object.keys(PARTS);
 const DEFAULT_PARTS = { hull: 'h_salvage', drive: 'd_stock', hold: 'c_crate', warp: 'w_cracked' };
+
+/* ------------------------------------------------------------
+   8a-iii. INFINITE PART TIERS
+   Every catalogue price below was underpriced for how much credit
+   an established captain accumulates, so the whole board is
+   doubled once here. Beyond that, nothing in the hangar ever caps
+   out at "fully upgraded" — the top tier on record for a slot just
+   generates the next one on demand, with cost climbing quadratically
+   per tier so a late upgrade is a real investment, not a rounding
+   error.
+------------------------------------------------------------ */
+for (const k of PART_KEYS) PARTS[k].cr = Math.round(PARTS[k].cr * 2);
+for (const k of SHIP_KEYS) SHIPS[k].price = Math.round(SHIPS[k].price * 2);
+for (const k of MODULE_KEYS) MODULES[k].cr = Math.round(MODULES[k].cr * 2);
+/* extend a slot's tier ladder by one, generated from its current top rung */
+function extraPartTier(slot, tier) {
+  const key = slot + '_gen' + tier;
+  if (PARTS[key]) return key;
+  const rungs = PART_KEYS.filter(k => PARTS[k].slot === slot);
+  const topKey = rungs.reduce((a, k) => (PARTS[k].tier > PARTS[a].tier ? k : a), rungs[0]);
+  const t0 = PARTS[topKey];
+  const over = tier - t0.tier; /* how many generated rungs past the hand-built top */
+  const statMul = Math.pow(1.3, over);          /* stats grow steadily */
+  const costMul = Math.pow(over + 1, 2) * 2.4;  /* cost grows quadratically once you're past the hand-built ladder */
+  const np = { slot: slot, n: t0.n + ' Mk ' + (tier + 1), tier: tier,
+    cr: Math.round(t0.cr * costMul), mass: t0.mass * (1 + over * 0.08),
+    d: 'A further refinement forged rather than bought — the yards stopped making these off a catalogue.', in: {} };
+  for (const stat of ['hull', 'impact', 'thrust', 'max', 'turn', 'cargo', 'fuel', 'warp', 'mine', 'regen', 'slots']) {
+    if (t0[stat] !== undefined) np[stat] = stat === 'slots' ? t0[stat] : Math.round(t0[stat] * statMul * 100) / 100;
+  }
+  for (const mat in t0.in) np.in[mat] = Math.round(t0.in[mat] * (1 + over * 0.6));
+  PARTS[key] = np; PART_KEYS.push(key);
+  return key;
+}
 
 const PAINTS = ['#9fb3c8','#6fd8ff','#ff6a4d','#6cff8f','#ffc46b','#d484ff','#c0f0ff','#ff9fd0','#8fe09f','#e6ddc8'];
 
@@ -828,6 +901,44 @@ const BUILDS = {
   battery:  { n: 'Orbital battery', cr: 460000,  in: { frame: 2, powercell: 4, iridium: 30 }, pwr: -26, def: 2.2, d: 'Answers anything that comes down the gravity well at your colony.' }
 };
 const BUILD_KEYS = Object.keys(BUILDS);
+for (const k of BUILD_KEYS) { BUILDS[k].cr = Math.round(BUILDS[k].cr * 2); BUILDS[k].tier = 1; BUILDS[k].base = k; }
+
+/* ------------------------------------------------------------
+   9b. BUILDING TIERS
+   Every structure gets two upgraded versions — same footprint, same
+   purpose, but built from rarer stock and considerably more capable.
+   Tier II and III cost far more in credits and pull in one extra rare
+   material apiece; base materials never inflate, they just take more
+   of them.
+------------------------------------------------------------ */
+const BUILD_TIER_MATS = [
+  ['platinum', 'chromatic'],       /* tier II: solidly uncommon */
+  ['voidcrystal', 'stellarite']    /* tier III: end-game rarities */
+];
+const BUILD_EFFECT_KEYS = ['pwr','cap','ext','grow','ref','trade','res','def','plots','store','wall','stab'];
+const BUILD_BASE_KEYS = BUILD_KEYS.slice(); /* snapshot — BUILD_KEYS itself grows below */
+for (const base of BUILD_BASE_KEYS) {
+  const d0 = BUILDS[base];
+  let prevKey = base;
+  for (let tier = 2; tier <= 3; tier++) {
+    const key = base + tier;
+    const prev = BUILDS[prevKey];
+    const rareMat = pick(rng(hash2(base.length * 977, tier * 131 + base.charCodeAt(0), 40009)), BUILD_TIER_MATS[tier - 2]);
+    const mul = tier === 2 ? 1.8 : 3.2;
+    const crMul = tier === 2 ? 6 : 22; /* "cost way more" — a real jump, not a linear step */
+    const inputs = {};
+    for (const m in d0.in) inputs[m] = Math.round(d0.in[m] * (tier === 2 ? 1.6 : 2.6));
+    inputs[rareMat] = tier === 2 ? ri(rng(hash2(tier, base.charCodeAt(0), 77)), 6, 14) : ri(rng(hash2(tier, base.charCodeAt(0), 88)), 3, 8);
+    const nb = { n: d0.n + (tier === 2 ? ' II' : ' III'), cr: Math.round(d0.cr * crMul), in: inputs,
+      d: d0.d + (tier === 2 ? ' Reinforced build — noticeably more capable.' : ' The final-form build. Rare stock, dramatically more capable.'),
+      personal: d0.personal, tier: tier, base: base, upgradeOf: prevKey };
+    for (const ek of BUILD_EFFECT_KEYS) if (d0[ek] !== undefined) nb[ek] = Math.round(d0[ek] * mul * 100) / 100;
+    if (d0.turret) nb.turret = 1;
+    if (d0.prest) nb.prest = d0.prest * mul;
+    BUILDS[key] = nb; BUILD_KEYS.push(key);
+    prevKey = key;
+  }
+}
 
 /* ------------------------------------------------------------
    10. FACTIONS, SPECIES, DIALOGUE
@@ -902,7 +1013,12 @@ const VTIERS = {
              d: 'A city the size of a small world. Threaten it and a forcefield comes up; break the field and it needs a minute to raise another. The spinal lance tracks you before it fires.' },
   warworld:{ n: 'War World',     rank: 4, hp: 100000, gun: 70, sp: 52, scale: 9, rad: 460, guns: ['streamtwin'], pay: 2150000,
              waves: [['fighter', 2.5], ['milita', 7.5], ['mother', 22.5]],
-             d: 'The same tonnage with the shield generators torn out and the hangars doubled. No field, no pause in the fire, and it empties its bays twice as fast.' }
+             d: 'The same tonnage with the shield generators torn out and the hangars doubled. No field, no pause in the fire, and it empties its bays twice as fast.' },
+
+  /* --- rung five: the thing that shows up when a whole faction wants you dead --- */
+  titan: { n: 'Dreadnought Titan', rank: 5, hp: 1000000, gun: 90, sp: 60, scale: 6.8, rad: 330, guns: ['t5missiles', 't5lance', 'streamtriple'], pay: 40000000,
+           summon: [3, 3], summonTier: 'mother',
+           d: 'A mothership hull built at twice the scale, with a carrier bay that never stops working, a locked spinal lance, and three streams of cannon fire that do not care where you hide.' }
 };
 const VTIER_KEYS = Object.keys(VTIERS);
 /* rank lookups, so behaviour keys off the rung rather than a ship name */
@@ -911,6 +1027,11 @@ function isRank(t, n) { return t && tierRank(t.tier) === n; }
 /* only the bastion is a place you can set down on; the war world is not */
 function isLandable(t) { return t && t.tier === 'citadel'; }
 const TIER_SHIPS = { citadel: 'singularity', warworld: 'singularity', mother: 'leviathan', broodmother: 'leviathan', milita: 'wraith', nova: 'wraith' };
+/* rung one and rung two draw a random hull each time a ship spawns —
+   friendly or hostile, it is a coin flip which of that rung's silhouettes
+   you are looking at, purely for variety */
+const TIER1_SKINS = ['vagrant', 'kestrel', 'interdart'];
+const TIER2_SKINS = ['wraith', 'corsair'];
 /* the pool a given rung draws from when something bigger calls for help */
 const TIER_VARIANTS = { 1: ['fighter', 'seeker'], 2: ['milita', 'nova'], 3: ['mother', 'broodmother'], 4: ['citadel', 'warworld'] };
 /* NPC weapon behaviours */
@@ -934,7 +1055,17 @@ const NPC_GUNS = {
   /* the bastion's spinal lance: locks on, charges where you can see it, then
      burns for a full second at three times a mothership beam and four times the width */
   worldlance: { cd: [8.5, 8.5], dmg: 5.7, col: '#ff5f8f', beam: true, dur: 1.0,
-                charge: 1.5, width: 44, hitRad: 46, lock: true, contact: true }
+                charge: 1.5, width: 44, hitRad: 46, lock: true, contact: true },
+
+  /* --- tier 5 dreadnought weapons --- */
+  /* five homing warheads a second, dead on the clock */
+  t5missiles: { cd: [0.2, 0.2], spd: 520, dmg: 1.1, col: '#ff8a5f', n: 1, sz: 6,
+                blast: 200, fuse: 2.5, homing: 2.4, accel: 320, maxSpd: 1050, missile: true },
+  /* a targeted lance: locks on, then fires — bigger and slower than the bastion's */
+  t5lance: { cd: [10, 10], dmg: 7.2, col: '#ff5f8f', beam: true, dur: 1.2,
+             charge: 1.8, width: 52, hitRad: 54, lock: true, contact: true },
+  /* three constant rows of cannon fire, always running */
+  streamtriple: { cd: [0.15, 0.15], spd: 1500, dmg: 0.55, col: '#ff5f8f', n: 3, sz: 4.4, sep: 34 }
 };
 
 const MOODS = ['guarded','friendly','bored','wary','cheerful','tired','sharp','distracted'];
@@ -1174,7 +1305,13 @@ function systemAt(cx, cy) {
       const pr = rng(ph);
       const biome = (home && i === 0) ? 'ruined' : pick(pr, BIOME_KEYS);
       const b = BIOMES[biome];
+      /* every element, crystal, gas and fuel in the game can turn up as a
+         rock deposit on any planet — the biome's own pool just makes those
+         materials more likely, it no longer gates them out entirely.
+         Each world still only settles on a handful (2-5) of them, so the
+         player has to keep moving to complete the set across the galaxy. */
       const pool = b.pool.slice();
+      for (const k of ORE_KEYS) if (pool.indexOf(k) < 0 && pr() < 0.16) pool.push(k);
       if (pr() < 0.4) pool.push(pick(pr, ORE_KEYS));
       if (pr() < 0.2) pool.push(pick(pr, ORE_KEYS));
       const res = [];
@@ -1214,7 +1351,7 @@ function nearbySystems(wx, wy, cells) {
 }
 function planetById(id) {
   if (!id) return null;
-  if (id.indexOf('train') === 0) return TRAINING_PLANET;
+  if (id.indexOf('train') === 0) return id === 'train:1' ? TRAINING_PLANET2 : TRAINING_PLANET;
   if (id.indexOf('city:') === 0) return G.citadels[id] || null;
   const k = id.split(':');
   const c = k[0].split('|');
@@ -1229,6 +1366,14 @@ const TRAINING_PLANET = {
   biome: 'training', r: 140, mass: 1, orbit: 1400, phase: 0, speed: 0.02,
   res: ['ferrite','tritium','fibre','silicate'], scanned: false, moons: 1, rings: false,
   life: 'Managed', hazard: 0, weather: ['clear skies'], rich: true, settled: true, day: 1
+};
+/* a second, unclaimed world in the same safe range — purely so the
+   "colonize another planet" tutorial step has somewhere to land */
+const TRAINING_PLANET2 = {
+  id: 'train:1', sys: 'train', idx: 1, seed: 777002, name: 'Annex Field',
+  biome: 'barren', r: 120, mass: 0.9, orbit: 2400, phase: 2.1, speed: 0.017,
+  res: ['ferrite','silicate','copper','magnetite'], scanned: false, moons: 0, rings: false,
+  life: 'None', hazard: 0, weather: ['clear skies'], rich: false, settled: false, day: 1
 };
 
 /* ------------------------------------------------------------
@@ -1383,7 +1528,10 @@ const TEMPERS = [
   { k: 'curious',   w: 14, d: 'Follows at a distance. Harmless.' },
   { k: 'neutral',   w: 12, d: 'Leaves you alone unless you strike first.' },
   { k: 'aggressive',w: 11, d: 'Charges on sight.' },
-  { k: 'predator',  w: 5,  d: 'Hunts. Fast, and it does not give up.' }
+  { k: 'predator',  w: 5,  d: 'Hunts. Fast, and it does not give up.' },
+  /* a third, much rarer aggressive archetype: enormous, lobs bombs in three
+     directions at once from range, then closes in to finish the job */
+  { k: 'behemoth',  w: 0.4, d: 'Huge. Throws bombs in three directions and closes in once you are close.' }
 ];
 function weighted(r, table) {
   let tot = 0; for (const t of table) tot += t.w;
@@ -1394,21 +1542,23 @@ function weighted(r, table) {
 function makeCreature(r, pl, x, y, cx, cy, i) {
   const b = BIOMES[pl.biome];
   const temper = weighted(r, TEMPERS);
-  const sz = rr(r, 9, 26) * (temper.k === 'predator' ? 1.5 : 1);
+  const behemoth = temper.k === 'behemoth';
+  const sz = behemoth ? rr(r, 46, 60) : rr(r, 9, 26) * (temper.k === 'predator' ? 1.5 : 1);
   const drops = [];
   if (b.flora > 0.2) drops.push('fibre');
   drops.push(pick(r, ['chitin', 'bone', 'leather', 'mold']));
   if (r() < 0.2) drops.push(pick(r, pl.res));
+  if (behemoth) drops.push(pick(r, pl.res), pick(r, pl.res));
   return {
     id: pl.id + '|c' + cx + '|' + cy + '|' + i,
     name: creatureName(r), temper: temper.k, tdesc: temper.d,
     hx: x, hy: y, x: x, y: y, vx: 0, vy: 0,
-    sz: sz, legs: ri(r, 2, 6), col: b.acc, eye: r() < 0.5 ? '#fff' : b.acc,
-    hp: Math.round(20 + sz * 3.4), max: Math.round(20 + sz * 3.4),
-    sp: rr(r, 30, 95) * (temper.k === 'predator' ? 1.7 : temper.k === 'skittish' ? 1.5 : 1),
+    sz: sz, legs: behemoth ? 6 : ri(r, 2, 6), col: b.acc, eye: r() < 0.5 ? '#fff' : b.acc,
+    hp: behemoth ? 1400 : Math.round(20 + sz * 3.4), max: behemoth ? 1400 : Math.round(20 + sz * 3.4),
+    sp: behemoth ? rr(r, 34, 48) : rr(r, 30, 95) * (temper.k === 'predator' ? 1.7 : temper.k === 'skittish' ? 1.5 : 1),
     rad: rr(r, 60, 220), ph: r() * TAU, state: 'wander', t: 0,
-    dmg: temper.k === 'predator' ? 14 : temper.k === 'aggressive' ? 8 : 3,
-    drops: drops, scanned: false, tamed: false, body: ri(r, 0, 3)
+    dmg: behemoth ? 50 : temper.k === 'predator' ? 14 : temper.k === 'aggressive' ? 8 : 3,
+    drops: drops, scanned: false, tamed: false, body: ri(r, 0, 3), bombCd: rr(r, 1, 2.5)
   };
 }
 
@@ -1472,8 +1622,8 @@ function makeNpc(r, role, fac, x, y, id) {
     id: id, name: personName(r), role: role.n, roleDef: role, spec: spec.n, head: spec.head, col: spec.c,
     fac: fac, mood: pick(r, MOODS), x: x, y: y, hx: x, hy: y, ph: r() * TAU,
     shop: role.shop, skill: role.skill || null, level: lvl,
-    hire: role.hire, wage: Math.round(rr(r, 2600, 9000) * lvl),
-    seed: (r() * 1e9) | 0, greeted: false,
+    hire: role.hire, wage: Math.round(rr(r, 10000, 30000) + (lvl - 1) * 23333),
+    seed: (r() * 1e9) | 0, greeted: false, fearful: r() < 0.5,
     hp: hp, max: hp, dead: false, state: 'idle', cd: rr(r, 0.3, 1.4), alertT: 0,
     weapon: armed ? pick(r, lvl >= 3 ? ['bolt','ray','bomb'] : ['bolt','bolt','ray']) : null,
     dmg: 7 + lvl * 5,
@@ -1545,7 +1695,9 @@ function makeTraffic(r, s, x, y, opts) {
   if (s && s.danger === 0 && rim < 1 && kind === 'pirate' && !opts.force) kind = 'trader';
   const tierKey = opts.tier || rollTier(r, rim, danger);
   const T = VTIERS[tierKey] || VTIERS.fighter;
-  const shipKey = TIER_SHIPS[tierKey] || pick(r, ['vagrant','kestrel','wraith','nomad']);
+  const shipKey = tierRank(tierKey) === 1 ? pick(r, TIER1_SKINS)
+    : tierRank(tierKey) === 2 ? pick(r, TIER2_SKINS)
+    : (TIER_SHIPS[tierKey] || pick(r, ['vagrant', 'kestrel', 'wraith', 'nomad']));
   const b = SHIPS[shipKey];
   const fkeys = FACTION_KEYS.filter(f => f !== 'none');
   /* a system with an owner is flown almost entirely by that owner */
@@ -1556,6 +1708,10 @@ function makeTraffic(r, s, x, y, opts) {
     else fac = pick(r, fkeys);
   }
   const hostile = opts.hostile !== undefined ? opts.hostile : (kind === 'pirate');
+  /* past the outermost orbit, nobody claims the ship traffic — it is
+     barbaric, unaffiliated raiding rather than any faction's navy, so
+     fighting it never moves your standing with anybody */
+  const barbaric = rim >= 1 && kind === 'pirate';
   /* AI archetypes: defensive, offensive, common, progressive, brutality (1 in 5 chance each) */
   const archetypes = ['defensive', 'offensive', 'common', 'progressive', 'brutality'];
   const archetype = archetypes[Math.floor(Math.random() * 5)];
@@ -1580,7 +1736,10 @@ function makeTraffic(r, s, x, y, opts) {
     ally: false, foe: null, foeT: 0,
     state: hostile ? 'hunt' : 'cruise', t: 0, hostile: hostile,
     tx: x + rr(r, -3000, 3000), ty: y + rr(r, -3000, 3000),
-    hailed: false, cargo: pick(r, MAT_KEYS), mood: pick(r, MOODS), scanned: false,
+    hailed: false, cargo: pick(r, MAT_KEYS), mood: pick(r, MOODS), scanned: false, barbaric: barbaric,
+    /* a fixed personal archetype for how this captain reacts to a threat —
+       decided once at spawn, not re-rolled every time you lean on them */
+    fearful: r() < 0.5,
     /* an NPC's opinion of where the money is must not change every time
        you ask them — bake it in when the ship is created */
     tipSeed: (r() * 1e9) | 0,
@@ -1720,7 +1879,7 @@ function turnInQuest(q) {
 ------------------------------------------------------------ */
 function claimCost() { return 40000 * Math.pow(2.1, Object.keys(G.colonies).length); }
 function claimPlanet() {
-  if (!planet || G.tutorial) return;
+  if (!planet) return;
   if (G.colonies[planet.id]) { say('You already own this world.', 'warn'); return; }
   const c = claimCost();
   if (G.credits < c) { say('Claim beacon costs ' + fmt(c) + ' units. You are short.', 'bad'); return; }
@@ -1908,9 +2067,18 @@ function newDay() {
     else { for (const c of G.crew) c.morale = clamp(c.morale - 25, 0, 100); say('Payroll missed. The crew noticed.', 'bad'); }
   }
   if (hungry) say(hungry + ' of the crew went unfed. Morale is dropping.', 'warn');
-  const quitters = G.crew.filter(c => c.morale <= 0);
+  /* nobody walks off outright until morale is fully bottomed out, but the
+     odds of losing someone climb steadily starting at 25% morale */
+  const quitters = [];
+  G.crew = G.crew.filter(c => {
+    if (c.morale <= 0) { quitters.push(c); return false; }
+    if (c.morale <= 25) {
+      const chance = ((25 - c.morale) / 25) * 0.55; /* up to 55%/cycle as morale nears zero */
+      if (Math.random() < chance) { quitters.push(c); return false; }
+    }
+    return true;
+  });
   for (const q of quitters) say(q.name + ' walked off the ship for good.', 'bad');
-  G.crew = G.crew.filter(c => c.morale > 0);
   /* water condensers */
   for (const pid in G.bases) { const st = colStats(G.bases[pid]); if (st.water) G.waterCan = 100; }
   if (G.set.autosave) save(true);
@@ -2019,7 +2187,7 @@ const TRAINING_SYSTEM = {
   key: 'train', cx: 0, cy: 0, x: 0, y: 0, name: 'Cadet Field Range', seed: 777,
   star: { n: 'Yellow dwarf', c: '#ffe9a8', r: 300, t: 1, mass: 1.0 },
   faction: 'free', danger: 0, wealth: 2, hasStation: true, belt: false,
-  scanned: true, planets: [TRAINING_PLANET], price: {}, stOrbit: 3000, stPhase: 1, stName: 'Academy Ring'
+  scanned: true, planets: [TRAINING_PLANET, TRAINING_PLANET2], price: {}, stOrbit: 3000, stPhase: 1, stName: 'Academy Ring'
 };
 for (const k of MAT_KEYS) TRAINING_SYSTEM.price[k] = 1;
 
@@ -2097,7 +2265,6 @@ function launch() {
   say('Breaking atmosphere.', 'good');
 }
 function leaveSystem() {
-  if (G.tutorial) { say('The range boundary is locked during training.', 'warn'); return; }
   if (G.fuel < 4) { say('Warp cells empty. Refine tritium into cells from the cargo screen.', 'bad'); return; }
   G.mode = 'galaxy'; G.docked = false;
   const a = Math.atan2(P.y, P.x) || 0;
@@ -2148,8 +2315,35 @@ function spawnTraffic(s) {
 
 /* The further you drift from the star, the busier it gets out here. */
 let rimAcc = 0;
+let kosAcc = 0;
+/* if a faction has you at "kill on sight", every second spent in one of
+   their systems is a 1% roll for them to drop a full strike force on you */
+function killOnSightCheck(dt) {
+  if (G.mode !== 'system' || !sys || G.tutorial || sys.faction === 'none' || !sys.faction) return;
+  kosAcc += dt;
+  if (kosAcc < 1) return;
+  kosAcc = 0;
+  const rep = G.rep[sys.faction] || 0;
+  if (rep > -75) return;
+  if (Math.random() >= 0.01) return;
+  const r = rng((Math.random() * 1e9) | 0);
+  say(FACTIONS[sys.faction].n + ' just put a kill order through — a strike force is inbound.', 'bad');
+  for (let i = 0; i < 2; i++) {
+    const a = Math.random() * TAU, d = 2600 + Math.random() * 1600;
+    const t = makeTraffic(r, sys, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d,
+      { tier: 'mother', fac: sys.faction, hostile: true, kind: 'patrol', force: true });
+    t.state = 'hunt'; hostiles.push(t);
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = Math.random() * TAU, d = 2000 + Math.random() * 1400;
+    const t = makeTraffic(r, sys, P.x + Math.cos(a) * d, P.y + Math.sin(a) * d,
+      { tier: pick(r, TIER_VARIANTS[2]), fac: sys.faction, hostile: true, kind: 'patrol', force: true });
+    t.state = 'hunt'; hostiles.push(t);
+  }
+}
 function rimSpawn(dt) {
-  if (G.mode !== 'system' || !sys || G.tutorial) return;
+  killOnSightCheck(dt);
+  if (G.mode !== 'system' || !sys) return;
   rimAcc -= dt;
   if (rimAcc > 0) return;
   const rim = rimFactor(sys, P.x, P.y);
@@ -2174,6 +2368,10 @@ function rimSpawn(dt) {
    20. DAMAGE + DEATH
 ------------------------------------------------------------ */
 function hurt(n, src) {
+  /* the training range is a genuinely safe haven — nothing here can put a
+     scratch on you, so the ship-repair loop can be practiced without the
+     one mistake that would send a new pilot back to the title screen */
+  if (G.tutorial) return;
   if (G.onFoot) return hurtSuit(n);
   if (G.set.shake) cam.shake = Math.min(24, cam.shake + n * 0.14);
   screenFlash();
@@ -2182,6 +2380,7 @@ function hurt(n, src) {
   if (G.hull <= 0 && !G.over) death(src);
 }
 function hurtSuit(n) {
+  if (G.tutorial) return;
   n = n * (1 - suitArmour());
   if (n <= 0) return;
   if (G.set.shake) cam.shake = Math.min(18, cam.shake + n * 0.2);
@@ -2210,12 +2409,16 @@ function homeWorld() {
 function homeWorldName() { const pl = homeWorld(); return pl ? pl.name : null; }
 function respawnHome() {
   G.over = false;
-  G.hull = ST().hull; G.shield = ST().shield; G.fuel = Math.max(G.fuel, 30);
+  G.hull = ST().hull; G.shield = ST().shield;
+  /* every death breaks the launch thrusters again — no drifting straight
+     back into orbit, the repair loop (ferrite + tritium, then press R)
+     has to happen all over */
+  G.thrustersFixed = false; G.fuel = 0; G.hyperwarp = false;
   G.suit.hp = G.suit.max; G.suit.air = G.suit.airMax;
   hostiles = []; bullets = []; neutrals = []; beams.length = 0;
-  G.onFoot = false; shipAnchor = null; G.docked = false;
+  shipAnchor = null; G.docked = false;
   const pl = homeWorld();
-  if (pl) { setSystem(pl.sys); landOn(pl, true); say('You come round on ' + pl.name + '. The ship is patched and the hold is empty.', 'warn'); return; }
+  if (pl) { setSystem(pl.sys); landOn(pl, true); say('You come round on ' + pl.name + '. The thrusters are dead again — get ferrite dust and tritium, then press R.', 'warn'); return; }
   setSystem('0|0'); enterSystem(sys);
 }
 
@@ -2262,12 +2465,22 @@ function flyControls(dt, env) {
 
   const boosting = down('ShiftLeft') || down('ShiftRight');
   const fwd = down('KeyW') || down('ArrowUp');
-  P.boost = (boosting && fwd && G.fuel > 0) ? 1 : 0;
+  /* hyperwarp: a toggle, not a hold. Burns cells at 100x the normal boost
+     rate for 100x the speed, and switches itself off the instant the tank
+     hits zero. */
+  if (tap('KeyO') && !G.onFoot) {
+    if (!G.hyperwarp && G.fuel <= 0) say('No warp cells left to spool a hyperwarp jump.', 'warn');
+    else { G.hyperwarp = !G.hyperwarp; say(G.hyperwarp ? 'Hyperwarp engaged.' : 'Hyperwarp disengaged.', G.hyperwarp ? 'rare' : ''); }
+  }
+  if (G.hyperwarp && G.fuel <= 0) { G.hyperwarp = false; say('Warp cells dry — hyperwarp disengaged.', 'bad'); }
+  P.boost = ((boosting || G.hyperwarp) && fwd && G.fuel > 0) ? 1 : 0;
+  P.hyper = G.hyperwarp && P.boost ? 1 : 0;
   let th = 0;
   if (fwd) th = 1; else if (down('KeyS') || down('ArrowDown')) th = -0.45;
   P.thrust = th;
 
-  const mul = (env.thrustMul || 1) * (P.boost ? (env.boostMul || 3.2) : 1) * (1 + crewBonus('piloting') * 0.08);
+  const boostMul = (env.boostMul || 3.2) * (P.hyper ? 100 : 1);
+  const mul = (env.thrustMul || 1) * (P.boost ? boostMul : 1) * (1 + crewBonus('piloting') * 0.08);
   if (th) {
     P.vx += Math.cos(P.ang) * s.thrust * mul * th * dt;
     P.vy += Math.sin(P.ang) * s.thrust * mul * th * dt;
@@ -2275,12 +2488,12 @@ function flyControls(dt, env) {
       const a = P.ang + Math.PI + (Math.random() - 0.5) * 0.5;
       parts.push({ x: P.x + Math.cos(P.ang + Math.PI) * 16, y: P.y + Math.sin(P.ang + Math.PI) * 16,
         vx: Math.cos(a) * 120 + P.vx * 0.3, vy: Math.sin(a) * 120 + P.vy * 0.3,
-        l: 0, m: 0.3 + Math.random() * 0.3, c: P.boost ? '#d484ff' : s.col, sz: P.boost ? 3.4 : 2.4 });
+        l: 0, m: 0.3 + Math.random() * 0.3, c: P.hyper ? '#ffffff' : (P.boost ? '#d484ff' : s.col), sz: P.boost ? 3.4 : 2.4 });
     }
   }
-  if (P.boost) { G.fuel = Math.max(0, G.fuel - 0.5 * dt); if (G.fuel === 0) say('Warp cells dry.', 'warn'); }
+  if (P.boost) { G.fuel = Math.max(0, G.fuel - 0.5 * dt * (P.hyper ? 100 : 1)); if (G.fuel === 0) { G.hyperwarp = false; say('Warp cells dry.', 'warn'); } }
 
-  const maxS = s.max * (env.speedMul || 1) * (P.boost ? (env.boostMul || 3.2) : 1);
+  const maxS = s.max * (env.speedMul || 1) * (P.boost ? boostMul : 1);
   const sp = Math.hypot(P.vx, P.vy);
   if (sp > maxS && !env.noClamp) { const f = maxS / sp; P.vx *= f; P.vy *= f; }
   const drag = env.drag === undefined ? 0.35 : env.drag;
@@ -2672,29 +2885,65 @@ function nearestHostile(x, y) {
 }
 
 let gunCd = 0;
+/* laser hull-lance energy pool: 3 seconds of beam time, spendable however
+   the pilot likes, then a flat 5-second recharge once it hits empty */
+G.laserCharge = G.laserCharge === undefined ? 3 : G.laserCharge;
+G.laserRecharging = false;
 function combat(dt) {
   const s = ST();
   gunCd -= dt;
-  if (down('Space') && gunCd <= 0 && !G.onFoot) {
-    gunCd = s.rate;
+  const holding = down('Space') && !G.onFoot;
+
+  if (s.gunType === 'laser') {
+    /* held physical beam. Costs charge only while actually firing; once
+       the 3-second pool is spent it locks out for a flat 5 seconds. */
+    if (G.laserRecharging) {
+      G.laserCharge += dt * (3 / 5); /* refills over 5s */
+      if (G.laserCharge >= 3) { G.laserCharge = 3; G.laserRecharging = false; }
+    }
+    if (holding && !G.laserRecharging && G.laserCharge > 0) {
+      G.laserCharge = Math.max(0, G.laserCharge - dt);
+      if (G.laserCharge <= 0) G.laserRecharging = true;
+      if (!beams.beamSfxCd || beams.beamSfxCd <= 0) { AU.play('shoot', 0.5); beams.beamSfxCd = 0.4; }
+      if (beams.beamSfxCd) beams.beamSfxCd -= dt;
+      /* an instant hitscan lance, not a moving projectile — it starts
+         dead center on the ship's nose and reaches clean across the
+         screen at any zoom level, instead of a fast bullet with a trail
+         that could visually clip back through the ship it fired from */
+      const bx = P.x + Math.cos(P.ang) * 22, by = P.y + Math.sin(P.ang) * 22;
+      const range = 6000;
+      const ex = bx + Math.cos(P.ang) * range, ey = by + Math.sin(P.ang) * range;
+      beams.push({ x1: bx, y1: by, x2: ex, y2: ey, c: s.col, w: 6 });
+      const dmg = s.gun * dt * 6;
+      const allTgt = hostiles.concat(neutrals);
+      for (const t of allTgt) {
+        if (t.dead) continue;
+        if (segDist(bx, by, ex, ey, t.x, t.y) < (t.rad || 36) + 4) hitShip(t, dmg, t.x, t.y, 'player');
+      }
+    }
+  } else if (holding && gunCd <= 0) {
     AU.play('shoot', 0.7);
     const bx = P.x + Math.cos(P.ang) * 22, by = P.y + Math.sin(P.ang) * 22;
     if (s.gunType === 'twin') {
+      /* double bullet stream: identical shot pattern to the single stream,
+         just fired at half the rate (twice the interval) */
+      gunCd = s.rate * 2;
       for (const off of [-9, 9]) {
         const ox = Math.cos(P.ang + Math.PI / 2) * off, oy = Math.sin(P.ang + Math.PI / 2) * off;
         bullets.push({ x: bx + ox, y: by + oy,
           vx: Math.cos(P.ang) * 1550 + P.vx, vy: Math.sin(P.ang) * 1550 + P.vy, l: 1.4, d: s.gun, mine: true, c: s.col });
       }
     } else if (s.gunType === 'missile') {
-      const tgt = nearestHostile(P.x, P.y);
+      /* one missile per press, flat 1-second cooldown regardless of tier,
+         locking onto the nearest hostile or whoever last shot the player */
+      gunCd = 1;
+      let tgt = (G.lastAttacker && !G.lastAttacker.dead && !G.lastAttacker.gone) ? G.lastAttacker : null;
+      if (!tgt) tgt = nearestHostile(P.x, P.y);
       bullets.push({ x: bx, y: by,
         vx: Math.cos(P.ang) * 700 + P.vx, vy: Math.sin(P.ang) * 700 + P.vy, l: 2.6, d: s.gun, mine: true, c: s.col,
         sz: 5, blast: s.gunBlast || 120, missile: true, homing: 2.4, accel: 380, maxSpd: 1400, tgt: tgt || null });
-    } else if (s.gunType === 'laser') {
-      bullets.push({ x: bx, y: by,
-        vx: Math.cos(P.ang) * 2400 + P.vx, vy: Math.sin(P.ang) * 2400 + P.vy, l: 1.1, d: s.gun, mine: true, c: s.col,
-        pierce: !!s.gunPierce });
     } else {
+      gunCd = s.rate;
       bullets.push({ x: bx, y: by,
         vx: Math.cos(P.ang) * 1550 + P.vx, vy: Math.sin(P.ang) * 1550 + P.vy, l: 1.4, d: s.gun, mine: true, c: s.col });
     }
@@ -2775,7 +3024,7 @@ function combat(dt) {
       if (hitMe || hitAlly || (b.blast && b.l <= 0)) {
         if (b.blast) blastAt(b.x, b.y, b.blast, b.d, false, 'hostile');
         else if (hitAlly) { hitShip(hitAlly, b.d, b.x, b.y, 'hostile'); boom(b.x, b.y, 6, '#ff6a4d', 100); }
-        else { hurt(b.d, 'weapons fire'); boom(b.x, b.y, 6, '#ff6a4d', 100); }
+        else { if (b.owner) G.lastAttacker = b.owner; hurt(b.d, 'weapons fire'); boom(b.x, b.y, 6, '#ff6a4d', 100); }
         b.l = 0;
       }
     }
@@ -2827,8 +3076,10 @@ function hitShip(t, dmg, fx, fy, src) {
   t.alarmed = true;
   if (!t.hostile && src === 'player') {
     t.hostile = true; t.state = 'attack'; t.ally = false; t.allyForced = false;
-    repChange(t.fac, REP_COST.provoke);
-    say(t.name + ' returns fire. ' + FACTIONS[t.fac].n + ' will remember this.', 'bad');
+    if (!t.barbaric) {
+      repChange(t.fac, REP_COST.provoke);
+      say(t.name + ' returns fire. ' + FACTIONS[t.fac].n + ' will remember this.', 'bad');
+    } else say(t.name + ' returns fire. Barbaric raiders — nobody civilised claims them.', 'bad');
   }
   if (t.hp <= 0 && !t.dead) {
     t.dead = true;
@@ -2847,9 +3098,12 @@ function hitShip(t, dmg, fx, fy, src) {
     G.credits += pay;
     const drops = rank >= 4 ? 6 : rank === 3 ? 3 : 1;
     for (let i = 0; i < drops; i++) addRes(pick(Math.random, ORE_KEYS), 12 + Math.floor(Math.random() * 22));
-    /* the owners take note, in proportion to what you just destroyed */
-    repChange(t.fac, shipRepCost(t.tier));
-    if (t.kind === 'pirate') repChange(sys && sys.faction !== 'none' ? sys.faction : 'free', 0.02);
+    /* the owners take note, in proportion to what you just destroyed —
+       unless this was an unaffiliated barbarian, which nobody vouches for */
+    if (!t.barbaric) {
+      repChange(t.fac, shipRepCost(t.tier));
+      if (t.kind === 'pirate') repChange(sys && sys.faction !== 'none' ? sys.faction : 'free', 0.02);
+    }
     say(t.name + ' destroyed. Salvage worth ' + fmt(pay) + '.', rank === 1 ? 'good' : 'rare');
     if (rank >= 4) discover('city:' + t.id, t.name, 'Vessel', 'A hull the size of a world brought down. Nobody does this twice in one lifetime.', 90000);
   }
@@ -2881,14 +3135,14 @@ function blastAt(x, y, rad, dmg, mine, src) {
 function aiCreature(c, dt) {
   c.t += dt;
   const dx = P.x - c.x, dy = P.y - c.y, d = Math.hypot(dx, dy) || 1;
-  const sees = d < (c.temper === 'predator' ? 620 : 380);
+  const sees = d < (c.temper === 'predator' ? 620 : c.temper === 'behemoth' ? 780 : 380);
   let tx = c.hx + Math.cos(c.t * 0.5 + c.ph) * c.rad;
   let ty = c.hy + Math.sin(c.t * 0.4 + c.ph) * c.rad;
 
-  if (c.hp < c.max * 0.35 && c.temper !== 'predator') c.state = 'flee';
+  if (c.hp < c.max * 0.35 && c.temper !== 'predator' && c.temper !== 'behemoth') c.state = 'flee';
   else if (c.angry && d < 900) c.state = 'chase';
   else if (sees) {
-    if (c.temper === 'aggressive' || c.temper === 'predator') c.state = 'chase';
+    if (c.temper === 'aggressive' || c.temper === 'predator' || c.temper === 'behemoth') c.state = 'chase';
     else if (c.temper === 'skittish') c.state = 'flee';
     else if (c.temper === 'curious') c.state = 'approach';
     else c.state = 'wander';
@@ -2904,6 +3158,22 @@ function aiCreature(c, dt) {
   c.vy = lerp(c.vy, Math.sin(a) * spd, 3 * dt);
   c.x += c.vx * dt; c.y += c.vy * dt;
   c.face = c.vx < 0 ? -1 : 1;
+
+  /* the behemoth lobs three bombs at once while it is still closing the
+     distance, then just keeps swinging once it is on top of you */
+  if (c.temper === 'behemoth' && c.state === 'chase') {
+    c.bombCd = (c.bombCd || 0) - dt;
+    if (c.bombCd <= 0 && d > c.sz + 40 && d < 900) {
+      c.bombCd = rr(Math.random, 1.8, 2.6);
+      const base = Math.atan2(dy, dx);
+      for (const off of [-0.32, 0, 0.32]) {
+        addShot({ x: c.x + Math.cos(base + off) * c.sz, y: c.y + Math.sin(base + off) * c.sz,
+          vx: Math.cos(base + off) * 340, vy: Math.sin(base + off) * 340,
+          l: 1.6, d: c.dmg, mine: false, c: '#ff6a4d', sz: 6, blast: 70, fuse: 1.6 });
+      }
+      AU.play('attack', 0.9);
+    }
+  }
 
   if (c.state === 'chase' && d < c.sz + 26) {
     c.hitCd = (c.hitCd || 0) - dt;
@@ -3393,7 +3663,7 @@ function updGalaxy(dt) {
   if (G.over) return;
   
   /* Deep space random spawns */
-  if (!G.tutorial) {
+  if (true) {
     const roll = Math.random();
     if (roll < 0.05 * dt) {
       const r = rng((Math.random() * 1e9) | 0);
@@ -3613,7 +3883,9 @@ function updSurfaceShip(dt, b, cells) {
   if (tap('KeyR') && !G.thrustersFixed) {
     if ((G.cargo.ferrite || 0) >= 25 && (G.cargo.tritium || 0) >= 12) {
       takeRes('ferrite', 25); takeRes('tritium', 12);
-      G.thrustersFixed = true; G.fuel = Math.max(G.fuel, 40);
+      /* fixing the thrusters does not fill the tank — that still has to
+         come from refining tritium into warp cells separately */
+      G.thrustersFixed = true;
       AU.play('upgrade');
       say('Launch thrusters live. Press L to leave this rock.', 'rare');
       discover('start', 'Verges IV', 'World', 'A cataclysmic world. Atmosphere is ash. Nothing survived the event that ended it.', 3000);
@@ -3623,11 +3895,10 @@ function updSurfaceShip(dt, b, cells) {
   if (!planet) return;   /* launch succeeded — nothing below applies any more */
   if (tap('KeyX')) { if (planet.citadel) say('You cannot claim a city that somebody is already living on.', 'warn'); else claimPlanet(); }
   if (tap('KeyE')) { disembark(); }
-  if (tap('KeyF')) scanSurface(cells);
+  if (tap('KeyF')) { if (planet.citadel) say('The city\u2019s own scanners jam anything you point at it from the air.', 'warn'); else scanSurface(cells); }
 }
 
 function disembark() {
-  if (!G.thrustersFixed && !G.tutorial) { say('Suit seals are still cycling. Get the thrusters running first.', 'warn'); return; }
   shipAnchor = { x: P.x, y: P.y, ang: P.ang };
   G.onFoot = true;
   P.vx = 0; P.vy = 0; P.x += 46; 
@@ -3744,7 +4015,7 @@ function updOnFoot(dt, b, cells) {
       boom(nodeTarget.x, nodeTarget.y, 6, MAT[nodeTarget.res].c, 90);
     } else say('Hold is full.', 'warn');
   }
-  if (tap('KeyF')) scanSurface(cells);
+  if (tap('KeyF')) { if (planet.citadel) say('Nothing scans inside a city\u2019s hull. The plating is shielded floor to ceiling.', 'warn'); else scanSurface(cells); }
   if (tap('KeyV')) {
     if (!hasTool('fish')) say('You need a fishing rod. Craft one from fibre, bone and resin.', 'warn');
     else if (!waterTarget) say('Stand at the water\u2019s edge to cast.', 'warn');
@@ -4077,11 +4348,35 @@ function talkOptions(npc) {
     }
     opts.push({ l: 'Threaten them', ghost: true, f: () => {
         civBump(st, -22); repChange(npc.fac, -0.05);
-        if (relOf(npc.id) > 40 || civRel(st) > 20) {
-          setTalkLine('After everything? Get off our ground.');
+        if (npc.fearful) {
+          /* fearful archetype: they cave and hand over what they are
+             carrying rather than fight for it */
+          const pool = (planet ? planet.res : ['ferrite']).concat(['ration','oxtank']);
+          const got = addRes(pick(Math.random, pool), ri(Math.random, 10, 30));
+          setTalkLine('Take it. Just — take it and go.');
+          npc.state = 'flee';
+          if (got) say(npc.name + ' handed over ' + got + ' units and bolted.', 'warn');
         } else {
+          /* brave archetype: they call the settlement's own guns on you */
           setTalkLine('Try it. See how many of us are armed.');
           alertSettlement(st, 2);
+        }
+        updRel(npc);
+        setTimeout(closeTalk, 1100);
+      } });
+  } else if (st && st.lone) {
+    /* a lone wanderer, no settlement backing them up */
+    opts.push({ l: 'Threaten them', ghost: true, f: () => {
+        repChange(npc.fac, -0.05);
+        if (npc.fearful) {
+          const got = addRes(pick(Math.random, MAT_KEYS.filter(k => MAT[k].v < 60)), ri(Math.random, 5, 20));
+          setTalkLine('Okay! Okay — here, just do not shoot.');
+          npc.x += (npc.x - P.x) * 4; npc.y += (npc.y - P.y) * 4;
+          if (got) say(npc.name + ' dropped ' + got + ' units and ran.', 'warn');
+        } else {
+          setTalkLine('You picked the wrong stranger to lean on.');
+          st.hostile = true; npc.alertT = 999;
+          say(npc.name + ' draws on you.', 'bad');
         }
         updRel(npc);
         setTimeout(closeTalk, 1100);
@@ -4157,7 +4452,7 @@ function hailShip(t) {
     } });
   opts.push({ l: 'Demand they hand over cargo', f: () => {
       repChange(t.fac, -0.02); repChange('outlaw', 5);
-      if (Math.random() < 0.45) {
+      if (t.fearful) {
         const got = addRes(t.cargo, 60);
         setTalkLine('Fine. Take it. I want no part of you.');
         t.state = 'flee';
@@ -4455,6 +4750,14 @@ function shipPath(g, s) {
       g.quadraticCurveTo(-18, -6, -10, -15); g.quadraticCurveTo(6, -12, 24, 0); break;
     case 'exotic':
       g.moveTo(24, 0); g.lineTo(0, 9); g.lineTo(-18, 14); g.lineTo(-12, 0); g.lineTo(-18, -14); g.lineTo(0, -9); g.closePath(); break;
+    /* a narrow, forked-tail interceptor — a new rung-one silhouette */
+    case 'interceptor':
+      g.moveTo(23, 0); g.lineTo(6, 3); g.lineTo(-4, 9); g.lineTo(-14, 17); g.lineTo(-9, 4); g.lineTo(-13, 0);
+      g.lineTo(-9, -4); g.lineTo(-14, -17); g.lineTo(-4, -9); g.lineTo(6, -3); g.closePath(); break;
+    /* a squat, double-hulled corvette — a new rung-two silhouette */
+    case 'corvette':
+      g.moveTo(20, 5); g.lineTo(4, 9); g.lineTo(-16, 9); g.lineTo(-20, 4); g.lineTo(-20, -4); g.lineTo(-16, -9);
+      g.lineTo(4, -9); g.lineTo(20, -5); g.lineTo(10, 0); g.closePath(); break;
     default:
       g.moveTo(20, 0); g.lineTo(12, 9); g.lineTo(-12, 11); g.lineTo(-18, 6); g.lineTo(-18, -6);
       g.lineTo(-12, -11); g.lineTo(12, -9); g.closePath();
@@ -5305,8 +5608,11 @@ function drawBullets() {
       ctx.beginPath(); ctx.arc(b.x, b.y, b.blast, 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
       continue;
     }
-    ctx.strokeStyle = b.c; ctx.lineWidth = b.sz || 3;
-    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 0.016, b.y - b.vy * 0.016); ctx.stroke();
+    /* the hull laser draws as a long, thick lance rather than a short
+       streak — 20x the trail length and 2x the width of a normal shot */
+    const trailMul = b.beamShot ? 0.32 : 0.016;
+    ctx.strokeStyle = b.c; ctx.lineWidth = (b.sz || 3) * (b.beamShot ? 2 : 1);
+    ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * trailMul, b.y - b.vy * trailMul); ctx.stroke();
   }
 }
 function drawParts() {
@@ -5543,7 +5849,7 @@ function renderHUD(dt) {
     if (!G.thrustersFixed) { pk = 'R'; pt = 'Repair launch thrusters'; }
     else pt = 'Step outside on foot';
     if (mineTarget) { p2k = 'Space'; p2t = 'Mine ' + MAT[mineTarget.res].n; }
-    else if (!G.colonies[planet.id] && !G.tutorial) { p2k = 'X'; p2t = 'Claim this world for ' + fmt(claimCost()); }
+    else if (!G.colonies[planet.id]) { p2k = 'X'; p2t = 'Claim this world for ' + fmt(claimCost()); }
   } else if (G.mode === 'system' && sys) {
     if (cityTarget) pt = 'Set down on ' + cityTarget.name;
     else if (stTarget) pt = 'Dock with ' + (sys.stName || 'the station');
@@ -5584,7 +5890,7 @@ function keyList() {
     add('V', waterTarget && hasTool('fish') ? 'Cast a line' : 'Fish (need rod + water)', !!(waterTarget && hasTool('fish')));
     add('P', 'Farmland');
     add('B', 'Construction');
-    if (!G.colonies[planet.id] && !G.tutorial) add('X', 'Claim this world');
+    if (!G.colonies[planet.id]) add('X', 'Claim this world');
     else if (G.colonies[planet.id]) add('X', 'Already yours');
   } else if (G.mode === 'surface') {
     add('WASD', 'Fly');
@@ -5595,7 +5901,7 @@ function keyList() {
     add('L', 'Launch', !!G.thrustersFixed);
     add('F', 'Scan surroundings');
     add('B', 'Construction');
-    if (!G.colonies[planet.id] && !G.tutorial) add('X', 'Claim this world');
+    if (!G.colonies[planet.id]) add('X', 'Claim this world');
   } else if (G.mode === 'system') {
     add('WASD', 'Fly');
     add('Shift', 'Boost');
@@ -6133,12 +6439,13 @@ function uiHangar(inline) {
     'Shields are not a part; they come from the shield module in refit. Buy a part outright or build it from your hold.</p>';
 
   h += '<h4 class="sec">Ship types</h4>';
+  h += '<p class="note">Purely cosmetic — a hull, a silhouette, a colour. Every stat you fly with comes from the parts fitted below and the modules in refit, not from which frame they are bolted to.</p>';
   for (const k of SHIP_KEYS) {
     const sd = SHIPS[k];
     const owned = G.owned.indexOf(k) >= 0;
     const active = k === G.ship;
     const price = Math.round(sd.price * (G.docked ? 1 : 1.2));
-    const bits3 = ['hull ' + sd.hull, 'shield ' + sd.shield, 'speed ' + Math.round(sd.max), 'hold ' + sd.cargo, sd.slots + ' module slots'];
+    const bits3 = [sd.cl, 'cosmetic hull only'];
     h += '<div class="row ' + (active ? 'sel' : owned ? '' : 'locked') + '"><span class="dot" style="background:' + sd.col + '"></span>' +
       '<span class="nm">' + sd.n + (active ? '<span class="pill e">flying</span>' : owned ? '<span class="pill e">owned</span>' : '<span class="pill c">' + sd.cl + '</span>') +
       '<small>' + sd.cl + ' · ' + sd.d + '</small><small class="cost">' + bits3.join(' · ') + '</small></span>' +
@@ -6165,16 +6472,16 @@ function uiHangar(inline) {
     h += '<h4 class="sec">' + PART_SLOTS[slot].n + '</h4>';
     /* only the immediate next tier is shown — buy or build it, and the tier
        after that unlocks in its place. Anything further out stays hidden. */
-    const higher = PART_KEYS.filter(k => PARTS[k].slot === slot && PARTS[k].tier > curTier);
-    if (!higher.length) { h += '<p class="empty">Fully upgraded.</p>'; continue; }
+    let higher = PART_KEYS.filter(k => PARTS[k].slot === slot && PARTS[k].tier > curTier);
+    if (!higher.length) { extraPartTier(slot, curTier + 1); higher = PART_KEYS.filter(k => PARTS[k].slot === slot && PARTS[k].tier > curTier); }
     const nextTier = Math.min.apply(null, higher.map(k => PARTS[k].tier));
     const nextKeys = higher.filter(k => PARTS[k].tier === nextTier);
     for (const k of nextKeys) {
       const pt = PARTS[k];
       const owned = !!G.ownedParts[k];
       const price = Math.round(pt.cr * (G.docked ? (1.05 - (sys.wealth || 2) * 0.03) : 1.25));
-      const canBuy = G.credits >= price;
       const canMake = hasAll(pt.in) && Object.keys(pt.in).length > 0;
+      const canBuy = G.credits >= price && hasAll(pt.in);
       const pv = previewWith(slot, k);
       const newFuel = slot === 'warp' ? pt.fuel + modSum('fuel') : maxFuel();
       const bits2 = [];
@@ -6241,7 +6548,7 @@ function uiRefit(inline) {
       const nextTier = fam.tiers[ownedTier + 1];
       if (nextTier) {
         const price = Math.round(nextTier.cr * (G.docked ? 1 : 1.2));
-        const canBuy = G.credits >= price, canMake = hasAll(nextTier.in);
+        const canBuy = G.credits >= price && hasAll(nextTier.in), canMake = hasAll(nextTier.in);
         h += '<div class="row locked"><span class="dot" style="background:#6fd8ff"></span>' +
           '<span class="nm">' + nextTier.n + '<span class="pill c">upgrade</span><small>' + bitsW(nextTier) + '</small>' +
           (Object.keys(nextTier.in).length ? '<small class="cost">' + costText(nextTier.in) + '</small>' : '') + '</span>' +
@@ -6253,7 +6560,7 @@ function uiRefit(inline) {
     } else {
       const td = fam.tiers[0];
       const price = Math.round(td.cr * (G.docked ? 1 : 1.2));
-      const canBuy = G.credits >= price, canMake = hasAll(td.in) && Object.keys(td.in).length > 0;
+      const canBuy = G.credits >= price && hasAll(td.in), canMake = hasAll(td.in) && Object.keys(td.in).length > 0;
       h += '<div class="row locked"><span class="dot" style="background:#6fd8ff"></span>' +
         '<span class="nm">' + fam.n + '<span class="pill c">unlock</span><small>' + fam.d + '</small><small class="cost">' + bitsW(td) + '</small>' +
         (Object.keys(td.in).length ? '<small class="cost">' + costText(td.in) + '</small>' : '') + '</span>' +
@@ -6392,9 +6699,15 @@ function uiBuild() {
     const d = BUILDS[k];
     const personal = !!d.personal;
     if ((buildTab === 'personal') !== personal) continue;
+    /* tier II and III are locked until at least one of the tier below is
+       actually standing — no skipping straight to the rare-material end */
+    if (d.upgradeOf && !site.build.some(x => x.t === d.upgradeOf)) continue;
     const owned = site.build.filter(x => x.t === k).length;
+    /* the credits price climbs with each one you already own — building a
+       fifth solar array is a bigger ask than the first — but the raw
+       material cost never inflates; ferrite is always ferrite */
     const cr = Math.round(d.cr * Math.pow(1.35, owned));
-    const cost = {}; for (const m in d.in) cost[m] = Math.round(d.in[m] * Math.pow(1.22, owned));
+    const cost = d.in;
     const afford = G.credits >= cr && hasAll(cost);
     const eff = [];
     if (d.pwr > 0) eff.push('+' + d.pwr + ' power'); else if (d.pwr < 0) eff.push(d.pwr + ' power');
@@ -6409,7 +6722,7 @@ function uiBuild() {
     if (d.store) eff.push(d.store + ' storage');
     if (d.craft) eff.push('fabrication on site');
     h += '<div class="row ' + (afford ? '' : 'locked') + '"><span class="dot" style="background:' + (personal ? '#ffc46b' : '#4fe3d0') + '"></span>' +
-      '<span class="nm">' + d.n + (owned ? '<span class="pill e">×' + owned + '</span>' : '') +
+      '<span class="nm">' + d.n + (d.tier > 1 ? '<span class="pill c">tier ' + d.tier + '</span>' : '') + (owned ? '<span class="pill e">×' + owned + '</span>' : '') +
       '<small>' + d.d + '</small><small>' + eff.join(' · ') + '</small>' +
       '<small class="cost">' + costText(cost) + '</small></span>' +
       '<span class="pr">' + fmt(cr) + '</span>' +
@@ -7218,7 +7531,8 @@ function doAction(act, k, n) {
       if (act === 'partbuy') {
         const price = +n;
         if (G.credits < price) { say('Not enough units.', 'warn'); break; }
-        G.credits -= price;
+        if (!hasAll(pt.in)) { say('Not enough materials in the hold for that part — check what it needs.', 'warn'); break; }
+        G.credits -= price; payAll(pt.in); refreshTools();
       } else {
         if (!hasAll(pt.in)) { say('Not enough materials in the hold.', 'warn'); break; }
         payAll(pt.in); refreshTools();
@@ -7245,7 +7559,8 @@ function doAction(act, k, n) {
       if (act === 'gunbuy') {
         const price = +n;
         if (G.credits < price) { say('Not enough units.', 'warn'); break; }
-        G.credits -= price;
+        if (!hasAll(tierDef.in)) { say('Not enough materials in the hold for that build — check what it needs.', 'warn'); break; }
+        G.credits -= price; payAll(tierDef.in); refreshTools();
       } else {
         if (!hasAll(tierDef.in)) { say('Not enough materials in the hold.', 'warn'); break; }
         payAll(tierDef.in); refreshTools();
@@ -7300,7 +7615,7 @@ function doAction(act, k, n) {
       if (!site) { say('Claim this world first.', 'warn'); break; }
       const owned = site.build.filter(x => x.t === k).length;
       const cr = Math.round(d.cr * Math.pow(1.35, owned));
-      const cost = {}; for (const m in d.in) cost[m] = Math.round(d.in[m] * Math.pow(1.22, owned));
+      const cost = d.in;
       if (G.credits < cr || !hasAll(cost)) { say('Cannot cover the cost.', 'warn'); break; }
       G.credits -= cr; payAll(cost); refreshTools();
       const a = Math.random() * TAU, dist = 220 + Math.random() * 300;
@@ -7396,59 +7711,126 @@ function doAction(act, k, n) {
    dropped into the real galaxy with everything reset.
 ------------------------------------------------------------ */
 const TUT = [
-  { t: 'Fly with W, A and D. Hold Shift to burn harder.',
-    h: 'You are on a training world. Nothing here can hurt you. Move about 600 metres in any direction.',
+  { t: 'Move 500 metres in any direction — W, A, S, D to fly, Shift to burn harder.',
+    h: 'The ship drifts and turns like a real hull. Get clear of the wreck before anything else.',
     setup: () => { G.tutStart = { x: P.x, y: P.y }; },
-    c: () => Math.hypot(P.x - G.tutStart.x, P.y - G.tutStart.y) > 600 },
-  { t: 'Fly up to a glowing deposit and hold Space to cut it.',
-    h: 'Deposits show on the scanner in the bottom-right corner. Mine 30 units of anything.',
-    setup: () => { G.tutMined = G.stat.mined; },
-    c: () => G.stat.mined - G.tutMined >= 30 },
+    c: () => Math.hypot(P.x - G.tutStart.x, P.y - G.tutStart.y) > 500 },
   { t: 'Press I to open the cargo hold.',
-    h: 'Everything you mine, grow, catch or craft lands here. Tritium and similar fuels refine into warp cells from this screen.',
+    h: 'I opens your hold — everything you mine, grow, catch or craft lives here, and it is where raw fuel gets refined into warp cells. The quest finishes the moment you press it.',
     c: () => openId === 'cargo' },
-  { t: 'Press E to step outside on foot.',
-    h: 'On foot you walk with WASD, interact and harvest with E, and fire whatever you are holding with Space. Your ship waits where you left it.',
-    c: () => G.onFoot },
-  { t: 'Walk up to a small node and hold E to harvest it by hand.',
-    h: 'Small triangular nodes are hand-harvested. You have to be standing at one — the reach is short. A multitool makes it three times faster.',
-    setup: () => { G.tutMined2 = G.stat.mined; },
-    c: () => G.stat.mined - G.tutMined2 >= 3 },
-  { t: 'Press Space to use your weapon, and R to switch to another.',
-    h: 'Space fires whatever is in your hands, bare fists included. R cycles through everything you are carrying, and the number keys pick one directly.',
-    setup: () => { G.tutGun = G.t; },
-    c: () => G.t - G.tutGun > 3 },
-  { t: 'Press F to run a scan.',
-    h: 'Scanning logs worlds, creatures, settlements and ships to the codex, and every first sighting pays.',
+  { t: 'Press G to open the Empire overview.',
+    h: 'G opens the empire screen — every colony and base you own, their population, income and build queues, all in one place.',
+    c: () => openId === 'empire' },
+  { t: 'Mine some tritium.',
+    h: 'Tritium is a fuel-grade element — find a deposit that reads tritium on the scanner and hold Space over it to cut it. You need at least 12 in the hold.',
+    c: () => (G.cargo.tritium || 0) >= 12 },
+  { t: 'Mine some ferrite dust.',
+    h: 'Ferrite dust is the most common ore in the game — nearly every deposit carries some. You need at least 25 in the hold.',
+    c: () => (G.cargo.ferrite || 0) >= 25 },
+  { t: 'Use the parts and press R to repair the launch thrusters.',
+    h: 'With 25 ferrite dust and 12 tritium in the hold, press R. The thrusters were torn out in the crash — nothing flies without them, and every time you die they break again and this has to happen over.',
+    c: () => G.thrustersFixed },
+  { t: 'Refine 10 tritium into warp cells, from the cargo screen (I).',
+    h: 'Fixing the thrusters does not fill the tank. Open the hold (I), find tritium, and use the refine action — 10 tritium becomes a stack of warp cells. You need fuel in the tank before you can launch.',
+    setup: () => { G.tutFuelBase = G.fuel; },
+    c: () => G.fuel > G.tutFuelBase },
+  { t: 'Press L to break atmosphere.',
+    h: 'L launches from the surface, straight up into orbit. It costs a handful of warp cells every time.',
+    c: () => G.mode === 'system' },
+  { t: () => 'Land back on ' + (homeWorldName() || 'the planet below') + '.',
+    h: 'Point the nose down and fly into the planet slower than about 150 m/s. Watch the descent readout on the right — too fast and you punch a hole in your own hull.',
+    c: () => G.mode === 'surface' },
+  { t: 'Press F to scan nearby flora and fauna.',
+    h: 'F runs a scan wherever you are — creatures and plants on a surface, ships and stations in orbit, whole systems in deep space. Every first sighting logs to the codex and pays out credits.',
     setup: () => { G.tutScans = G.stat.scans; },
     c: () => G.stat.scans > G.tutScans || G.codexN > 0 },
-  { t: 'Press K and craft something.',
-    h: 'The fabricator turns raw material into parts, tools, seeds and ship modules. The alloy forge tab fuses any two materials into something new.',
-    setup: () => { G.tutCraft = G.stat.crafted; },
-    c: () => G.stat.crafted > G.tutCraft },
-  { t: 'Board the ship with E, then press L to launch.',
-    h: 'In orbit the planets pull on you. Come in slower than 150 m/s and you land; faster and you punch a hole in your own hull.',
-    c: () => G.mode === 'system' },
-  { t: 'Fly back down and land gently on Cadet Field.',
-    h: 'Watch the altitude and descent readout on the right. Keep the descent number under 150 and fly straight into the planet.',
-    c: () => G.mode === 'surface' }
+  { t: 'Press E to leave the ship, then fire your weapon with Space.',
+    h: 'E steps you outside on foot. Space fires whatever is in your hands — even bare fists count.',
+    setup: () => { G.tutGunT = G.t; },
+    c: () => G.onFoot && (G.t - (G.tutGunT || 0) > 0.4) },
+  { t: 'Claim this planet — press X once you have enough resources.',
+    h: 'X claims the world you are standing on for your own empire, once you can cover the claim cost. Check the prompt in the corner for what is needed.',
+    c: () => !!G.colonies[planet && planet.id] },
+  { t: 'Build a housing unit and set up a perimeter wall.',
+    h: 'Open construction (B) on your new colony and put down a Habitation dome and a Perimeter wall. The dome houses colonists; the wall keeps raiders from just walking in.',
+    c: () => { for (const k in G.colonies) { const b = G.colonies[k].build.map(x => x.t); if (b.indexOf('habitat') >= 0 && b.indexOf('wall') >= 0) return true; } return false; } },
+  { t: 'Trade at a trading station.',
+    h: 'Fly to a station (the scanner marks them) and dock. The trade terminal buys and sells everything in your hold at that system\u2019s prices.',
+    setup: () => { G.tutSold = G.stat.sold; },
+    c: () => G.stat.sold > G.tutSold },
+  { t: 'Buy a power unit to power the house.',
+    h: 'A Habitation dome and most other buildings draw power. Put down a Solar array on the same colony to keep the lights on.',
+    c: () => { for (const k in G.colonies) { const b = G.colonies[k].build.map(x => x.t); if (b.indexOf('solar') >= 0) return true; } return false; } },
+  { t: 'Colonize another planet.',
+    h: 'Fly to a second world — any system will do — and claim it the same way: land, meet the cost, press X.',
+    c: () => Object.keys(G.colonies).length >= 2 },
+  { t: 'Kill 5 enemy ships.',
+    h: 'Pirates and hostile patrols show up in most systems. Engage with Space and finish them off — 5 kills clears this step.',
+    setup: () => { G.tutKills = G.stat.kills; },
+    c: () => G.stat.kills - (G.tutKills || 0) >= 5 },
+  { t: 'Craft an upgrade to upgrade the ship.',
+    h: 'Open the hangar (H) or refit (U) and either buy or build a part or weapon upgrade — anything that fits and materials cover.',
+    setup: () => { G.tutUpg = Object.keys(G.ownedParts).length + Object.values(G.shipWeapons).reduce((a, b) => a + b + 1, 0); },
+    c: () => (Object.keys(G.ownedParts).length + Object.values(G.shipWeapons).reduce((a, b) => a + b + 1, 0)) > (G.tutUpg || 0) },
+  { t: 'Grow your empire\u2019s population to 500.',
+    h: 'Population climbs on its own once a colony has housing, food and power — a Hydroponics bay speeds it up considerably. Check the total on the empire screen (G).',
+    c: () => empirePop() >= 500 },
+  { t: 'Craft something in the fabricator.',
+    h: 'Press K to open the fabricator. It turns raw material into parts, tools, seeds and components — pick anything you can afford and build it.',
+    setup: () => { G.tutCraft2 = G.stat.crafted; },
+    c: () => G.stat.crafted > (G.tutCraft2 || 0) },
+  { t: 'Get someone to work on your ship.',
+    h: 'Talk to an NPC at a settlement and hire them on — a crew member adds a passive bonus and needs feeding and paying every cycle.',
+    c: () => G.crew.length > 0 },
+  { t: 'Finish the tutorial.',
+    h: 'That is the whole loop: mine, craft, fly, land, claim, build, trade, fight, crew up. Finishing wipes this run and drops you into a fresh save — the real game, starting from the same broken ship. Press Skip training below when you are ready.',
+    setup: () => { G.tutFinishAt = G.t + 4; },
+    c: () => G.t > (G.tutFinishAt || 0) }
 ];
 function startTutorial() {
   G.tutorial = true; G.tutStep = 0;
-  G.credits = 5000; G.thrustersFixed = true; G.fuel = 100;
-  G.cargo = {}; addRes('ferrite', 10);
+  /* the tutorial starts exactly like a real new game — broken thrusters,
+     no fuel, no shortcuts — because everything it teaches has to still be
+     true the moment it hands you off to your first real save */
+  G.credits = 1200; G.cargo = {}; G.mined = {}; G.minedN = 0;
+  G.ship = 'vagrant'; G.owned = ['vagrant']; G.fit = { vagrant: {} };
+  G.paint = { vagrant: '#9fb3c8' }; G.shipNames = { vagrant: 'The Last Errand' };
+  G.maxFuelBase = 100; G.fuel = 0;
+  G.suit = { hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 };
+  G.suitKey = 'standard'; syncSuit();
+  G.crew = []; G.colonies = {}; G.bases = {}; G.farms = {}; G.stash = {};
+  G.codex = {}; G.codexN = 0; G.quests = []; G.questDone = 0;
+  G.relations = {}; G.knownNpcs = {}; G.waypoint = null; G.waypoints6 = {};
+  G.thrustersFixed = false; G.deaths = 0; G.crashes = 0; G.objIdx = 0;
+  G.tools = {}; G.alloysMade = 0; G.day = 1; G.dayT = 0.32; G.over = false;
+  G.parts = Object.assign({}, DEFAULT_PARTS); G.ownedParts = {};
+  G.gun = 'fists'; G.gunHeat = 0;
+  G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
+  G.laserCharge = 3; G.laserRecharging = false; G.lastAttacker = null; G.hyperwarp = false;
+  G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
+  G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
+  shots = []; piles = [];
+  G.encTimer = 45; G.raidTimer = 420;
+  G.stat = { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0,
+    talked: 0, docked: false, landed: 0, built: 0, footTime: 0,
+    groundKills: 0, monoliths: 0, motherKills: 0, cityKills: 0, razed: 0 };
+  for (const f of FACTION_KEYS) G.rep[f] = 0;
   setSystem('train');
   landOn(TRAINING_PLANET, true);
+  G.homeId = TRAINING_PLANET.id;
+  G.hull = ST().hull; G.shield = ST().shield;
+  cam.x = P.x; cam.y = P.y; cam.z = 1;
+  $('objective').classList.add('hidden');
   $('tutband').classList.remove('hidden');
   tutEnter();
-  say('Training flight. Nothing on this world is dangerous.', 'good');
+  say('Training flight on the Cadet Field range. Nothing here can actually hurt you — use that.', 'good');
 }
 function tutEnter() {
   const s = TUT[G.tutStep];
   if (!s) return;
   if (s.setup) s.setup();
   $('tb-step').textContent = 'Step ' + (G.tutStep + 1) + ' / ' + TUT.length;
-  $('tb-text').textContent = s.t;
+  $('tb-text').textContent = typeof s.t === 'function' ? s.t() : s.t;
   $('tb-hint').textContent = s.h;
 }
 function tutTick() {
@@ -7465,9 +7847,10 @@ function tutTick() {
 function endTutorial(finished) {
   G.tutorial = false;
   $('tutband').classList.add('hidden');
+  $('objective').classList.remove('hidden');
   if (finished) {
     showEvent('training complete', 'That is the whole of it',
-      'Mine, craft, fly, land, talk, plant, build. Everything else is a variation on those. ' +
+      'Mine, craft, fly, land, claim, build, trade, fight, crew up. Everything else is a variation on those. ' +
       'Your record is wiped and you are put down where every pilot starts: a dead world called Verges IV, with a broken ship and no money. ' +
       'Good luck out there.',
       [{ l: 'Drop me into the galaxy', f: () => newGame() }]);
@@ -7552,7 +7935,7 @@ function newGame() {
   G.credits = 1200; G.cargo = {}; G.mined = {}; G.minedN = 0;
   G.ship = 'vagrant'; G.owned = ['vagrant']; G.fit = { vagrant: {} };
   G.paint = { vagrant: '#9fb3c8' }; G.shipNames = { vagrant: 'The Last Errand' };
-  G.maxFuelBase = 100; G.fuel = 26;
+  G.maxFuelBase = 100; G.fuel = 0;
   G.suit = { hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 };
   G.suitKey = 'standard'; syncSuit();
   G.crew = []; G.colonies = {}; G.bases = {}; G.farms = {}; G.stash = {};
@@ -7563,6 +7946,7 @@ function newGame() {
   G.parts = Object.assign({}, DEFAULT_PARTS); G.ownedParts = {};
   G.gun = 'fists'; G.gunHeat = 0;
   G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
+  G.laserCharge = 3; G.laserRecharging = false; G.lastAttacker = null;
   G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
   G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
   shots = []; piles = [];
@@ -7603,6 +7987,12 @@ function frame(now) {
   if (G.mode === 'surface' && !planet) { G.mode = sys ? 'system' : 'galaxy'; G.onFoot = false; shipAnchor = null; }
   if (G.mode === 'system' && !sys) setSystem('0|0');
 
+  /* runs every frame regardless of open panels — several steps (open the
+     cargo hold, open the empire screen) only become true the instant a
+     panel opens, which is exactly when the sim would otherwise stop
+     calling this */
+  tutTick();
+
   if (!busy && !G.over) {
     if (G.mode === 'surface') updSurface(dt);
     else if (G.mode === 'system') updSystem(dt);
@@ -7611,7 +8001,6 @@ function frame(now) {
     economyTick(dt);
     raidCheck(dt);
     objCheck();
-    tutTick();
     hotkeys();
     scuttleTick(dt);
   } else if (fishing) {
@@ -7645,7 +8034,7 @@ const SCUTTLE_HOLD = 5;
 function scuttleTick(dt) {
   const el = $('scuttle');
   if (!el) return;
-  const held = down('KeyZ') && !G.over && G.started;
+  const held = down('KeyZ') && !G.over && G.started && !G.tutorial;
   if (held) scuttleT = Math.min(SCUTTLE_HOLD, scuttleT + dt);
   else scuttleT = Math.max(0, scuttleT - dt * 3.5);
 
