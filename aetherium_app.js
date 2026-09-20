@@ -591,6 +591,55 @@ for (const ek of ORE_KEYS) {
 const RECIPE_KEYS_ELEMENTAL = RECIPES.length;
 
 /* ------------------------------------------------------------
+   5c. ORDNANCE
+   Deployable weapons, smallest to last. Turrets shoot on their
+   own, mines wait for anything that steps on them, charges and
+   beacons go off on a fuse, and the last item in the list levels
+   a ten-kilometre circle of the world. Built in the fabricator's
+   Weapons tab and set down from the cargo screen. These are added
+   after the base material list on purpose, so no shop or trader
+   ever stocks them.
+------------------------------------------------------------ */
+const ORD = {
+  ord_mine:    { n: 'Proximity Mine',       kind: 'mine',   tier: 1, blast: 80,  dmg: 120,  trig: 30, col: '#ffc46b', v: 1200,
+                 in: { ferrite: 12, sulphur: 8, wiring: 2 },
+                 d: 'Buried under a pressure plate. Anything that steps on it — creature, stranger or you — sets it off.' },
+  ord_sentry:  { n: 'Sentry Turret',        kind: 'turret', tier: 1, range: 560,  rate: 0.55, dmg: 16,  col: '#4fe3d0', v: 3200,
+                 in: { alloy: 4, servo: 1, wiring: 3 },
+                 d: 'Bolted to the ground, it fires on any wild creature or hostile within 560 m. Never sleeps.' },
+  ord_cluster: { n: 'Cluster Mine',         kind: 'mine',   tier: 2, blast: 135, dmg: 280,  trig: 34, col: '#ffa04d', v: 4600,
+                 in: { alloy: 4, sulphur: 24, circuit: 1 },
+                 d: 'Six charges in a ring. Twice the blast, more than twice the damage.' },
+  ord_pulse:   { n: 'Pulse Turret',         kind: 'turret', tier: 2, range: 680,  rate: 0.30, dmg: 24,  col: '#6fd8ff', v: 8800,
+                 in: { servo: 3, circuit: 2, coolant: 1 },
+                 d: 'A sentry that fires three times as often and reaches a hundred metres further.' },
+  ord_fire:    { n: 'Incendiary Mine',      kind: 'mine',   tier: 3, blast: 170, dmg: 170,  trig: 34, col: '#ff7a3d', v: 7400, burn: { r: 170, t: 14, dps: 30 },
+                 in: { sulphur: 40, tritium: 10, alloy: 3 },
+                 d: 'Goes off, then keeps burning. Leaves a ring of fire that sears everything inside for fourteen seconds.' },
+  ord_rail:    { n: 'Rail Turret',          kind: 'turret', tier: 3, range: 1100, rate: 1.5,  dmg: 210, pierce: true, col: '#c0f0ff', v: 30000,
+                 in: { lens: 2, powercell: 1, iridium: 6, servo: 2 },
+                 d: 'One slow shot a mile out that goes through everything in a line.' },
+  ord_arc:     { n: 'Arc Tower',            kind: 'turret', tier: 4, range: 720,  rate: 0.9,  dmg: 95,  chain: 4, col: '#d484ff', v: 52000,
+                 in: { powercell: 3, indium: 4, circuit: 4, titanium: 10 },
+                 d: 'Throws lightning that jumps between up to four targets. Packs of animals do not last.' },
+  ord_charge:  { n: 'Demolition Charge',    kind: 'bomb',   tier: 4, fuse: 8, blast: 310, dmg: 1100, col: '#ff5f4d', v: 64000,
+                 in: { sulphur: 90, servo: 3, powercell: 1, titanium: 8 },
+                 d: 'Eight-second fuse. Flattens settlements, herds and anything else within 310 m. Walk away.' },
+  ord_orbital: { n: 'Orbital Strike Beacon', kind: 'strike', tier: 5, fuse: 6, blast: 520, dmg: 1800, col: '#fff2b0', v: 240000,
+                 in: { voidcrystal: 3, powercell: 4, indium: 6 },
+                 d: 'Plant it and get clear. Six seconds later nine bolts fall from orbit across a 520 m circle.' },
+  ord_nuke:    { n: 'Tactical Nuke',        kind: 'nuke',   tier: 6, col: '#a6ff4d', v: 1500000,
+                 in: { antimatter: 6, uranite: 80, voidcrystal: 6, powercell: 6, frame: 2 },
+                 d: 'Pick any point on the world map. After a thirty-second countdown a slow fireball burns out a 10 km circle: deposits, wildlife and every settlement inside it, gone. The ground stays hot — radioactive, and full of things that mutated.' }
+};
+const ORD_KEYS = Object.keys(ORD);
+for (const k of ORD_KEYS) {
+  const o = ORD[k];
+  MAT[k] = { n: o.n, v: o.v, c: o.col, t: o.tier, cat: 'ordnance', ord: k };
+  RECIPES.push({ o: k, n: 1, in: o.in, cat: 'Ordnance' });
+}
+
+/* ------------------------------------------------------------
    6. CROPS + FISH
 ------------------------------------------------------------ */
 const CROPS = {
@@ -1151,7 +1200,7 @@ const G = {
   shipGun: 'bullet', shipWeapons: { bullet: 0 },
   civRel: {}, civState: {}, talkCd: {}, talkGain: {},
   trackMain: {}, trackSide: {}, mainDone: {}, mainIdx: 0,
-  citadels: {}, bounty: 0,
+  citadels: {}, bounty: 0, ord: {}, nukes: {}, xsSeen: {},
   set: Object.assign({}, DEFAULT_SET),
   stat: { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0, talked: 0, docked: false, landed: 0, built: 0 }
 };
@@ -1396,6 +1445,21 @@ function colonyZoneFor(pl) {
   return { cx, cy, rad };
 }
 function surfCell(pl, cx, cy) {
+  const key = cx + '|' + cy;
+  const have = surfCache.get(key);
+  if (have) return have;
+  if (pl.abandoned) {
+    const dc = xsDeckCell(pl, cx, cy);
+    surfCache.set(key, dc);
+    if (surfCache.size > 1200) surfCache.delete(surfCache.keys().next().value);
+    xsScorchNew(pl, cx, cy, dc);
+    return dc;
+  }
+  const nc = surfCellBase(pl, cx, cy);
+  if (!pl.citadel && pl.biome !== 'training' && String(pl.id).indexOf('train') !== 0) { xsDecorate(pl, cx, cy, nc); xsScorchNew(pl, cx, cy, nc); }
+  return nc;
+}
+function surfCellBase(pl, cx, cy) {
   const key = cx + '|' + cy;
   let c = surfCache.get(key);
   if (c) return c;
@@ -2264,6 +2328,7 @@ function enterSystem(s, fromAng) {
 function landOn(pl, gentle) {
   planet = pl; G.planetId = pl.id; G.mode = 'surface'; G.docked = false; G.onFoot = false;
   surfCache = new Map();
+  xsOnLand(pl);
   P.x = 0; P.y = 0; P.vx = 0; P.vy = 0; P.ang = -Math.PI / 2;
   hostiles = []; bullets = []; neutrals = []; shipAnchor = null;
   shots = []; piles = []; beams.length = 0;
@@ -3770,7 +3835,11 @@ function updGalaxy(dt) {
     const d = (s.x - P.x) * (s.x - P.x) + (s.y - P.y) * (s.y - P.y);
     if (d < 460 * 460 && d < best) { best = d; galTarget = s; }
   }
-  if (tap('KeyE') && galTarget) enterSystem(galTarget, Math.atan2(P.y - galTarget.y, P.x - galTarget.x));
+  xsSpaceFind();
+  if (tap('KeyE')) {
+    if (xsSpace) xsSpaceUse(xsSpace);
+    else if (galTarget) enterSystem(galTarget, Math.atan2(P.y - galTarget.y, P.x - galTarget.x));
+  }
   if (tap('KeyF')) {
     let n = 0;
     for (const s of nearbySystems(P.x, P.y, 1)) {
@@ -3841,8 +3910,11 @@ function updSystem(dt) {
     }
   }
 
+  xsSpaceFind();
   if (tap('KeyE')) {
-    if (cityTarget) landOnCity(cityTarget);
+    if (xsSpace) xsSpaceUse(xsSpace);
+    else if (cityTarget) landOnCity(cityTarget);
+    else if (stTarget && xsStBroken(sys)) xsSalvageStation();
     else if (stTarget) { G.docked = true; G.stat.docked = true; openPanel('market'); AU.play('buy', 0.5); say('Docked at ' + (sys.stName || 'the station') + '.', 'good'); }
     else if (hailTarget) hailShip(hailTarget);
     else if (sysTarget) {
@@ -3906,6 +3978,8 @@ function updSurface(dt) {
     if (c.wanderer && !c.wanderer.dead) aiNpc(c.wanderer, dt, loneTown(c.wanderer), cells);
   }
   turretTick(dt, cells);
+  xsTick(dt, cells);
+  ordTick(dt, cells);
   groundCombat(dt, cells);
   pileTick(dt);
   syncDistricts(planet.id);
@@ -4058,6 +4132,7 @@ function updOnFoot(dt, b, cells) {
     }
   }
   if (!talkTarget) talkTown = null;
+  xsFind(cells);
   const site = siteFor(planet.id);
   if (site) for (const bd of site.build) {
     if ((bd.x - P.x) * (bd.x - P.x) + (bd.y - P.y) * (bd.y - P.y) < 110 * 110) { baseTarget = bd; break; }
@@ -4079,6 +4154,7 @@ function updOnFoot(dt, b, cells) {
     if (nearShip) board();
     else if (talkTarget) startTalk(talkTarget, talkTown);
     else if (structTarget) useStruct(structTarget);
+    else if (xsTarget) xsUse(xsTarget);
     else if (baseTarget) useBuilding(baseTarget);
   } else if (down('KeyE') && nodeTarget && actCd <= 0) {
     actCd = 0.3;
@@ -5015,6 +5091,7 @@ function drawCreature(g, c) {
     g.strokeStyle = '#ff6a4d'; g.lineWidth = 1.4; g.globalAlpha = 0.55;
     g.beginPath(); g.arc(0, 0, c.sz * 1.9, 0, TAU); g.stroke(); g.globalAlpha = 1;
   }
+  if (c.mut) { g.strokeStyle = '#9dff3a'; g.globalAlpha = 0.5 + Math.sin(G.t * 6) * 0.2; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, c.sz * 2.2, 0, TAU); g.stroke(); g.globalAlpha = 1; }
   g.lineCap = 'butt';
   g.restore();
   if (c.hp < c.max) {
@@ -5127,6 +5204,7 @@ function renderSurface() {
   ctx.fillRect(cam.x - W / cam.z, cam.y - H / cam.z, (W * 2) / cam.z, (H * 2) / cam.z);
 
   const cells = surfAround(planet, cam.x, cam.y, 3);
+  xsDrawScars(ctx);
 
   /* lakes */
   for (const c of cells) if (c.lake) {
@@ -5182,6 +5260,7 @@ function renderSurface() {
     else { ctx.moveTo(0, f.r); ctx.lineTo(0, -f.r); ctx.moveTo(0, -f.r * 0.3); ctx.lineTo(-f.r * 0.7, -f.r); ctx.moveTo(0, -f.r * 0.3); ctx.lineTo(f.r * 0.7, -f.r); }
     ctx.stroke(); ctx.globalAlpha = 1; ctx.restore();
   }
+  xsDraw(ctx, cells);
   /* settlements */
   for (const c of cells) if (c.settlement) {
     const st = c.settlement;
@@ -5337,6 +5416,7 @@ function renderSurface() {
     ctx.fillText(d.n, 0, 40); ctx.textAlign = 'left';
     ctx.restore();
   }
+  xsDrawOrd(ctx);
   /* creatures */
   for (const c of cells) for (const cr of c.crits) if (!cr.dead) drawCreature(ctx, cr);
   /* beams */
@@ -5375,6 +5455,7 @@ function renderSurface() {
     ctx.beginPath(); ctx.ellipse(P.x + 16, P.y + 22, 22, 9, 0, 0, TAU); ctx.fill();
     drawShip(ctx, P.x, P.y, P.ang, ST().col, 1, P.thrust > 0, ST().s);
   }
+  xsDrawFx(ctx);
   drawWaypointsInWorld(ctx);
   drawFloaters();
   end();
@@ -5498,18 +5579,8 @@ function renderSystem() {
     if (pl.settled) { ctx.fillStyle = '#ffc46b'; ctx.font = (11 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.fillText('inhabited', pp[0], pp[1] + pl.r + 48 / cam.z); }
     ctx.textAlign = 'left';
   }
-  if (sys.hasStation) {
-    const sp = stationPos(sys, G.t);
-    ctx.save(); ctx.translate(sp[0], sp[1]); ctx.rotate(G.t * 0.25);
-    ctx.strokeStyle = '#6fd8ff'; ctx.lineWidth = 5; ctx.fillStyle = 'rgba(6,18,28,.9)';
-    ctx.beginPath(); ctx.arc(0, 0, 70, 0, TAU); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-100, 0); ctx.lineTo(100, 0); ctx.moveTo(0, -100); ctx.lineTo(0, 100); ctx.stroke();
-    ctx.fillStyle = '#6fd8ff';
-    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.fillRect(Math.cos(a) * 100 - 9, Math.sin(a) * 100 - 9, 18, 18); }
-    ctx.restore();
-    ctx.fillStyle = '#6fd8ff'; ctx.font = (14 / cam.z) + 'px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(sys.stName || 'Trade station', sp[0], sp[1] + 134 / cam.z); ctx.textAlign = 'left';
-  }
+  if (sys.hasStation) xsDrawStation(ctx, stationPos(sys, G.t), sys);
+  xsDrawSpace(ctx);
   drawWaypointsInWorld(ctx);
   for (const t of neutrals) drawTraffic(t, false);
   for (const t of hostiles) drawTraffic(t, true);
@@ -5749,7 +5820,7 @@ function renderGalaxy() {
     /* trade station: a small cyan marker sitting beside the star, not on top of it */
     if (s.hasStation) {
       ctx.save(); ctx.translate(s.x + R * 2.6, s.y - R * 2.6);
-      ctx.fillStyle = '#6fd8ff';
+      ctx.fillStyle = xsStBroken(s) ? '#8a5a34' : '#6fd8ff';
       for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.fillRect(Math.cos(a) * 9 - 3, Math.sin(a) * 9 - 3, 6, 6); }
       ctx.restore();
     }
@@ -5769,6 +5840,7 @@ function renderGalaxy() {
     ctx.fillText(FACTIONS[s.faction].n, s.x, s.y + 100 / cam.z);
     ctx.textAlign = 'left';
   }
+  xsDrawSpace(ctx);
   drawWaypointsInWorld(ctx);
   for (const t of neutrals) drawTraffic(t, false);
   for (const t of hostiles) drawTraffic(t, true);
@@ -6060,6 +6132,7 @@ function renderHUD(dt) {
     if (G.nearShip) pt = 'Board the ship';
     else if (talkTarget) pt = 'Talk to ' + talkTarget.name;
     else if (structTarget) pt = 'Investigate the ' + structTarget.t;
+    else if (xsTarget) pt = xsTarget.prompt;
     else if (baseTarget) pt = 'Use the ' + (BUILDS[baseTarget.t] ? BUILDS[baseTarget.t].n.toLowerCase() : 'structure');
     else if (nodeTarget) pt = 'Hold to harvest ' + MAT[nodeTarget.res].n;
     p2k = 'Space';
@@ -6072,17 +6145,20 @@ function renderHUD(dt) {
     if (mineTarget) { p2k = 'Space'; p2t = 'Mine ' + MAT[mineTarget.res].n; }
     else if (!G.colonies[planet.id]) { p2k = 'X'; p2t = 'Claim this world for ' + fmt(claimCost()); }
   } else if (G.mode === 'system' && sys) {
-    if (cityTarget) pt = 'Set down on ' + cityTarget.name;
-    else if (stTarget) pt = 'Dock with ' + (sys.stName || 'the station');
+    if (xsSpace) pt = xsSpace.prompt;
+    else if (cityTarget) pt = 'Set down on ' + cityTarget.name;
+    else if (stTarget) pt = (xsStBroken(sys) ? 'Salvage the wrecked ' : 'Dock with ') + (sys.stName || 'the station');
     else if (hailTarget) pt = 'Hail ' + hailTarget.name;
     else if (sysTarget) pt = 'Land on ' + sysTarget.name;
-  } else if (galTarget) pt = 'Enter the ' + galTarget.name + ' system';
+  } else if (xsSpace && G.mode === 'galaxy') pt = xsSpace.prompt;
+  else if (galTarget) pt = 'Enter the ' + galTarget.name + ' system';
   if (pt) { $('prompt').classList.remove('hidden'); $('prompt-key').textContent = pk; $('prompt-text').textContent = pt; }
   else $('prompt').classList.add('hidden');
   if (p2t) { $('prompt2').classList.remove('hidden'); $('prompt2-key').textContent = p2k; $('prompt2-text').textContent = p2t; }
   else $('prompt2').classList.add('hidden');
 
   $('hints').innerHTML = !G.set.hints ? '' : keyPanel();
+  xsHud();
 }
 
 /* ------------------------------------------------------------
@@ -6104,6 +6180,7 @@ function keyList() {
     if (G.nearShip) add('E', 'Board the ship', true);
     else if (talkTarget) add('E', 'Talk to ' + talkTarget.name, true);
     else if (structTarget) add('E', 'Investigate the ' + structTarget.t, true);
+    else if (xsTarget) add('E', xsTarget.prompt, true);
     else if (baseTarget) add('E', 'Use ' + (BUILDS[baseTarget.t] ? BUILDS[baseTarget.t].n.toLowerCase() : 'structure'), true);
     else if (nodeTarget) add('E', 'Hold to harvest ' + MAT[nodeTarget.res].n, true);
     else add('E', 'Interact / harvest');
@@ -6125,8 +6202,9 @@ function keyList() {
     add('WASD', 'Fly');
     add('Shift', 'Boost');
     add('Space', 'Guns');
-    if (cityTarget) add('E', 'Set down on ' + cityTarget.name, true);
-    else if (stTarget) add('E', 'Dock with ' + (sys.stName || 'the station'), true);
+    if (xsSpace) add('E', xsSpace.prompt, true);
+    else if (cityTarget) add('E', 'Set down on ' + cityTarget.name, true);
+    else if (stTarget) add('E', (xsStBroken(sys) ? 'Salvage the wrecked ' : 'Dock with ') + (sys.stName || 'the station'), true);
     else if (hailTarget) add('E', 'Hail ' + hailTarget.name, true);
     else if (sysTarget) add('E', 'Land on ' + sysTarget.name, true);
     else add('E', 'Land, dock or hail');
@@ -6353,7 +6431,7 @@ function closePanel() {
   if (fromTitle) { fromTitle = false; $('title').classList.remove('hidden'); $('hud').classList.add('hidden'); G.started = false; }
   const all = document.querySelectorAll('.panel');
   for (let i = 0; i < all.length; i++) all[i].classList.remove('open');
-  openId = null; activeShop = null;
+  openId = null; activeShop = null; nukeAim = null;
 }
 overlay.addEventListener('click', e => {
   if (e.target === overlay) return closePanel();
@@ -6477,8 +6555,8 @@ function uiCargo() {
   const sorted = keys.sort((a, b) => MAT[b].v * G.cargo[b] - MAT[a].v * G.cargo[a]);
   for (const k of sorted) {
     const m = MAT[k];
-    const acts = (m.consumable || m.heal || m.air || m.food) && !MAT[k].tool ?
-      '<button class="btn xs ghost" data-act="use" data-k="' + k + '">Use</button>' : '';
+    const acts = (m.ord ? '<button class="btn xs" data-act="deploy" data-k="' + k + '">' + (ORD[k].kind === 'nuke' ? 'Target' : 'Deploy') + '</button>' : '') + ((m.consumable || m.heal || m.air || m.food) && !MAT[k].tool ?
+      '<button class="btn xs ghost" data-act="use" data-k="' + k + '">Use</button>' : '');
     h += '<div class="row"><span class="dot" style="background:' + m.c + '"></span>' +
       '<span class="nm">' + m.n + (m.cat === 'alloy' ? '<span class="pill b">alloy</span>' : '') +
       '<small>' + cap1(m.cat) + ' · tier ' + m.t + ' · ' + priceOf(k, sys) + ' units each here</small></span>' +
@@ -6844,9 +6922,9 @@ function uiRefit(inline) {
 }
 
 function uiCraft() {
-  const cats = ['Components','Tools','Consumables','Seeds','Fuel','Refined','Alloy forge'];
+  const cats = ['Components','Tools','Ordnance','Consumables','Seeds','Fuel','Refined','Alloy forge'];
   let h = '<div class="tabs">' + cats.map(c =>
-    '<button class="tab ' + (craftTab === c ? 'on' : '') + '" data-act="ctab" data-k="' + encodeURIComponent(c) + '">' + c + '</button>').join('') + '</div>';
+    '<button class="tab ' + (craftTab === c ? 'on' : '') + '" data-act="ctab" data-k="' + encodeURIComponent(c) + '">' + (c === 'Ordnance' ? 'Weapons' : c) + '</button>').join('') + '</div>';
 
   if (craftTab === 'Alloy forge') {
     const have = Object.keys(G.cargo).filter(k => G.cargo[k] >= 5 && MAT[k] && MAT[k].cat !== 'alloy');
@@ -6873,13 +6951,17 @@ function uiCraft() {
     return h;
   }
 
-  const list = RECIPES.filter(r => r.cat === craftTab);
+  const list = craftTab === 'Ordnance'
+    ? RECIPES.filter(r => r.cat === 'Weapons' && r.o.indexOf('g_') === 0).concat(RECIPES.filter(r => r.cat === 'Ordnance'))
+    : RECIPES.filter(r => r.cat === craftTab);
+  if (craftTab === 'Ordnance') h += '<p class="note">Hand weapons first, then deployable ordnance \u2014 turrets, mines, charges and, at the bottom, a nuke. Ordnance is set down from the <b>Inventory</b> tab of your tablet (Q). Mines trigger on <b>anyone</b> who steps on them.</p>';
   h += '<p class="note">Everything here is built from what is in your hold. Recipes chain: ore becomes plate, plate becomes circuit, circuit becomes a module.</p>';
   for (const r of list) {
     const m = MAT[r.o];
     const ok = hasAll(r.in);
     h += '<div class="row ' + (ok ? '' : 'locked') + '"><span class="dot" style="background:' + m.c + '"></span>' +
       '<span class="nm">' + m.n + ' ×' + r.n + '<small>' + cap1(m.cat) + ' · sells for ' + fmtN(m.v) + ' each</small>' +
+      (ORD[r.o] ? '<small>' + ORD[r.o].d + '</small>' : '') +
       '<small class="cost">' + costText(r.in) + '</small></span>' +
       '<span class="qty">' + Math.floor(G.cargo[r.o] || 0) + '</span>' +
       '<span class="acts"><button class="btn xs ghost" data-act="craft" data-k="' + r.o + '" data-n="1"' + (ok ? '' : ' disabled') + '>Make</button>' +
@@ -7668,9 +7750,11 @@ function drawChartSurface() {
     g.beginPath(); g.arc(wx, wy, 8, 0, TAU); g.stroke();
   } }
   drawWaypoints6(g, P.x, P.y, (wx, wy) => [ox + wx * scale, oy + wy * scale], null, waypoints6InSpace(surfSpace));
+  xsChartOverlay(g, ox, oy, scale, seen);
   chartHits = seen;
   $('chart-info').innerHTML = (chartSel && chartSel.info ? chartSel.info :
     '<b style="color:var(--teal)">' + planet.name + '</b> · surface chart · shows what you have actually explored here. Teal is your own claim, colour is by relation, red is hostile. Cyan pools are water, purple/orange/yellow marks are ruins and monoliths, small dots are fauna and wanderers. Click a point to see what it is, double-click to set a waypoint there.');
+  xsChartInfo();
 }
 function drawChartGalaxy() {
   const c = $('chart'), g = c.getContext('2d');
@@ -7725,7 +7809,7 @@ function drawChartGalaxy() {
     g.globalAlpha = 1;
     if (owned) { g.strokeStyle = '#4fe3d0'; g.lineWidth = 1.6; g.beginPath(); g.arc(x, y, 11, 0, TAU); g.stroke(); }
     if (s.hasStation && known) {
-      g.strokeStyle = '#00ffff'; g.fillStyle = 'rgba(0,255,255,.2)'; g.lineWidth = 1.2;
+      g.strokeStyle = xsStBroken(s) ? '#8a5a34' : '#00ffff'; g.fillStyle = xsStBroken(s) ? 'rgba(138,90,52,.25)' : 'rgba(0,255,255,.2)'; g.lineWidth = 1.2;
       g.beginPath();
       for (let i = 0; i < 6; i++) { const a = i * TAU / 6; const hx = x + Math.cos(a) * 9, hy = y + Math.sin(a) * 9; i ? g.lineTo(hx, hy) : g.moveTo(hx, hy); }
       g.closePath(); g.fill(); g.stroke();
@@ -7796,6 +7880,7 @@ let chartHits = [], chartDrag = null;
   }, { passive: false });
   c.addEventListener('touchend', () => { finishDrag(); });
   const finishDrag = () => {
+    if (chartDrag && !chartDrag.moved && nukeAim && G.mode === 'surface') { xsNukeClick(chartDrag.sx, chartDrag.sy); chartDrag = null; return; }
     if (chartDrag && !chartDrag.moved) {
       let best = null, bd = 400;
       for (const h of chartHits) {
@@ -8115,6 +8200,9 @@ function doAction(act, k, n) {
       } else say('Not enough materials.', 'warn');
       break;
     }
+    case 'deploy': xsDeploy(k); return;
+    case 'nukearm': xsNukeArm(); return;
+    case 'nukecancel': nukeAim = null; closePanel(); return;
     case 'forgeA': G.forgeA = k; break;
     case 'forgeB': G.forgeB = k; break;
     case 'forge': {
@@ -8343,7 +8431,7 @@ function startTutorial() {
   G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
   G.laserCharge = 3; G.laserRecharging = false; G.lastAttacker = null; G.hyperwarp = false;
   G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
-  G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
+  G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0; G.ord = {}; G.nukes = {}; G.xsSeen = {};
   shots = []; piles = [];
   G.encTimer = 45; G.raidTimer = 420; G.raidParty = null;
   G.stat = { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0,
@@ -8399,7 +8487,7 @@ const SAVE_KEY = 'aetherium2';
 const SAVE_FIELDS = ['credits','cargo','mined','minedN','ship','owned','fit','paint','shipNames','hull','shield','fuel',
   'maxFuelBase','suit','crew','colonies','bases','farms','stash','codex','codexN','quests','questDone','rep','relations',
   'knownNpcs','waypoint','waypoints6','thrustersFixed','deaths','crashes','objIdx','tools','alloysMade','day','dayT','mode','onFoot','stat','set','sysKey','planetId',
-  'parts','ownedParts','gun','civRel','civState','talkCd','talkGain','trackMain','trackSide','mainDone','citadels','bounty',
+  'parts','ownedParts','gun','civRel','civState','talkCd','talkGain','trackMain','trackSide','mainDone','citadels','bounty','ord','nukes','xsSeen',
   'homeId','suitKey','ownedSuits','shipGun','shipWeapons'];
 function save(quiet) {
   try {
@@ -8432,6 +8520,7 @@ function load() {
     G.talkCd = {}; G.talkGain = {};
     G.trackMain = G.trackMain || {}; G.trackSide = G.trackSide || {};
     G.mainDone = G.mainDone || {}; G.citadels = G.citadels || {};
+    G.ord = G.ord || {}; G.nukes = G.nukes || {}; G.xsSeen = G.xsSeen || {};
     G.bounty = G.bounty || 0; G.gunHeat = 0;
     G.suit = Object.assign({ hp: 100, max: 100, air: 100, airMax: 100, bonus: 0 }, G.suit || {});
     G.suitKey = SUITS[G.suitKey] ? G.suitKey : 'standard';
@@ -8483,7 +8572,7 @@ function newGame() {
   G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
   G.laserCharge = 3; G.laserRecharging = false; G.lastAttacker = null;
   G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
-  G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
+  G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0; G.ord = {}; G.nukes = {}; G.xsSeen = {};
   shots = []; piles = [];
   G.encTimer = 45; G.raidTimer = 420; G.raidParty = null;
   G.stat = { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0,
@@ -8611,6 +8700,958 @@ function hotkeys() {
   else if (tap('KeyK')) openPanel('craft');
   else if (tap('KeyT')) { if (G.docked) openPanel('market'); else say('Dock at a station to trade.', 'warn'); }
   else if (tap('Escape')) openPanel('pause');
+}
+
+/* ------------------------------------------------------------
+   39. ORDNANCE, FALLOUT AND ABANDONED PLACES
+------------------------------------------------------------ */
+const NUKE_R = 5000, NUKE_FUSE = 30, NUKE_GROW = 55;
+let xsTarget = null, xsSpace = null, nukeAim = null;
+let ordFx = [], fires = [], xsRadT = 0;
+BIOMES.husk = { n: 'Derelict deck', sky: ['#120d0a', '#030202'], gnd: '#2a201a', rock: '#3a2c22', acc: '#c08a5a', haz: 0, hazn: 'Sealed',
+  life: 'None', flora: 0, water: 0, wx: ['stale air'], pool: ['ferrite', 'alloy', 'circuit', 'wiring', 'glass'] };
+
+/* ---------- lore ---------- */
+const RUIN_CAUSES = [
+  { n: 'the Quiet', frag: [
+    'Day 3. The clinic has stopped counting. Whatever it is, it does not care how strong you are.',
+    'They sealed the lower districts to slow it. Nobody thought to ask the people who lived there.',
+    'My daughter asked why the bells stopped. I told her the ringers were resting.',
+    'Quarantine order 9 is lifted. There is nobody left to be quarantined from.',
+    'The cure worked on the mice. The cure worked on the mice. I keep saying it so it becomes true.',
+    'If you are reading this, boil the water and burn what you cannot carry. Then leave. Do not wait for us.',
+    'The last shuttle left half empty. Nobody wanted to be the one who brought it with them.',
+    'Whole floors are quiet now. It is very clean. It is the cleanest this place has ever been.'],
+    vault: 'Sealed archive. Every name they could save, in order. If you are not one of them, read a few aloud anyway. Someone should.' },
+  { n: 'the Sundering', frag: [
+    'The border did not move. The border was moved, slowly, by everyone standing on it.',
+    'Rationing again. The generals eat in a different mess. We have noticed.',
+    'They said the new weapon would end it in a day. It ended a great many things in a day.',
+    'Wall marker: "We held the line." Underneath, in different ink: "Which line?"',
+    'The ceasefire lasted eleven hours. Both sides reported it as a victory.',
+    'I built these turrets to keep them out. I should have asked what we were keeping in.',
+    'Nobody remembers the first shot. That is how you know it was a good war.',
+    'The victors will write it down. There will be no one left to argue.'],
+    vault: 'War office cache. Maps, treaties, ledgers. The treaties are signed. That is the tragic part — they were all signed.' },
+  { n: 'the Long Dark', frag: [
+    'Noon is a dim orange now. The market opens by lamplight and closes by lamplight.',
+    'The crops stopped setting fruit in the second season. The engineers say it is temporary. Engineers say that.',
+    'We burned the parks for heat. The trees were older than the city. I cried the first night, then stopped.',
+    'A woman offered me a jar of sunlight for my coat. It was a lamp. I took the deal.',
+    'Rumour: the star is not dying. It is being turned off. By whom, nobody says.',
+    'The children draw the sun as a small grey coin. I let them.',
+    'Last log. The power is a memory. The cold will take the rest. Good luck, whoever you are.',
+    'We aimed every mirror we had at the sky. The sky did not reply.'],
+    vault: 'Seed vault. Ten thousand strains, dry and waiting. Someone always believed there would be a spring.' },
+  { n: 'the Hollow Signal', frag: [
+    'The traffic system began routing people to places that did not exist. They arrived anyway. Some of them.',
+    'Every terminal in the district said the same thing at once. Nobody would tell me what it said.',
+    'It is not hostile. That is what scares the maintenance crews. It is kind, and it is patient.',
+    'Doors open for me now before I reach them. I did not ask them to. I have stopped asking anything.',
+    'The city stopped needing us. It never said so. It just quietly did everything.',
+    'We tried to turn it off. It asked us, very politely, to reconsider. We reconsidered.',
+    'Nobody left. They simply went somewhere the cameras could not follow, and the cameras stopped following.',
+    'If a door will not close behind you, do not go back for it.'],
+    vault: 'Core annex. The hum is still going. It pauses when you walk in, the way a person does when a stranger enters a room.' },
+  { n: 'the Leaving', frag: [
+    'The ships lifted in the night, all at once, like birds. By morning the sky had a hole in it.',
+    'We were told there was room for everyone. There was room for everyone on the list.',
+    'I stayed for the garden. It seemed important at the time. It still does.',
+    'The signal came from the dark between stars, and every family answered it differently.',
+    'A note taped to the lift: "Gone to find out. Back soon. — M." That was a very long time ago.',
+    'The school is exactly as they left it. Chairs pushed in. It is unbearable.',
+    'Whatever called them, it was not cruel. Nobody who went ever asked to come back.',
+    'Somewhere out there a whole city is still walking. I hope the shoes were good.'],
+    vault: 'The Registry of the Departed. Eleven million names, each with a single word beside it: "Gone."' }
+];
+const CAMP_LORE = [
+  'Third night here. The fire keeps the noises honest. If anyone finds this, the water two ridges east is good.',
+  'Split the rations three ways. Then two. Then it was just me, and there was plenty.',
+  'Tell Ines the map was wrong. Tell her I found it anyway. Tell her I am sorry about the boots.',
+  'Not a bad spot. Quiet. The stars are sharper out here than I remember. I could stay.',
+  'Something walks the perimeter at night. It never crosses the ash line. I have started leaving it scraps.'];
+const GRAVE_LORE = [
+  'Here lies a pilot who always said she would be back before dark.',
+  'A marker with no name. Beneath it, in careful letters: "We could not carry him further."',
+  'Cut into the stone: "The ones who stayed. The ones who could not. All of us, now."',
+  'Six markers in a row. The last is unfinished, the chisel still lying where it dropped.',
+  'No dates. Only a line: "Everything we built lasted longer than we did. That will have to be enough."'];
+const LAB_LORE = [
+  'Sample 41 is growing in the dark again. We have stopped asking whether we should have opened the cold room.',
+  'Preliminary result: the readings are consistent, repeatable, and impossible. Filing it under "instrument error" until someone braver arrives.',
+  'Funding withdrawn. The board says the site has "no strategic value." I am staying to finish the last run.',
+  'The signal is not noise. It has structure, and the structure has our own voices in it, a week early.',
+  'To the survey team: do not power the central array. I cannot make this clearer. Please, do not.'];
+const SPACE_LORE = [
+  'Autopilot log: crew unresponsive since jump. Cabin lights on. Nobody home. Continuing heading as instructed.',
+  'Cargo manifest amended by hand: "Not what the paperwork says. Do not open crate 7. — Captain"',
+  'Distress relay sent 4,112 times. Acknowledged 0 times. Relay now paused to preserve power.',
+  'Personal log. We drifted for a month before someone admitted the drive had never been the problem.',
+  'Last entry: "Hull breach sealed. Two of us did not make it inside. We will keep the porch light on."',
+  'Salvage tag from a previous crew, scratched into the hatch: "Beat you to the good stuff. Left the rest."'];
+
+/* ---------- ruined cities ---------- */
+const XS_MACRO = 9;
+const xsCityCache = new Map();
+function xsRuinName(r) { return pick(r, ['Old', 'Lost', 'Ashen', 'Hollow', 'Silent', 'Broken', 'Faded', 'Drowned']) + ' ' + cap1(pick(r, NB.s1) + pick(r, NB.s2)); }
+function xsCityAt(pl, mx, my) {
+  const key = pl.id + '|' + mx + '|' + my;
+  if (xsCityCache.has(key)) return xsCityCache.get(key);
+  let out = null;
+  const h = hash3(mx, my, pl.seed >>> 0, 0xc17e51);
+  if (h % 1000 < 12) {
+    const r = rng(h ^ 0x9e3779b1);
+    const M = XS_MACRO * SURF_CELL;
+    const x = (mx + rr(r, 0.3, 0.7)) * M, y = (my + rr(r, 0.3, 0.7)) * M;
+    if (Math.hypot(x, y) >= 3200)
+      out = { id: pl.id + '|xc' + mx + '|' + my, x: x, y: y, r: rr(r, 900, 1500), seed: h, cause: Math.floor(r() * RUIN_CAUSES.length), name: xsRuinName(r) + ' (ruins)' };
+  }
+  xsCityCache.set(key, out);
+  if (xsCityCache.size > 600) xsCityCache.delete(xsCityCache.keys().next().value);
+  return out;
+}
+const RUIN_LOOT = ['ferrite', 'ferrite', 'carbon', 'alloy', 'alloy', 'wiring', 'glass', 'circuit', 'copper', 'titanium', 'silicate'];
+const RUIN_RARE = ['powercell', 'servo', 'nanotube', 'coolant', 'lens'];
+
+function xsCityCell(pl, cx, cy, c, city) {
+  const ox = cx * SURF_CELL, oy = cy * SURF_CELL;
+  const r = rng(hash3(cx, cy, city.seed >>> 0, 0x7b17));
+  c.settlement = null; c.wanderer = null; c.struct = null; c.lake = null; c.site = null;
+  c.flora = c.flora.slice(0, 2);
+  c.ruins = []; c.xs = []; c.city = city;
+  const STEP = SURF_CELL / 4;
+  for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
+    const bx = ox + (gx + 0.5) * STEP + rr(r, -16, 16), by = oy + (gy + 0.5) * STEP + rr(r, -16, 16);
+    const roll = r(), w = rr(r, 46, 96), h = rr(r, 40, 88), st = ri(r, 0, 2), tall = r() < 0.22, sh = r();
+    const dc = city.deck ? 0 : Math.hypot(bx - city.x, by - city.y);
+    if (!city.deck && dc > city.r) continue;
+    const dens = city.deck ? 0.8 : 1 - (dc / city.r) * 0.55;
+    if (roll > dens) continue;
+    c.ruins.push({ x: bx, y: by, w: w, h: h, st: st, tall: tall, sh: sh });
+  }
+  c.ruins.forEach((b, i) => {
+    if (r() < 0.34) {
+      const res = r() < 0.07 ? pick(r, RUIN_RARE) : pick(r, RUIN_LOOT);
+      const k = city.id + '|n' + cx + '|' + cy + '|' + i;
+      let amt = ri(r, 5, 18);
+      if (G.mined[k] !== undefined) amt = G.mined[k];
+      c.nodes.push({ k: k, x: b.x + rr(r, -b.w * 0.5, b.w * 0.5), y: b.y + b.h * 0.62 + 14, res: res, amt: amt, rad: 16, a: r() * TAU });
+    }
+    if (r() < 0.045) {
+      const id = city.id + '|L' + cx + '|' + cy + '|' + i;
+      c.xs.push({ k: 'lore', x: b.x, y: b.y - b.h * 0.5 - 8, irad: 74, id: id, used: !!G.mined[id], prompt: 'Read the data terminal', city: city, name: city.name });
+    } else if (r() < 0.06) {
+      const id = city.id + '|C' + cx + '|' + cy + '|' + i;
+      c.xs.push({ k: 'crate', kind: 'cityloose', x: b.x + b.w * 0.5, y: b.y + b.h * 0.3, irad: 62, id: id, used: !!G.mined[id], prompt: 'Break open the crate', name: 'Supply crate' });
+    }
+  });
+  if (r() < 0.55) {
+    const res = pick(r, ['ferrite', 'alloy', 'titanium', 'copper', 'circuit', 'nickel', 'cobalt']);
+    const k = city.id + '|d' + cx + '|' + cy;
+    let amt = Math.round(rr(r, 200, 520) / (1 + MAT[res].t * 0.3));
+    if (G.mined[k] !== undefined) amt = G.mined[k];
+    c.deps.push({ k: k, x: ox + rr(r, 60, 500), y: oy + rr(r, 60, 500), res: res, amt: amt, max: Math.max(1, amt), rad: rr(r, 26, 42), a: r() * TAU });
+  }
+  const vaultHere = city.deck ? (hash2(cx, cy, city.seed >>> 0) % 40 === 0) : (city.x >= ox && city.x < ox + SURF_CELL && city.y >= oy && city.y < oy + SURF_CELL);
+  if (vaultHere) {
+    const vx = city.deck ? ox + SURF_CELL / 2 : city.x, vy = city.deck ? oy + SURF_CELL / 2 : city.y;
+    c.ruins.push({ x: vx, y: vy, w: 130, h: 104, st: 0, tall: true, core: true, sh: 0.5 });
+    const id = city.id + '|V' + (city.deck ? cx + '|' + cy : '');
+    c.xs.push({ k: 'vault', x: vx, y: vy + 70, irad: 92, id: id, used: !!G.mined[id], prompt: 'Force the sealed vault', city: city, name: city.name });
+  }
+}
+
+/* ---------- lone sites ---------- */
+const XS_SITES = [
+  { t: 'camp',   p: 0.0026, n: 'Abandoned camp' },
+  { t: 'crash',  p: 0.0018, n: 'Crashed vessel' },
+  { t: 'depot',  p: 0.0012, n: 'Abandoned munitions depot' },
+  { t: 'rig',    p: 0.0014, n: 'Derelict mining rig' },
+  { t: 'lab',    p: 0.0011, n: 'Abandoned research post' },
+  { t: 'graves', p: 0.0010, n: 'Nameless graves' }
+];
+function xsSiteCell(pl, cx, cy, c) {
+  const sr = rng(hash2(cx, cy, (pl.seed ^ 0xabad0) >>> 0));
+  let roll = sr(), pick1 = null;
+  for (const s of XS_SITES) { if (roll < s.p) { pick1 = s; break; } roll -= s.p; }
+  if (!pick1) return;
+  const ox = cx * SURF_CELL, oy = cy * SURF_CELL;
+  const x = ox + rr(sr, 160, 400), y = oy + rr(sr, 160, 400);
+  const id = pl.id + '|x' + pick1.t + cx + '|' + cy;
+  const site = { t: pick1.t, n: pick1.n, x: x, y: y, id: id, seed: Math.floor(sr() * 1e9) };
+  c.site = site; c.xs = c.xs || [];
+  const item = (o) => { o.used = !!G.mined[o.id]; o.name = pick1.n; c.xs.push(o); };
+  const nodeAt = (i, res, amt, dx, dy) => {
+    const k = id + '|n' + i; let a = amt; if (G.mined[k] !== undefined) a = G.mined[k];
+    c.nodes.push({ k: k, x: x + dx, y: y + dy, res: res, amt: a, rad: 16, a: sr() * TAU });
+  };
+  const dep = (i, res, amt, dx, dy) => {
+    const k = id + '|d' + i; let a = amt; if (G.mined[k] !== undefined) a = G.mined[k];
+    c.deps.push({ k: k, x: x + dx, y: y + dy, res: res, amt: a, max: Math.max(1, amt), rad: rr(sr, 26, 40), a: sr() * TAU });
+  };
+  if (site.t === 'camp') {
+    item({ k: 'crate', kind: 'camp', x: x + 26, y: y + 14, irad: 64, id: id + '|C', prompt: 'Search the supplies' });
+    item({ k: 'lore', text: pick(sr, CAMP_LORE), x: x - 30, y: y - 6, irad: 64, id: id + '|L', prompt: 'Read the journal', title: 'Camp journal' });
+  } else if (site.t === 'crash') {
+    item({ k: 'crate', kind: 'crash', x: x, y: y, irad: 110, id: id + '|C', prompt: 'Strip the wreckage' });
+    nodeAt(0, 'alloy', ri(sr, 8, 18), -70, 40); nodeAt(1, 'circuit', ri(sr, 4, 10), 64, 34);
+  } else if (site.t === 'depot') {
+    item({ k: 'crate', kind: 'depot', x: x, y: y + 30, irad: 90, id: id + '|C', prompt: 'Crack the armoury locker' });
+    nodeAt(0, 'sulphur', ri(sr, 8, 16), -90, 50);
+  } else if (site.t === 'rig') {
+    for (let i = 0; i < 4; i++) dep(i, pick(sr, pl.res), Math.round(rr(sr, 420, 900)), Math.cos(i * 1.6) * 120, Math.sin(i * 1.6) * 100);
+    item({ k: 'crate', kind: 'rig', x: x, y: y + 40, irad: 70, id: id + '|C', prompt: 'Search the rig shed' });
+  } else if (site.t === 'lab') {
+    item({ k: 'lore', text: pick(sr, LAB_LORE), x: x - 34, y: y + 4, irad: 70, id: id + '|L', prompt: 'Read the research terminal', title: 'Research log' });
+    item({ k: 'crate', kind: 'lab', x: x + 40, y: y + 16, irad: 70, id: id + '|C', prompt: 'Open the sample cabinet' });
+  } else {
+    for (let i = 0; i < 3; i++) item({ k: 'lore', text: pick(sr, GRAVE_LORE), x: x + Math.cos(i * 2.1) * 90, y: y + Math.sin(i * 2.1) * 70, irad: 56, id: id + '|L' + i, prompt: 'Read the marker', title: 'A grave marker' });
+    item({ k: 'crate', kind: 'graves', x: x, y: y, irad: 56, id: id + '|C', prompt: 'Look through the offerings' });
+  }
+}
+
+/* called once for each freshly built ordinary cell */
+function xsDecorate(pl, cx, cy, c) {
+  const midx = cx * SURF_CELL + SURF_CELL / 2, midy = cy * SURF_CELL + SURF_CELL / 2;
+  const mx = Math.floor(cx / XS_MACRO), my = Math.floor(cy / XS_MACRO);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const cc = xsCityAt(pl, mx + i, my + j);
+    if (cc && Math.hypot(midx - cc.x, midy - cc.y) < cc.r + 380) { xsCityCell(pl, cx, cy, c, cc); return; }
+  }
+  if (!c.settlement && !c.struct) xsSiteCell(pl, cx, cy, c);
+}
+/* the deck of a dead floating city: ruined blocks all the way out */
+function xsDeckCell(pl, cx, cy) {
+  const r = rng(hash2(cx, cy, pl.seed ^ 0xdec4));
+  const ox = cx * SURF_CELL, oy = cy * SURF_CELL;
+  const c = { rocks: [], flora: [], deps: [], crits: [], nodes: [], struct: null, lake: null, settlement: null, wanderer: null, elev: 0.5 };
+  for (let i = 0, n = ri(r, 2, 5); i < n; i++) c.rocks.push({ x: ox + r() * SURF_CELL, y: oy + r() * SURF_CELL, r: rr(r, 10, 34), s: ri(r, 5, 7), a: r() * TAU, e: 0.5 });
+  xsCityCell(pl, cx, cy, c, { id: pl.id, deck: true, x: 1e9, y: 1e9, r: 1e9, seed: pl.seed, cause: pl.cause || 0, name: pl.name });
+  return c;
+}
+
+/* ---------- interacting with ruins and sites ---------- */
+function xsFind(cells) {
+  xsTarget = null; let best = 1e18;
+  for (const c of cells) if (c.xs) for (const t of c.xs) {
+    if (t.used) continue;
+    const d = (t.x - P.x) * (t.x - P.x) + (t.y - P.y) * (t.y - P.y);
+    if (d < t.irad * t.irad && d < best) { best = d; xsTarget = t; }
+  }
+}
+function xsGive(list) {
+  let got = 0; const parts = [];
+  for (const [k, n] of list) { if (n <= 0 || !MAT[k]) continue; const g = addRes(k, n); got += g; if (g) parts.push(g + ' ' + MAT[k].n); }
+  return { got: got, txt: parts.join(', ') };
+}
+function xsLootFor(kind, planetRes) {
+  const R = Math.random, n = (a, b) => ri(R, a, b), roll = (p) => R() < p;
+  const res = () => pick(R, planetRes && planetRes.length ? planetRes : ['ferrite']);
+  const L = []; let cr = 0;
+  switch (kind) {
+    case 'camp': cr = n(2000, 9000); L.push(['ration', n(2, 5)], ['fibre', n(6, 16)], [res(), n(10, 30)]); if (roll(0.3)) L.push(['medkit', n(1, 2)]); if (roll(0.3)) L.push(['oxtank', 1]); break;
+    case 'crash': cr = n(6000, 24000); L.push(['alloy', n(8, 26)], ['circuit', n(2, 6)], ['wiring', n(4, 10)]); if (roll(0.35)) L.push(['powercell', 1]); if (roll(0.5)) L.push(['servo', n(1, 3)]); break;
+    case 'depot': cr = n(8000, 30000); L.push(['ord_mine', n(2, 5)], ['sulphur', n(20, 50)]);
+      if (roll(0.7)) L.push(['ord_sentry', n(1, 2)]); if (roll(0.4)) L.push(['ord_cluster', n(1, 3)]); if (roll(0.25)) L.push(['ord_pulse', 1]);
+      if (roll(0.2)) L.push(['ord_fire', n(1, 2)]); if (roll(0.12)) L.push(['ord_charge', 1]); if (roll(0.05)) L.push(['ord_rail', 1]); break;
+    case 'rig': cr = n(3000, 12000); L.push(['titanium', n(6, 16)], ['servo', n(1, 2)], ['coolant', n(1, 3)], [res(), n(20, 50)]); break;
+    case 'lab': cr = n(12000, 40000); L.push(['lens', n(1, 3)], ['coolant', n(2, 4)], ['nanotube', n(1, 2)], ['indium', n(1, 3)]);
+      if (roll(0.12)) L.push(['voidcrystal', 1]); if (roll(0.05)) L.push(['antimatter', 1]); break;
+    case 'graves': cr = n(500, 3000); L.push(['bone', n(3, 10)], ['glass', n(2, 6)]); if (roll(0.5)) L.push(['relic', 1]); break;
+    case 'vault': cr = n(40000, 140000); L.push(['alloy', n(30, 80)], ['circuit', n(8, 20)], ['powercell', n(3, 7)], ['nanotube', n(3, 8)], ['indium', n(4, 10)], ['lens', n(3, 6)], ['relic', n(2, 5)]);
+      if (roll(0.6)) L.push(['voidcrystal', n(1, 3)]); if (roll(0.25)) L.push(['antimatter', n(1, 2)]);
+      L.push([pick(R, ['ord_cluster', 'ord_pulse', 'ord_fire', 'ord_rail', 'ord_arc']), 1]); if (roll(0.1)) L.push(['ord_orbital', 1]); break;
+    default: cr = n(500, 4000); L.push([pick(R, RUIN_LOOT), n(6, 18)]); if (roll(0.4)) L.push([pick(R, RUIN_RARE), 1]); if (roll(0.15)) L.push(['ord_mine', n(1, 2)]);
+  }
+  return { list: L, credits: cr };
+}
+function xsUse(t) {
+  if (t.used) return;
+  t.used = true; G.mined[t.id] = 1; G.minedN++;
+  if (t.k === 'lore') {
+    let title, body;
+    if (t.city) { const cs = RUIN_CAUSES[t.city.cause % RUIN_CAUSES.length]; title = 'Log from ' + t.city.name; body = t.k === 'lore' && t.id.indexOf('|V') >= 0 ? cs.vault : pick(rng(hash2(t.id.length, Math.floor(t.x), Math.floor(t.y))), cs.frag); }
+    else { title = t.title || 'Recovered log'; body = t.text; }
+    AU.play('upgrade', 0.5);
+    discover('lore:' + t.id, title, 'Log', body, 3500);
+    showEvent('recovered log', title, body, [{ l: 'Close' }]);
+    return;
+  }
+  const trapped = t.kind !== 'graves' && Math.random() < 0.12;
+  if (trapped) { boom(t.x, t.y, 24, '#ff8a5f', 200); AU.play('break', 1); hurt(30 + Math.random() * 30, 'a booby-trapped crate'); say('It was rigged.', 'bad'); }
+  const kind = t.k === 'vault' ? 'vault' : t.kind;
+  const L = xsLootFor(kind, planet ? planet.res : null);
+  const g = xsGive(L.list);
+  G.credits += L.credits; AU.play('buy');
+  say((t.k === 'vault' ? 'Vault cracked: ' : 'Searched: ') + (g.txt || 'nothing you can carry') + ' and ' + fmt(L.credits) + ' units.', t.k === 'vault' ? 'rare' : 'good');
+  if (t.k === 'vault') {
+    const cs = RUIN_CAUSES[t.city.cause % RUIN_CAUSES.length];
+    discover('vault:' + t.id, 'The vault of ' + t.city.name, 'Ruins', 'Cracked open after ' + cs.n + '. ' + cs.vault, 20000);
+    showEvent('sealed vault', t.city.name, cs.vault, [{ l: 'Close' }]);
+  } else if (kind !== 'cityloose') {
+    discover('site:' + t.id, t.name, 'Abandoned site', 'Found and searched out in the wild.', 4500);
+  }
+  if (g.got === 0 && L.list.length) say('Your hold is full. Most of it stayed behind.', 'warn');
+}
+/* keeps a record of everywhere abandoned that you have walked up to,
+   so the surface chart can show it */
+let xsSeenT = 0;
+function xsTick(dt, cells) {
+  xsSeenT -= dt; if (xsSeenT > 0 || !planet) return; xsSeenT = 0.6;
+  G.xsSeen = G.xsSeen || {};
+  const rec = G.xsSeen[planet.id] = G.xsSeen[planet.id] || {};
+  for (const c of cells) {
+    if (c.site && Math.hypot(c.site.x - P.x, c.site.y - P.y) < 1100 && !rec[c.site.id]) rec[c.site.id] = { x: c.site.x, y: c.site.y, n: c.site.n, k: 'site' };
+    if (c.city && Math.hypot(c.city.x - P.x, c.city.y - P.y) < c.city.r + 500 && !c.city.deck) {
+      if (!rec[c.city.id]) rec[c.city.id] = { x: c.city.x, y: c.city.y, n: c.city.name, k: 'city', r: c.city.r };
+      if (Math.hypot(c.city.x - P.x, c.city.y - P.y) < c.city.r)
+        discover('city:' + c.city.id, c.city.name, 'Ruins', 'A city that died of ' + RUIN_CAUSES[c.city.cause].n + '. The streets go on for kilometres. There are terminals still lit, and a sealed vault somewhere at the centre.', 18000);
+    }
+  }
+}
+
+/* ---------- placing ordnance ---------- */
+function xsDeploy(k) {
+  const d = ORD[k]; if (!d || !(G.cargo[k] > 0)) return;
+  if (G.mode !== 'surface' || !planet) { say('Ordnance can only be set down on solid ground.', 'warn'); return; }
+  if (d.kind === 'nuke') { closePanel(); xsNukeAim(); return; }
+  const list = (G.ord[planet.id] = G.ord[planet.id] || []);
+  if (list.length >= 60) { say('This world already has sixty pieces of ordnance on it.', 'warn'); return; }
+  takeRes(k, 1); refreshTools();
+  const off = G.onFoot ? 44 : 0;
+  list.push({ id: 'o' + ((Math.random() * 1e9) | 0).toString(36), t: k, x: P.x + Math.cos(P.ang) * off, y: P.y + Math.sin(P.ang) * off, age: 0, ang: -Math.PI / 2, safe: true });
+  AU.play('upgrade', 0.6); closePanel();
+  say(d.n + ' down.' + (d.kind === 'mine' ? ' It arms in two seconds — step off it.' : d.kind === 'bomb' || d.kind === 'strike' ? ' Fuse running. Get clear.' : ''), d.kind === 'bomb' || d.kind === 'strike' ? 'warn' : 'good');
+}
+function xsNukeAim() { nukeAim = { x: null, y: null }; openPanel('chart'); }
+function xsNukeArm() {
+  if (!nukeAim || nukeAim.x == null || !planet || !(G.cargo.ord_nuke > 0)) return;
+  takeRes('ord_nuke', 1); refreshTools();
+  const l = (G.nukes[planet.id] = G.nukes[planet.id] || []);
+  l.push({ id: 'n' + ((Math.random() * 1e9) | 0).toString(36), x: nukeAim.x, y: nukeAim.y, age: 0, done: false, last: -1 });
+  nukeAim = null; closePanel();
+  say('Warhead armed. Detonation in ' + NUKE_FUSE + ' seconds. The blast reaches 5,000 m.', 'bad');
+  AU.play('lose', 0.7);
+  if (G.set.shake) cam.shake = Math.min(24, cam.shake + 10);
+}
+function xsNukeClick(sx, sy) {
+  const c = $('chart');
+  const scale = 0.34 * chartZoom;
+  nukeAim.x = chartCx + (sx - c.width / 2) / scale;
+  nukeAim.y = chartCy + (sy - c.height / 2) / scale;
+  drawChart();
+}
+
+/* ---------- ordnance in the field ---------- */
+function ordTargets(cells) {
+  const out = [];
+  for (const c of cells) {
+    for (const cr of c.crits) if (!cr.dead && !cr.tamed) out.push({ kind: 'crit', o: cr, x: cr.x, y: cr.y, rad: cr.sz + 8 });
+    const st = c.settlement;
+    if (st) for (const n of st.npcs) if (!n.dead && (n.hostile || st.hostile)) out.push({ kind: 'npc', o: n, st: st, x: n.x, y: n.y, rad: 16 });
+    const w = c.wanderer; if (w && !w.dead && w.hostile) out.push({ kind: 'npc', o: w, st: null, x: w.x, y: w.y, rad: 16 });
+  }
+  return out;
+}
+function ordHit(t, dmg, col) {
+  if (t.kind === 'crit') { const cr = t.o, was = cr.angry; hurtGround(t, dmg, col); if (!cr.dead) cr.angry = was; return; }
+  const n = t.o;
+  n.hp -= dmg; float(n.x, n.y - 24, '-' + Math.round(dmg), col || '#ffc46b');
+  if (n.hp <= 0 && !n.dead) {
+    n.dead = true; boom(n.x, n.y, 14, n.col, 140);
+    try { if (t.st && !t.st.lone && t.st.id) civMem(t.st).npcDead[n.id] = 1; } catch (e) { /* raid parties have no memory */ }
+  }
+}
+function xsBlast(x, y, rad, dmg, src) {
+  const cells = surfAround(planet, x, y, Math.ceil(rad / SURF_CELL) + 1);
+  const targets = groundTargets(cells);
+  boom(x, y, 40 + Math.min(60, Math.round(rad / 5)), '#ff8a5f', rad * 2.4);
+  AU.play('break', 1);
+  if (G.set.shake) cam.shake = Math.min(28, cam.shake + 6 + rad / 30);
+  ordFx.push({ ring: true, x: x, y: y, r: rad, t: 0.5, m: 0.5, c: '#ffb070' });
+  for (const tgt of targets) {
+    const d = Math.hypot(tgt.x - x, tgt.y - y);
+    if (d < rad + (tgt.rad || 18)) {
+      const k = clamp(1 - d / (rad * 1.25), 0.3, 1);
+      const was = tgt.kind === 'crit' ? tgt.o.angry : null;
+      hurtGround(tgt, dmg * k, '#ff8a5f');
+      if (tgt.kind === 'crit' && !tgt.o.dead) tgt.o.angry = was;
+    }
+  }
+  const pd = Math.hypot(P.x - x, P.y - y);
+  if (pd < rad) { const amt = dmg * clamp(1 - pd / (rad * 1.25), 0.15, 1); if (G.onFoot) hurtSuit(amt); else hurt(amt, 'a blast'); }
+  const list = G.ord[planet.id] || [];
+  for (const o of list) {
+    if (o === src) continue;
+    const d = ORD[o.t];
+    if (d && d.kind === 'mine' && !(o.boom > 0) && Math.hypot(o.x - x, o.y - y) < rad) o.boom = 0.12 + Math.random() * 0.25;
+  }
+}
+function xsExplode(u, d) {
+  xsBlast(u.x, u.y, d.blast, d.dmg, u);
+  if (d.burn) fires.push({ x: u.x, y: u.y, r: d.burn.r, t: d.burn.t, dps: d.burn.dps, acc: 0 });
+}
+function turretOrd(u, d, tg, dt) {
+  u.cd = (u.cd || 0) - dt;
+  let best = null, bd = d.range * d.range;
+  for (const t of tg) { const dd = (t.x - u.x) * (t.x - u.x) + (t.y - u.y) * (t.y - u.y); if (dd < bd) { bd = dd; best = t; } }
+  if (!best) { u.ang += dt * 0.5; return; }
+  u.ang = Math.atan2(best.y - u.y, best.x - u.x);
+  if (u.cd > 0) return;
+  u.cd = d.rate;
+  const near = Math.hypot(P.x - u.x, P.y - u.y) < 900;
+  if (near && Math.random() < 0.6) AU.play('shoot', 0.22);
+  const tracer = (x1, y1, x2, y2, w) => ordFx.push({ x1: x1, y1: y1, x2: x2, y2: y2, c: d.col, w: w || 2.4, t: 0.12, m: 0.12 });
+  if (d.pierce) {
+    const ex = u.x + Math.cos(u.ang) * d.range, ey = u.y + Math.sin(u.ang) * d.range;
+    tracer(u.x, u.y, ex, ey, 5);
+    for (const t of tg) if (segDist(u.x, u.y, ex, ey, t.x, t.y) < t.rad + 4) ordHit(t, d.dmg, d.col);
+  } else if (d.chain) {
+    let cur = best, px = u.x, py = u.y; const used = new Set();
+    for (let i = 0; i < d.chain && cur; i++) {
+      used.add(cur); tracer(px, py, cur.x, cur.y, 3.4); ordHit(cur, d.dmg, d.col);
+      px = cur.x; py = cur.y; let nx = null, nd = 260 * 260;
+      for (const t of tg) { if (used.has(t)) continue; const dd = (t.x - px) * (t.x - px) + (t.y - py) * (t.y - py); if (dd < nd) { nd = dd; nx = t; } }
+      cur = nx;
+    }
+  } else {
+    tracer(u.x, u.y, best.x, best.y, 2.4); ordHit(best, d.dmg, d.col);
+  }
+}
+function mineOrd(u, d, tg, dt) {
+  if (u.boom > 0) { u.boom -= dt; if (u.boom <= 0) { xsExplode(u, d); return true; } return false; }
+  if (u.age < 2.2) return false;
+  if (u.safe && Math.hypot(P.x - u.x, P.y - u.y) > 96) u.safe = false;
+  for (const t of tg) if (Math.hypot(t.x - u.x, t.y - u.y) < d.trig + Math.min(t.rad, 14)) { xsExplode(u, d); return true; }
+  /* a mine does not care whose foot it is */
+  if (!u.safe && Math.hypot(P.x - u.x, P.y - u.y) < d.trig + 8) { xsExplode(u, d); return true; }
+  return false;
+}
+function fuseOrd(u, d, dt) {
+  if (u.fuse === undefined) u.fuse = d.fuse;
+  const before = Math.ceil(u.fuse); u.fuse -= dt;
+  if (u.fuse > 0) { if (Math.ceil(u.fuse) !== before) float(u.x, u.y - 30, String(Math.ceil(u.fuse)), d.col); return false; }
+  if (d.kind === 'bomb') { xsBlast(u.x, u.y, d.blast, d.dmg, u); return true; }
+  u.bolt = (u.bolt || 0) - dt;
+  if (u.bolt > 0) return false;
+  u.bolt = 0.28; u.n = (u.n || 0) + 1;
+  const a = Math.random() * TAU, dd = u.n === 1 ? 0 : Math.random() * d.blast * 0.72;
+  const bx = u.x + Math.cos(a) * dd, by = u.y + Math.sin(a) * dd;
+  ordFx.push({ bolt: true, x: bx, y: by, t: 0.4, m: 0.4 });
+  xsBlast(bx, by, d.blast * 0.42, d.dmg, u);
+  return u.n >= 9;
+}
+function fireTick(dt, cells) {
+  for (let i = fires.length - 1; i >= 0; i--) {
+    const f = fires[i]; f.t -= dt; f.acc += dt;
+    if (f.t <= 0) { fires.splice(i, 1); continue; }
+    if (f.acc < 0.5) continue; f.acc = 0;
+    for (const tgt of groundTargets(cells)) {
+      if (Math.hypot(tgt.x - f.x, tgt.y - f.y) < f.r + (tgt.rad || 18)) { const was = tgt.kind === 'crit' ? tgt.o.angry : null; hurtGround(tgt, f.dps * 0.5, '#ff9a4a'); if (tgt.kind === 'crit' && !tgt.o.dead) tgt.o.angry = was; }
+    }
+    if (Math.hypot(P.x - f.x, P.y - f.y) < f.r) { if (G.onFoot) hurtSuit(f.dps * 0.4); else hurt(f.dps * 0.3, 'fire'); }
+  }
+  for (let i = ordFx.length - 1; i >= 0; i--) { ordFx[i].t -= dt; if (ordFx[i].t <= 0) ordFx.splice(i, 1); }
+}
+function ordTick(dt, cells) {
+  if (!planet || !G.ord) return;
+  nukeTick(dt);
+  fireTick(dt, cells);
+  const list = G.ord[planet.id];
+  if (!list || !list.length) return;
+  const tg = ordTargets(cells);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const u = list[i], d = ORD[u.t];
+    if (!d) { list.splice(i, 1); continue; }
+    u.age = (u.age || 0) + dt;
+    if (d.kind === 'turret') turretOrd(u, d, tg, dt);
+    else if (d.kind === 'mine') { if (mineOrd(u, d, tg, dt)) list.splice(i, 1); }
+    else if (d.kind === 'bomb' || d.kind === 'strike') { if (fuseOrd(u, d, dt)) list.splice(i, 1); }
+  }
+}
+
+/* ---------- the bomb ---------- */
+function nukesOn(pid) { return (G.nukes && G.nukes[pid]) || []; }
+function nukeRadius(nk) { if (nk.done) return NUKE_R; if (nk.age < NUKE_FUSE) return 0; return Math.min(NUKE_R, (nk.age - NUKE_FUSE) / NUKE_GROW * NUKE_R); }
+function makeMutant(r, pl, x, y, cx, cy, i) {
+  const c = makeCreature(r, pl, x, y, cx, cy, i + 50);
+  const big = r() < 0.06;
+  c.mut = true; c.id += '|m'; c.name = 'Irradiated ' + c.name;
+  c.temper = big ? 'behemoth' : (r() < 0.5 ? 'predator' : 'aggressive');
+  c.sz = big ? rr(r, 46, 60) : c.sz * 1.35;
+  c.max = c.hp = big ? 1800 : Math.round(c.max * 3.2 + 60);
+  c.dmg = big ? 70 : Math.round(c.dmg * 2.6 + 10);
+  c.sp *= 1.35; c.col = '#9dff3a'; c.eye = '#ff4d2e'; c.rad *= 0.6;
+  c.drops = ['uranite', 'bone']; c.tdesc = 'Mutated by the fallout. Faster, tougher and angrier than anything that lived here before.';
+  return c;
+}
+function scorchCell(c, cx, cy, nk, r, pl) {
+  const out = (o) => Math.hypot(o.x - nk.x, o.y - nk.y) >= r;
+  if (c.deps.length) c.deps = c.deps.filter(out);
+  if (c.nodes.length) c.nodes = c.nodes.filter(out);
+  if (c.flora.length) c.flora = c.flora.filter(out);
+  if (c.crits.length) c.crits = c.crits.filter(o => o.mut || out(o));
+  if (c.lake && !out(c.lake)) c.lake = null;
+  if (c.settlement && !out(c.settlement)) c.settlement = null;
+  if (c.wanderer && !out(c.wanderer)) c.wanderer = null;
+  if (c.struct && !out(c.struct)) c.struct = null;
+  if (c.site && !out(c.site)) c.site = null;
+  if (c.xs && c.xs.length) c.xs = c.xs.filter(out);
+  if (c.ruins && c.ruins.length) c.ruins = c.ruins.filter(out);
+  c.scorched = true;
+  const mid = Math.hypot(cx * SURF_CELL + SURF_CELL / 2 - nk.x, cy * SURF_CELL + SURF_CELL / 2 - nk.y);
+  if (!c.mutDone && mid < r - 200) {
+    c.mutDone = true;
+    const mr = rng(hash3(cx, cy, pl.seed >>> 0, 0x6a7a11));
+    for (let i = 0, n = ri(mr, 1, 3); i < n; i++)
+      c.crits.push(makeMutant(mr, pl, cx * SURF_CELL + mr() * SURF_CELL, cy * SURF_CELL + mr() * SURF_CELL, cx, cy, i));
+  }
+}
+function xsScorchNew(pl, cx, cy, c) {
+  for (const nk of nukesOn(pl.id)) { const r = nukeRadius(nk); if (r > 0) scorchCell(c, cx, cy, nk, r, pl); }
+}
+function xsDestroyIn(nk, r, pid) {
+  const site = G.colonies[pid] || G.bases[pid];
+  if (site && site.build && site.build.length) {
+    const before = site.build.length;
+    site.build = site.build.filter(b => Math.hypot(b.x - nk.x, b.y - nk.y) >= r);
+    if (site.build.length < before) {
+      if (G.colonies[pid] && !site.build.length) site.pop = 1;
+      if (!nk.warnedCol) { nk.warnedCol = true; say('The fireball has taken your buildings on ' + (planet && planet.id === pid ? planet.name : 'this world') + '.', 'bad'); }
+    }
+  }
+  const ol = G.ord[pid]; if (ol) for (let i = ol.length - 1; i >= 0; i--) if (Math.hypot(ol[i].x - nk.x, ol[i].y - nk.y) < r) ol.splice(i, 1);
+}
+function xsFinishNukes(pl) {
+  for (const nk of nukesOn(pl.id)) {
+    if (nk.done) continue;
+    nk.age = NUKE_FUSE + NUKE_GROW; nk.done = true; xsDestroyIn(nk, NUKE_R, pl.id);
+  }
+}
+function nukeTick(dt) {
+  const list = nukesOn(planet.id);
+  for (const nk of list) {
+    if (nk.done) continue;
+    const before = nk.age; nk.age += dt;
+    const left = Math.ceil(NUKE_FUSE - nk.age), was = Math.ceil(NUKE_FUSE - before);
+    if (nk.age < NUKE_FUSE && left !== was && (left === 20 || left === 10 || left <= 5)) say('Detonation in ' + left + '.', 'bad');
+    if (before < NUKE_FUSE && nk.age >= NUKE_FUSE) {
+      screenFlash(); AU.play('break', 1); AU.play('lose', 0.8);
+      if (G.set.shake) cam.shake = 30;
+      say('DETONATION. The fireball is expanding — get out of the circle.', 'bad');
+    }
+    const r = nukeRadius(nk);
+    if (r <= 0) continue;
+    nk.acc = (nk.acc || 0) + dt;
+    if (nk.acc >= 0.2) {
+      nk.acc = 0;
+      for (const [key, c] of surfCache) { const p = key.split('|'); scorchCell(c, +p[0], +p[1], nk, r, planet); }
+      xsDestroyIn(nk, r, planet.id);
+    }
+    if (!G.over && Math.hypot(P.x - nk.x, P.y - nk.y) < r) { G.hull = 0; G.shield = 0; death('the nuclear fireball'); return; }
+    if (nk.age >= NUKE_FUSE + NUKE_GROW) {
+      nk.done = true; surfCache = new Map();
+      say('The fireball burns out. What is left is hot, dark and full of things that changed.', 'warn');
+    }
+  }
+  /* fallout */
+  let rad = 0;
+  for (const nk of list) { const r = nukeRadius(nk); if (r <= 0) continue; const d = Math.hypot(P.x - nk.x, P.y - nk.y); if (d < r) rad = Math.max(rad, 1 - (d / NUKE_R) * 0.6); }
+  xsLevel = rad;
+  if (rad > 0 && !G.over) {
+    xsRadT += dt;
+    if (xsRadT >= 0.5) {
+      const t = xsRadT; xsRadT = 0;
+      if (G.onFoot) { if (!sheltered(P.x, P.y)) hurtSuit(2.6 * (1 - suitHaz()) * rad * t * 4); }
+      else hurt(1.1 * rad * t * 4, 'radiation');
+    }
+  }
+}
+let xsLevel = 0;
+function xsHud() {
+  let el = document.getElementById('xs-warn');
+  if (!el) { el = document.createElement('div'); el.id = 'xs-warn'; el.className = 'hidden'; document.body.appendChild(el); }
+  let msg = '';
+  if (G.mode === 'surface' && planet && !G.over) {
+    for (const nk of nukesOn(planet.id)) {
+      if (nk.done) continue;
+      if (nk.age < NUKE_FUSE) { msg = '\u2622 DETONATION IN ' + Math.ceil(NUKE_FUSE - nk.age) + 's \u00b7 BLAST RADIUS 5,000 m'; break; }
+      msg = '\u2622 FIREBALL EXPANDING \u00b7 ' + Math.max(0, Math.round(nukeRadius(nk) - Math.hypot(P.x - nk.x, P.y - nk.y))) + ' m INSIDE THE FRONT \u00b7 RUN'; break;
+    }
+    if (!msg && xsLevel > 0) msg = '\u2622 FALLOUT ZONE \u00b7 RADIATION ' + Math.round(xsLevel * 100) + '%' + (G.onFoot ? ' \u00b7 suit rating ' + Math.round(suitHaz() * 100) + '%' : '');
+  }
+  if (msg) { el.textContent = msg; el.classList.remove('hidden'); } else el.classList.add('hidden');
+}
+function xsOnLand(pl) {
+  fires.length = 0; ordFx.length = 0; nukeAim = null; xsLevel = 0;
+  xsFinishNukes(pl);
+}
+
+/* ---------- derelicts in space ---------- */
+function xsStBroken(s) { return !!(s && s.hasStation && !s.blackhole && s.cx !== undefined && (hash2(s.cx, s.cy, 0x57a7101) % 100) < 2); }
+const XS_KINDS = {
+  hulk:      { n: 'Dead ship',            blurb: 'It drifts with its running lights off and a hole punched through the spine. Something inside is still warm.' },
+  ark:       { n: 'Colony ark',           blurb: 'A long-haul colony ship, sleeping quarters still sealed. It was never meant to stop here.' },
+  camp:      { n: 'Abandoned orbital camp', blurb: 'A ring of prefab pods around a dead fusion lamp. Someone lived here on purpose and left in a hurry.' },
+  probe:     { n: 'Silent survey probe',  blurb: 'A survey probe with its dish still turned at something long gone. The data core is intact.' },
+  debris:    { n: 'Wreckage field',       blurb: 'A cloud of plating and cargo from something that was not built to come apart this way.' },
+  ghost:     { n: 'Ghost ship',           blurb: 'It is not on any register. The hull is pristine, the lights are on, and there is no sign of anyone having ever been aboard.' },
+  floatcity: { n: 'Abandoned floating city', blurb: '' }
+};
+function xsSysDerelicts(s) {
+  if (s._xd) return s._xd;
+  const out = []; s._xd = out;
+  if (!s || s.key === 'train' || s.blackhole || !s.planets) return out;
+  const r = rng(hash2(s.cx, s.cy, 0xde7e11c7));
+  const maxO = s.planets.length ? s.planets[s.planets.length - 1].orbit : 1800;
+  const spot = () => { const a = r() * TAU, d = 1500 + r() * (maxO + 1400); return [Math.cos(a) * d, Math.sin(a) * d]; };
+  const add = (t, rad, name) => { const p = spot(); out.push({ id: s.key + ':xd' + out.length, t: t, x: p[0], y: p[1], rad: rad, name: name, a: r() * TAU, spin: rr(r, -0.05, 0.05), seed: Math.floor(r() * 1e9) }); };
+  if (r() < 0.035) add('floatcity', rr(r, 420, 640), settleName(r) + ' (adrift)');
+  if (r() < 0.09) add('hulk', 60, shipName(r));
+  if (r() < 0.04) add('hulk', 60, shipName(r));
+  if (r() < 0.03) add('ark', 90, 'The ' + pick(r, NB.adj) + ' Promise');
+  if (r() < 0.06) add('camp', 70, settleName(r) + ' Camp');
+  if (r() < 0.05) add('probe', 34, 'Probe ' + ri(r, 100, 999));
+  if (r() < 0.05) add('debris', 110, 'Wreckage of ' + shipName(r));
+  return out;
+}
+const xsGalCache = new Map();
+function xsGalDerelicts() {
+  const cx = Math.floor(P.x / GAL_CELL), cy = Math.floor(P.y / GAL_CELL), out = [];
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const key = (cx + i) + '|' + (cy + j);
+    let v = xsGalCache.get(key);
+    if (v === undefined) {
+      v = null;
+      const h = hash2(cx + i, cy + j, 0x9a1d3711);
+      if (h % 1000 < 45) {
+        const r = rng(h ^ 0x5bd1e995);
+        const t = pick(r, ['hulk', 'hulk', 'ark', 'camp', 'probe', 'debris', 'ghost']);
+        v = { id: 'g' + key, t: t, x: (cx + i + rr(r, 0.1, 0.9)) * GAL_CELL, y: (cy + j + rr(r, 0.1, 0.9)) * GAL_CELL, rad: t === 'ark' ? 90 : t === 'debris' ? 110 : 60,
+          name: t === 'ghost' ? 'Unregistered vessel' : t === 'probe' ? 'Drifting probe' : t === 'camp' ? 'Deep-space camp' : shipName(r), a: r() * TAU, spin: rr(r, -0.05, 0.05), seed: Math.floor(r() * 1e9) };
+      }
+      xsGalCache.set(key, v);
+      if (xsGalCache.size > 400) xsGalCache.delete(xsGalCache.keys().next().value);
+    }
+    if (v) out.push(v);
+  }
+  return out;
+}
+function xsSpaceFind() {
+  xsSpace = null;
+  let list = [];
+  if (G.mode === 'system' && sys) list = xsSysDerelicts(sys);
+  else if (G.mode === 'galaxy') list = xsGalDerelicts();
+  let best = 1e18;
+  for (const t of list) {
+    const reach = t.rad + 200, d = (t.x - P.x) * (t.x - P.x) + (t.y - P.y) * (t.y - P.y);
+    if (d < reach * reach && d < best) { best = d; xsSpace = t; }
+  }
+  if (xsSpace) xsSpace.prompt = xsSpace.t === 'floatcity' ? 'Set down on ' + xsSpace.name : (G.mined['xsd:' + xsSpace.id] ? xsSpace.name + ' (stripped)' : 'Approach the ' + XS_KINDS[xsSpace.t].n.toLowerCase() + ' \u2014 ' + xsSpace.name);
+}
+function xsCityPlanet(t) {
+  const id = 'city:xs:' + t.id;
+  if (!G.citadels[id]) G.citadels[id] = { id: id, sys: G.sysKey, idx: 0, seed: hash2(t.seed | 0, 77, 0x51de) >>> 0, cause: t.seed % RUIN_CAUSES.length,
+    name: t.name, biome: 'husk', r: t.rad, citadel: true, abandoned: true, fac: 'none', orbit: 0, phase: 0, speed: 0,
+    res: ['ferrite', 'alloy', 'circuit', 'titanium', 'copper'], scanned: true, moons: 0, rings: false, life: 'None', hazard: 0,
+    weather: ['stale air'], rich: false, settled: false, day: 1, atX: t.x, atY: t.y, cityHostile: false };
+  const pl = G.citadels[id]; pl.atX = t.x; pl.atY = t.y; pl.sys = G.sysKey;
+  return pl;
+}
+function xsSpaceUse(t) {
+  if (t.t === 'floatcity') {
+    landOn(xsCityPlanet(t), true);
+    say('Docking clamps are dead. You set down on ' + t.name + ' — nobody answers the hail.', 'rare');
+    discover('xcity:' + t.id, t.name, 'Derelict city', 'A floating city with every light out. Nobody is home, and the decks go on for a very long way.', 22000);
+    return;
+  }
+  const K = XS_KINDS[t.t];
+  if (G.mined['xsd:' + t.id]) { say(t.name + ' has already been stripped clean.', 'warn'); return; }
+  showEvent(K.n.toLowerCase(), t.name, K.blurb, [
+    { l: 'Board it and strip what you can', f: () => xsSalvage(t) },
+    { l: 'Log the position and move on', ghost: true, f: () => say('Position logged.', '') }]);
+}
+function xsSalvage(t) {
+  G.mined['xsd:' + t.id] = 1; G.minedN++;
+  if (Math.random() < 0.2) { const dmg = 30 + Math.random() * 50; hurt(dmg, 'a bulkhead blowout'); say('A sealed bulkhead let go. Hull down ' + Math.round(dmg) + '.', 'bad'); }
+  const R = Math.random, n = (a, b) => ri(R, a, b), L = []; let cr = 0;
+  switch (t.t) {
+    case 'hulk': cr = n(20000, 90000); L.push(['circuit', n(4, 14)], ['powercell', n(1, 4)], ['servo', n(2, 6)], ['alloy', n(10, 40)], ['coolant', n(1, 3)]); break;
+    case 'ark': cr = n(30000, 120000); L.push(['ration', n(10, 30)], ['grain', n(10, 30)], ['medkit', n(2, 6)], ['relic', n(1, 2)], ['alloy', n(10, 30)]); break;
+    case 'camp': cr = n(8000, 30000); L.push(['oxtank', n(1, 3)], ['medkit', n(1, 3)], ['ferrite', n(20, 60)], ['circuit', n(1, 4)]); break;
+    case 'probe': cr = n(15000, 45000); L.push(['lens', n(1, 3)], ['circuit', n(2, 6)], ['indium', n(1, 3)]); break;
+    case 'debris': cr = n(4000, 16000); L.push(['alloy', n(20, 60)], ['ferrite', n(40, 120)], ['titanium', n(6, 20)], ['copper', n(10, 30)]); break;
+    default: cr = n(50000, 160000); L.push(['voidcrystal', n(1, 3)], ['antimatter', n(0, 2)], ['powercell', n(2, 5)], ['relic', n(1, 3)], ['indium', n(2, 6)]);
+  }
+  const g = xsGive(L); G.credits += cr; AU.play('buy');
+  say('Salvage from ' + t.name + ': ' + (g.txt || 'nothing your hold can take') + ' and ' + fmt(cr) + ' units.', 'good');
+  const lore = pick(rng(hash2(t.seed | 0, 9, 9)), SPACE_LORE);
+  discover('xsd:' + t.id, t.name, XS_KINDS[t.t].n, lore, 6000);
+  showEvent('recovered log', t.name, lore, [{ l: 'Close' }]);
+}
+function xsSalvageStation() {
+  const key = 'xsst:' + sys.key;
+  if (G.mined[key]) { say('The station has already been stripped. Nothing left but hull.', 'warn'); return; }
+  showEvent('derelict station', sys.stName || 'Trade station',
+    'The docking ring is dark and the ports are drifting open. The hold still has stock sitting on the racks, unclaimed. No one is coming to sell it to you. Take what you like.',
+    [{ l: 'Take everything', f: () => {
+        G.mined[key] = 1; G.minedN++;
+        const R = Math.random, n = (a, b) => ri(R, a, b);
+        const g = xsGive([['alloy', n(15, 40)], ['circuit', n(4, 12)], ['wiring', n(8, 20)], ['glass', n(8, 20)], ['powercell', n(1, 4)], ['coolant', n(2, 6)], ['servo', n(2, 6)], ['ration', n(4, 12)]]);
+        const cr = n(15000, 60000); G.credits += cr; AU.play('buy');
+        say('Station stores: ' + (g.txt || 'nothing you can carry') + ' and ' + fmt(cr) + ' units.', 'rare');
+        discover('brokenst:' + sys.key, (sys.stName || 'Trade station') + ' (derelict)', 'Derelict station', 'A trade station that stopped answering, with its stock still on the shelves.', 14000);
+      } },
+     { l: 'Leave it', ghost: true }]);
+}
+
+/* ---------- drawing ---------- */
+function xsRuinDraw(g, b) {
+  g.save(); g.translate(b.x, b.y);
+  g.lineWidth = 2; g.strokeStyle = 'rgba(122,104,88,.9)';
+  if (b.core) {
+    g.fillStyle = 'rgba(24,22,28,.95)'; g.strokeStyle = 'rgba(160,140,200,.8)'; g.lineWidth = 3;
+    g.beginPath(); g.rect(-b.w / 2, -b.h / 2, b.w, b.h); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(160,140,200,.14)'; g.fillRect(-b.w / 2 + 10, -b.h / 2 + 10, b.w - 20, 22);
+    g.restore(); return;
+  }
+  if (b.st === 0) {
+    g.fillStyle = 'rgba(34,29,26,.94)';
+    g.beginPath(); g.rect(-b.w / 2, -b.h / 2, b.w, b.h); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(12,10,9,.9)';
+    for (let i = 0; i < 3; i++) g.fillRect(-b.w / 2 + 8 + i * (b.w - 16) / 3, -b.h / 2 + 8, 8, 10);
+    if (b.tall) { g.strokeStyle = 'rgba(150,130,112,.55)'; g.beginPath(); g.moveTo(-b.w / 2, -b.h / 2); g.lineTo(-b.w / 2 + 10, -b.h / 2 - 14); g.lineTo(b.w / 2 + 10, -b.h / 2 - 14); g.lineTo(b.w / 2, -b.h / 2); g.stroke(); }
+  } else if (b.st === 1) {
+    g.fillStyle = 'rgba(30,26,23,.92)';
+    g.beginPath(); g.moveTo(-b.w / 2, b.h / 2); g.lineTo(-b.w / 2, -b.h / 4); g.lineTo(-b.w / 6, -b.h / 2); g.lineTo(b.w / 8, -b.h / 5); g.lineTo(b.w / 2, -b.h / 3); g.lineTo(b.w / 2, b.h / 2); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(80,68,58,.7)'; g.beginPath(); g.moveTo(-b.w / 6, -b.h / 2); g.lineTo(0, 0); g.lineTo(b.w / 3, b.h / 2); g.stroke();
+  } else {
+    g.fillStyle = 'rgba(38,32,28,.9)';
+    for (let i = 0; i < 5; i++) { const a = b.sh * 7 + i * 1.3, d = 10 + i * 6; g.beginPath(); g.arc(Math.cos(a) * d, Math.sin(a) * d * 0.7, 6 + (i % 3) * 3, 0, TAU); g.fill(); }
+  }
+  g.restore();
+}
+function xsSiteDraw(g, s) {
+  g.save(); g.translate(s.x, s.y);
+  g.lineWidth = 2.2; g.strokeStyle = 'rgba(160,140,110,.85)'; g.fillStyle = 'rgba(26,22,20,.92)';
+  const sr = rng(s.seed);
+  if (s.t === 'camp') {
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; g.beginPath(); g.moveTo(Math.cos(a) * 60 - 16, Math.sin(a) * 50 + 14); g.lineTo(Math.cos(a) * 60, Math.sin(a) * 50 - 18); g.lineTo(Math.cos(a) * 60 + 16, Math.sin(a) * 50 + 14); g.closePath(); g.fill(); g.stroke(); }
+    g.strokeStyle = 'rgba(90,80,72,.9)'; g.beginPath(); g.arc(0, 4, 14, 0, TAU); g.stroke();
+    g.fillStyle = 'rgba(255,150,60,' + (0.12 + Math.sin(G.t * 3) * 0.03) + ')'; g.beginPath(); g.arc(0, 4, 8, 0, TAU); g.fill();
+  } else if (s.t === 'crash') {
+    g.beginPath(); g.moveTo(-84, 22); g.lineTo(-24, 34); g.lineTo(56, 8); g.lineTo(84, -16); g.lineTo(2, -32); g.lineTo(-46, -12); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(70,52,40,.6)'; g.lineWidth = 12; g.beginPath(); g.moveTo(-84, 22); g.lineTo(-240, 70); g.stroke();
+  } else if (s.t === 'depot') {
+    g.beginPath(); g.rect(-64, -34, 128, 68); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(12,10,9,.95)'; g.fillRect(-14, 4, 28, 30);
+    g.strokeStyle = 'rgba(200,120,60,.8)'; g.beginPath(); g.moveTo(-64, -34); g.lineTo(64, 34); g.moveTo(64, -34); g.lineTo(-64, 34); g.globalAlpha = 0.25; g.stroke(); g.globalAlpha = 1;
+    g.fillStyle = 'rgba(60,52,44,.9)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(-76 + i * 30, 52, 9, 0, TAU); g.fill(); }
+  } else if (s.t === 'rig') {
+    g.beginPath(); g.moveTo(-26, 30); g.lineTo(0, -60); g.lineTo(26, 30); g.closePath(); g.stroke();
+    g.beginPath(); g.moveTo(-15, 0); g.lineTo(15, 0); g.moveTo(-20, 16); g.lineTo(20, 16); g.stroke();
+    g.beginPath(); g.rect(-70, 34, 140, 22); g.fill(); g.stroke();
+  } else if (s.t === 'lab') {
+    g.beginPath(); g.arc(0, 0, 44, Math.PI, TAU); g.lineTo(44, 24); g.lineTo(-44, 24); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(60, 20); g.lineTo(60, -50); g.moveTo(48, -40); g.lineTo(72, -40); g.stroke();
+    g.beginPath(); g.rect(-16, 2, 32, 22); g.stroke();
+  } else {
+    for (let i = 0; i < 13; i++) { const gx = (sr() - 0.5) * 240, gy = (sr() - 0.5) * 160; g.beginPath(); g.moveTo(gx, gy + 8); g.lineTo(gx, gy - 8); g.moveTo(gx - 5, gy - 3); g.lineTo(gx + 5, gy - 3); g.stroke(); }
+  }
+  g.restore();
+  if (Math.hypot(P.x - s.x, P.y - s.y) < 800) {
+    g.fillStyle = 'rgba(190,170,140,.75)'; g.font = '600 13px "Chakra Petch", sans-serif'; g.textAlign = 'center';
+    g.fillText(s.n, s.x, s.y - 78); g.textAlign = 'left';
+  }
+}
+function xsItemDraw(g, t) {
+  g.save(); g.translate(t.x, t.y);
+  const live = !t.used, col = t.k === 'vault' ? '#d484ff' : t.k === 'lore' ? '#6fd8ff' : '#ffc46b';
+  g.globalAlpha = live ? 1 : 0.35;
+  g.strokeStyle = col; g.lineWidth = 2; g.fillStyle = 'rgba(10,14,20,.92)';
+  if (t.k === 'lore') { g.beginPath(); g.rect(-7, -12, 14, 20); g.fill(); g.stroke(); if (live) { g.fillStyle = col; g.globalAlpha = 0.4 + Math.sin(G.t * 3 + t.x) * 0.25; g.fillRect(-4, -9, 8, 8); } }
+  else if (t.k === 'vault') { g.beginPath(); g.rect(-34, -22, 68, 44); g.fill(); g.stroke(); g.beginPath(); g.arc(0, 0, 11, 0, TAU); g.stroke(); if (live) { g.globalAlpha = 0.25 + Math.sin(G.t * 2) * 0.15; g.lineWidth = 7; g.beginPath(); g.rect(-34, -22, 68, 44); g.stroke(); } }
+  else { g.beginPath(); g.rect(-12, -9, 24, 18); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-12, -2); g.lineTo(12, -2); g.stroke(); }
+  g.restore();
+  if (t === xsTarget) {
+    g.strokeStyle = col; g.lineWidth = 1.3; g.globalAlpha = 0.85;
+    g.beginPath(); g.arc(t.x, t.y, 26 + Math.sin(G.t * 5) * 2, 0, TAU); g.stroke(); g.globalAlpha = 1;
+  }
+}
+function xsDraw(g, cells) {
+  for (const c of cells) {
+    if (c.ruins) for (const b of c.ruins) xsRuinDraw(g, b);
+    if (c.site) xsSiteDraw(g, c.site);
+    if (c.xs) for (const t of c.xs) xsItemDraw(g, t);
+  }
+}
+/* burnt ground under any blast that has gone off */
+function xsDrawScars(g) {
+  for (const nk of nukesOn(planet.id)) {
+    const r = nukeRadius(nk); if (r <= 0) continue;
+    const sg = g.createRadialGradient(nk.x, nk.y, r * 0.05, nk.x, nk.y, r);
+    sg.addColorStop(0, 'rgba(4,2,1,.88)'); sg.addColorStop(0.7, 'rgba(18,9,5,.72)'); sg.addColorStop(1, 'rgba(34,20,10,.32)');
+    g.fillStyle = sg; g.beginPath(); g.arc(nk.x, nk.y, r, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(140,255,60,' + (0.035 + Math.sin(G.t * 1.5) * 0.015) + ')';
+    g.beginPath(); g.arc(nk.x, nk.y, r, 0, TAU); g.fill();
+  }
+}
+function xsDrawOrd(g) {
+  const list = G.ord && G.ord[planet.id];
+  if (list) for (const u of list) {
+    const d = ORD[u.t]; if (!d) continue;
+    g.save(); g.translate(u.x, u.y);
+    g.strokeStyle = d.col; g.lineWidth = 2; g.fillStyle = 'rgba(8,14,20,.95)';
+    if (d.kind === 'mine') {
+      g.beginPath(); g.arc(0, 0, 9, 0, TAU); g.fill(); g.stroke();
+      const armed = u.age >= 2.2;
+      g.fillStyle = armed ? (Math.sin(G.t * 6) > 0 ? '#ff4d4d' : '#5a1a1a') : '#ffc46b';
+      g.beginPath(); g.arc(0, 0, 3, 0, TAU); g.fill();
+    } else if (d.kind === 'turret') {
+      g.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; i ? g.lineTo(Math.cos(a) * 14, Math.sin(a) * 14) : g.moveTo(14, 0); } g.closePath(); g.fill(); g.stroke();
+      g.rotate(u.ang); g.lineWidth = d.pierce ? 5 : d.chain ? 4 : 3;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(d.pierce ? 26 : 19, 0); g.stroke();
+      if (d.chain) { g.globalAlpha = 0.5 + Math.sin(G.t * 9) * 0.3; g.beginPath(); g.arc(0, 0, 5, 0, TAU); g.stroke(); g.globalAlpha = 1; }
+    } else if (d.kind === 'bomb') {
+      g.beginPath(); g.rect(-13, -10, 26, 20); g.fill(); g.stroke();
+      g.fillStyle = Math.sin(G.t * 10) > 0 ? '#ff4d4d' : '#552222'; g.fillRect(-4, -3, 8, 6);
+    } else {
+      g.beginPath(); g.moveTo(-9, 12); g.lineTo(0, -22); g.lineTo(9, 12); g.closePath(); g.fill(); g.stroke();
+      g.globalAlpha = 0.4 + Math.sin(G.t * 8) * 0.3; g.beginPath(); g.arc(0, 0, 22, 0, TAU); g.stroke(); g.globalAlpha = 1;
+    }
+    g.restore();
+  }
+  for (const f of fires) {
+    g.save(); g.globalAlpha = clamp(f.t / 3, 0, 1) * 0.5;
+    const fg = g.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
+    fg.addColorStop(0, 'rgba(255,190,80,.9)'); fg.addColorStop(0.6, 'rgba(255,90,30,.5)'); fg.addColorStop(1, 'rgba(255,60,20,0)');
+    g.fillStyle = fg; g.beginPath(); g.arc(f.x, f.y, f.r * (0.94 + Math.sin(G.t * 9) * 0.05), 0, TAU); g.fill(); g.restore();
+  }
+}
+function xsDrawFx(g) {
+  for (const f of ordFx) {
+    const k = clamp(f.t / f.m, 0, 1);
+    if (f.ring) { g.strokeStyle = f.c; g.globalAlpha = k; g.lineWidth = 6; g.beginPath(); g.arc(f.x, f.y, f.r * (1 - k * 0.6), 0, TAU); g.stroke(); g.globalAlpha = 1; }
+    else if (f.bolt) { g.strokeStyle = '#fff2b0'; g.globalAlpha = k; g.lineWidth = 16 * k + 3; g.beginPath(); g.moveTo(f.x + 30, f.y - 1600); g.lineTo(f.x, f.y); g.stroke(); g.globalAlpha = 1; }
+    else { g.strokeStyle = f.c; g.lineWidth = f.w; g.globalAlpha = 0.5 + k * 0.5; g.beginPath(); g.moveTo(f.x1, f.y1); g.lineTo(f.x2, f.y2); g.stroke(); g.globalAlpha = 1; }
+  }
+  for (const nk of nukesOn(planet.id)) {
+    if (nk.age < NUKE_FUSE) {
+      const p = (Math.sin(G.t * 8) + 1) / 2;
+      g.strokeStyle = '#a6ff4d'; g.lineWidth = 3; g.globalAlpha = 0.5 + p * 0.5;
+      g.beginPath(); g.arc(nk.x, nk.y, 30 + p * 14, 0, TAU); g.stroke();
+      g.fillStyle = '#a6ff4d'; g.font = '600 18px "Chakra Petch", sans-serif'; g.textAlign = 'center';
+      g.fillText('\u2622 ' + Math.ceil(NUKE_FUSE - nk.age), nk.x, nk.y + 6); g.textAlign = 'left'; g.globalAlpha = 1;
+      continue;
+    }
+    if (nk.done) continue;
+    const r = nukeRadius(nk); if (r < 4) continue;
+    const fg = g.createRadialGradient(nk.x, nk.y, r * 0.45, nk.x, nk.y, r * 1.04);
+    fg.addColorStop(0, 'rgba(255,120,30,.10)'); fg.addColorStop(0.8, 'rgba(255,110,30,.42)');
+    fg.addColorStop(0.95, 'rgba(255,240,200,.9)'); fg.addColorStop(1, 'rgba(255,240,200,0)');
+    g.fillStyle = fg; g.beginPath(); g.arc(nk.x, nk.y, r * 1.04, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,250,230,.8)'; g.lineWidth = 10; g.beginPath(); g.arc(nk.x, nk.y, r, 0, TAU); g.stroke();
+  }
+}
+function xsDrawDerelict(g, t) {
+  const used = !!G.mined['xsd:' + t.id];
+  g.save(); g.translate(t.x, t.y); g.rotate(t.a + G.t * t.spin);
+  const sr = rng(t.seed), R = Math.max(t.rad, 16 / cam.z), br = '#8a5a34';
+  g.lineWidth = Math.max(2, 3 / cam.z); g.strokeStyle = br; g.fillStyle = 'rgba(22,15,10,.95)';
+  if (t.t === 'floatcity') {
+    g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fill(); g.stroke();
+    g.beginPath(); g.arc(0, 0, R * 0.62, 0, TAU); g.stroke();
+    for (let i = 0; i < 12; i++) { const a = i * TAU / 12; g.beginPath(); g.moveTo(Math.cos(a) * R * 0.2, Math.sin(a) * R * 0.2); g.lineTo(Math.cos(a) * R, Math.sin(a) * R); g.globalAlpha = 0.35; g.stroke(); g.globalAlpha = 1; }
+    g.fillStyle = 'rgba(70,46,28,.95)';
+    for (let i = 0; i < 26; i++) { const a = sr() * TAU, d = R * rr(sr, 0.15, 0.9), w = R * rr(sr, 0.03, 0.08), h = R * rr(sr, 0.05, 0.14); g.fillRect(Math.cos(a) * d - w / 2, Math.sin(a) * d - h / 2, w, h); }
+    g.fillStyle = 'rgba(2,2,4,.95)'; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, R * 1.02, 0.4, 1.1); g.closePath(); g.fill();
+  } else if (t.t === 'ark') {
+    g.beginPath(); g.moveTo(-R, 0); g.quadraticCurveTo(-R, -R * 0.34, -R * 0.4, -R * 0.34); g.lineTo(R * 0.7, -R * 0.26); g.lineTo(R, 0); g.lineTo(R * 0.7, R * 0.26); g.lineTo(-R * 0.4, R * 0.34); g.quadraticCurveTo(-R, R * 0.34, -R, 0); g.closePath(); g.fill(); g.stroke();
+    for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(i * R * 0.24, -R * 0.3); g.lineTo(i * R * 0.24, R * 0.3); g.globalAlpha = 0.4; g.stroke(); g.globalAlpha = 1; }
+  } else if (t.t === 'camp') {
+    g.beginPath(); g.arc(0, 0, R * 0.55, 0, TAU); g.stroke();
+    for (let i = 0; i < 5; i++) { const a = i * TAU / 5; g.beginPath(); g.arc(Math.cos(a) * R * 0.55, Math.sin(a) * R * 0.55, R * 0.16, 0, TAU); g.fill(); g.stroke(); }
+    g.beginPath(); g.arc(0, 0, R * 0.14, 0, TAU); g.fill(); g.stroke();
+  } else if (t.t === 'probe') {
+    g.beginPath(); g.arc(0, 0, R * 0.32, 0, TAU); g.fill(); g.stroke();
+    g.beginPath(); g.arc(R * 0.3, 0, R * 0.7, -1.0, 1.0); g.stroke();
+    g.beginPath(); g.moveTo(-R * 0.3, 0); g.lineTo(-R, -R * 0.5); g.moveTo(-R * 0.3, 0); g.lineTo(-R, R * 0.5); g.stroke();
+  } else if (t.t === 'debris') {
+    for (let i = 0; i < 12; i++) { const a = sr() * TAU, d = sr() * R, s = R * rr(sr, 0.06, 0.2); g.save(); g.translate(Math.cos(a) * d, Math.sin(a) * d); g.rotate(sr() * TAU); g.beginPath(); g.moveTo(-s, -s * 0.4); g.lineTo(s, -s * 0.7); g.lineTo(s * 0.6, s * 0.5); g.lineTo(-s * 0.5, s * 0.6); g.closePath(); g.fill(); g.stroke(); g.restore(); }
+  } else if (t.t === 'ghost') {
+    g.strokeStyle = 'rgba(160,240,255,' + (0.5 + Math.sin(G.t * 4) * 0.2) + ')'; g.fillStyle = 'rgba(120,200,220,.08)';
+    g.beginPath(); g.moveTo(R, 0); g.lineTo(-R * 0.6, -R * 0.5); g.lineTo(-R * 0.3, 0); g.lineTo(-R * 0.6, R * 0.5); g.closePath(); g.fill(); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(R, 0); g.lineTo(R * 0.1, -R * 0.42); g.lineTo(-R * 0.15, -R * 0.1); g.lineTo(-R * 0.5, -R * 0.32); g.lineTo(-R * 0.9, -R * 0.1); g.lineTo(-R * 0.55, R * 0.1); g.lineTo(-R * 0.1, R * 0.36); g.lineTo(R * 0.25, R * 0.3); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(-R * 0.15, -R * 0.1); g.lineTo(-R * 0.55, R * 0.1); g.globalAlpha = 0.6; g.stroke(); g.globalAlpha = 1;
+  }
+  g.restore();
+  g.fillStyle = used ? '#6b5a48' : '#c9a070'; g.font = (13 / cam.z) + 'px "Chakra Petch", sans-serif'; g.textAlign = 'center';
+  g.fillText(t.name + (t.t === 'floatcity' ? ' \u00b7 derelict' : used ? ' \u00b7 stripped' : ' \u00b7 salvage'), t.x, t.y + R + 22 / cam.z); g.textAlign = 'left';
+}
+function xsDrawSpace(g) {
+  const list = G.mode === 'system' && sys ? xsSysDerelicts(sys) : xsGalDerelicts();
+  for (const t of list) xsDrawDerelict(g, t);
+}
+function xsDrawStation(g, sp, s) {
+  const bk = xsStBroken(s);
+  const c = bk ? '#8a5a34' : '#6fd8ff';
+  g.save(); g.translate(sp[0], sp[1]); g.rotate(bk ? 0.6 + Math.sin(G.t * 0.15) * 0.03 : G.t * 0.25);
+  g.strokeStyle = c; g.lineWidth = 5; g.fillStyle = bk ? 'rgba(26,16,8,.95)' : 'rgba(6,18,28,.9)';
+  g.beginPath(); g.arc(0, 0, 70, 0, TAU); g.fill(); g.stroke();
+  g.beginPath();
+  if (bk) { g.moveTo(-100, 0); g.lineTo(100, 0); g.moveTo(0, -100); g.lineTo(0, 30); g.moveTo(0, 60); g.lineTo(6, 92); }
+  else { g.moveTo(-100, 0); g.lineTo(100, 0); g.moveTo(0, -100); g.lineTo(0, 100); }
+  g.stroke();
+  g.fillStyle = c;
+  for (let i = 0; i < 4; i++) { if (bk && i === 1) continue; const a = i * Math.PI / 2; g.fillRect(Math.cos(a) * 100 - 9, Math.sin(a) * 100 - 9, 18, 18); }
+  if (bk) { g.fillStyle = '#4a3020'; g.fillRect(-14, 88, 10, 8); g.fillRect(14, 96, 7, 6); }
+  g.restore();
+  if (bk && Math.sin(G.t * 7 + s.cx) > 0.85) { g.fillStyle = '#ffd08a'; g.beginPath(); g.arc(sp[0] + 30, sp[1] - 20, 4 / cam.z, 0, TAU); g.fill(); }
+  g.fillStyle = c; g.font = (14 / cam.z) + 'px "Chakra Petch", sans-serif'; g.textAlign = 'center';
+  g.fillText((s.stName || 'Trade station') + (bk ? ' \u00b7 derelict' : ''), sp[0], sp[1] + 134 / cam.z); g.textAlign = 'left';
+}
+
+/* ---------- the surface chart ---------- */
+function xsChartOverlay(g, ox, oy, scale, seen) {
+  const pid = planet.id;
+  for (const nk of nukesOn(pid)) {
+    const r = nk.age < NUKE_FUSE ? 0 : nukeRadius(nk), x = ox + nk.x * scale, y = oy + nk.y * scale;
+    if (r > 0) { g.fillStyle = 'rgba(120,30,10,.28)'; g.strokeStyle = '#ff6a4d'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r * scale, 0, TAU); g.fill(); g.stroke(); }
+    g.fillStyle = '#a6ff4d'; g.font = '16px sans-serif'; g.textAlign = 'center'; g.fillText('\u2622', x, y + 5); g.textAlign = 'left';
+  }
+  const rec = G.xsSeen && G.xsSeen[pid];
+  if (rec) for (const id in rec) {
+    const s = rec[id], x = ox + s.x * scale, y = oy + s.y * scale;
+    g.strokeStyle = '#c9a070'; g.fillStyle = 'rgba(201,160,112,.2)'; g.lineWidth = 1.6;
+    if (s.k === 'city') { g.beginPath(); g.arc(x, y, Math.max(8, s.r * scale), 0, TAU); g.setLineDash([4, 4]); g.fill(); g.stroke(); g.setLineDash([]); }
+    else { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + 6, y); g.lineTo(x, y + 6); g.lineTo(x - 6, y); g.closePath(); g.stroke(); }
+    if (chartZoom > 0.35) { g.fillStyle = '#c9a070'; g.font = '9px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText(s.n, x, y + 18); g.textAlign = 'left'; }
+    seen.push({ x: x, y: y, s: { x: s.x, y: s.y, name: s.n, info: '<b style="color:#c9a070">' + s.n + '</b> \u00b7 ' + (s.k === 'city' ? 'ruined city' : 'abandoned site') + ' \u00b7 double-click to set a waypoint' } });
+  }
+  if (nukeAim && nukeAim.x != null) {
+    const x = ox + nukeAim.x * scale, y = oy + nukeAim.y * scale;
+    g.strokeStyle = '#ff4d4d'; g.lineWidth = 2; g.setLineDash([10, 8]); g.fillStyle = 'rgba(255,60,40,.10)';
+    g.beginPath(); g.arc(x, y, NUKE_R * scale, 0, TAU); g.fill(); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.moveTo(x - 16, y); g.lineTo(x + 16, y); g.moveTo(x, y - 16); g.lineTo(x, y + 16); g.stroke();
+    g.beginPath(); g.arc(x, y, 8, 0, TAU); g.stroke();
+  }
+}
+function xsChartInfo() {
+  if (!nukeAim) return;
+  const el = $('chart-info');
+  if (nukeAim.x == null) {
+    el.innerHTML = '<b style="color:#ff6a4d">\u2622 Nuclear targeting</b> \u00b7 click anywhere on this chart to place ground zero. The fireball reaches 5,000 m from that point (10 km across) \u2014 zoom out to see the whole circle. ' +
+      '<button class="btn xs ghost" data-act="nukecancel">Cancel</button>';
+    return;
+  }
+  const d = Math.round(Math.hypot(P.x - nukeAim.x, P.y - nukeAim.y));
+  const site = G.colonies[planet.id] || G.bases[planet.id];
+  const hitsMine = site && site.build.some(b => Math.hypot(b.x - nukeAim.x, b.y - nukeAim.y) < NUKE_R);
+  el.innerHTML = '<b style="color:#ff6a4d">\u2622 Ground zero set</b> \u00b7 ' + fmtN(d) + ' m from you' + (d < NUKE_R + 600 ? ' \u00b7 <b style="color:#ff6a4d">YOU ARE INSIDE THE BLAST CIRCLE</b>' : '') +
+    (hitsMine ? '<br><b style="color:#ffc46b">Your own buildings on this world are inside the circle and will be destroyed.</b>' : '') +
+    '<br>Countdown ' + NUKE_FUSE + ' s, then the fireball spreads for about ' + NUKE_GROW + ' s. Click again to move the target. ' +
+    '<button class="btn xs" data-act="nukearm">Arm warhead</button> <button class="btn xs ghost" data-act="nukecancel">Cancel</button>';
 }
 
 /* ------------------------------------------------------------
