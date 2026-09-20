@@ -895,6 +895,9 @@ const BUILDS = {
   storage:  { n: 'Storage vault',   cr: 8000,    in: { alloy: 6, ferrite: 60 },          pwr: -1, store: 400, personal: true, d: 'Off-ship storage. Stash what your hold cannot carry.' },
   workshop: { n: 'Fabricator shed', cr: 16000,   in: { alloy: 8, circuit: 2 },           pwr: -3, craft: 1, personal: true, d: 'Lets you craft and forge alloys while planetside.' },
   turret:   { n: 'Defence turret',  cr: 22000,   in: { servo: 2, alloy: 6, wiring: 4 },  pwr: -4, def: 0.4, personal: true, turret: 1, d: 'Shoots anything hostile that wanders too close.' },
+  /* --- late-game transit --- */
+  telepad:  { n: 'Telepad',         cr: 620000,  in: { alloy: 30, circuit: 16, powercell: 8, voidcrystal: 5 }, pwr: -12, personal: true, telepad: true,
+              d: 'Step in, press E, and link it to another pad on this world. Once paired, either pad carries you straight to the other — instantly, no fuel, no ship. Same world only.' },
   /* --- civilisation pieces, colony only --- */
   stabiliser:{ n: 'Weather stabiliser', cr: 85000, in: { coolant: 12, circuit: 8, powercell: 2 }, pwr: -18, stab: 1, d: 'Holds the sky still inside one border ring. No hazard, no weather, no suit drain.' },
   wall:     { n: 'Perimeter wall',  cr: 18000,   in: { ferrite: 180, alloy: 8 },        pwr: -1, wall: 1, d: 'A ring segment that raiders have to come through rather than over.' },
@@ -918,6 +921,7 @@ const BUILD_TIER_MATS = [
 const BUILD_EFFECT_KEYS = ['pwr','cap','ext','grow','ref','trade','res','def','plots','store','wall','stab'];
 const BUILD_BASE_KEYS = BUILD_KEYS.slice(); /* snapshot — BUILD_KEYS itself grows below */
 for (const base of BUILD_BASE_KEYS) {
+  if (BUILDS[base].telepad) continue; /* a transit pad doesn't have "more effective" tiers — it's linked or it isn't */
   const d0 = BUILDS[base];
   let prevKey = base;
   for (let tier = 2; tier <= 3; tier++) {
@@ -934,6 +938,9 @@ for (const base of BUILD_BASE_KEYS) {
       personal: d0.personal, tier: tier, base: base, upgradeOf: prevKey };
     for (const ek of BUILD_EFFECT_KEYS) if (d0[ek] !== undefined) nb[ek] = Math.round(d0[ek] * mul * 100) / 100;
     if (d0.turret) nb.turret = 1;
+    if (d0.craft) nb.craft = 1;
+    if (d0.water) nb.water = 1;
+    if (d0.beacon) nb.beacon = 1;
     if (d0.prest) nb.prest = d0.prest * mul;
     BUILDS[key] = nb; BUILD_KEYS.push(key);
     prevKey = key;
@@ -1109,7 +1116,7 @@ const GOSSIP = [
 /* ------------------------------------------------------------
    11. STATE
 ------------------------------------------------------------ */
-const GALSEED = 90210, GAL_CELL = 2600, SURF_CELL = 560;
+const GALSEED = 90210, GAL_CELL = 5200, SURF_CELL = 560;
 /* A star system reads as roughly 250 units across on the chart. A collapse
    is ten times that, which is nearly the whole galactic cell. */
 const BLACKHOLE_R = 2500;
@@ -1137,7 +1144,7 @@ const G = {
   codex: {}, codexN: 0, research: 0, quests: [], questDone: 0,
   rep: {}, relations: {}, knownNpcs: {},
   waypoint: null, waypoints6: {}, thrustersFixed: false, deaths: 0, crashes: 0,
-  objIdx: 0, encTimer: 45, raidTimer: 420, hailTimer: 30,
+  objIdx: 0, encTimer: 45, raidTimer: 420, hailTimer: 30, raidParty: null,
   tools: {}, alloysMade: 0,
   parts: Object.assign({}, DEFAULT_PARTS), ownedParts: {},
   gun: 'fists', gunHeat: 0,
@@ -1379,6 +1386,15 @@ const TRAINING_PLANET2 = {
 /* ------------------------------------------------------------
    13. PLANET SURFACE GENERATION
 ------------------------------------------------------------ */
+/* the centre and reach of whatever you have built on this world, so
+   surrounding cells know they're inside your colony's circular claim */
+function colonyZoneFor(pl) {
+  const site = G.colonies[pl.id] || G.bases[pl.id];
+  if (!site || !site.build || !site.build.length) return null;
+  let cx = 0, cy = 0; for (const bd of site.build) { cx += bd.x; cy += bd.y; } cx /= site.build.length; cy /= site.build.length;
+  let rad = 300; for (const bd of site.build) rad = Math.max(rad, Math.hypot(bd.x - cx, bd.y - cy) + 220);
+  return { cx, cy, rad };
+}
 function surfCell(pl, cx, cy) {
   const key = cx + '|' + cy;
   let c = surfCache.get(key);
@@ -1389,6 +1405,10 @@ function surfCell(pl, cx, cy) {
   const ox = cx * SURF_CELL, oy = cy * SURF_CELL;
   const rocks = [], flora = [], deps = [], crits = [], nodes = [];
   let lake = null, settlement = null, struct = null;
+  /* a settled colony draws people and wildlife in toward it — more life
+     spawns inside your own claim than out in the empty country */
+  const zone = colonyZoneFor(pl);
+  const inZone = !!zone && Math.hypot(ox + SURF_CELL / 2 - zone.cx, oy + SURF_CELL / 2 - zone.cy) < zone.rad;
 
   /* terrain elevation from noise gives shading and mountain silhouettes */
   const elev = fbm(cx * 0.17, cy * 0.17, pl.seed, 3);
@@ -1427,8 +1447,8 @@ function surfCell(pl, cx, cy) {
   }
   /* creatures */
   if (b.life !== 'None') {
-    for (let i = 0, n = ri(r, 0, 2); i < n; i++) {
-      if (r() > 0.45) continue;
+    for (let i = 0, n = ri(r, 0, 2) + (inZone ? 1 : 0); i < n; i++) {
+      if (r() > (inZone ? 0.7 : 0.45)) continue;
       crits.push(makeCreature(rng(hash3(cx, cy, i * 97, pl.seed ^ 0xbeef)), pl, ox + r() * SURF_CELL, oy + r() * SURF_CELL, cx, cy, i));
     }
   }
@@ -1456,7 +1476,7 @@ function surfCell(pl, cx, cy) {
 
   /* the occasional person out on their own, miles from anywhere */
   let wanderer = null;
-  if (!settlement && b.life !== 'None' && r() < 0.022) {
+  if (!settlement && b.life !== 'None' && r() < (inZone ? 0.07 : 0.022)) {
     const wr = rng(hash2(cx, cy, pl.seed ^ 0x77a1));
     const role = pick(wr, ROLES);
     wanderer = makeNpc(wr, role, sysFactionOf(pl), ox + rr(wr, 0.2, 0.8) * SURF_CELL, oy + rr(wr, 0.2, 0.8) * SURF_CELL,
@@ -1863,6 +1883,33 @@ function questProgress(q) {
   return [0, 1];
 }
 function questReady(q) { const p = questProgress(q); return p[0] >= p[1]; }
+/* points the dotted line at a contract's giver, but only when we're
+   currently in the same coordinate space (galaxy/system/surface) it was
+   offered in — a waypoint set in one mode is meaningless in another */
+/* Every waypoint (the single default one and each of the six colour pins)
+   is tagged with the "space" it was set in — deep space, a specific solar
+   system, or a specific planet's surface — since those are three totally
+   different coordinate systems. A waypoint only ever renders and counts
+   distance while you're actually in the space it belongs to. */
+function curSpaceKey() {
+  if (G.mode === 'surface' && planet) return 'surface:' + planet.id;
+  if (G.mode === 'system' && sys) return 'system:' + sys.cx + '|' + sys.cy;
+  return 'galaxy';
+}
+function setQuestWaypoint(q) {
+  if (!q || q.locX === undefined || q.locMode !== G.mode) return false;
+  if (q.locMode === 'surface' && (!planet || planet.id !== q.locPlanetId)) return false;
+  if (q.locMode === 'system' && (!sys || (sys.cx + '|' + sys.cy) !== q.locSysKey)) return false;
+  G.waypoint = { x: q.locX, y: q.locY, name: q.locName || q.t, space: q.locMode === 'surface' ? 'surface:' + q.locPlanetId : q.locMode === 'system' ? 'system:' + q.locSysKey : 'galaxy' };
+  say('Waypoint set: ' + G.waypoint.name, 'good');
+  return true;
+}
+function questDistText(q) {
+  if (!q || q.locX === undefined || q.locMode !== G.mode) return '';
+  if (q.locMode === 'surface' && (!planet || planet.id !== q.locPlanetId)) return '';
+  if (q.locMode === 'system' && (!sys || (sys.cx + '|' + sys.cy) !== q.locSysKey)) return '';
+  return fmtN(Math.round(Math.hypot(q.locX - P.x, q.locY - P.y))) + ' u away';
+}
 function turnInQuest(q) {
   if (!questReady(q) || q.done) return false;
   if (q.kind === 'deliver') takeRes(q.need.m, q.need.n);
@@ -1877,7 +1924,14 @@ function turnInQuest(q) {
 /* ------------------------------------------------------------
    16. COLONIES, BASES, FARMS, ECONOMY
 ------------------------------------------------------------ */
-function claimCost() { return 40000 * Math.pow(2.1, Object.keys(G.colonies).length); }
+function claimCost() {
+  const n = Object.keys(G.colonies).length;
+  /* the first world is free — everyone starts somewhere. The second is a
+     flat 20K, and every one after that climbs at the same 2.1x rate the
+     game always used */
+  if (n <= 0) return 0;
+  return Math.round(20000 * Math.pow(2.1, n - 1));
+}
 function claimPlanet() {
   if (!planet) return;
   if (G.colonies[planet.id]) { say('You already own this world.', 'warn'); return; }
@@ -2013,7 +2067,11 @@ function economyTick(dt) {
     const co = G.colonies[k], st = colStats(co);
     research += st.res;
     if (st.eff > 0) {
-      co.pop += co.pop * st.grow * (1 - co.pop / Math.max(1, st.cap)) * st.eff * d;
+      /* a colony that just took a population hit from a raid recovers
+         much faster than its normal growth rate until about a cycle
+         after the attack, rather than crawling back at the usual pace */
+      const relief = (co.reliefUntil && G.day < co.reliefUntil) ? 6 : 1;
+      co.pop += co.pop * st.grow * relief * (1 - co.pop / Math.max(1, st.cap)) * st.eff * d;
       co.pop = clamp(co.pop, 1, st.cap);
     }
     if (st.ext > 0 && co.res.length) {
@@ -2593,6 +2651,17 @@ function allyOf(t) {
   if (rep >= 20) return true;
   return rep >= 0 && (t.kind === 'patrol' || t.kind === 'city' || t.kind === 'escort');
 }
+/* An ally you have real standing with does not eat your shots by
+   accident. A forced escort (one that launched specifically to fly with
+   you) or a faction ally you have a strong relationship with (45+, same
+   bar as "allied" on the ground) is trusted enough that player fire
+   simply passes through the hull instead of landing, so one stray shot
+   in a crowded firefight can't flip a good relationship hostile. Ships
+   you are merely on decent terms with (rep 20-44) still take the hit and
+   can still turn on you — that risk is the point at lower standing. */
+function trustedAlly(t) {
+  return !!t && t.ally && !t.hostile && (t.allyForced || (G.rep[t.fac] || 0) >= 45);
+}
 function allyShips() {
   const out = [];
   for (const t of neutrals) if (!t.dead && t.ally) out.push(t);
@@ -2917,7 +2986,7 @@ function combat(dt) {
       const dmg = s.gun * dt * 6;
       const allTgt = hostiles.concat(neutrals);
       for (const t of allTgt) {
-        if (t.dead) continue;
+        if (t.dead || trustedAlly(t)) continue;
         if (segDist(bx, by, ex, ey, t.x, t.y) < (t.rad || 36) + 4) hitShip(t, dmg, t.x, t.y, 'player');
       }
     }
@@ -2987,7 +3056,7 @@ function combat(dt) {
       if (b.l <= 0) continue;
       const all = hostiles.concat(neutrals);
       for (const t of all) {
-        if (t.dead) continue;
+        if (t.dead || trustedAlly(t)) continue;
         const rad = (t.rad || 36) + 4;
         if ((t.x - b.x) * (t.x - b.x) + (t.y - b.y) * (t.y - b.y) < rad * rad) {
           hitShip(t, b.d, b.x, b.y, 'player');
@@ -3115,7 +3184,7 @@ function blastAt(x, y, rad, dmg, mine, src) {
   boom(x, y, 30, '#ff8a5f', rad * 2.4);
   if (G.set.shake) cam.shake = Math.min(30, cam.shake + 10);
   /* who the blast is allowed to touch depends on who set it off */
-  const list = src === 'player' ? hostiles.concat(neutrals)
+  const list = src === 'player' ? hostiles.concat(neutrals).filter(t => !trustedAlly(t))
              : src === 'ally'   ? hostiles
              : hostiles.concat(neutrals).filter(t => t.ally);
   for (const t of list) {
@@ -3903,12 +3972,21 @@ function disembark() {
   G.onFoot = true;
   P.vx = 0; P.vy = 0; P.x += 46; 
   G.suit.air = G.suit.airMax;
-  say('Stepping outside. Air supply running.', '');
+  /* leave a waypoint on the ship itself, so a lost pilot always has a
+     line back to it on the chart */
+  G.waypoint = { x: shipAnchor.x, y: shipAnchor.y, name: 'Your ship', space: curSpaceKey(), auto: 'ship' };
+  say('Stepping outside. Air supply running. Your ship is marked as a waypoint.', '');
+}
+/* the "Your ship" pin that stepping outside drops is only meaningful while
+   the ship is parked; once it is gone it would float over empty ground */
+function dropShipWaypoint() {
+  if (G.waypoint && (G.waypoint.auto === 'ship' || G.waypoint.name === 'Your ship') && !(G.onFoot && shipAnchor)) G.waypoint = null;
 }
 function board() {
   G.onFoot = false;
   if (shipAnchor) { P.x = shipAnchor.x; P.y = shipAnchor.y; P.ang = shipAnchor.ang; }
   P.vx = 0; P.vy = 0; shipAnchor = null;
+  dropShipWaypoint();
   G.suit.air = G.suit.airMax;
   say('Back aboard.', '');
 }
@@ -4021,7 +4099,7 @@ function updOnFoot(dt, b, cells) {
     else if (!waterTarget) say('Stand at the water\u2019s edge to cast.', 'warn');
     else startFishing();
   }
-  if (tap('KeyP')) { if (siteFor(planet.id)) openPanel('farm'); else say('Build a farm plot first — press B.', 'warn'); }
+  if (tap('KeyP')) { if (siteFor(planet.id)) openPanel('farm'); else say('Build a farm plot first — Q, then the Buildings tab.', 'warn'); }
   if (tap('KeyX')) { if (planet.citadel) say('You cannot claim a city that somebody is already living on.', 'warn'); else claimPlanet(); }
   if (tap('KeyL')) say(nearShip ? 'Board the ship first (E), then press L.' : 'Your ship is elsewhere on the surface.', 'warn');
 }
@@ -4060,7 +4138,7 @@ function useStruct(s) {
     say('Stripped the wreck: ' + got + ' units of cargo and 4K.', 'good');
   } else if (s.t === 'beacon') {
     const list = nearbySystems(sys.x, sys.y, 3).filter(x => x !== sys);
-    if (list.length) { const tgt = pick(Math.random, list); G.waypoint = { x: tgt.x, y: tgt.y, name: tgt.name }; say('Beacon marks ' + tgt.name + ' on your chart.', 'rare'); }
+    if (list.length) { const tgt = pick(Math.random, list); G.waypoint = { x: tgt.x, y: tgt.y, name: tgt.name, space: 'galaxy' }; say('Beacon marks ' + tgt.name + ' on your chart.', 'rare'); }
   } else if (s.t === 'cache') {
     const k = pick(Math.random, ['relic','glyph','indium','voidcrystal','powercell','nanotube']);
     const n = addRes(k, ri(Math.random, 2, 8));
@@ -4075,12 +4153,39 @@ function useStruct(s) {
 function useBuilding(bd) {
   const d = BUILDS[bd.t];
   if (!d) return;
+  if (d.telepad) { useTelepad(bd); return; }
   if (d.plots) openPanel('farm');
   else if (d.craft) openPanel('craft');
   else if (d.store) openPanel('cargo');
   else if (d.water) { G.waterCan = 100; say('Watering can refilled.', 'good'); }
-  else if (d.beacon || bd.t === 'beacon') { G.waypoint = { x: sys.x, y: sys.y, name: planet.name }; say('Beacon set as your waypoint.', 'good'); }
+  else if (d.beacon || bd.t === 'beacon') { G.waypoint = { x: sys.x, y: sys.y, name: planet.name, space: 'galaxy' }; say('Beacon set as your waypoint.', 'good'); }
   else say(d.n + ' — running normally.', '');
+}
+/* Late-game transit: same world only, no fuel, instant. Standing inside a
+   pad and pressing E either links it to another pad on this planet or,
+   once linked, fires you straight to the other end. */
+function useTelepad(bd) {
+  const site = siteFor(planet.id);
+  if (!site) return;
+  if (bd.link) {
+    const other = site.build.find(x => x.t.indexOf('telepad') === 0 && x.padId === bd.link);
+    if (!other) { say('The far pad is gone. Link it to another one.', 'warn'); bd.link = null; return; }
+    P.x = other.x + 40; P.y = other.y; P.vx = 0; P.vy = 0;
+    boom(bd.x, bd.y, 10, '#ffc46b', 140); boom(other.x, other.y, 10, '#ffc46b', 140);
+    AU.play('upgrade'); say('Stepped through to ' + (other.padName || 'the linked pad') + '.', 'good');
+    return;
+  }
+  const others = site.build.filter(x => x.t.indexOf('telepad') === 0 && x !== bd);
+  if (!others.length) { say('No other telepad on this world yet — build a second one, then link them here.', 'warn'); return; }
+  let list = 'Link this pad to which one?\n' + others.map((o, i) => (i + 1) + '. ' + (o.padName || o.padId)).join('\n');
+  const raw = window.prompt ? window.prompt(list, '1') : '1';
+  const idx = (parseInt(raw, 10) || 0) - 1;
+  const target = others[idx];
+  if (!target) { say('No pad picked — nothing linked.', 'warn'); return; }
+  const nm = window.prompt ? window.prompt('Name this pad pair (optional)', bd.padName || 'Pad ' + bd.padId.slice(2)) : null;
+  if (nm && nm.trim()) { bd.padName = nm.trim().slice(0, 24); target.padName = bd.padName; }
+  bd.link = target.padId; target.link = bd.padId;
+  say('Linked. Step in and press E on either pad to cross ' + planet.name + ' instantly.', 'rare');
 }
 
 /* ------------------------------------------------------------
@@ -4297,7 +4402,15 @@ function talkOptions(npc) {
     opts.push({ l: 'Got any work?', f: () => {
         const q = makeQuest(rng((npc.seed + G.day * 7) >>> 0), npc.fac, npc.id);
         q.where = st && !st.lone ? st.name : 'out in the open';
+        /* remember exactly where this was offered — same coordinate space
+           as G.waypoint uses in whichever mode we're in right now, so a
+           waypoint set from it always lines up with the live map */
+        q.locMode = G.mode; q.locX = P.x; q.locY = P.y;
+        q.locSysKey = G.mode !== 'surface' && sys ? (sys.cx + '|' + sys.cy) : null;
+        q.locPlanetId = G.mode === 'surface' && planet ? planet.id : null;
+        q.locName = q.where;
         G.quests.push(q);
+        if (Object.keys(G.trackSide).length < 1) { G.trackSide[q.id] = 1; setQuestWaypoint(q); }
         setTalkLine('As it happens. ' + q.t + '. Pays ' + fmt(q.pay) + ' units on delivery.');
         relGain(npc, 3, 'work'); updRel(npc); talkOptions(npc);
       } });
@@ -4446,7 +4559,7 @@ function hailShip(t) {
         }
       }
       if (t.tipSystem === 'none') { setTalkLine('Nothing worth the fuel out this way. Try further in.'); return; }
-      G.waypoint = { x: t.tipSystem.x, y: t.tipSystem.y, name: t.tipSystem.name };
+      G.waypoint = { x: t.tipSystem.x, y: t.tipSystem.y, name: t.tipSystem.name, space: 'galaxy' };
       setTalkLine(t.tipSystem.name + '. Station there pays well and nobody asks much. Marked it for you — same as I said last time.');
       relBump(t.id, 1);
     } });
@@ -4713,21 +4826,105 @@ function encounterTick(dt) {
   G.encTimer -= dt * (P.boost > 0 ? 1.8 : 1);
   if (G.encTimer <= 0) { G.encTimer = 55 + Math.random() * 70; pick(Math.random, ENCOUNTERS)(); }
 }
+/* ------------------------------------------------------------
+   28b. COLONY RAIDS
+   Three outcomes instead of a flat, faceless population tax: a
+   temporary population hit that heals over about a cycle, an actual war
+   party that lands and has to be fought off in person if you're on that
+   world (or costs the garrison people if you're not), or a slice of
+   what you've actually built getting levelled outright. Walls and
+   planetary shields (colStats().def) make an attack less likely to land
+   at all, and bias which of the three you get when one does get through.
+------------------------------------------------------------ */
 function raidCheck(dt) {
+  if (G.raidParty) tickRaidParty(dt);
   const n = Object.keys(G.colonies).length;
   if (!n) return;
   G.raidTimer -= dt;
   if (G.raidTimer > 0) return;
   G.raidTimer = 360 + Math.random() * 420;
+  if (G.raidParty) return; /* one raid at a time */
   const keys = Object.keys(G.colonies);
   const co = G.colonies[pick(Math.random, keys)];
   const st = colStats(co);
-  if (st.def > 0) say('Raiders turned back by the shield over ' + co.name + '.', 'good');
-  else {
-    const lost = Math.round(co.pop * 0.18);
-    co.pop = Math.max(1, co.pop - lost); co.raided++;
-    AU.play('lose', 0.5);
-    say('Raiders hit ' + co.name + '. ' + fmtN(lost) + ' colonists lost. Build a planetary shield.', 'bad');
+  const guard = clamp(st.def, 0, 0.9);
+  if (Math.random() < guard) { say('Raiders turned back by the defences over ' + co.name + '.', 'good'); return; }
+  runColonyAttack(co, guard);
+}
+function runColonyAttack(co, guard) {
+  AU.play('lose', 0.5);
+  /* heavier walls/shields also push a raid that gets through toward the
+     milder outcomes, not just toward not happening at all */
+  const roll = Math.random() * (1 - guard * 0.4);
+  if (roll < 0.33) {
+    const lost = Math.max(1, Math.round(co.pop * 0.5));
+    co.pop = Math.max(1, co.pop - lost);
+    co.raided = (co.raided || 0) + 1;
+    co.reliefUntil = G.day + 1;
+    say('Raiders hit ' + co.name + '. ' + fmtN(lost) + ' colonists scattered or were taken — the colony should recover over about a cycle.', 'bad');
+  } else if (roll < 0.66) {
+    if (G.mode === 'surface' && planet && planet.id === co.id) {
+      spawnColonyRaidParty(co);
+    } else {
+      const lost = Math.round(co.pop * 0.12);
+      co.pop = Math.max(1, co.pop - lost);
+      co.raided = (co.raided || 0) + 1;
+      say('Raiders hit ' + co.name + ' while you were off-world. The garrison held, but lost ' + fmtN(lost) + ' people doing it.', 'bad');
+    }
+  } else {
+    const cnt = Math.min(co.build.length, Math.max(1, Math.ceil(co.build.length * 0.1)));
+    for (let i = 0; i < cnt; i++) co.build.splice(Math.floor(Math.random() * co.build.length), 1);
+    co.raided = (co.raided || 0) + 1;
+    say('Raiders levelled ' + cnt + ' structure' + (cnt === 1 ? '' : 's') + ' at ' + co.name + '.', 'bad');
+  }
+}
+/* an actual war party that lands near your colony and has to be fought
+   off in person — it reuses the settlement/NPC machinery so it behaves
+   like any hostile camp on the ground, it just didn't come from the
+   galaxy seed and it disappears once it's resolved */
+function spawnColonyRaidParty(co) {
+  const zone = colonyZoneFor({ id: co.id }) || { cx: P.x, cy: P.y, rad: 400 };
+  const cx = Math.floor(zone.cx / SURF_CELL), cy = Math.floor(zone.cy / SURF_CELL);
+  const cell = surfCell(planet, cx, cy);
+  const r = rng((Math.random() * 1e9) | 0);
+  const id = 'raid:' + co.id + ':' + G.day + ':' + Math.floor(G.t);
+  const size = ri(r, 4, 7);
+  const npcs = [];
+  for (let i = 0; i < size; i++) {
+    const a = (i / size) * TAU, d = rr(r, 140, 320);
+    const role = pick(r, ROLES);
+    const npc = makeNpc(rng((r() * 1e9) | 0), role, 'outlaw', zone.cx + Math.cos(a) * d, zone.cy + Math.sin(a) * d, id + '|npc' + i);
+    npc.weapon = pick(r, ['bolt', 'ray', 'bomb']);
+    npc.dmg = 20 + npc.level * 8;
+    npcs.push(npc);
+  }
+  const party = { id: id, name: co.name + ' raiders', fac: 'outlaw', x: zone.cx, y: zone.cy, r: zone.rad,
+    huts: [], npcs: npcs, walls: [], razed: false, alert: 1, hostile: true, barbaric: true,
+    bombCd: 4, stockSeed: 0, pad: { x: zone.cx, y: zone.cy + 300 } };
+  cell.settlement = party;
+  G.raidParty = { co: co.id, st: party, t: 0, limit: 110 };
+  say('Raiders are on the ground at ' + co.name + ' — find them before they tear the place apart.', 'bad');
+}
+function tickRaidParty(dt) {
+  const rp = G.raidParty;
+  if (!rp) return;
+  rp.t += dt;
+  const alive = rp.st.npcs.some(nc => !nc.dead);
+  if (!alive) {
+    G.raidParty = null;
+    const co = G.colonies[rp.co];
+    say('Raiders at ' + (co ? co.name : 'the colony') + ' wiped out. Nothing lost.', 'good');
+    return;
+  }
+  if (rp.t > rp.limit) {
+    const co = G.colonies[rp.co];
+    G.raidParty = null;
+    if (co) {
+      const cnt = Math.min(co.build.length, Math.max(1, Math.ceil(co.build.length * 0.1)));
+      for (let i = 0; i < cnt; i++) co.build.splice(Math.floor(Math.random() * co.build.length), 1);
+      co.raided = (co.raided || 0) + 1;
+      say('Nobody dealt with the raiders at ' + co.name + ' in time. ' + cnt + ' structure' + (cnt === 1 ? '' : 's') + ' lost.', 'bad');
+    }
   }
 }
 
@@ -5178,6 +5375,7 @@ function renderSurface() {
     ctx.beginPath(); ctx.ellipse(P.x + 16, P.y + 22, 22, 9, 0, 0, TAU); ctx.fill();
     drawShip(ctx, P.x, P.y, P.ang, ST().col, 1, P.thrust > 0, ST().s);
   }
+  drawWaypointsInWorld(ctx);
   drawFloaters();
   end();
   /* weather overlay */
@@ -5312,6 +5510,7 @@ function renderSystem() {
     ctx.fillStyle = '#6fd8ff'; ctx.font = (14 / cam.z) + 'px "Chakra Petch", sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(sys.stName || 'Trade station', sp[0], sp[1] + 134 / cam.z); ctx.textAlign = 'left';
   }
+  drawWaypointsInWorld(ctx);
   for (const t of neutrals) drawTraffic(t, false);
   for (const t of hostiles) drawTraffic(t, true);
   drawBeams(); drawBullets(); drawParts();
@@ -5570,13 +5769,35 @@ function renderGalaxy() {
     ctx.fillText(FACTIONS[s.faction].n, s.x, s.y + 100 / cam.z);
     ctx.textAlign = 'left';
   }
-  if (G.waypoint) {
+  drawWaypointsInWorld(ctx);
+  for (const t of neutrals) drawTraffic(t, false);
+  for (const t of hostiles) drawTraffic(t, true);
+  drawBeams(); drawBullets(); drawParts();
+  drawShip(ctx, P.x, P.y, P.ang, ST().col, 1.0 / cam.z, P.thrust > 0, ST().s);
+  drawFloaters();
+  end();
+}
+/* the dotted line(s) from the ship out to whatever's pinned — shared by the
+   galaxy, system and surface flight views. Only draws waypoints that belong
+   to whichever space you're actually in right now. */
+function drawWaypointsInWorld(ctx) {
+  const space = curSpaceKey();
+  const wp = waypointInSpace(space);
+  if (wp) {
     ctx.strokeStyle = '#d484ff'; ctx.lineWidth = 2 / cam.z; ctx.globalAlpha = 0.5; ctx.setLineDash([16, 14]);
-    ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(G.waypoint.x, G.waypoint.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(wp.x, wp.y); ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
+    const wdist = Math.round(Math.hypot(wp.x - P.x, wp.y - P.y));
+    const wang = Math.atan2(wp.y - P.y, wp.x - P.x);
+    const wLabelD = Math.min(wdist, 60 / cam.z);
+    const wlx = P.x + Math.cos(wang) * wLabelD, wly = P.y + Math.sin(wang) * wLabelD;
+    ctx.fillStyle = '#d484ff'; ctx.font = (11 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
+    ctx.fillText((wp.name || 'Waypoint') + ' · ' + fmtN(wdist) + ' u', wlx, wly - 10 / cam.z);
+    ctx.textAlign = 'left';
   }
-  for (const c in G.waypoints6) {
-    const w = G.waypoints6[c]; if (!w) continue;
+  const pins = waypoints6InSpace(space);
+  for (const c in pins) {
+    const w = pins[c]; if (!w) continue;
     const col = WAYPOINT_COLORS[c];
     ctx.strokeStyle = col; ctx.lineWidth = 2 / cam.z; ctx.globalAlpha = 0.55; ctx.setLineDash([16, 14]);
     ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(w.x, w.y); ctx.stroke();
@@ -5588,15 +5809,9 @@ function renderGalaxy() {
     const labelD = Math.min(dist, 60 / cam.z);
     const lx = P.x + Math.cos(ang) * labelD, ly = P.y + Math.sin(ang) * labelD;
     ctx.font = (11 / cam.z) + 'px "IBM Plex Mono", monospace'; ctx.textAlign = 'center';
-    ctx.fillText(fmtN(dist) + ' u', lx, ly - 10 / cam.z);
+    ctx.fillText((w.name ? w.name + ' · ' : '') + fmtN(dist) + ' u', lx, ly - 10 / cam.z);
     ctx.textAlign = 'left';
   }
-  for (const t of neutrals) drawTraffic(t, false);
-  for (const t of hostiles) drawTraffic(t, true);
-  drawBeams(); drawBullets(); drawParts();
-  drawShip(ctx, P.x, P.y, P.ang, ST().col, 1.0 / cam.z, P.thrust > 0, ST().s);
-  drawFloaters();
-  end();
 }
 function drawBullets() {
   for (const b of bullets) {
@@ -5701,6 +5916,8 @@ function renderScanner() {
     const site = siteFor(planet.id);
     if (site) for (const bd of site.build) blip(bd.x, bd.y, '#4fe3d0', 3);
     if (G.onFoot && shipAnchor) blip(shipAnchor.x, shipAnchor.y, '#ffffff', 4);
+    { const wp = waypointInSpace(curSpaceKey()); if (wp) blip(wp.x, wp.y, '#d484ff', 4.2); }
+    { const pins = waypoints6InSpace(curSpaceKey()); for (const c in pins) blip(pins[c].x, pins[c].y, WAYPOINT_COLORS[c], 4.2); }
   } else if (G.mode === 'system') {
     blip(0, 0, sys.star.c, 5);
     for (let i = 0; i < sys.planets.length; i++) {
@@ -5708,6 +5925,8 @@ function renderScanner() {
       blip(pp[0], pp[1], ROYGBIV[i % 7], clamp(pl.r / 40, 2.4, 5.5));
     }
     if (sys.hasStation) { const sp = stationPos(sys, G.t); tradeBlip(sp[0], sp[1], 4.2); }
+    { const wp = waypointInSpace(curSpaceKey()); if (wp) blip(wp.x, wp.y, '#d484ff', 4.2); }
+    { const pins = waypoints6InSpace(curSpaceKey()); for (const c in pins) blip(pins[c].x, pins[c].y, WAYPOINT_COLORS[c], 4.2); }
     for (const t of neutrals) triBlip(t.x, t.y, t.ally ? '#6cff8f' : '#6fb8ff', tierRank(t.tier) >= 4 ? 6.5 : tierRank(t.tier) === 3 ? 4.8 : 3);
     for (const t of hostiles) triBlip(t.x, t.y, '#ff5f5f', tierRank(t.tier) >= 4 ? 6.5 : tierRank(t.tier) === 3 ? 4.8 : 3.2);
   } else {
@@ -5725,8 +5944,8 @@ function renderScanner() {
       blip(s.x, s.y, ROYGBIV[Math.abs(hash2(s.cx, s.cy, 0x2e0)) % 7], s.hasStation ? 4 : 3.4);
       if (s.hasStation) tradeBlip(s.x, s.y, 5);
     }
-    if (G.waypoint) blip(G.waypoint.x, G.waypoint.y, '#d484ff', 4.2);
-    for (const c in G.waypoints6) { const w = G.waypoints6[c]; if (w) blip(w.x, w.y, WAYPOINT_COLORS[c], 4.2); }
+    { const wp = waypointInSpace(curSpaceKey()); if (wp) blip(wp.x, wp.y, '#d484ff', 4.2); }
+    { const pins = waypoints6InSpace(curSpaceKey()); for (const c in pins) blip(pins[c].x, pins[c].y, WAYPOINT_COLORS[c], 4.2); }
     for (const t of neutrals) triBlip(t.x, t.y, t.ally ? '#6cff8f' : '#6fb8ff', 3);
     for (const t of hostiles) triBlip(t.x, t.y, '#ff5f5f', 3.2);
   }
@@ -5786,6 +6005,7 @@ function renderHUD(dt) {
     sub = b.n + ' · ' + (shel ? 'sheltered' : b.haz > 0.3 ? b.hazn : 'Stable') + (G.colonies[planet.id] ? ' · your colony' : G.bases[planet.id] ? ' · your base' : '');
     coord = 'SURF ' + Math.round(P.x) + ' / ' + Math.round(P.y);
     wx = (sheltered(P.x, P.y) ? 'weather held off' : (planet.weatherNow || b.wx[0])) + ' · ' + (sunAmount() > 0.5 ? 'day' : 'night');
+    { const wp = waypointInSpace('surface:' + planet.id); if (wp) wx += ' · waypoint ' + fmtN(Math.round(Math.hypot(wp.x - P.x, wp.y - P.y))) + ' u'; }
   } else if (G.mode === 'system' && sys) {
     name = sys.name;
     sub = sys.star.n + ' · ' + FACTIONS[sys.faction].n + (sys.danger ? ' · threat ' + sys.danger : '');
@@ -5796,10 +6016,11 @@ function renderHUD(dt) {
     wx = 'pull ' + gpull.toFixed(2) + ' g · ' +
       (rim < 0.35 ? 'inner system' : rim < 0.8 ? 'mid orbits' : rim < 1.15 ? 'outer orbits' : rim < 1.8 ? 'the rim' : 'deep dark') +
       (rim > 1.1 ? ' · heavy traffic' : '');
+    { const wp = waypointInSpace('system:' + sys.cx + '|' + sys.cy); if (wp) wx += ' · waypoint ' + fmtN(Math.round(Math.hypot(wp.x - P.x, wp.y - P.y))) + ' u'; }
   } else {
     name = 'Deep space'; sub = 'No stellar body in range';
     coord = 'GAL ' + Math.floor(P.x / GAL_CELL) + '.' + Math.floor(P.y / GAL_CELL);
-    wx = G.waypoint ? 'Waypoint: ' + G.waypoint.name : '';
+    { const wp = waypointInSpace('galaxy'); wx = wp ? 'Waypoint: ' + wp.name + ' · ' + fmtN(Math.round(Math.hypot(wp.x - P.x, wp.y - P.y))) + ' u' : ''; }
   }
   $('loc-name').textContent = name; $('loc-sub').textContent = sub;
   $('loc-coord').textContent = coord; $('loc-weather').textContent = wx;
@@ -5811,11 +6032,11 @@ function renderHUD(dt) {
     const title = e.main ? q.t : q.t;
     let prog = '';
     if (e.main && q.p) { const pr = q.p(); prog = fmtN(Math.min(pr[0], pr[1])) + ' / ' + fmtN(pr[1]); }
-    else if (!e.main) { const pr = questProgress(q); prog = fmtN(pr[0]) + ' / ' + fmtN(pr[1]) + ' · ' + fmt(q.pay) + ' units'; }
+    else if (!e.main) { const pr = questProgress(q); const dt = questDistText(q); prog = fmtN(pr[0]) + ' / ' + fmtN(pr[1]) + ' · ' + fmt(q.pay) + ' units' + (dt ? ' · ' + dt : ''); }
     oh += '<div class="objrow ' + (e.main ? 'main' : 'side') + '"><span>' + title + '</span>' +
       (prog ? '<i>' + prog + '</i>' : '') + '</div>';
   }
-  $('obj-text').innerHTML = oh || 'Nothing tracked. Press Q to open the journal.';
+  $('obj-text').innerHTML = oh || 'Nothing tracked. Press Q and open the Journal tab.';
   $('obj-prog').textContent = '';
 
   /* landing assist */
@@ -5889,7 +6110,6 @@ function keyList() {
     add('F', 'Scan surroundings');
     add('V', waterTarget && hasTool('fish') ? 'Cast a line' : 'Fish (need rod + water)', !!(waterTarget && hasTool('fish')));
     add('P', 'Farmland');
-    add('B', 'Construction');
     if (!G.colonies[planet.id]) add('X', 'Claim this world');
     else if (G.colonies[planet.id]) add('X', 'Already yours');
   } else if (G.mode === 'surface') {
@@ -5900,7 +6120,6 @@ function keyList() {
     add('E', 'Step outside on foot', true);
     add('L', 'Launch', !!G.thrustersFixed);
     add('F', 'Scan surroundings');
-    add('B', 'Construction');
     if (!G.colonies[planet.id]) add('X', 'Claim this world');
   } else if (G.mode === 'system') {
     add('WASD', 'Fly');
@@ -5922,16 +6141,10 @@ function keyList() {
   }
 
   /* panels are always reachable */
-  add('I', 'Cargo hold');
-  if (G.onFoot) add('Y', 'Stats and gear', true); else add('Y', 'Stats and gear');
-  add('Q', 'Journal');
-  add('M', 'Star chart');
+  add('Q', 'Tablet — inventory, buildings, crew, journal & more', true);
+  add('Y', 'Stats and gear', !!G.onFoot);
+  add('M', G.mode === 'surface' ? 'Local map' : G.mode === 'system' ? 'System map' : 'Star chart');
   add('K', 'Fabricator');
-  add('H', 'Ship parts');
-  add('U', 'Refit modules');
-  add('N', 'Crew');
-  add('G', 'Empire');
-  add('C', 'Codex');
   if (G.docked) add('T', 'Trade terminal', true);
   add('Z', 'Hold 5s to scuttle');
   add('Esc', 'Pause');
@@ -6118,11 +6331,19 @@ function objCheck() { mainCheck(); }
 ------------------------------------------------------------ */
 const overlay = $('overlay');
 let fromTitle = false;
-let openId = null, marketTab = 'trade', craftTab = 'Components', buildTab = 'colony', codexTab = 'all', crewTab = 'roster', questTab = 'main';
+let openId = null, marketTab = 'trade', craftTab = 'Components', buildTab = 'colony', codexTab = 'all', crewTab = 'roster', questTab = 'main', buildTier = 1;
+/* the slate: one tablet overlay, eight tabs. Each tab is one of the old
+   stand-alone menus; openId still holds the tab's own id so everything that
+   asks "is the cargo screen open" keeps working. */
+const TABLET_TABS = { empire: 'Relations', build: 'Buildings', crew: 'Ship roster', cargo: 'Inventory',
+  refit: 'Ship refit', hangar: 'Hangar', codex: 'Codex', quests: 'Journal' };
+const isTablet = id => Object.prototype.hasOwnProperty.call(TABLET_TABS, id);
+let lastTab = 'cargo';
 function openPanel(id) {
   const all = document.querySelectorAll('.panel');
   for (let i = 0; i < all.length; i++) all[i].classList.remove('open');
-  const p = $('p-' + id); if (!p) return;
+  if (isTablet(id)) lastTab = id;
+  const p = $(isTablet(id) ? 'p-tablet' : 'p-' + id); if (!p) return;
   p.classList.add('open'); overlay.classList.remove('hidden'); openId = id;
   renderPanel(id);
 }
@@ -6137,6 +6358,8 @@ function closePanel() {
 overlay.addEventListener('click', e => {
   if (e.target === overlay) return closePanel();
   if (e.target.closest('[data-close]')) return closePanel();
+  const tb = e.target.closest('[data-tab]');
+  if (tb) { openPanel(tb.dataset.tab); return; }
   const a = e.target.closest('[data-act]');
   if (a) { doAction(a.dataset.act, a.dataset.k, a.dataset.n); return; }
 });
@@ -6184,8 +6407,13 @@ overlay.addEventListener('input', e => {
 });
 function renderPanel(id) {
   if (!id) return;
-  const el = $('p-' + id); if (!el) return;
+  const el = $(isTablet(id) ? 'p-tablet' : 'p-' + id); if (!el) return;
   const body = el.querySelector('.pbody');
+  if (isTablet(id)) {
+    const tabs = el.querySelectorAll('.ttab');
+    for (let i = 0; i < tabs.length; i++) tabs[i].classList.toggle('on', tabs[i].dataset.tab === id);
+    $('tablet-title').textContent = '// ' + TABLET_TABS[id].toUpperCase();
+  }
   if (id === 'cargo') body.innerHTML = uiCargo();
   else if (id === 'market') body.innerHTML = uiMarket();
   else if (id === 'shop') body.innerHTML = uiShop();
@@ -6695,13 +6923,19 @@ function uiBuild() {
       '<div class="stat"><i>Structures</i><b>' + site.build.length + '</b></div></div>';
   }
   h += '<h4 class="sec">Available</h4>';
+  h += '<div class="tabs">' + [1, 2, 3].map(t =>
+    '<button class="tab ' + (buildTier === t ? 'on' : '') + '" data-act="btier" data-k="' + t + '">' +
+    (t === 1 ? 'Tier I' : t === 2 ? 'Tier II — rarer, stronger' : 'Tier III — endgame') + '</button>').join('') + '</div>';
+  let shown = 0;
   for (const k of BUILD_KEYS) {
     const d = BUILDS[k];
     const personal = !!d.personal;
     if ((buildTab === 'personal') !== personal) continue;
+    if (d.tier !== buildTier) continue;
     /* tier II and III are locked until at least one of the tier below is
        actually standing — no skipping straight to the rare-material end */
     if (d.upgradeOf && !site.build.some(x => x.t === d.upgradeOf)) continue;
+    shown++;
     const owned = site.build.filter(x => x.t === k).length;
     /* the credits price climbs with each one you already own — building a
        fifth solar array is a bigger ask than the first — but the raw
@@ -6727,6 +6961,9 @@ function uiBuild() {
       '<small class="cost">' + costText(cost) + '</small></span>' +
       '<span class="pr">' + fmt(cr) + '</span>' +
       '<span class="acts"><button class="btn sm" data-act="build" data-k="' + k + '"' + (afford ? '' : ' disabled') + '>Build</button></span></div>';
+  }
+  if (!shown) {
+    h += '<p class="empty">' + (buildTier === 1 ? 'Nothing in this category yet.' : 'Nothing unlocked at this tier — build at least one Tier ' + (buildTier === 2 ? 'I' : 'II') + ' structure of the type you want first.') + '</p>';
   }
   if (buildTab === 'colony' && isColony) {
     syncDistricts(planet.id, true);
@@ -6764,7 +7001,7 @@ function uiFarm() {
   if (G.mode !== 'surface' || !planet) return '<p class="empty">Farmland is tied to a world. Land first.</p>';
   const pid = planet.id;
   const total = totalPlots(pid);
-  if (!total) return '<p class="empty">No plots here yet. Open construction (B) and put down a farm plot.</p>';
+  if (!total) return '<p class="empty">No plots here yet. Open the tablet (Q), pick the Buildings tab and put down a farm plot.</p>';
   const f = syncPlots(pid);
   const seeds = Object.keys(G.cargo).filter(k => MAT[k] && MAT[k].cat === 'seed' && G.cargo[k] >= 1);
   const suited = Object.keys(CROPS).filter(c => CROPS[c].biome.indexOf(planet.biome) >= 0);
@@ -7048,10 +7285,12 @@ function uiQuests() {
   for (const q of G.quests) {
     const pr = questProgress(q), ready = pr[0] >= pr[1];
     const on = !!G.trackSide[q.id];
+    const dtext = questDistText(q);
     h += '<div class="row ' + (ready ? 'sel' : '') + '"><span class="dot" style="background:' + FACTIONS[q.fac].c + '"></span>' +
       '<span class="nm">' + q.t + '<small>' + FACTIONS[q.fac].n + (q.where ? ' · ' + q.where : '') + ' · ' +
-      (ready ? 'ready to hand in' : fmtN(pr[0]) + ' of ' + fmtN(pr[1])) + '</small></span>' +
+      (ready ? 'ready to hand in' : fmtN(pr[0]) + ' of ' + fmtN(pr[1])) + (dtext ? ' · ' + dtext : '') + '</small></span>' +
       '<span class="pr">' + fmt(q.pay) + '</span>' +
+      (q.locX !== undefined ? '<button class="btn xs ghost" data-act="questcourse" data-k="' + q.id + '">Course</button>' : '') +
       '<span class="acts"><button class="btn xs ' + (on ? '' : 'ghost') + '" data-act="tracks" data-k="' + q.id + '">' + (on ? 'Pinned' : 'Pin') + '</button>' +
       '<button class="btn xs" data-act="turnin" data-k="' + q.id + '"' + (ready ? '' : ' disabled') + '>Claim</button>' +
       '<button class="btn xs ghost" data-act="abandon" data-k="' + q.id + '">Drop</button></span></div>';
@@ -7124,16 +7363,27 @@ const CHART_ROYGBIV = ['#ff5f5f', '#ff9f4d', '#ffe94d', '#6cff8f', '#6fb8ff', '#
 const WAYPOINT_COLORS = { red: '#ff5f5f', orange: '#ff9f4d', yellow: '#ffe94d', green: '#6cff8f', blue: '#6fb8ff', purple: '#d484ff' };
 let waypointArm = null; /* colour currently armed for placement, or null */
 function setWaypoint6(color, x, y, name) {
-  G.waypoints6[color] = { x: x, y: y, name: name };
+  G.waypoints6[color] = { x: x, y: y, name: name, space: curSpaceKey() };
   say(color[0].toUpperCase() + color.slice(1) + ' waypoint set: ' + name, 'good');
+}
+/* pins belonging to whichever space we're currently in — deep space, this
+   system, or this planet's surface — kept separate from every other one */
+function waypointInSpace(space) {
+  return (G.waypoint && (G.waypoint.space || 'galaxy') === space) ? G.waypoint : null;
+}
+function waypoints6InSpace(space) {
+  const out = {};
+  for (const c in G.waypoints6) if (G.waypoints6[c] && (G.waypoints6[c].space || 'galaxy') === space) out[c] = G.waypoints6[c];
+  return out;
 }
 function clearWaypoint6(color) { delete G.waypoints6[color]; }
 /* draws every placed waypoint as a dotted line from (fx,fy) out to it, with
    the live distance printed partway along the line — used by both the
    in-world renderer and the scanner/chart panel */
-function drawWaypoints6(g, fx, fy, toScreen, worldUnitsPerPx) {
-  for (const color in G.waypoints6) {
-    const w = G.waypoints6[color]; if (!w) continue;
+function drawWaypoints6(g, fx, fy, toScreen, worldUnitsPerPx, pins) {
+  pins = pins || G.waypoints6;
+  for (const color in pins) {
+    const w = pins[color]; if (!w) continue;
     const col = WAYPOINT_COLORS[color] || '#fff';
     const a = toScreen(fx, fy), b = toScreen(w.x, w.y);
     g.strokeStyle = col; g.globalAlpha = 0.6; g.setLineDash([7, 6]); g.lineWidth = 1.6;
@@ -7154,11 +7404,275 @@ function drawWaypoints6(g, fx, fy, toScreen, worldUnitsPerPx) {
 /* --- star chart --- */
 let chartZoom = 1, chartCx = 0, chartCy = 0, chartSel = null, chartPanned = false;
 function chartHome() {
-  chartCx = G.mode === 'galaxy' ? P.x : (sys ? sys.x : 0);
-  chartCy = G.mode === 'galaxy' ? P.y : (sys ? sys.y : 0);
+  /* P.x/P.y are already in whatever coordinate space the current mode
+     uses — galaxy-wide, this system's local frame, or this planet's
+     local frame — so centring on the player is the same line everywhere */
+  chartCx = P.x; chartCy = P.y;
   chartPanned = false;
 }
 function drawChart() {
+  if (G.mode === 'surface' && planet) drawChartSurface();
+  else if (G.mode === 'system' && sys) drawChartSystem();
+  else drawChartGalaxy();
+  syncChartToolbar();
+}
+let chartPinBarBuilt = false;
+/* Updates the permanent toolbar buttons in place — text, classes and
+   visibility only, never innerHTML — so nothing is ever destroyed and
+   recreated under a player's cursor. Safe to call every single frame. */
+function syncChartToolbar() {
+  const zl = $('chart-zoomlvl'); if (zl) zl.textContent = '×' + chartZoom.toFixed(2) + (chartPanned ? ' · panned' : '');
+  const wd = $('chart-wpdist');
+  if (wd) {
+    const wp = waypointInSpace(curSpaceKey());
+    if (wp) {
+      const dist = Math.round(Math.hypot(wp.x - P.x, wp.y - P.y));
+      wd.textContent = 'Waypoint: ' + wp.name + ' · ' + fmtN(dist) + ' u';
+    } else wd.textContent = '';
+  }
+  const pinbar = $('chart-pinbar');
+  if (!pinbar) return;
+  pinbar.classList.toggle('hidden', !chartShowPins);
+  if (!chartShowPins) return;
+  if (!chartPinBarBuilt) {
+    let h = '';
+    for (const c in WAYPOINT_COLORS) h += '<button class="btn xs ghost" data-act="wparm" data-k="' + c + '" style="border-color:' + WAYPOINT_COLORS[c] + ';color:' + WAYPOINT_COLORS[c] + '"></button>';
+    h += '<button class="btn xs ghost" data-act="wpclear">Clear pins</button>';
+    pinbar.innerHTML = h;
+    chartPinBarBuilt = true;
+  }
+  const herePins = waypoints6InSpace(curSpaceKey());
+  for (const c in WAYPOINT_COLORS) {
+    const btn = pinbar.querySelector('[data-act="wparm"][data-k="' + c + '"]');
+    if (!btn) continue;
+    const here = herePins[c];
+    const armed = waypointArm === c;
+    btn.classList.toggle('ghost', !armed);
+    if (armed) btn.textContent = 'Click a star\u2026';
+    else if (here) {
+      const dist = Math.round(Math.hypot(here.x - P.x, here.y - P.y));
+      btn.textContent = c + ' \u2713 · ' + fmtN(dist) + ' u';
+    } else btn.textContent = c;
+  }
+}
+/* ------------------------------------------------------------
+   32b. IN-SYSTEM MAP
+   Star at the centre, orbit rings, planets at their live position,
+   the station, and every ship currently loaded — a proper local chart
+   rather than the galaxy-wide star map.
+------------------------------------------------------------ */
+let chartShowPins = true; // pins are enabled in every chart mode now — each is tagged to its own space
+function drawChartSystem() {
+  const c = $('chart'), g = c.getContext('2d');
+  const CW = c.width, CH = c.height;
+  if (!chartPanned && !chartSel) chartHome();
+  g.fillStyle = '#02060b'; g.fillRect(0, 0, CW, CH);
+  let maxOrbit = 1200;
+  for (const pl of sys.planets) maxOrbit = Math.max(maxOrbit, pl.orbit || 0);
+  if (sys.hasStation) maxOrbit = Math.max(maxOrbit, sys.stOrbit || 0);
+  const scale = (Math.min(CW, CH) * 0.42 / maxOrbit) * chartZoom;
+  const ox = CW / 2 - chartCx * scale, oy = CH / 2 - chartCy * scale;
+  const seen = [];
+
+  g.fillStyle = sys.star.c; g.beginPath(); g.arc(ox, oy, 7, 0, TAU); g.fill();
+  g.strokeStyle = 'rgba(255,233,168,.25)'; g.lineWidth = 1;
+  g.beginPath(); g.arc(ox, oy, 14, 0, TAU); g.stroke();
+
+  for (const pl of sys.planets) {
+    g.strokeStyle = 'rgba(159,227,255,.14)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(ox, oy, (pl.orbit || 0) * scale, 0, TAU); g.stroke();
+    const pp = planetPos(pl, G.t);
+    const px = ox + pp[0] * scale, py = oy + pp[1] * scale;
+    const owned = !!G.colonies[pl.id], based = !owned && !!G.bases[pl.id];
+    seen.push({ x: px, y: py, s: { x: pp[0], y: pp[1], name: pl.name,
+      info: '<b style="color:var(--teal)">' + pl.name + '</b> · ' + (BIOMES[pl.biome] ? BIOMES[pl.biome].n : pl.biome) + ' world' +
+        (owned ? ' · your colony' : based ? ' · your base' : '') + ' · double-click to set a waypoint' } });
+    g.fillStyle = (BIOMES[pl.biome] && BIOMES[pl.biome].acc) || '#9fb3c8';
+    g.beginPath(); g.arc(px, py, 4.5, 0, TAU); g.fill();
+    if (owned) { g.strokeStyle = '#4fe3d0'; g.lineWidth = 2; g.beginPath(); g.arc(px, py, 10, 0, TAU); g.stroke(); }
+    else if (based) { g.strokeStyle = '#ffc46b'; g.lineWidth = 1.6; g.beginPath(); g.arc(px, py, 9, 0, TAU); g.stroke(); }
+    if (chartZoom > 0.5) {
+      g.fillStyle = 'rgba(207,230,238,.85)'; g.font = '10px "IBM Plex Mono", monospace'; g.textAlign = 'center';
+      g.fillText(pl.name, px, py + 17); g.textAlign = 'left';
+    }
+  }
+  if (sys.hasStation) {
+    const sp = stationPos(sys, G.t);
+    const stx = ox + sp[0] * scale, sty = oy + sp[1] * scale;
+    g.strokeStyle = '#00ffff'; g.fillStyle = 'rgba(0,255,255,.2)'; g.lineWidth = 1.2;
+    g.beginPath();
+    for (let i = 0; i < 6; i++) { const a = i * TAU / 6; const hx = stx + Math.cos(a) * 8, hy = sty + Math.sin(a) * 8; i ? g.lineTo(hx, hy) : g.moveTo(hx, hy); }
+    g.closePath(); g.fill(); g.stroke();
+    seen.push({ x: stx, y: sty, s: { x: sp[0], y: sp[1], name: sys.stName || 'Station',
+      info: '<b style="color:#6fd8ff">' + (sys.stName || 'Station') + '</b> · trade station · double-click to set a waypoint' } });
+  }
+  const blip = (t, col) => {
+    const x = ox + t.x * scale, y = oy + t.y * scale;
+    if (x < -20 || x > CW + 20 || y < -20 || y > CH + 20) return;
+    g.fillStyle = col; g.beginPath(); g.arc(x, y, tierRank(t.tier) >= 3 ? 5 : 3, 0, TAU); g.fill();
+  };
+  for (const t of hostiles) blip(t, '#ff6a4d');
+  for (const t of neutrals) blip(t, '#6fd8ff');
+
+  const px = ox + P.x * scale, py = oy + P.y * scale;
+  g.strokeStyle = '#d484ff'; g.lineWidth = 2;
+  g.beginPath(); g.arc(px, py, 9 + Math.sin(G.t * 3) * 2, 0, TAU); g.stroke();
+  g.beginPath(); g.moveTo(px - 15, py); g.lineTo(px - 6, py); g.moveTo(px + 6, py); g.lineTo(px + 15, py); g.stroke();
+  const sysSpace = 'system:' + sys.cx + '|' + sys.cy;
+  { const wp = waypointInSpace(sysSpace); if (wp) {
+    const wx = ox + wp.x * scale, wy = oy + wp.y * scale;
+    g.strokeStyle = '#ffc46b'; g.setLineDash([6, 5]);
+    g.beginPath(); g.moveTo(px, py); g.lineTo(wx, wy); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.arc(wx, wy, 8, 0, TAU); g.stroke();
+  } }
+  drawWaypoints6(g, P.x, P.y, (wx, wy) => [ox + wx * scale, oy + wy * scale], null, waypoints6InSpace(sysSpace));
+  chartHits = seen;
+  $('chart-info').innerHTML = (chartSel && chartSel.info ? chartSel.info :
+    '<b style="color:var(--teal)">' + sys.name + '</b> · in-system chart · teal rings are worlds you own, amber is a personal base, red are hostiles, cyan the station. Click a point to see what it is, double-click to set a waypoint there.');
+}
+/* ------------------------------------------------------------
+   32c. SURFACE MAP
+   Everything that has actually been explored around you: your own
+   colony or base footprint, other settlements coloured by relation
+   (teal = yours, faction colour = neutral or allied, red = hostile),
+   each with a territory ring, plus wanderers and known structures.
+------------------------------------------------------------ */
+function drawChartSurface() {
+  const c = $('chart'), g = c.getContext('2d');
+  const CW = c.width, CH = c.height;
+  if (!chartPanned && !chartSel) chartHome();
+  g.fillStyle = '#050a08'; g.fillRect(0, 0, CW, CH);
+  const scale = 0.34 * chartZoom;
+  const ox = CW / 2 - chartCx * scale, oy = CH / 2 - chartCy * scale;
+  const seen = [];
+
+  g.strokeStyle = 'rgba(159,227,255,.06)'; g.lineWidth = 1;
+  const gridStep = SURF_CELL * scale;
+  if (gridStep > 8) {
+    for (let x = (ox % gridStep); x < CW; x += gridStep) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, CH); g.stroke(); }
+    for (let y = (oy % gridStep); y < CH; y += gridStep) { g.beginPath(); g.moveTo(0, y); g.lineTo(CW, y); g.stroke(); }
+  }
+
+  /* your own colony/base footprint — the centroid and spread of every
+     building you have actually put down on this world */
+  const site = G.colonies[planet.id] || G.bases[planet.id];
+  if (site && site.build.length) {
+    let cx = 0, cy = 0; for (const b of site.build) { cx += b.x; cy += b.y; } cx /= site.build.length; cy /= site.build.length;
+    let spread = 300; for (const b of site.build) spread = Math.max(spread, Math.hypot(b.x - cx, b.y - cy) + 220);
+    const px = ox + cx * scale, py = oy + cy * scale;
+    g.fillStyle = 'rgba(79,227,208,.08)'; g.strokeStyle = '#4fe3d0'; g.lineWidth = 2;
+    g.beginPath(); g.arc(px, py, spread * scale, 0, TAU); g.fill(); g.stroke();
+    if (chartZoom > 0.4) { g.fillStyle = '#4fe3d0'; g.font = '11px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText(site.name || 'Your colony', px, py - spread * scale - 8); g.textAlign = 'left'; }
+    seen.push({ x: px, y: py, s: { x: cx, y: cy, name: site.name || 'Your colony',
+      info: '<b style="color:#4fe3d0">' + (site.name || 'Your colony') + '</b> · ' + (G.colonies[planet.id] ? 'your colony' : 'your personal base') +
+        ' · ' + site.build.length + ' structure' + (site.build.length === 1 ? '' : 's') + (G.colonies[planet.id] ? ' · ' + fmtN(Math.round(site.pop || 0)) + ' colonists' : '') +
+        ' · double-click to set a waypoint' } });
+    for (const b of site.build) {
+      const bx = ox + b.x * scale, by = oy + b.y * scale;
+      g.fillStyle = '#4fe3d0'; g.beginPath(); g.arc(bx, by, 2.4, 0, TAU); g.fill();
+    }
+  }
+
+  /* every settlement, structure and wanderer already generated in the
+     explored radius around the player */
+  for (const c2 of surfCache.values()) {
+    if (c2.settlement) {
+      const st = c2.settlement;
+      const x = ox + st.x * scale, y = oy + st.y * scale;
+      if (x < -40 || x > CW + 40 || y < -40 || y > CH + 40) continue;
+      const mood = st.hostile || st.barbarian || st.barbaric ? 'hostile' : civMood(st);
+      const col = mood === 'hostile' ? '#ff6a4d' : mood === 'allied' ? '#4fe3d0' : mood === 'warm' ? '#8fe09f' : (FACTIONS[st.fac] ? FACTIONS[st.fac].c : '#9fb3c8');
+      g.fillStyle = col + '22'; g.strokeStyle = col; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(x, y, Math.max(6, (st.r || 340) * scale), 0, TAU); g.fill(); g.stroke();
+      if (chartZoom > 0.35) { g.fillStyle = col; g.font = '10px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText(st.name, x, y - (st.r || 340) * scale - 6); g.textAlign = 'left'; }
+      const alive = st.npcs.filter(nc => !nc.dead).length;
+      seen.push({ x: x, y: y, s: { x: st.x, y: st.y, name: st.name,
+        info: '<b style="color:' + col + '">' + st.name + '</b> · ' + (st.barbaric || st.barbarian ? 'raiders/barbarian camp' : (FACTIONS[st.fac] ? FACTIONS[st.fac].n : 'settlement')) +
+          ' · standing ' + mood + ' · ' + alive + ' people about · double-click to set a waypoint' } });
+    }
+    if (c2.struct && !c2.struct.used) {
+      const x = ox + c2.struct.x * scale, y = oy + c2.struct.y * scale;
+      if (x >= -20 && x <= CW + 20 && y >= -20 && y <= CH + 20) {
+        const scol = c2.struct.t === 'monolith' ? '#d484ff' : c2.struct.t === 'wreck' ? '#ff9a6b' : c2.struct.t === 'beacon' ? '#ffe97f' : '#9fb3c8';
+        g.fillStyle = scol;
+        g.beginPath(); g.arc(x, y, 3.6, 0, TAU); g.fill();
+        if (chartZoom > 0.5) { g.fillStyle = 'rgba(207,230,238,.7)'; g.font = '9px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText(c2.struct.t, x, y - 8); g.textAlign = 'left'; }
+        seen.push({ x: x, y: y, s: { x: c2.struct.x, y: c2.struct.y, name: c2.struct.t,
+          info: '<b style="color:' + scol + '">' + c2.struct.t.charAt(0).toUpperCase() + c2.struct.t.slice(1) + '</b> · unexplored structure — get close and press E to investigate · double-click to set a waypoint' } });
+      }
+    }
+    /* a known water pool — the only source of fish and irrigation on a world */
+    if (c2.lake) {
+      const x = ox + c2.lake.x * scale, y = oy + c2.lake.y * scale;
+      if (x >= -60 && x <= CW + 60 && y >= -60 && y <= CH + 60) {
+        g.fillStyle = 'rgba(111,216,255,.22)'; g.strokeStyle = 'rgba(111,216,255,.6)'; g.lineWidth = 1;
+        g.beginPath(); g.arc(x, y, Math.max(3, c2.lake.r * scale), 0, TAU); g.fill(); g.stroke();
+        seen.push({ x: x, y: y, s: { x: c2.lake.x, y: c2.lake.y, name: 'Water pool',
+          info: '<b style="color:#6fd8ff">Water pool</b> · fishing and irrigation source · double-click to set a waypoint' } });
+      }
+    }
+    /* a lone wanderer not attached to any settlement */
+    if (c2.wanderer && !c2.wanderer.dead) {
+      const w = c2.wanderer;
+      const x = ox + w.x * scale, y = oy + w.y * scale;
+      if (x >= -20 && x <= CW + 20 && y >= -20 && y <= CH + 20) {
+        const wcol = w.hostile ? '#ff6a4d' : '#9fe4b4';
+        g.fillStyle = wcol; g.beginPath(); g.arc(x, y, 2.6, 0, TAU); g.fill();
+        seen.push({ x: x, y: y, s: { x: w.x, y: w.y, name: w.name,
+          info: '<b style="color:' + wcol + '">' + w.name + '</b> · ' + (w.role || 'wanderer') + (w.hostile ? ' · hostile' : '') + ' · double-click to set a waypoint' } });
+      }
+    }
+    /* moving fauna, coloured by temperament the same way the minimap does */
+    for (const cr of c2.crits || []) {
+      if (cr.dead) continue;
+      const x = ox + cr.x * scale, y = oy + cr.y * scale;
+      if (x < -20 || x > CW + 20 || y < -20 || y > CH + 20) continue;
+      const ccol = (cr.temper === 'aggressive' || cr.temper === 'predator') ? '#ff6a4d' : '#9fe4b4';
+      g.fillStyle = ccol; g.beginPath(); g.arc(x, y, 2, 0, TAU); g.fill();
+      seen.push({ x: x, y: y, s: { x: cr.x, y: cr.y, name: cr.name || 'Fauna',
+        info: '<b style="color:' + ccol + '">' + (cr.name || 'Fauna') + '</b> · ' + (cr.temper || 'wild') + ' · double-click to set a waypoint' } });
+    }
+  }
+  /* known telepad pairs on this world, linked or not */
+  const tpSite = siteFor(planet.id);
+  if (tpSite) for (const bd of tpSite.build) {
+    if (bd.t.indexOf('telepad') !== 0) continue;
+    const x = ox + bd.x * scale, y = oy + bd.y * scale;
+    g.strokeStyle = bd.link ? '#ffc46b' : '#8892a0'; g.lineWidth = 1.6;
+    g.beginPath(); g.moveTo(x - 7, y); g.lineTo(x + 7, y); g.moveTo(x, y - 7); g.lineTo(x, y + 7); g.stroke();
+    if (chartZoom > 0.35) { g.fillStyle = g.strokeStyle; g.font = '9px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText(bd.padName || 'Pad', x, y + 16); g.textAlign = 'left'; }
+    seen.push({ x: x, y: y, s: { x: bd.x, y: bd.y, name: bd.padName || 'Telepad',
+      info: '<b style="color:' + (bd.link ? '#ffc46b' : '#8892a0') + '">' + (bd.padName || 'Telepad') + '</b> · ' + (bd.link ? 'linked' : 'unlinked') + ' telepad · double-click to set a waypoint' } });
+  }
+  /* your ship, if you're on foot and it's sitting somewhere nearby */
+  if (G.onFoot && shipAnchor) {
+    const x = ox + shipAnchor.x * scale, y = oy + shipAnchor.y * scale;
+    if (x >= -20 && x <= CW + 20 && y >= -20 && y <= CH + 20) {
+      g.strokeStyle = '#ffe97f'; g.lineWidth = 1.6;
+      g.beginPath(); g.moveTo(x - 8, y); g.lineTo(x + 8, y); g.moveTo(x, y - 8); g.lineTo(x, y + 8); g.stroke();
+      g.beginPath(); g.arc(x, y, 10, 0, TAU); g.stroke();
+    }
+    seen.push({ x: x, y: y, s: { x: shipAnchor.x, y: shipAnchor.y, name: 'Your ship',
+      info: '<b style="color:#ffe97f">Your ship</b> · parked here · double-click to set a waypoint' } });
+  }
+
+  const px = ox + P.x * scale, py = oy + P.y * scale;
+  g.strokeStyle = '#d484ff'; g.lineWidth = 2;
+  g.beginPath(); g.arc(px, py, 9 + Math.sin(G.t * 3) * 2, 0, TAU); g.stroke();
+  g.beginPath(); g.moveTo(px - 15, py); g.lineTo(px - 6, py); g.moveTo(px + 6, py); g.lineTo(px + 15, py); g.stroke();
+  const surfSpace = 'surface:' + planet.id;
+  { const wp = waypointInSpace(surfSpace); if (wp) {
+    const wx = ox + wp.x * scale, wy = oy + wp.y * scale;
+    g.strokeStyle = '#ffc46b'; g.setLineDash([6, 5]);
+    g.beginPath(); g.moveTo(px, py); g.lineTo(wx, wy); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.arc(wx, wy, 8, 0, TAU); g.stroke();
+  } }
+  drawWaypoints6(g, P.x, P.y, (wx, wy) => [ox + wx * scale, oy + wy * scale], null, waypoints6InSpace(surfSpace));
+  chartHits = seen;
+  $('chart-info').innerHTML = (chartSel && chartSel.info ? chartSel.info :
+    '<b style="color:var(--teal)">' + planet.name + '</b> · surface chart · shows what you have actually explored here. Teal is your own claim, colour is by relation, red is hostile. Cyan pools are water, purple/orange/yellow marks are ruins and monoliths, small dots are fauna and wanderers. Click a point to see what it is, double-click to set a waypoint there.');
+}
+function drawChartGalaxy() {
   const c = $('chart'), g = c.getContext('2d');
   const CW = c.width, CH = c.height;
   /* Only snap the view back to the ship when the player has not moved it
@@ -7223,27 +7737,20 @@ function drawChart() {
   }
   g.textAlign = 'left';
   /* you */
-  const px = CW / 2 + ((G.mode === 'galaxy' ? P.x : sys.x) - chartCx) * scale;
-  const py = CH / 2 + ((G.mode === 'galaxy' ? P.y : sys.y) - chartCy) * scale;
+  const px = CW / 2 + (P.x - chartCx) * scale;
+  const py = CH / 2 + (P.y - chartCy) * scale;
   g.strokeStyle = '#d484ff'; g.lineWidth = 2;
   g.beginPath(); g.arc(px, py, 9 + Math.sin(G.t * 3) * 2, 0, TAU); g.stroke();
   g.beginPath(); g.moveTo(px - 15, py); g.lineTo(px - 6, py); g.moveTo(px + 6, py); g.lineTo(px + 15, py); g.stroke();
-  if (G.waypoint) {
-    const wx = CW / 2 + (G.waypoint.x - chartCx) * scale, wy = CH / 2 + (G.waypoint.y - chartCy) * scale;
+  { const wp = waypointInSpace('galaxy'); if (wp) {
+    const wx = CW / 2 + (wp.x - chartCx) * scale, wy = CH / 2 + (wp.y - chartCy) * scale;
     g.strokeStyle = '#ffc46b'; g.setLineDash([6, 5]);
     g.beginPath(); g.moveTo(px, py); g.lineTo(wx, wy); g.stroke(); g.setLineDash([]);
     g.beginPath(); g.arc(wx, wy, 8, 0, TAU); g.stroke();
-  }
-  drawWaypoints6(g, (G.mode === 'galaxy' ? P.x : sys.x), (G.mode === 'galaxy' ? P.y : sys.y),
-    (wx, wy) => [CW / 2 + (wx - chartCx) * scale, CH / 2 + (wy - chartCy) * scale]);
+  } }
+  drawWaypoints6(g, P.x, P.y,
+    (wx, wy) => [CW / 2 + (wx - chartCx) * scale, CH / 2 + (wy - chartCy) * scale], null, waypoints6InSpace('galaxy'));
   chartHits = seen;
-  let wpBar = '<div class="chartbar">';
-  for (const c in WAYPOINT_COLORS) {
-    const set = !!G.waypoints6[c];
-    wpBar += '<button class="btn xs ' + (waypointArm === c ? '' : 'ghost') + '" style="border-color:' + WAYPOINT_COLORS[c] + ';color:' + WAYPOINT_COLORS[c] + '" ' +
-      'data-act="wparm" data-k="' + c + '">' + (waypointArm === c ? 'Click a star\u2026' : (set ? c + ' \u2713' : c)) + '</button>';
-  }
-  wpBar += '<button class="btn xs ghost" data-act="wpclear">Clear pins</button></div>';
   $('chart-info').innerHTML = (chartSel
     ? (chartSel.blackhole
       ? '<b style="color:var(--orchid)">' + chartSel.name + '</b> · collapsed singularity · no orbits, no survivors' +
@@ -7251,11 +7758,7 @@ function drawChart() {
       : '<b style="color:var(--teal)">' + chartSel.name + '</b> · ' + chartSel.star.n + ' · ' + chartSel.planets.length + ' worlds · ' +
       FACTIONS[chartSel.faction].n + (chartSel.hasStation ? ' · trade station' : '') + ' · threat ' + chartSel.danger +
       '<br>Click it again to set it as your waypoint.')
-    : 'Drag to pan, scroll to zoom, click a star for details. Teal rings are worlds you own; squares are stations.') +
-    '<div class="chartbar"><button class="btn xs ghost" data-act="chartzoom" data-n="1">Zoom in</button>' +
-    '<button class="btn xs ghost" data-act="chartzoom" data-n="-1">Zoom out</button>' +
-    '<button class="btn xs ghost" data-act="chartrecentre">Centre on me</button>' +
-    '<span class="cost">×' + chartZoom.toFixed(2) + (chartPanned ? ' · panned' : '') + '</span></div>' + wpBar;
+    : 'Drag to pan, scroll to zoom, click a star for details. Teal rings are worlds you own; squares are stations.');
 }
 let chartHits = [], chartDrag = null;
 (function wireChart() {
@@ -7263,7 +7766,7 @@ let chartHits = [], chartDrag = null;
   if (!c) return;
   c.addEventListener('wheel', e => {
     e.preventDefault();
-    chartZoom = clamp(chartZoom * (e.deltaY < 0 ? 1.2 : 0.84), 0.25, 6);
+    chartZoom = clamp(chartZoom * (e.deltaY < 0 ? 1.2 : 0.84), 0.01, 6);
     drawChart();
   }, { passive: false });
   const startDrag = (cx, cy) => {
@@ -7301,7 +7804,7 @@ let chartHits = [], chartDrag = null;
       }
       if (best) {
         if (waypointArm) { setWaypoint6(waypointArm, best.x, best.y, best.name); waypointArm = null; chartSel = null; }
-        else if (chartSel === best) { G.waypoint = { x: best.x, y: best.y, name: best.name }; say('Waypoint set: ' + best.name, 'good'); chartSel = null; }
+        else if (chartSel === best) { G.waypoint = { x: best.x, y: best.y, name: best.name, space: curSpaceKey() }; say('Waypoint set: ' + best.name, 'good'); chartSel = null; }
         else chartSel = best;
         drawChart();
       }
@@ -7309,6 +7812,24 @@ let chartHits = [], chartDrag = null;
     chartDrag = null;
   };
   window.addEventListener('mouseup', finishDrag);
+  /* an explicit double-click sets a waypoint immediately at whatever
+     point is under the cursor, without needing to select it first */
+  c.addEventListener('dblclick', e => {
+    e.preventDefault();
+    const r = c.getBoundingClientRect();
+    const sx = (e.clientX - r.left) * (c.width / r.width), sy = (e.clientY - r.top) * (c.height / r.height);
+    let best = null, bd = 400;
+    for (const h of chartHits) {
+      const d = (h.x - sx) * (h.x - sx) + (h.y - sy) * (h.y - sy);
+      if (d < bd) { bd = d; best = h.s; }
+    }
+    if (best) {
+      G.waypoint = { x: best.x, y: best.y, name: best.name, space: curSpaceKey() };
+      say('Waypoint set: ' + best.name, 'good');
+      chartSel = best;
+      drawChart();
+    }
+  });
 })();
 
 /* ------------------------------------------------------------
@@ -7320,6 +7841,7 @@ function doAction(act, k, n) {
     case 'mtab': marketTab = k; break;
     case 'ctab': craftTab = decodeURIComponent(k); break;
     case 'btab': buildTab = k; break;
+    case 'btier': buildTier = clamp(+k, 1, 3); break;
     case 'kxtab': codexTab = decodeURIComponent(k); break;
     case 'crtab': crewTab = k; break;
     case 'equipgun': {
@@ -7331,7 +7853,12 @@ function doAction(act, k, n) {
     case 'equipsuit': wearSuit(k); break;
     case 'qtab': questTab = k; break;
     case 'trackm': if (G.trackMain[k]) delete G.trackMain[k]; else G.trackMain[k] = 1; break;
-    case 'tracks': if (G.trackSide[k]) delete G.trackSide[k]; else G.trackSide[k] = 1; break;
+    case 'tracks': {
+      if (G.trackSide[k]) delete G.trackSide[k];
+      else { G.trackSide[k] = 1; const q = G.quests.find(x => x.id === k); if (q) setQuestWaypoint(q); }
+      break;
+    }
+    case 'questcourse': { const q = G.quests.find(x => x.id === k); if (q && !setQuestWaypoint(q)) say('Out of range of that contract right now — get back to the ' + (q.locMode === 'surface' ? 'planet' : q.locMode === 'system' ? 'system' : 'galaxy map') + ' it was offered in.', 'warn'); break; }
 
     case 'buy': {
       const p = priceOf(k, sys);
@@ -7619,7 +8146,9 @@ function doAction(act, k, n) {
       if (G.credits < cr || !hasAll(cost)) { say('Cannot cover the cost.', 'warn'); break; }
       G.credits -= cr; payAll(cost); refreshTools();
       const a = Math.random() * TAU, dist = 220 + Math.random() * 300;
-      site.build.push({ t: k, x: P.x + Math.cos(a) * dist, y: P.y + Math.sin(a) * dist, built: G.day });
+      const entry = { t: k, x: P.x + Math.cos(a) * dist, y: P.y + Math.sin(a) * dist, built: G.day };
+      if (d.telepad) { entry.padId = 'tp' + (G.telepadSeq = (G.telepadSeq || 0) + 1); entry.link = null; entry.padName = 'Pad ' + entry.padId.slice(2); }
+      site.build.push(entry);
       if (planet) syncDistricts(planet.id, true);
       G.stat.built++;
       AU.play('upgrade');
@@ -7678,7 +8207,7 @@ function doAction(act, k, n) {
     case 'abandon': { G.quests = G.quests.filter(x => x.id !== k); say('Contract dropped.', 'warn'); break; }
     case 'goto': {
       const pl = planetById(k);
-      if (pl) { const c = pl.sys.split('|'); const s = systemAt(+c[0], +c[1]); if (s) { G.waypoint = { x: s.x, y: s.y, name: s.name }; say('Course set for ' + s.name + '.', 'good'); } }
+      if (pl) { const c = pl.sys.split('|'); const s = systemAt(+c[0], +c[1]); if (s) { G.waypoint = { x: s.x, y: s.y, name: s.name, space: 'galaxy' }; say('Course set for ' + s.name + '.', 'good'); } }
       break;
     }
 
@@ -7688,10 +8217,10 @@ function doAction(act, k, n) {
       if (k === 'music' && G.set.music) AU.startMusic();
       break;
     }
-    case 'chartzoom': chartZoom = clamp(chartZoom * (+n > 0 ? 1.35 : 0.74), 0.25, 6); drawChart(); return;
+    case 'chartzoom': chartZoom = clamp(chartZoom * (+n > 0 ? 1.35 : 0.74), 0.01, 6); drawChart(); return;
     case 'chartrecentre': chartSel = null; chartHome(); drawChart(); return;
     case 'wparm': waypointArm = (waypointArm === k ? null : k); drawChart(); return;
-    case 'wpclear': G.waypoints6 = {}; waypointArm = null; drawChart(); return;
+    case 'wpclear': { const here = curSpaceKey(); for (const c in G.waypoints6) if ((G.waypoints6[c].space || 'galaxy') === here) delete G.waypoints6[c]; waypointArm = null; drawChart(); return; }
     case 'opensettings': openPanel('settings'); return;
     case 'save': save(); break;
     case 'load': load(); break;
@@ -7715,12 +8244,18 @@ const TUT = [
     h: 'The ship drifts and turns like a real hull. Get clear of the wreck before anything else.',
     setup: () => { G.tutStart = { x: P.x, y: P.y }; },
     c: () => Math.hypot(P.x - G.tutStart.x, P.y - G.tutStart.y) > 500 },
-  { t: 'Press I to open the cargo hold.',
-    h: 'I opens your hold — everything you mine, grow, catch or craft lives here, and it is where raw fuel gets refined into warp cells. The quest finishes the moment you press it.',
+  { t: 'Press Q to open your tablet.',
+    h: 'Q opens the slate — one tablet that holds every menu in the game. The tabs along the top switch between them, and Q or Esc puts it away again.',
+    c: () => isTablet(openId) },
+  { t: 'On the tablet, open the Inventory tab.',
+    h: 'Press Q, then click Inventory. This is your hold — everything you mine, grow, catch or craft lives here, and it is where raw fuel gets refined into warp cells.',
     c: () => openId === 'cargo' },
-  { t: 'Press G to open the Empire overview.',
-    h: 'G opens the empire screen — every colony and base you own, their population, income and build queues, all in one place.',
+  { t: 'Open the Relations tab.',
+    h: 'Press Q and click Relations — every colony and base you own, how the factions feel about you, and where you stand on the wealth leaderboard.',
     c: () => openId === 'empire' },
+  { t: 'Open the Journal tab.',
+    h: 'Press Q and click Journal — your main story, side contracts and what to do next all live here. Tracked tasks also show in the corner of the screen.',
+    c: () => openId === 'quests' },
   { t: 'Mine some tritium.',
     h: 'Tritium is a fuel-grade element — find a deposit that reads tritium on the scanner and hold Space over it to cut it. You need at least 12 in the hold.',
     c: () => (G.cargo.tritium || 0) >= 12 },
@@ -7730,8 +8265,8 @@ const TUT = [
   { t: 'Use the parts and press R to repair the launch thrusters.',
     h: 'With 25 ferrite dust and 12 tritium in the hold, press R. The thrusters were torn out in the crash — nothing flies without them, and every time you die they break again and this has to happen over.',
     c: () => G.thrustersFixed },
-  { t: 'Refine 10 tritium into warp cells, from the cargo screen (I).',
-    h: 'Fixing the thrusters does not fill the tank. Open the hold (I), find tritium, and use the refine action — 10 tritium becomes a stack of warp cells. You need fuel in the tank before you can launch.',
+  { t: 'Refine 10 tritium into warp cells — Q, then the Inventory tab.',
+    h: 'Fixing the thrusters does not fill the tank. Press Q, open the Inventory tab, find tritium, and use the refine action — 10 tritium becomes a stack of warp cells. You need fuel in the tank before you can launch.',
     setup: () => { G.tutFuelBase = G.fuel; },
     c: () => G.fuel > G.tutFuelBase },
   { t: 'Press L to break atmosphere.',
@@ -7752,7 +8287,7 @@ const TUT = [
     h: 'X claims the world you are standing on for your own empire, once you can cover the claim cost. Check the prompt in the corner for what is needed.',
     c: () => !!G.colonies[planet && planet.id] },
   { t: 'Build a housing unit and set up a perimeter wall.',
-    h: 'Open construction (B) on your new colony and put down a Habitation dome and a Perimeter wall. The dome houses colonists; the wall keeps raiders from just walking in.',
+    h: 'Press Q and open the Buildings tab on your new colony, then put down a Habitation dome and a Perimeter wall. The dome houses colonists; the wall keeps raiders from just walking in.',
     c: () => { for (const k in G.colonies) { const b = G.colonies[k].build.map(x => x.t); if (b.indexOf('habitat') >= 0 && b.indexOf('wall') >= 0) return true; } return false; } },
   { t: 'Trade at a trading station.',
     h: 'Fly to a station (the scanner marks them) and dock. The trade terminal buys and sells everything in your hold at that system\u2019s prices.',
@@ -7769,18 +8304,18 @@ const TUT = [
     setup: () => { G.tutKills = G.stat.kills; },
     c: () => G.stat.kills - (G.tutKills || 0) >= 5 },
   { t: 'Craft an upgrade to upgrade the ship.',
-    h: 'Open the hangar (H) or refit (U) and either buy or build a part or weapon upgrade — anything that fits and materials cover.',
+    h: 'Press Q, then open the Hangar or Ship refit tab and either buy or build a part or weapon upgrade — anything that fits and materials cover.',
     setup: () => { G.tutUpg = Object.keys(G.ownedParts).length + Object.values(G.shipWeapons).reduce((a, b) => a + b + 1, 0); },
     c: () => (Object.keys(G.ownedParts).length + Object.values(G.shipWeapons).reduce((a, b) => a + b + 1, 0)) > (G.tutUpg || 0) },
   { t: 'Grow your empire\u2019s population to 500.',
-    h: 'Population climbs on its own once a colony has housing, food and power — a Hydroponics bay speeds it up considerably. Check the total on the empire screen (G).',
+    h: 'Population climbs on its own once a colony has housing, food and power — a Hydroponics bay speeds it up considerably. Check the total on the Relations tab of your tablet (Q).',
     c: () => empirePop() >= 500 },
   { t: 'Craft something in the fabricator.',
     h: 'Press K to open the fabricator. It turns raw material into parts, tools, seeds and components — pick anything you can afford and build it.',
     setup: () => { G.tutCraft2 = G.stat.crafted; },
     c: () => G.stat.crafted > (G.tutCraft2 || 0) },
   { t: 'Get someone to work on your ship.',
-    h: 'Talk to an NPC at a settlement and hire them on — a crew member adds a passive bonus and needs feeding and paying every cycle.',
+    h: 'Talk to an NPC at a settlement and hire them on — a crew member adds a passive bonus and needs feeding and paying every cycle. Your hires show up under the Ship roster tab (Q).',
     c: () => G.crew.length > 0 },
   { t: 'Finish the tutorial.',
     h: 'That is the whole loop: mine, craft, fly, land, claim, build, trade, fight, crew up. Finishing wipes this run and drops you into a fresh save — the real game, starting from the same broken ship. Press Skip training below when you are ready.',
@@ -7810,7 +8345,7 @@ function startTutorial() {
   G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
   G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
   shots = []; piles = [];
-  G.encTimer = 45; G.raidTimer = 420;
+  G.encTimer = 45; G.raidTimer = 420; G.raidParty = null;
   G.stat = { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0,
     talked: 0, docked: false, landed: 0, built: 0, footTime: 0,
     groundKills: 0, monoliths: 0, motherKills: 0, cityKills: 0, razed: 0 };
@@ -7950,7 +8485,7 @@ function newGame() {
   G.civRel = {}; G.civState = {}; G.talkCd = {}; G.talkGain = {};
   G.trackMain = {}; G.trackSide = {}; G.mainDone = {}; G.citadels = {}; G.bounty = 0;
   shots = []; piles = [];
-  G.encTimer = 45; G.raidTimer = 420;
+  G.encTimer = 45; G.raidTimer = 420; G.raidParty = null;
   G.stat = { mined: 0, jumps: 0, scans: 0, kills: 0, sold: 0, peak: 0, harvest: 0, caught: 0, crafted: 0,
     talked: 0, docked: false, landed: 0, built: 0, footTime: 0,
     groundKills: 0, monoliths: 0, motherKills: 0, cityKills: 0, razed: 0 };
@@ -7992,6 +8527,7 @@ function frame(now) {
      panel opens, which is exactly when the sim would otherwise stop
      calling this */
   tutTick();
+  dropShipWaypoint();
 
   if (!busy && !G.over) {
     if (G.mode === 'surface') updSurface(dt);
@@ -8007,6 +8543,7 @@ function frame(now) {
     updFishing(dt);
   } else if (busy) {
     if (tap('Escape')) { if (talkOpen) closeTalk(); else if (openId) closePanel(); }
+    if (tap('KeyQ') && isTablet(openId) && !modalOpen && !talkOpen) closePanel();
     scuttleT = 0;
     const scEl = $('scuttle'); if (scEl) scEl.classList.add('hidden');
   }
@@ -8024,6 +8561,13 @@ function frame(now) {
   beams.length = 0;
   renderScanner();
   renderHUD(dt);
+
+  /* the star chart used to only redraw itself on open, on a manual pan or
+     on a zoom click, so a map opened on a planet, in a system, or in deep
+     space would go stale the instant anything moved. Redraw it every
+     frame it's actually open, in whichever mode you opened it in, so it
+     always reflects where things are right now. */
+  if (openId === 'chart') drawChart();
 }
 
 /* Holding the scuttle key for a full five seconds writes the ship off on
@@ -8061,17 +8605,10 @@ function scuttleTick(dt) {
 }
 
 function hotkeys() {
-  if (tap('KeyY')) openPanel('gear');
+  if (tap('KeyQ')) openPanel(lastTab);
+  else if (tap('KeyY')) openPanel('gear');
   else if (tap('KeyM')) openPanel('chart');
-  else if (tap('KeyI')) openPanel('cargo');
-  else if (tap('KeyC')) openPanel('codex');
-  else if (tap('KeyG')) openPanel('empire');
-  else if (tap('KeyB')) { if (G.mode === 'surface') openPanel('build'); else say('Construction needs solid ground.', 'warn'); }
-  else if (tap('KeyH')) openPanel('hangar');
-  else if (tap('KeyU')) openPanel('refit');
   else if (tap('KeyK')) openPanel('craft');
-  else if (tap('KeyJ') || tap('KeyQ')) openPanel('quests');
-  else if (tap('KeyN')) openPanel('crew');
   else if (tap('KeyT')) { if (G.docked) openPanel('market'); else say('Dock at a station to trade.', 'warn'); }
   else if (tap('Escape')) openPanel('pause');
 }

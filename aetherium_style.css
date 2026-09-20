@@ -350,3 +350,42 @@ h4.sec:first-child{margin-top:0}
   #vitals{width:170px;bottom:96px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+
+/* ============ SLATE (tablet overlay) ============ */
+#p-tablet{width:min(1080px,96vw);height:min(86vh,760px);
+  --tnotch:polygon(0 22px,22px 0,calc(100% - 22px) 0,100% 22px,100% calc(100% - 22px),calc(100% - 22px) 100%,22px 100%,0 calc(100% - 22px));
+  clip-path:var(--tnotch);
+  background:
+    repeating-linear-gradient(0deg,rgba(79,227,208,.028) 0 1px,transparent 1px 3px),
+    radial-gradient(120% 80% at 50% -10%,rgba(79,227,208,.10),transparent 60%),
+    linear-gradient(160deg,rgba(9,22,32,.985),rgba(3,9,14,.985));
+  box-shadow:inset 0 0 0 2px rgba(79,227,208,.55),inset 0 0 0 7px rgba(3,9,14,.9),inset 0 0 0 8px rgba(79,227,208,.22),0 0 60px rgba(79,227,208,.16),0 30px 90px rgba(0,0,0,.75)}
+#p-tablet.open{animation:slateIn .22s ease-out}
+@keyframes slateIn{from{opacity:0;transform:translateY(14px) scale(.985)}}
+#p-tablet header{padding:18px 30px 11px;gap:14px}
+#p-tablet header h3{display:flex;align-items:baseline;gap:8px;font-size:14px;letter-spacing:.3em}
+#p-tablet .t-logo{color:var(--orchid);font-size:11px}
+#p-tablet header h3 i{font-style:normal;font-size:11px;letter-spacing:.16em;color:var(--dim)}
+#p-tablet .t-status{margin-left:auto;font-size:9.5px;letter-spacing:.18em;color:var(--dim);display:flex;align-items:center;gap:7px}
+#p-tablet .t-status b{width:6px;height:6px;background:var(--leaf);box-shadow:0 0 8px var(--leaf);animation:breathe 2.4s ease-in-out infinite}
+.ttabs{display:flex;gap:3px;padding:10px 30px 0;overflow-x:auto;flex:0 0 auto;
+  border-bottom:1px solid rgba(79,227,208,.25)}
+.ttabs::-webkit-scrollbar{height:0}
+.ttab{display:flex;align-items:center;gap:8px;white-space:nowrap;font-family:var(--ui);font-size:12px;
+  letter-spacing:.1em;text-transform:uppercase;padding:10px 16px 9px;background:rgba(79,227,208,.05);
+  color:var(--dim);border:0;border-bottom:2px solid transparent;cursor:pointer;
+  clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,0 100%)}
+.ttab i{font-style:normal;font-size:9px;color:rgba(79,227,208,.5)}
+.ttab:hover{color:var(--bone);background:rgba(79,227,208,.11)}
+.ttab.on{color:var(--teal);background:rgba(79,227,208,.18);border-bottom-color:var(--teal);
+  box-shadow:inset 0 -10px 16px -10px rgba(79,227,208,.5)}
+.ttab.on i{color:var(--orchid)}
+#p-tablet .pbody{flex:1 1 auto;min-height:0;padding:18px 30px 26px}
+@media (max-width:900px){
+  #p-tablet{height:92vh}
+  .ttabs{padding:8px 14px 0}
+  #p-tablet .pbody{padding:14px 16px 20px}
+  #p-tablet header{padding:14px 18px 9px}
+  #p-tablet .t-status{display:none}
+}

@@ -107,21 +107,41 @@
 
 <!-- ============ PANELS ============ -->
 <div id="overlay" class="hidden">
-  <div class="panel" id="p-cargo"><header><h3>Cargo hold</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
+  <div class="panel wide tablet" id="p-tablet">
+    <header>
+      <h3><span class="t-logo">&#9670;</span> SLATE <i id="tablet-title" class="mono">// —</i></h3>
+      <span class="t-status mono"><b></b> LINK STABLE</span>
+      <button class="x" data-close>close &middot; Q</button>
+    </header>
+    <nav id="tablet-tabs" class="ttabs">
+      <button class="ttab" data-tab="empire"><i class="mono">01</i>Relations</button>
+      <button class="ttab" data-tab="build"><i class="mono">02</i>Buildings</button>
+      <button class="ttab" data-tab="crew"><i class="mono">03</i>Ship roster</button>
+      <button class="ttab" data-tab="cargo"><i class="mono">04</i>Inventory</button>
+      <button class="ttab" data-tab="refit"><i class="mono">05</i>Ship refit</button>
+      <button class="ttab" data-tab="hangar"><i class="mono">06</i>Hangar</button>
+      <button class="ttab" data-tab="codex"><i class="mono">07</i>Codex</button>
+      <button class="ttab" data-tab="quests"><i class="mono">08</i>Journal</button>
+    </nav>
+    <div class="pbody"></div>
+  </div>
   <div class="panel wide" id="p-market"><header><h3>Trade terminal</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-shop"><header><h3 id="shop-title">Shop</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-gear"><header><h3>Stats &amp; gear</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-hangar"><header><h3>Hangar</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-refit"><header><h3>Ship refit</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-craft"><header><h3>Fabricator</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-build"><header><h3>Construction</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-farm"><header><h3>Farmland</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-crew"><header><h3>Crew</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-empire"><header><h3>Empire</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-codex"><header><h3>Codex</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
-  <div class="panel wide" id="p-quests"><header><h3>Journal</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel wide" id="p-chart"><header><h3>Star chart</h3><button class="x" data-close>close</button></header>
-    <div class="pbody"><canvas id="chart" width="900" height="520"></canvas><div id="chart-info"></div></div></div>
+    <div class="pbody"><canvas id="chart" width="900" height="520"></canvas>
+      <div class="chartbar" id="chart-toolbar">
+        <button class="btn xs ghost" data-act="chartzoom" data-n="1">Zoom in</button>
+        <button class="btn xs ghost" data-act="chartzoom" data-n="-1">Zoom out</button>
+        <button class="btn xs ghost" data-act="chartrecentre">Centre on me</button>
+        <span class="cost" id="chart-zoomlvl">×1.00</span>
+        <span class="cost" id="chart-wpdist"></span>
+      </div>
+      <div class="chartbar hidden" id="chart-pinbar"></div>
+      <div id="chart-info"></div>
+    </div></div>
   <div class="panel wide" id="p-settings"><header><h3>Settings</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
   <div class="panel" id="p-pause"><header><h3>Paused</h3><button class="x" data-close>close</button></header><div class="pbody"></div></div>
 </div>
