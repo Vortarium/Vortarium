@@ -239,6 +239,8 @@ h4.sec:first-child{margin-top:0}
 .set .nm small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
 .set input[type=range]{width:180px;accent-color:#4fe3d0;cursor:pointer}
 .set .val{font-family:var(--mono);font-size:12px;color:var(--gold);width:48px;text-align:right}
+.bulkbar{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.06em;color:var(--teal);margin-left:auto;margin-right:14px}
+.bulkbar .dim{opacity:.4;color:var(--dim)}
 .toggle{width:52px;height:24px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line);
   cursor:pointer;position:relative;flex:0 0 auto}
 .toggle i{position:absolute;top:3px;left:3px;width:18px;height:18px;background:var(--dim);transition:left .16s,background .16s}
