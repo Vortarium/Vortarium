@@ -1182,7 +1182,7 @@ const DEFAULT_SET = {
 
 const G = {
   started: false, over: false, t: 0, day: 1, dayT: 0.32,
-  mode: 'surface', onFoot: false, tutorial: false, tutStep: 0,
+  mode: 'surface', onFoot: false, tutorial: false, tutStep: 0, sandbox: false,
   credits: 1200, cargo: {}, mined: {}, minedN: 0,
   ship: 'vagrant', owned: ['vagrant'], fit: { vagrant: {} }, paint: { vagrant: '#9fb3c8' },
   shipNames: { vagrant: 'The Last Errand' },
@@ -1247,7 +1247,7 @@ function ST() {
     thrust: drive.thrust * agility * (1 + modSum('thrust')),
     max: drive.max * clamp(3.4 / (m + 2.0), 0.55, 1.3) * (1 + modSum('max')),
     turn: drive.turn * agility * (1 + modSum('turn')),
-    cargo: Math.round(hold.cargo * (1 + modSum('cargo'))),
+    cargo: G.sandbox ? SANDBOX_CARGO_CAP : Math.round(hold.cargo * (1 + modSum('cargo'))),
     hull: Math.round(hullP.hull * (1 + modSum('hull'))),
     shield: Math.round(60 * (1 + modSum('shield')) + modSum('shieldFlat')),
     regen: 5 + modSum('regen') + (hullP.regen || 0),
@@ -1262,7 +1262,7 @@ function ST() {
     col: G.paint[G.ship] || b.col, s: b.s
   };
 }
-function maxFuel() { return partOf('warp').fuel + modSum('fuel'); }
+function maxFuel() { return G.sandbox ? SANDBOX_FUEL : partOf('warp').fuel + modSum('fuel'); }
 
 /* --- personal weapons --- */
 function ownedGuns() {
@@ -1297,6 +1297,11 @@ function hasTool(t) { return !!G.tools[t]; }
    12. PROCEDURAL GALAXY
 ------------------------------------------------------------ */
 function systemAt(cx, cy) {
+  /* the training range lives at the same coordinate a real home system would
+     occupy, but only while the tutorial is running — leaving it and coming
+     back should find Cadet Field Range still there, not a stranger's system
+     that happened to spawn in the same spot */
+  if (G.tutorial && cx === 0 && cy === 0) return TRAINING_SYSTEM;
   const key = cx + '|' + cy;
   if (sysCache.has(key)) return sysCache.get(key);
   const h = hash2(cx, cy, GALSEED);
@@ -2369,7 +2374,7 @@ function launch() {
   if (!G.thrustersFixed) { say('Launch thrusters are still dead. Repair them first.', 'bad'); return; }
   if (G.onFoot) { say('Board the ship first — press E beside it.', 'warn'); return; }
   if (G.fuel < 8) { say('Not enough warp cells to break atmosphere. Refine tritium in the cargo screen.', 'bad'); return; }
-  G.fuel -= 8;
+  if (!G.sandbox) G.fuel -= 8;
   const pl = planet;
   G.mode = 'system'; setSystem(pl.sys);
   if (pl.citadel) {
@@ -2491,10 +2496,9 @@ function rimSpawn(dt) {
    20. DAMAGE + DEATH
 ------------------------------------------------------------ */
 function hurt(n, src) {
-  /* the training range is a genuinely safe haven — nothing here can put a
-     scratch on you, so the ship-repair loop can be practiced without the
-     one mistake that would send a new pilot back to the title screen */
-  if (G.tutorial) return;
+  /* sandbox worlds are a genuine playground — nothing here can put a
+     scratch on you, so there is nothing stopping you from just enjoying it */
+  if (G.sandbox) return;
   if (G.onFoot) return hurtSuit(n);
   if (G.set.shake) cam.shake = Math.min(24, cam.shake + n * 0.14);
   screenFlash();
@@ -2503,7 +2507,7 @@ function hurt(n, src) {
   if (G.hull <= 0 && !G.over) death(src);
 }
 function hurtSuit(n) {
-  if (G.tutorial) return;
+  if (G.sandbox) return;
   n = n * (1 - suitArmour());
   if (n <= 0) return;
   if (G.set.shake) cam.shake = Math.min(18, cam.shake + n * 0.2);
@@ -2546,6 +2550,7 @@ function respawnHome() {
 }
 
 function death(src) {
+  if (G.sandbox) { G.hull = ST().hull; G.shield = ST().shield; G.over = false; return; }
   G.over = true; G.deaths++;
   AU.play('lose');
   const lost = Math.round(G.credits * 0.2);
@@ -2614,7 +2619,7 @@ function flyControls(dt, env) {
         l: 0, m: 0.3 + Math.random() * 0.3, c: P.hyper ? '#ffffff' : (P.boost ? '#d484ff' : s.col), sz: P.boost ? 3.4 : 2.4 });
     }
   }
-  if (P.boost) { G.fuel = Math.max(0, G.fuel - 0.5 * dt * (P.hyper ? 100 : 1)); if (G.fuel === 0) { G.hyperwarp = false; say('Warp cells dry.', 'warn'); } }
+  if (P.boost && !G.sandbox) { G.fuel = Math.max(0, G.fuel - 0.5 * dt * (P.hyper ? 100 : 1)); if (G.fuel === 0) { G.hyperwarp = false; say('Warp cells dry.', 'warn'); } }
 
   const maxS = s.max * (env.speedMul || 1) * (P.boost ? boostMul : 1);
   const sp = Math.hypot(P.vx, P.vy);
@@ -4086,7 +4091,7 @@ function updOnFoot(dt, b, cells) {
   const shelter = sheltered(P.x, P.y);
   if (b.haz > 0.05 && !shelter) {
     /* a better-sealed suit simply loses less of it */
-    G.suit.air = Math.max(0, G.suit.air - (6 + b.haz * 14) * (1 - suitHaz()) * dt);
+    if (!G.sandbox) G.suit.air = Math.max(0, G.suit.air - (6 + b.haz * 14) * (1 - suitHaz()) * dt);
     if (G.suit.air <= 0) hurtSuit(9 * dt);
     else if (G.suit.air < 25 && Math.random() < dt * 0.6) say('Air supply low. Return to the ship or use a canister.', 'warn');
   } else {
@@ -8425,7 +8430,7 @@ function startTutorial() {
   G.codex = {}; G.codexN = 0; G.quests = []; G.questDone = 0;
   G.relations = {}; G.knownNpcs = {}; G.waypoint = null; G.waypoints6 = {};
   G.thrustersFixed = false; G.deaths = 0; G.crashes = 0; G.objIdx = 0;
-  G.tools = {}; G.alloysMade = 0; G.day = 1; G.dayT = 0.32; G.over = false;
+  G.tools = {}; G.alloysMade = 0; G.day = 1; G.dayT = 0.32; G.over = false; G.sandbox = false;
   G.parts = Object.assign({}, DEFAULT_PARTS); G.ownedParts = {};
   G.gun = 'fists'; G.gunHeat = 0;
   G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
@@ -8446,7 +8451,7 @@ function startTutorial() {
   $('objective').classList.add('hidden');
   $('tutband').classList.remove('hidden');
   tutEnter();
-  say('Training flight on the Cadet Field range. Nothing here can actually hurt you — use that.', 'good');
+  say('Training flight on the Cadet Field range. It can hurt you same as anywhere — fly it like it matters.', 'good');
 }
 function tutEnter() {
   const s = TUT[G.tutStep];
@@ -8481,6 +8486,30 @@ function endTutorial(finished) {
 }
 
 /* ------------------------------------------------------------
+   34b. SANDBOX MODE
+   A throwaway file that never touches the save slot. Credits, warp
+   cells, hull, shield, suit and every material in the hold are
+   force-topped-up once a frame, so nothing here ever runs dry —
+   this is purely a place to build and blow things up for fun.
+------------------------------------------------------------ */
+const SANDBOX_CREDITS = 999999999, SANDBOX_FUEL = 99999, SANDBOX_CARGO_STOCK = 99999, SANDBOX_CARGO_CAP = 999999999;
+function startSandbox() {
+  newGame();
+  G.sandbox = true;
+  G.thrustersFixed = true;
+  sandboxTick();
+  say('Sandbox mode — nothing here saves. Take whatever you want and see what happens.', 'rare');
+}
+function sandboxTick() {
+  if (!G.sandbox) return;
+  G.credits = SANDBOX_CREDITS;
+  G.fuel = SANDBOX_FUEL;
+  G.hull = ST().hull; G.shield = ST().shield;
+  if (G.suit) { G.suit.hp = G.suit.max; G.suit.air = G.suit.airMax; }
+  for (const k in MAT) G.cargo[k] = SANDBOX_CARGO_STOCK;
+}
+
+/* ------------------------------------------------------------
    35. SAVE / LOAD
 ------------------------------------------------------------ */
 const SAVE_KEY = 'aetherium2';
@@ -8490,6 +8519,7 @@ const SAVE_FIELDS = ['credits','cargo','mined','minedN','ship','owned','fit','pa
   'parts','ownedParts','gun','civRel','civState','talkCd','talkGain','trackMain','trackSide','mainDone','citadels','bounty','ord','nukes','xsSeen',
   'homeId','suitKey','ownedSuits','shipGun','shipWeapons'];
 function save(quiet) {
+  if (G.sandbox) { if (!quiet) say('Sandbox runs do not save.', 'warn'); return false; }
   try {
     const o = {};
     for (const f of SAVE_FIELDS) o[f] = G[f];
@@ -8566,7 +8596,7 @@ function newGame() {
   G.codex = {}; G.codexN = 0; G.quests = []; G.questDone = 0;
   G.relations = {}; G.knownNpcs = {}; G.waypoint = null; G.waypoints6 = {};
   G.thrustersFixed = false; G.deaths = 0; G.crashes = 0; G.objIdx = 0;
-  G.tools = {}; G.alloysMade = 0; G.day = 1; G.dayT = 0.32; G.over = false; G.tutorial = false;
+  G.tools = {}; G.alloysMade = 0; G.day = 1; G.dayT = 0.32; G.over = false; G.tutorial = false; G.sandbox = false;
   G.parts = Object.assign({}, DEFAULT_PARTS); G.ownedParts = {};
   G.gun = 'fists'; G.gunHeat = 0;
   G.shipGun = 'bullet'; G.shipWeapons = { bullet: 0 };
@@ -8617,6 +8647,7 @@ function frame(now) {
      calling this */
   tutTick();
   dropShipWaypoint();
+  sandboxTick();
 
   if (!busy && !G.over) {
     if (G.mode === 'surface') updSurface(dt);
@@ -9690,6 +9721,7 @@ function xsChartInfo() {
   AU.armGesture();
 
   $('btn-start').onclick = () => { wakeAudio(); newGame(); };
+  $('btn-sandbox').onclick = () => { wakeAudio(); startSandbox(); };
   $('btn-tutorial').onclick = () => { wakeAudio(); $('title').classList.add('hidden'); $('hud').classList.remove('hidden'); G.started = true; startTutorial(); };
   $('btn-continue').onclick = () => { wakeAudio(); if (!load()) newGame(); };
   $('btn-settings').onclick = () => {
@@ -9700,7 +9732,7 @@ function xsChartInfo() {
   };
   $('tb-skip').onclick = () => endTutorial(false);
 
-  setInterval(() => { if (G.started && G.set.autosave && !G.over) save(true); }, 60000);
+  setInterval(() => { if (G.started && G.set.autosave && !G.over && !G.sandbox) save(true); }, 60000);
 
   requestAnimationFrame(frame);
 })();
