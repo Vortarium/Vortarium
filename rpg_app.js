@@ -6,11 +6,12 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+  deleteUser, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
-  addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion
+  addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -93,15 +94,22 @@ async function withErrorToast(fn){
    ========================================================================= */
 const BLOCKLIST_EXTRA = []; // <-- load a real moderation list/service here
 const BASIC_BLOCKLIST = ["damn","hell","crap","ass","piss"]; // mild example only
-function normalizeForFilter(s){
-  return s.toLowerCase()
+function normalizeWord(w){
+  return w.toLowerCase()
     .replace(/[0@]/g,'o').replace(/1|!/g,'i').replace(/3/g,'e')
     .replace(/4/g,'a').replace(/5|\$/g,'s').replace(/7/g,'t')
     .replace(/[^a-z]/g,'');
 }
+// IMPORTANT: this checks whole WORDS, not raw substrings. The previous
+// version stripped spaces before matching, so "hello" (contains "hell"),
+// "class"/"mass"/"glass" (contain "ass"), "scrap"/"crap" etc. were all
+// getting silently mangled into asterisks — which is what made chat feel
+// broken. Splitting on word boundaries first and only flagging an exact
+// normalized-word match fixes that without weakening the filter itself.
 function containsBlockedWord(raw){
-  const n = normalizeForFilter(raw);
-  return [...BASIC_BLOCKLIST, ...BLOCKLIST_EXTRA].some(w => n.includes(w));
+  const blocked = new Set([...BASIC_BLOCKLIST, ...BLOCKLIST_EXTRA]);
+  const words = String(raw).split(/[^A-Za-z0-9@!$]+/).map(normalizeWord).filter(Boolean);
+  return words.some(w => blocked.has(w));
 }
 function isValidUsername(u){
   if(!/^[A-Za-z0-9_]{3,16}$/.test(u)) return "3-16 letters, numbers, underscore only.";
@@ -158,11 +166,22 @@ const PREFIXES = ["Rusty","Sturdy","Ancient","Glowing","Cursed","Blessed","Mysti
   "Moonlit","Sunburnt","Dew-kissed","Thorned","Feathered","Scaled","Runic","Doodled"];
 const BASE_NAMES = {
   weapon:["Sword","Dagger","Staff","Bow","Axe","Mace","Wand","Spear","Claws","Rapier","Fan","Chakram"],
-  armor:["Tunic","Plate","Robe","Cloak","Helm","Gauntlets","Boots","Shield","Vest","Hood","Greaves","Cuirass"],
+  armor:["Helm","Hood","Coif","Tunic","Plate","Cuirass","Greaves","Leggings","Legwraps","Boots","Treads","Sabatons"],
   trinket:["Charm","Ring","Amulet","Locket","Bell","Feather","Bead","Totem","Pendant","Coin","Idol","Sigil"],
   consumable:["Potion","Elixir","Berry","Bread","Stew","Tonic","Draught","Cookie","Tea","Scroll","Candy","Brew"],
   material:["Scale","Claw","Fang","Ore","Crystal","Fiber","Resin","Dust","Shard","Feather","Root","Ember"]
 };
+// Armor now splits into 4 equip slots (helmet/chestplate/leggings/boots)
+// instead of one generic "armor" slot — each base name below maps to
+// exactly one of the 4, 3 names apiece, so the existing 12-name/96-item
+// generation loop still produces an even spread across all four.
+const ARMOR_SLOT_BY_NAME = {
+  Helm:"helmet", Hood:"helmet", Coif:"helmet",
+  Tunic:"chestplate", Plate:"chestplate", Cuirass:"chestplate",
+  Greaves:"leggings", Leggings:"leggings", Legwraps:"leggings",
+  Boots:"boots", Treads:"boots", Sabatons:"boots"
+};
+const ARMOR_SLOTS = ["helmet","chestplate","leggings","boots"];
 function seededRand(seed){ let s = seed % 2147483647; if(s<=0)s+=2147483646;
   return () => (s = s*16807 % 2147483647) / 2147483647; }
 
@@ -188,6 +207,7 @@ function buildItemBank(){
         desc: itemFlavor(type, prefix, base, element, rarity),
         stats: itemStats(type, rarity)
       };
+      if(type==="armor") item.armorSlot = ARMOR_SLOT_BY_NAME[base] || "chestplate";
       bank.push(item);
     }
   }
@@ -410,7 +430,7 @@ function defaultPlayerDoc(username, archetype, klass){
     stats, ...bars,
     region:"forest",
     inventory: [], // {itemId, qty}
-    equipped: { weapon:null, armor:null, trinket:null },
+    equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
     friends: [], createdAt: Date.now()
   };
@@ -551,6 +571,46 @@ document.getElementById("btnLogout").addEventListener("click", async ()=>{
   closeModal("settingsModal");
 });
 
+document.getElementById("btnShowDeleteAccount").addEventListener("click", ()=>{
+  document.getElementById("deleteAccountConfirm").style.display = "block";
+  document.getElementById("deleteAccountPassword").value = "";
+  document.getElementById("deleteAccountError").textContent = "";
+});
+document.getElementById("btnConfirmDeleteAccount").addEventListener("click", async ()=>{
+  const pass = document.getElementById("deleteAccountPassword").value;
+  const errEl = document.getElementById("deleteAccountError");
+  errEl.textContent = "";
+  if(!pass){ errEl.textContent = "Enter your password to confirm."; return; }
+  const btn = document.getElementById("btnConfirmDeleteAccount");
+  btn.disabled = true;
+  try{
+    // Firebase requires a recent sign-in for account deletion; re-proving
+    // the password here covers both that requirement and "are you sure".
+    const cred = EmailAuthProvider.credential(usernameToEmail(state.username), pass);
+    await reauthenticateWithCredential(auth.currentUser, cred);
+
+    // Firestore data must go BEFORE the Auth user — once that's deleted
+    // the client is signed out and loses write access to clean anything up.
+    const questsSnap = await getDocs(collection(db,"players",state.uid,"quests"));
+    for(const d of questsSnap.docs) await deleteDoc(d.ref);
+    const inboxSnap = await getDocs(collection(db,"players",state.uid,"inbox"));
+    for(const d of inboxSnap.docs) await deleteDoc(d.ref);
+    await deleteDoc(doc(db,"players",state.uid));
+    await deleteDoc(doc(db,"usernames",state.username.toLowerCase())).catch(()=>{});
+
+    await deleteUser(auth.currentUser);
+    toast("Your account has been deleted.");
+    closeModal("settingsModal");
+    cleanupSubs();
+    showScreen("screen-title");
+    playMusic("rpg_title.mp3");
+  }catch(err){
+    errEl.textContent = friendlyFirebaseError(err);
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 onAuthStateChanged(auth, async (user)=>{
   // The auth form calls loadPlayerAndRoute() itself once signup/login
   // finishes — skip here so we don't race it (see authFlowBusy above).
@@ -620,7 +680,10 @@ renderClassGrid();
 /* =========================================================================
    ENTER GAME / LIVE SYNC
    ========================================================================= */
-function cleanupSubs(){ state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null; }
+function cleanupSubs(){
+  state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null;
+  if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
+}
 
 function enterGame(){
   showScreen("screen-game");
@@ -663,27 +726,33 @@ function setBar(key, val, max){
 }
 
 /* level-up: xp scales by 1.2x rounded down each level */
+const SKILL_KEYS = ["SPEED","STRENGTH","CHARM","SMARTS"];
 async function grantXP(amount){
   await withErrorToast(async ()=>{
     let p = state.profile;
     let xp = p.xp + amount;
     let xpMax = p.xpMax;
     let level = p.level;
-    let leveled = false;
+    let levelsGained = 0;
+    const stats = { ...p.stats };
     while(xp >= xpMax){
       xp -= xpMax;
       xpMax = Math.floor(xpMax*1.2);
       level++;
-      leveled = true;
+      levelsGained++;
+      // one free skill point per level, dropped into a random stat
+      const pick = SKILL_KEYS[Math.floor(Math.random()*SKILL_KEYS.length)];
+      stats[pick] = (stats[pick]||0) + 1;
     }
     const updates = { xp, xpMax, level };
-    if(leveled){
-      updates.hpMax = p.hpMax + 10;
+    if(levelsGained > 0){
+      updates.stats = stats;
+      updates.hpMax = p.hpMax + 10*levelsGained;
       updates.hp = updates.hpMax;
-      updates.manaMax = p.manaMax + 3;
+      updates.manaMax = p.manaMax + 3*levelsGained;
       updates.mana = updates.manaMax;
       playSfx("levelup");
-      toast(`Level up! You are now level ${level}.`);
+      toast(`Level up! You are now level ${level} (+${levelsGained} skill point${levelsGained>1?"s":""}).`);
     }
     await updateDoc(doc(db,"players",state.uid), updates);
   });
@@ -781,14 +850,16 @@ async function sellItem(item){
   toast(`Sold ${item.name} for $${item.sellPrice}`);
 }
 async function equipItem(item){
-  const slot = item.type; // weapon/armor/trinket
+  const slot = item.type==="armor" ? item.armorSlot : item.type; // weapon/helmet/chestplate/leggings/boots/trinket
   const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`equipped.${slot}`]: item.id }));
   if(ok!==null) toast(`Equipped ${item.name}`);
 }
+const EQUIP_SLOTS = ["weapon","helmet","chestplate","leggings","boots","trinket"];
 function renderEquipSlots(){
   const p = state.profile; if(!p) return;
-  ["weapon","armor","trinket"].forEach(slot=>{
+  EQUIP_SLOTS.forEach(slot=>{
     const el = document.getElementById("equip"+slot.charAt(0).toUpperCase()+slot.slice(1));
+    if(!el) return;
     const itemId = p.equipped?.[slot];
     if(itemId && ITEM_BY_ID[itemId]){
       el.classList.add("filled");
@@ -830,11 +901,13 @@ async function renderLeaderboard(cat){
     const q = query(collection(db,"players"), orderBy(field,"desc"), limit(10));
     const snap = await getDocs(q);
     list.innerHTML="";
-    snap.forEach((d,i)=>{
+    let rank = 0;
+    snap.forEach((d)=>{
+      rank++;
       const data = d.data();
       const li = document.createElement("li");
-      li.innerHTML = `<span>#${i+1} ${data.username}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
-      li.addEventListener("click", ()=> openProfileBook(d.id, data, i+1, cat));
+      li.innerHTML = `<span>#${rank} ${data.username}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
+      li.addEventListener("click", ()=> openProfileBook(d.id, data, rank, cat));
       list.appendChild(li);
     });
     if(list.children.length===0) list.innerHTML="<li>No players yet.</li>";
@@ -848,8 +921,25 @@ function openProfileBook(uid, data, rank, cat){
     Monsters Killed: ${data.monstersKilled||0}<br>
     PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}`;
   document.getElementById("profileRank").textContent = rank? `Ranked #${rank} in ${cat}` : "";
-  document.getElementById("btnPM").onclick = ()=>{ closeModal("profileModal"); openPrivateChatWith(uid, data.username); };
-  document.getElementById("btnFriendReq").onclick = ()=> sendFriendRequest(uid, data.username);
+
+  const pmBtn = document.getElementById("btnPM");
+  const friendBtn = document.getElementById("btnFriendReq");
+  const isSelf = uid === state.uid;
+  pmBtn.style.display = isSelf ? "none" : "";
+  friendBtn.style.display = isSelf ? "none" : "";
+  if(!isSelf){
+    pmBtn.onclick = ()=>{ closeModal("profileModal"); openPrivateChatWith(uid, data.username); };
+    const isFriend = (state.profile.friends||[]).includes(uid);
+    friendBtn.textContent = isFriend ? "Remove Friend" : "Add Friend";
+    friendBtn.className = "doodle-btn " + (isFriend ? "btn-pink" : "btn-blue");
+    friendBtn.onclick = isFriend
+      ? ()=> withErrorToast(async ()=>{
+          await updateDoc(doc(db,"players",state.uid), { friends: arrayRemove(uid) });
+          toast(`Removed ${data.username} as a friend.`);
+          closeModal("profileModal");
+        })
+      : ()=> sendFriendRequest(uid, data.username);
+  }
   openModal("profileModal");
 }
 
@@ -1064,6 +1154,8 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
    The other side of the handshake is applied by the OTHER player's own
    client, triggered by an inbox notification only they can read. */
 async function sendFriendRequest(uid, username){
+  if(uid === state.uid){ toast("You can't friend yourself!"); return; }
+  if((state.profile.friends||[]).includes(uid)){ toast("You're already friends."); return; }
   const ok = await withErrorToast(()=> addDoc(collection(db,"players",uid,"inbox"), {
     type:"friend_request", fromUid: state.uid, fromUsername: state.profile.username, ts: Date.now()
   }));
@@ -1133,13 +1225,22 @@ document.querySelectorAll("[data-aucsub]").forEach(btn=>{
     if(btn.dataset.aucsub==="mine") populatePostForm();
   });
 });
+let auctionUnsub = null;
 function renderAuction(){
-  const q = query(collection(db,"auction"), where("status","==","active"), orderBy("postedAt","desc"), limit(40));
-  const unsub = onSnapshot(q, snap=>{
+  // NOTE: this intentionally does NOT combine where("status","==","active")
+  // with orderBy("postedAt") — mixing an equality filter with an orderBy on
+  // a DIFFERENT field requires a Firestore composite index. Firebase won't
+  // create that automatically, and without it this query fails outright
+  // (which is why the auction house looked "broken"). Filtering status and
+  // expiry client-side instead avoids needing any manual index.
+  const q = query(collection(db,"auction"), orderBy("postedAt","desc"), limit(60));
+  if(auctionUnsub) auctionUnsub();
+  auctionUnsub = onSnapshot(q, snap=>{
     const grid = document.getElementById("auctionGrid");
     grid.innerHTML="";
     snap.forEach(d=>{
       const listing = d.data();
+      if(listing.status !== "active") return;
       if(listing.expiresAt < Date.now()) return;
       const item = ITEM_BY_ID[listing.itemId];
       if(!item) return;
@@ -1154,7 +1255,6 @@ function renderAuction(){
       grid.appendChild(cell);
     });
   }, (err)=> toast(friendlyFirebaseError(err)));
-  state.unsubs.push(unsub);
 }
 async function buyAuctionListing(listingId, listing, item){
   const totalCost = listing.pricePer * listing.qty;
@@ -1204,8 +1304,9 @@ document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
   const price = Number(document.getElementById("postPrice").value);
   if(!itemId || qty<1 || price<1){ toast("Enter a valid quantity and price."); return; }
   try{
-    const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid), where("status","==","active")));
-    if(mySnap.size >= 5){ toast("You can only have 5 auction slots."); return; }
+    const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
+    const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
+    if(activeCount >= 5){ toast("You can only have 5 auction slots."); return; }
   }catch(err){ toast(friendlyFirebaseError(err)); return; }
   const entry = invExpanded().find(e=>e.itemId===itemId);
   if(!entry || entry.qty < qty){ toast("You don't have that many."); return; }
@@ -1220,12 +1321,13 @@ document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
 });
 async function renderMySlots(){
   try{
-    const q = query(collection(db,"auction"), where("sellerUid","==",state.uid), where("status","==","active"));
+    const q = query(collection(db,"auction"), where("sellerUid","==",state.uid));
     const snap = await getDocs(q);
     const grid = document.getElementById("myAuctionSlots");
     grid.innerHTML="";
     snap.forEach(d=>{
       const listing = d.data();
+      if(listing.status !== "active") return;
       const item = ITEM_BY_ID[listing.itemId];
       if(!item) return;
       const cell = document.createElement("div");
@@ -1315,8 +1417,10 @@ function playerAttackPower(){
 }
 function playerDefense(){
   const p = state.profile;
-  const armor = p.equipped.armor && ITEM_BY_ID[p.equipped.armor];
-  return (armor?.stats.defense||0);
+  return ARMOR_SLOTS.reduce((sum,slot)=>{
+    const piece = p.equipped[slot] && ITEM_BY_ID[p.equipped[slot]];
+    return sum + (piece?.stats.defense||0);
+  }, 0);
 }
 function startPvE(difficulty){
   const enemy = pickEnemy(difficulty);
@@ -1382,6 +1486,7 @@ async function playerAttack(power){
   playSfx("attack");
   if(b.enemy.curHp<=0){ await winBattle(); return; }
   renderBattle();
+  triggerEnemyTurnIfOutOfMoves();
 }
 document.getElementById("btnPowerAttack").addEventListener("click", ()=> playerAttack(true));
 async function useItemInBattle(item){
@@ -1391,10 +1496,17 @@ async function useItemInBattle(item){
   b.stamina -= 4;
   battleLogPush(`You use ${item.name}.`);
   await changeInvQty(item.id, -1);
-  if(b.enemy.curHp>0){ enemyTurnIfNeeded(); }
   renderBattle();
+  triggerEnemyTurnIfOutOfMoves();
 }
-document.getElementById("btnEndTurn").addEventListener("click", ()=> enemyTurnIfNeeded());
+// Combat is automatic once a player is out of moves for the turn — no more
+// "End Turn" button to click. A short delay just gives the log line time
+// to be read before the enemy's line appears.
+function triggerEnemyTurnIfOutOfMoves(){
+  const b = state.battle;
+  if(!b || b.stamina>=4 || b.enemy.curHp<=0) return;
+  setTimeout(()=> enemyTurnIfNeeded(), 650);
+}
 function enemyTurnIfNeeded(){
   const b = state.battle;
   if(!b) return;

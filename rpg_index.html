@@ -106,6 +106,7 @@
     <div class="header-left">
       <button class="icon-btn" id="btnSettings" title="Settings">&#9881;</button>
       <button class="icon-btn" id="btnAccountBack" title="Account">&#128100;</button>
+      <span class="region-pill" id="hudRegion">Enchanted Forest</span>
     </div>
     <div class="header-center" id="accountSummary">
       <span class="acct-name" id="hudName">Adventurer</span>
@@ -113,7 +114,7 @@
       <span class="acct-money">$<span id="hudMoney">0</span></span>
     </div>
     <div class="header-right">
-      <span class="region-pill" id="hudRegion">Enchanted Forest</span>
+      <button class="doodle-btn journal-btn" id="btnJournal">&#128214; Journal</button>
     </div>
   </header>
 
@@ -141,8 +142,6 @@
       <div class="stat-row"><span>SMT</span><b id="statSMARTS">0</b></div>
     </div>
   </footer>
-
-  <button class="journal-btn doodle-btn" id="btnJournal">&#128214; Journal</button>
 </section>
 
 <!-- ================= JOURNAL MODAL ================= -->
@@ -157,9 +156,12 @@
 
     <div class="jtab-page active" id="jtab-inventory">
       <div class="equip-row">
-        <div class="equip-slot" id="equipArmor" data-slot="armor"><span>Armor</span></div>
-        <div class="equip-slot" id="equipTrinket" data-slot="trinket"><span>Trinket</span></div>
         <div class="equip-slot" id="equipWeapon" data-slot="weapon"><span>Weapon</span></div>
+        <div class="equip-slot" id="equipHelmet" data-slot="helmet"><span>Helmet</span></div>
+        <div class="equip-slot" id="equipChestplate" data-slot="chestplate"><span>Chestplate</span></div>
+        <div class="equip-slot" id="equipLeggings" data-slot="leggings"><span>Leggings</span></div>
+        <div class="equip-slot" id="equipBoots" data-slot="boots"><span>Boots</span></div>
+        <div class="equip-slot" id="equipTrinket" data-slot="trinket"><span>Trinket</span></div>
       </div>
       <div class="inv-grid" id="invGrid"></div>
       <div class="page-nav">
@@ -320,7 +322,6 @@
       <button class="doodle-btn btn-sm btn-pink" id="btnPowerAttack" disabled>Power Attack!</button>
     </div>
     <div class="battle-actions" id="battleActions"></div>
-    <button class="doodle-btn btn-sm" id="btnEndTurn">End Turn</button>
   </div>
 </div>
 
@@ -332,6 +333,16 @@
     <label class="doodle-check"><input type="checkbox" id="muteMusic"> Mute music</label>
     <label class="doodle-check"><input type="checkbox" id="muteSfx"> Mute sound effects</label>
     <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
+
+    <hr class="danger-hr">
+    <h3 class="doodle-h2 danger-heading">Danger Zone</h3>
+    <button class="doodle-btn btn-block btn-danger" id="btnShowDeleteAccount">Delete Account</button>
+    <div id="deleteAccountConfirm" class="danger-confirm">
+      <p class="danger-warning">This permanently deletes your character, items, and progress. This cannot be undone. Enter your password to confirm.</p>
+      <input type="password" id="deleteAccountPassword" placeholder="Password" class="danger-input">
+      <p class="doodle-error" id="deleteAccountError"></p>
+      <button class="doodle-btn btn-block btn-danger" id="btnConfirmDeleteAccount">Yes, permanently delete my account</button>
+    </div>
   </div>
 </div>
 
