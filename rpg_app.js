@@ -42,14 +42,26 @@ const usernameToEmail = (u) => `${u.toLowerCase()}@${AUTH_DOMAIN}`;
    ========================================================================= */
 function friendlyFirebaseError(err){
   const code = err?.code || "";
-  if(code.includes("permission-denied")) return "That action isn't allowed.";
+  // NOTE: order matters here. "auth/user-not-found" and
+  // "auth/configuration-not-found" both contain the substring "not-found",
+  // so the generic not-found check MUST come after every specific code
+  // that also happens to contain "not-found" — otherwise it shadows them
+  // and every one of those errors gets mislabeled as "That no longer
+  // exists.", which is exactly what was happening here.
+  if(code.includes("permission-denied")) return `That action isn't allowed. (${code})`;
   if(code.includes("unavailable") || code.includes("network")) return "Connection problem — check your internet and try again.";
-  if(code.includes("not-found")) return "That no longer exists.";
   if(code.includes("wrong-password") || code.includes("invalid-credential")) return "Wrong username or password.";
   if(code.includes("user-not-found")) return "No account with that username.";
   if(code.includes("email-already-in-use")) return "That username is taken.";
   if(code.includes("weak-password")) return "Password needs 6+ characters.";
-  return "Something went wrong. Please try again.";
+  if(code.includes("invalid-email")) return `That username isn't valid. (${code})`;
+  if(code.includes("configuration-not-found") || code.includes("operation-not-allowed")){
+    return `Sign-in isn't configured correctly yet. (${code}) — enable Email/Password sign-in for this project in the Firebase console.`;
+  }
+  if(code.includes("not-found")) return `That no longer exists. (${code})`;
+  // Fallback: never swallow the real reason. Show the raw code/message so
+  // this is debuggable instead of a dead-end "Something went wrong."
+  return `Something went wrong${code ? ` (${code})` : ""}: ${err?.message || err}`;
 }
 async function withErrorToast(fn){
   try{ return await fn(); }
@@ -440,7 +452,10 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
       if(pass.length < 6){ errEl.textContent="Password needs 6+ characters."; return; }
 
       // reserve the username first so two people can't grab the same one
-      const takenSnap = await getDoc(doc(db,"usernames",uname.toLowerCase()));
+      let takenSnap;
+      try{
+        takenSnap = await getDoc(doc(db,"usernames",uname.toLowerCase()));
+      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
       if(takenSnap.exists()){ errEl.textContent="That username is taken."; return; }
 
       let cred;
