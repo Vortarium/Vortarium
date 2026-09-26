@@ -14,11 +14,18 @@ service cloud.firestore {
     }
 
     // Players: public read (leaderboards/profiles), self-only write.
-    // Money/inventory/stats can ONLY be changed by the owning client here —
-    // for a production game, move reward-granting (battle winnings, auction
-    // payouts, level-ups) into Cloud Functions with the Admin SDK so a
-    // modified client can't just write itself infinite money. This ruleset
-    // is the safe baseline: nobody can touch another player's document.
+    // No other player's document can EVER be updated by this ruleset —
+    // notifications (friend requests, auction sold, friend accept) are
+    // therefore delivered via each player's own /inbox subcollection, and
+    // the receiving player's OWN client applies the effect to their OWN
+    // document. This is enforced here, not just by convention in the app.
+    //
+    // Money/XP/level/inventory are still writable by the owning client
+    // directly (e.g. after winning a battle, buying a shop item). Rules
+    // alone cannot verify those values are "earned" rather than invented
+    // by a modified client — that requires moving reward-granting into
+    // Cloud Functions with the Admin SDK. See the accompanying notes for
+    // exactly which operations that applies to.
     match /players/{uid} {
       allow read: if true;
       allow create: if isOwner(uid);
@@ -29,9 +36,10 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
       match /inbox/{notifId} {
-        allow read, delete, update: if isOwner(uid);
-        // any signed-in player may notify another (friend requests, auction
-        // sold notices) but only the recipient may read/manage their inbox
+        allow read, update, delete: if isOwner(uid);
+        // any signed-in player may notify another (friend requests,
+        // friend-accept, auction-sold receipts) — but only the recipient
+        // may read, update or delete their own inbox entries.
         allow create: if isSignedIn();
       }
     }
@@ -51,22 +59,51 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Auction: sellers may create/cancel(delete) their own listings.
+    // A "purchase" is an UPDATE (status -> "sold"), never a delete by a
+    // non-owner, so a listing can't just be wiped by anyone without
+    // paying. This still trusts the buyer's own client to have actually
+    // debited itself the correct amount in the same transaction — see the
+    // remaining-limitations note for why only a Cloud Function closes
+    // that gap completely.
     match /auction/{listingId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.sellerUid == request.auth.uid;
-      // deletion happens on purchase (by buyer, via transaction) or on
-      // cancel (by seller) — both are legitimate from the client with this
-      // ruleset; move to a Cloud Function if you want server-verified gold
-      // transfer on purchase instead of trusting the buyer's client.
-      allow delete: if isSignedIn();
-      allow update: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.sellerUid == request.auth.uid
+        && request.resource.data.status == "active";
+      allow delete: if isSignedIn() && isOwner(resource.data.sellerUid);
+      allow update: if isSignedIn() && (
+        // seller may edit their own still-active listing
+        isOwner(resource.data.sellerUid) ||
+        // OR a non-owner may claim an active listing as sold, touching
+        // only the sale-related fields
+        (
+          resource.data.status == "active" &&
+          request.resource.data.status == "sold" &&
+          request.resource.data.buyerUid == request.auth.uid &&
+          request.resource.data.sellerUid == resource.data.sellerUid &&
+          request.resource.data.itemId == resource.data.itemId &&
+          request.resource.data.qty == resource.data.qty &&
+          request.resource.data.pricePer == resource.data.pricePer
+        )
+      );
     }
 
+    // Duel rooms: only the host may modify host-owned fields; only an
+    // unclaimed room (guestUid == null) may be joined, and only by the
+    // joining player setting themselves as guest.
     match /duelRooms/{code} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.hostUid == request.auth.uid;
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isOwner(resource.data.hostUid) ||
+        (
+          resource.data.guestUid == null &&
+          request.resource.data.guestUid == request.auth.uid &&
+          request.resource.data.hostUid == resource.data.hostUid
+        )
+      );
+      allow delete: if isSignedIn() && isOwner(resource.data.hostUid);
     }
 
     match /queue/{uid} {
