@@ -40,8 +40,18 @@ const usernameToEmail = (u) => `${u.toLowerCase()}@${AUTH_DOMAIN}`;
    race condition, bad input) is routed through one of these so the UI
    never just "goes quiet" — the player always gets a toast.
    ========================================================================= */
+/* TEMP DEBUG SWITCH — set to false once auth/signup is confirmed working.
+   While true, every Firebase error shown to the player (and logged) is the
+   raw {code, message} instead of a friendly string, so nothing is hidden
+   during debugging. */
+const DEBUG_AUTH_ERRORS = true;
+
 function friendlyFirebaseError(err){
+  console.error("FIREBASE ERROR:", err?.code, err?.message, err);
   const code = err?.code || "";
+  if(DEBUG_AUTH_ERRORS){
+    return `[DEBUG] ${code || "unknown-code"}: ${err?.message || String(err)}`;
+  }
   // NOTE: order matters here. "auth/user-not-found" and
   // "auth/configuration-not-found" both contain the substring "not-found",
   // so the generic not-found check MUST come after every specific code
@@ -437,60 +447,20 @@ document.getElementById("btnSignup").addEventListener("click", ()=>{
   document.getElementById("authError").textContent="";
   openModal("authModal");
 });
-document.getElementById("authForm").addEventListener("submit", async (e)=>{
-  e.preventDefault();
-  const uname = document.getElementById("authUsername").value.trim();
-  const pass = document.getElementById("authPassword").value;
-  const errEl = document.getElementById("authError");
-  const submitBtn = document.getElementById("authSubmit");
-  errEl.textContent="";
-  submitBtn.disabled = true;
-  try{
-    if(authMode==="signup"){
-      const problem = isValidUsername(uname);
-      if(problem){ errEl.textContent = problem; return; }
-      if(pass.length < 6){ errEl.textContent="Password needs 6+ characters."; return; }
+// Set true for the entire duration of the signup/login submit handler.
+// onAuthStateChanged fires the instant Firebase considers the user signed
+// in — which, on signup, is BEFORE this file has finished writing
+// /players/{uid} and /usernames/{username}. Without this guard the global
+// listener races the signup handler, sees no player doc yet, and signs the
+// brand-new account back out — which then makes the signup handler's own
+// still-pending setDoc calls fail with permission-denied because the user
+// is no longer authenticated by the time they run.
+let authFlowBusy = false;
 
-      // reserve the username first so two people can't grab the same one
-      let takenSnap;
-      try{
-        takenSnap = await getDoc(doc(db,"usernames",uname.toLowerCase()));
-      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
-      if(takenSnap.exists()){ errEl.textContent="That username is taken."; return; }
-
-      let cred;
-      try{
-        cred = await createUserWithEmailAndPassword(auth, usernameToEmail(uname), pass);
-      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
-
-      try{
-        const pdoc = defaultPlayerDoc(uname, null, null);
-        await setDoc(doc(db,"players",cred.user.uid), pdoc);
-        await setDoc(doc(db,"usernames",uname.toLowerCase()), { uid:cred.user.uid });
-      }catch(err){
-        // roll back the auth account so we don't leave an orphaned login
-        // with no matching player document
-        try{ await cred.user.delete(); }catch(e2){ /* best effort */ }
-        errEl.textContent = "Couldn't finish creating your account. Please try again.";
-        return;
-      }
-      closeModal("authModal");
-    } else {
-      try{
-        await signInWithEmailAndPassword(auth, usernameToEmail(uname), pass);
-        closeModal("authModal");
-      }catch(err){ errEl.textContent = friendlyFirebaseError(err); }
-    }
-  } finally {
-    submitBtn.disabled = false;
-  }
-});
-document.getElementById("btnLogout").addEventListener("click", async ()=>{
-  await withErrorToast(()=> signOut(auth));
-  closeModal("settingsModal");
-});
-
-onAuthStateChanged(auth, async (user)=>{
+/* Shared by onAuthStateChanged (page load / token refresh / other tabs)
+   and the auth form itself (right after a signup/login it just performed),
+   so both paths route the player the same way without racing each other. */
+async function loadPlayerAndRoute(user){
   cleanupSubs();
   if(!user){ showScreen("screen-title"); playMusic("rpg_title.mp3"); return; }
   state.uid = user.uid;
@@ -518,6 +488,74 @@ onAuthStateChanged(auth, async (user)=>{
   } else {
     enterGame();
   }
+}
+
+document.getElementById("authForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  const uname = document.getElementById("authUsername").value.trim();
+  const pass = document.getElementById("authPassword").value;
+  const errEl = document.getElementById("authError");
+  const submitBtn = document.getElementById("authSubmit");
+  errEl.textContent="";
+  submitBtn.disabled = true;
+  authFlowBusy = true;
+  try{
+    if(authMode==="signup"){
+      const problem = isValidUsername(uname);
+      if(problem){ errEl.textContent = problem; return; }
+      if(pass.length < 6){ errEl.textContent="Password needs 6+ characters."; return; }
+
+      // reserve the username first so two people can't grab the same one
+      let takenSnap;
+      try{
+        takenSnap = await getDoc(doc(db,"usernames",uname.toLowerCase()));
+      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
+      if(takenSnap.exists()){ errEl.textContent="That username is taken."; return; }
+
+      let cred;
+      try{
+        cred = await createUserWithEmailAndPassword(auth, usernameToEmail(uname), pass);
+      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
+
+      try{
+        const pdoc = defaultPlayerDoc(uname, null, null);
+        await setDoc(doc(db,"players",cred.user.uid), pdoc);
+        await setDoc(doc(db,"usernames",uname.toLowerCase()), { uid:cred.user.uid });
+      }catch(err){
+        console.error("SIGNUP FIRESTORE ERROR:", err);
+        // roll back the auth account so we don't leave an orphaned login
+        // with no matching player document
+        try{ await cred.user.delete(); }catch(e2){ console.error("ROLLBACK DELETE FAILED:", e2); }
+        errEl.textContent = DEBUG_AUTH_ERRORS
+          ? `[DEBUG] player/username doc create failed: ${err?.code||"unknown"}: ${err?.message||err}`
+          : "Couldn't finish creating your account. Please try again.";
+        return;
+      }
+      closeModal("authModal");
+      await loadPlayerAndRoute(cred.user);
+    } else {
+      let cred;
+      try{
+        cred = await signInWithEmailAndPassword(auth, usernameToEmail(uname), pass);
+      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
+      closeModal("authModal");
+      await loadPlayerAndRoute(cred.user);
+    }
+  } finally {
+    authFlowBusy = false;
+    submitBtn.disabled = false;
+  }
+});
+document.getElementById("btnLogout").addEventListener("click", async ()=>{
+  await withErrorToast(()=> signOut(auth));
+  closeModal("settingsModal");
+});
+
+onAuthStateChanged(auth, async (user)=>{
+  // The auth form calls loadPlayerAndRoute() itself once signup/login
+  // finishes — skip here so we don't race it (see authFlowBusy above).
+  if(authFlowBusy) return;
+  await loadPlayerAndRoute(user);
 });
 
 /* =========================================================================
