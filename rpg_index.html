@@ -40,7 +40,7 @@
   <div class="title-stage">
     <svg id="dragonSleeping" class="dragon-doodle frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
-  <p class="doodle-caption">zzz&hellip; the dragon is dreaming of new adventurers</p>
+
 
   <div class="title-buttons">
     <button class="doodle-btn btn-lg btn-pink" id="btnLogin">LOG IN</button>
@@ -105,7 +105,6 @@
   <header class="game-header doodle-panel">
     <div class="header-left">
       <button class="icon-btn" id="btnSettings" title="Settings">&#9881;</button>
-      <button class="icon-btn" id="btnAccountBack" title="Account">&#128100;</button>
       <span class="region-pill" id="hudRegion">Enchanted Forest</span>
     </div>
     <div class="header-center" id="accountSummary">
@@ -114,13 +113,24 @@
       <span class="acct-money">$<span id="hudMoney">0</span></span>
     </div>
     <div class="header-right">
-      <button class="doodle-btn journal-btn" id="btnJournal">&#128214; Journal</button>
+      <button class="icon-btn circle-btn" id="btnJournal" title="Journal">&#128214;</button>
     </div>
   </header>
 
   <!-- CENTER STAGE -->
   <main class="game-stage">
+    <div class="region-parallax" id="regionParallax">
+      <div class="region-layer region-layer-bg"></div>
+      <div class="region-layer region-layer-mid"></div>
+      <div class="region-layer region-layer-fg"></div>
+    </div>
     <svg id="dragonMain" class="dragon-doodle stage-dragon frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="dragonHitFx"></div>
+    <div class="bossbar-wrap" id="dragonBossbar" style="display:none">
+      <div class="bossbar-label">The Sleeping Dragon</div>
+      <div class="bossbar"><div class="bossbar-fill" id="dragonBossbarFill"></div></div>
+      <div class="bossbar-num" id="dragonBossbarNum">1,000,000,000 / 1,000,000,000</div>
+    </div>
     <div id="stageLog" class="stage-log"></div>
   </main>
 
@@ -133,7 +143,7 @@
       <div class="bar-row"><span>XP</span><div class="bar bar-xp"><div class="bar-fill" id="barXP"></div></div><span class="bar-num" id="numXP">0/10</span></div>
     </div>
 
-    <button class="doodle-btn compass-btn" id="btnCompass">&#129517; Compass</button>
+    <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
 
     <div class="footer-right doodle-panel">
       <div class="stat-row"><span>SPD</span><b id="statSPEED">0</b></div>
@@ -196,6 +206,7 @@
     <p class="profile-rank" id="profileRank"></p>
     <button class="doodle-btn btn-pink" id="btnPM">Private Message</button>
     <button class="doodle-btn btn-blue" id="btnFriendReq">Add Friend</button>
+    <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
   </div>
 </div>
 
@@ -210,6 +221,7 @@
       <button class="tab-btn" data-ctab="auction">Auction</button>
       <button class="tab-btn" data-ctab="battle">Battle</button>
       <button class="tab-btn" data-ctab="craft">Craft</button>
+      <button class="tab-btn" data-ctab="jobs">Jobs</button>
     </div>
 
     <div class="ctab-page active" id="ctab-map">
@@ -259,6 +271,12 @@
       </div>
       <div class="aucsub-page active" id="aucsub-browse">
         <div class="inv-grid" id="auctionGrid"></div>
+        <div class="auction-detail doodle-panel" id="auctionDetail" style="display:none">
+          <h3 id="aucDetailName"></h3>
+          <p id="aucDetailMeta"></p>
+          <p id="aucDetailTimer"></p>
+          <button class="doodle-btn btn-green btn-block" id="aucDetailBuyBtn">Buy</button>
+        </div>
       </div>
       <div class="aucsub-page" id="aucsub-mine">
         <div class="post-form doodle-panel">
@@ -293,6 +311,38 @@
       </div>
       <button class="doodle-btn btn-green" id="btnCraft">Craft</button>
       <div class="inv-grid" id="craftInvGrid"></div>
+    </div>
+
+    <div class="ctab-page" id="ctab-jobs">
+      <div class="chat-sub-row">
+        <button class="doodle-btn btn-sm job-sub active" data-jobsub="foraging">Foraging</button>
+        <button class="doodle-btn btn-sm job-sub" data-jobsub="mining">Mining</button>
+        <button class="doodle-btn btn-sm job-sub" data-jobsub="fishing">Fishing</button>
+      </div>
+
+      <div class="jobsub-page active" id="jobsub-foraging">
+        <p class="doodle-sub">Click the bush — free, once a minute.</p>
+        <div class="job-stage">
+          <button class="job-bush" id="btnForage" style="font-size:70px; background:none; border:none; cursor:pointer;">&#127795;</button>
+        </div>
+        <p id="forageCooldown"></p>
+      </div>
+
+      <div class="jobsub-page" id="jobsub-mining">
+        <p class="doodle-sub">Requires a Pickaxe. Pick one of 3 rocks — 3 rocks every hour.</p>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Buy Pickaxe ($60)</button>
+        <div class="job-stage" id="mineRocks"></div>
+        <p id="mineCooldown"></p>
+      </div>
+
+      <div class="jobsub-page" id="jobsub-fishing">
+        <p class="doodle-sub">Requires a Fishing Rod. Hold the button (or Space) to keep the bar on the fish.</p>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Buy Fishing Rod ($60)</button>
+        <div class="job-stage" id="fishStage" style="display:none">
+          <div class="fish-track"><div class="fish-target" id="fishTarget"></div><div class="fish-bar" id="fishBar"></div><span id="fishEmoji">🐟</span></div>
+          <button class="doodle-btn btn-blue" id="btnStartFish">Cast Line</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

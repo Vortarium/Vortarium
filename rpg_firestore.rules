@@ -5,6 +5,16 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
+    // Server-side admin/mod list. This is enforced here, not in client JS,
+    // so it cannot be bypassed by editing the page. Replace the UID below
+    // with Vortarium's actual Firebase Auth UID (Firebase Console >
+    // Authentication, or console.log(auth.currentUser.uid) once logged in).
+    function isAdmin() {
+      return isSignedIn() && request.auth.uid in [
+        'REPLACE_WITH_VORTARIUM_UID'
+      ];
+    }
+
     // Reserved usernames: only the owning account may create/read its own
     // claim; nobody may overwrite someone else's.
     match /usernames/{uname} {
@@ -30,8 +40,10 @@ service cloud.firestore {
     match /players/{uid} {
       allow read: if true;
       allow create: if isOwner(uid);
-      allow update: if isOwner(uid);
-      allow delete: if isOwner(uid); // player-initiated account deletion
+      // Admin may also update another player's doc — used only for banning
+      // (setting banned:true and scrubbing displayName to banneduser_#####).
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isOwner(uid) || isAdmin(); // player-initiated or admin ban deletion
 
       match /quests/{questId} {
         allow read, write: if isOwner(uid);
@@ -48,16 +60,25 @@ service cloud.firestore {
     match /globalChat/{msgId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if false;
+      // A user may delete their own message; the admin may delete anyone's.
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
+      allow update: if false;
     }
 
     match /privateChats/{threadId}/messages/{msgId} {
       // threadId is "{uidA}_{uidB}" sorted — only the two participants may
-      // read or write into it.
-      allow read, create: if isSignedIn() &&
+      // read or write into it. Read and create are split: on a read there
+      // is no request.resource, so a combined condition that references it
+      // rejects every read (this was the permission-denied bug).
+      allow read: if isSignedIn() && threadId.split('_').hasAny([request.auth.uid]);
+      allow create: if isSignedIn() &&
         threadId.split('_').hasAny([request.auth.uid]) &&
         request.resource.data.uid == request.auth.uid;
-      allow update, delete: if false;
+      // Sender may delete their own message; admin may delete anyone's.
+      allow delete: if isSignedIn() &&
+        threadId.split('_').hasAny([request.auth.uid]) &&
+        (isOwner(resource.data.uid) || isAdmin());
+      allow update: if false;
     }
 
     // Auction: sellers may create/cancel(delete) their own listings.
@@ -105,6 +126,20 @@ service cloud.firestore {
         )
       );
       allow delete: if isSignedIn() && isOwner(resource.data.hostUid);
+    }
+
+    // Shared world boss (the sleeping dragon). Any signed-in player may hit
+    // it: hp may only go down, never up, and never below 0, which stops a
+    // modified client from healing it or underflowing the counter.
+    match /world/dragon {
+      allow read: if isSignedIn();
+      // One-time creation with full HP (only if it doesn't exist yet).
+      allow create: if isSignedIn() &&
+        request.resource.data.hp == request.resource.data.maxHp;
+      // Hits only: hp may only go down, never up or below 0.
+      allow update: if isSignedIn() &&
+        request.resource.data.hp <= resource.data.hp &&
+        request.resource.data.hp >= 0;
     }
 
     match /queue/{uid} {

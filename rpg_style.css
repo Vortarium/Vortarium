@@ -128,6 +128,68 @@ body{
   font-size:28px; background:transparent; border:none; cursor:pointer; color:var(--ink);
   padding:4px 6px; line-height:1;
 }
+.circle-btn{
+  width:54px; height:54px; border-radius:50%;
+  background:#fff8ec; border:3px solid var(--ink); box-shadow:2px 2px 0 var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; padding:0; transition:transform .12s ease;
+}
+.circle-btn:hover{ transform:translateY(-2px) scale(1.05); }
+.circle-btn:active{ transform:translateY(0) scale(.97); }
+
+/* ---------- world boss: sleeping dragon ---------- */
+.bossbar-wrap{
+  position:absolute; top:14px; left:50%; transform:translateX(-50%);
+  width:min(90%,520px); opacity:0; transition:opacity .6s ease;
+  text-align:center; z-index:5;
+}
+.bossbar-wrap.visible{ opacity:1; }
+.bossbar-label{ font-weight:800; text-shadow:0 1px 0 #fff; margin-bottom:4px; }
+.bossbar{
+  height:18px; border-radius:10px; background:#e9ded0; border:2px solid var(--ink);
+  overflow:hidden;
+}
+.bossbar-fill{
+  height:100%; width:100%; background:linear-gradient(90deg,#c0392b,#e74c3c);
+  transition:width .5s ease;
+}
+.bossbar-num{ font-size:12px; margin-top:2px; }
+#dragonHitFx{ position:absolute; inset:0; pointer-events:none; z-index:6; }
+.dragon-dmg{
+  position:absolute; top:40%; font-weight:800; color:#e74c3c;
+  text-shadow:1px 1px 0 #fff; animation:dmgFloat 1.2s ease-out forwards;
+  pointer-events:none;
+}
+@keyframes dmgFloat{
+  0%{ opacity:1; transform:translateY(0); }
+  100%{ opacity:0; transform:translateY(-60px); }
+}
+
+/* ---------- animated region parallax background ---------- */
+.region-parallax{ position:absolute; inset:0; overflow:hidden; z-index:0; pointer-events:none; }
+.region-layer{ position:absolute; inset:-10% -10%; background-size:cover; background-position:center; opacity:.55; }
+.region-layer-bg{ animation:driftSlow 40s ease-in-out infinite alternate; }
+.region-layer-mid{ animation:driftMed 26s ease-in-out infinite alternate; opacity:.4; }
+.region-layer-fg{ animation:driftFast 16s ease-in-out infinite alternate; opacity:.3; }
+@keyframes driftSlow{ from{transform:translate(0,0) scale(1);} to{transform:translate(-2%,1%) scale(1.03);} }
+@keyframes driftMed{ from{transform:translate(0,0) scale(1);} to{transform:translate(2%,-1%) scale(1.05);} }
+@keyframes driftFast{ from{transform:translate(0,0) scale(1);} to{transform:translate(-3%,2%) scale(1.07);} }
+
+.region-forest .region-layer-bg{ background:radial-gradient(circle at 30% 20%, #cdeccb, transparent 60%); }
+.region-forest .region-layer-mid{ background:radial-gradient(circle at 70% 60%, #9fd89a, transparent 65%); }
+.region-forest .region-layer-fg{ background:linear-gradient(to top, #6fae6a, transparent 70%); }
+
+.region-mountains .region-layer-bg{ background:radial-gradient(circle at 60% 15%, #e6f2ff, transparent 60%); }
+.region-mountains .region-layer-mid{ background:radial-gradient(circle at 30% 55%, #b9d7ef, transparent 65%); }
+.region-mountains .region-layer-fg{ background:linear-gradient(to top, #7fa8c9, transparent 70%); }
+
+.region-volcano .region-layer-bg{ background:radial-gradient(circle at 50% 20%, #3a2020, transparent 60%); }
+.region-volcano .region-layer-mid{ background:radial-gradient(circle at 40% 70%, #a5341f, transparent 65%); }
+.region-volcano .region-layer-fg{ background:linear-gradient(to top, #e8792e, transparent 70%); }
+
+.region-reef .region-layer-bg{ background:radial-gradient(circle at 40% 20%, #cdeffb, transparent 60%); }
+.region-reef .region-layer-mid{ background:radial-gradient(circle at 65% 55%, #7fd8e0, transparent 65%); }
+.region-reef .region-layer-fg{ background:linear-gradient(to top, #2f8fae, transparent 70%); }
 
 /* ---------- auth modal / forms ---------- */
 .modal-backdrop{
@@ -231,6 +293,17 @@ body{
 .inv-cell.rarity-epic{background:var(--purple);}
 .inv-cell.rarity-legendary{background:var(--yellow);}
 .inv-cell .qty-badge{position:absolute; bottom:3px; right:6px; font-size:14px; font-weight:700;}
+.inv-cell.selected{ outline:3px solid var(--ink); outline-offset:2px; }
+.auction-detail{ margin-top:12px; padding:12px 14px; }
+.auction-detail h3{ margin:0 0 6px; }
+.auction-detail p{ margin:2px 0; font-size:14px; }
+.job-stage{ display:flex; gap:16px; justify-content:center; align-items:center; min-height:100px; margin:14px 0; flex-wrap:wrap; }
+.mine-rock{ transition:transform .15s; }
+.mine-rock:hover{ transform:scale(1.1); }
+.fish-track{ position:relative; height:36px; background:#dcdcdc; border:2px solid var(--ink); border-radius:10px; overflow:hidden; }
+.fish-target{ position:absolute; top:0; bottom:0; background:rgba(46,204,113,.45); border-left:2px solid #27ae60; border-right:2px solid #27ae60; }
+.fish-bar{ position:absolute; top:2px; bottom:2px; background:var(--blue); border-radius:6px; }
+#fishEmoji{ position:absolute; right:8px; top:6px; font-size:20px; user-select:none; cursor:pointer; }
 .page-nav{display:flex; align-items:center; gap:14px; justify-content:center; margin:10px 0;}
 .item-detail{min-height:70px; font-size:18px;}
 
@@ -240,6 +313,7 @@ body{
 .lb-list li:hover{background:var(--yellow);}
 .quest-list{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:10px;}
 .quest-list li{display:flex; justify-content:space-between; align-items:center; border:2px solid var(--ink); border-radius:12px; padding:10px 14px; background:#FFFDF7; font-size:19px;}
+.quest-list li.quest-row{flex-direction:column; align-items:stretch; gap:6px; font-size:16px;}
 
 /* ---------- compass ---------- */
 .compass-card{width:840px;}
@@ -260,12 +334,19 @@ body{
 
 .chat-sub-row{display:flex; gap:8px; margin-bottom:10px;}
 .chat-log{height:260px; overflow-y:auto; border:2.5px solid var(--ink); border-radius:14px; padding:10px; background:#FFFDF7; margin-bottom:8px; font-size:18px;}
-.chat-msg{margin-bottom:10px; max-width:75%;}
+.chat-msg{margin-bottom:10px; max-width:75%; position:relative;}
 .chat-msg .who{font-size:14px; color:var(--ink-soft);}
+.chat-msg .who.chat-username{cursor:pointer; text-decoration:underline dotted; display:inline-block;}
+.chat-msg .who.chat-username:hover{color:var(--ink);}
 .chat-msg .bubble{border:2px solid var(--ink); border-radius:14px; padding:7px 12px; display:inline-block;}
 .chat-msg.mine{margin-left:auto; text-align:right;}
 .chat-msg.mine .bubble{background:var(--blue);}
 .chat-msg.theirs .bubble{background:var(--pink);}
+.chat-del-btn{
+  background:none; border:none; cursor:pointer; color:var(--ink-soft);
+  font-size:14px; margin-left:6px; vertical-align:middle;
+}
+.chat-del-btn:hover{ color:var(--danger); }
 .chat-input-row{display:flex; gap:8px;}
 .chat-input-row input{flex:1; font-family:'Patrick Hand'; font-size:18px; padding:8px 12px; border:2px solid var(--ink); border-radius:10px;}
 .pm-layout{display:flex; gap:12px;}
