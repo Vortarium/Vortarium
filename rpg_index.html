@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragoneer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="rpg_style.css">
+</head>
+<body>
+
+<!-- hand-drawn wobble filter, used all over the UI -->
+<svg width="0" height="0" style="position:absolute">
+  <filter id="doodleWobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" result="noise" seed="7"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.5"/>
+  </filter>
+  <filter id="doodleWobbleBig">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008" numOctaves="2" result="noise" seed="3"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="6"/>
+  </filter>
+</svg>
+
+<div id="toast-stack"></div>
+
+<!-- ================= LOADING ================= -->
+<section id="screen-loading" class="screen active">
+  <div class="loading-doodle">
+    <div class="egg" id="loadingEgg"></div>
+    <p class="doodle-h2">hatching Dragoneer&hellip;</p>
+  </div>
+</section>
+
+<!-- ================= TITLE / AUTH ================= -->
+<section id="screen-title" class="screen">
+  <div class="paper-bg"></div>
+  <h1 class="game-title">Dragoneer</h1>
+  <div class="title-stage">
+    <svg id="dragonSleeping" class="dragon-doodle frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <p class="doodle-caption">zzz&hellip; the dragon is dreaming of new adventurers</p>
+
+  <div class="title-buttons">
+    <button class="doodle-btn btn-lg btn-pink" id="btnLogin">LOG IN</button>
+    <button class="doodle-btn btn-lg btn-blue" id="btnSignup">SIGN UP</button>
+  </div>
+  <audio id="sfx-hover" src="rpg_hover.mp3" preload="none"></audio>
+  <audio id="sfx-click" src="rpg_click.mp3" preload="none"></audio>
+  <audio id="sfx-attack" src="rpg_attack.mp3" preload="none"></audio>
+  <audio id="sfx-buy" src="rpg_buy.mp3" preload="none"></audio>
+  <audio id="sfx-sell" src="rpg_sell.mp3" preload="none"></audio>
+  <audio id="sfx-levelup" src="rpg_levelup.mp3" preload="none"></audio>
+  <audio id="music-player" loop></audio>
+</section>
+
+<!-- Auth modal (shared for login + signup) -->
+<div id="authModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2" id="authTitle">Sign Up</h2>
+    <form id="authForm" class="doodle-form">
+      <label>Username
+        <input type="text" id="authUsername" maxlength="16" autocomplete="off" required>
+      </label>
+      <label>Password
+        <input type="password" id="authPassword" minlength="6" required>
+      </label>
+      <p class="doodle-error" id="authError"></p>
+      <button type="submit" class="doodle-btn btn-green btn-block" id="authSubmit">Create Account</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ARCHETYPE SELECT ================= -->
+<section id="screen-archetype" class="screen">
+  <div class="paper-bg"></div>
+  <h2 class="doodle-h1">Choose your Archetype</h2>
+  <p class="doodle-sub">Every rune shapes how your dragon grows.</p>
+  <div class="rune-grid" id="runeGrid"></div>
+  <div class="desc-box doodle-panel" id="archetypeDesc">
+    <p>Hover or tap a rune to learn its path.</p>
+  </div>
+  <button class="doodle-btn btn-lg btn-blue" id="btnConfirmArchetype" disabled>Confirm</button>
+</section>
+
+<!-- ================= CLASS SELECT ================= -->
+<section id="screen-class" class="screen">
+  <div class="paper-bg"></div>
+  <h2 class="doodle-h1">Choose your Class</h2>
+  <p class="doodle-sub">How will you fight, cast, and survive?</p>
+  <div class="class-grid" id="classGrid"></div>
+  <div class="desc-box doodle-panel" id="classDesc">
+    <p>Hover or tap a class to learn its path.</p>
+  </div>
+  <button class="doodle-btn btn-lg btn-green" id="btnConfirmClass" disabled>Begin Adventure</button>
+</section>
+
+<!-- ================= MAIN GAME ================= -->
+<section id="screen-game" class="screen">
+  <div class="paper-bg" id="regionBg"></div>
+
+  <!-- HEADER -->
+  <header class="game-header doodle-panel">
+    <div class="header-left">
+      <button class="icon-btn" id="btnSettings" title="Settings">&#9881;</button>
+      <button class="icon-btn" id="btnAccountBack" title="Account">&#128100;</button>
+    </div>
+    <div class="header-center" id="accountSummary">
+      <span class="acct-name" id="hudName">Adventurer</span>
+      <span class="acct-line">Lv. <b id="hudLevel">1</b> &middot; <span id="hudArchetype">Earth</span> <span id="hudClass">Warrior</span></span>
+      <span class="acct-money">$<span id="hudMoney">0</span></span>
+    </div>
+    <div class="header-right">
+      <span class="region-pill" id="hudRegion">Enchanted Forest</span>
+    </div>
+  </header>
+
+  <!-- CENTER STAGE -->
+  <main class="game-stage">
+    <svg id="dragonMain" class="dragon-doodle stage-dragon frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="stageLog" class="stage-log"></div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="game-footer">
+    <div class="footer-left doodle-panel">
+      <div class="bar-row"><span>HP</span><div class="bar bar-hp"><div class="bar-fill" id="barHP"></div></div><span class="bar-num" id="numHP">100/100</span></div>
+      <div class="bar-row"><span>MANA</span><div class="bar bar-mana"><div class="bar-fill" id="barMANA"></div></div><span class="bar-num" id="numMANA">20/20</span></div>
+      <div class="bar-row"><span>RAGE</span><div class="bar bar-rage"><div class="bar-fill" id="barRAGE"></div></div><span class="bar-num" id="numRAGE">10/10</span></div>
+      <div class="bar-row"><span>XP</span><div class="bar bar-xp"><div class="bar-fill" id="barXP"></div></div><span class="bar-num" id="numXP">0/10</span></div>
+    </div>
+
+    <button class="doodle-btn compass-btn" id="btnCompass">&#129517; Compass</button>
+
+    <div class="footer-right doodle-panel">
+      <div class="stat-row"><span>SPD</span><b id="statSPEED">0</b></div>
+      <div class="stat-row"><span>STR</span><b id="statSTRENGTH">0</b></div>
+      <div class="stat-row"><span>CHR</span><b id="statCHARM">0</b></div>
+      <div class="stat-row"><span>SMT</span><b id="statSMARTS">0</b></div>
+    </div>
+  </footer>
+
+  <button class="journal-btn doodle-btn" id="btnJournal">&#128214; Journal</button>
+</section>
+
+<!-- ================= JOURNAL MODAL ================= -->
+<div id="journalModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel journal-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <div class="tab-row">
+      <button class="tab-btn active" data-jtab="inventory">Inventory</button>
+      <button class="tab-btn" data-jtab="leaderboard">Leaderboard</button>
+      <button class="tab-btn" data-jtab="quests">Sidequests</button>
+    </div>
+
+    <div class="jtab-page active" id="jtab-inventory">
+      <div class="equip-row">
+        <div class="equip-slot" id="equipArmor" data-slot="armor"><span>Armor</span></div>
+        <div class="equip-slot" id="equipTrinket" data-slot="trinket"><span>Trinket</span></div>
+        <div class="equip-slot" id="equipWeapon" data-slot="weapon"><span>Weapon</span></div>
+      </div>
+      <div class="inv-grid" id="invGrid"></div>
+      <div class="page-nav">
+        <button class="doodle-btn btn-sm" id="invPrev">&larr;</button>
+        <span id="invPageLabel">Page 1</span>
+        <button class="doodle-btn btn-sm" id="invNext">&rarr;</button>
+      </div>
+      <div class="item-detail doodle-panel" id="itemDetail">Select an item to inspect it.</div>
+    </div>
+
+    <div class="jtab-page" id="jtab-leaderboard">
+      <div class="lb-cat-row">
+        <button class="doodle-btn btn-sm lb-cat active" data-cat="money">Richest</button>
+        <button class="doodle-btn btn-sm lb-cat" data-cat="level">Highest Level</button>
+        <button class="doodle-btn btn-sm lb-cat" data-cat="kills">Most Monsters Killed</button>
+      </div>
+      <ol class="lb-list" id="lbList"></ol>
+    </div>
+
+    <div class="jtab-page" id="jtab-quests">
+      <ul class="quest-list" id="questList"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PLAYER PROFILE BOOK OVERLAY ================= -->
+<div id="profileModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel book-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2" id="profileName">Player</h2>
+    <div class="profile-stats" id="profileStats"></div>
+    <p class="profile-rank" id="profileRank"></p>
+    <button class="doodle-btn btn-pink" id="btnPM">Private Message</button>
+    <button class="doodle-btn btn-blue" id="btnFriendReq">Add Friend</button>
+  </div>
+</div>
+
+<!-- ================= COMPASS MODAL ================= -->
+<div id="compassModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel compass-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <div class="tab-row wrap">
+      <button class="tab-btn active" data-ctab="map">Map</button>
+      <button class="tab-btn" data-ctab="shop">Shop</button>
+      <button class="tab-btn" data-ctab="chat">Chat</button>
+      <button class="tab-btn" data-ctab="auction">Auction</button>
+      <button class="tab-btn" data-ctab="battle">Battle</button>
+      <button class="tab-btn" data-ctab="craft">Craft</button>
+    </div>
+
+    <div class="ctab-page active" id="ctab-map">
+      <div class="region-grid" id="regionGrid"></div>
+    </div>
+
+    <div class="ctab-page" id="ctab-shop">
+      <p class="doodle-sub" id="shopRegionLabel">Enchanted Forest Shop</p>
+      <div class="daily-item-box doodle-panel" id="dailyItemBox"></div>
+      <div class="shop-grid" id="shopGrid"></div>
+    </div>
+
+    <div class="ctab-page" id="ctab-chat">
+      <div class="chat-sub-row">
+        <button class="doodle-btn btn-sm chat-sub active" data-chatsub="global">Global</button>
+        <button class="doodle-btn btn-sm chat-sub" data-chatsub="private">Private</button>
+        <button class="doodle-btn btn-sm chat-sub" data-chatsub="inbox">Inbox</button>
+      </div>
+      <div class="chatsub-page active" id="chatsub-global">
+        <div class="chat-log" id="chatLogGlobal"></div>
+        <form class="chat-input-row" id="globalChatForm">
+          <input type="text" id="globalChatInput" maxlength="200" placeholder="Say something...">
+          <button class="doodle-btn btn-sm" type="submit">Send</button>
+        </form>
+      </div>
+      <div class="chatsub-page" id="chatsub-private">
+        <div class="pm-layout">
+          <ul class="pm-contacts" id="pmContacts"></ul>
+          <div class="pm-thread">
+            <div class="chat-log" id="chatLogPrivate"></div>
+            <form class="chat-input-row" id="privateChatForm">
+              <input type="text" id="privateChatInput" maxlength="200" placeholder="Message...">
+              <button class="doodle-btn btn-sm" type="submit">Send</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <div class="chatsub-page" id="chatsub-inbox">
+        <ul class="inbox-list" id="inboxList"></ul>
+      </div>
+    </div>
+
+    <div class="ctab-page" id="ctab-auction">
+      <div class="chat-sub-row">
+        <button class="doodle-btn btn-sm auc-sub active" data-aucsub="browse">Auction House</button>
+        <button class="doodle-btn btn-sm auc-sub" data-aucsub="mine">Your Items</button>
+      </div>
+      <div class="aucsub-page active" id="aucsub-browse">
+        <div class="inv-grid" id="auctionGrid"></div>
+      </div>
+      <div class="aucsub-page" id="aucsub-mine">
+        <div class="post-form doodle-panel">
+          <select id="postItemSelect"></select>
+          <input type="number" id="postQty" min="1" value="1" placeholder="Qty">
+          <input type="number" id="postPrice" min="1" placeholder="$ each">
+          <span id="postTotalLabel">Total: $0</span>
+          <button class="doodle-btn btn-sm btn-green" id="btnPostAuction">Post</button>
+        </div>
+        <div class="inv-grid" id="myAuctionSlots"></div>
+      </div>
+    </div>
+
+    <div class="ctab-page" id="ctab-battle">
+      <div class="battle-choice-grid">
+        <button class="doodle-btn btn-lg btn-green" id="btnFightEasy">Easy Enemy</button>
+        <button class="doodle-btn btn-lg btn-yellow" id="btnFightMedium">Medium Enemy</button>
+        <button class="doodle-btn btn-lg btn-pink" id="btnFightHard">Hard Enemy</button>
+        <button class="doodle-btn btn-lg btn-blue" id="btnFightFriend">Challenge a Friend</button>
+      </div>
+      <div class="duel-panel doodle-panel" id="duelPanel"></div>
+    </div>
+
+    <div class="ctab-page" id="ctab-craft">
+      <p class="doodle-sub">Combine two items, or upgrade a piece with a material.</p>
+      <div class="craft-slots">
+        <div class="craft-slot" id="craftSlotA" data-craft="A">Slot A</div>
+        <span class="craft-plus">+</span>
+        <div class="craft-slot" id="craftSlotB" data-craft="B">Slot B</div>
+        <span class="craft-eq">=</span>
+        <div class="craft-slot craft-result" id="craftResult">?</div>
+      </div>
+      <button class="doodle-btn btn-green" id="btnCraft">Craft</button>
+      <div class="inv-grid" id="craftInvGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= BATTLE MODAL ================= -->
+<div id="battleModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel battle-card">
+    <div class="battle-arena">
+      <div class="fighter fighter-enemy">
+        <div class="fighter-name" id="battleEnemyName">Enemy</div>
+        <div class="bar bar-hp"><div class="bar-fill" id="battleEnemyHPBar"></div></div>
+        <span class="bar-num" id="battleEnemyHPNum">0/0</span>
+        <div class="fighter-sprite" id="battleEnemySprite">&#128009;</div>
+      </div>
+      <div class="vs-divider">VS</div>
+      <div class="fighter fighter-player">
+        <div class="fighter-name" id="battlePlayerName">You</div>
+        <div class="bar bar-hp"><div class="bar-fill" id="battlePlayerHPBar"></div></div>
+        <span class="bar-num" id="battlePlayerHPNum">0/0</span>
+        <div class="fighter-sprite">&#128378;</div>
+      </div>
+    </div>
+    <div class="battle-log" id="battleLog"></div>
+    <div class="battle-stamina">
+      Stamina: <span id="battleStaminaLabel">4 (1 move)</span>
+      &middot; Rage: <span id="battleRageLabel">0/10</span>
+      <button class="doodle-btn btn-sm btn-pink" id="btnPowerAttack" disabled>Power Attack!</button>
+    </div>
+    <div class="battle-actions" id="battleActions"></div>
+    <button class="doodle-btn btn-sm" id="btnEndTurn">End Turn</button>
+  </div>
+</div>
+
+<!-- ================= SETTINGS MODAL ================= -->
+<div id="settingsModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2">Settings</h2>
+    <label class="doodle-check"><input type="checkbox" id="muteMusic"> Mute music</label>
+    <label class="doodle-check"><input type="checkbox" id="muteSfx"> Mute sound effects</label>
+    <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
+  </div>
+</div>
+
+<script type="module" src="rpg_app.js"></script>
+</body>
+</html>
