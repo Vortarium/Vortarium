@@ -129,13 +129,17 @@ body{
   padding:4px 6px; line-height:1;
 }
 .circle-btn{
-  width:54px; height:54px; border-radius:50%;
-  background:#fff8ec; border:3px solid var(--ink); box-shadow:2px 2px 0 var(--ink);
+  width:54px; height:54px;
+  /* wobbly, hand-drawn "circle" instead of a perfect geometric one, to
+     match the rest of the doodle-styled UI */
+  border-radius:52% 48% 51% 49% / 48% 52% 49% 51%;
+  background:#fff8ec; border:3px solid var(--ink); box-shadow:3px 3px 0 rgba(74,63,53,.25);
   display:flex; align-items:center; justify-content:center;
-  font-size:26px; padding:0; transition:transform .12s ease;
+  font-size:26px; padding:0; transition:transform .12s ease, box-shadow .12s ease;
+  filter:url(#doodleWobble);
 }
-.circle-btn:hover{ transform:translateY(-2px) scale(1.05); }
-.circle-btn:active{ transform:translateY(0) scale(.97); }
+.circle-btn:hover{ transform:translate(-1px,-2px) scale(1.05); box-shadow:5px 6px 0 rgba(74,63,53,.25); }
+.circle-btn:active{ transform:translate(1px,1px) scale(.97); box-shadow:1px 1px 0 rgba(74,63,53,.25); }
 
 /* ---------- world boss: sleeping dragon ---------- */
 .bossbar-wrap{
@@ -191,12 +195,57 @@ body{
 .region-reef .region-layer-mid{ background:radial-gradient(circle at 65% 55%, #7fd8e0, transparent 65%); }
 .region-reef .region-layer-fg{ background:linear-gradient(to top, #2f8fae, transparent 70%); }
 
+.tool-shelf{ padding:10px 14px; margin-bottom:10px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+
+/* ---------- extra ambient background decor, per region ---------- */
+.region-decor{ position:absolute; inset:0; overflow:hidden; z-index:0; pointer-events:none; }
+.decor-bit{ position:absolute; font-size:28px; opacity:.7; will-change:transform; }
+.decor-bit.d1{ left:8%;  top:20%; animation:decorFloat1 9s ease-in-out infinite; }
+.decor-bit.d2{ left:82%; top:15%; animation:decorFloat2 11s ease-in-out infinite; animation-delay:.6s; }
+.decor-bit.d3{ left:18%; top:70%; animation:decorFloat1 13s ease-in-out infinite; animation-delay:1.4s; }
+.decor-bit.d4{ left:70%; top:66%; animation:decorFloat2 10s ease-in-out infinite; animation-delay:2s; }
+.decor-bit.d5{ left:45%; top:12%; animation:decorFloat1 15s ease-in-out infinite; animation-delay:.3s; }
+.decor-bit.d6{ left:55%; top:78%; animation:decorFloat2 12s ease-in-out infinite; animation-delay:1.8s; }
+@keyframes decorFloat1{ 0%,100%{ transform:translateY(0) rotate(0deg); } 50%{ transform:translateY(-14px) rotate(6deg); } }
+@keyframes decorFloat2{ 0%,100%{ transform:translateY(0) rotate(0deg); } 50%{ transform:translateY(10px) rotate(-6deg); } }
+
+.region-forest .decor-bit.d1::before{ content:"🍃"; }
+.region-forest .decor-bit.d2::before{ content:"🌳"; font-size:1.4em; opacity:.5; }
+.region-forest .decor-bit.d3::before{ content:"🍄"; }
+.region-forest .decor-bit.d4::before{ content:"🦋"; }
+.region-forest .decor-bit.d5::before{ content:"🍂"; }
+.region-forest .decor-bit.d6::before{ content:"🌿"; }
+
+.region-mountains .decor-bit.d1::before{ content:"❄️"; }
+.region-mountains .decor-bit.d2::before{ content:"🏔️"; font-size:1.4em; opacity:.45; }
+.region-mountains .decor-bit.d3::before{ content:"❄️"; }
+.region-mountains .decor-bit.d4::before{ content:"🌬️"; }
+.region-mountains .decor-bit.d5::before{ content:"❄️"; }
+.region-mountains .decor-bit.d6::before{ content:"🪶"; }
+
+.region-volcano .decor-bit.d1::before{ content:"🔥"; }
+.region-volcano .decor-bit.d2::before{ content:"🌋"; font-size:1.4em; opacity:.45; }
+.region-volcano .decor-bit.d3::before{ content:"✨"; }
+.region-volcano .decor-bit.d4::before{ content:"🔥"; }
+.region-volcano .decor-bit.d5::before{ content:"💨"; }
+.region-volcano .decor-bit.d6::before{ content:"✨"; }
+
+.region-reef .decor-bit.d1::before{ content:"🫧"; }
+.region-reef .decor-bit.d2::before{ content:"🐠"; }
+.region-reef .decor-bit.d3::before{ content:"🪸"; font-size:1.3em; opacity:.5; }
+.region-reef .decor-bit.d4::before{ content:"🫧"; }
+.region-reef .decor-bit.d5::before{ content:"🐟"; }
+.region-reef .decor-bit.d6::before{ content:"🫧"; }
+
 /* ---------- auth modal / forms ---------- */
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(74,63,53,.35);
   display:none; align-items:center; justify-content:center; z-index:50;
 }
 .modal-backdrop.active{display:flex;}
+/* Profile "book" opens on top of whatever GUI is already open (compass,
+   journal, chat, etc.) instead of painting behind it. */
+#profileModal{ z-index:70; }
 .modal-card{position:relative; max-width:92vw; max-height:88vh; overflow:auto; min-width:300px;}
 .doodle-x{position:absolute; top:8px; right:14px; font-size:30px; background:none; border:none; cursor:pointer; color:var(--ink);}
 .doodle-form{display:flex; flex-direction:column; gap:14px; margin-top:12px; width:300px;}
@@ -333,12 +382,17 @@ body{
 .shop-cell{border:2.5px solid var(--ink); border-radius:12px; padding:8px; font-size:14px; text-align:center; background:#FFFDF7; display:flex; flex-direction:column; gap:5px;}
 
 .chat-sub-row{display:flex; gap:8px; margin-bottom:10px;}
-.chat-log{height:260px; overflow-y:auto; border:2.5px solid var(--ink); border-radius:14px; padding:10px; background:#FFFDF7; margin-bottom:8px; font-size:18px;}
-.chat-msg{margin-bottom:10px; max-width:75%; position:relative;}
+.chat-log{height:260px; overflow-y:auto; overflow-x:hidden; border:2.5px solid var(--ink); border-radius:14px; padding:10px; background:#FFFDF7; margin-bottom:8px; font-size:18px;}
+.chat-msg{margin-bottom:10px; max-width:75%; width:fit-content; position:relative;}
 .chat-msg .who{font-size:14px; color:var(--ink-soft);}
 .chat-msg .who.chat-username{cursor:pointer; text-decoration:underline dotted; display:inline-block;}
 .chat-msg .who.chat-username:hover{color:var(--ink);}
-.chat-msg .bubble{border:2px solid var(--ink); border-radius:14px; padding:7px 12px; display:inline-block;}
+/* Long/unbroken messages wrap and grow taller instead of overflowing the
+   chat panel width or forcing the log to scroll sideways. */
+.chat-msg .bubble{
+  border:2px solid var(--ink); border-radius:14px; padding:7px 12px; display:inline-block;
+  max-width:100%; overflow-wrap:anywhere; word-break:break-word; white-space:pre-wrap;
+}
 .chat-msg.mine{margin-left:auto; text-align:right;}
 .chat-msg.mine .bubble{background:var(--blue);}
 .chat-msg.theirs .bubble{background:var(--pink);}

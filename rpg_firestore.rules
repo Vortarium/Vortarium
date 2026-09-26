@@ -119,6 +119,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.hostUid == request.auth.uid;
       allow update: if isSignedIn() && (
         isOwner(resource.data.hostUid) ||
+        isOwner(resource.data.guestUid) ||
         (
           resource.data.guestUid == null &&
           request.resource.data.guestUid == request.auth.uid &&

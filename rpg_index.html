@@ -122,6 +122,11 @@
     <div class="region-parallax" id="regionParallax">
       <div class="region-layer region-layer-bg"></div>
       <div class="region-layer region-layer-mid"></div>
+      <div class="region-decor" aria-hidden="true">
+        <span class="decor-bit d1"></span><span class="decor-bit d2"></span>
+        <span class="decor-bit d3"></span><span class="decor-bit d4"></span>
+        <span class="decor-bit d5"></span><span class="decor-bit d6"></span>
+      </div>
       <div class="region-layer region-layer-fg"></div>
     </div>
     <svg id="dragonMain" class="dragon-doodle stage-dragon frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -221,7 +226,9 @@
       <button class="tab-btn" data-ctab="auction">Auction</button>
       <button class="tab-btn" data-ctab="battle">Battle</button>
       <button class="tab-btn" data-ctab="craft">Craft</button>
-      <button class="tab-btn" data-ctab="jobs">Jobs</button>
+      <button class="tab-btn" data-ctab="foraging">Foraging</button>
+      <button class="tab-btn" data-ctab="mining">Mining</button>
+      <button class="tab-btn" data-ctab="fishing">Fishing</button>
     </div>
 
     <div class="ctab-page active" id="ctab-map">
@@ -230,6 +237,11 @@
 
     <div class="ctab-page" id="ctab-shop">
       <p class="doodle-sub" id="shopRegionLabel">Enchanted Forest Shop</p>
+      <div class="tool-shelf doodle-panel">
+        <p class="doodle-sub" style="margin:0 0 8px;">Job Tools</p>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Buy Pickaxe ($60)</button>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Buy Fishing Rod ($60)</button>
+      </div>
       <div class="daily-item-box doodle-panel" id="dailyItemBox"></div>
       <div class="shop-grid" id="shopGrid"></div>
     </div>
@@ -313,35 +325,25 @@
       <div class="inv-grid" id="craftInvGrid"></div>
     </div>
 
-    <div class="ctab-page" id="ctab-jobs">
-      <div class="chat-sub-row">
-        <button class="doodle-btn btn-sm job-sub active" data-jobsub="foraging">Foraging</button>
-        <button class="doodle-btn btn-sm job-sub" data-jobsub="mining">Mining</button>
-        <button class="doodle-btn btn-sm job-sub" data-jobsub="fishing">Fishing</button>
+    <div class="ctab-page" id="ctab-foraging">
+      <p class="doodle-sub">Click the bush — free, once a minute.</p>
+      <div class="job-stage">
+        <button class="job-bush" id="btnForage" style="font-size:70px; background:none; border:none; cursor:pointer;">&#127795;</button>
       </div>
+      <p id="forageCooldown"></p>
+    </div>
 
-      <div class="jobsub-page active" id="jobsub-foraging">
-        <p class="doodle-sub">Click the bush — free, once a minute.</p>
-        <div class="job-stage">
-          <button class="job-bush" id="btnForage" style="font-size:70px; background:none; border:none; cursor:pointer;">&#127795;</button>
-        </div>
-        <p id="forageCooldown"></p>
-      </div>
+    <div class="ctab-page" id="ctab-mining">
+      <p class="doodle-sub">Requires a Pickaxe (buy it in the Shop). Pick one of 3 rocks — 3 rocks every hour.</p>
+      <div class="job-stage" id="mineRocks"></div>
+      <p id="mineCooldown"></p>
+    </div>
 
-      <div class="jobsub-page" id="jobsub-mining">
-        <p class="doodle-sub">Requires a Pickaxe. Pick one of 3 rocks — 3 rocks every hour.</p>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Buy Pickaxe ($60)</button>
-        <div class="job-stage" id="mineRocks"></div>
-        <p id="mineCooldown"></p>
-      </div>
-
-      <div class="jobsub-page" id="jobsub-fishing">
-        <p class="doodle-sub">Requires a Fishing Rod. Hold the button (or Space) to keep the bar on the fish.</p>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Buy Fishing Rod ($60)</button>
-        <div class="job-stage" id="fishStage" style="display:none">
-          <div class="fish-track"><div class="fish-target" id="fishTarget"></div><div class="fish-bar" id="fishBar"></div><span id="fishEmoji">🐟</span></div>
-          <button class="doodle-btn btn-blue" id="btnStartFish">Cast Line</button>
-        </div>
+    <div class="ctab-page" id="ctab-fishing">
+      <p class="doodle-sub">Requires a Fishing Rod (buy it in the Shop). Hold the button (or Space) to keep the bar on the fish.</p>
+      <div class="job-stage" id="fishStage" style="display:none">
+        <div class="fish-track"><div class="fish-target" id="fishTarget"></div><div class="fish-bar" id="fishBar"></div><span id="fishEmoji">🐟</span></div>
+        <button class="doodle-btn btn-blue" id="btnStartFish">Cast Line</button>
       </div>
     </div>
   </div>
@@ -369,7 +371,6 @@
     <div class="battle-stamina">
       Stamina: <span id="battleStaminaLabel">4 (1 move)</span>
       &middot; Rage: <span id="battleRageLabel">0/10</span>
-      <button class="doodle-btn btn-sm btn-pink" id="btnPowerAttack" disabled>Power Attack!</button>
     </div>
     <div class="battle-actions" id="battleActions"></div>
   </div>

@@ -1276,15 +1276,9 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
     document.getElementById("ctab-"+btn.dataset.ctab).classList.add("active");
     if(btn.dataset.ctab==="chat") ensureChatSubscriptions();
-    if(btn.dataset.ctab==="jobs") renderJobsTab();
-  });
-});
-document.querySelectorAll("[data-jobsub]").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    document.querySelectorAll("[data-jobsub]").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    document.querySelectorAll(".jobsub-page").forEach(p=>p.classList.remove("active"));
-    document.getElementById("jobsub-"+btn.dataset.jobsub).classList.add("active");
+    if(btn.dataset.ctab==="foraging") renderForageTab();
+    if(btn.dataset.ctab==="mining") renderMineTab();
+    if(btn.dataset.ctab==="fishing") renderFishTab();
   });
 });
 
@@ -2062,6 +2056,19 @@ function startPvE(difficulty){
   closeModal("compassModal");
   openBattleModal();
 }
+/* Skill-based attack menu (not chance-based): each move has a fixed
+   stamina cost / effect, and the two strongest unlock by player level
+   instead of a random roll. */
+const ATTACK_SKILLS = [
+  { id:"basic", name:"Attack", stamina:4, unlockLevel:1,
+    dmgMult:()=>1, desc:"A standard strike. Always available." },
+  { id:"power", name:"Power Strike", stamina:4, unlockLevel:1, needsFullRage:true,
+    dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
+  { id:"precision", name:"Precision Strike", stamina:4, unlockLevel:10,
+    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Reliable extra damage, ignores half enemy defense." },
+  { id:"ultimate", name:"Ultimate Strike", stamina:8, unlockLevel:30,
+    dmgMult:()=>3, desc:"Unlocked at Lv.30. Devastating hit, costs double stamina." },
+];
 function openBattleModal(){
   renderBattle();
   openModal("battleModal");
@@ -2082,16 +2089,21 @@ function renderBattle(){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.playerHp)}/${state.profile.hpMax}`;
   document.getElementById("battleStaminaLabel").textContent = `${b.stamina} (${Math.floor(b.stamina/4)} moves)`;
   document.getElementById("battleRageLabel").textContent = `${b.rage}/${b.rageMax}`;
-  document.getElementById("btnPowerAttack").disabled = b.rage < b.rageMax;
   document.getElementById("battleLog").innerHTML = b.log.slice(-30).map(m=>`<div>${m}</div>`).join("");
 
   const actions = document.getElementById("battleActions");
   actions.innerHTML="";
-  const attackBtn = document.createElement("button");
-  attackBtn.className="doodle-btn btn-sm btn-pink"; attackBtn.textContent="Attack";
-  attackBtn.disabled = b.stamina<4;
-  attackBtn.addEventListener("click", ()=> playerAttack(false));
-  actions.appendChild(attackBtn);
+  const level = state.profile.level||1;
+  ATTACK_SKILLS.forEach(skill=>{
+    const btn = document.createElement("button");
+    const locked = level < skill.unlockLevel;
+    btn.className="doodle-btn btn-sm btn-pink";
+    btn.textContent = locked ? `${skill.name} (Lv.${skill.unlockLevel})` : skill.name;
+    btn.title = skill.desc;
+    btn.disabled = locked || b.stamina<skill.stamina || (skill.needsFullRage && b.rage<b.rageMax);
+    btn.addEventListener("click", ()=> playerAttack(skill.id));
+    actions.appendChild(btn);
+  });
 
   invExpanded().filter(e=>e.item.type==="consumable").slice(0,4).forEach(e=>{
     const btn = document.createElement("button");
@@ -2100,22 +2112,37 @@ function renderBattle(){
     btn.addEventListener("click", ()=> useItemInBattle(e.item));
     actions.appendChild(btn);
   });
+
+  const fleeBtn = document.createElement("button");
+  fleeBtn.className="doodle-btn btn-sm btn-yellow"; fleeBtn.textContent="Flee";
+  fleeBtn.addEventListener("click", fleeBattle);
+  actions.appendChild(fleeBtn);
 }
-async function playerAttack(power){
+async function playerAttack(skillId){
   const b = state.battle;
-  if(!b || b.stamina<4) return;
-  if(power && b.rage < b.rageMax) return;
-  let dmg = Math.round(playerAttackPower() * (power?2:1) * (0.85+Math.random()*0.3));
+  const skill = ATTACK_SKILLS.find(s=>s.id===skillId) || ATTACK_SKILLS[0];
+  const level = state.profile.level||1;
+  if(!b || b.stamina<skill.stamina) return;
+  if(level < skill.unlockLevel) return;
+  if(skill.needsFullRage && b.rage < b.rageMax) return;
+  let dmg = Math.round(playerAttackPower() * skill.dmgMult() * (0.9+Math.random()*0.2));
   b.enemy.curHp -= dmg;
-  b.stamina -= 4;
-  b.rage = power ? 0 : Math.min(b.rageMax, b.rage + Math.round(dmg*0.15)+1);
-  battleLogPush(`You hit ${b.enemy.name} for ${dmg} damage${power?" (POWER ATTACK!)":""}.`);
+  b.stamina -= skill.stamina;
+  b.rage = skill.needsFullRage ? 0 : Math.min(b.rageMax, b.rage + Math.round(dmg*0.15)+1);
+  battleLogPush(`You hit ${b.enemy.name} for ${dmg} damage (${skill.name}).`);
   playSfx("attack");
   if(b.enemy.curHp<=0){ await winBattle(); return; }
   renderBattle();
   triggerEnemyTurnIfOutOfMoves();
 }
-document.getElementById("btnPowerAttack").addEventListener("click", ()=> playerAttack(true));
+async function fleeBattle(){
+  const b = state.battle;
+  if(!b) return;
+  battleLogPush(`You fled from ${b.enemy.name}.`);
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp: Math.max(1,b.playerHp) }));
+  toast("You fled the battle.");
+  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 700);
+}
 async function useItemInBattle(item){
   const b = state.battle;
   if(!b || b.stamina<4) return;
@@ -2197,16 +2224,14 @@ let roomUnsub=null, queueInterval=null;
 async function startDuelRoom(){
   const code = randCode();
   const ok = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
-    hostUid: state.uid, hostName: state.profile.username, guestUid:null, guestName:null, status:"waiting", createdAt: Date.now()
+    hostUid: state.uid, hostName: state.profile.username,
+    hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
+    guestUid:null, guestName:null, guestHp:null, guestHpMax:null,
+    status:"waiting", winner:null, createdAt: Date.now()
   }));
   if(ok===null) return;
   document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
-  if(roomUnsub) roomUnsub();
-  roomUnsub = onSnapshot(doc(db,"duelRooms",code), snap=>{
-    if(!snap.exists()){ document.getElementById("roomStatus").textContent="Room closed."; return; }
-    const d = snap.data();
-    if(d.status==="ready") document.getElementById("roomStatus").textContent = `${d.guestName} joined! (Full live-synced PvP battle logic isn't wired up in this build — see the notes on extending the PvE combat loop with the opponent's live stats.)`;
-  }, (err)=> toast(friendlyFirebaseError(err)));
+  watchDuelRoom(code);
 }
 async function joinDuelRoom(code){
   if(!/^\d{5}$/.test(code)){ toast("Enter a valid 5-digit code."); return; }
@@ -2214,9 +2239,95 @@ async function joinDuelRoom(code){
   try{
     const snap = await getDoc(rref);
     if(!snap.exists() || snap.data().status!=="waiting"){ toast("Room not found or full."); return; }
-    await updateDoc(rref, { guestUid: state.uid, guestName: state.profile.username, status:"ready" });
-    document.getElementById("roomStatus").textContent = "Joined! Waiting for host to start.";
+    // Joining immediately flips the room to "active" — there is no separate
+    // "host clicks start" step, both sides connect live at the same moment.
+    await updateDoc(rref, {
+      guestUid: state.uid, guestName: state.profile.username,
+      guestHp: state.profile.hpMax, guestHpMax: state.profile.hpMax,
+      status:"active"
+    });
+    document.getElementById("roomStatus").textContent = "Duel starting…";
+    watchDuelRoom(code);
   }catch(err){ toast(friendlyFirebaseError(err)); }
+}
+function watchDuelRoom(code){
+  if(roomUnsub) roomUnsub();
+  state.duel = { code };
+  roomUnsub = onSnapshot(doc(db,"duelRooms",code), snap=>{
+    if(!snap.exists()){ document.getElementById("roomStatus").textContent="Room closed."; return; }
+    const d = snap.data();
+    if(d.status==="waiting"){
+      document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
+      return;
+    }
+    // Whoever is the host flips to "active" the instant a guest doc appears,
+    // so both clients enter the live duel together with no manual start.
+    if(d.status==="active" && d.guestUid && !document.getElementById("battleModal").classList.contains("active")){
+      openDuelBattle(code, d);
+    }
+    if(document.getElementById("battleModal").classList.contains("active") && state.battle?.mode==="duel"){
+      renderDuelBattle(d);
+    }
+    if(d.status==="finished" && state.battle?.mode==="duel"){
+      const won = d.winner===state.uid;
+      battleLogPush(won ? "You won the duel!" : "You were defeated in the duel.");
+      toast(won ? "Duel won!" : "Duel lost.");
+      setTimeout(()=>{ closeModal("battleModal"); state.battle=null; if(roomUnsub){roomUnsub(); roomUnsub=null;} }, 1400);
+    }
+  }, (err)=> toast(friendlyFirebaseError(err)));
+}
+function openDuelBattle(code, d){
+  const iAmHost = d.hostUid===state.uid;
+  state.battle = { mode:"duel", code, iAmHost, log:[`${d.hostName} vs ${d.guestName} — fight!`] };
+  closeModal("compassModal");
+  openModal("battleModal");
+  renderDuelBattle(d);
+}
+function renderDuelBattle(d){
+  const b = state.battle;
+  const iAmHost = b.iAmHost;
+  const myHp = iAmHost ? d.hostHp : d.guestHp, myMax = iAmHost ? d.hostHpMax : d.guestHpMax;
+  const oppHp = iAmHost ? d.guestHp : d.hostHp, oppMax = iAmHost ? d.guestHpMax : d.hostHpMax;
+  document.getElementById("battleEnemyName").textContent = iAmHost ? d.guestName : d.hostName;
+  document.getElementById("battleEnemyHPBar").style.width = (100*Math.max(0,oppHp)/oppMax)+"%";
+  document.getElementById("battleEnemyHPNum").textContent = `${Math.max(0,oppHp)}/${oppMax}`;
+  document.getElementById("battlePlayerName").textContent = state.profile.username;
+  document.getElementById("battlePlayerHPBar").style.width = (100*Math.max(0,myHp)/myMax)+"%";
+  document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,myHp)}/${myMax}`;
+  document.getElementById("battleStaminaLabel").textContent = "Live PvP";
+  document.getElementById("battleRageLabel").textContent = "-";
+  document.getElementById("battleLog").innerHTML = b.log.slice(-30).map(m=>`<div>${m}</div>`).join("");
+  const actions = document.getElementById("battleActions");
+  actions.innerHTML="";
+  if(d.status==="finished") return;
+  const atkBtn = document.createElement("button");
+  atkBtn.className="doodle-btn btn-sm btn-pink"; atkBtn.textContent="Attack";
+  atkBtn.disabled = myHp<=0 || oppHp<=0;
+  atkBtn.addEventListener("click", ()=> duelAttack(d));
+  actions.appendChild(atkBtn);
+  const fleeBtn = document.createElement("button");
+  fleeBtn.className="doodle-btn btn-sm btn-yellow"; fleeBtn.textContent="Flee";
+  fleeBtn.addEventListener("click", ()=> duelFlee(d));
+  actions.appendChild(fleeBtn);
+}
+async function duelAttack(d){
+  const b = state.battle;
+  if(!b || b.mode!=="duel") return;
+  const rref = doc(db,"duelRooms",b.code);
+  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
+  const oppField = b.iAmHost ? "guestHp" : "hostHp";
+  const newOppHp = Math.max(0, (b.iAmHost ? d.guestHp : d.hostHp) - dmg);
+  const patch = { [oppField]: newOppHp };
+  if(newOppHp<=0){ patch.status="finished"; patch.winner=state.uid; }
+  await withErrorToast(()=> updateDoc(rref, patch));
+  battleLogPush(`You hit for ${dmg} damage.`);
+}
+async function duelFlee(d){
+  const b = state.battle;
+  if(!b || b.mode!=="duel") return;
+  const rref = doc(db,"duelRooms",b.code);
+  const winner = b.iAmHost ? d.guestUid : d.hostUid;
+  await withErrorToast(()=> updateDoc(rref, { status:"finished", winner }));
 }
 function joinQueue(){
   toast("Searching for an opponent…");
