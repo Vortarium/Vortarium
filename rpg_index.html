@@ -256,8 +256,8 @@
       </div>
       <div class="chatsub-page active" id="chatsub-global">
         <div class="chat-log" id="chatLogGlobal"></div>
-        <form class="chat-input-row" id="globalChatForm">
-          <div class="chat-cmd-menu" id="chatCmdMenu"></div>
+        <form class="chat-input-row" id="globalChatForm" style="position:relative;">
+          <div id="chatCmdPopup" class="chat-cmd-popup doodle-panel" style="display:none;"></div>
           <input type="text" id="globalChatInput" maxlength="200" placeholder="Say something... (try /)" autocomplete="off">
           <button class="doodle-btn btn-sm" type="submit">Send</button>
         </form>
@@ -323,7 +323,7 @@
         <div class="craft-slot craft-result" id="craftResult">?</div>
       </div>
       <button class="doodle-btn btn-green" id="btnCraft">Craft</button>
-      <div class="inv-grid craft-inv-grid" id="craftInvGrid"></div>
+      <div class="inv-grid" id="craftInvGrid"></div>
     </div>
   </div>
 </div>

@@ -50,6 +50,10 @@ const DEBUG_AUTH_ERRORS = true;
 
 function friendlyFirebaseError(err){
   console.error("FIREBASE ERROR:", err?.code, err?.message, err);
+  if(String(err?.message||"").startsWith("insufficient-item:")){
+    const itemId = err.message.split(":")[1];
+    return `You don't have enough ${ITEM_BY_ID[itemId]?.name || "of that item"} for that.`;
+  }
   const code = err?.code || "";
   if(DEBUG_AUTH_ERRORS){
     return `[DEBUG] ${code || "unknown-code"}: ${err?.message || String(err)}`;
@@ -282,10 +286,31 @@ const ENEMY_NAME_PARTS = {
   reef:["Coral Crab","Tide Serpent","Bubble Jelly","Pearl Turtle","Riptide Shark","Kelp Wisp","Foam Sprite","Shell Guardian","Abyssal Eel","Barnacle Brute"]
 };
 const DIFF = {
-  easy:{ mult:0.7, xp:[3,6], money:[5,15], lvlOffset:-2 },
-  medium:{ mult:1.0, xp:[8,14], money:[15,35], lvlOffset:0 },
-  hard:{ mult:1.6, xp:[20,40], money:[40,100], lvlOffset:3 }
+  easy:{ mult:0.7, xp:[3,6], money:[5,15] },
+  medium:{ mult:1.0, xp:[8,14], money:[15,35] },
+  hard:{ mult:1.6, xp:[20,40], money:[40,100] }
 };
+/* Monster level is generated RELATIVE to the player's CURRENT level at the
+   moment the monster spawns, per design:
+     easy:   playerLevel - (1 to 5), floored at level 1
+     medium: playerLevel +/- 3, randomly
+     hard:   playerLevel + (1 to 5)
+   buildEnemyBank() only enumerates the 10 name slots per region for
+   variety; level/stats are computed fresh in makeMonsterFromSlot() using
+   whatever the player's level is right now. */
+function rollMonsterLevel(diff, playerLevel, rnd=Math.random){
+  playerLevel = Math.max(1, playerLevel||1);
+  if(diff==="easy"){
+    const under = 1 + Math.floor(rnd()*5); // 1-5 levels under, min level 1
+    return Math.max(1, playerLevel - under);
+  }
+  if(diff==="hard"){
+    const over = 1 + Math.floor(rnd()*5); // 1-5 levels over
+    return playerLevel + over;
+  }
+  const delta = Math.floor(rnd()*7) - 3; // medium: -3..+3, randomly
+  return Math.max(1, playerLevel + delta);
+}
 function buildEnemyBank(){
   const bank = [];
   let id=0;
@@ -293,23 +318,28 @@ function buildEnemyBank(){
     for(const diff of Object.keys(DIFF)){
       const names = ENEMY_NAME_PARTS[region];
       for(let i=0;i<10;i++){
-        const d = DIFF[diff];
-        const lvl = Math.max(1, i+1+d.lvlOffset);
-        bank.push({
-          id:`enm_${id++}`, name:`${names[i]}`, region, difficulty:diff, level:lvl,
-          element: REGIONS[region].element,
-          hp: Math.round((20 + lvl*8) * d.mult),
-          attack: Math.round((3 + lvl*1.5) * d.mult),
-          xpReward: Math.round(d.xp[0] + Math.random()*(d.xp[1]-d.xp[0])),
-          moneyReward: Math.round(d.money[0] + Math.random()*(d.money[1]-d.money[0])),
-          dropChance: diff==="easy"?0.25:diff==="medium"?0.45:0.7
-        });
+        bank.push({ id:`enm_${id++}`, name:names[i], region, difficulty:diff });
       }
     }
   }
   return bank;
 }
 const ENEMY_BANK = buildEnemyBank();
+// Builds a full monster from a name/region/diff slot at a level computed
+// relative to the player's level right now.
+function makeMonsterFromSlot(slot, playerLevel, rnd=Math.random){
+  const d = DIFF[slot.difficulty];
+  const lvl = rollMonsterLevel(slot.difficulty, playerLevel, rnd);
+  return {
+    id: slot.id, name: slot.name, region: slot.region, difficulty: slot.difficulty,
+    level: lvl, element: REGIONS[slot.region].element,
+    hp: Math.round((20 + lvl*8) * d.mult),
+    attack: Math.round((3 + lvl*1.5) * d.mult),
+    xpReward: Math.round(d.xp[0] + rnd()*(d.xp[1]-d.xp[0])),
+    moneyReward: Math.round(d.money[0] + rnd()*(d.money[1]-d.money[0])),
+    dropChance: slot.difficulty==="easy"?0.25:slot.difficulty==="medium"?0.45:0.7
+  };
+}
 
 /* =========================================================================
    DRAGON DOODLE (2-frame hand-drawn animation)
@@ -471,27 +501,11 @@ function defaultPlayerDoc(username, archetype, klass){
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
     friends: [], sentFriendRequests: [], createdAt: Date.now(),
     lastHpRegenTs: Date.now(), // used to catch up 10hp/hour regen even while the game was closed
-    lastManaRegenTs: Date.now(), // used to catch up 1 mana/minute regen
     lastForageTs: 0, mineHourStart: 0, minePicksThisHour: 0, fishingXp: 0, miningXp: 0, foragingXp: 0
   };
 }
 const HP_REGEN_PER_HOUR = 10;
 const HP_REGEN_MS = 60*60*1000;
-const MANA_REGEN_MS = 60*1000; // 1 mana per minute
-async function catchUpManaRegen(p){
-  if(!p || p.mana >= p.manaMax){
-    if(p && p.lastManaRegenTs && Date.now()-p.lastManaRegenTs >= MANA_REGEN_MS){
-      await updateDoc(doc(db,"players",state.uid), { lastManaRegenTs: Date.now() }).catch(()=>{});
-    }
-    return;
-  }
-  const last = p.lastManaRegenTs || p.createdAt || Date.now();
-  const ticks = Math.floor((Date.now()-last)/MANA_REGEN_MS);
-  if(ticks <= 0) return;
-  const newMana = Math.min(p.manaMax, p.mana + ticks);
-  const newTs = last + ticks*MANA_REGEN_MS;
-  await updateDoc(doc(db,"players",state.uid), { mana:newMana, lastManaRegenTs:newTs }).catch(()=>{});
-}
 /* Catches up HP regen for however long the player was away (or since the
    last catch-up), at 10 HP per full hour elapsed, capped at hpMax. Safe to
    call often — it's a no-op unless at least one full hour has passed. Also
@@ -783,7 +797,6 @@ function enterGame(){
     }
     if(firstSnapshot){
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      catchUpManaRegen(state.profile);
       ensureSpawnPoint().then(pos=> initWorld(pos));
     }
     firstSnapshot = false;
@@ -794,7 +807,7 @@ function enterGame(){
   // Re-check every minute while the tab is open so regen still lands on
   // the hour even without a reload; catchUpHpRegen itself no-ops unless a
   // full hour has actually elapsed.
-  state.hpRegenInterval = setInterval(()=>{ catchUpHpRegen(state.profile); catchUpManaRegen(state.profile); }, 60*1000);
+  state.hpRegenInterval = setInterval(()=> catchUpHpRegen(state.profile), 60*1000);
 }
 // Every account gets a random permanent spawn point the first time it
 // enters the open world (existing accounts from before this update get
@@ -964,20 +977,42 @@ function afterInvChangeRefreshDetail(itemId){
 // duplicates items" bug: the 2nd call could read state.profile before the
 // 1st call's write had round-tripped back down, so it wrote a version of
 // the array that still had the 1st ingredient at full quantity.
-async function applyInvChanges({remove=[], add=[]}={}){
+// Runs entirely inside a Firestore transaction: reads the CURRENT
+// server-side inventory (never the possibly-stale local state.profile),
+// validates every `remove` actually has enough quantity available, and
+// writes the merged result in one atomic round-trip. This is what closes
+// the "crafting duplicates items / creates items out of thin air" bug —
+// two rapid actions (e.g. double-clicking Craft, or crafting right after
+// eating) can no longer both read the same stale pre-write inventory,
+// because each transaction re-reads from the server and Firestore retries
+// on conflict instead of silently racing.
+// extraFields may be a plain object OR a function (freshData)=>object, so
+// callers that need to compute a field off the CURRENT server value (like
+// healing off current hp, not the possibly-stale local state.profile.hp)
+// can do so from inside the same transaction that validates/spends items.
+async function applyInvChanges({remove=[], add=[]}={}, extraFields={}){
   return withErrorToast(async ()=>{
-    const p = state.profile;
-    const inv = (p.inventory||[]).map(e=>({...e}));
-    for(const {itemId, qty} of remove){
-      const idx = inv.findIndex(e=>e.itemId===itemId);
-      if(idx>=0) inv[idx].qty -= qty;
-    }
-    for(const {itemId, qty} of add){
-      const idx = inv.findIndex(e=>e.itemId===itemId);
-      if(idx>=0) inv[idx].qty += qty;
-      else inv.push({ itemId, qty });
-    }
-    await updateDoc(doc(db,"players",state.uid), { inventory: inv.filter(e=>e.qty>0) });
+    const pref = doc(db,"players",state.uid);
+    await runTransaction(db, async (tx)=>{
+      const snap = await tx.get(pref);
+      const data = snap.data() || {};
+      const inv = (data.inventory||[]).map(e=>({...e}));
+      for(const {itemId, qty} of remove){
+        const idx = inv.findIndex(e=>e.itemId===itemId);
+        const have = idx>=0 ? inv[idx].qty : 0;
+        if(have < qty){
+          throw new Error(`insufficient-item:${itemId}`);
+        }
+        inv[idx].qty -= qty;
+      }
+      for(const {itemId, qty} of add){
+        const idx = inv.findIndex(e=>e.itemId===itemId);
+        if(idx>=0) inv[idx].qty += qty;
+        else inv.push({ itemId, qty });
+      }
+      const fields = typeof extraFields==="function" ? extraFields(data) : extraFields;
+      tx.update(pref, { inventory: inv.filter(e=>e.qty>0), ...fields });
+    });
   });
 }
 async function changeInvQty(itemId, delta){
@@ -1024,22 +1059,21 @@ function renderEquipSlots(){
   });
 }
 async function useConsumable(item){
-  // Guard against using a stack you no longer actually hold (stale button
-  // from before a re-render, or spam-clicking past the last one).
-  const have = (state.profile.inventory||[]).find(e=>e.itemId===item.id);
-  if(!have || have.qty<=0){
-    toast(`You don't have any ${item.name} left.`);
+  // Everything — the qty check, the qty decrement, AND the hp/mana gain —
+  // happens inside ONE transaction now (via applyInvChanges' extraFields),
+  // reading the server's current inventory each time. That's what stops a
+  // double-click (or eating right after crafting) from consuming an item
+  // you don't actually have anymore, or applying its effect twice.
+  const ok = await applyInvChanges({ remove:[{itemId:item.id, qty:1}] }, (fresh)=>{
+    const fields = {};
+    if(item.stats.heal) fields.hp = Math.min(fresh.hpMax, fresh.hp+item.stats.heal);
+    if(item.stats.mana) fields.mana = Math.min(fresh.manaMax, fresh.mana+item.stats.mana);
+    return fields;
+  });
+  if(ok===null){
     afterInvChangeRefreshDetail(item.id);
     return;
   }
-  await withErrorToast(async ()=>{
-    const p = state.profile;
-    const updates = {};
-    if(item.stats.heal) updates.hp = Math.min(p.hpMax, p.hp+item.stats.heal);
-    if(item.stats.mana) updates.mana = Math.min(p.manaMax, p.mana+item.stats.mana);
-    await updateDoc(doc(db,"players",state.uid), updates);
-  });
-  await changeInvQty(item.id, -1);
   toast(`Used ${item.name}`);
   afterInvChangeRefreshDetail(item.id);
 }
@@ -1496,11 +1530,27 @@ document.getElementById("btnBuyRod").addEventListener("click", async ()=>{
   await buyItem(ITEM_BY_ID.tool_fishingrod);
 });
 let fishGame = null;
+// Each fish that bites gets a random speed trait — slow/medium/fast —
+// picked once per bite. Faster fish are harder to keep the bar on, but
+// bias the catch roll toward higher quality/rarity as a reward for landing one.
+const FISH_TRAITS = [
+  { id:"slow",   label:"slow",   weight:50, speedMult:0.6,  rarityBonus:0 },
+  { id:"medium", label:"medium", weight:35, speedMult:1.0,  rarityBonus:0.12 },
+  { id:"fast",   label:"fast",   weight:15, speedMult:1.6,  rarityBonus:0.28 }
+];
+function rollFishTrait(){
+  const total = FISH_TRAITS.reduce((s,t)=>s+t.weight,0);
+  let r = Math.random()*total;
+  for(const t of FISH_TRAITS){ if((r-=t.weight)<=0) return t; }
+  return FISH_TRAITS[0];
+}
 function doFishAction(){
   if(!hasItem("tool_fishingrod")){ toast("You need a Fishing Rod (buy it in the Shop) to fish."); return; }
   if(fishGame) return;
   worldState.controlsSuspended = true; // movement/attack pause while the minigame overlay is up
   document.getElementById("fishOverlay").classList.add("show");
+  const trait = rollFishTrait();
+  toast(`Something's biting — feels ${trait.label}!`);
   const track = document.querySelector(".fish-track-v");
   const trackH = track.clientHeight || 260;
   const barH = 64;
@@ -1510,11 +1560,7 @@ function doFishAction(){
   let progress = 0;
   const progressNeeded = 100;
   let fishY = Math.random()*(trackH-26);
-  // Each fish has a random speed trait — slow/medium/fast — that's harder
-  // to track the faster it is, but pays off with better catch quality.
-  const traitRoll = Math.random();
-  const trait = traitRoll<0.45 ? FISH_TRAITS.slow : traitRoll<0.8 ? FISH_TRAITS.medium : FISH_TRAITS.fast;
-  let fishVel = (Math.random()<0.5?-1:1) * trait.speed;
+  let fishVel = (Math.random()<0.5?-1:1) * (0.6+Math.random()*0.8) * trait.speedMult;
   const emojiEl = document.getElementById("fishEmoji");
   const barEl = document.getElementById("fishBar");
   const fillEl = document.getElementById("fishProgressFill");
@@ -1532,7 +1578,7 @@ function doFishAction(){
     fishY += fishVel;
     if(fishY < 0){ fishY = 0; fishVel = Math.abs(fishVel); }
     if(fishY > trackH-26){ fishY = trackH-26; fishVel = -Math.abs(fishVel); }
-    if(Math.random()<0.03) fishVel = (Math.random()<0.5?-1:1) * trait.speed;
+    if(Math.random()<0.03) fishVel = (Math.random()<0.5?-1:1) * (0.5+Math.random()*1.2) * trait.speedMult;
     emojiEl.style.top = fishY+"px";
 
     vel += held ? LIFT : GRAVITY;
@@ -1558,14 +1604,6 @@ function doFishAction(){
     window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp);
   };
 }
-// Speed traits for the fishing minigame: a fish that darts up/down fast is
-// harder to keep the bar on, so it rolls against a better loot table as a
-// reward for landing it. "medium"/"easy to catch" fish stay on the base table.
-const FISH_TRAITS = {
-  slow:   { name:"slow",   speed:0.5,  qualityBonus:0 },
-  medium: { name:"medium", speed:1.1,  qualityBonus:0.15 },
-  fast:   { name:"fast",   speed:1.9,  qualityBonus:0.35 }
-};
 async function endFishing(success, trait){
   if(!fishGame) return;
   clearInterval(fishGame); fishGame.cleanup?.(); fishGame = null;
@@ -1573,13 +1611,14 @@ async function endFishing(success, trait){
   document.getElementById("fishProgressFill").style.height = "0%";
   worldState.controlsSuspended = false;
   if(success){
-    const bonus = trait?.qualityBonus || 0;
-    const roll = Math.max(0, Math.min(0.999, Math.random() + bonus));
+    // Roll is nudged up by the fish's speed trait — a fast bite is harder
+    // to reel in but skews the catch toward the rarer/higher-quality pools.
+    const roll = Math.min(0.999, Math.random() + (trait?.rarityBonus||0));
     const pool = roll<0.55 ? ["fish_minnow"] : roll<0.85 ? ["fish_bass","fish_trout"] : roll<0.98 ? ["fish_swordfish"] : ["fish_golden"];
     const pick = pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1 }));
-    worldLogMsg(`Caught a ${trait?.name||""} fish — a ${ITEM_BY_ID[pick].name}!`);
+    worldLogMsg(`Caught a ${ITEM_BY_ID[pick].name}!`);
   } else {
     worldLogMsg("The fish got away.");
   }
@@ -1647,10 +1686,10 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   const input = document.getElementById("globalChatInput");
   const raw = input.value.trim();
   if(!raw) return;
+  hideChatCmdPopup();
   if(raw.startsWith("/")){
-    hideCmdMenu();
-    input.value = "";
-    await runSlashCommand(raw);
+    await runChatCommand(raw);
+    input.value="";
     return;
   }
   const text = moderateChatText(raw);
@@ -1659,115 +1698,113 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   if(ok!==null) input.value="";
 });
 
-/* =========================================================================
-   CHAT SLASH COMMANDS
-   ========================================================================= */
-const SLASH_COMMANDS = [
-  { cmd:"/pay", usage:"/pay [username] [amount]", desc:"Send money to another player (up to what you have)." },
-  { cmd:"/ah", usage:"/ah", desc:"Open the Auction House." },
-  { cmd:"/ah sell", usage:"/ah sell [item] [amount]", desc:"List 1 of that item on the auction for that price." },
-  { cmd:"/friend", usage:"/friend [username]", desc:"Send a friend request." },
-  { cmd:"/friend remove", usage:"/friend remove [username]", desc:"Unfriend a player." },
-  { cmd:"/msg", usage:"/msg [username]", desc:"Open (or start) a private chat with a player." }
+/* ---------- slash commands ---------- */
+const CHAT_COMMANDS = [
+  { cmd:"/pay [username] [amount]", desc:"Send money to another player." },
+  { cmd:"/ah", desc:"Jump to the Auction House." },
+  { cmd:"/ah sell [item] [price]", desc:"List 1 of that item on the auction for that price." },
+  { cmd:"/friend [username]", desc:"Send a friend request." },
+  { cmd:"/friend remove [username]", desc:"Unfriend a player." },
+  { cmd:"/msg [username]", desc:"Open a private chat with a player." }
 ];
-function hideCmdMenu(){
-  const menu = document.getElementById("chatCmdMenu");
-  menu.classList.remove("show");
-  menu.innerHTML = "";
+function hideChatCmdPopup(){
+  const pop = document.getElementById("chatCmdPopup");
+  pop.style.display = "none"; pop.innerHTML = "";
 }
-function renderCmdMenu(filterText){
-  const menu = document.getElementById("chatCmdMenu");
-  const matches = SLASH_COMMANDS.filter(c=> c.cmd.startsWith(filterText.split(" ")[0]) );
-  if(!matches.length){ hideCmdMenu(); return; }
-  menu.innerHTML = matches.map(c=> `
-    <div class="chat-cmd-item" data-cmd="${escapeHTML(c.usage)}">
-      <b>${escapeHTML(c.usage)}</b>
-      <span class="cmd-desc">${escapeHTML(c.desc)}</span>
-    </div>`).join("");
-  menu.classList.add("show");
-  menu.querySelectorAll("[data-cmd]").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const input = document.getElementById("globalChatInput");
-      // drop the "[...]" placeholders, leave the command word(s) + a trailing space
-      input.value = el.dataset.cmd.replace(/\s*\[[^\]]*\]/g, "").trim() + " ";
-      input.focus();
-      hideCmdMenu();
-    });
-  });
+function showChatCmdPopup(filterText){
+  const pop = document.getElementById("chatCmdPopup");
+  const matches = CHAT_COMMANDS.filter(c=> c.cmd.toLowerCase().startsWith(filterText.toLowerCase()) || filterText==="/");
+  if(!matches.length){ hideChatCmdPopup(); return; }
+  pop.innerHTML = matches.map(c=>`<div class="chat-cmd-row"><b>${escapeHTML(c.cmd)}</b> — ${escapeHTML(c.desc)}</div>`).join("");
+  pop.style.display = "flex";
 }
 document.getElementById("globalChatInput").addEventListener("input", (e)=>{
   const v = e.target.value;
-  if(v.startsWith("/")) renderCmdMenu(v); else hideCmdMenu();
+  if(v.startsWith("/")) showChatCmdPopup(v);
+  else hideChatCmdPopup();
 });
-document.getElementById("globalChatInput").addEventListener("blur", ()=> setTimeout(hideCmdMenu, 150));
+document.getElementById("globalChatInput").addEventListener("blur", ()=> setTimeout(hideChatCmdPopup, 150));
 
-async function findPlayerByUsername(username){
-  const snap = await getDocs(query(collection(db,"players"), where("username","==",username), limit(1)));
+async function findUidByUsername(username){
+  const q = query(collection(db,"players"), where("username","==",username));
+  const snap = await getDocs(q);
   if(snap.empty) return null;
   return { uid: snap.docs[0].id, data: snap.docs[0].data() };
 }
-async function runSlashCommand(raw){
+async function runChatCommand(raw){
   const parts = raw.trim().split(/\s+/);
-  const head = parts[0].toLowerCase();
-  try{
-    if(head==="/pay"){
-      const [, username, amountStr] = parts;
-      const amount = Number(amountStr);
-      if(!username || !amount || amount<=0){ toast("Usage: /pay [username] [amount]"); return; }
-      if(username===state.profile.username){ toast("You can't pay yourself."); return; }
-      if(amount > (state.profile.money||0)){ toast(`You only have $${fmtMoney(state.profile.money||0)}.`); return; }
-      const target = await findPlayerByUsername(username);
-      if(!target){ toast(`No player named "${username}" found.`); return; }
-      // Same self-write-only pattern as auction sales/duel rewards: debit
-      // ourselves now, and deliver the money via the recipient's inbox,
-      // which auto-credits it the instant they see it.
-      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0)-amount }));
-      await withErrorToast(()=> addDoc(collection(db,"players",target.uid,"inbox"), {
-        type:"pay_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false
+  const cmd = parts[0].toLowerCase();
+  if(cmd === "/pay"){
+    const [ , username, amountStr ] = parts;
+    const amount = Number(amountStr);
+    if(!username || !Number.isFinite(amount) || amount<=0){ toast("Usage: /pay [username] [amount]"); return; }
+    if(amount > (state.profile.money||0)){ toast("You don't have that much money."); return; }
+    if(username.toLowerCase() === state.profile.username.toLowerCase()){ toast("You can't pay yourself."); return; }
+    const target = await findUidByUsername(username);
+    if(!target){ toast(`No player named ${username}.`); return; }
+    // Never write another player's doc directly — deduct from OUR OWN
+    // balance, then drop an inbox notice on theirs (same pattern as
+    // auction/duel payouts) that their own client auto-credits.
+    const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) - amount }));
+    if(ok===null) return;
+    await withErrorToast(()=> addDoc(collection(db,"players",target.uid,"inbox"), {
+      type:"payment_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false
+    }));
+    toast(`Paid $${amount} to ${username}.`);
+    return;
+  }
+  if(cmd === "/ah"){
+    if(parts[1]?.toLowerCase() === "sell"){
+      const itemName = parts[2];
+      const price = Number(parts[3]);
+      if(!itemName || !Number.isFinite(price) || price<=0){ toast("Usage: /ah sell [item] [price]"); return; }
+      const entry = invExpanded().find(e=> e.item.name.toLowerCase() === itemName.toLowerCase() || e.item.name.toLowerCase().replace(/\s+/g,"") === itemName.toLowerCase());
+      if(!entry || entry.qty<1){ toast(`You don't have a ${itemName}.`); return; }
+      try{
+        const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
+        const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
+        if(activeCount >= 5){ toast("You can only have 5 auction slots."); return; }
+      }catch(err){ toast(friendlyFirebaseError(err)); return; }
+      const ok = await applyInvChanges({ remove:[{itemId:entry.item.id, qty:1}] });
+      if(ok===null) return;
+      const posted = await withErrorToast(()=> addDoc(collection(db,"auction"), {
+        sellerUid: state.uid, sellerName: state.profile.username, itemId: entry.item.id, qty:1, pricePer: price,
+        status:"active", postedAt: Date.now(), expiresAt: Date.now() + 1000*60*60*24
       }));
-      toast(`Paid ${username} $${amount}.`);
-    } else if(head==="/ah"){
-      if(parts[1]==="sell"){
-        const itemQuery = parts.slice(2, -1).join(" ");
-        const price = Number(parts[parts.length-1]);
-        if(!itemQuery || !price || price<=0){ toast("Usage: /ah sell [item] [amount]"); return; }
-        const entry = invExpanded().find(e=> e.item.name.toLowerCase()===itemQuery.toLowerCase())
-                    || invExpanded().find(e=> e.item.name.toLowerCase().includes(itemQuery.toLowerCase()));
-        if(!entry){ toast(`You don't have an item matching "${itemQuery}".`); return; }
-        await postAuctionListing(entry.itemId, 1, price);
-      } else {
-        document.querySelector('[data-ctab="auction"]').click();
-      }
-    } else if(head==="/friend"){
-      if(parts[1]==="remove"){
-        const username = parts[2];
-        if(!username){ toast("Usage: /friend remove [username]"); return; }
-        const target = await findPlayerByUsername(username);
-        if(!target){ toast(`No player named "${username}" found.`); return; }
-        if(!(state.profile.friends||[]).includes(target.uid)){ toast(`You aren't friends with ${username}.`); return; }
-        await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { friends: arrayRemove(target.uid) }));
-        toast(`Removed ${username} from your friends.`);
-      } else {
-        const username = parts[1];
-        if(!username){ toast("Usage: /friend [username]"); return; }
-        if(username===state.profile.username){ toast("You can't friend yourself."); return; }
-        const target = await findPlayerByUsername(username);
-        if(!target){ toast(`No player named "${username}" found.`); return; }
-        if((state.profile.friends||[]).includes(target.uid)){ toast(`You're already friends with ${username}.`); return; }
-        await sendFriendRequest(target.uid, username);
-      }
-    } else if(head==="/msg"){
-      const username = parts[1];
-      if(!username){ toast("Usage: /msg [username]"); return; }
-      const target = await findPlayerByUsername(username);
-      if(!target){ toast(`No player named "${username}" found.`); return; }
-      document.querySelector('[data-ctab="chat"]').click();
-      document.querySelector('[data-chatsub="private"]').click();
-      openPrivateChatWith(target.uid, username);
-    } else {
-      toast(`Unknown command: ${head}`);
+      if(posted===null){ await addItemToInv(entry.item.id, 1); return; }
+      toast(`Posted 1 ${entry.item.name} to the auction for $${price}.`);
+      return;
     }
-  }catch(err){ toast(friendlyFirebaseError(err)); }
+    document.querySelector('[data-ctab="auction"]')?.click();
+    return;
+  }
+  if(cmd === "/friend"){
+    if(parts[1]?.toLowerCase() === "remove"){
+      const username = parts[2];
+      if(!username){ toast("Usage: /friend remove [username]"); return; }
+      const target = await findUidByUsername(username);
+      if(!target){ toast(`No player named ${username}.`); return; }
+      if(!(state.profile.friends||[]).includes(target.uid)){ toast(`You're not friends with ${username}.`); return; }
+      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { friends: arrayRemove(target.uid) }));
+      toast(`Removed ${username} as a friend.`);
+      return;
+    }
+    const username = parts[1];
+    if(!username){ toast("Usage: /friend [username]"); return; }
+    const target = await findUidByUsername(username);
+    if(!target){ toast(`No player named ${username}.`); return; }
+    await sendFriendRequest(target.uid, username);
+    return;
+  }
+  if(cmd === "/msg"){
+    const username = parts[1];
+    if(!username){ toast("Usage: /msg [username]"); return; }
+    const target = await findUidByUsername(username);
+    if(!target){ toast(`No player named ${username}.`); return; }
+    openPrivateChatWith(target.uid, username);
+    return;
+  }
+  toast(`Unknown command: ${cmd}`);
 }
 document.querySelectorAll("[data-chatsub]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
@@ -1865,12 +1902,14 @@ function subscribeInbox(){
     // combined write (not one write per doc) — several sales landing in
     // the same snapshot and each reading state.profile.money separately
     // would race the same way the old crafting bug did.
-    const uncredited = snap.docs.filter(d=> ["auction_sold","duel_reward","pay_received"].includes(d.data().type) && !d.data().credited);
+    const uncredited = snap.docs.filter(d=> ["auction_sold","duel_won","payment_received"].includes(d.data().type) && !d.data().credited);
     if(uncredited.length){
       const total = uncredited.reduce((sum,d)=> sum + (d.data().amount||0), 0);
-      const itemAdds = uncredited.filter(d=>d.data().itemId).map(d=>({itemId:d.data().itemId, qty:1}));
-      if(itemAdds.length) withErrorToast(()=> applyInvChanges({ add: itemAdds }));
-      if(total>0) withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) + total }));
+      withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) + total }));
+      uncredited.filter(d=>d.data().type==="duel_won" && d.data().itemName).forEach(d=>{
+        const item = ITEM_BANK.find(i=>i.name===d.data().itemName);
+        if(item) addItemToInv(item.id, 1);
+      });
       uncredited.forEach(d=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid,"inbox",d.id), { credited:true })));
     }
     const list = document.getElementById("inboxList");
@@ -1914,17 +1953,17 @@ function subscribeInbox(){
           await updateDoc(doc(db,"players",state.uid), { sentFriendRequests: arrayRemove(n.byUid) });
           await deleteDoc(doc(db,"players",state.uid,"inbox",d.id));
         }));
+      } else if(n.type==="payment_received"){
+        li.innerHTML = `<span>${escapeHTML(n.fromUsername)} paid you $${n.amount}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
+      } else if(n.type==="duel_won"){
+        const itemMsg = n.itemName ? ` and their ${escapeHTML(n.itemName)}` : "";
+        li.innerHTML = `<span>You won a duel vs ${escapeHTML(n.fromUsername)}! +$${n.amount}${itemMsg} (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else if(n.type==="auction_sold"){
         // Money is auto-credited above the moment this doc is seen — this
         // is now purely a dismissible reminder, no claim step.
         li.innerHTML = `<span>Your ${escapeHTML(n.itemName)} sold for $${n.amount}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
-        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
-      } else if(n.type==="duel_reward"){
-        // Auto-credited above the moment this doc is seen — dismiss-only reminder.
-        li.innerHTML = `<span>Beat ${escapeHTML(n.fromUsername)} in a duel — won $${n.amount}${n.itemName?` and their ${escapeHTML(n.itemName)}`:""}! (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
-        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
-      } else if(n.type==="pay_received"){
-        li.innerHTML = `<span>${escapeHTML(n.fromUsername)} paid you $${n.amount}. (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else {
         li.innerHTML = `<span>${escapeHTML(n.text||"Notification")}</span><button class="doodle-btn btn-sm" data-a="ok">OK</button>`;
@@ -2076,31 +2115,26 @@ function updatePostTotal(){
 }
 document.getElementById("postQty").addEventListener("input", updatePostTotal);
 document.getElementById("postPrice").addEventListener("input", updatePostTotal);
-// Shared by the Post button and the /ah sell chat command.
-async function postAuctionListing(itemId, qty, price){
-  if(!itemId || qty<1 || price<1){ toast("Enter a valid quantity and price."); return false; }
+document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
+  const itemId = document.getElementById("postItemSelect").value;
+  const qty = Number(document.getElementById("postQty").value);
+  const price = Number(document.getElementById("postPrice").value);
+  if(!itemId || qty<1 || price<1){ toast("Enter a valid quantity and price."); return; }
   try{
     const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
     const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
-    if(activeCount >= 5){ toast("You can only have 5 auction slots."); return false; }
-  }catch(err){ toast(friendlyFirebaseError(err)); return false; }
+    if(activeCount >= 5){ toast("You can only have 5 auction slots."); return; }
+  }catch(err){ toast(friendlyFirebaseError(err)); return; }
   const entry = invExpanded().find(e=>e.itemId===itemId);
-  if(!entry || entry.qty < qty){ toast("You don't have that many."); return false; }
+  if(!entry || entry.qty < qty){ toast("You don't have that many."); return; }
   await changeInvQty(itemId, -qty);
   const ok = await withErrorToast(()=> addDoc(collection(db,"auction"), {
     sellerUid: state.uid, sellerName: state.profile.username, itemId, qty, pricePer: price,
     status:"active", postedAt: Date.now(), expiresAt: Date.now() + 1000*60*60*24
   }));
-  if(ok===null){ await addItemToInv(itemId, qty); return false; } // roll back on failure
+  if(ok===null){ await addItemToInv(itemId, qty); return; } // roll back on failure
   toast("Posted to auction house!");
   populatePostForm();
-  return true;
-}
-document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
-  const itemId = document.getElementById("postItemSelect").value;
-  const qty = Number(document.getElementById("postQty").value);
-  const price = Number(document.getElementById("postPrice").value);
-  await postAuctionListing(itemId, qty, price);
 });
 async function renderMySlots(){
   try{
@@ -2200,7 +2234,8 @@ function upgradeItem(item){
    section below). These pieces are still shared by that system. */
 function pickEnemy(difficulty){
   const pool = ENEMY_BANK.filter(e=>e.region===state.profile.region && e.difficulty===difficulty);
-  return pool[Math.floor(Math.random()*pool.length)];
+  const slot = pool[Math.floor(Math.random()*pool.length)];
+  return slot && makeMonsterFromSlot(slot, state.profile.level);
 }
 function playerAttackPower(){
   const p = state.profile;
@@ -2218,15 +2253,31 @@ function playerDefense(){
    world trigger the others (see WORLD section). Kept from the old menu
    system so unlock levels/costs stay consistent. */
 const ATTACK_SKILLS = [
-  { id:"basic", name:"Attack", stamina:4, unlockLevel:1,
+  { id:"basic", name:"Attack", key:"1", unlockLevel:1,
     dmgMult:()=>1, desc:"A standard strike. Always available." },
-  { id:"power", name:"Power Strike", stamina:4, unlockLevel:1, needsFullRage:true,
+  { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
     dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
-  { id:"precision", name:"Precision Strike", stamina:4, unlockLevel:10,
-    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Reliable extra damage, ignores half enemy defense." },
-  { id:"ultimate", name:"Ultimate Strike", stamina:8, unlockLevel:30,
-    dmgMult:()=>3, desc:"Unlocked at Lv.30. Devastating hit, costs double stamina." },
+  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:6,
+    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 6 mana. Extra damage, ignores half enemy defense." },
+  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:12,
+    dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 12 mana. Devastating hit." },
 ];
+function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || ATTACK_SKILLS[0]; }
+// Mana regenerates 1 point/minute while the world is loaded. Persisted to
+// Firestore, not just local state, so it survives navigating away.
+let manaRegenInterval=null;
+function startManaRegen(){
+  if(manaRegenInterval) clearInterval(manaRegenInterval);
+  manaRegenInterval = setInterval(()=>{
+    const p = state.profile;
+    if(!p) return;
+    if((p.mana||0) >= (p.manaMax||0)) return;
+    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
+      mana: Math.min(p.manaMax, (p.mana||0)+1)
+    }));
+  }, 60000);
+}
+function stopManaRegen(){ if(manaRegenInterval){ clearInterval(manaRegenInterval); manaRegenInterval=null; } }
 function battleLogPush(msg){
   state.battle.log.push(msg);
   const el = document.getElementById("battleLog");
@@ -2288,11 +2339,16 @@ function randCode(){ return String(Math.floor(10000+Math.random()*90000)); }
 let roomUnsub=null, queueInterval=null;
 async function startDuelRoom(){
   const code = randCode();
+  const p = state.profile;
   const ok = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
     hostUid: state.uid, hostName: state.profile.username,
-    hostHp: state.profile.hp, hostHpMax: state.profile.hpMax,
-    guestUid:null, guestName:null, guestHp:null, guestHpMax:null,
-    status:"waiting", winner:null, turn: state.uid, createdAt: Date.now(), log:[]
+    hostHp: p.hpMax, hostHpMax: p.hpMax, hostMana: p.mana, hostManaMax: p.manaMax,
+    guestUid:null, guestName:null, guestHp:null, guestHpMax:null, guestMana:null, guestManaMax:null,
+    // Host always goes first. Turn-based: only "turn" may attack; the
+    // other side's Attack button is disabled until turn flips (see
+    // renderDuelBattle/duelAttack).
+    turn: state.uid,
+    status:"waiting", winner:null, createdAt: Date.now(), log:[]
   }));
   if(ok===null) return;
   document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
@@ -2308,7 +2364,8 @@ async function joinDuelRoom(code){
     // "host clicks start" step, both sides connect live at the same moment.
     await updateDoc(rref, {
       guestUid: state.uid, guestName: state.profile.username,
-      guestHp: state.profile.hp, guestHpMax: state.profile.hpMax,
+      guestHp: state.profile.hpMax, guestHpMax: state.profile.hpMax,
+      guestMana: state.profile.mana, guestManaMax: state.profile.manaMax,
       status:"active"
     });
     document.getElementById("roomStatus").textContent = "Duel starting…";
@@ -2338,22 +2395,25 @@ function watchDuelRoom(code){
     if(d.status==="finished" && state.battle?.mode==="duel" && state.battle.code===code && !state.battle.resolved){
       state.battle.resolved = true;
       const won = d.winner===state.uid;
-      // HP as it stood at the end of the duel carries over to your real
-      // profile (per spec: hp/mana/stats from the fight are saved, not
-      // reset) — never above your normal max.
-      const myFinalHp = Math.max(1, Math.min(state.profile.hpMax, state.battle.iAmHost ? d.hostHp : d.guestHp));
       if(won){
         battleLogPush("You won the duel!");
         toast("Duel won!");
         withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-          hp: myFinalHp, kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
+          kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
         }));
       } else {
         battleLogPush("You were defeated in the duel.");
-        withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp: myFinalHp }));
-        applyDuelLossReward(d.winner).then(({moneyLoss,lostItemName})=>{
+        // The LOSER'S own client computes and applies the loss (never
+        // writes another player's doc), then forwards the exact amount/
+        // item to the WINNER's inbox — same pattern as auction payouts —
+        // so the winner's subscribeInbox() can credit it to their own doc.
+        applyDeathPenalty().then(({moneyLoss,lostItemName})=>{
           const lossMsg = lostItemName ? `Lost $${moneyLoss} and your ${lostItemName}.` : `Lost $${moneyLoss}.`;
           toast(`Duel lost. ${lossMsg}`);
+          withErrorToast(()=> addDoc(collection(db,"players",d.winner,"inbox"), {
+            type:"duel_won", amount: moneyLoss, itemName: lostItemName,
+            fromUsername: state.profile.username, ts: Date.now(), credited:false
+          }));
         });
       }
       setTimeout(()=>{ closeModal("battleModal"); state.battle=null; if(roomUnsub){roomUnsub(); roomUnsub=null;} }, 1400);
@@ -2388,14 +2448,11 @@ function renderDuelBattle(d){
   const actions = document.getElementById("battleActions");
   actions.innerHTML="";
   if(d.status==="finished") return;
-  // Strict turn system: only the player named in d.turn may attack. The
-  // button flips to "Waiting..." on your opponent's turn so it's obvious
-  // whose go it is instead of both sides being able to swing at once.
   const isMyTurn = d.turn === state.uid;
   const atkBtn = document.createElement("button");
   atkBtn.className="doodle-btn btn-sm btn-pink";
   atkBtn.textContent = isMyTurn ? "Attack" : "Waiting for opponent…";
-  atkBtn.disabled = myHp<=1 || oppHp<=1 || !isMyTurn;
+  atkBtn.disabled = myHp<=0 || oppHp<=0 || !isMyTurn;
   atkBtn.addEventListener("click", ()=> duelAttack(d));
   actions.appendChild(atkBtn);
   const fleeBtn = document.createElement("button");
@@ -2406,52 +2463,27 @@ function renderDuelBattle(d){
 async function duelAttack(d){
   const b = state.battle;
   if(!b || b.mode!=="duel") return;
-  if(d.turn !== state.uid){ toast("Wait for your turn!"); return; }
+  if(d.turn !== state.uid){ toast("It's not your turn."); return; } // enforced again server-side isn't possible client-only, but this + disabled button + re-check on snapshot keeps both sides honest in practice
   const rref = doc(db,"duelRooms",b.code);
   const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
   const oppField = b.iAmHost ? "guestHp" : "hostHp";
-  const oppUid = b.iAmHost ? d.guestUid : d.hostUid;
   const oppName = b.iAmHost ? d.guestName : d.hostName;
-  // Death = reaching 1 HP, same threshold as PvE/world PvP.
-  const newOppHp = Math.max(1, (b.iAmHost ? d.guestHp : d.hostHp) - dmg);
+  const oppUid = b.iAmHost ? d.guestUid : d.hostUid;
+  const newOppHp = Math.max(0, (b.iAmHost ? d.guestHp : d.hostHp) - dmg);
   const patch = {
     [oppField]: newOppHp,
-    turn: oppUid, // end my turn, hand it to the opponent
+    turn: oppUid, // turn always passes to the other side after an attack
     log: arrayUnion(`${state.profile.username} hit ${oppName} for ${dmg} damage.`)
   };
-  if(newOppHp<=1){ patch.status="finished"; patch.winner=state.uid; patch.loser=oppUid; }
+  if(newOppHp<=0){ patch.status="finished"; patch.winner=state.uid; }
   await withErrorToast(()=> updateDoc(rref, patch));
-}
-// The winner's money/inventory can never be written directly by the loser's
-// client (players collection is self-write-only) — so, same pattern as
-// auction sales, the LOSER debits themselves and drops the winnings in the
-// WINNER's inbox, which auto-credits them (see subscribeInbox).
-async function applyDuelLossReward(winnerUid){
-  const p = state.profile;
-  const pct = 0.10 + Math.random()*0.15; // 10%-25%
-  const moneyLoss = Math.floor((p.money||0) * pct);
-  const inv = p.inventory||[];
-  let lostItemId=null, lostItemName=null;
-  if(inv.length){
-    const pick = inv[Math.floor(Math.random()*inv.length)];
-    lostItemId = pick.itemId;
-    lostItemName = ITEM_BY_ID[pick.itemId]?.name || null;
-  }
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-    money: Math.max(0, (p.money||0)-moneyLoss), deaths:(p.deaths||0)+1, killstreak:0
-  }));
-  if(lostItemId) await changeInvQty(lostItemId, -1);
-  await withErrorToast(()=> addDoc(collection(db,"players",winnerUid,"inbox"), {
-    type:"duel_reward", amount: moneyLoss, itemId: lostItemId, itemName: lostItemName,
-    fromUsername: state.profile.username, ts: Date.now(), credited:false
-  }));
-  return { moneyLoss, lostItemName };
 }
 async function duelFlee(d){
   const b = state.battle;
   if(!b || b.mode!=="duel") return;
   const rref = doc(db,"duelRooms",b.code);
   const winner = b.iAmHost ? d.guestUid : d.hostUid;
+  const loser = state.uid;
   await withErrorToast(()=> updateDoc(rref, {
     status:"finished", winner, log: arrayUnion(`${state.profile.username} fled the duel.`)
   }));
@@ -2479,7 +2511,7 @@ async function joinQueue(){
     if(label) label.textContent = ` ${Math.floor(seconds/60)}m ${seconds%60}s`;
   },1000);
   const ok = await withErrorToast(()=> setDoc(doc(db,"queue",state.uid), {
-    username: state.profile.username, hp: state.profile.hp, hpMax: state.profile.hpMax, joinedAt: Date.now()
+    username: state.profile.username, hpMax: state.profile.hpMax, joinedAt: Date.now()
   }));
   if(ok===null) return;
 
@@ -2497,10 +2529,10 @@ async function joinQueue(){
       const code = randCode();
       const created = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
         hostUid: state.uid, hostName: state.profile.username,
-        hostHp: state.profile.hp, hostHpMax: state.profile.hpMax,
+        hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
         guestUid: opp.uid, guestName: opp.username,
-        guestHp: opp.hp!=null?opp.hp:(opp.hpMax||100), guestHpMax: opp.hpMax||100,
-        status:"active", winner:null, turn: state.uid, createdAt: Date.now(), log:[]
+        guestHp: opp.hpMax||100, guestHpMax: opp.hpMax||100,
+        status:"active", winner:null, createdAt: Date.now(), log:[]
       }));
       if(created===null) return;
       await withErrorToast(()=> deleteDoc(doc(db,"queue",state.uid)));
@@ -2601,6 +2633,7 @@ function worldUnsubAll(){
   [worldState.nearbyPlayersUnsub, worldState.nearbyLootUnsub, worldState.nearbyObjectsUnsub,
    worldState.incomingHitsUnsub, worldState.killCreditsUnsub].forEach(u=> u && u());
   if(worldState.raf) cancelAnimationFrame(worldState.raf);
+  stopManaRegen();
 }
 
 function generateChunkNodes(cx,cy){
@@ -2620,19 +2653,6 @@ function generateChunkNodes(cx,cy){
   worldState.chunkNodeCache[key] = nodes;
   return nodes;
 }
-/* Monster level is generated relative to the PLAYER'S level at the moment
-   the chunk is first seen, per spec:
-     easy   = 1-5 levels BELOW the player, always at least level 1
-     medium = player level +/- (0-3), randomly
-     hard   = 1-5 levels ABOVE the player
-   Stats/xp/money then scale off that computed level using the same
-   difficulty multipliers as the old static ENEMY_BANK, so an easy monster
-   at level 3 hits the same as any other level-3 easy monster. */
-function levelForDifficulty(diff, playerLevel, rnd){
-  if(diff==="easy") return Math.max(1, playerLevel - (1+Math.floor(rnd()*5)));
-  if(diff==="hard") return playerLevel + (1+Math.floor(rnd()*5));
-  return Math.max(1, playerLevel + (Math.floor(rnd()*7)-3)); // medium: -3..+3
-}
 function generateChunkMonsters(cx,cy){
   const key = chunkKeyStr(cx,cy);
   if(worldState.chunkMonsterCache[key]) return worldState.chunkMonsterCache[key];
@@ -2642,22 +2662,16 @@ function generateChunkMonsters(cx,cy){
   if(rnd() >= 0.4){ // 60% of chunks have monsters
     const count = 1 + Math.floor(rnd()*3);
     const playerLevel = state.profile.level||1;
-    const names = ENEMY_NAME_PARTS[region];
+    const diffPool = playerLevel<8 ? ["easy"] : playerLevel<20 ? ["easy","medium"] : ["medium","hard"];
     for(let i=0;i<count;i++){
-      const roll = rnd();
-      const diff = roll<0.4 ? "easy" : roll<0.8 ? "medium" : "hard";
-      const mLevel = levelForDifficulty(diff, playerLevel, rnd);
-      const d = DIFF[diff];
-      const tmpl = {
-        id:`${key}_m${i}_tmpl`, name: names[Math.floor(rnd()*names.length)],
-        region, difficulty:diff, level: mLevel,
-        element: REGIONS[region].element,
-        hp: Math.round((20 + mLevel*8) * d.mult),
-        attack: Math.round((3 + mLevel*1.5) * d.mult),
-        xpReward: Math.round(d.xp[0] + rnd()*(d.xp[1]-d.xp[0])),
-        moneyReward: Math.round(d.money[0] + rnd()*(d.money[1]-d.money[0])),
-        dropChance: diff==="easy"?0.25:diff==="medium"?0.45:0.7
-      };
+      const diff = diffPool[Math.floor(rnd()*diffPool.length)];
+      const pool = ENEMY_BANK.filter(e=>e.region===region && e.difficulty===diff);
+      const slot = pool[Math.floor(rnd()*pool.length)];
+      if(!slot) continue;
+      // Level/stats are rolled relative to the player's level AT SPAWN
+      // TIME and then frozen on the monster (tmpl) — a monster you spawned
+      // at level 3 stays that level even if you level up before fighting it.
+      const tmpl = makeMonsterFromSlot(slot, playerLevel, rnd);
       monsters.push({
         id:`${key}_m${i}`, x: cx*CHUNK + rnd()*CHUNK, y: cy*CHUNK + rnd()*CHUNK,
         tmpl, hp: tmpl.hp, maxHp: tmpl.hp, dead:false, deadAt:0, lastHitTs:0
@@ -2698,8 +2712,11 @@ function initWorld(pos){
   window.addEventListener("keydown", (e)=>{
     if(worldControlsBlocked()) return;
     if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=true;
-    if(e.code==="Space"){ e.preventDefault(); handleSpacebar(1); }
-    if(["1","2","3","4"].includes(e.key)){ handleSpacebar(Number(e.key)); }
+    if(e.code==="Space"){ e.preventDefault(); handleSpacebar("basic"); }
+    if(["1","2","3","4"].includes(e.key)){
+      const skill = ATTACK_SKILLS.find(s=>s.key===e.key);
+      if(skill) handleSpacebar(skill.id);
+    }
   });
   window.addEventListener("keyup", (e)=>{
     if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=false;
@@ -2709,6 +2726,7 @@ function initWorld(pos){
   setupIncomingHitsListener();
   setupKillCreditsListener();
   renderHotbar();
+  startManaRegen();
   worldState.raf = requestAnimationFrame(worldTick);
 }
 function resizeWorldCanvas(){
@@ -2943,30 +2961,36 @@ function updateInteractTarget(){
   prompt.textContent = labels[best.kind](best.ref);
   prompt.classList.add("show");
 }
-// Attacks 1 & 2 are free basic strikes; attacks 3 & 4 cost mana in
-// exchange for extra damage (see WORLD_ATTACKS below). You regen 1 mana
-// per minute (see catchUpManaRegen).
-const WORLD_ATTACKS = {
-  1: { manaCost:0,  mult:1,   label:"Attack" },
-  2: { manaCost:0,  mult:1.25, label:"Heavy Attack" },
-  3: { manaCost:8,  mult:1.8, label:"Mana Strike" },
-  4: { manaCost:15, mult:2.5, label:"Mana Burst" }
-};
-function handleSpacebar(slot=1){
+function handleSpacebar(skillId="basic"){
   const now = Date.now();
   const t = worldState.interactTarget;
   if(!t) return;
   if(t.kind==="node"){ interactNode(t.ref); return; }
   if(now - worldState.lastAttackTs < ATTACK_COOLDOWN_MS) return;
-  const atk = WORLD_ATTACKS[slot] || WORLD_ATTACKS[1];
-  if(atk.manaCost>0){
-    if((state.profile.mana||0) < atk.manaCost){ toast(`Not enough mana for ${atk.label} (needs ${atk.manaCost}).`); return; }
-  }
+  const skill = attackSkillById(skillId);
+  if(!checkAndSpendAttackCost(skill)) return;
   worldState.lastAttackTs = now;
-  if(t.kind==="monster") attackWorldMonster(t.ref, atk);
-  else if(t.kind==="player") attackWorldPlayer(t.ref, atk);
+  if(t.kind==="monster") attackWorldMonster(t.ref, skill);
+  else if(t.kind==="player") attackWorldPlayer(t.ref, skill);
   else if(t.kind==="loot") pickupWorldLoot(t.ref);
   else if(t.kind==="object") reclaimWorldObject(t.ref);
+}
+// Validates a skill can be used (level unlock, full-rage requirement, mana
+// cost) and, if so, spends its cost (rage reset to 0, or mana deducted).
+// Returns false (and toasts why) without spending anything if it can't be used.
+function checkAndSpendAttackCost(skill){
+  const p = state.profile;
+  if((p.level||1) < skill.unlockLevel){ toast(`${skill.name} unlocks at Lv.${skill.unlockLevel}.`); return false; }
+  if(skill.needsFullRage){
+    if((p.rage||0) < (p.rageMax||10)){ toast(`${skill.name} needs full Rage.`); return false; }
+    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { rage:0 }));
+    return true;
+  }
+  if(skill.manaCost){
+    if((p.mana||0) < skill.manaCost){ toast(`${skill.name} needs ${skill.manaCost} mana.`); return false; }
+    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { mana: p.mana - skill.manaCost }));
+  }
+  return true;
 }
 function interactNode(n){
   if(n.type==="pond") doFishAction();
@@ -2974,25 +2998,19 @@ function interactNode(n){
   else doForageAction(); // tree or bush
   n.depletedAt = Date.now();
 }
-async function spendAttackMana(atk){
-  if(!atk || !atk.manaCost) return;
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { mana: Math.max(0, (state.profile.mana||0)-atk.manaCost) }));
-}
-async function attackWorldMonster(m, atk=WORLD_ATTACKS[1]){
-  const dmg = Math.round(playerAttackPower() * atk.mult * (0.85+Math.random()*0.3));
+async function attackWorldMonster(m, skill=ATTACK_SKILLS[0]){
+  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3) * skill.dmgMult());
   m.hp -= dmg;
   playSfx("attack");
-  worldLogMsg(`You hit ${m.tmpl.name} for ${dmg}${atk.manaCost?` (${atk.label})`:""}.`);
-  await spendAttackMana(atk);
+  worldLogMsg(`You hit ${m.tmpl.name} with ${skill.name} for ${dmg}.`);
   if(m.hp <= 0) await killMonsterReward(m);
 }
-async function attackWorldPlayer(op, atk=WORLD_ATTACKS[1]){
+async function attackWorldPlayer(op, skill=ATTACK_SKILLS[0]){
   const targetUid = Object.keys(worldState.nearbyPlayers).find(uid=> worldState.nearbyPlayers[uid]===op);
   if(!targetUid) return;
-  const dmg = Math.round(playerAttackPower() * atk.mult * (0.85+Math.random()*0.3));
+  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3) * skill.dmgMult());
   playSfx("attack");
-  worldLogMsg(`You hit ${op.username} for ${dmg}${atk.manaCost?` (${atk.label})`:""}.`);
-  await spendAttackMana(atk);
+  worldLogMsg(`You hit ${op.username} with ${skill.name} for ${dmg}.`);
   await withErrorToast(()=> addDoc(collection(db,"players",targetUid,"incomingHits"), {
     fromUid: state.uid, fromUsername: state.profile.username, dmg, ts: Date.now()
   }));
