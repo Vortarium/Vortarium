@@ -258,6 +258,22 @@ const JOB_ITEM_BANK = [
 ];
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
 
+/* ---------- placeable building items for the open world ---------- */
+const BUILD_ITEM_BANK = [
+  { id:"build_bench", name:"Wooden Bench", type:"material", rarity:"common", price:40, sellPrice:8, desc:"Place it to mark a spot as yours.", stats:{}, placeable:true, buildType:"bench" },
+  { id:"build_fence", name:"Fence Post", type:"material", rarity:"common", price:20, sellPrice:5, desc:"Mark out territory.", stats:{}, placeable:true, buildType:"fence" },
+  { id:"build_bed", name:"Cozy Bed", type:"material", rarity:"uncommon", price:150, sellPrice:20, desc:"Place it and you'll respawn there instead of your spawn point.", stats:{}, placeable:true, buildType:"bed" },
+  { id:"build_home", name:"Small Home Kit", type:"material", rarity:"rare", price:500, sellPrice:60, desc:"A tiny house frame you can build on your land.", stats:{}, placeable:true, buildType:"home" },
+  { id:"build_guard", name:"Guard Post", type:"material", rarity:"uncommon", price:200, sellPrice:25, desc:"Warns off wandering monsters that wander too close.", stats:{}, placeable:true, buildType:"guard" }
+];
+BUILD_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
+document.getElementById("buildShelf").insertAdjacentHTML("beforeend",
+  BUILD_ITEM_BANK.map(i=>`<button class="doodle-btn btn-sm btn-green" data-buy-build="${i.id}">Buy ${i.name} ($${i.price})</button>`).join(" ")
+);
+document.querySelectorAll("[data-buy-build]").forEach(btn=>{
+  btn.addEventListener("click", ()=> buyItem(ITEM_BY_ID[btn.dataset.buyBuild]));
+});
+
 /* ---------- procedural enemy bank: 4 regions x 3 difficulties x 10 = 120 ---------- */
 const ENEMY_NAME_PARTS = {
   forest:["Bramblefang","Mosshide","Thornback","Glade Sprite","Root Walker","Acorn Golem","Fern Wisp","Vine Serpent","Bark Beetle","Sap Slime"],
@@ -376,71 +392,6 @@ function setupDragonAnim(){
 }
 
 /* =========================================================================
-   WORLD BOSS — THE SLEEPING DRAGON
-   Shared /world/dragon doc, 1,000,000,000 HP, hit by every player, synced
-   live via Firestore so everyone sees the same fight and the same damage.
-   ========================================================================= */
-const DRAGON_MAX_HP = 1000000000;
-let dragonUnsub = null;
-let dragonAwake = false;
-let dragonLastSeenHp = null;
-async function ensureDragonWorldDoc(){
-  const ref = doc(db,"world","dragon");
-  const snap = await getDoc(ref).catch(()=>null);
-  if(snap && !snap.exists()){
-    await setDoc(ref, { hp: DRAGON_MAX_HP, maxHp: DRAGON_MAX_HP }).catch(()=>{});
-  }
-}
-function subscribeDragon(){
-  if(dragonUnsub) dragonUnsub();
-  dragonUnsub = onSnapshot(doc(db,"world","dragon"), (snap)=>{
-    if(!snap.exists()) return;
-    const d = snap.data();
-    const maxHp = d.maxHp || DRAGON_MAX_HP;
-    if(dragonAwake){
-      document.getElementById("dragonBossbarFill").style.width = (100*Math.max(0,d.hp)/maxHp)+"%";
-      document.getElementById("dragonBossbarNum").textContent = `${Math.max(0,d.hp).toLocaleString()} / ${maxHp.toLocaleString()}`;
-    }
-    // Someone (possibly another player) landed a hit — show a floating
-    // damage number even if we weren't the one attacking.
-    if(dragonLastSeenHp!=null && d.hp < dragonLastSeenHp && dragonAwake){
-      spawnDragonDamageFx(dragonLastSeenHp - d.hp);
-    }
-    dragonLastSeenHp = d.hp;
-  }, (err)=> console.error(err));
-}
-function spawnDragonDamageFx(amount){
-  const host = document.getElementById("dragonHitFx");
-  if(!host) return;
-  const el = document.createElement("div");
-  el.className = "dragon-dmg";
-  el.textContent = `-${Math.round(amount).toLocaleString()}`;
-  el.style.left = (30 + Math.random()*40) + "%";
-  host.appendChild(el);
-  setTimeout(()=> el.remove(), 1200);
-}
-async function attackDragon(){
-  const bar = document.getElementById("dragonBossbar");
-  if(!dragonAwake){
-    dragonAwake = true;
-    bar.style.display = "";
-    requestAnimationFrame(()=> bar.classList.add("visible"));
-  }
-  const dmg = 5 + Math.floor(Math.random()*10) + Math.floor((state.profile?.stats?.STRENGTH||0)/2);
-  spawnDragonDamageFx(dmg);
-  playSfx("attack");
-  try{
-    await runTransaction(db, async (tx)=>{
-      const ref = doc(db,"world","dragon");
-      const snap = await tx.get(ref);
-      const cur = snap.exists() ? snap.data().hp : DRAGON_MAX_HP;
-      tx.set(ref, { hp: Math.max(0, cur-dmg), maxHp: DRAGON_MAX_HP }, { merge:true });
-    });
-  }catch(err){ console.error(err); }
-}
-document.getElementById("dragonMain").addEventListener("click", attackDragon);
-
-/* =========================================================================
    AUDIO
    ========================================================================= */
 const musicEl = () => document.getElementById("music-player");
@@ -494,6 +445,7 @@ const state = {
   selArchetype:null, selClass:null,
   invPage:0,
   currentChatPartner:null,
+  pmContactsExtra:{},     // uid -> username for people you've PM'd who aren't (yet) friends
   craftA:null, craftB:null,
   selectedInvItem:null,
   battle:null,
@@ -793,7 +745,7 @@ renderClassGrid();
 function cleanupSubs(){
   state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
-  if(dragonUnsub){ dragonUnsub(); dragonUnsub=null; }
+  if(worldUnsubAll) worldUnsubAll();
   if(state.hpRegenInterval){ clearInterval(state.hpRegenInterval); state.hpRegenInterval=null; }
 }
 
@@ -813,18 +765,35 @@ function enterGame(){
       const r = REGIONS[state.profile.region] || REGIONS.forest;
       playMusic(r.track);
     }
-    if(firstSnapshot) catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
+    if(firstSnapshot){
+      catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
+      ensureSpawnPoint().then(pos=> initWorld(pos));
+    }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
   state.unsubs.push(unsub);
   subscribeGlobalChat();
-  ensureDragonWorldDoc();
-  subscribeDragon();
   if(state.hpRegenInterval) clearInterval(state.hpRegenInterval);
   // Re-check every minute while the tab is open so regen still lands on
   // the hour even without a reload; catchUpHpRegen itself no-ops unless a
   // full hour has actually elapsed.
   state.hpRegenInterval = setInterval(()=> catchUpHpRegen(state.profile), 60*1000);
+}
+// Every account gets a random permanent spawn point the first time it
+// enters the open world (existing accounts from before this update get
+// one lazily assigned here too), between -10000..10000 on both axes.
+// Returns the coordinates to actually start at, so initWorld() never has
+// to guess whether state.profile has caught up with this write yet.
+async function ensureSpawnPoint(){
+  const p = state.profile;
+  if(p.spawnX!=null && p.spawnY!=null && p.x!=null && p.y!=null){
+    return { x:p.x, y:p.y };
+  }
+  const spawnX = Math.floor(Math.random()*20001)-10000;
+  const spawnY = Math.floor(Math.random()*20001)-10000;
+  const x = p.x ?? spawnX, y = p.y ?? spawnY;
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { spawnX, spawnY, x, y }));
+  return { x, y };
 }
 
 function renderHUD(){
@@ -837,7 +806,6 @@ function renderHUD(){
   document.getElementById("hudRegion").textContent = REGIONS[p.region].name;
 
   document.getElementById("regionBg").className = "paper-bg " + REGIONS[p.region].css;
-  document.getElementById("regionParallax").className = "region-parallax " + REGIONS[p.region].css;
 
   setBar("HP", p.hp, p.hpMax);
   setBar("MANA", p.mana, p.manaMax);
@@ -848,6 +816,7 @@ function renderHUD(){
   document.getElementById("statSTRENGTH").textContent = p.stats.STRENGTH;
   document.getElementById("statCHARM").textContent = p.stats.CHARM;
   document.getElementById("statSMARTS").textContent = p.stats.SMARTS;
+  renderHotbar();
 }
 function setBar(key, val, max){
   const pct = Math.max(0, Math.min(100, (val/max)*100));
@@ -949,29 +918,58 @@ function selectInvItem(entry){
   if(eq) eq.addEventListener("click", ()=> equipItem(entry.item));
   const use = document.getElementById("btnUse");
   if(use) use.addEventListener("click", ()=> useConsumable(entry.item));
-  document.getElementById("btnToss").addEventListener("click", ()=> changeInvQty(entry.item.id, -1));
-  document.getElementById("btnSell").addEventListener("click", ()=> sellItem(entry.item));
+  document.getElementById("btnToss").addEventListener("click", async ()=>{
+    await changeInvQty(entry.item.id, -1);
+    afterInvChangeRefreshDetail(entry.item.id);
+  });
+  document.getElementById("btnSell").addEventListener("click", async ()=>{
+    await sellItem(entry.item);
+    afterInvChangeRefreshDetail(entry.item.id);
+  });
+}
+// After a use/toss/sell, re-check how many of that item are left: if none,
+// clear the detail panel and deselect instead of leaving stale Use/Toss/Sell
+// buttons that still fire against a stack that no longer exists (which is
+// what let people spam "Use" past having zero of an item).
+function afterInvChangeRefreshDetail(itemId){
+  const fresh = invExpanded().find(e=>e.item.id===itemId);
+  if(fresh){ selectInvItem(fresh); }
+  else {
+    state.selectedInvItem = null;
+    document.getElementById("itemDetail").innerHTML = "Select an item to inspect it.";
+  }
+  renderInventory();
+}
+// All inventory-array mutations go through here so that a multi-item
+// action (like crafting, which removes 2 ingredients and adds 1 result)
+// reads the inventory ONCE and writes it ONCE. Doing separate sequential
+// changeInvQty() calls for that was the actual cause of the "crafting
+// duplicates items" bug: the 2nd call could read state.profile before the
+// 1st call's write had round-tripped back down, so it wrote a version of
+// the array that still had the 1st ingredient at full quantity.
+async function applyInvChanges({remove=[], add=[]}={}){
+  return withErrorToast(async ()=>{
+    const p = state.profile;
+    const inv = (p.inventory||[]).map(e=>({...e}));
+    for(const {itemId, qty} of remove){
+      const idx = inv.findIndex(e=>e.itemId===itemId);
+      if(idx>=0) inv[idx].qty -= qty;
+    }
+    for(const {itemId, qty} of add){
+      const idx = inv.findIndex(e=>e.itemId===itemId);
+      if(idx>=0) inv[idx].qty += qty;
+      else inv.push({ itemId, qty });
+    }
+    await updateDoc(doc(db,"players",state.uid), { inventory: inv.filter(e=>e.qty>0) });
+  });
 }
 async function changeInvQty(itemId, delta){
-  return withErrorToast(async ()=>{
-    const p = state.profile;
-    const inv = [...(p.inventory||[])];
-    const idx = inv.findIndex(e=>e.itemId===itemId);
-    if(idx<0) return;
-    inv[idx] = { ...inv[idx], qty: inv[idx].qty+delta };
-    const filtered = inv.filter(e=>e.qty>0);
-    await updateDoc(doc(db,"players",state.uid), { inventory: filtered });
-  });
+  return delta>=0
+    ? applyInvChanges({ add:[{itemId, qty:delta}] })
+    : applyInvChanges({ remove:[{itemId, qty:-delta}] });
 }
 async function addItemToInv(itemId, qty=1){
-  return withErrorToast(async ()=>{
-    const p = state.profile;
-    const inv = [...(p.inventory||[])];
-    const idx = inv.findIndex(e=>e.itemId===itemId);
-    if(idx>=0) inv[idx] = { ...inv[idx], qty: inv[idx].qty+qty };
-    else inv.push({ itemId, qty });
-    await updateDoc(doc(db,"players",state.uid), { inventory: inv });
-  });
+  return applyInvChanges({ add:[{itemId, qty}] });
 }
 async function sellItem(item){
   await changeInvQty(item.id, -1);
@@ -984,6 +982,13 @@ async function equipItem(item){
   const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`equipped.${slot}`]: item.id }));
   if(ok!==null) toast(`Equipped ${item.name}`);
 }
+async function unequipItem(slot){
+  const p = state.profile;
+  const itemId = p.equipped?.[slot];
+  if(!itemId) return;
+  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`equipped.${slot}`]: null }));
+  if(ok!==null) toast(`Unequipped ${ITEM_BY_ID[itemId]?.name||"item"}`);
+}
 const EQUIP_SLOTS = ["weapon","helmet","chestplate","leggings","boots","trinket"];
 function renderEquipSlots(){
   const p = state.profile; if(!p) return;
@@ -993,7 +998,8 @@ function renderEquipSlots(){
     const itemId = p.equipped?.[slot];
     if(itemId && ITEM_BY_ID[itemId]){
       el.classList.add("filled");
-      el.innerHTML = `<span>${ITEM_BY_ID[itemId].name}</span>`;
+      el.innerHTML = `<span>${ITEM_BY_ID[itemId].name}</span><button type="button" class="doodle-btn btn-sm equip-deslot-btn" data-deequip="${slot}" title="Take off">✕</button>`;
+      el.querySelector("[data-deequip]").addEventListener("click", (ev)=>{ ev.stopPropagation(); unequipItem(slot); });
     } else {
       el.classList.remove("filled");
       el.innerHTML = `<span>${slot[0].toUpperCase()+slot.slice(1)}</span>`;
@@ -1001,6 +1007,14 @@ function renderEquipSlots(){
   });
 }
 async function useConsumable(item){
+  // Guard against using a stack you no longer actually hold (stale button
+  // from before a re-render, or spam-clicking past the last one).
+  const have = (state.profile.inventory||[]).find(e=>e.itemId===item.id);
+  if(!have || have.qty<=0){
+    toast(`You don't have any ${item.name} left.`);
+    afterInvChangeRefreshDetail(item.id);
+    return;
+  }
   await withErrorToast(async ()=>{
     const p = state.profile;
     const updates = {};
@@ -1010,11 +1024,19 @@ async function useConsumable(item){
   });
   await changeInvQty(item.id, -1);
   toast(`Used ${item.name}`);
+  afterInvChangeRefreshDetail(item.id);
 }
 
 /* =========================================================================
    LEADERBOARD + PROFILE BOOK
    ========================================================================= */
+async function computeFollowerCount(uid, friendCount){
+  try{
+    const q = query(collection(db,"players"), where("sentFriendRequests","array-contains",uid));
+    const snap = await getDocs(q);
+    return friendCount + snap.size;
+  }catch(err){ console.error(err); return friendCount; }
+}
 document.querySelectorAll(".lb-cat").forEach(b=>{
   b.addEventListener("click", ()=>{
     document.querySelectorAll(".lb-cat").forEach(x=>x.classList.remove("active"));
@@ -1023,7 +1045,7 @@ document.querySelectorAll(".lb-cat").forEach(b=>{
   });
 });
 async function renderLeaderboard(cat){
-  const fieldMap = { money:"money", level:"level", kills:"monstersKilled" };
+  const fieldMap = { money:"money", level:"level", kills:"monstersKilled", pvpkills:"kills", deaths:"deaths" };
   const field = fieldMap[cat];
   const list = document.getElementById("lbList");
   list.innerHTML = "<li>Loading…</li>";
@@ -1051,8 +1073,15 @@ function openProfileBook(uid, data, rank, cat){
     Level ${data.level} ${ELEMENTS[data.archetype]?.name||""} ${CLASSES[data.klass]?.name||""}<br>
     Money: $${fmtMoney(data.money||0)}<br>
     Monsters Killed: ${data.monstersKilled||0}<br>
-    PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}`;
+    PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}<br>
+    Friends: ${(data.friends||[]).length} &middot; Followers: <span id="profileFollowerCount">…</span>`;
   document.getElementById("profileRank").textContent = rank? `Ranked #${rank} in ${cat}` : "";
+  // Followers = friends + people who have a pending friend request out to
+  // this player (i.e. anyone whose own sentFriendRequests contains them).
+  computeFollowerCount(uid, (data.friends||[]).length).then(count=>{
+    const el = document.getElementById("profileFollowerCount");
+    if(el) el.textContent = count;
+  });
 
   const pmBtn = document.getElementById("btnPM");
   const friendBtn = document.getElementById("btnFriendReq");
@@ -1276,13 +1305,14 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
     document.getElementById("ctab-"+btn.dataset.ctab).classList.add("active");
     if(btn.dataset.ctab==="chat") ensureChatSubscriptions();
-    if(btn.dataset.ctab==="foraging") renderForageTab();
-    if(btn.dataset.ctab==="mining") renderMineTab();
-    if(btn.dataset.ctab==="fishing") renderFishTab();
   });
 });
 
 /* --- map --- */
+/* --- map: now doubles as fast-travel — clicking a region teleports you
+   into that quadrant instead of just flipping a cosmetic field, since your
+   region is normally whatever quadrant your live x/y position is in. --- */
+const QUADRANT_TRAVEL_POINT = { forest:{x:2000,y:2000}, reef:{x:-2000,y:2000}, mountains:{x:-2000,y:-2000}, volcano:{x:2000,y:-2000} };
 function renderRegionGrid(){
   const grid = document.getElementById("regionGrid");
   grid.innerHTML="";
@@ -1292,10 +1322,9 @@ function renderRegionGrid(){
     card.innerHTML = `<div style="font-size:30px">${{forest:"🌲",mountains:"⛰️",volcano:"🌋",reef:"🪸"}[key]}</div><div>${r.name}</div>`;
     card.addEventListener("click", async ()=>{
       if(state.profile.region===key) return;
-      const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { region:key }));
-      if(ok===null) return;
-      playMusic(r.track);
-      renderRegionGrid(); renderShop();
+      const pt = QUADRANT_TRAVEL_POINT[key];
+      teleportTo(pt.x, pt.y);
+      closeModal("compassModal");
       toast(`Traveled to ${r.name}`);
     });
     grid.appendChild(card);
@@ -1360,38 +1389,18 @@ async function buyItem(item){
 }
 
 /* =========================================================================
-   JOBS — foraging, mining, fishing
+   WORLD RESOURCE GATHERING — foraging, mining, fishing
+   These used to be their own tab UIs; now they're triggered by walking up
+   to a tree/bush/rocky cliff/pond in the open world and pressing Space.
+   The reward math is unchanged from the old tab-based version.
    ========================================================================= */
 function hasItem(itemId){ return (state.profile.inventory||[]).some(e=>e.itemId===itemId && e.qty>0); }
-function renderJobsTab(){
-  renderForageTab();
-  renderMineTab();
-  renderFishTab();
-}
 
-/* --- foraging: free, once every 60s, 5% money / 45% item / 50% nothing --- */
+/* --- foraging (bush): free, once every 60s, 5% money / 45% item / 50% nothing --- */
 const FORAGE_COOLDOWN_MS = 60*1000;
-function renderForageTab(){
-  const btn = document.getElementById("btnForage");
-  const label = document.getElementById("forageCooldown");
-  const msLeft = FORAGE_COOLDOWN_MS - (Date.now() - (state.profile.lastForageTs||0));
-  if(msLeft > 0){
-    btn.disabled = true;
-    label.textContent = `Ready again in ${Math.ceil(msLeft/1000)}s`;
-    if(!state.forageTickInterval){
-      state.forageTickInterval = setInterval(()=>{
-        if(document.getElementById("ctab-jobs").classList.contains("active")) renderForageTab();
-      }, 1000);
-    }
-  } else {
-    btn.disabled = false;
-    label.textContent = "Ready!";
-    if(state.forageTickInterval){ clearInterval(state.forageTickInterval); state.forageTickInterval=null; }
-  }
-}
-document.getElementById("btnForage").addEventListener("click", async ()=>{
-  const msLeft = FORAGE_COOLDOWN_MS - (Date.now() - (state.profile.lastForageTs||0));
-  if(msLeft > 0) return;
+function forageReadyIn(){ return FORAGE_COOLDOWN_MS - (Date.now() - (state.profile.lastForageTs||0)); }
+async function doForageAction(){
+  if(forageReadyIn() > 0) return;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
     lastForageTs: Date.now(), foragingXp: (state.profile.foragingXp||0)+1
   }));
@@ -1399,61 +1408,35 @@ document.getElementById("btnForage").addEventListener("click", async ()=>{
   if(roll < 0.05){
     const amt = 5 + Math.floor(Math.random()*15);
     await grantMoney(amt);
-    toast(`You found $${amt} in the bush!`);
+    worldLogMsg(`You found $${amt} in the bush!`);
   } else if(roll < 0.50){
     const pool = ["forage_berry","forage_herb","forage_mushroom"];
     const pick = pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
-    toast(`You foraged a ${ITEM_BY_ID[pick].name}!`);
+    worldLogMsg(`You foraged a ${ITEM_BY_ID[pick].name}!`);
   } else {
-    toast("Nothing this time.");
+    worldLogMsg("Nothing this time.");
   }
-  renderForageTab();
-});
+}
 
-/* --- mining: 3 rocks per hour, gold-rush-style pick-one-of-3 --- */
+/* --- mining (rocky cliff): 3 pulls per hour, needs a Pickaxe --- */
 const MINE_HOUR_MS = 60*60*1000;
 document.getElementById("btnBuyPickaxe").addEventListener("click", async ()=>{
   if(hasItem("tool_pickaxe")){ toast("You already have a pickaxe."); return; }
   await buyItem(ITEM_BY_ID.tool_pickaxe);
-  renderMineTab();
 });
-function renderMineTab(){
-  const buyBtn = document.getElementById("btnBuyPickaxe");
-  const rocksEl = document.getElementById("mineRocks");
-  const cdEl = document.getElementById("mineCooldown");
-  const owns = hasItem("tool_pickaxe");
-  buyBtn.style.display = owns ? "none" : "";
-  if(!owns){ rocksEl.innerHTML=""; cdEl.textContent=""; return; }
-
-  const hourStart = state.profile.mineHourStart || 0;
-  const picks = state.profile.minePicksThisHour || 0;
-  const inWindow = Date.now() - hourStart < MINE_HOUR_MS;
-  const picksLeft = inWindow ? Math.max(0, 3 - picks) : 3;
-
-  if(picksLeft === 0){
-    const msLeft = MINE_HOUR_MS - (Date.now()-hourStart);
-    rocksEl.innerHTML = "";
-    cdEl.textContent = `Next batch of rocks in ${Math.ceil(msLeft/60000)}m`;
-    return;
-  }
-  cdEl.textContent = `${picksLeft} rock${picksLeft>1?"s":""} left this batch`;
-  rocksEl.innerHTML = "";
-  for(let i=0;i<3;i++){
-    const rock = document.createElement("button");
-    rock.className = "doodle-btn btn-lg mine-rock";
-    rock.textContent = "🪨";
-    rock.style.fontSize = "50px";
-    rock.addEventListener("click", ()=> mineRock());
-    rocksEl.appendChild(rock);
-  }
+function minePicksLeft(){
+  const p = state.profile;
+  const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
+  return inWindow ? Math.max(0, 3-(p.minePicksThisHour||0)) : 3;
 }
-async function mineRock(){
+async function doMineAction(){
+  if(!hasItem("tool_pickaxe")){ toast("You need a Pickaxe (buy it in the Shop) to mine."); return; }
   const p = state.profile;
   const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
   const hourStart = inWindow ? p.mineHourStart : Date.now();
   const picks = inWindow ? (p.minePicksThisHour||0) : 0;
-  if(picks >= 3) return;
+  if(picks >= 3){ toast("Out of rock pulls for this hour."); return; }
   const roll = Math.random();
   let msg;
   const updates = { mineHourStart: hourStart, minePicksThisHour: picks+1, miningXp: (p.miningXp||0)+1 };
@@ -1487,67 +1470,69 @@ async function mineRock(){
     }
   }
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), updates));
-  toast(msg);
-  renderMineTab();
+  worldLogMsg(msg);
 }
 
-/* --- fishing: hold to keep a moving bar over the target zone --- */
+/* --- fishing (pond): vertical hold-to-catch minigame, needs a Fishing Rod --- */
 document.getElementById("btnBuyRod").addEventListener("click", async ()=>{
   if(hasItem("tool_fishingrod")){ toast("You already have a fishing rod."); return; }
   await buyItem(ITEM_BY_ID.tool_fishingrod);
-  renderFishTab();
 });
-function renderFishTab(){
-  const owns = hasItem("tool_fishingrod");
-  document.getElementById("btnBuyRod").style.display = owns ? "none" : "";
-  document.getElementById("fishStage").style.display = owns ? "" : "none";
-}
 let fishGame = null;
-function startFishing(){
+function doFishAction(){
+  if(!hasItem("tool_fishingrod")){ toast("You need a Fishing Rod (buy it in the Shop) to fish."); return; }
   if(fishGame) return;
-  const track = document.querySelector(".fish-track");
-  const trackW = track.clientWidth || 260;
-  const targetW = 60 + Math.random()*40;
-  const targetX = Math.random()*(trackW-targetW);
-  document.getElementById("fishTarget").style.cssText = `width:${targetW}px; left:${targetX}px;`;
-  const barW = 16;
-  let barX = 0, dir = 1, held = false, holdMs = 0;
-  const needMs = 2000 + Math.random()*1000;
-  document.getElementById("btnStartFish").disabled = true;
-  document.getElementById("btnStartFish").textContent = "Reeling...";
+  worldState.controlsSuspended = true; // movement/attack pause while the minigame overlay is up
+  document.getElementById("fishOverlay").classList.add("show");
+  const track = document.querySelector(".fish-track-v");
+  const trackH = track.clientHeight || 260;
+  const barH = 64;
+  let barY = trackH - barH;
+  let vel = 0;
+  let held = false;
+  let progress = 0;
+  const progressNeeded = 100;
+  let fishY = Math.random()*(trackH-26);
+  let fishVel = (Math.random()<0.5?-1:1) * (0.6+Math.random()*0.8);
+  const emojiEl = document.getElementById("fishEmoji");
+  const barEl = document.getElementById("fishBar");
+  const fillEl = document.getElementById("fishProgressFill");
+
   const holdOn = ()=> held = true;
   const holdOff = ()=> held = false;
-  const btn = document.getElementById("fishEmoji");
-  btn.addEventListener("mousedown", holdOn); btn.addEventListener("touchstart", holdOn);
-  window.addEventListener("mouseup", holdOff); window.addEventListener("touchend", holdOff);
   const keyDown = (e)=>{ if(e.code==="Space"){ e.preventDefault(); held=true; } };
   const keyUp = (e)=>{ if(e.code==="Space"){ held=false; } };
+  track.addEventListener("mousedown", holdOn); track.addEventListener("touchstart", holdOn);
+  window.addEventListener("mouseup", holdOff); window.addEventListener("touchend", holdOff);
   window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp);
-  const speed = 4;
+
+  const GRAVITY = 0.9, LIFT = -1.8, MAXV = 6;
   fishGame = setInterval(()=>{
-    // bar drifts back and forth on its own; holding pulls it toward the
-    // target zone instead of just reversing drift, so it actually feels
-    // controllable rather than just "faster ping-pong"
-    if(held){
-      const targetCenter = targetX + targetW/2;
-      const barCenter = barX + barW/2;
-      barX += Math.sign(targetCenter-barCenter) * speed;
-    } else {
-      barX += dir*speed;
-      if(barX <= 0){ barX=0; dir=1; }
-      if(barX >= trackW-barW){ barX=trackW-barW; dir=-1; }
-    }
-    barX = Math.max(0, Math.min(trackW-barW, barX));
-    document.getElementById("fishBar").style.cssText = `width:${barW}px; left:${barX}px;`;
-    const inTarget = barX+barW/2 >= targetX && barX+barW/2 <= targetX+targetW;
-    if(inTarget) holdMs += 100; else holdMs = Math.max(0, holdMs-50);
-    if(holdMs >= needMs){
-      endFishing(true);
-    }
-  }, 100);
-  setTimeout(()=>{ if(fishGame) endFishing(false); }, 8000);
+    fishY += fishVel;
+    if(fishY < 0){ fishY = 0; fishVel = Math.abs(fishVel); }
+    if(fishY > trackH-26){ fishY = trackH-26; fishVel = -Math.abs(fishVel); }
+    if(Math.random()<0.03) fishVel = (Math.random()<0.5?-1:1) * (0.5+Math.random()*1.2);
+    emojiEl.style.top = fishY+"px";
+
+    vel += held ? LIFT : GRAVITY;
+    vel = Math.max(-MAXV, Math.min(MAXV, vel));
+    barY += vel;
+    if(barY < 0){ barY = 0; vel = 0; }
+    if(barY > trackH-barH){ barY = trackH-barH; vel = 0; }
+    barEl.style.height = barH+"px";
+    barEl.style.top = barY+"px";
+
+    const fishCenter = fishY + 13;
+    const inBar = fishCenter >= barY && fishCenter <= barY+barH;
+    progress += inBar ? 1.4 : -1.2;
+    progress = Math.max(0, Math.min(progressNeeded, progress));
+    fillEl.style.height = progress+"%";
+
+    if(progress >= progressNeeded){ endFishing(true); }
+  }, 50);
+  setTimeout(()=>{ if(fishGame) endFishing(false); }, 15000);
   fishGame.cleanup = ()=>{
-    btn.removeEventListener("mousedown", holdOn); btn.removeEventListener("touchstart", holdOn);
+    track.removeEventListener("mousedown", holdOn); track.removeEventListener("touchstart", holdOn);
     window.removeEventListener("mouseup", holdOff); window.removeEventListener("touchend", holdOff);
     window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp);
   };
@@ -1555,21 +1540,22 @@ function startFishing(){
 async function endFishing(success){
   if(!fishGame) return;
   clearInterval(fishGame); fishGame.cleanup?.(); fishGame = null;
-  document.getElementById("btnStartFish").disabled = false;
-  document.getElementById("btnStartFish").textContent = "Cast Line";
-  document.getElementById("fishBar").style.width="0";
+  document.getElementById("fishOverlay").classList.remove("show");
+  document.getElementById("fishProgressFill").style.height = "0%";
+  worldState.controlsSuspended = false;
   if(success){
     const roll = Math.random();
     const pool = roll<0.55 ? ["fish_minnow"] : roll<0.85 ? ["fish_bass","fish_trout"] : roll<0.98 ? ["fish_swordfish"] : ["fish_golden"];
     const pick = pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1 }));
-    toast(`Caught a ${ITEM_BY_ID[pick].name}!`);
+    worldLogMsg(`Caught a ${ITEM_BY_ID[pick].name}!`);
   } else {
-    toast("The fish got away.");
+    worldLogMsg("The fish got away.");
   }
 }
-document.getElementById("btnStartFish").addEventListener("click", startFishing);
+document.getElementById("btnCancelFish").addEventListener("click", ()=> endFishing(false));
+
 
 /* =========================================================================
    CHAT
@@ -1645,6 +1631,9 @@ document.querySelectorAll("[data-chatsub]").forEach(btn=>{
 function pmThreadId(a,b){ return [a,b].sort().join("_"); }
 function openPrivateChatWith(uid, username){
   state.currentChatPartner = { uid, username };
+  // Immediately make sure this person's PM subsection shows up in the
+  // contacts list to click between, even if you're not friends yet.
+  state.pmContactsExtra[uid] = username;
   openModal("compassModal");
   document.querySelector('[data-ctab="chat"]').click();
   document.querySelector('[data-chatsub="private"]').click();
@@ -1660,8 +1649,11 @@ function subscribeFriendsAsContacts(){
 async function renderPMContacts(friendUids){
   const list = document.getElementById("pmContacts");
   friendUids = friendUids || state.profile?.friends || [];
+  // Merge in anyone you've privately messaged who isn't a mutual friend,
+  // so their thread stays reachable without needing to add them.
+  const allUids = [...new Set([...friendUids, ...Object.keys(state.pmContactsExtra)])];
   list.innerHTML="";
-  for(const uid of friendUids){
+  for(const uid of allUids){
     try{
       const snap = await getDoc(doc(db,"players",uid));
       if(!snap.exists()) continue;
@@ -1720,6 +1712,16 @@ async function sendFriendRequest(uid, username){
 function subscribeInbox(){
   const q = query(collection(db,"players",state.uid,"inbox"), orderBy("ts","desc"));
   const unsub = onSnapshot(q, snap=>{
+    // Auto-credit ALL not-yet-credited auction sales in this batch as ONE
+    // combined write (not one write per doc) — several sales landing in
+    // the same snapshot and each reading state.profile.money separately
+    // would race the same way the old crafting bug did.
+    const uncredited = snap.docs.filter(d=> d.data().type==="auction_sold" && !d.data().credited);
+    if(uncredited.length){
+      const total = uncredited.reduce((sum,d)=> sum + (d.data().amount||0), 0);
+      withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) + total }));
+      uncredited.forEach(d=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid,"inbox",d.id), { credited:true })));
+    }
     const list = document.getElementById("inboxList");
     list.innerHTML="";
     snap.forEach(d=>{
@@ -1762,13 +1764,10 @@ function subscribeInbox(){
           await deleteDoc(doc(db,"players",state.uid,"inbox",d.id));
         }));
       } else if(n.type==="auction_sold"){
-        li.innerHTML = `<span>Your ${escapeHTML(n.itemName)} sold for $${n.amount}!</span><button class="doodle-btn btn-sm" data-a="ok">OK</button>`;
-        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(async ()=>{
-          // the money is credited HERE, by the seller's own client, on
-          // their own document — never written by the buyer directly.
-          await updateDoc(doc(db,"players",state.uid), { money: state.profile.money + n.amount });
-          await deleteDoc(doc(db,"players",state.uid,"inbox",d.id));
-        }));
+        // Money is auto-credited above the moment this doc is seen — this
+        // is now purely a dismissible reminder, no claim step.
+        li.innerHTML = `<span>Your ${escapeHTML(n.itemName)} sold for $${n.amount}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else {
         li.innerHTML = `<span>${escapeHTML(n.text||"Notification")}</span><button class="doodle-btn btn-sm" data-a="ok">OK</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
@@ -1979,6 +1978,13 @@ function renderCraftInv(){
   });
 }
 function assignCraftSlot(entry){
+  // Block picking the same stack into both slots unless there are at
+  // least 2 of it — otherwise you'd be "spending" one copy twice.
+  const other = !state.craftA ? state.craftB : (!state.craftB ? state.craftA : null);
+  if(other && other.item.id===entry.item.id && entry.qty<2){
+    toast(`You only have 1 ${entry.item.name} — can't use it in both slots.`);
+    return;
+  }
   if(!state.craftA){ state.craftA = entry; document.getElementById("craftSlotA").textContent = entry.item.name; document.getElementById("craftSlotA").classList.add("filled"); }
   else if(!state.craftB){ state.craftB = entry; document.getElementById("craftSlotB").textContent = entry.item.name; document.getElementById("craftSlotB").classList.add("filled"); }
   previewCraftResult();
@@ -2004,9 +2010,12 @@ document.getElementById("btnCraft").addEventListener("click", async ()=>{
     const pool = ITEM_BANK.filter(i=> i.type===(a.type==="material"?"material":a.type));
     resultItem = pool[Math.floor(Math.random()*pool.length)];
   }
-  await changeInvQty(a.id, -1);
-  await changeInvQty(b.id, -1);
-  await addItemToInv(resultItem.id, 1);
+  // Both ingredients removed and the result added in ONE write — see
+  // applyInvChanges() for why this has to be atomic.
+  await applyInvChanges({
+    remove:[{itemId:a.id, qty:1}, {itemId:b.id, qty:1}],
+    add:[{itemId:resultItem.id, qty:1}]
+  });
   toast(`Crafted ${resultItem.name}!`);
   state.craftA=null; state.craftB=null;
   document.getElementById("craftSlotA").textContent="Slot A"; document.getElementById("craftSlotA").classList.remove("filled");
@@ -2023,10 +2032,9 @@ function upgradeItem(item){
 /* =========================================================================
    BATTLE: PvE
    ========================================================================= */
-document.getElementById("btnFightEasy").addEventListener("click", ()=> startPvE("easy"));
-document.getElementById("btnFightMedium").addEventListener("click", ()=> startPvE("medium"));
-document.getElementById("btnFightHard").addEventListener("click", ()=> startPvE("hard"));
-
+/* PvE no longer opens a menu-driven battle modal — monsters live in the
+   open world and are fought in real time with Space (see the WORLD
+   section below). These pieces are still shared by that system. */
 function pickEnemy(difficulty){
   const pool = ENEMY_BANK.filter(e=>e.region===state.profile.region && e.difficulty===difficulty);
   return pool[Math.floor(Math.random()*pool.length)];
@@ -2043,22 +2051,9 @@ function playerDefense(){
     return sum + (piece?.stats.defense||0);
   }, 0);
 }
-function startPvE(difficulty){
-  const enemy = pickEnemy(difficulty);
-  if(!enemy){ toast("No enemies found here."); return; }
-  state.battle = {
-    mode:"pve", difficulty,
-    enemy: { ...enemy, curHp: enemy.hp },
-    playerHp: state.profile.hp,
-    stamina: 4, rage: state.profile.rage, rageMax: state.profile.rageMax,
-    log: [`A wild ${enemy.name} (Lv.${enemy.level}) appears!`]
-  };
-  closeModal("compassModal");
-  openBattleModal();
-}
-/* Skill-based attack menu (not chance-based): each move has a fixed
-   stamina cost / effect, and the two strongest unlock by player level
-   instead of a random roll. */
+/* Skill-based attacks: Space = basic attack, number keys 1-4 in the open
+   world trigger the others (see WORLD section). Kept from the old menu
+   system so unlock levels/costs stay consistent. */
 const ATTACK_SKILLS = [
   { id:"basic", name:"Attack", stamina:4, unlockLevel:1,
     dmgMult:()=>1, desc:"A standard strike. Always available." },
@@ -2069,133 +2064,38 @@ const ATTACK_SKILLS = [
   { id:"ultimate", name:"Ultimate Strike", stamina:8, unlockLevel:30,
     dmgMult:()=>3, desc:"Unlocked at Lv.30. Devastating hit, costs double stamina." },
 ];
-function openBattleModal(){
-  renderBattle();
-  openModal("battleModal");
-}
 function battleLogPush(msg){
   state.battle.log.push(msg);
   const el = document.getElementById("battleLog");
   el.innerHTML = state.battle.log.slice(-30).map(m=>`<div>${m}</div>`).join("");
   el.scrollTop = el.scrollHeight;
 }
-function renderBattle(){
-  const b = state.battle;
-  document.getElementById("battleEnemyName").textContent = `${b.enemy.name} Lv.${b.enemy.level}`;
-  document.getElementById("battleEnemyHPBar").style.width = (100*Math.max(0,b.enemy.curHp)/b.enemy.hp)+"%";
-  document.getElementById("battleEnemyHPNum").textContent = `${Math.max(0,b.enemy.curHp)}/${b.enemy.hp}`;
-  document.getElementById("battlePlayerName").textContent = state.profile.username;
-  document.getElementById("battlePlayerHPBar").style.width = (100*Math.max(0,b.playerHp)/state.profile.hpMax)+"%";
-  document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.playerHp)}/${state.profile.hpMax}`;
-  document.getElementById("battleStaminaLabel").textContent = `${b.stamina} (${Math.floor(b.stamina/4)} moves)`;
-  document.getElementById("battleRageLabel").textContent = `${b.rage}/${b.rageMax}`;
-  document.getElementById("battleLog").innerHTML = b.log.slice(-30).map(m=>`<div>${m}</div>`).join("");
-
-  const actions = document.getElementById("battleActions");
-  actions.innerHTML="";
-  const level = state.profile.level||1;
-  ATTACK_SKILLS.forEach(skill=>{
-    const btn = document.createElement("button");
-    const locked = level < skill.unlockLevel;
-    btn.className="doodle-btn btn-sm btn-pink";
-    btn.textContent = locked ? `${skill.name} (Lv.${skill.unlockLevel})` : skill.name;
-    btn.title = skill.desc;
-    btn.disabled = locked || b.stamina<skill.stamina || (skill.needsFullRage && b.rage<b.rageMax);
-    btn.addEventListener("click", ()=> playerAttack(skill.id));
-    actions.appendChild(btn);
-  });
-
-  invExpanded().filter(e=>e.item.type==="consumable").slice(0,4).forEach(e=>{
-    const btn = document.createElement("button");
-    btn.className="doodle-btn btn-sm btn-green"; btn.textContent=`Use ${e.item.name}`;
-    btn.disabled = b.stamina<4;
-    btn.addEventListener("click", ()=> useItemInBattle(e.item));
-    actions.appendChild(btn);
-  });
-
-  const fleeBtn = document.createElement("button");
-  fleeBtn.className="doodle-btn btn-sm btn-yellow"; fleeBtn.textContent="Flee";
-  fleeBtn.addEventListener("click", fleeBattle);
-  actions.appendChild(fleeBtn);
-}
-async function playerAttack(skillId){
-  const b = state.battle;
-  const skill = ATTACK_SKILLS.find(s=>s.id===skillId) || ATTACK_SKILLS[0];
-  const level = state.profile.level||1;
-  if(!b || b.stamina<skill.stamina) return;
-  if(level < skill.unlockLevel) return;
-  if(skill.needsFullRage && b.rage < b.rageMax) return;
-  let dmg = Math.round(playerAttackPower() * skill.dmgMult() * (0.9+Math.random()*0.2));
-  b.enemy.curHp -= dmg;
-  b.stamina -= skill.stamina;
-  b.rage = skill.needsFullRage ? 0 : Math.min(b.rageMax, b.rage + Math.round(dmg*0.15)+1);
-  battleLogPush(`You hit ${b.enemy.name} for ${dmg} damage (${skill.name}).`);
-  playSfx("attack");
-  if(b.enemy.curHp<=0){ await winBattle(); return; }
-  renderBattle();
-  triggerEnemyTurnIfOutOfMoves();
-}
-async function fleeBattle(){
-  const b = state.battle;
-  if(!b) return;
-  battleLogPush(`You fled from ${b.enemy.name}.`);
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp: Math.max(1,b.playerHp) }));
-  toast("You fled the battle.");
-  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 700);
-}
-async function useItemInBattle(item){
-  const b = state.battle;
-  if(!b || b.stamina<4) return;
-  if(item.stats.heal) b.playerHp = Math.min(state.profile.hpMax, b.playerHp+item.stats.heal);
-  b.stamina -= 4;
-  battleLogPush(`You use ${item.name}.`);
-  await changeInvQty(item.id, -1);
-  renderBattle();
-  triggerEnemyTurnIfOutOfMoves();
-}
-// Combat is automatic once a player is out of moves for the turn — no more
-// "End Turn" button to click. A short delay just gives the log line time
-// to be read before the enemy's line appears.
-function triggerEnemyTurnIfOutOfMoves(){
-  const b = state.battle;
-  if(!b || b.stamina>=4 || b.enemy.curHp<=0) return;
-  setTimeout(()=> enemyTurnIfNeeded(), 650);
-}
-function enemyTurnIfNeeded(){
-  const b = state.battle;
-  if(!b) return;
-  const dmg = Math.round(Math.max(1, b.enemy.attack - playerDefense()) * (0.8+Math.random()*0.4));
-  b.playerHp -= dmg;
-  battleLogPush(`${b.enemy.name} hits you for ${dmg} damage.`);
-  playSfx("attack");
-  b.stamina = 4;
-  if(b.playerHp<=0){ loseBattle(); return; }
-  renderBattle();
-}
-async function winBattle(){
-  const b = state.battle;
-  battleLogPush(`You defeated ${b.enemy.name}!`);
-  await grantXP(b.enemy.xpReward);
-  await grantMoney(b.enemy.moneyReward);
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-    hp: Math.max(1,b.playerHp), rage: b.rage, monstersKilled: (state.profile.monstersKilled||0)+1
-  }));
-  if(Math.random() < b.enemy.dropChance){
-    const pool = ITEM_BANK.filter(i=>i.element===b.enemy.element);
-    const drop = pool[Math.floor(Math.random()*pool.length)];
-    await addItemToInv(drop.id,1);
-    battleLogPush(`You found ${drop.name}!`);
+// Dying = hitting 1 HP in battle: you're kicked out, lose 10-25% of your
+// money, and lose one random item from your inventory. extraFields lets
+// callers (world PvE/PvP loss vs. duel loss) merge in their own updates
+// in one write.
+async function applyDeathPenalty(extraFields={}){
+  const p = state.profile;
+  const pct = 0.10 + Math.random()*0.15;
+  const moneyLoss = Math.floor((p.money||0) * pct);
+  const updates = {
+    hp: 1, rage: 0,
+    deaths: (p.deaths||0)+1,
+    money: Math.max(0, (p.money||0) - moneyLoss),
+    killstreak: 0,
+    ...extraFields
+  };
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), updates));
+  const inv = p.inventory||[];
+  let lostItemName = null;
+  if(inv.length){
+    const pick = inv[Math.floor(Math.random()*inv.length)];
+    lostItemName = ITEM_BY_ID[pick.itemId]?.name || null;
+    await changeInvQty(pick.itemId, -1);
   }
-  toast(`Victory! +${b.enemy.xpReward} XP, +$${b.enemy.moneyReward}`);
-  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 1400);
+  return { moneyLoss, lostItemName };
 }
-async function loseBattle(){
-  const b = state.battle;
-  battleLogPush(`You were defeated by ${b.enemy.name}...`);
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp: 1, rage: 0 }));
-  toast("You were defeated! Rest up and try again.");
-  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 1400);
-}
+
 
 /* --- duel (challenge a friend) --- */
 document.getElementById("btnFightFriend").addEventListener("click", renderDuelPanel);
@@ -2209,6 +2109,7 @@ function renderDuelPanel(){
     </div>
     <div style="margin-top:8px;">
       <button class="doodle-btn btn-sm btn-yellow" id="btnJoinQueue">Join Random Queue</button>
+      <button class="doodle-btn btn-sm" id="btnCancelQueue">Cancel Queue</button>
       <span id="queueTimerLabel"></span>
     </div>
     <div id="roomStatus" style="margin-top:8px;"></div>`;
@@ -2218,6 +2119,7 @@ function renderDuelPanel(){
     joinDuelRoom(code);
   });
   document.getElementById("btnJoinQueue").addEventListener("click", joinQueue);
+  document.getElementById("btnCancelQueue").addEventListener("click", cancelQueue);
 }
 function randCode(){ return String(Math.floor(10000+Math.random()*90000)); }
 let roomUnsub=null, queueInterval=null;
@@ -2227,7 +2129,7 @@ async function startDuelRoom(){
     hostUid: state.uid, hostName: state.profile.username,
     hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
     guestUid:null, guestName:null, guestHp:null, guestHpMax:null,
-    status:"waiting", winner:null, createdAt: Date.now()
+    status:"waiting", winner:null, createdAt: Date.now(), log:[]
   }));
   if(ok===null) return;
   document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
@@ -2254,31 +2156,45 @@ function watchDuelRoom(code){
   if(roomUnsub) roomUnsub();
   state.duel = { code };
   roomUnsub = onSnapshot(doc(db,"duelRooms",code), snap=>{
-    if(!snap.exists()){ document.getElementById("roomStatus").textContent="Room closed."; return; }
+    if(!snap.exists()){ const el=document.getElementById("roomStatus"); if(el) el.textContent="Room closed."; return; }
     const d = snap.data();
     if(d.status==="waiting"){
-      document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
+      const el=document.getElementById("roomStatus"); if(el) el.textContent = `Room code: ${code} — waiting for opponent…`;
       return;
     }
     // Whoever is the host flips to "active" the instant a guest doc appears,
     // so both clients enter the live duel together with no manual start.
-    if(d.status==="active" && d.guestUid && !document.getElementById("battleModal").classList.contains("active")){
+    // Checked against our battle state (not just the modal's CSS class) so
+    // a stale modal-closing animation can't stop the host from joining.
+    if(d.status==="active" && d.guestUid && !(state.battle && state.battle.mode==="duel" && state.battle.code===code)){
       openDuelBattle(code, d);
     }
-    if(document.getElementById("battleModal").classList.contains("active") && state.battle?.mode==="duel"){
+    if(state.battle?.mode==="duel" && state.battle.code===code){
       renderDuelBattle(d);
     }
-    if(d.status==="finished" && state.battle?.mode==="duel"){
+    if(d.status==="finished" && state.battle?.mode==="duel" && state.battle.code===code && !state.battle.resolved){
+      state.battle.resolved = true;
       const won = d.winner===state.uid;
-      battleLogPush(won ? "You won the duel!" : "You were defeated in the duel.");
-      toast(won ? "Duel won!" : "Duel lost.");
+      if(won){
+        battleLogPush("You won the duel!");
+        toast("Duel won!");
+        withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
+          kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
+        }));
+      } else {
+        battleLogPush("You were defeated in the duel.");
+        applyDeathPenalty().then(({moneyLoss,lostItemName})=>{
+          const lossMsg = lostItemName ? `Lost $${moneyLoss} and your ${lostItemName}.` : `Lost $${moneyLoss}.`;
+          toast(`Duel lost. ${lossMsg}`);
+        });
+      }
       setTimeout(()=>{ closeModal("battleModal"); state.battle=null; if(roomUnsub){roomUnsub(); roomUnsub=null;} }, 1400);
     }
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
 function openDuelBattle(code, d){
   const iAmHost = d.hostUid===state.uid;
-  state.battle = { mode:"duel", code, iAmHost, log:[`${d.hostName} vs ${d.guestName} — fight!`] };
+  state.battle = { mode:"duel", code, iAmHost, resolved:false, log:[`${d.hostName} vs ${d.guestName} — fight!`] };
   closeModal("compassModal");
   openModal("battleModal");
   renderDuelBattle(d);
@@ -2296,7 +2212,11 @@ function renderDuelBattle(d){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,myHp)}/${myMax}`;
   document.getElementById("battleStaminaLabel").textContent = "Live PvP";
   document.getElementById("battleRageLabel").textContent = "-";
-  document.getElementById("battleLog").innerHTML = b.log.slice(-30).map(m=>`<div>${m}</div>`).join("");
+  // The log is stored on the room doc itself (not local state) so both
+  // players see the same "who did what" history, attributed by name.
+  const logEl = document.getElementById("battleLog");
+  logEl.innerHTML = (d.log||[]).slice(-30).map(m=>`<div>${escapeHTML(m)}</div>`).join("");
+  logEl.scrollTop = logEl.scrollHeight;
   const actions = document.getElementById("battleActions");
   actions.innerHTML="";
   if(d.status==="finished") return;
@@ -2316,31 +2236,90 @@ async function duelAttack(d){
   const rref = doc(db,"duelRooms",b.code);
   const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
   const oppField = b.iAmHost ? "guestHp" : "hostHp";
+  const oppName = b.iAmHost ? d.guestName : d.hostName;
   const newOppHp = Math.max(0, (b.iAmHost ? d.guestHp : d.hostHp) - dmg);
-  const patch = { [oppField]: newOppHp };
+  const patch = {
+    [oppField]: newOppHp,
+    log: arrayUnion(`${state.profile.username} hit ${oppName} for ${dmg} damage.`)
+  };
   if(newOppHp<=0){ patch.status="finished"; patch.winner=state.uid; }
   await withErrorToast(()=> updateDoc(rref, patch));
-  battleLogPush(`You hit for ${dmg} damage.`);
 }
 async function duelFlee(d){
   const b = state.battle;
   if(!b || b.mode!=="duel") return;
   const rref = doc(db,"duelRooms",b.code);
   const winner = b.iAmHost ? d.guestUid : d.hostUid;
-  await withErrorToast(()=> updateDoc(rref, { status:"finished", winner }));
+  await withErrorToast(()=> updateDoc(rref, {
+    status:"finished", winner, log: arrayUnion(`${state.profile.username} fled the duel.`)
+  }));
 }
-function joinQueue(){
+let queueUnsub=null, queueGuestUnsub=null;
+function leaveQueueListeners(){
+  clearInterval(queueInterval); queueInterval=null;
+  if(queueUnsub){ queueUnsub(); queueUnsub=null; }
+  if(queueGuestUnsub){ queueGuestUnsub(); queueGuestUnsub=null; }
+}
+async function cancelQueue(){
+  leaveQueueListeners();
+  await withErrorToast(()=> deleteDoc(doc(db,"queue",state.uid)));
+  const label = document.getElementById("queueTimerLabel");
+  if(label) label.textContent = "";
+  toast("Left the queue.");
+}
+async function joinQueue(){
+  leaveQueueListeners();
   toast("Searching for an opponent…");
   let seconds=0;
-  clearInterval(queueInterval);
   queueInterval = setInterval(()=>{
     seconds++;
     const label = document.getElementById("queueTimerLabel");
     if(label) label.textContent = ` ${Math.floor(seconds/60)}m ${seconds%60}s`;
   },1000);
-  // NOTE: production queue-matching belongs in a Cloud Function that pairs
-  // two `queue/{uid}` docs atomically; this client only starts the timer/UI.
-  withErrorToast(()=> setDoc(doc(db,"queue",state.uid), { username: state.profile.username, joinedAt: Date.now() }));
+  const ok = await withErrorToast(()=> setDoc(doc(db,"queue",state.uid), {
+    username: state.profile.username, hpMax: state.profile.hpMax, joinedAt: Date.now()
+  }));
+  if(ok===null) return;
+
+  // Real matchmaking: watch the whole queue for another waiting player.
+  // Whoever has the lexicographically lower uid becomes host and creates
+  // the room directly (so both clients can't race to create two rooms).
+  queueUnsub = onSnapshot(collection(db,"queue"), async (snap)=>{
+    if(!state.profile) return;
+    const others = snap.docs.filter(d=> d.id!==state.uid).map(d=>({uid:d.id,...d.data()}));
+    if(others.length===0) return;
+    others.sort((a,b)=> (a.joinedAt||0)-(b.joinedAt||0));
+    const opp = others[0];
+    if(state.uid < opp.uid){
+      leaveQueueListeners();
+      const code = randCode();
+      const created = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
+        hostUid: state.uid, hostName: state.profile.username,
+        hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
+        guestUid: opp.uid, guestName: opp.username,
+        guestHp: opp.hpMax||100, guestHpMax: opp.hpMax||100,
+        status:"active", winner:null, createdAt: Date.now(), log:[]
+      }));
+      if(created===null) return;
+      await withErrorToast(()=> deleteDoc(doc(db,"queue",state.uid)));
+      const el = document.getElementById("roomStatus"); if(el) el.textContent = "Opponent found!";
+      watchDuelRoom(code);
+    }
+  }, (err)=> toast(friendlyFirebaseError(err)));
+
+  // Watch for a room where someone else matched US as the guest.
+  queueGuestUnsub = onSnapshot(
+    query(collection(db,"duelRooms"), where("guestUid","==",state.uid), where("status","==","active")),
+    (snap)=>{
+      if(snap.empty) return;
+      const fresh = snap.docs.find(dd=> (Date.now()-(dd.data().createdAt||0)) < 60000);
+      if(!fresh) return;
+      leaveQueueListeners();
+      withErrorToast(()=> deleteDoc(doc(db,"queue",state.uid)));
+      const el = document.getElementById("roomStatus"); if(el) el.textContent = "Opponent found!";
+      watchDuelRoom(fresh.id);
+    }, (err)=> toast(friendlyFirebaseError(err))
+  );
 }
 
 /* =========================================================================
@@ -2355,6 +2334,583 @@ document.getElementById("muteSfx").addEventListener("change", (e)=>{ state.setti
    ========================================================================= */
 document.addEventListener("mouseover", (e)=>{ if(e.target.closest(".doodle-btn")) playSfx("hover"); });
 document.addEventListener("click", (e)=>{ if(e.target.closest(".doodle-btn")) playSfx("click"); });
+
+/* =========================================================================
+   OPEN WORLD — replaces the old dragon idle screen. Birds-eye, WASD to
+   move, Space to gather/attack/pick up depending on what's nearby.
+
+   Honest simplifications (documented rather than hidden):
+   - Resource nodes and monster POSITIONS are deterministic (a pure hash of
+     chunk coordinates), so everyone's world looks the same without any
+     server storage. Monster STATS scale to whichever player is viewing
+     them (matches "spawning based on your level" literally) — two players
+     standing in the same spot can therefore see a monster at different
+     strength. Node/monster "defeated" state is tracked per-client with a
+     respawn timer, not synced across players — true shared monster HP
+     would need a much heavier chunk-document architecture.
+   - Player positions, attacks (PvP), loot drops and placed buildings ARE
+     fully synced through Firestore, so those are genuinely multiplayer.
+   ========================================================================= */
+const WORLD_BOUND = 10000;
+const CHUNK = 500;
+const VIEW_CHUNK_RADIUS = 2;       // how many chunks out to draw nodes/monsters
+const NODE_RESPAWN_MS = 120000;    // 2 min, client-local
+const MONSTER_RESPAWN_MS = 180000; // 3 min, client-local
+const ATTACK_COOLDOWN_MS = 450;
+const GATHER_RANGE = 46, ATTACK_RANGE = 46, AGGRO_RANGE = 150, PICKUP_RANGE = 40;
+const POS_SYNC_MS = 180;
+const MONSTER_HIT_INTERVAL = 1400;
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashCoords(x,y){ return (Math.imul(x|0, 374761393) ^ Math.imul(y|0, 668265263)) | 0; }
+function chunkOf(x,y){ return { cx: Math.floor(x/CHUNK), cy: Math.floor(y/CHUNK) }; }
+function chunkKeyStr(cx,cy){ return `${cx}_${cy}`; }
+// Quadrant -> region, per spec: Q1 forest/earth, Q2 ocean/water, Q3 snowy
+// cliffs/wind, Q4 fire/volcano. (0,0) is where all four meet.
+function quadrantRegion(x,y){
+  if(x>=0 && y>=0) return "forest";
+  if(x<0 && y>=0)  return "reef";
+  if(x<0 && y<0)   return "mountains";
+  return "volcano";
+}
+const QUADRANT_COLOR = { forest:"#bfe3a8", reef:"#a8d8e3", mountains:"#dce6ee", volcano:"#e3a89c" };
+const QUADRANT_GLYPH = { tree:"🌳", bush:"🌿", pond:"💧", rock:"🪨" };
+
+const worldState = {
+  x:0, y:0, facing:"down",
+  keys:{}, lastAttackTs:0, lastPosSentTs:0, lastSentX:null, lastSentY:null,
+  currentChunkKey:null, controlsSuspended:false,
+  nearbyPlayers:{}, nearbyPlayersUnsub:null,
+  nearbyLoot:{}, nearbyLootUnsub:null,
+  nearbyObjects:{}, nearbyObjectsUnsub:null,
+  incomingHitsUnsub:null, killCreditsUnsub:null,
+  chunkNodeCache:{}, chunkMonsterCache:{},
+  interactTarget:null, canvas:null, ctx:null, mmCtx:null, raf:null, lastTs:0,
+  respawning:false
+};
+function worldUnsubAll(){
+  [worldState.nearbyPlayersUnsub, worldState.nearbyLootUnsub, worldState.nearbyObjectsUnsub,
+   worldState.incomingHitsUnsub, worldState.killCreditsUnsub].forEach(u=> u && u());
+  if(worldState.raf) cancelAnimationFrame(worldState.raf);
+}
+
+function generateChunkNodes(cx,cy){
+  const key = chunkKeyStr(cx,cy);
+  if(worldState.chunkNodeCache[key]) return worldState.chunkNodeCache[key];
+  const rnd = mulberry32(hashCoords(cx, cy));
+  const count = 4 + Math.floor(rnd()*5);
+  const types = ["tree","bush","pond","rock"];
+  const nodes = [];
+  for(let i=0;i<count;i++){
+    nodes.push({
+      id:`${key}_n${i}`, type: types[Math.floor(rnd()*types.length)],
+      x: cx*CHUNK + rnd()*CHUNK, y: cy*CHUNK + rnd()*CHUNK,
+      depletedAt: 0
+    });
+  }
+  worldState.chunkNodeCache[key] = nodes;
+  return nodes;
+}
+function generateChunkMonsters(cx,cy){
+  const key = chunkKeyStr(cx,cy);
+  if(worldState.chunkMonsterCache[key]) return worldState.chunkMonsterCache[key];
+  const rnd = mulberry32(hashCoords(cx*7+3, cy*7+3));
+  const region = quadrantRegion(cx*CHUNK+1, cy*CHUNK+1);
+  const monsters = [];
+  if(rnd() >= 0.4){ // 60% of chunks have monsters
+    const count = 1 + Math.floor(rnd()*3);
+    const level = state.profile.level||1;
+    const diffPool = level<8 ? ["easy"] : level<20 ? ["easy","medium"] : ["medium","hard"];
+    for(let i=0;i<count;i++){
+      const diff = diffPool[Math.floor(rnd()*diffPool.length)];
+      const pool = ENEMY_BANK.filter(e=>e.region===region && e.difficulty===diff);
+      const tmpl = pool[Math.floor(rnd()*pool.length)];
+      if(!tmpl) continue;
+      monsters.push({
+        id:`${key}_m${i}`, x: cx*CHUNK + rnd()*CHUNK, y: cy*CHUNK + rnd()*CHUNK,
+        tmpl, hp: tmpl.hp, maxHp: tmpl.hp, dead:false, deadAt:0, lastHitTs:0
+      });
+    }
+  }
+  worldState.chunkMonsterCache[key] = monsters;
+  return monsters;
+}
+function nodesNearPlayer(){
+  const {cx,cy} = chunkOf(worldState.x, worldState.y);
+  const out = [];
+  for(let dx=-VIEW_CHUNK_RADIUS; dx<=VIEW_CHUNK_RADIUS; dx++)
+    for(let dy=-VIEW_CHUNK_RADIUS; dy<=VIEW_CHUNK_RADIUS; dy++)
+      out.push(...generateChunkNodes(cx+dx, cy+dy).filter(n=> !n.depletedAt || Date.now()-n.depletedAt > NODE_RESPAWN_MS));
+  return out;
+}
+function monstersNearPlayer(){
+  const {cx,cy} = chunkOf(worldState.x, worldState.y);
+  const out = [];
+  for(let dx=-VIEW_CHUNK_RADIUS; dx<=VIEW_CHUNK_RADIUS; dx++)
+    for(let dy=-VIEW_CHUNK_RADIUS; dy<=VIEW_CHUNK_RADIUS; dy++)
+      out.push(...generateChunkMonsters(cx+dx, cy+dy).filter(m=> !m.dead || Date.now()-m.deadAt > MONSTER_RESPAWN_MS));
+  // respawn: reset hp once past the timer
+  out.forEach(m=>{ if(m.dead && Date.now()-m.deadAt>MONSTER_RESPAWN_MS){ m.dead=false; m.hp=m.maxHp; } });
+  return out;
+}
+
+/* ---------- init ---------- */
+function initWorld(pos){
+  worldState.x = pos.x; worldState.y = pos.y;
+  worldState.canvas = document.getElementById("worldCanvas");
+  worldState.ctx = worldState.canvas.getContext("2d");
+  worldState.mmCtx = document.getElementById("minimapCanvas").getContext("2d");
+  resizeWorldCanvas();
+  window.addEventListener("resize", resizeWorldCanvas);
+
+  window.addEventListener("keydown", (e)=>{
+    if(worldControlsBlocked()) return;
+    if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=true;
+    if(e.code==="Space"){ e.preventDefault(); handleSpacebar(); }
+  });
+  window.addEventListener("keyup", (e)=>{
+    if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=false;
+  });
+
+  updateNearbySubscriptions(true);
+  setupIncomingHitsListener();
+  setupKillCreditsListener();
+  renderHotbar();
+  worldState.raf = requestAnimationFrame(worldTick);
+}
+function resizeWorldCanvas(){
+  const c = worldState.canvas, stage = document.getElementById("gameStage");
+  if(!c || !stage) return;
+  c.width = stage.clientWidth; c.height = stage.clientHeight;
+}
+function worldControlsBlocked(){
+  if(worldState.controlsSuspended) return true;
+  if(document.activeElement && ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return true;
+  if(document.querySelector(".modal-backdrop.active")) return true;
+  return false;
+}
+
+/* ---------- main loop ---------- */
+function worldTick(ts){
+  const dt = worldState.lastTs ? Math.min(50, ts-worldState.lastTs) : 16;
+  worldState.lastTs = ts;
+  if(!worldControlsBlocked()) stepMovement(dt);
+  syncPositionThrottled();
+  updateInteractTarget();
+  applyMonsterAggro();
+  drawWorld();
+  drawMinimap();
+  worldState.raf = requestAnimationFrame(worldTick);
+}
+function stepMovement(dt){
+  const p = state.profile; if(!p) return;
+  const speed = (140 + (p.stats?.SPEED||0)*5) * (dt/1000);
+  let dx=0, dy=0;
+  if(worldState.keys.w) dy -= 1;
+  if(worldState.keys.s) dy += 1;
+  if(worldState.keys.a) dx -= 1;
+  if(worldState.keys.d) dx += 1;
+  if(dx||dy){
+    const len = Math.hypot(dx,dy);
+    worldState.x = Math.max(-WORLD_BOUND, Math.min(WORLD_BOUND, worldState.x + (dx/len)*speed));
+    worldState.y = Math.max(-WORLD_BOUND, Math.min(WORLD_BOUND, worldState.y + (dy/len)*speed));
+    worldState.facing = Math.abs(dx)>Math.abs(dy) ? (dx>0?"right":"left") : (dy>0?"down":"up");
+  }
+}
+function syncPositionThrottled(){
+  const now = Date.now();
+  if(now - worldState.lastPosSentTs < POS_SYNC_MS) return;
+  const moved = worldState.lastSentX==null || Math.hypot(worldState.x-worldState.lastSentX, worldState.y-worldState.lastSentY) > 2;
+  if(!moved) return;
+  worldState.lastPosSentTs = now;
+  worldState.lastSentX = worldState.x; worldState.lastSentY = worldState.y;
+  const {cx,cy} = chunkOf(worldState.x, worldState.y);
+  const chunkKey = chunkKeyStr(cx,cy);
+  const region = quadrantRegion(worldState.x, worldState.y);
+  withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
+    x: Math.round(worldState.x), y: Math.round(worldState.y), facing: worldState.facing,
+    chunkKey, region
+  }));
+  if(chunkKey !== worldState.currentChunkKey){
+    worldState.currentChunkKey = chunkKey;
+    updateNearbySubscriptions(false);
+  }
+}
+
+/* ---------- nearby players / loot / objects (real multiplayer sync) --- */
+function neighborChunkKeys(){
+  const {cx,cy} = chunkOf(worldState.x, worldState.y);
+  const keys = [];
+  for(let dx=-1; dx<=1; dx++) for(let dy=-1; dy<=1; dy++) keys.push(chunkKeyStr(cx+dx,cy+dy));
+  return keys;
+}
+function updateNearbySubscriptions(){
+  const keys = neighborChunkKeys();
+  worldState.currentChunkKey = chunkKeyStr(...Object.values(chunkOf(worldState.x, worldState.y)));
+  if(worldState.nearbyPlayersUnsub) worldState.nearbyPlayersUnsub();
+  worldState.nearbyPlayersUnsub = onSnapshot(
+    query(collection(db,"players"), where("chunkKey","in",keys)),
+    snap=>{
+      worldState.nearbyPlayers = {};
+      snap.forEach(d=>{ if(d.id!==state.uid) worldState.nearbyPlayers[d.id]=d.data(); });
+    }, ()=>{}
+  );
+  if(worldState.nearbyLootUnsub) worldState.nearbyLootUnsub();
+  worldState.nearbyLootUnsub = onSnapshot(
+    query(collection(db,"worldLoot"), where("chunkKey","in",keys)),
+    snap=>{
+      worldState.nearbyLoot = {};
+      snap.forEach(d=> worldState.nearbyLoot[d.id]={id:d.id, ...d.data()});
+    }, ()=>{}
+  );
+  if(worldState.nearbyObjectsUnsub) worldState.nearbyObjectsUnsub();
+  worldState.nearbyObjectsUnsub = onSnapshot(
+    query(collection(db,"worldObjects"), where("chunkKey","in",keys)),
+    snap=>{
+      worldState.nearbyObjects = {};
+      snap.forEach(d=> worldState.nearbyObjects[d.id]={id:d.id, ...d.data()});
+    }, ()=>{}
+  );
+}
+
+/* ---------- PvP: incoming hits + kill credits (self-write-only pattern) - */
+function setupIncomingHitsListener(){
+  worldState.incomingHitsUnsub = onSnapshot(
+    collection(db,"players",state.uid,"incomingHits"),
+    snap=> snap.docChanges().forEach(ch=>{ if(ch.type==="added") processIncomingHit(ch.doc); }),
+    ()=>{}
+  );
+}
+async function processIncomingHit(hitDoc){
+  const hit = hitDoc.data();
+  await withErrorToast(()=> deleteDoc(hitDoc.ref));
+  const p = state.profile;
+  const newHp = Math.max(0, p.hp - hit.dmg);
+  if(newHp <= 1){
+    worldLogMsg(`${hit.fromUsername} defeated you!`);
+    await worldPlayerDeath(hit.fromUid, hit.fromUsername);
+  } else {
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:newHp }));
+    worldLogMsg(`${hit.fromUsername} hit you for ${hit.dmg}!`);
+  }
+}
+function setupKillCreditsListener(){
+  worldState.killCreditsUnsub = onSnapshot(
+    collection(db,"players",state.uid,"killCredits"),
+    snap=> snap.docChanges().forEach(async ch=>{
+      if(ch.type!=="added") return;
+      const c = ch.doc.data();
+      await withErrorToast(()=> deleteDoc(ch.doc.ref));
+      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
+        kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
+      }));
+      worldLogMsg(`You defeated ${c.victimUsername}!`);
+    }),
+    ()=>{}
+  );
+}
+// Victim's own client drops their loot bag, credits the killer, respawns.
+async function worldPlayerDeath(killerUid, killerUsername){
+  const { moneyLoss, lostItemName } = await applyDeathPenalty();
+  await withErrorToast(()=> addDoc(collection(db,"worldLoot"), {
+    x: worldState.x, y: worldState.y, chunkKey: worldState.currentChunkKey,
+    money: moneyLoss, itemName: lostItemName||null, ts: Date.now()
+  }));
+  if(killerUid){
+    await withErrorToast(()=> addDoc(collection(db,"players",killerUid,"killCredits"), {
+      victimUsername: state.profile.username, ts: Date.now()
+    }));
+  }
+  respawnPlayer();
+}
+function respawnPlayer(){
+  const p = state.profile;
+  const rx = p.bedX ?? p.spawnX ?? 0, ry = p.bedY ?? p.spawnY ?? 0;
+  teleportTo(rx, ry);
+  toast("You respawned.");
+}
+function teleportTo(x,y){
+  worldState.x = x; worldState.y = y;
+  worldState.lastSentX = null; // force an immediate position sync
+  const chunkKey = chunkKeyStr(...Object.values(chunkOf(x,y)));
+  const region = quadrantRegion(x,y);
+  withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { x:Math.round(x), y:Math.round(y), chunkKey, region }));
+  updateNearbySubscriptions();
+}
+
+/* ---------- monster AI: simple aggro + periodic hit --------------------- */
+function applyMonsterAggro(){
+  if(worldControlsBlocked()) return;
+  const now = Date.now();
+  monstersNearPlayer().forEach(m=>{
+    if(m.dead) return;
+    const d = Math.hypot(m.x-worldState.x, m.y-worldState.y);
+    if(d > AGGRO_RANGE) return;
+    if(now - m.lastHitTs < MONSTER_HIT_INTERVAL) return;
+    m.lastHitTs = now;
+    const dmg = Math.round(Math.max(1, m.tmpl.attack - playerDefense()) * (0.8+Math.random()*0.4));
+    const newHp = Math.max(0, (state.profile.hp||1) - dmg);
+    if(newHp <= 1){
+      worldLogMsg(`${m.tmpl.name} defeated you!`);
+      applyDeathPenalty().then(()=> respawnPlayer());
+    } else {
+      withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:newHp }));
+      worldLogMsg(`${m.tmpl.name} hits you for ${dmg}.`);
+    }
+  });
+}
+async function killMonsterReward(m){
+  m.dead = true; m.deadAt = Date.now();
+  await grantXP(m.tmpl.xpReward);
+  await grantMoney(m.tmpl.moneyReward);
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { monstersKilled:(state.profile.monstersKilled||0)+1 }));
+  if(Math.random() < m.tmpl.dropChance){
+    const pool = ITEM_BANK.filter(i=>i.element===m.tmpl.element);
+    const drop = pool[Math.floor(Math.random()*pool.length)];
+    if(drop){ await addItemToInv(drop.id,1); worldLogMsg(`Defeated ${m.tmpl.name}! +${m.tmpl.xpReward} XP, +$${m.tmpl.moneyReward}, found ${drop.name}!`); return; }
+  }
+  worldLogMsg(`Defeated ${m.tmpl.name}! +${m.tmpl.xpReward} XP, +$${m.tmpl.moneyReward}`);
+}
+
+/* ---------- interact target + Space handling ---------------------------- */
+function updateInteractTarget(){
+  const prompt = document.getElementById("interactPrompt");
+  let best = null, bestDist = Infinity;
+  nodesNearPlayer().forEach(n=>{
+    const d = Math.hypot(n.x-worldState.x, n.y-worldState.y);
+    if(d<GATHER_RANGE && d<bestDist){ bestDist=d; best={kind:"node", ref:n}; }
+  });
+  monstersNearPlayer().forEach(m=>{
+    if(m.dead) return;
+    const d = Math.hypot(m.x-worldState.x, m.y-worldState.y);
+    if(d<ATTACK_RANGE && d<bestDist){ bestDist=d; best={kind:"monster", ref:m}; }
+  });
+  Object.values(worldState.nearbyPlayers).forEach(op=>{
+    const d = Math.hypot((op.x||0)-worldState.x, (op.y||0)-worldState.y);
+    if(d<ATTACK_RANGE && d<bestDist){ bestDist=d; best={kind:"player", ref:op}; }
+  });
+  Object.values(worldState.nearbyLoot).forEach(l=>{
+    const d = Math.hypot(l.x-worldState.x, l.y-worldState.y);
+    if(d<PICKUP_RANGE && d<bestDist){ bestDist=d; best={kind:"loot", ref:l}; }
+  });
+  Object.values(worldState.nearbyObjects).forEach(o=>{
+    if(o.ownerUid!==state.uid) return;
+    const d = Math.hypot(o.x-worldState.x, o.y-worldState.y);
+    if(d<PICKUP_RANGE && d<bestDist){ bestDist=d; best={kind:"object", ref:o}; }
+  });
+  worldState.interactTarget = best;
+  if(!best){ prompt.classList.remove("show"); return; }
+  const labels = {
+    node: n=> `Space to ${n.type==="pond"?"fish":n.type==="rock"?"mine":"forage"}`,
+    monster: m=> `Space to attack ${m.tmpl.name} (Lv.${m.tmpl.level})`,
+    player: p=> `Space to attack ${p.username}`,
+    loot: l=> `Space to pick up loot`,
+    object: o=> `Space to reclaim your ${o.type}`
+  };
+  prompt.textContent = labels[best.kind](best.ref);
+  prompt.classList.add("show");
+}
+function handleSpacebar(){
+  const now = Date.now();
+  const t = worldState.interactTarget;
+  if(!t) return;
+  if(t.kind==="node"){ interactNode(t.ref); return; }
+  if(now - worldState.lastAttackTs < ATTACK_COOLDOWN_MS) return;
+  worldState.lastAttackTs = now;
+  if(t.kind==="monster") attackWorldMonster(t.ref);
+  else if(t.kind==="player") attackWorldPlayer(t.ref);
+  else if(t.kind==="loot") pickupWorldLoot(t.ref);
+  else if(t.kind==="object") reclaimWorldObject(t.ref);
+}
+function interactNode(n){
+  if(n.type==="pond") doFishAction();
+  else if(n.type==="rock") doMineAction();
+  else doForageAction(); // tree or bush
+  n.depletedAt = Date.now();
+}
+async function attackWorldMonster(m){
+  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
+  m.hp -= dmg;
+  playSfx("attack");
+  worldLogMsg(`You hit ${m.tmpl.name} for ${dmg}.`);
+  if(m.hp <= 0) await killMonsterReward(m);
+}
+async function attackWorldPlayer(op){
+  const targetUid = Object.keys(worldState.nearbyPlayers).find(uid=> worldState.nearbyPlayers[uid]===op);
+  if(!targetUid) return;
+  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
+  playSfx("attack");
+  worldLogMsg(`You hit ${op.username} for ${dmg}.`);
+  await withErrorToast(()=> addDoc(collection(db,"players",targetUid,"incomingHits"), {
+    fromUid: state.uid, fromUsername: state.profile.username, dmg, ts: Date.now()
+  }));
+}
+async function pickupWorldLoot(l){
+  await withErrorToast(()=> deleteDoc(doc(db,"worldLoot",l.id)));
+  if(l.money) await grantMoney(l.money);
+  if(l.itemName){
+    const item = ITEM_BANK.find(i=>i.name===l.itemName) || Object.values(ITEM_BY_ID).find(i=>i.name===l.itemName);
+    if(item) await addItemToInv(item.id, 1);
+  }
+  worldLogMsg(`Picked up loot${l.money?` (+$${l.money})`:""}.`);
+}
+async function reclaimWorldObject(o){
+  await withErrorToast(()=> deleteDoc(doc(db,"worldObjects",o.id)));
+  await addItemToInv(o.itemId, 1);
+  if(o.type==="bed"){
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bedX:null, bedY:null }));
+  }
+  worldLogMsg(`Reclaimed your ${o.type}.`);
+}
+function worldLogMsg(msg){
+  const el = document.getElementById("stageLog");
+  const line = document.createElement("div");
+  line.className = "stage-log-line";
+  line.textContent = msg;
+  el.appendChild(line);
+  setTimeout(()=> line.remove(), 4000);
+}
+
+/* ---------- hotbar: first 9 items, click to Drop or Place --------------- */
+function renderHotbar(){
+  const bar = document.getElementById("hotbar");
+  if(!bar || !state.profile) return;
+  const entries = invExpanded().slice(0,9);
+  bar.innerHTML = entries.map((e,i)=>`
+    <div class="hotbar-slot" data-hb="${i}">
+      <span class="hb-key">${i+1}</span>
+      <span>${e.item.name.split(" ").slice(0,2).join(" ")}</span>
+      <span class="qty-badge">x${e.qty}</span>
+    </div>`).join("");
+  bar.querySelectorAll("[data-hb]").forEach((el,i)=>{
+    el.addEventListener("click", ()=> openHotbarAction(entries[i], el));
+  });
+}
+function openHotbarAction(entry, el){
+  document.querySelectorAll(".hb-action-popup").forEach(p=>p.remove());
+  const pop = document.createElement("div");
+  pop.className = "hb-action-popup doodle-panel";
+  pop.innerHTML = `
+    <button class="doodle-btn btn-sm" data-hba="drop">Drop</button>
+    ${entry.item.placeable ? `<button class="doodle-btn btn-sm btn-green" data-hba="place">Place</button>` : ""}
+  `;
+  el.appendChild(pop);
+  pop.querySelector('[data-hba="drop"]').addEventListener("click", (ev)=>{ ev.stopPropagation(); dropHotbarItem(entry); pop.remove(); });
+  const placeBtn = pop.querySelector('[data-hba="place"]');
+  if(placeBtn) placeBtn.addEventListener("click", (ev)=>{ ev.stopPropagation(); placeHotbarItem(entry); pop.remove(); });
+  setTimeout(()=> document.addEventListener("click", function h(ev){ if(!pop.contains(ev.target)){ pop.remove(); document.removeEventListener("click",h); } }), 0);
+}
+async function dropHotbarItem(entry){
+  await changeInvQty(entry.item.id, -1);
+  await withErrorToast(()=> addDoc(collection(db,"worldLoot"), {
+    x: worldState.x, y: worldState.y, chunkKey: worldState.currentChunkKey,
+    money:0, itemName: entry.item.name, ts: Date.now()
+  }));
+  worldLogMsg(`Dropped ${entry.item.name}.`);
+}
+async function placeHotbarItem(entry){
+  const facingOffset = { down:{x:0,y:40}, up:{x:0,y:-40}, left:{x:-40,y:0}, right:{x:40,y:0} }[worldState.facing];
+  const px = worldState.x + facingOffset.x, py = worldState.y + facingOffset.y;
+  await changeInvQty(entry.item.id, -1);
+  await withErrorToast(()=> addDoc(collection(db,"worldObjects"), {
+    x:px, y:py, chunkKey: chunkKeyStr(...Object.values(chunkOf(px,py))),
+    type: entry.item.buildType, itemId: entry.item.id, ownerUid: state.uid, ts: Date.now()
+  }));
+  if(entry.item.buildType==="bed"){
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bedX:px, bedY:py }));
+  }
+  worldLogMsg(`Placed a ${entry.item.name}.`);
+}
+
+/* ---------- rendering ---------------------------------------------------- */
+const OBJECT_GLYPH = { bench:"🪑", fence:"🚧", bed:"🛏️", home:"🏠", guard:"🛡️" };
+function drawWorld(){
+  const ctx = worldState.ctx, c = worldState.canvas;
+  if(!ctx) return;
+  const w=c.width, h=c.height;
+  ctx.clearRect(0,0,w,h);
+  const camX = worldState.x - w/2, camY = worldState.y - h/2;
+
+  // quadrant-colored ground, split at the world axes
+  const region = quadrantRegion(worldState.x, worldState.y);
+  ctx.fillStyle = QUADRANT_COLOR[region];
+  ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle = "rgba(74,63,53,.12)"; ctx.lineWidth=1;
+  for(let gx = Math.floor(camX/100)*100; gx < camX+w; gx+=100){ ctx.beginPath(); ctx.moveTo(gx-camX,0); ctx.lineTo(gx-camX,h); ctx.stroke(); }
+  for(let gy = Math.floor(camY/100)*100; gy < camY+h; gy+=100){ ctx.beginPath(); ctx.moveTo(0,gy-camY); ctx.lineTo(w,gy-camY); ctx.stroke(); }
+  // world-axis lines (x=0 / y=0) drawn heavier — "quadrants collide" marker
+  ctx.strokeStyle = "rgba(74,63,53,.35)"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0-camX,0); ctx.lineTo(0-camX,h); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,0-camY); ctx.lineTo(w,0-camY); ctx.stroke();
+
+  ctx.font = "28px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  nodesNearPlayer().forEach(n=>{
+    if(n.depletedAt && Date.now()-n.depletedAt<NODE_RESPAWN_MS) return;
+    ctx.fillText(QUADRANT_GLYPH[n.type], n.x-camX, n.y-camY);
+  });
+  Object.values(worldState.nearbyObjects).forEach(o=>{
+    ctx.fillText(OBJECT_GLYPH[o.type]||"📦", o.x-camX, o.y-camY);
+  });
+  Object.values(worldState.nearbyLoot).forEach(l=>{
+    ctx.fillText("💰", l.x-camX, l.y-camY);
+  });
+  monstersNearPlayer().forEach(m=>{
+    if(m.dead) return;
+    ctx.fillText("👹", m.x-camX, m.y-camY);
+    drawMiniHpBar(ctx, m.x-camX, m.y-camY-24, m.hp/m.maxHp, "#c0392b");
+    ctx.font = "10px sans-serif"; ctx.fillStyle="#2a2016";
+    ctx.fillText(`${m.tmpl.name} Lv.${m.tmpl.level}`, m.x-camX, m.y-camY-32);
+    ctx.font = "28px sans-serif";
+  });
+  Object.entries(worldState.nearbyPlayers).forEach(([uid,op])=>{
+    const ox=(op.x||0)-camX, oy=(op.y||0)-camY;
+    ctx.fillText("🧙", ox, oy);
+    ctx.font = "11px sans-serif"; ctx.fillStyle="#2a2016";
+    ctx.fillText(op.username||"?", ox, oy-24);
+    ctx.font = "28px sans-serif";
+  });
+  // self, always centered
+  ctx.fillText("🧝", w/2, h/2);
+  ctx.font = "11px sans-serif"; ctx.fillStyle="#2a2016";
+  ctx.fillText(state.profile.username, w/2, h/2-24);
+}
+function drawMiniHpBar(ctx,x,y,pct,color){
+  ctx.fillStyle="rgba(0,0,0,.25)"; ctx.fillRect(x-16,y,32,4);
+  ctx.fillStyle=color; ctx.fillRect(x-16,y,32*Math.max(0,pct),4);
+}
+function drawMinimap(){
+  const ctx = worldState.mmCtx; if(!ctx) return;
+  const size = 150, range = 1200; // world units shown across the minimap
+  ctx.clearRect(0,0,size,size);
+  // 4 quadrant quarters, colored, always centered on true (0,0) so the
+  // "where all 4 sections collide" point is visually anchored
+  const originPx = size/2 - (worldState.x/range)*size;
+  const originPy = size/2 - (worldState.y/range)*size;
+  ctx.fillStyle = QUADRANT_COLOR.forest;    ctx.fillRect(originPx, originPy-size, size, size);
+  ctx.fillStyle = QUADRANT_COLOR.reef;      ctx.fillRect(originPx-size, originPy-size, size, size);
+  ctx.fillStyle = QUADRANT_COLOR.mountains; ctx.fillRect(originPx-size, originPy, size, size);
+  ctx.fillStyle = QUADRANT_COLOR.volcano;   ctx.fillRect(originPx, originPy, size, size);
+  ctx.strokeStyle="#4a3f35"; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(originPx,0); ctx.lineTo(originPx,size); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,originPy); ctx.lineTo(size,originPy); ctx.stroke();
+  // nearby players as dots
+  ctx.fillStyle="#2a6fdb";
+  Object.values(worldState.nearbyPlayers).forEach(op=>{
+    const px = size/2 + ((op.x||0)-worldState.x)/range*size, py = size/2 + ((op.y||0)-worldState.y)/range*size;
+    if(px>=0&&px<=size&&py>=0&&py<=size){ ctx.beginPath(); ctx.arc(px,py,3,0,7); ctx.fill(); }
+  });
+  // self, always dead-center
+  ctx.fillStyle="#c0392b";
+  ctx.beginPath(); ctx.arc(size/2,size/2,4,0,7); ctx.fill();
+}
+
 
 /* =========================================================================
    BOOT
