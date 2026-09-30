@@ -689,6 +689,7 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
   }
 });
 document.getElementById("btnLogout").addEventListener("click", async ()=>{
+  stopPresence();                                    // tell the other side we've left BEFORE we lose auth
   await withErrorToast(()=> signOut(auth));
   closeModal("settingsModal");
 });
@@ -809,7 +810,9 @@ function resetSessionUI(){
   ["recapModal","eatModal","battleModal","journalModal","compassModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
 }
 function cleanupSubs(){
-  state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null;
+  stopPresence();
+  state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false;
+  if(pmUnsub){ pmUnsub(); } pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
   stopManaRegen(); bossCleanup();
   if(state.hpRegenInterval){ clearInterval(state.hpRegenInterval); state.hpRegenInterval=null; }
@@ -1356,6 +1359,30 @@ const QUEST_TEMPLATES = [
       label:`Slay ${target} enemies`,
       moneyReward: Math.round(target * (12+rnd()*8) * {I:1,II:1.6,III:2.4}[tier])
     };
+  },
+  // ---- job + shopping quests (all three tiers) ----
+  (rnd, tier) => {
+    const target = { I:4, II:10, III:25 }[tier] + Math.floor(rnd()*4);
+    return { type:"mine", target, label:`Swing your pickaxe ${target} times`,
+      moneyReward: Math.round(target * (10+rnd()*6) * {I:1,II:1.6,III:2.4}[tier]),
+      ...(tier==="III" ? { itemRewardId:"ore_gold", itemRewardQty:1 } : {}) };
+  },
+  (rnd, tier) => {
+    const target = { I:3, II:7, III:16 }[tier] + Math.floor(rnd()*3);
+    return { type:"fish", target, label:`Catch ${target} fish`,
+      moneyReward: Math.round(target * (12+rnd()*8) * {I:1,II:1.6,III:2.4}[tier]),
+      ...(tier==="III" ? { itemRewardId:"fish_swordfish", itemRewardQty:1 } : {}) };
+  },
+  (rnd, tier) => {
+    const target = { I:5, II:12, III:30 }[tier] + Math.floor(rnd()*5);
+    return { type:"forage", target, label:`Forage ${target} times`,
+      moneyReward: Math.round(target * (7+rnd()*5) * {I:1,II:1.6,III:2.4}[tier]),
+      ...(tier==="III" ? { itemRewardId:"forage_truffle", itemRewardQty:1 } : {}) };
+  },
+  (rnd, tier) => {
+    const target = { I:2, II:5, III:10 }[tier] + Math.floor(rnd()*3);
+    return { type:"shop", target, label:`Buy ${target} item${target===1?"":"s"} from the shop`,
+      moneyReward: Math.round(target * (28+rnd()*12) * {I:1,II:1.6,III:2.4}[tier]) };
   }
 ];
 function offeredQuestFor(tier){
@@ -1369,12 +1396,16 @@ function questProgress(quest, p){
   if(quest.type==="gather") return Math.max(0, (p.inventory||[]).find(e=>e.itemId===quest.itemId)?.qty - quest.baseline || 0);
   if(quest.type==="money") return Math.max(0, p.money - quest.baseline);
   if(quest.type==="slay") return Math.max(0, (p.monstersKilled||0) - quest.baseline);
+  if(QUEST_COUNTER[quest.type]) return Math.max(0, (p[QUEST_COUNTER[quest.type]]||0) - quest.baseline);
   return 0;
 }
+// job/shop quests count off these lifetime counters on the player doc
+const QUEST_COUNTER = { mine:"miningXp", fish:"fishingXp", forage:"foragingXp", shop:"shopBought" };
 function questBaseline(quest, p){
   if(quest.type==="gather") return (p.inventory||[]).find(e=>e.itemId===quest.itemId)?.qty || 0;
   if(quest.type==="money") return p.money||0;
   if(quest.type==="slay") return p.monstersKilled||0;
+  if(QUEST_COUNTER[quest.type]) return p[QUEST_COUNTER[quest.type]]||0;
   return 0;
 }
 async function renderQuests(){
@@ -1563,6 +1594,7 @@ async function buyItem(item){
   if(state.profile.money < item.price){ toast("Not enough money!"); return; }
   await grantMoney(-item.price);
   await addItemToInv(item.id, 1);
+  updateDoc(doc(db,"players",state.uid), { shopBought: increment(1) }).catch(()=>{});   // feeds shopping sidequests
   playSfx("buy");
   toast(`Bought ${item.name}`);
 }
@@ -1805,10 +1837,16 @@ async function openProfileByUid(uid){
 function chatMessageHTML(m, id, collectionPath){
   const canDelete = m.uid===state.uid || isAdminUI();
   if(m.system==="deleted") return `<div class="chat-system" data-mid="${id}">${escapeHTML(m.username)} deleted a message</div>`;
+  // A reply shows the quoted message as a small bubble attached on top of this
+  // one, in the colour that quoted author has for THIS viewer (blue = you, pink = them).
+  const rq = m.replyTo && m.replyTo.username
+    ? `<div class="reply-quote ${m.replyTo.uid===state.uid?'q-mine':'q-theirs'}"><b>${escapeHTML(m.replyTo.username)}</b> ${escapeHTML(m.replyTo.text||"")}</div>` : "";
   return `
-      <div class="chat-msg ${m.uid===state.uid?'mine':'theirs'}" data-mid="${id}">
+      <div class="chat-msg ${m.uid===state.uid?'mine':'theirs'}${rq?' has-reply':''}" data-mid="${id}">
         <div class="who chat-username" data-uid="${m.uid}">${escapeHTML(m.username)}</div>
+        ${rq}
         <div class="bubble">${escapeHTML(m.text)}</div>
+        <button class="chat-reply-btn" data-reply="${id}" title="Reply">&#10550;</button>
         ${canDelete ? `<button class="chat-del-btn" data-del="${id}" data-ts="${m.ts||Date.now()}" data-cpath="${collectionPath}" title="Delete message">&times;</button>` : ""}
       </div>`;
 }
@@ -1867,9 +1905,37 @@ function focusChatLog(log){
 }
 function focusVisibleChat(){ ["chatLogGlobal","chatLogPrivate"].forEach(id=>{ const l=document.getElementById(id); if(l.offsetParent!==null) focusChatLog(l); }); }
 document.querySelectorAll("[data-chatsub]").forEach(b=> b.addEventListener("click", ()=> setTimeout(focusVisibleChat,0)));
+/* ---------- replies ----------
+   Clicking the bent arrow puts a mini copy of that message on top of the
+   compose box; whatever you send next carries it as `replyTo`. One pending
+   reply per chat (global / private). */
+const pendingReply = { global:null, private:null };
+function replyBox(which){ return document.getElementById(which==="global" ? "globalChatForm" : "privateChatForm"); }
+function renderReplyPreview(which){
+  const form = replyBox(which); form.querySelector(".reply-compose")?.remove();
+  const r = pendingReply[which]; if(!r) return;
+  const el = document.createElement("div");
+  el.className = "reply-compose " + (r.uid===state.uid ? "q-mine" : "q-theirs");
+  el.innerHTML = `<span><b>${escapeHTML(r.username)}</b> ${escapeHTML(r.text)}</span><button type="button" class="reply-cancel" title="Cancel reply">&times;</button>`;
+  el.querySelector(".reply-cancel").addEventListener("click", ()=>{ pendingReply[which]=null; renderReplyPreview(which); });
+  form.prepend(el);
+  form.querySelector("input")?.focus();
+}
+function takeReply(which){
+  const r = pendingReply[which]; pendingReply[which] = null; renderReplyPreview(which);
+  return r ? { id:r.id, uid:r.uid, username:r.username, text:r.text } : null;
+}
 function wireChatRowInteractions(log){
   log.querySelectorAll(".chat-username").forEach(el=>{
     el.addEventListener("click", ()=> openProfileByUid(el.dataset.uid));
+  });
+  log.querySelectorAll("[data-reply]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const m = (log._rows||[]).find(x=>x.id===btn.dataset.reply); if(!m || m.system) return;
+      const which = log.id==="chatLogGlobal" ? "global" : "private";
+      pendingReply[which] = { id:m.id, uid:m.uid, username:m.username, text:String(m.text||"").slice(0,80) };
+      renderReplyPreview(which);
+    });
   });
   log.querySelectorAll("[data-del]").forEach(btn=>{
     btn.addEventListener("click", async ()=>{
@@ -1908,8 +1974,9 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   const text = moderateChatText(raw);
   if(!text) return;
   input.value=""; markRead(document.getElementById("chatLogGlobal"), "global");
-  const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now() }));
-  if(ok===null) input.value = raw;
+  const replyTo = takeReply("global");
+  const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now(), ...(replyTo?{replyTo}:{}) }));
+  if(ok===null){ input.value = raw; if(replyTo){ pendingReply.global = replyTo; renderReplyPreview("global"); } }
 });
 
 /* ---------- slash commands ---------- */
@@ -2071,6 +2138,9 @@ function subscribePrivateThread(){
   document.getElementById("chatLogPrivate").dataset.init="";
   if(!state.currentChatPartner) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
+  if(presence.thread !== threadId){ pendingReply.private = null; renderReplyPreview("private"); }
+  watchPartnerPresence(threadId);
+  syncPresence(true);
   const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","desc"), limit(100));
   pmUnsub = onSnapshot(q, snap=>{
     const log = document.getElementById("chatLogPrivate");
@@ -2079,6 +2149,90 @@ function subscribePrivateThread(){
     renderChatLog(log, rows, "pm_"+threadId, `privateChats/${threadId}/messages`);
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
+
+/* =========================================================================
+   DM PRESENCE — private chat only (never public chat).
+   Each side keeps ONE tiny doc  privateChats/{thread}/presence/{myUid}:
+     watching: I'm actively inside this DM thread, in the tab, right now
+     typing:   ...and there is text in my message box
+   Both are refreshed by a heartbeat and treated as expired by the reader if
+   the heartbeat stops (closed tab, lost connection), so nothing gets stuck.
+   The other side sees a bubble bottom-left: 👀 while I'm watching, animated
+   dots while I'm typing, and nothing when I'm not in the DM screen.
+   ========================================================================= */
+const PRESENCE_BEAT_MS = 5000, PRESENCE_STALE_MS = 13000;
+const presence = { thread:null, sent:{ watching:false, typing:false, at:0 }, partner:null, unsub:null, tick:null, shown:"" };
+function iAmWatchingDM(){
+  const log = document.getElementById("chatLogPrivate");
+  return !!(state.profile && state.currentChatPartner && !document.hidden &&
+    document.getElementById("screen-game").classList.contains("active") &&
+    log && log.offsetParent !== null);            // visible = compass open + Chat tab + Private sub-tab
+}
+function presenceRef(thread){ return doc(db,"privateChats",thread,"presence",state.uid); }
+// Writes only when something changed, or as a heartbeat while active.
+function syncPresence(force){
+  if(!state.uid || !state.profile) return;
+  const thread = state.currentChatPartner ? pmThreadId(state.uid, state.currentChatPartner.uid) : null;
+  // moved to a different thread (or left DMs entirely): clear the old one first
+  if(presence.thread && presence.thread !== thread && (presence.sent.watching || presence.sent.typing)){
+    setDoc(presenceRef(presence.thread), { watching:false, typing:false, ts:Date.now() }).catch(()=>{});
+    presence.sent = { watching:false, typing:false, at:0 };
+  }
+  presence.thread = thread;
+  if(!thread) return;
+  const watching = iAmWatchingDM();
+  const typing = watching && document.getElementById("privateChatInput").value.trim().length > 0;
+  const s = presence.sent, now = Date.now();
+  const changed = watching !== s.watching || typing !== s.typing;
+  const beat = (watching || typing) && now - s.at >= PRESENCE_BEAT_MS;
+  if(!changed && !beat && !force) return;
+  if(!changed && !beat && force && !watching && !typing) return;
+  presence.sent = { watching, typing, at:now };
+  setDoc(presenceRef(thread), { watching, typing, ts:now }).catch(()=>{});
+}
+function watchPartnerPresence(thread){
+  if(presence.unsub){ presence.unsub(); presence.unsub = null; }
+  presence.partner = null; renderPartnerPresence();
+  const partnerUid = state.currentChatPartner.uid;
+  presence.unsub = onSnapshot(doc(db,"privateChats",thread,"presence",partnerUid), snap=>{
+    presence.partner = snap.exists() ? snap.data() : null;
+    renderPartnerPresence();
+  }, ()=>{});
+  if(!presence.tick) presence.tick = setInterval(()=>{ syncPresence(); renderPartnerPresence(); }, 1000);
+}
+function renderPartnerPresence(){
+  const el = document.getElementById("dmStatus"); if(!el) return;
+  const pr = presence.partner, fresh = pr && (Date.now() - (pr.ts||0)) < PRESENCE_STALE_MS;
+  // we only show it while WE are also looking at this thread
+  const on = fresh && state.currentChatPartner && iAmWatchingDM();
+  const want = !on ? "" : (pr.typing ? "typing" : pr.watching ? "watching" : "");
+  if(want === presence.shown) return;
+  const bubble = el.querySelector(".dm-bubble");
+  const prev = presence.shown; presence.shown = want;
+  if(!want){                                            // leave: quick pop-out
+    bubble.classList.remove("pop-in"); bubble.classList.add("pop-out");
+    setTimeout(()=>{ if(!presence.shown){ bubble.className = "dm-bubble"; bubble.innerHTML = ""; } }, 220);
+    return;
+  }
+  bubble.innerHTML = want==="typing" ? '<span class="dm-dots"><i></i><i></i><i></i></span>' : '<span class="dm-eyes">👀</span>';
+  bubble.className = "dm-bubble show" + (want==="typing" ? " typing" : "");
+  void bubble.offsetWidth;                              // restart the pop animation on every change / appearance
+  bubble.classList.add("pop-in");
+}
+function stopPresence(){                                // logout / session reset
+  if(presence.thread && state.uid && (presence.sent.watching || presence.sent.typing)){
+    setDoc(presenceRef(presence.thread), { watching:false, typing:false, ts:Date.now() }).catch(()=>{});
+  }
+  if(presence.unsub){ presence.unsub(); presence.unsub = null; }
+  if(presence.tick){ clearInterval(presence.tick); presence.tick = null; }
+  presence.thread = null; presence.partner = null; presence.sent = { watching:false, typing:false, at:0 }; presence.shown = "";
+  const b = document.querySelector("#dmStatus .dm-bubble"); if(b){ b.className = "dm-bubble"; b.innerHTML = ""; }
+}
+// typing + focus/visibility/tab changes all just re-evaluate
+document.getElementById("privateChatInput").addEventListener("input", ()=> syncPresence());
+document.addEventListener("visibilitychange", ()=>{ syncPresence(); renderPartnerPresence(); });
+window.addEventListener("pagehide", ()=>{ syncPresence(); });
+document.querySelectorAll("[data-chatsub],[data-ctab],[data-close-modal]").forEach(b=> b.addEventListener("click", ()=> setTimeout(()=>{ syncPresence(); renderPartnerPresence(); }, 60)));
 document.getElementById("privateChatForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
   if(!state.currentChatPartner) { toast("Pick a friend to message."); return; }
@@ -2088,8 +2242,10 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   if(!text) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
   input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+threadId);
-  const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now() }));
-  if(ok===null){ input.value = raw; return; }
+  syncPresence(true);                       // box is empty now: drop the typing indicator right away
+  const replyTo = takeReply("private");
+  const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now(), ...(replyTo?{replyTo}:{}) }));
+  if(ok===null){ input.value = raw; if(replyTo){ pendingReply.private = replyTo; renderReplyPreview("private"); } return; }
   // Ping the recipient's inbox so they get a popup if that chat isn't open
   // (the recipient's client shows the toast, then deletes this ping).
   addDoc(collection(db,"players",state.currentChatPartner.uid,"inbox"), {
