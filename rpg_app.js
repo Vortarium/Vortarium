@@ -289,26 +289,26 @@ const ENEMY_NAME_PARTS = {
   reef:["Coral Crab","Tide Serpent","Bubble Jelly","Pearl Turtle","Riptide Shark","Kelp Wisp","Foam Sprite","Shell Guardian","Abyssal Eel","Barnacle Brute"]
 };
 const DIFF = {
-  easy:{ mult:0.7, xp:[3,6], money:[5,15] },
+  easy:{ mult:0.9, xp:[4,8], money:[8,20] },
   medium:{ mult:1.0, xp:[8,14], money:[15,35] },
-  hard:{ mult:1.6, xp:[20,40], money:[40,100] }
+  hard:{ mult:1.3, xp:[16,32], money:[35,80] }
 };
 /* Monster level is generated RELATIVE to the player's CURRENT level at the
    moment the monster spawns, per design:
-     easy:   playerLevel - (1 to 5), floored at level 1
+     easy:   playerLevel - (0 to 2), floored at level 1
      medium: playerLevel +/- 3, randomly
-     hard:   playerLevel + (1 to 5)
+     hard:   playerLevel + (1 to 3)
    buildEnemyBank() only enumerates the 10 name slots per region for
    variety; level/stats are computed fresh in makeMonsterFromSlot() using
    whatever the player's level is right now. */
 function rollMonsterLevel(diff, playerLevel, rnd=Math.random){
   playerLevel = Math.max(1, playerLevel||1);
   if(diff==="easy"){
-    const under = 1 + Math.floor(rnd()*5); // 1-5 levels under, min level 1
+    const under = Math.floor(rnd()*3); // 0-2 levels under, min level 1
     return Math.max(1, playerLevel - under);
   }
   if(diff==="hard"){
-    const over = 1 + Math.floor(rnd()*5); // 1-5 levels over
+    const over = 1 + Math.floor(rnd()*3); // 1-3 levels over
     return playerLevel + over;
   }
   const delta = Math.floor(rnd()*7) - 3; // medium: -3..+3, randomly
@@ -1873,7 +1873,7 @@ async function runChatCommand(raw){
       try{
         const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
         const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
-        if(activeCount >= 5){ toast("You can only have 5 auction slots."); return; }
+        if(activeCount >= 10){ toast("You can only have 10 auction slots."); return; }
       }catch(err){ toast(friendlyFirebaseError(err)); return; }
       const ok = await applyInvChanges({ remove:[{itemId:entry.item.id, qty:1}] });
       if(ok===null) return;
@@ -1985,7 +1985,12 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
   input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+threadId);
   const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now() }));
-  if(ok===null) input.value = raw;
+  if(ok===null){ input.value = raw; return; }
+  // Ping the recipient's inbox so they get a popup if that chat isn't open
+  // (the recipient's client shows the toast, then deletes this ping).
+  addDoc(collection(db,"players",state.currentChatPartner.uid,"inbox"), {
+    type:"new_message", fromUid: state.uid, fromUsername: state.profile.username, ts: Date.now()
+  }).catch(()=>{});
 });
 /* Friend requests / accept notifications only ever write to the CURRENT
    user's own player doc — never to another player's — because the
@@ -2032,9 +2037,17 @@ function subscribeInbox(){
   const unsub = onSnapshot(q, snap=>{
     // Pop-up notification the instant a payment / auction sale lands
     // (the first snapshot is skipped; the welcome-back recap covers those).
-    if(!inboxFirst) snap.docChanges().forEach(ch=>{
+    snap.docChanges().forEach(ch=>{
       if(ch.type!=="added") return;
       const n = ch.doc.data();
+      if(n.type==="new_message"){
+        const log = document.getElementById("chatLogPrivate");
+        const viewing = log && log.offsetParent!==null && state.currentChatPartner?.uid===n.fromUid;
+        if(!inboxFirst && !viewing) toast(`💬 ${n.fromUsername} sent you a new message`, 5000, "toast-money");
+        deleteDoc(ch.doc.ref).catch(()=>{});
+        return;
+      }
+      if(inboxFirst) return;
       if(n.type==="payment_received" && !n.credited){ toast(`💰 ${n.fromUsername} paid you $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
       else if(n.type==="auction_sold" && !n.credited){ toast(`🏷️ ${n.buyerName||"Someone"} bought your ${n.itemName} for $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
     });
@@ -2049,6 +2062,7 @@ function subscribeInbox(){
     list.innerHTML="";
     snap.forEach(d=>{
       const n = d.data();
+      if(n.type==="new_message") return;
       const li = document.createElement("li");
       if(n.type==="friend_request"){
         li.innerHTML = `<span>${escapeHTML(n.fromUsername)} wants to be friends</span>
@@ -2265,7 +2279,7 @@ document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
   try{
     const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
     const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
-    if(activeCount >= 5){ toast("You can only have 5 auction slots."); return; }
+    if(activeCount >= 10){ toast("You can only have 10 auction slots."); return; }
   }catch(err){ toast(friendlyFirebaseError(err)); return; }
   const entry = invExpanded().find(e=>e.itemId===itemId);
   if(!entry || entry.qty < qty){ toast("You don't have that many."); return; }
@@ -2501,8 +2515,8 @@ const INTENTS = {
   brace: { icon:"🛡️", label:"Brace",      tip:"Takes 60% less damage — set up a Focus, or use Precision." },
   drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." }
 };
-const INTENT_WEIGHTS = { easy:{attack:5,heavy:1,brace:2,drain:1}, medium:{attack:4,heavy:2,brace:2,drain:2}, hard:{attack:3,heavy:3,brace:2,drain:3} };
-const FEINT_CHANCE = { easy:0, medium:0.12, hard:0.25 };
+const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:1}, medium:{attack:4,heavy:2,brace:2,drain:2}, hard:{attack:3,heavy:3,brace:2,drain:2} };
+const FEINT_CHANCE = { easy:0.05, medium:0.12, hard:0.2 };
 const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
 function rollIntent(diff){
   const bag = Object.entries(INTENT_WEIGHTS[diff]).flatMap(([k,n])=>Array(n).fill(k));
@@ -2548,9 +2562,9 @@ function renderPve(){
   });
   add("Guard", "Take 65% less damage this turn and gain 2 Rage.", ()=>pveAct("guard"), false, "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), b.focus, "btn-blue");
-  add("Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints!", ()=>pveAct("counter"), false, "btn-blue");
+  add(b.lastMove==="counter" ? "Counter (recovering)" : "Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Ends your turn, and can't be used two turns in a row.", ()=>pveAct("counter"), b.lastMove==="counter", "btn-blue");
   const food = bestFood();
-  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Uses your turn.", ()=>pveAct("eat"), !food, "btn-green");
+  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), !food, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
 }
 function bestFood(){
@@ -2563,15 +2577,24 @@ async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
   b.busy = true;
   const p = state.profile, m = b.m, intent = b.actual, rnd = ()=>0.9+Math.random()*0.2;
+  if(move==="counter" && b.lastMove==="counter"){ toast("You can't Counter two turns in a row."); b.busy=false; return; }
+  // Eating is a free action: heal and stay on your turn (no enemy response).
+  if(move==="eat"){
+    const f = bestFood();
+    if(f){
+      const heal = Math.min(f.stats.heal, p.hpMax-b.php);
+      const ok = await changeInvQty(f.id,-1);
+      if(ok!==null){ b.php+=heal; battleLogPush(`You eat ${f.name}: +${heal} HP. (free action)`); }
+    }
+    b.busy=false; renderPve(); return;
+  }
+  b.lastMove = move;
   const brace = intent==="brace";
   let guard=false, counter=false;
   if(move==="guard"){ guard=true; b.rage=Math.min(p.rageMax,b.rage+2); battleLogPush("You raise your guard."); }
   else if(move==="counter"){ counter=true; battleLogPush("You ready a counter…"); }
   else if(move==="focus"){ b.focus=true; battleLogPush("You focus, gathering strength."); }
-  else if(move==="eat"){
-    const f = bestFood();
-    if(f){ const heal=Math.min(f.stats.heal, p.hpMax-b.php); b.php+=heal; await changeInvQty(f.id,-1); battleLogPush(`You eat ${f.name}: +${heal} HP.`); }
-  } else {
+  else {
     const s = attackSkillById(move);
     if(s.needsFullRage) b.rage = 0;
     if(s.manaCost) b.mana -= s.manaCost;
@@ -2784,16 +2807,16 @@ function renderDuelBattle(d){
     addBtn(s.id, s.name, s.desc, (s.needsFullRage && rage<pp.rageMax) || (s.manaCost && mana<s.manaCost), "btn-pink"));
   addBtn("guard", "Guard", "Take 65% less from their next hit and gain 2 Rage.", false, "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
-  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them.", false, "btn-blue");
+  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them. Ends your turn; can't be used twice in a row.", d[me+"Last"]==="counter", "btn-blue");
   const food = duelFood(d[me+"HpMax"] - myHp);
-  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory.", !food, "btn-green");
+  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", !food, "btn-green");
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
   fleeBtn.className = "doodle-btn btn-sm btn-yellow"; fleeBtn.textContent = "Flee";
   fleeBtn.addEventListener("click", ()=> duelFlee(d));
   actions.appendChild(fleeBtn);
 }
-const duelMoves = ()=> [...ATTACK_SKILLS.filter(s=>state.profile.level>=s.unlockLevel).map(s=>s.id), "guard","focus","counter","eat"];
+const duelMoves = ()=> [...ATTACK_SKILLS.filter(s=>state.profile.level>=s.unlockLevel).map(s=>s.id), "guard","focus","counter"];   // eating is a free action, not part of the once-per-cycle list
 function duelFood(missing){
   const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal).sort((a,c)=>a.stats.heal-c.stats.heal);
   return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
@@ -2803,9 +2826,15 @@ function duelFood(missing){
 async function duelAct(d, move){
   const b = state.battle; if(!b || b.mode!=="duel" || b.busy) return;
   if(d.turn !== state.uid){ toast("It's not your turn."); return; }
+  b.busy = true;   // lock immediately so a fast double-click can't fire a second action off stale room data
+  try{ await duelActInner(d, move); } finally { b.busy = false; }
+}
+async function duelActInner(d, move){
+  const b = state.battle;
   const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
   let used = [...(d[me+"Used"]||[])];
   if(duelMoves().every(m=>used.includes(m))) used = [];
+  if(move==="counter" && d[me+"Last"]==="counter"){ toast("You can't Counter two turns in a row."); return; }
   if(used.includes(move)){ toast("You already used that move — try another!"); return; }
   const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
   let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
@@ -2827,13 +2856,17 @@ async function duelAct(d, move){
     else { if(opFx.guard) dmg *= 0.35; dmg = Math.max(1,Math.round(dmg)); opHp -= dmg; lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`); }
   }
   opFx.guard = false; opFx.counter = false;   // their stance lasts one action of mine
-  const patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
-    [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Used"]:[...used, move], turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
-  if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
-  else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
-  b.busy = true;
+  let patch;
+  if(move==="eat"){
+    // free action: heal only, keep the turn, don't touch stances or the used list
+    patch = { [me+"Hp"]:Math.max(0,myHp), log:[...(d.log||[]), ...lines].slice(-60) };
+  } else {
+    patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
+      [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Used"]:[...used, move], [me+"Last"]:move, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
+    if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
+    else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
+  }
   const ok = await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), patch));
-  b.busy = false;
   if(ok!==null && eatId) changeInvQty(eatId, -1);
 }
 async function duelFlee(d){
