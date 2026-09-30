@@ -2782,9 +2782,8 @@ function renderDuelBattle(d){
   document.getElementById("battlePlayerHPBar").style.width = (100*Math.max(0,myHp)/myMax)+"%";
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,myHp)}/${myMax}`;
   const me = iAmHost ? "host" : "guest", pp = state.profile;
-  const usedNow = (()=>{ const u = d[me+"Used"]||[]; return duelMoves().every(m=>u.includes(m)) ? [] : u; })();
   const myFx = d[me+"Fx"]||{}, opFxNow = d[(iAmHost?"guest":"host")+"Fx"]||{};
-  document.getElementById("battleStaminaLabel").textContent = `Mana ${d[me+"Mana"] ?? pp.mana}/${pp.manaMax} · Moves left ${duelMoves().length-usedNow.length}` + (myFx.focus?" · 🎯 Focused":"") + (myFx.guard?" · 🛡️ Guarding":"") + (myFx.counter?" · ↩️ Countering":"") + (opFxNow.guard?" · Foe guarding":"") + (opFxNow.counter?" · Foe countering":"");
+  document.getElementById("battleStaminaLabel").textContent = `Mana ${d[me+"Mana"] ?? pp.mana}/${pp.manaMax} · One move per turn` + (myFx.focus?" · 🎯 Focused":"") + (myFx.guard?" · 🛡️ Guarding":"") + (myFx.counter?" · ↩️ Countering":"") + (opFxNow.guard?" · Foe guarding":"") + (opFxNow.counter?" · Foe countering":"");
   document.getElementById("battleRageLabel").textContent = `${d[me+"Rage"] ?? pp.rage}/${pp.rageMax}`;
   // The log is stored on the room doc itself (not local state) so both
   // players see the same "who did what" history, attributed by name.
@@ -2798,16 +2797,15 @@ function renderDuelBattle(d){
   const mana = d[me+"Mana"] ?? pp.mana, rage = d[me+"Rage"] ?? pp.rage;
   const addBtn = (id, label, tip, extraDis, cls)=>{
     const el = document.createElement("button");
-    const isUsed = usedNow.includes(id);
-    el.className = `doodle-btn btn-sm ${cls}`; el.textContent = isUsed ? `${label} ✓` : label; el.title = tip;
-    el.disabled = !isMyTurn || isUsed || myHp<=0 || oppHp<=0 || !!extraDis;
+    el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip;
+    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;
     el.addEventListener("click", ()=> duelAct(d, id)); actions.appendChild(el);
   };
   ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
     addBtn(s.id, s.name, s.desc, (s.needsFullRage && rage<pp.rageMax) || (s.manaCost && mana<s.manaCost), "btn-pink"));
   addBtn("guard", "Guard", "Take 65% less from their next hit and gain 2 Rage.", false, "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
-  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them. Ends your turn; can't be used twice in a row.", d[me+"Last"]==="counter", "btn-blue");
+  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them. Ends your turn.", false, "btn-blue");
   const food = duelFood(d[me+"HpMax"] - myHp);
   addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", !food, "btn-green");
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
@@ -2816,7 +2814,6 @@ function renderDuelBattle(d){
   fleeBtn.addEventListener("click", ()=> duelFlee(d));
   actions.appendChild(fleeBtn);
 }
-const duelMoves = ()=> [...ATTACK_SKILLS.filter(s=>state.profile.level>=s.unlockLevel).map(s=>s.id), "guard","focus","counter"];   // eating is a free action, not part of the once-per-cycle list
 function duelFood(missing){
   const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal).sort((a,c)=>a.stats.heal-c.stats.heal);
   return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
@@ -2832,10 +2829,6 @@ async function duelAct(d, move){
 async function duelActInner(d, move){
   const b = state.battle;
   const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
-  let used = [...(d[me+"Used"]||[])];
-  if(duelMoves().every(m=>used.includes(m))) used = [];
-  if(move==="counter" && d[me+"Last"]==="counter"){ toast("You can't Counter two turns in a row."); return; }
-  if(used.includes(move)){ toast("You already used that move — try another!"); return; }
   const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
   let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
   const myFx = { ...(d[me+"Fx"]||{}) }, opFx = { ...(d[op+"Fx"]||{}) }, lines = [], rnd = ()=>0.9+Math.random()*0.2;
@@ -2862,7 +2855,7 @@ async function duelActInner(d, move){
     patch = { [me+"Hp"]:Math.max(0,myHp), log:[...(d.log||[]), ...lines].slice(-60) };
   } else {
     patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
-      [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Used"]:[...used, move], [me+"Last"]:move, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
+      [me+"Fx"]:myFx, [op+"Fx"]:opFx, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
     if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
     else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
   }
