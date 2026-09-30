@@ -267,11 +267,12 @@ const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fi
  ["tool_fishingrod2","Sturdy Fishing Rod",150,"uncommon",10],["tool_fishingrod3","Iron Fishing Rod",400,"rare",25]]
  .forEach(([id,name,price,rarity,uses])=> JOB_ITEM_BANK.push({ id,name,type:"tool",rarity,price,sellPrice:Math.round(price/3),desc:`Breaks after ${uses} uses.`,stats:{} }));
 JOB_ITEM_BANK.push(
+ { id:"ore_coal", name:"Coal", type:"material", rarity:"common", sellPrice:4, desc:"Fuel for cooking and smelting.", stats:{} },
  { id:"forage_apple", name:"Wild Apple", type:"consumable", rarity:"uncommon", sellPrice:8, desc:"A crisp foraged apple.", stats:{} },
  { id:"forage_truffle", name:"Forest Truffle", type:"consumable", rarity:"rare", sellPrice:25, desc:"A prized foraged truffle.", stats:{} },
  { id:"forage_goldapple", name:"Golden Apple", type:"consumable", rarity:"legendary", sellPrice:100, desc:"Glows faintly. Restores a ton.", stats:{} });
 JOB_ITEM_BANK.filter(i=>i.id==="tool_pickaxe"||i.id==="tool_fishingrod").forEach(i=> i.desc+=" Breaks after 3 uses.");
-JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = HEAL_BY_RARITY[i.rarity]);
+JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = Math.round(HEAL_BY_RARITY[i.rarity]*(i.id.startsWith("fish_")?0.6:1)));
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
 
 /* ---------- procedural enemy bank: 4 regions x 3 difficulties x 10 = 120 ---------- */
@@ -793,7 +794,7 @@ function enterGame(){
     }
     if(firstSnapshot){
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      initBoss(); startManaRegen();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); showRecap(since); initBoss(); startManaRegen();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -803,7 +804,7 @@ function enterGame(){
   // Re-check every minute while the tab is open so regen still lands on
   // the hour even without a reload; catchUpHpRegen itself no-ops unless a
   // full hour has actually elapsed.
-  state.hpRegenInterval = setInterval(()=> catchUpHpRegen(state.profile), 15*1000);
+  // 1 HP/min now rides on the single per-minute heartbeat (startManaRegen)
 }
 function renderHUD(){
   const p = state.profile; if(!p) return;
@@ -1074,28 +1075,29 @@ document.querySelectorAll(".lb-cat").forEach(b=>{
     renderLeaderboard(b.dataset.cat);
   });
 });
+const LB_FIELDS = { money:"money", level:"level", kills:"monstersKilled", pvpkills:"kills", deaths:"deaths" };
+const LB_LABEL = { money:"💰", level:"⭐", kills:"👹", pvpkills:"⚔️", deaths:"💀" };
+const lbCache = {};
+async function getLb(cat){
+  const c = lbCache[cat]; if(c && Date.now()-c.t < 60000) return c.rows;
+  const snap = await getDocs(query(collection(db,"players"), orderBy(LB_FIELDS[cat],"desc"), limit(30)));
+  const rows = snap.docs.filter(d=>!d.data().banned).map(d=>({id:d.id, data:d.data()}));
+  lbCache[cat] = { t:Date.now(), rows }; return rows;
+}
 async function renderLeaderboard(cat){
-  const fieldMap = { money:"money", level:"level", kills:"monstersKilled", pvpkills:"kills", deaths:"deaths" };
-  const field = fieldMap[cat];
-  const list = document.getElementById("lbList");
+  const field = LB_FIELDS[cat], list = document.getElementById("lbList");
   list.innerHTML = "<li>Loading…</li>";
   try{
-    // fetch extra and filter out banned users client-side, since older
-    // player docs don't have a `banned` field for a where() filter to key on
-    const q = query(collection(db,"players"), orderBy(field,"desc"), limit(30));
-    const snap = await getDocs(q);
-    list.innerHTML="";
-    let rank = 0;
-    snap.docs.filter(d=>!d.data().banned).slice(0,10).forEach((d)=>{
-      rank++;
-      const data = d.data();
-      const li = document.createElement("li");
-      li.innerHTML = `<span>#${rank} ${data.username}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
-      li.addEventListener("click", ()=> openProfileBook(d.id, data, rank, cat));
+    const rows = (await getLb(cat)).slice(0,10);
+    list.innerHTML = "";
+    rows.forEach((r,i)=>{
+      const data = r.data, li = document.createElement("li");
+      li.innerHTML = `<span>#${i+1} ${escapeHTML(data.username)}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
+      li.addEventListener("click", ()=> openProfileBook(r.id, data, i+1, cat));
       list.appendChild(li);
     });
-    if(list.children.length===0) list.innerHTML="<li>No players yet.</li>";
-  }catch(e){ console.error(e); list.innerHTML="<li>Leaderboard unavailable right now.</li>"; }
+    if(!rows.length) list.innerHTML = "<li>No players yet.</li>";
+  }catch(e){ console.error(e); list.innerHTML = "<li>Leaderboard unavailable right now.</li>"; }
 }
 function openProfileBook(uid, data, rank, cat){
   document.getElementById("profileName").textContent = data.username;
@@ -1104,8 +1106,19 @@ function openProfileBook(uid, data, rank, cat){
     Money: $${fmtMoney(data.money||0)}<br>
     Monsters Killed: ${data.monstersKilled||0}<br>
     PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}<br>
-    Friends: ${(data.friends||[]).length} &middot; Followers: <span id="profileFollowerCount">…</span>`;
+    Friends: ${(data.friends||[]).length} &middot; Followers: <span id="profileFollowerCount">…</span><br>
+    Playtime: ${fmtPlaytime(data.playtime||0)}<div class="lb-bubbles" id="lbBubbles"></div>`;
   document.getElementById("profileRank").textContent = rank? `Ranked #${rank} in ${cat}` : "";
+  const card = document.querySelector("#profileModal .book-card");
+  card.style.background = ELEMENTS[data.archetype]?.color || "";
+  Promise.all(Object.keys(LB_FIELDS).map(getLb)).then(all=>{
+    const box = document.getElementById("lbBubbles"); if(!box) return;
+    box.innerHTML = Object.keys(LB_FIELDS).map((c,i)=>{ const pos = all[i].findIndex(r=>r.id===uid); return `<span class="lb-bubble${pos>=0&&pos<3?" top":""}" title="${c}">${LB_LABEL[c]} ${pos>=0?"#"+(pos+1):"30+"}</span>`; }).join("");
+  }).catch(()=>{});
+  const payBox = document.getElementById("payBox");
+  payBox.style.display = uid===state.uid ? "none" : "";
+  document.getElementById("payAmount").value = "";
+  document.getElementById("btnPay").onclick = async ()=>{ if(await payPlayer(uid, data.username, Number(document.getElementById("payAmount").value))) document.getElementById("payAmount").value=""; };
   // Followers = friends + people who have a pending friend request out to
   // this player (i.e. anyone whose own sentFriendRequests contains them).
   computeFollowerCount(uid, (data.friends||[]).length).then(count=>{
@@ -1496,8 +1509,8 @@ async function doMineAction(){
   let msg;
   const updates = { mineHourStart: hourStart, minePicksThisHour: picks+1, miningXp: (p.miningXp||0)+1 };
   if(roll < 0.4){ // good
-    const pool = ["ore_copper","ore_iron","gem_quartz","gem_ruby","money"];
-    const w = [0.35,0.3,0.2,0.08,0.07];
+    const pool = ["ore_copper","ore_iron","gem_quartz","gem_ruby","money","ore_coal"];
+    const w = [0.22,0.18,0.14,0.05,0.06,0.35];
     let r = Math.random(), pick=pool[0], acc=0;
     for(let i=0;i<pool.length;i++){ acc+=w[i]; if(r<=acc){ pick=pool[i]; break; } }
     if(pick==="money"){
@@ -1509,7 +1522,7 @@ async function doMineAction(){
       msg = `Found a ${ITEM_BY_ID[pick].name}!`;
     }
   } else if(roll < 0.75){ // neutral
-    const pool = ["ore_copper","forage_mushroom"];
+    const pool = ["ore_copper","ore_coal","ore_coal","forage_mushroom"];
     const pick = pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
     msg = `Just some ${ITEM_BY_ID[pick].name}.`;
@@ -1933,7 +1946,7 @@ function subscribeInbox(){
       const total = uncredited.reduce((sum,d)=> sum + (d.data().amount||0), 0);
       withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) + total }));
       uncredited.filter(d=>d.data().type==="duel_won" && d.data().itemName).forEach(d=>{
-        const item = ITEM_BANK.find(i=>i.name===d.data().itemName);
+        const item = Object.values(ITEM_BY_ID).find(i=>i.name===d.data().itemName);
         if(item) addItemToInv(item.id, 1);
       });
       uncredited.forEach(d=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid,"inbox",d.id), { credited:true })));
@@ -2188,69 +2201,90 @@ async function renderMySlots(){
   }catch(err){ toast(friendlyFirebaseError(err)); }
 }
 
-/* --- crafting --- */
-function renderCraftInv(){
-  const grid = document.getElementById("craftInvGrid");
-  grid.innerHTML="";
-  invExpanded().forEach(e=>{
-    const cell = document.createElement("div");
-    cell.className="inv-cell rarity-"+e.item.rarity;
-    cell.innerHTML = `<div>${e.item.name}</div><span class="qty-badge">x${e.qty}</span>`;
-    cell.addEventListener("click", ()=> assignCraftSlot(e));
-    grid.appendChild(cell);
-  });
-}
-function assignCraftSlot(entry){
-  // Block picking the same stack into both slots unless there are at
-  // least 2 of it — otherwise you'd be "spending" one copy twice.
-  const other = !state.craftA ? state.craftB : (!state.craftB ? state.craftA : null);
-  if(other && other.item.id===entry.item.id && entry.qty<2){
-    toast(`You only have 1 ${entry.item.name} — can't use it in both slots.`);
-    return;
+/* --- crafting: recipe book (banners you scroll; pick one, confirm with CRAFT) --- */
+const RECIPES = [];
+(function buildRecipes(){
+  const I = ITEM_BY_ID;
+  const add = (id, name, type, rarity, extra, ing)=>{
+    if(!I[id]){
+      const sell = Math.max(1, Math.round(ing.reduce((s,[iid,q])=> s+(I[iid]?.sellPrice||3)*q, 0)*1.3));
+      I[id] = { id, name, type, rarity, price:sell*3, sellPrice:sell, desc:"Crafted.", stats:{}, ...extra };
+    }
+    RECIPES.push({ id:"rc_"+id, out:id, ing });
+  };
+  // coal-fired basics
+  add("ing_copper","Copper Ingot","material","common",{desc:"Smelted copper."},[["ore_copper",2],["ore_coal",1]]);
+  add("ing_iron","Iron Ingot","material","uncommon",{desc:"Smelted iron."},[["ore_iron",2],["ore_coal",1]]);
+  add("ing_bronze","Bronze Ingot","material","uncommon",{desc:"Copper and iron alloy."},[["ore_copper",2],["ore_iron",1],["ore_coal",1]]);
+  add("ing_steel","Steel Ingot","material","rare",{desc:"Hardened steel."},[["ing_iron",2],["ore_coal",2]]);
+  add("gem_quartz_cut","Polished Quartz","material","rare",{desc:"A cut gem."},[["gem_quartz",2]]);
+  add("gem_ruby_cut","Cut Ruby","material","epic",{desc:"A flawless cut gem."},[["gem_ruby",2]]);
+  // cooked fish: 1 fish + 1 coal
+  ["fish_minnow","fish_bass","fish_trout","fish_swordfish","fish_golden"].forEach(f=>
+    add("cooked_"+f, "Cooked "+I[f].name, "consumable", I[f].rarity, { stats:{heal:HEAL_BY_RARITY[I[f].rarity]}, desc:"Grilled over coal. Heals well." }, [[f,1],["ore_coal",1]]));
+  // roasted forage
+  ["forage_berry","forage_mushroom","forage_herb","forage_apple","forage_truffle","forage_goldapple"].forEach(f=>
+    add("roast_"+f, "Roasted "+I[f].name.replace(/^Wild |^Healing |^Forest /,""), "consumable", I[f].rarity, { stats:{heal:HEAL_BY_RARITY[I[f].rarity]}, desc:"Roasted over coal." }, [[f,1],["ore_coal",1]]));
+  // dishes: every pair of edible ingredients
+  const edible = ["forage_berry","forage_mushroom","forage_herb","forage_apple","forage_truffle","forage_goldapple","fish_minnow","fish_bass","fish_trout","fish_swordfish","fish_golden"];
+  const short = id=> I[id].name.replace(/^Wild |^Healing |^Forest /,"");
+  const sfx = ["Stew","Skewer","Pie","Soup","Salad","Roast"]; let n=0;
+  for(let i=0;i<edible.length;i++) for(let j=i+1;j<edible.length;j++){
+    const a=edible[i], b=edible[j];
+    const rarity = RARITIES[Math.max(RARITIES.indexOf(I[a].rarity), RARITIES.indexOf(I[b].rarity))];
+    add(`dish_${a}_${b}`, `${short(a)} & ${short(b)} ${sfx[n++%6]}`, "consumable", rarity, { stats:{heal:HEAL_BY_RARITY[rarity]}, desc:"A hearty homemade dish." }, [[a,1],[b,1]]);
   }
-  if(!state.craftA){ state.craftA = entry; document.getElementById("craftSlotA").textContent = entry.item.name; document.getElementById("craftSlotA").classList.add("filled"); }
-  else if(!state.craftB){ state.craftB = entry; document.getElementById("craftSlotB").textContent = entry.item.name; document.getElementById("craftSlotB").classList.add("filled"); }
-  previewCraftResult();
-}
-document.querySelectorAll(".craft-slot[data-craft]").forEach(slot=>{
-  slot.addEventListener("click", ()=>{
-    if(slot.dataset.craft==="A"){ state.craftA=null; slot.textContent="Slot A"; slot.classList.remove("filled"); }
-    else { state.craftB=null; slot.textContent="Slot B"; slot.classList.remove("filled"); }
-    previewCraftResult();
+  // gear tiers
+  const tiers = [["Copper","ing_copper","common","SPEED"],["Bronze","ing_bronze","uncommon","STRENGTH"],["Iron","ing_iron","uncommon","STRENGTH"],
+                 ["Quartz","gem_quartz_cut","rare","SMARTS"],["Steel","ing_steel","rare","STRENGTH"],["Ruby","gem_ruby_cut","epic","CHARM"]];
+  const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
+  const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
+  tiers.forEach(([t,mat,rar,stat])=>{
+    const m = RARITY_MULT[rar], k = t.toLowerCase();
+    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, { stats:{attack:Math.round(3*m)+2+(i%3)}, desc:`A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.` }, [[mat,2+(i%2)],["ore_coal",1]]));
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:{defense:Math.round(2*m)+1, hp:Math.round(4*m)}, desc:`Sturdy ${t.toLowerCase()} protection.` }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m)), curse:false}, desc:`A ${t.toLowerCase()} ring boosting ${stat}.` }, [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m))+1, curse:false}, desc:`A ${t.toLowerCase()} amulet boosting ${stat}.` }, [[mat,2],["forage_herb",2]]);
   });
-});
-function previewCraftResult(){
-  const result = document.getElementById("craftResult");
-  result.textContent = (state.craftA && state.craftB) ? "Ready to craft!" : "?";
+  // tools
+  [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
+  [["tool_fishingrod","ing_copper"],["tool_fishingrod2","ing_iron"],["tool_fishingrod3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,1],["forage_herb",2]]));
+})();
+const haveQty = id=> (state.profile.inventory||[]).find(e=>e.itemId===id)?.qty||0;
+const canCraft = r=> r.ing.every(([id,q])=> haveQty(id)>=q);
+function renderCraftInv(){
+  const p = state.profile; if(!p) return;
+  const owned = invExpanded().map(e=>e.item.id), disc = new Set(p.discovered||[]);
+  const fresh = owned.filter(id=>!disc.has(id));
+  if(fresh.length){ fresh.forEach(id=>disc.add(id)); updateDoc(doc(db,"players",state.uid), { discovered: arrayUnion(...fresh) }).catch(()=>{}); }
+  const unlocked = RECIPES.filter(r=> r.ing.every(([id])=> disc.has(id)));
+  unlocked.sort((a,b)=> canCraft(b)-canCraft(a));
+  document.getElementById("recipeCount").textContent = `${unlocked.length} / ${RECIPES.length} recipes discovered`;
+  const list = document.getElementById("recipeList"); list.innerHTML = "";
+  unlocked.forEach(r=>{
+    const it = ITEM_BY_ID[r.out], ok = canCraft(r);
+    const el = document.createElement("div");
+    el.className = `recipe-banner rarity-${it.rarity}` + (ok?" can":"") + (state.selRecipe===r.id?" sel":"");
+    el.innerHTML = `<b>${it.name}</b><span>${r.ing.map(([id,q])=>`${q}x ${ITEM_BY_ID[id].name}`).join(" + ")}</span>`;
+    el.addEventListener("click", ()=>{ state.selRecipe=r.id; renderCraftInv(); });
+    list.appendChild(el);
+  });
+  const sel = RECIPES.find(r=>r.id===state.selRecipe), det = document.getElementById("recipeDetail"), btn = document.getElementById("btnCraft");
+  if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
+  const it = ITEM_BY_ID[sel.out], st = it.stats||{};
+  const eff = st.heal?`Heals ${st.heal} HP`: st.attack?`+${st.attack} attack`: st.defense?`+${st.defense} defense, +${st.hp||0} HP`: Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
+  det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p>` +
+    sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
+  btn.disabled = !canCraft(sel);
 }
 document.getElementById("btnCraft").addEventListener("click", async ()=>{
-  if(!state.craftA || !state.craftB){ toast("Choose two items first."); return; }
-  const a = state.craftA.item, b = state.craftB.item;
-  let resultItem;
-  if(a.type==="material" && b.type!=="material") resultItem = upgradeItem(b);
-  else if(b.type==="material" && a.type!=="material") resultItem = upgradeItem(a);
-  else {
-    const pool = ITEM_BANK.filter(i=> i.type===(a.type==="material"?"material":a.type));
-    resultItem = pool[Math.floor(Math.random()*pool.length)];
-  }
-  // Both ingredients removed and the result added in ONE write — see
-  // applyInvChanges() for why this has to be atomic.
-  await applyInvChanges({
-    remove:[{itemId:a.id, qty:1}, {itemId:b.id, qty:1}],
-    add:[{itemId:resultItem.id, qty:1}]
-  });
-  toast(`Crafted ${resultItem.name}!`);
-  state.craftA=null; state.craftB=null;
-  document.getElementById("craftSlotA").textContent="Slot A"; document.getElementById("craftSlotA").classList.remove("filled");
-  document.getElementById("craftSlotB").textContent="Slot B"; document.getElementById("craftSlotB").classList.remove("filled");
-  previewCraftResult();
+  const r = RECIPES.find(x=>x.id===state.selRecipe); if(!r) return;
+  if(!canCraft(r)){ toast("You're missing ingredients."); return; }
+  const ok = await applyInvChanges({ remove:r.ing.map(([itemId,qty])=>({itemId,qty})), add:[{itemId:r.out, qty:1}] });
+  if(ok===null) return;
+  toast(`Crafted ${ITEM_BY_ID[r.out].name}!`);
   renderCraftInv();
 });
-function upgradeItem(item){
-  const idx = RARITIES.indexOf(item.rarity);
-  const nextRarity = RARITIES[Math.min(RARITIES.length-1, idx+1)];
-  return ITEM_BANK.find(i=>i.type===item.type && i.rarity===nextRarity) || item;
-}
 
 /* =========================================================================
    BATTLE: PvE
@@ -2295,12 +2329,11 @@ let manaRegenInterval=null;
 function startManaRegen(){
   if(manaRegenInterval) clearInterval(manaRegenInterval);
   manaRegenInterval = setInterval(()=>{
-    const p = state.profile;
-    if(!p) return;
-    if((p.mana||0) >= (p.manaMax||0)) return;
-    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-      mana: Math.min(p.manaMax, (p.mana||0)+1)
-    }));
+    const p = state.profile; if(!p) return;
+    const u = { playtime:(p.playtime||0)+60, lastSeen:Date.now() };
+    if((p.mana||0) < (p.manaMax||0)) u.mana = (p.mana||0)+1;
+    if((p.hp||0) < (p.hpMax||0)){ u.hp = Math.min(p.hpMax, p.hp+1); u.lastHpRegenTs = Date.now(); }
+    updateDoc(doc(db,"players",state.uid), u).catch(()=>{});
   }, 60000);
 }
 function stopManaRegen(){ if(manaRegenInterval){ clearInterval(manaRegenInterval); manaRegenInterval=null; } }
@@ -2726,6 +2759,83 @@ async function joinQueue(){
   );
 }
 
+/* --- playtime, players list, leaderboard cache, pay, recap --- */
+function fmtPlaytime(sec){
+  sec = Math.floor(sec||0);
+  if(sec < 3600) return `${Math.floor(sec/60)}m ${sec%60}s`;
+  if(sec < 86400) return `${Math.floor(sec/3600)}h ${Math.floor(sec%3600/60)}m`;
+  return `${Math.floor(sec/86400)}d ${Math.floor(sec%86400/3600)}h`;
+}
+let playersCache = { t:0, rows:[] };
+async function loadPlayers(){
+  if(Date.now()-playersCache.t < 60000) return playersCache.rows;
+  const snap = await getDocs(query(collection(db,"players"), limit(300)));
+  playersCache = { t:Date.now(), rows: snap.docs.filter(d=>!d.data().banned && d.id!==state.uid).map(d=>({id:d.id, data:d.data()})) };
+  return playersCache.rows;
+}
+async function renderPlayerList(){
+  const list = document.getElementById("playerList"), q = document.getElementById("playerSearch").value.trim().toLowerCase();
+  list.innerHTML = "<p class='doodle-sub'>Loading…</p>";
+  try{
+    const friends = new Set(state.profile.friends||[]);
+    const rows = (await loadPlayers()).filter(r=> !q || (r.data.username||"").toLowerCase().includes(q))
+      .sort((a,b)=> (friends.has(b.id)-friends.has(a.id)) || (b.data.level||0)-(a.data.level||0));
+    list.innerHTML = rows.length ? "" : "<p class='doodle-sub'>No players found.</p>";
+    rows.forEach(r=>{
+      const d = r.data, el = document.createElement("div");
+      el.className = "player-card"; el.style.background = ELEMENTS[d.archetype]?.color || "#FFFDF7";
+      el.innerHTML = `<b>${escapeHTML(d.username)}</b><span>Lv.${d.level||1} ${ELEMENTS[d.archetype]?.name||""} ${CLASSES[d.klass]?.name||""}</span>${friends.has(r.id)?"<em>★ Friend</em>":""}`;
+      el.addEventListener("click", ()=> openProfileBook(r.id, d, null, null));
+      list.appendChild(el);
+    });
+  }catch(e){ list.innerHTML = "<p class='doodle-sub'>Couldn't load players.</p>"; }
+}
+document.getElementById("playerSearch").addEventListener("input", ()=>{ clearTimeout(renderPlayerList._t); renderPlayerList._t = setTimeout(renderPlayerList, 200); });
+document.querySelector('[data-jtab="players"]').addEventListener("click", renderPlayerList);
+
+async function payPlayer(uid, username, amount){
+  amount = Math.floor(amount);
+  if(!(amount>0)){ toast("Enter an amount."); return false; }
+  if(amount > (state.profile.money||0)){ toast("You don't have that much money."); return false; }
+  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) - amount }));
+  if(ok===null) return false;
+  await withErrorToast(()=> addDoc(collection(db,"players",uid,"inbox"), { type:"payment_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false }));
+  toast(`Paid $${fmtMoney(amount)} to ${username}.`);
+  return true;
+}
+async function showRecap(since){
+  if(!since || Date.now()-since < 60000) return;
+  let sold=0, soldN=0, paid=0, paidN=0, fr=0, dms=0;
+  try{
+    const ib = await getDocs(query(collection(db,"players",state.uid,"inbox"), where("ts",">",since)));
+    ib.forEach(d=>{ const n=d.data();
+      if(n.type==="auction_sold"){ sold+=n.amount||0; soldN++; }
+      else if(n.type==="payment_received"){ paid+=n.amount||0; paidN++; }
+      else if(n.type==="friend_request") fr++; });
+    const uids = [...new Set([...(state.profile.friends||[]), ...Object.keys(state.pmContactsExtra)])];
+    const counts = await Promise.all(uids.map(u=> getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,u),"messages"), where("ts",">",since))).then(s=>s.docs.filter(d=>d.data().uid!==state.uid).length).catch(()=>0)));
+    dms = counts.reduce((a,b)=>a+b,0);
+  }catch(e){ console.error(e); }
+  document.getElementById("recapBody").innerHTML = `
+    <p class="recap-away">You were away for ${fmtPlaytime((Date.now()-since)/1000)}</p>
+    <div class="recap-grid">
+      <div><span>🏷️</span><b>$${fmtMoney(sold)}</b><small>earned from the auction (${soldN} sale${soldN===1?"":"s"})</small></div>
+      <div><span>💰</span><b>$${fmtMoney(paid)}</b><small>paid to you (${paidN} payment${paidN===1?"":"s"})</small></div>
+      <div><span>🤝</span><b>${fr}</b><small>friend request${fr===1?"":"s"}</small></div>
+      <div><span>💬</span><b>${dms}</b><small>new private message${dms===1?"":"s"}</small></div>
+    </div>`;
+  openModal("recapModal");
+}
+document.getElementById("btnRecapOk").addEventListener("click", ()=> closeModal("recapModal"));
+document.querySelectorAll("[data-pay]").forEach(b=> b.addEventListener("click", ()=>{
+  const inp = document.getElementById("payAmount");
+  inp.value = Math.min(state.profile.money||0, (Number(inp.value)||0) + Number(b.dataset.pay));
+}));
+document.getElementById("payAmount").addEventListener("input", (e)=>{
+  const v = Math.floor(Number(e.target.value)||0);
+  e.target.value = v>0 ? Math.min(v, state.profile.money||0) : "";
+});
+
 /* =========================================================================
    SETTINGS
    ========================================================================= */
@@ -2753,27 +2863,29 @@ function renderBoss(){
   document.getElementById("bossFill").style.width = (100*Math.max(0,bossHp)/BOSS_MAX)+"%";
   document.getElementById("bossNum").textContent = bossHp<=0 ? "DEFEATED — it stirs again soon…" : `${fmtBig(bossHp)} / ${fmtBig(BOSS_MAX)}`;
 }
+let bossPoll=null;
+async function pollBoss(){
+  if(document.hidden) return;
+  const s = await getDoc(bossRef()).catch(()=>null);
+  if(!s || !s.exists()) return;
+  bossHp = s.data().hp - bossPending; renderBoss();
+  if(s.data().hp<=0 && !bossResetTimer) bossResetTimer = setTimeout(async ()=>{
+    bossResetTimer=null;
+    await runTransaction(db, async tx=>{ const c=await tx.get(bossRef()); if(c.data().hp<=0) tx.update(bossRef(),{hp:BOSS_MAX}); }).catch(()=>{});
+  }, 6000);
+}
 async function initBoss(){
   bossCleanup();
   const snap = await getDoc(bossRef()).catch(()=>null);
   if(snap && !snap.exists()) await setDoc(bossRef(), { hp:BOSS_MAX, hpMax:BOSS_MAX }).catch(()=>{});
-  bossUnsub = onSnapshot(bossRef(), s=>{
-    if(!s.exists()) return;
-    bossHp = s.data().hp - bossPending; renderBoss();
-    if(s.data().hp<=0 && !bossResetTimer) bossResetTimer = setTimeout(async ()=>{
-      bossResetTimer=null;
-      await runTransaction(db, async tx=>{ const c=await tx.get(bossRef()); if(c.data().hp<=0) tx.update(bossRef(),{hp:BOSS_MAX}); }).catch(()=>{});
-    }, 6000);
-  }, err=> toast(friendlyFirebaseError(err)));
-  rxUnsub = onSnapshot(query(collection(db,"reactions"), orderBy("ts","desc"), limit(20)), snap=>{
-    snap.docChanges().forEach(c=>{
-      const r = c.doc.data();
-      if(c.type==="added" && Date.now()-r.ts < 4000) spawnReaction(r);
-    });
+  pollBoss(); bossPoll = setInterval(pollBoss, 5000);   // live bar refreshes every 5s (was a live listener)
+  rxUnsub = onSnapshot(query(collection(db,"reactions"), where("ts",">",Date.now()-3000)), snap=>{
+    snap.docChanges().forEach(c=>{ if(c.type==="added" && Date.now()-c.doc.data().ts < 4000) spawnReaction(c.doc.data()); });
   }, ()=>{});
 }
 function bossCleanup(){
-  if(bossUnsub){ bossUnsub(); bossUnsub=null; } if(rxUnsub){ rxUnsub(); rxUnsub=null; }
+  if(bossPoll){ clearInterval(bossPoll); bossPoll=null; }
+  if(rxUnsub){ rxUnsub(); rxUnsub=null; }
   if(bossTimer){ clearTimeout(bossTimer); bossTimer=null; }
 }
 async function flushBoss(){
@@ -2796,12 +2908,13 @@ document.getElementById("bossDragon").addEventListener("click", (e)=>{
   n.style.left = (e.clientX-r.left)+"px"; n.style.top = (e.clientY-r.top)+"px";
   document.getElementById("reactionLayer").appendChild(n); setTimeout(()=>n.remove(), 900);
   playSfx("attack");
-  if(!bossTimer) bossTimer = setTimeout(flushBoss, 600);
+  if(!bossTimer) bossTimer = setTimeout(flushBoss, 3000);
 });
 const RX_EMOJI = ["❤️","⚔️","🔥","😭"];
 document.querySelectorAll("[data-rx]").forEach(btn=> btn.addEventListener("click", async ()=>{
-  if(!state.profile || !RX_EMOJI.includes(btn.dataset.rx) || Date.now()-lastRx < 500) return;
+  if(!state.profile || !RX_EMOJI.includes(btn.dataset.rx) || Date.now()-lastRx < 3000) return;
   lastRx = Date.now();
+  const all = document.querySelectorAll("[data-rx]"); all.forEach(b=>b.disabled=true); setTimeout(()=>all.forEach(b=>b.disabled=false), 3000);
   const ref = await withErrorToast(()=> addDoc(collection(db,"reactions"), { uid:state.uid, username:state.profile.username, emoji:btn.dataset.rx, ts:Date.now() }));
   if(ref) setTimeout(()=> deleteDoc(ref).catch(()=>{}), 6000);
 }));
@@ -2812,6 +2925,7 @@ function spawnReaction(r){
   el.append(e,u); el.style.left = (15+Math.random()*70)+"%";
   document.getElementById("reactionLayer").appendChild(el); setTimeout(()=>el.remove(), 2200);
 }
+window.addEventListener("pagehide", ()=>{ if(bossPending) flushBoss(); });
 document.getElementById("btnLeaveQueue").addEventListener("click", cancelQueue);
 
 setupDragonAnim();

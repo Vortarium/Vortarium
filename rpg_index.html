@@ -173,6 +173,7 @@
     <div class="tab-row">
       <button class="tab-btn active" data-jtab="inventory">Inventory</button>
       <button class="tab-btn" data-jtab="leaderboard">Leaderboard</button>
+      <button class="tab-btn" data-jtab="players">Friends</button>
       <button class="tab-btn" data-jtab="quests">Sidequests</button>
     </div>
 
@@ -205,6 +206,11 @@
       <ol class="lb-list" id="lbList"></ol>
     </div>
 
+    <div class="jtab-page" id="jtab-players">
+      <input type="text" id="playerSearch" class="player-search" placeholder="Search players…" autocomplete="off">
+      <div class="player-list" id="playerList"></div>
+    </div>
+
     <div class="jtab-page" id="jtab-quests">
       <ul class="quest-list" id="questList"></ul>
     </div>
@@ -218,6 +224,11 @@
     <h2 class="doodle-h2" id="profileName">Player</h2>
     <div class="profile-stats" id="profileStats"></div>
     <p class="profile-rank" id="profileRank"></p>
+    <div class="pay-box" id="payBox">
+      <input type="number" id="payAmount" min="1" placeholder="Amount to pay">
+      <div class="pay-quick"><button class="doodle-btn btn-sm" data-pay="1">+1</button><button class="doodle-btn btn-sm" data-pay="10">+10</button><button class="doodle-btn btn-sm" data-pay="100">+100</button><button class="doodle-btn btn-sm" data-pay="1000">+1000</button></div>
+      <button class="doodle-btn btn-green btn-sm" id="btnPay">Pay</button>
+    </div>
     <button class="doodle-btn btn-pink" id="btnPM">Private Message</button>
     <button class="doodle-btn btn-blue" id="btnFriendReq">Add Friend</button>
     <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
@@ -231,12 +242,11 @@
     <div class="tab-row wrap">
       <button class="tab-btn active" data-ctab="map">Map</button>
       <button class="tab-btn" data-ctab="jobs">Jobs</button>
-      <button class="tab-btn" data-ctab="monsters">Monsters</button>
       <button class="tab-btn" data-ctab="shop">Shop</button>
       <button class="tab-btn" data-ctab="chat">Chat</button>
       <button class="tab-btn" data-ctab="auction">Auction</button>
       <button class="tab-btn" data-ctab="craft">Craft</button>
-      <button class="tab-btn" data-ctab="duel">Duel</button>
+      <button class="tab-btn" data-ctab="duel">Battle</button>
     </div>
 
     <div class="ctab-page active" id="ctab-map">
@@ -252,15 +262,6 @@
       </div>
       <div class="doodle-panel" id="jobToolStatus"></div>
       <p class="doodle-sub" id="jobLog"></p>
-    </div>
-
-    <div class="ctab-page" id="ctab-monsters">
-      <p class="doodle-sub">Turn-based fights in your current region. Read the monster's intent, then pick your move — Guard, Counter, Focus, skills or food. Fleeing costs nothing.</p>
-      <div class="job-row">
-        <button class="doodle-btn btn-lg btn-green" data-pve="easy">Easy</button>
-        <button class="doodle-btn btn-lg btn-yellow" data-pve="medium">Medium</button>
-        <button class="doodle-btn btn-lg btn-danger" data-pve="hard">Hard</button>
-      </div>
     </div>
 
     <div class="ctab-page" id="ctab-shop">
@@ -332,7 +333,13 @@
     </div>
 
     <div class="ctab-page" id="ctab-duel">
-      <p class="doodle-sub">Duels are separate from the open world — challenge a specific friend directly.</p>
+      <p class="doodle-sub">Fight monsters — read their intent, then pick your move. Fleeing costs nothing.</p>
+      <div class="job-row">
+        <button class="doodle-btn btn-lg btn-green" data-pve="easy">Easy</button>
+        <button class="doodle-btn btn-lg btn-yellow" data-pve="medium">Medium</button>
+        <button class="doodle-btn btn-lg btn-danger" data-pve="hard">Hard</button>
+      </div>
+      <p class="doodle-sub">Duels — challenge a friend or queue for a random opponent.</p>
       <div class="battle-choice-grid">
         <button class="doodle-btn btn-lg btn-blue" id="btnFightFriend">Challenge a Friend</button>
       </div>
@@ -340,17 +347,20 @@
     </div>
 
     <div class="ctab-page" id="ctab-craft">
-      <p class="doodle-sub">Combine two items, or upgrade a piece with a material.</p>
-      <div class="craft-slots">
-        <div class="craft-slot" id="craftSlotA" data-craft="A">Slot A</div>
-        <span class="craft-plus">+</span>
-        <div class="craft-slot" id="craftSlotB" data-craft="B">Slot B</div>
-        <span class="craft-eq">=</span>
-        <div class="craft-slot craft-result" id="craftResult">?</div>
-      </div>
-      <button class="doodle-btn btn-green" id="btnCraft">Craft</button>
-      <div class="inv-grid" id="craftInvGrid"></div>
+      <p class="doodle-sub">Choose a recipe, then press CRAFT. Gather more goods to discover more recipes. <span id="recipeCount"></span></p>
+      <div class="recipe-list" id="recipeList"></div>
+      <div class="recipe-detail doodle-panel" id="recipeDetail">Pick a recipe above.</div>
+      <button class="doodle-btn btn-green btn-lg" id="btnCraft" disabled>CRAFT</button>
     </div>
+  </div>
+</div>
+
+<!-- ================= WELCOME BACK RECAP ================= -->
+<div id="recapModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel recap-card">
+    <h2 class="doodle-h2">Welcome Back!</h2>
+    <div id="recapBody"></div>
+    <button class="doodle-btn btn-green btn-lg" id="btnRecapOk">OK</button>
   </div>
 </div>
 
