@@ -198,7 +198,10 @@ function buildItemBank(){
     const rnd = seededRand(1000 + ITEM_TYPES.indexOf(type));
     for(let i=0;i<96;i++){
       const prefix = PREFIXES[i % PREFIXES.length];
-      const base = BASE_NAMES[type][i % BASE_NAMES[type].length];
+      // (prefix, base) pair is unique for all 96 items of a type: the base name is
+      // shifted by 3 for every full cycle of the 24 prefixes.
+      const nb = BASE_NAMES[type].length;
+      const base = BASE_NAMES[type][(i % nb + 3*Math.floor(i/PREFIXES.length)) % nb];
       const rarity = RARITIES[Math.min(4, Math.floor(rnd()*rnd()*5))];
       const elementKeys = Object.keys(ELEMENTS);
       const element = elementKeys[i % 4];
@@ -793,7 +796,7 @@ function enterGame(){
     const prevRegion = state.profile?.region;
     state.profile = snap.data();
     renderHUD();
-    refreshDmReceipt();
+    refreshDmReceipt(); syncNotifBoxes();
     if(document.getElementById("journalModal").classList.contains("active")) renderInventory();
     // Keep music in sync with whatever region is actually on the player
     // doc — on first load (including re-signing in mid-session) and any
@@ -804,7 +807,7 @@ function enterGame(){
     }
     if(firstSnapshot){
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -1448,40 +1451,48 @@ function renderRegionGrid(){
    (food/potion) and 2 materials — reshuffled once per day per region, but
    stable across re-renders/reloads on the same day (seeded by date+region
    so it doesn't change every time the shop is opened). */
-function shopItemsForRegion(){
-  const p = state.profile;
-  const region = REGIONS[p.region];
-  const own = ITEM_BANK.filter(i => i.element === region.element);
-  const day = new Date().toISOString().slice(0,10);
-  const seedStr = day + p.region;
-  const seed = [...seedStr].reduce((a,c)=>a+c.charCodeAt(0),0) + 7000;
-  const rnd = seededRand(seed);
-  const pickTwo = (type) => {
-    const pool = own.filter(i => i.type===type);
-    const picked = [];
-    const used = new Set();
-    while(picked.length < 2 && picked.length < pool.length){
-      const idx = Math.floor(rnd()*pool.length);
-      if(used.has(idx)) continue;
-      used.add(idx); picked.push(pool[idx]);
+const SHOP_TYPES = ["weapon","armor","trinket","consumable","material"];
+const dayIndex = ()=>{ const d=new Date(); return Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000); };
+const shufflePools = {};
+function shuffledPool(element, type){
+  const key = element+"|"+type;
+  if(!shufflePools[key]){
+    const pool = ITEM_BANK.filter(i=>i.element===element && i.type===type);
+    const rnd = seededRand([...key].reduce((a,ch)=>a*31+ch.charCodeAt(0),7) + 4242);
+    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    shufflePools[key] = pool;
+  }
+  return shufflePools[key];
+}
+// Each region walks its own fixed shuffled list 2 items per type per day, so
+// today's stock never overlaps yesterday's, and every item gets its turn before
+// anything comes back around. Names are also kept unique across all 4 shops per day.
+let shopStockCache = { day:-1, stock:null };
+function shopStock(){
+  const day = dayIndex();
+  if(shopStockCache.day===day) return shopStockCache.stock;
+  const used = new Set(), stock = {};
+  for(const region of Object.keys(REGIONS)){
+    const items = [];
+    for(const type of SHOP_TYPES){
+      const pool = shuffledPool(REGIONS[region].element, type);
+      if(!pool.length) continue;
+      const start = (day*2) % pool.length;
+      let picked = 0;
+      for(let step=0; step<pool.length && picked<2; step++){
+        const it = pool[(start+step)%pool.length];
+        if(used.has(it.name)) continue;
+        used.add(it.name); items.push(it); picked++;
+      }
     }
-    return picked;
-  };
-  return [
-    ...pickTwo("weapon"), ...pickTwo("armor"), ...pickTwo("trinket"),
-    ...pickTwo("consumable"), ...pickTwo("material")
-  ];
+    stock[region] = items;
+  }
+  shopStockCache = { day, stock };
+  return stock;
 }
-function dailyItem(){
-  const day = new Date().toISOString().slice(0,10);
-  const seed = [...day].reduce((a,c)=>a+c.charCodeAt(0),0);
-  return ITEM_BANK[seed % ITEM_BANK.length];
-}
+function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
 function renderShop(){
   document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop`;
-  const daily = dailyItem();
-  document.getElementById("dailyItemBox").innerHTML = `<b>Today's Special:</b> ${daily.name} (${daily.rarity}) — $${daily.price} <button class="doodle-btn btn-sm btn-yellow" id="buyDaily">Buy</button>`;
-  document.getElementById("buyDaily").addEventListener("click", ()=> buyItem(daily));
   const grid = document.getElementById("shopGrid");
   grid.innerHTML="";
   shopItemsForRegion().forEach(item=>{
@@ -2086,13 +2097,13 @@ function subscribeInbox(){
       if(n.type==="new_message"){
         const log = document.getElementById("chatLogPrivate");
         const viewing = log && log.offsetParent!==null && state.currentChatPartner?.uid===n.fromUid;
-        if(!inboxFirst && !viewing) toast(`💬 ${n.fromUsername} sent you a new message — click to open`, 8000, "toast-money", ()=> openPrivateChatWith(n.fromUid, n.fromUsername));
-        deleteDoc(ch.doc.ref).catch(()=>{});
+        if(!inboxFirst && !viewing && notifOn("chat")) toast(`💬 ${n.fromUsername} sent you a new message — click to open`, 8000, "toast-money", ()=> openPrivateChatWith(n.fromUid, n.fromUsername));
+        (inboxFirst ? (state.recapPromise||Promise.resolve()).catch(()=>{}) : Promise.resolve()).then(()=> deleteDoc(ch.doc.ref)).catch(()=>{});
         return;
       }
       if(inboxFirst) return;
-      if(n.type==="payment_received" && !n.credited){ toast(`💰 ${n.fromUsername} paid you $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
-      else if(n.type==="auction_sold" && !n.credited){ toast(`🏷️ ${n.buyerName||"Someone"} bought your ${n.itemName} for $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
+      if(n.type==="payment_received" && !n.credited && notifOn("pay")){ toast(`💰 ${n.fromUsername} paid you $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
+      else if(n.type==="auction_sold" && !n.credited && notifOn("auction")){ toast(`🏷️ ${n.buyerName||"Someone"} bought your ${n.itemName} for $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
     });
     inboxFirst = false;
     // Auto-credit ALL not-yet-credited auction sales in this batch as ONE
@@ -3086,28 +3097,42 @@ async function payPlayer(uid, username, amount){
   return true;
 }
 async function showRecap(since){
-  if(!since || Date.now()-since < 60000) return;
-  let sold=0, soldN=0, paid=0, paidN=0, fr=0, dms=0;
+  if(!since) return;                       // brand-new account: nothing to recap
+  if(document.getElementById("recapModal").classList.contains("active")) return;
+  let sold=0, soldN=0, paid=0, paidN=0;
+  const friendReqs = [], payers = {}, dmFrom = {};
   try{
     const ib = await getDocs(query(collection(db,"players",state.uid,"inbox"), where("ts",">",since)));
     ib.forEach(d=>{ const n=d.data();
       if(n.type==="auction_sold"){ sold+=n.amount||0; soldN++; }
-      else if(n.type==="payment_received"){ paid+=n.amount||0; paidN++; }
-      else if(n.type==="friend_request") fr++; });
+      else if(n.type==="payment_received"){ paid+=n.amount||0; paidN++; payers[n.fromUsername]=(payers[n.fromUsername]||0)+(n.amount||0); }
+      else if(n.type==="friend_request") friendReqs.push(n.fromUsername);
+      else if(n.type==="new_message"){ const k=n.fromUid; dmFrom[k]=dmFrom[k]||{name:n.fromUsername,n:0}; dmFrom[k].n++; } });
+    // also count DMs straight from the threads (covers anything without a ping)
     const uids = [...new Set([...(state.profile.friends||[]), ...Object.keys(state.pmContactsExtra)])];
-    const counts = await Promise.all(uids.map(u=> getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,u),"messages"), where("ts",">",since))).then(s=>s.docs.filter(d=>d.data().uid!==state.uid).length).catch(()=>0)));
-    dms = counts.reduce((a,b)=>a+b,0);
+    const counts = await Promise.all(uids.map(u=> getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,u),"messages"), where("ts",">",since))).then(sn=>sn.docs.filter(d=>d.data().uid!==state.uid && !d.data().system).length).catch(()=>0)));
+    uids.forEach((u,i)=>{ if(counts[i] > (dmFrom[u]?.n||0)) dmFrom[u] = { name:dmFrom[u]?.name || state.pmContactsExtra[u] || "a friend", n:counts[i] }; });
   }catch(e){ console.error(e); }
+  const dms = Object.values(dmFrom).reduce((a,x)=>a+x.n,0), fr = friendReqs.length;
+  const list = (arr)=> arr.length ? `<div class="recap-detail">${arr.slice(0,5).map(escapeHTML).join(", ")}${arr.length>5?", …":""}</div>` : "";
+  const nothing = !soldN && !paidN && !fr && !dms;
   document.getElementById("recapBody").innerHTML = `
     <p class="recap-away">You were away for ${fmtPlaytime((Date.now()-since)/1000)}</p>
     <div class="recap-grid">
       <div><span>🏷️</span><b>$${fmtMoney(sold)}</b><small>earned from the auction (${soldN} sale${soldN===1?"":"s"})</small></div>
-      <div><span>💰</span><b>$${fmtMoney(paid)}</b><small>paid to you (${paidN} payment${paidN===1?"":"s"})</small></div>
-      <div><span>🤝</span><b>${fr}</b><small>friend request${fr===1?"":"s"}</small></div>
-      <div><span>💬</span><b>${dms}</b><small>new private message${dms===1?"":"s"}</small></div>
-    </div>`;
+      <div><span>💰</span><b>$${fmtMoney(paid)}</b><small>paid to you (${paidN} payment${paidN===1?"":"s"})</small>${list(Object.entries(payers).map(([n,a])=>`${n} ($${fmtMoney(a)})`))}</div>
+      <div><span>🤝</span><b>${fr}</b><small>friend request${fr===1?"":"s"}</small>${list(friendReqs)}</div>
+      <div><span>💬</span><b>${dms}</b><small>new private message${dms===1?"":"s"}</small>${list(Object.values(dmFrom).map(x=>`${x.name} (${x.n})`))}</div>
+    </div>${nothing?'<p class="recap-away">Nothing new while you were gone.</p>':""}`;
   openModal("recapModal");
 }
+// returning to the tab after a while shows the recap again
+let hiddenAt = null;
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden){ hiddenAt = Date.now(); return; }
+  if(hiddenAt && state.profile && Date.now()-hiddenAt >= 60000 && !state.battle) showRecap(hiddenAt);
+  hiddenAt = null;
+});
 document.getElementById("btnRecapOk").addEventListener("click", ()=> closeModal("recapModal"));
 document.querySelectorAll("[data-pay]").forEach(b=> b.addEventListener("click", ()=>{
   const inp = document.getElementById("payAmount");
@@ -3121,7 +3146,16 @@ document.getElementById("payAmount").addEventListener("input", (e)=>{
 /* =========================================================================
    SETTINGS
    ========================================================================= */
-document.getElementById("btnSettings").addEventListener("click", ()=> openModal("settingsModal"));
+// Notification toggles (ON = show popups, OFF = hide them). Saved on the player doc so they follow the account.
+const notifOn = k=> state.profile?.notifSettings?.[k] !== false;
+const NOTIF_BOXES = { chat:"notifChat", pay:"notifPay", auction:"notifAuction" };
+function syncNotifBoxes(){ Object.entries(NOTIF_BOXES).forEach(([k,id])=>{ const el=document.getElementById(id); if(el) el.checked = notifOn(k); }); }
+Object.entries(NOTIF_BOXES).forEach(([k,id])=>{
+  document.getElementById(id).addEventListener("change", (e)=>{
+    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`notifSettings.${k}`]: e.target.checked }));
+  });
+});
+document.getElementById("btnSettings").addEventListener("click", ()=>{ syncNotifBoxes(); openModal("settingsModal"); });
 document.getElementById("muteMusic").addEventListener("change", (e)=>{ state.settings.muteMusic=e.target.checked; if(e.target.checked) musicEl().pause(); else musicEl().play().catch(()=>{}); });
 document.getElementById("muteSfx").addEventListener("change", (e)=>{ state.settings.muteSfx=e.target.checked; });
 

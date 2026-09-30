@@ -576,3 +576,5 @@ body{
 .chat-system{ text-align:center; font-style:italic; opacity:.6; font-size:14px; margin:6px 0; }
 
 .dm-receipt{ font-size:11px; color:#9a9a9a; text-align:right; margin-top:2px; }
+
+.recap-detail{ font-size:13px; opacity:.7; margin-top:2px; }
