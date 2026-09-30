@@ -793,6 +793,7 @@ function enterGame(){
     const prevRegion = state.profile?.region;
     state.profile = snap.data();
     renderHUD();
+    refreshDmReceipt();
     if(document.getElementById("journalModal").classList.contains("active")) renderInventory();
     // Keep music in sync with whatever region is actually on the player
     // doc — on first load (including re-signing in mid-session) and any
@@ -929,7 +930,7 @@ function itemEffectText(item){
   const st = item.stats || {};
   if(item.type==="consumable"){
     const bits = [];
-    if(st.heal) bits.push(`Restores ${st.heal} HP`);
+    if(st.heal) bits.push(`Restores ${healText(st)} HP`);
     if(st.mana) bits.push(`Restores ${st.mana} mana`);
     return bits.join(" · ") || "No effect";
   }
@@ -1109,9 +1110,10 @@ async function useConsumable(item){
   // reading the server's current inventory each time. That's what stops a
   // double-click (or eating right after crafting) from consuming an item
   // you don't actually have anymore, or applying its effect twice.
+  const rolled = rollHeal(item);
   const ok = await applyInvChanges({ remove:[{itemId:item.id, qty:1}] }, (fresh)=>{
     const fields = {};
-    if(item.stats.heal) fields.hp = Math.min(fresh.hpMax, fresh.hp+item.stats.heal);
+    if(item.stats.heal) fields.hp = Math.min(fresh.hpMax, fresh.hp+rolled);
     if(item.stats.mana) fields.mana = Math.min(fresh.manaMax, fresh.mana+item.stats.mana);
     return fields;
   });
@@ -1119,7 +1121,7 @@ async function useConsumable(item){
     afterInvChangeRefreshDetail(item.id);
     return;
   }
-  toast(`Used ${item.name}`);
+  toast(`Used ${item.name}${rolled?` (+${rolled} HP)`:""}`);
   afterInvChangeRefreshDetail(item.id);
 }
 
@@ -1756,12 +1758,41 @@ function renderChatLog(log, rows, key, path){
   const live = !first && visible && wasBottom;           // new msg arrives while you're reading the bottom: no line
   log.innerHTML = rows.map((m,i)=> (i===fu && !live ? '<div class="unread-line"></div>' : "") + chatMessageHTML(m, m.id, path)).join("");
   wireChatRowInteractions(log);
+  log._rows = rows;
+  if(String(key).startsWith("pm_")) refreshDmReceipt();
   if(!log._sw){ log._sw = true; log.addEventListener("scroll", ()=>{ if(chatAtBottom(log) && log.querySelector(".unread-line")) markRead(log, log._key); }); }
   log.dataset.init = "1";
   if(first){ if(visible) focusChatLog(log); }
   else if(live){ log.scrollTop = log.scrollHeight; markRead(log, key); }
   else log.scrollTop = prevTop;
+  if(String(key).startsWith("pm_")) ackDmSeen();
 }
+// "Sent" / "Seen" under the last private message YOU sent. "Seen" once the other
+// player has had this DM thread open (they ping our inbox; we store it on our own doc).
+function refreshDmReceipt(){
+  const log = document.getElementById("chatLogPrivate"), partner = state.currentChatPartner;
+  if(!log || !partner || !log._rows || !state.profile) return;
+  log.querySelectorAll(".dm-receipt").forEach(e=>e.remove());
+  const mine = log._rows.filter(m=>m.uid===state.uid && !m.system).pop();
+  if(!mine) return;
+  const el = log.querySelector(`.chat-msg[data-mid="${mine.id}"]`);
+  if(!el) return;
+  const seen = ((state.profile.dmSeen||{})[partner.uid]||0) >= mine.ts;
+  el.insertAdjacentHTML("beforeend", `<div class="dm-receipt">${seen?"Seen":"Sent"}</div>`);
+}
+// Tell the sender we've now seen their latest message (only when the DM thread is actually on screen).
+function ackDmSeen(){
+  const log = document.getElementById("chatLogPrivate"), partner = state.currentChatPartner;
+  if(!log || !partner || !log._rows || log.offsetParent===null || document.hidden) return;
+  const latest = log._rows.filter(m=>m.uid===partner.uid && !m.system).pop();
+  if(!latest) return;
+  const k = `dmack_${state.uid}_${partner.uid}`;
+  if(+localStorage.getItem(k) >= latest.ts) return;
+  localStorage.setItem(k, String(latest.ts));
+  addDoc(collection(db,"players",partner.uid,"inbox"), { type:"dm_seen", fromUid: state.uid, ts: latest.ts }).catch(()=>{});
+}
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) ackDmSeen(); });
+document.querySelectorAll('[data-chatsub],[data-ctab="chat"]').forEach(b=> b.addEventListener("click", ()=> setTimeout(ackDmSeen,50)));
 function focusChatLog(log){
   const line = log.querySelector(".unread-line");
   log.scrollTop = line ? Math.max(0, line.offsetTop-10) : log.scrollHeight;
@@ -2046,6 +2077,12 @@ function subscribeInbox(){
     snap.docChanges().forEach(ch=>{
       if(ch.type!=="added") return;
       const n = ch.doc.data();
+      if(n.type==="dm_seen"){
+        const cur = (state.profile?.dmSeen||{})[n.fromUid]||0;
+        if(n.ts>cur) updateDoc(doc(db,"players",state.uid), { [`dmSeen.${n.fromUid}`]: n.ts }).catch(()=>{});
+        deleteDoc(ch.doc.ref).catch(()=>{});
+        return;
+      }
       if(n.type==="new_message"){
         const log = document.getElementById("chatLogPrivate");
         const viewing = log && log.offsetParent!==null && state.currentChatPartner?.uid===n.fromUid;
@@ -2068,7 +2105,7 @@ function subscribeInbox(){
     list.innerHTML="";
     snap.forEach(d=>{
       const n = d.data();
-      if(n.type==="new_message") return;
+      if(n.type==="new_message" || n.type==="dm_seen") return;
       const li = document.createElement("li");
       if(n.type==="friend_request"){
         li.innerHTML = `<span>${escapeHTML(n.fromUsername)} wants to be friends</span>
@@ -2390,6 +2427,46 @@ const RECIPES = [];
   ["gem_quartz_cut","gem_ruby_cut","gem_sapphire_cut","gem_emerald_cut","gem_diamond_cut"].forEach(g=>
     add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
 })();
+/* ---------- healing rebalance ----------
+   Every consumable gets a heal RANGE; the actual amount is rolled each time
+   it is eaten/drunk. stats.heal stays as the average (used for sorting).
+     berries / herbs / mushrooms / apples ..... 5-20
+     rare foraged (truffle, golden apple) ..... 20-60
+     roasted forage ........................... 10-40 (rare: 40-90)
+     raw fish ................................. 10-80 (scaled by rarity)
+     cooked fish .............................. 50-150 (scaled by rarity)
+     homemade dishes .......................... 40-140 (scaled by rarity)
+     potions / elixirs / tonics / draughts .... 5-150 (random)
+     other procedural foods (bread, tea, ...) . 5-40 */
+const HEAL_RANGES = {
+  fishRaw:   { common:[10,30], uncommon:[20,50], rare:[40,70], epic:[50,75], legendary:[60,80] },
+  fishCooked:{ common:[50,80], uncommon:[60,100], rare:[80,125], epic:[95,140], legendary:[110,150] },
+  dish:      { common:[40,70], uncommon:[50,90], rare:[70,110], epic:[90,125], legendary:[110,140] }
+};
+function healRangeFor(it){
+  const id = it.id, r = it.rarity;
+  if(id.startsWith("fish_")) return HEAL_RANGES.fishRaw[r];
+  if(id.startsWith("cooked_")) return HEAL_RANGES.fishCooked[r];
+  if(id.startsWith("dish_")) return HEAL_RANGES.dish[r];
+  if(id.startsWith("elixir_")) return [5,150];
+  if(id.startsWith("roast_")) return (id==="roast_forage_truffle"||id==="roast_forage_goldapple") ? [40,90] : [10,40];
+  if(id==="forage_truffle") return [20,60];
+  if(id==="forage_goldapple") return [40,100];
+  if(id.startsWith("forage_")) return [5,20];
+  if(/(Potion|Elixir|Tonic|Draught|Brew)$/.test(it.name)) return [5,150];
+  return [5,40];
+}
+Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
+  i.stats = i.stats || {};
+  const [lo,hi] = healRangeFor(i);
+  i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
+});
+function rollHeal(item){
+  const st = item.stats||{};
+  if(st.healMin==null) return st.heal||0;
+  return st.healMin + Math.floor(Math.random()*(st.healMax-st.healMin+1));
+}
+const healText = st=> st.healMin!=null ? `${st.healMin}-${st.healMax}` : `${st.heal}`;
 const haveQty = id=> (state.profile.inventory||[]).find(e=>e.itemId===id)?.qty||0;
 const canCraft = r=> r.ing.every(([id,q])=> haveQty(id)>=q);
 function renderCraftInv(){
@@ -2412,7 +2489,7 @@ function renderCraftInv(){
   const sel = RECIPES.find(r=>r.id===state.selRecipe), det = document.getElementById("recipeDetail"), btn = document.getElementById("btnCraft");
   if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
   const it = ITEM_BY_ID[sel.out], st = it.stats||{};
-  const eff = st.heal?`Heals ${st.heal} HP`: st.attack?`+${st.attack} attack`: st.defense?`+${st.defense} defense, +${st.hp||0} HP`: Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
+  const eff = st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: st.defense?`+${st.defense} defense, +${st.hp||0} HP`: Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
   det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p>` +
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
@@ -2565,11 +2642,11 @@ function renderPve(){
   ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel).forEach(s=>{
     add(s.name, s.desc, ()=>pveAct(s.id), false);
   });
-  add("Guard", "Take 65% less damage this turn and gain 2 Rage.", ()=>pveAct("guard"), false, "btn-blue");
+  add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
-  add("Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Ends your turn.", ()=>pveAct("counter"), false, "btn-blue");
+  add(b.lastMove==="counter" ? "Counter (cooldown)" : "Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Can only be used every other turn.", ()=>pveAct("counter"), b.lastMove==="counter", "btn-blue");
   const food = bestFood();
-  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), false, "btn-green");
+  add(food?`Eat ${food.name} (+${healText(food.stats)})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), false, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
 }
 function bestFood(){
@@ -2582,7 +2659,9 @@ async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
   b.busy = true;
   const p = state.profile, m = b.m, intent = b.actual, rnd = ()=>0.9+Math.random()*0.2;
-  // Buttons are never greyed out; moves you can't afford just tell you why (and don't use your turn).
+  // Guard and Counter have a 1-turn cooldown: greyed out the turn right after you use them.
+  if((move==="guard"||move==="counter") && b.lastMove===move){ toast(`${move==="guard"?"Guard":"Counter"} is on cooldown.`); b.busy=false; return; }
+  // Other moves are never greyed out; ones you can't afford just tell you why (and don't use your turn).
   const sk = ATTACK_SKILLS.find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
@@ -2591,7 +2670,7 @@ async function pveAct(move){
   if(move==="eat"){
     const f = bestFood();
     if(f){
-      const heal = Math.min(f.stats.heal, p.hpMax-b.php);
+      const heal = Math.min(rollHeal(f), p.hpMax-b.php);
       const ok = await changeInvQty(f.id,-1);
       if(ok!==null){ b.php+=heal; battleLogPush(`You eat ${f.name}: +${heal} HP. (free action)`); }
     }
@@ -2807,16 +2886,16 @@ function renderDuelBattle(d){
   const addBtn = (id, label, tip, extraDis, cls)=>{
     const el = document.createElement("button");
     el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip;
-    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0;   // ONLY greyed when it isn't your turn
+    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;   // greyed when it isn't your turn (or Guard/Counter on cooldown)
     el.addEventListener("click", ()=> duelAct(d, id)); actions.appendChild(el);
   };
   ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
     addBtn(s.id, s.name, s.desc, false, "btn-pink"));
-  addBtn("guard", "Guard", "Take 65% less from their next hit and gain 2 Rage.", false, "btn-blue");
+  addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit and gain 2 Rage. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
-  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them. Ends your turn.", false, "btn-blue");
+  addBtn("counter", d[me+"Last"]==="counter" ? "Counter (cooldown)" : "Counter", "If they attack next, negate it and bounce the damage back at them. Can only be used every other turn.", d[me+"Last"]==="counter", "btn-blue");
   const food = duelFood(d[me+"HpMax"] - myHp);
-  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", false, "btn-green");
+  addBtn("eat", food?`Eat ${food.name} (+${healText(food.stats)})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", false, "btn-green");
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
   fleeBtn.className = "doodle-btn btn-sm btn-yellow"; fleeBtn.textContent = "Flee";
@@ -2838,6 +2917,7 @@ async function duelAct(d, move){
 async function duelActInner(d, move){
   const b = state.battle;
   const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
+  if((move==="guard"||move==="counter") && d[me+"Last"]===move){ toast(`${move==="guard"?"Guard":"Counter"} is on cooldown.`); return; }
   const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
   let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
   const myFx = { ...(d[me+"Fx"]||{}) }, opFx = { ...(d[op+"Fx"]||{}) }, lines = [], rnd = ()=>0.9+Math.random()*0.2;
@@ -2847,7 +2927,7 @@ async function duelActInner(d, move){
   else if(move==="focus"){ myFx.focus = true; lines.push(`${myName} focuses their strength.`); }
   else if(move==="eat"){
     const f = duelFood(d[me+"HpMax"] - myHp); if(!f){ toast("You have no food."); return; }
-    const heal = Math.min(f.stats.heal, d[me+"HpMax"] - myHp); myHp += heal; eatId = f.id;
+    const heal = Math.min(rollHeal(f), d[me+"HpMax"] - myHp); myHp += heal; eatId = f.id;
     lines.push(`${myName} eats ${f.name} (+${heal} HP).`);
   } else {
     const s = attackSkillById(move);
@@ -2864,7 +2944,7 @@ async function duelActInner(d, move){
     patch = { [me+"Hp"]:Math.max(0,myHp), log:[...(d.log||[]), ...lines].slice(-60) };
   } else {
     patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
-      [me+"Fx"]:myFx, [op+"Fx"]:opFx, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
+      [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Last"]:move, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
     if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
     else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
   }

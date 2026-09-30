@@ -574,3 +574,5 @@ body{
 .toast.toast-click{ cursor:pointer; }
 .toast.toast-click:hover{ filter:brightness(.95); transform:translateY(-1px); }
 .chat-system{ text-align:center; font-style:italic; opacity:.6; font-size:14px; margin:6px 0; }
+
+.dm-receipt{ font-size:11px; color:#9a9a9a; text-align:right; margin-top:2px; }
