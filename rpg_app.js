@@ -268,6 +268,11 @@ const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fi
  .forEach(([id,name,price,rarity,uses])=> JOB_ITEM_BANK.push({ id,name,type:"tool",rarity,price,sellPrice:Math.round(price/3),desc:`Breaks after ${uses} uses.`,stats:{} }));
 JOB_ITEM_BANK.push(
  { id:"ore_coal", name:"Coal", type:"material", rarity:"common", sellPrice:4, desc:"Fuel for cooking and smelting.", stats:{} },
+ { id:"ore_silver", name:"Silver Ore", type:"material", rarity:"uncommon", sellPrice:18, desc:"A gleaming ore.", stats:{} },
+ { id:"ore_gold", name:"Gold Ore", type:"material", rarity:"rare", sellPrice:40, desc:"Heavy, shiny ore.", stats:{} },
+ { id:"gem_sapphire", name:"Sapphire", type:"material", rarity:"rare", sellPrice:55, desc:"A deep blue gem.", stats:{} },
+ { id:"gem_emerald", name:"Emerald", type:"material", rarity:"epic", sellPrice:110, desc:"A vivid green gem.", stats:{} },
+ { id:"gem_diamond", name:"Diamond", type:"material", rarity:"legendary", sellPrice:250, desc:"The hardest gem of all.", stats:{} },
  { id:"forage_apple", name:"Wild Apple", type:"consumable", rarity:"uncommon", sellPrice:8, desc:"A crisp foraged apple.", stats:{} },
  { id:"forage_truffle", name:"Forest Truffle", type:"consumable", rarity:"rare", sellPrice:25, desc:"A prized foraged truffle.", stats:{} },
  { id:"forage_goldapple", name:"Golden Apple", type:"consumable", rarity:"legendary", sellPrice:100, desc:"Glows faintly. Restores a ton.", stats:{} });
@@ -424,8 +429,10 @@ function setupDragonAnim(){
 const musicEl = () => document.getElementById("music-player");
 function playSfx(name){
   if(state.settings.muteSfx) return;
-  const el = document.getElementById(`sfx-${name}`);
-  if(el){ try{ el.currentTime=0; el.play().catch(()=>{}); }catch(e){} }
+  const el = document.getElementById(`sfx-${name}`); if(!el) return;
+  // a fresh Audio per play, so repeated sounds overlap instead of restarting
+  const a = new Audio(el.currentSrc || el.src); a.volume = el.volume;
+  a.addEventListener("ended", ()=> a.remove?.()); a.play().catch(()=>{});
 }
 function playMusic(src){
   const el = musicEl(); if(!el) return;
@@ -794,7 +801,7 @@ function enterGame(){
     }
     if(firstSnapshot){
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); showRecap(since); initBoss(); startManaRegen();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -1436,8 +1443,9 @@ async function buyItem(item){
    The reward math is unchanged from the old tab-based version.
    ========================================================================= */
 function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(l) l.textContent=msg; }
+const toolIds = kind=> ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
 async function useTool(kind){
-  const id = ["tool_"+kind,"tool_"+kind+"2","tool_"+kind+"3"].find(hasItem);
+  const id = toolIds(kind).find(hasItem);
   if(!id){ toast(`You need a ${kind==="pickaxe"?"Pickaxe":"Fishing Rod"} — buy one in the Shop.`); return false; }
   const uses = { ...(state.profile.toolUses||{}) };
   const left = (uses[id] ?? TOOL_USES[id]) - 1;
@@ -1446,7 +1454,7 @@ async function useTool(kind){
   return true;
 }
 function toolUsesLeft(kind){
-  const id = ["tool_"+kind,"tool_"+kind+"2","tool_"+kind+"3"].find(hasItem);
+  const id = toolIds(kind).find(hasItem);
   return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":"fishing rod"}`;
 }
 [["pickaxe","Pickaxe"],["fishingrod","Fishing Rod"]].forEach(([k,n])=>[2,3].forEach(t=>{
@@ -1509,8 +1517,8 @@ async function doMineAction(){
   let msg;
   const updates = { mineHourStart: hourStart, minePicksThisHour: picks+1, miningXp: (p.miningXp||0)+1 };
   if(roll < 0.4){ // good
-    const pool = ["ore_copper","ore_iron","gem_quartz","gem_ruby","money","ore_coal"];
-    const w = [0.22,0.18,0.14,0.05,0.06,0.35];
+    const pool = ["ore_copper","ore_iron","ore_coal","gem_quartz","ore_silver","ore_gold","gem_ruby","gem_sapphire","gem_emerald","gem_diamond","money"];
+    const w = [0.16,0.13,0.32,0.10,0.08,0.05,0.04,0.04,0.02,0.01,0.05];
     let r = Math.random(), pick=pool[0], acc=0;
     for(let i=0;i<pool.length;i++){ acc+=w[i]; if(r<=acc){ pick=pool[i]; break; } }
     if(pick==="money"){
@@ -1934,6 +1942,23 @@ async function sendFriendRequest(uid, username){
   });
   if(ok!==null){ toast(`Friend request sent to ${username}`); closeModal("profileModal"); }
 }
+let crediting = false;
+async function creditInbox(docs){
+  if(crediting) return; crediting = true;
+  const items = [];
+  try{
+    await runTransaction(db, async tx=>{
+      items.length = 0;
+      const pref = doc(db,"players",state.uid), ps = await tx.get(pref), fresh = [];
+      for(const d of docs){ const s = await tx.get(d.ref); if(s.exists() && !s.data().credited) fresh.push(s); }
+      if(!fresh.length) return;
+      tx.update(pref, { money: (ps.data().money||0) + fresh.reduce((a,s)=>a+(s.data().amount||0),0) });
+      fresh.forEach(s=>{ tx.update(s.ref, { credited:true }); if(s.data().type==="duel_won" && s.data().itemName) items.push(s.data().itemName); });
+    });
+    items.forEach(n=>{ const it = Object.values(ITEM_BY_ID).find(i=>i.name===n); if(it) addItemToInv(it.id,1); });
+  }catch(e){ console.error(e); toast(friendlyFirebaseError(e)); }
+  finally{ crediting = false; }
+}
 function subscribeInbox(){
   const q = query(collection(db,"players",state.uid,"inbox"), orderBy("ts","desc"));
   const unsub = onSnapshot(q, snap=>{
@@ -1942,15 +1967,7 @@ function subscribeInbox(){
     // the same snapshot and each reading state.profile.money separately
     // would race the same way the old crafting bug did.
     const uncredited = snap.docs.filter(d=> ["auction_sold","duel_won","payment_received"].includes(d.data().type) && !d.data().credited);
-    if(uncredited.length){
-      const total = uncredited.reduce((sum,d)=> sum + (d.data().amount||0), 0);
-      withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) + total }));
-      uncredited.filter(d=>d.data().type==="duel_won" && d.data().itemName).forEach(d=>{
-        const item = Object.values(ITEM_BY_ID).find(i=>i.name===d.data().itemName);
-        if(item) addItemToInv(item.id, 1);
-      });
-      uncredited.forEach(d=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid,"inbox",d.id), { credited:true })));
-    }
+    if(uncredited.length) creditInbox(uncredited);
     const list = document.getElementById("inboxList");
     list.innerHTML="";
     snap.forEach(d=>{
@@ -2219,6 +2236,11 @@ const RECIPES = [];
   add("ing_steel","Steel Ingot","material","rare",{desc:"Hardened steel."},[["ing_iron",2],["ore_coal",2]]);
   add("gem_quartz_cut","Polished Quartz","material","rare",{desc:"A cut gem."},[["gem_quartz",2]]);
   add("gem_ruby_cut","Cut Ruby","material","epic",{desc:"A flawless cut gem."},[["gem_ruby",2]]);
+  add("ing_silver","Silver Ingot","material","uncommon",{desc:"Smelted silver."},[["ore_silver",2],["ore_coal",1]]);
+  add("ing_gold","Gold Ingot","material","rare",{desc:"Smelted gold."},[["ore_gold",2],["ore_coal",1]]);
+  add("gem_sapphire_cut","Cut Sapphire","material","rare",{desc:"A cut gem."},[["gem_sapphire",2]]);
+  add("gem_emerald_cut","Cut Emerald","material","epic",{desc:"A cut gem."},[["gem_emerald",2]]);
+  add("gem_diamond_cut","Cut Diamond","material","legendary",{desc:"A flawless cut diamond."},[["gem_diamond",2]]);
   // cooked fish: 1 fish + 1 coal
   ["fish_minnow","fish_bass","fish_trout","fish_swordfish","fish_golden"].forEach(f=>
     add("cooked_"+f, "Cooked "+I[f].name, "consumable", I[f].rarity, { stats:{heal:HEAL_BY_RARITY[I[f].rarity]}, desc:"Grilled over coal. Heals well." }, [[f,1],["ore_coal",1]]));
@@ -2236,7 +2258,9 @@ const RECIPES = [];
   }
   // gear tiers
   const tiers = [["Copper","ing_copper","common","SPEED"],["Bronze","ing_bronze","uncommon","STRENGTH"],["Iron","ing_iron","uncommon","STRENGTH"],
-                 ["Quartz","gem_quartz_cut","rare","SMARTS"],["Steel","ing_steel","rare","STRENGTH"],["Ruby","gem_ruby_cut","epic","CHARM"]];
+                 ["Quartz","gem_quartz_cut","rare","SMARTS"],["Steel","ing_steel","rare","STRENGTH"],["Ruby","gem_ruby_cut","epic","CHARM"],
+                 ["Silver","ing_silver","uncommon","SMARTS"],["Gold","ing_gold","rare","CHARM"],["Sapphire","gem_sapphire_cut","rare","SMARTS"],
+                 ["Emerald","gem_emerald_cut","epic","SPEED"],["Diamond","gem_diamond_cut","legendary","STRENGTH"]];
   const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
   tiers.forEach(([t,mat,rar,stat])=>{
@@ -2249,6 +2273,15 @@ const RECIPES = [];
   // tools
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
   [["tool_fishingrod","ing_copper"],["tool_fishingrod2","ing_iron"],["tool_fishingrod3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,1],["forage_herb",2]]));
+  // gem/mineral tools: far more durable
+  [[4,"Gold","ing_gold","rare",40],[5,"Emerald","gem_emerald_cut","epic",80],[6,"Diamond","gem_diamond_cut","legendary",200]].forEach(([n,nm,mat,rar,u])=>{
+    TOOL_USES["tool_pickaxe"+n] = u; TOOL_USES["tool_fishingrod"+n] = u;
+    add("tool_pickaxe"+n, `${nm} Pickaxe`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,2],["ing_steel",1]]);
+    add("tool_fishingrod"+n, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,1],["ing_steel",1],["forage_herb",2]]);
+  });
+  // gem elixirs
+  ["gem_quartz_cut","gem_ruby_cut","gem_sapphire_cut","gem_emerald_cut","gem_diamond_cut"].forEach(g=>
+    add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
 })();
 const haveQty = id=> (state.profile.inventory||[]).find(e=>e.itemId===id)?.qty||0;
 const canCraft = r=> r.ing.every(([id,q])=> haveQty(id)>=q);
@@ -2638,8 +2671,11 @@ function renderDuelBattle(d){
   document.getElementById("battlePlayerName").textContent = state.profile.username;
   document.getElementById("battlePlayerHPBar").style.width = (100*Math.max(0,myHp)/myMax)+"%";
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,myHp)}/${myMax}`;
-  document.getElementById("battleStaminaLabel").textContent = "Live PvP";
-  document.getElementById("battleRageLabel").textContent = "-";
+  const me = iAmHost ? "host" : "guest", pp = state.profile;
+  const usedNow = (()=>{ const u = d[me+"Used"]||[]; return duelMoves().every(m=>u.includes(m)) ? [] : u; })();
+  const myFx = d[me+"Fx"]||{}, opFxNow = d[(iAmHost?"guest":"host")+"Fx"]||{};
+  document.getElementById("battleStaminaLabel").textContent = `Mana ${d[me+"Mana"] ?? pp.mana}/${pp.manaMax} · Moves left ${duelMoves().length-usedNow.length}` + (myFx.focus?" · 🎯 Focused":"") + (myFx.guard?" · 🛡️ Guarding":"") + (myFx.counter?" · ↩️ Countering":"") + (opFxNow.guard?" · Foe guarding":"") + (opFxNow.counter?" · Foe countering":"");
+  document.getElementById("battleRageLabel").textContent = `${d[me+"Rage"] ?? pp.rage}/${pp.rageMax}`;
   // The log is stored on the room doc itself (not local state) so both
   // players see the same "who did what" history, attributed by name.
   const logEl = document.getElementById("battleLog");
@@ -2649,34 +2685,69 @@ function renderDuelBattle(d){
   actions.innerHTML="";
   if(d.status==="finished") return;
   const isMyTurn = d.turn === state.uid;
-  const atkBtn = document.createElement("button");
-  atkBtn.className="doodle-btn btn-sm btn-pink";
-  atkBtn.textContent = isMyTurn ? "Attack" : "Waiting for opponent…";
-  atkBtn.disabled = myHp<=0 || oppHp<=0 || !isMyTurn;
-  atkBtn.addEventListener("click", ()=> duelAttack(d));
-  actions.appendChild(atkBtn);
+  const mana = d[me+"Mana"] ?? pp.mana, rage = d[me+"Rage"] ?? pp.rage;
+  const addBtn = (id, label, tip, extraDis, cls)=>{
+    const el = document.createElement("button");
+    const isUsed = usedNow.includes(id);
+    el.className = `doodle-btn btn-sm ${cls}`; el.textContent = isUsed ? `${label} ✓` : label; el.title = tip;
+    el.disabled = !isMyTurn || isUsed || myHp<=0 || oppHp<=0 || !!extraDis;
+    el.addEventListener("click", ()=> duelAct(d, id)); actions.appendChild(el);
+  };
+  ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
+    addBtn(s.id, s.name, s.desc, (s.needsFullRage && rage<pp.rageMax) || (s.manaCost && mana<s.manaCost), "btn-pink"));
+  addBtn("guard", "Guard", "Take 65% less from their next hit and gain 2 Rage.", false, "btn-blue");
+  addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
+  addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them.", false, "btn-blue");
+  const food = duelFood(d[me+"HpMax"] - myHp);
+  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory.", !food, "btn-green");
+  if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
-  fleeBtn.className="doodle-btn btn-sm btn-yellow"; fleeBtn.textContent="Flee";
+  fleeBtn.className = "doodle-btn btn-sm btn-yellow"; fleeBtn.textContent = "Flee";
   fleeBtn.addEventListener("click", ()=> duelFlee(d));
   actions.appendChild(fleeBtn);
 }
-async function duelAttack(d){
-  const b = state.battle;
-  if(!b || b.mode!=="duel") return;
-  if(d.turn !== state.uid){ toast("It's not your turn."); return; } // enforced again server-side isn't possible client-only, but this + disabled button + re-check on snapshot keeps both sides honest in practice
-  const rref = doc(db,"duelRooms",b.code);
-  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3));
-  const oppField = b.iAmHost ? "guestHp" : "hostHp";
-  const oppName = b.iAmHost ? d.guestName : d.hostName;
-  const oppUid = b.iAmHost ? d.guestUid : d.hostUid;
-  const newOppHp = Math.max(0, (b.iAmHost ? d.guestHp : d.hostHp) - dmg);
-  const patch = {
-    [oppField]: newOppHp,
-    turn: oppUid, // turn always passes to the other side after an attack
-    log: arrayUnion(`${state.profile.username} hit ${oppName} for ${dmg} damage.`)
-  };
-  if(newOppHp<=0){ patch.status="finished"; patch.winner=state.uid; }
-  await withErrorToast(()=> updateDoc(rref, patch));
+const duelMoves = ()=> [...ATTACK_SKILLS.filter(s=>state.profile.level>=s.unlockLevel).map(s=>s.id), "guard","focus","counter","eat"];
+function duelFood(missing){
+  const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal).sort((a,c)=>a.stats.heal-c.stats.heal);
+  return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
+}
+/* Each move can be used once per cycle; once every move has been used the
+   list refreshes. Each side stores its own Hp/Mana/Rage/Fx/Used on the room. */
+async function duelAct(d, move){
+  const b = state.battle; if(!b || b.mode!=="duel" || b.busy) return;
+  if(d.turn !== state.uid){ toast("It's not your turn."); return; }
+  const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
+  let used = [...(d[me+"Used"]||[])];
+  if(duelMoves().every(m=>used.includes(m))) used = [];
+  if(used.includes(move)){ toast("You already used that move — try another!"); return; }
+  const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
+  let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
+  const myFx = { ...(d[me+"Fx"]||{}) }, opFx = { ...(d[op+"Fx"]||{}) }, lines = [], rnd = ()=>0.9+Math.random()*0.2;
+  let eatId = null;
+  if(move==="guard"){ myFx.guard = true; rage = Math.min(p.rageMax, rage+2); lines.push(`${myName} raises their guard.`); }
+  else if(move==="counter"){ myFx.counter = true; lines.push(`${myName} readies a counter…`); }
+  else if(move==="focus"){ myFx.focus = true; lines.push(`${myName} focuses their strength.`); }
+  else if(move==="eat"){
+    const f = duelFood(d[me+"HpMax"] - myHp); if(!f){ toast("You have no food."); return; }
+    const heal = Math.min(f.stats.heal, d[me+"HpMax"] - myHp); myHp += heal; eatId = f.id;
+    lines.push(`${myName} eats ${f.name} (+${heal} HP).`);
+  } else {
+    const s = attackSkillById(move);
+    if((s.needsFullRage && rage<p.rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
+    if(s.needsFullRage) rage = 0; if(s.manaCost) mana -= s.manaCost; else if(s.id==="basic") rage = Math.min(p.rageMax, rage+1);
+    let dmg = playerAttackPower()*s.dmgMult()*rnd()*(myFx.focus?2:1); myFx.focus = false;
+    if(opFx.counter){ const back = Math.max(1,Math.round(dmg)); myHp -= back; lines.push(`${opName} counters! ${myName}'s ${s.name} is turned back for ${back} damage.`); }
+    else { if(opFx.guard) dmg *= 0.35; dmg = Math.max(1,Math.round(dmg)); opHp -= dmg; lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`); }
+  }
+  opFx.guard = false; opFx.counter = false;   // their stance lasts one action of mine
+  const patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
+    [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Used"]:[...used, move], turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
+  if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
+  else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
+  b.busy = true;
+  const ok = await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), patch));
+  b.busy = false;
+  if(ok!==null && eatId) changeInvQty(eatId, -1);
 }
 async function duelFlee(d){
   const b = state.battle;
