@@ -188,6 +188,24 @@ const ARMOR_SLOT_BY_NAME = {
   Boots:"boots", Treads:"boots", Sabatons:"boots"
 };
 const ARMOR_SLOTS = ["helmet","chestplate","leggings","boots"];
+/* There is no "defense" stat in this game. Armor instead changes your real
+   stats (and max HP) for as long as it is worn. Each slot has a profile;
+   heavier pieces trade some speed/charm for their bonuses. */
+const ARMOR_PROFILE = {
+  helmet:     { hp:3, SMARTS:1 },
+  chestplate: { hp:6, STRENGTH:1, SPEED:-1 },
+  leggings:   { hp:4, SPEED:1 },
+  boots:      { hp:3, SPEED:1, CHARM:-1 }
+};
+function armorStats(slot, m, extra=0){
+  const prof = ARMOR_PROFILE[slot] || ARMOR_PROFILE.chestplate, out = {};
+  Object.entries(prof).forEach(([k,v])=>{
+    if(k==="hp") out.hp = Math.round(v*m) + extra*2;
+    else if(v>0) out[k] = Math.max(1, Math.round(v*m)) + extra;
+    else out[k] = -Math.max(1, Math.round(-v*m*0.5));
+  });
+  return out;
+}
 function seededRand(seed){ let s = seed % 2147483647; if(s<=0)s+=2147483646;
   return () => (s = s*16807 % 2147483647) / 2147483647; }
 
@@ -216,7 +234,10 @@ function buildItemBank(){
         desc: itemFlavor(type, prefix, base, element, rarity),
         stats: itemStats(type, rarity)
       };
-      if(type==="armor") item.armorSlot = ARMOR_SLOT_BY_NAME[base] || "chestplate";
+      if(type==="armor"){
+        item.armorSlot = ARMOR_SLOT_BY_NAME[base] || "chestplate";
+        item.stats = armorStats(item.armorSlot, mult);
+      }
       bank.push(item);
     }
   }
@@ -225,7 +246,7 @@ function buildItemBank(){
 function itemFlavor(type, prefix, base, element, rarity){
   const flavors = {
     weapon:`A ${rarity} ${base.toLowerCase()}, ${prefix.toLowerCase()} and humming faintly with ${ELEMENTS[element].name.toLowerCase()} energy.`,
-    armor:`${prefix} ${base.toLowerCase()} that smells faintly of ${ELEMENTS[element].name.toLowerCase()} weather. Offers ${rarity} protection.`,
+    armor:`${prefix} ${base.toLowerCase()} that smells faintly of ${ELEMENTS[element].name.toLowerCase()} weather. Wearing it shifts your stats (${rarity}).`,
     trinket:`A small ${base.toLowerCase()}, ${prefix.toLowerCase()}, said to nudge fate for its wearer.`,
     consumable:`A ${prefix.toLowerCase()} ${base.toLowerCase()} — drink or eat to feel its ${rarity} effects.`,
     material:`Raw crafting material: a ${prefix.toLowerCase()} ${base.toLowerCase()}, useful at the forge.`
@@ -235,7 +256,7 @@ function itemFlavor(type, prefix, base, element, rarity){
 function itemStats(type, rarity){
   const m = RARITY_MULT[rarity];
   if(type==="weapon") return { attack: Math.round(3*m) };
-  if(type==="armor") return { defense: Math.round(2*m), hp: Math.round(4*m) };
+  if(type==="armor") return {}; // filled in per-slot by armorStats() in buildItemBank
   if(type==="trinket"){
     const pool = ["SPEED","STRENGTH","CHARM","SMARTS"];
     const stat = pool[Math.floor(Math.random()*pool.length)];
@@ -583,7 +604,7 @@ let authFlowBusy = false;
    so both paths route the player the same way without racing each other. */
 async function loadPlayerAndRoute(user){
   cleanupSubs();
-  if(!user){ showScreen("screen-title"); playMusic("rpg_title.mp3"); return; }
+  if(!user){ resetSessionUI(); showScreen("screen-title"); playMusic("rpg_title.mp3"); return; }
   state.uid = user.uid;
   let psnap;
   try{
@@ -702,7 +723,7 @@ document.getElementById("btnConfirmDeleteAccount").addEventListener("click", asy
     await deleteUser(auth.currentUser);
     toast("Your account has been deleted.");
     closeModal("settingsModal");
-    cleanupSubs();
+    cleanupSubs(); resetSessionUI();
     showScreen("screen-title");
     playMusic("rpg_title.mp3");
   }catch(err){
@@ -781,6 +802,12 @@ renderClassGrid();
 /* =========================================================================
    ENTER GAME / LIVE SYNC
    ========================================================================= */
+// Clears everything tied to the logged-in session so nothing from it (like the
+// Welcome Back popup) can leak onto the title screen.
+function resetSessionUI(){
+  state.profile = null; state.recapPromise = null; state.battle = null;
+  ["recapModal","eatModal","battleModal","journalModal","compassModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
+}
 function cleanupSubs(){
   state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
@@ -798,6 +825,7 @@ function enterGame(){
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
     if(document.getElementById("journalModal").classList.contains("active")) renderInventory();
+    if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
     // Keep music in sync with whatever region is actually on the player
     // doc — on first load (including re-signing in mid-session) and any
     // time the region field itself changes, not just on manual travel.
@@ -806,6 +834,7 @@ function enterGame(){
       playMusic(r.track);
     }
     if(firstSnapshot){
+      { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
       const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen();
     }
@@ -928,7 +957,7 @@ document.getElementById("invPrev").addEventListener("click", ()=>{ state.invPage
 document.getElementById("invNext").addEventListener("click", ()=>{ state.invPage++; renderInventory(); });
 
 // One-line effect summary for the inspect panel: heal/mana for consumables,
-// damage for weapons, defense/HP for armor, +/- stat buffs for trinkets, uses for tools.
+// damage for weapons, stat/HP changes for armor, +/- stat buffs for trinkets, uses for tools.
 function itemEffectText(item){
   const st = item.stats || {};
   if(item.type==="consumable"){
@@ -940,9 +969,8 @@ function itemEffectText(item){
   if(item.type==="weapon") return `Damage: +${st.attack||0} attack`;
   if(item.type==="armor"){
     const bits = [];
-    if(st.defense) bits.push(`+${st.defense} defense`);
-    if(st.hp) bits.push(`+${st.hp} max HP`);
-    Object.keys(st).filter(k=>!["defense","hp","curse"].includes(k)).forEach(k=> bits.push(`${st[k]>=0?"+":""}${st[k]} ${k}`));
+    if(st.hp) bits.push(`${st.hp>=0?"+":""}${st.hp} max HP`);
+    Object.keys(st).filter(k=>!["hp","curse"].includes(k)).forEach(k=> bits.push(`${st[k]>=0?"+":""}${st[k]} ${k}`));
     return `${item.armorSlot?item.armorSlot[0].toUpperCase()+item.armorSlot.slice(1)+": ":""}${bits.join(", ")||"No bonuses"}`;
   }
   if(item.type==="trinket"){
@@ -1069,7 +1097,8 @@ async function equipItem(item){
       if(oi>=0) inv[oi].qty += 1; else inv.push({ itemId:old, qty:1 });
       swapped = old;
     }
-    tx.update(pref, { inventory: inv.filter(e=>e.qty>0), [`equipped.${slot}`]: item.id });
+    const newEq = { ...(d.equipped||{}), [slot]: item.id };
+    tx.update(pref, { inventory: inv.filter(e=>e.qty>0), [`equipped.${slot}`]: item.id, ...gearSyncFields(d, newEq) });
   }));
   if(ok!==null){
     toast(`Equipped ${item.name}` + (swapped ? ` (${ITEM_BY_ID[swapped]?.name||"old item"} returned to inventory)` : ""));
@@ -1086,9 +1115,36 @@ async function unequipItem(slot){
     const inv = (d.inventory||[]).map(e=>({...e}));
     const idx = inv.findIndex(e=>e.itemId===itemId);
     if(idx>=0) inv[idx].qty += 1; else inv.push({ itemId, qty:1 });
-    tx.update(pref, { inventory: inv, [`equipped.${slot}`]: null });
+    const newEq = { ...(d.equipped||{}), [slot]: null };
+    tx.update(pref, { inventory: inv, [`equipped.${slot}`]: null, ...gearSyncFields(d, newEq) });
   }));
   if(ok!==null) toast(`${name} moved back to your inventory`);
+}
+/* Armor works by shifting the real numbers on the player doc (hpMax + the
+   four stats) while it is worn. `gearApplied` remembers exactly what is
+   currently baked in, so taking a piece off (or an item's stats changing
+   later) always removes the right amount. */
+function gearBonus(equipped){
+  const out = { hp:0, stats:{ SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0 } };
+  ARMOR_SLOTS.forEach(slot=>{
+    const it = equipped?.[slot] && ITEM_BY_ID[equipped[slot]]; if(!it) return;
+    const st = it.stats||{};
+    out.hp += st.hp||0;
+    SKILL_KEYS.forEach(k=> out.stats[k] += st[k]||0);
+  });
+  return out;
+}
+function gearSyncFields(data, equipped){
+  const want = gearBonus(equipped), had = data.gearApplied || { hp:0, stats:{} };
+  const stats = { ...(data.stats||{}) };
+  let changed = want.hp !== (had.hp||0);
+  SKILL_KEYS.forEach(k=>{
+    const delta = want.stats[k] - (had.stats?.[k]||0);
+    if(delta){ stats[k] = (stats[k]||0) + delta; changed = true; }
+  });
+  if(!changed) return {};
+  const hpMax = Math.max(1, (data.hpMax||1) + (want.hp - (had.hp||0)));
+  return { stats, hpMax, hp: Math.max(1, Math.min(hpMax, data.hp||1)), gearApplied: want };
 }
 const EQUIP_SLOTS = ["weapon","helmet","chestplate","leggings","boots","trinket"];
 function renderEquipSlots(){
@@ -2421,7 +2477,7 @@ const RECIPES = [];
   tiers.forEach(([t,mat,rar,stat])=>{
     const m = RARITY_MULT[rar], k = t.toLowerCase();
     weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, { stats:{attack:Math.round(3*m)+2+(i%3)}, desc:`A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.` }, [[mat,2+(i%2)],["ore_coal",1]]));
-    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:{defense:Math.round(2*m)+1, hp:Math.round(4*m)}, desc:`Sturdy ${t.toLowerCase()} protection.` }, [[mat,q],["ore_coal",1]]));
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:armorStats(slot, m, 1), desc:`Sturdy ${t.toLowerCase()} gear.` }, [[mat,q],["ore_coal",1]]));
     add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m)), curse:false}, desc:`A ${t.toLowerCase()} ring boosting ${stat}.` }, [[mat,1],["ore_coal",1]]);
     add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m))+1, curse:false}, desc:`A ${t.toLowerCase()} amulet boosting ${stat}.` }, [[mat,2],["forage_herb",2]]);
   });
@@ -2500,7 +2556,7 @@ function renderCraftInv(){
   const sel = RECIPES.find(r=>r.id===state.selRecipe), det = document.getElementById("recipeDetail"), btn = document.getElementById("btnCraft");
   if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
   const it = ITEM_BY_ID[sel.out], st = it.stats||{};
-  const eff = st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: st.defense?`+${st.defense} defense, +${st.hp||0} HP`: Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
+  const eff = st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: it.type==="armor"?itemEffectText(it): Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
   det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p>` +
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
@@ -2530,13 +2586,6 @@ function playerAttackPower(){
   const weapon = p.equipped.weapon && ITEM_BY_ID[p.equipped.weapon];
   return 4 + p.stats.STRENGTH*1.5 + p.stats.SMARTS + (weapon?.stats.attack||0);
 }
-function playerDefense(){
-  const p = state.profile;
-  return ARMOR_SLOTS.reduce((sum,slot)=>{
-    const piece = p.equipped[slot] && ITEM_BY_ID[p.equipped[slot]];
-    return sum + (piece?.stats.defense||0);
-  }, 0);
-}
 /* Skill-based attacks: Space = basic attack, number keys 1-4 in the open
    world trigger the others (see WORLD section). Kept from the old menu
    system so unlock levels/costs stay consistent. */
@@ -2546,7 +2595,7 @@ const ATTACK_SKILLS = [
   { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
     dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
   { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:6,
-    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 6 mana. Extra damage, ignores half enemy defense." },
+    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 6 mana. Extra damage that cuts through a brace." },
   { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:12,
     dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 12 mana. Devastating hit." },
 ];
@@ -2627,7 +2676,7 @@ function startPve(diff){
   if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
   state.battle = { mode:"pve", m, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false };
   document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
-  openModal("battleModal");
+  openModal("battleModal"); setPvpRxVisible(false);
   battleLogPush(`A wild ${m.name} (Lv.${m.level}) appears!`);
   nextIntent(state.battle);
   renderPve();
@@ -2643,6 +2692,7 @@ function renderPve(){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.php)}/${p.hpMax}`;
   document.getElementById("battleStaminaLabel").textContent = `Mana ${b.mana}/${p.manaMax}${b.focus?" · 🎯 Focused (next hit x2)":""}`;
   document.getElementById("battleRageLabel").textContent = `${b.rage}/${p.rageMax}`;
+  if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
   const box = document.getElementById("battleActions"); box.innerHTML = "";
   if(b.over) return;
   const add = (label, tip, fn, disabled, cls="btn-pink")=>{
@@ -2656,15 +2706,8 @@ function renderPve(){
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
   add(b.lastMove==="counter" ? "Counter (cooldown)" : "Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Can only be used every other turn.", ()=>pveAct("counter"), b.lastMove==="counter", "btn-blue");
-  const food = bestFood();
-  add(food?`Eat ${food.name} (+${healText(food.stats)})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), false, "btn-green");
+  add("🍖 Eat", "Open your food bag and pick what to eat. Free action — does NOT end your turn.", openEatModal, false, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
-}
-function bestFood(){
-  const b = state.battle, missing = state.profile.hpMax - b.php;
-  const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal);
-  foods.sort((a,c)=>a.stats.heal-c.stats.heal);
-  return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
 }
 async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
@@ -2676,17 +2719,6 @@ async function pveAct(move){
   const sk = ATTACK_SKILLS.find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
-  if(move==="eat" && !bestFood()){ toast("You have no food."); b.busy=false; return; }
-  // Eating is a free action: heal and stay on your turn (no enemy response).
-  if(move==="eat"){
-    const f = bestFood();
-    if(f){
-      const heal = Math.min(rollHeal(f), p.hpMax-b.php);
-      const ok = await changeInvQty(f.id,-1);
-      if(ok!==null){ b.php+=heal; battleLogPush(`You eat ${f.name}: +${heal} HP. (free action)`); }
-    }
-    b.busy=false; renderPve(); return;
-  }
   b.lastMove = move;
   const brace = intent==="brace";
   let guard=false, counter=false;
@@ -2713,7 +2745,7 @@ async function pveAct(move){
       const back = Math.max(1,Math.round(playerAttackPower()*1.5*rnd())); b.ehp-=back;
       battleLogPush(`Countered! ${m.name}'s ${INTENTS[intent].label} is negated and you deal ${back}.`);
     } else {
-      let d = m.attack*mult*rnd() - playerDefense()*0.5;
+      let d = m.attack*mult*rnd();
       if(guard) d*=0.35; if(counter) d*=1.3;
       d = Math.max(1, Math.round(d)); b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
       battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
@@ -2729,7 +2761,7 @@ async function pveFlee(){
   b.over = true;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage }));
   toast("You fled safely — nothing lost.");
-  closeModal("battleModal"); state.battle = null;
+  closeModal("eatModal"); closeModal("battleModal"); state.battle = null;
 }
 async function pveEnd(won){
   const b = state.battle, m = b.m; b.over = true; renderPve();
@@ -2747,9 +2779,88 @@ async function pveEnd(won){
     const r = await applyDeathPenalty({ mana:b.mana });
     toast(`Defeated. Lost $${r.moneyLoss}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
   }
-  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 1800);
+  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); state.battle=null; }, 1800);
 }
 document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("click", ()=> startPve(btn.dataset.pve)));
+
+
+/* =========================================================================
+   EAT OVERLAY — shared by PvE and PvP battles. Pick any food/consumable
+   straight from your inventory, read its description, and press Eat (or
+   spam it). HP and Mana bars update live as you eat.
+   ========================================================================= */
+let eatSel = null, eatBusy = false;
+function eatContext(){
+  const b = state.battle, p = state.profile; if(!b || !p) return null;
+  if(b.mode==="pve") return { hp:b.php, hpMax:p.hpMax, mana:b.mana, manaMax:p.manaMax, canEat:!b.over, why:"" };
+  if(b.mode==="duel" && b.d){
+    const d = b.d, me = b.iAmHost?"host":"guest";
+    return { hp:d[me+"Hp"], hpMax:d[me+"HpMax"], mana:d[me+"Mana"] ?? p.mana, manaMax:d[me+"ManaMax"] ?? p.manaMax,
+      canEat: d.turn===state.uid && d.status!=="finished", why:"You can only eat on your turn." };
+  }
+  return null;
+}
+function eatableFoods(){
+  return invExpanded().filter(e=> e.item.type==="consumable" && ((e.item.stats.heal||0)>0 || (e.item.stats.mana||0)>0));
+}
+function openEatModal(){
+  if(!eatContext()){ return; }
+  openModal("eatModal"); renderEatModal();
+}
+function renderEatModal(){
+  const ctx = eatContext();
+  if(!ctx){ closeModal("eatModal"); return; }
+  const setEat = (k, v, max)=>{
+    document.getElementById("eatBar"+k).style.width = Math.max(0,Math.min(100,(v/max)*100))+"%";
+    document.getElementById("eatNum"+k).textContent = `${Math.max(0,Math.round(v))}/${max}`;
+  };
+  setEat("HP", ctx.hp, ctx.hpMax); setEat("MANA", ctx.mana, ctx.manaMax);
+  const foods = eatableFoods();
+  if(eatSel && !foods.some(e=>e.item.id===eatSel)) eatSel = null;
+  const grid = document.getElementById("eatGrid"); grid.innerHTML = "";
+  if(!foods.length) grid.innerHTML = `<p class="doodle-sub" style="grid-column:1/-1">You have no food.</p>`;
+  foods.forEach(e=>{
+    const cell = document.createElement("div");
+    cell.className = `inv-cell rarity-${e.item.rarity}` + (eatSel===e.item.id?" selected":"");
+    cell.innerHTML = `<div>${escapeHTML(e.item.name)}</div><span class="qty-badge">x${e.qty}</span>`;
+    cell.addEventListener("click", ()=>{ eatSel = e.item.id; renderEatModal(); });
+    grid.appendChild(cell);
+  });
+  const sel = eatSel && ITEM_BY_ID[eatSel], det = document.getElementById("eatDetail"), btn = document.getElementById("btnEatNow");
+  det.innerHTML = sel
+    ? `<b>${escapeHTML(sel.name)}</b> <i>(${sel.rarity})</i><br>${escapeHTML(sel.desc||"")}<br><b>${escapeHTML(itemEffectText(sel))}</b>` + (!ctx.canEat && ctx.why ? `<br><small>${ctx.why}</small>` : "")
+    : "Select a food to read about it.";
+  btn.disabled = !sel || !ctx.canEat;
+}
+document.getElementById("btnEatNow").addEventListener("click", eatSelected);
+async function eatSelected(){
+  if(eatBusy || !eatSel) return;             // spam-safe: clicks during an in-flight eat are ignored
+  const ctx = eatContext(), item = ITEM_BY_ID[eatSel];
+  if(!ctx || !item) return;
+  if(!ctx.canEat){ toast(ctx.why || "You can't eat right now."); return; }
+  if(!eatableFoods().some(e=>e.item.id===item.id)){ eatSel = null; renderEatModal(); return; }
+  eatBusy = true;
+  try{
+    const b = state.battle;
+    const heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0;
+    const manaGain = item.stats.mana ? Math.min(item.stats.mana, ctx.manaMax-ctx.mana) : 0;
+    if(heal<=0 && manaGain<=0){ toast("You're already full — save it for later."); return; }
+    const gains = [heal>0?`+${heal} HP`:"", manaGain>0?`+${manaGain} mana`:""].filter(Boolean).join(", ");
+    const removed = await changeInvQty(item.id, -1);   // inventory first: no free heals if the item isn't really there
+    if(removed===null) return;
+    if(b.mode==="pve"){
+      b.php += heal; b.mana += manaGain;
+      battleLogPush(`You eat ${item.name}: ${gains}. (free action)`);
+      renderPve();
+    } else {
+      const me = b.iAmHost?"host":"guest", d = b.d;
+      await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), {
+        [me+"Hp"]: ctx.hp+heal, [me+"Mana"]: ctx.mana+manaGain,
+        log: [...(d.log||[]), `${state.profile.username} eats ${item.name} (${gains}).`].slice(-60)
+      }));
+    }
+  } finally { eatBusy = false; renderEatModal(); }
+}
 
 /* --- duel (challenge a friend) --- */
 document.getElementById("btnFightFriend").addEventListener("click", renderDuelPanel);
@@ -2777,16 +2888,20 @@ function renderDuelPanel(){
 }
 function randCode(){ return String(Math.floor(10000+Math.random()*90000)); }
 let roomUnsub=null, queueInterval=null;
+/* One side's live numbers, copied straight from that player's CURRENT
+   profile so you enter the duel exactly as you are (10 HP stays 10 HP). */
+function duelSide(role, s){
+  return { [role+"Hp"]:s.hp, [role+"HpMax"]:s.hpMax, [role+"Mana"]:s.mana, [role+"ManaMax"]:s.manaMax,
+           [role+"Rage"]:s.rage, [role+"RageMax"]:s.rageMax };
+}
+const NO_GUEST = { guestUid:null, guestName:null, guestHp:null, guestHpMax:null, guestMana:null, guestManaMax:null, guestRage:null, guestRageMax:null };
 async function startDuelRoom(){
   const code = randCode();
   const p = state.profile;
   const ok = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
     hostUid: state.uid, hostName: state.profile.username,
-    hostHp: p.hpMax, hostHpMax: p.hpMax, hostMana: p.mana, hostManaMax: p.manaMax,
-    guestUid:null, guestName:null, guestHp:null, guestHpMax:null, guestMana:null, guestManaMax:null,
-    // Host always goes first. Turn-based: only "turn" may attack; the
-    // other side's Attack button is disabled until turn flips (see
-    // renderDuelBattle/duelAttack).
+    ...duelSide("host", p), ...NO_GUEST,
+    // Host always goes first. Turn-based: only "turn" may act.
     turn: state.uid,
     status:"waiting", winner:null, createdAt: Date.now(), log:[]
   }));
@@ -2804,13 +2919,23 @@ async function joinDuelRoom(code){
     // "host clicks start" step, both sides connect live at the same moment.
     await updateDoc(rref, {
       guestUid: state.uid, guestName: state.profile.username,
-      guestHp: state.profile.hpMax, guestHpMax: state.profile.hpMax,
-      guestMana: state.profile.mana, guestManaMax: state.profile.manaMax,
+      ...duelSide("guest", state.profile),
       status:"active", turn: Math.random()<0.5 ? state.uid : snap.data().hostUid
     });
     document.getElementById("roomStatus").textContent = "Duel starting…";
     watchDuelRoom(code);
   }catch(err){ toast(friendlyFirebaseError(err)); }
+}
+// Both sides re-copy their own live stats the moment the duel opens (only
+// before anyone has acted), so time spent waiting in a room/queue — eating,
+// regen, etc. — never leaves stale numbers in the fight.
+async function syncMyDuelStats(code, role){
+  const rref = doc(db,"duelRooms",code);
+  await runTransaction(db, async tx=>{
+    const s = await tx.get(rref); if(!s.exists()) return;
+    if((s.data().log||[]).length) return;      // fight already started
+    tx.update(rref, duelSide(role, state.profile));
+  }).catch(()=>{});
 }
 function watchDuelRoom(code){
   if(roomUnsub) roomUnsub();
@@ -2831,15 +2956,19 @@ function watchDuelRoom(code){
     }
     if(state.battle?.mode==="duel" && state.battle.code===code){
       renderDuelBattle(d);
+      pvpReactionsFromRoom(d);
     }
     if(d.status==="finished" && state.battle?.mode==="duel" && state.battle.code===code && !state.battle.resolved){
       state.battle.resolved = true;
       const won = d.winner===state.uid;
+      const me = state.battle.iAmHost ? "host" : "guest", pp = state.profile;
+      // Whatever HP/mana/rage you finish the duel with is carried back to your character.
+      const fin = { hp: Math.max(1, d[me+"Hp"] ?? pp.hp), mana: d[me+"Mana"] ?? pp.mana, rage: d[me+"Rage"] ?? pp.rage };
       if(won){
         battleLogPush("You won the duel!");
         toast("Duel won!");
         withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-          kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
+          kills:(pp.kills||0)+1, killstreak:(pp.killstreak||0)+1, ...fin
         }));
       } else {
         battleLogPush("You were defeated in the duel.");
@@ -2847,7 +2976,8 @@ function watchDuelRoom(code){
         // writes another player's doc), then forwards the exact amount/
         // item to the WINNER's inbox — same pattern as auction payouts —
         // so the winner's subscribeInbox() can credit it to their own doc.
-        (d.fledBy===state.uid ? Promise.resolve(null) : applyDeathPenalty()).then((res)=>{
+        const fled = d.fledBy===state.uid;
+        (fled ? withErrorToast(()=> updateDoc(doc(db,"players",state.uid), fin)).then(()=>null) : applyDeathPenalty({ mana: fin.mana })).then((res)=>{
           if(!res){ toast("You fled the duel — nothing lost."); return; }
           const {moneyLoss,lostItemName} = res;
           const lossMsg = lostItemName ? `Lost $${moneyLoss} and your ${lostItemName}.` : `Lost $${moneyLoss}.`;
@@ -2858,19 +2988,28 @@ function watchDuelRoom(code){
           }));
         });
       }
-      setTimeout(()=>{ closeModal("battleModal"); state.battle=null; if(roomUnsub){roomUnsub(); roomUnsub=null;} }, 1400);
+      setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); setPvpRxVisible(false); state.battle=null; if(roomUnsub){roomUnsub(); roomUnsub=null;} }, 1400);
     }
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
 function openDuelBattle(code, d){
   const iAmHost = d.hostUid===state.uid;
-  state.battle = { mode:"duel", code, iAmHost, resolved:false, log:[`${d.hostName} vs ${d.guestName} — fight!`] };
+  state.battle = { mode:"duel", code, iAmHost, resolved:false, d, log:[`${d.hostName} vs ${d.guestName} — fight!`],
+    seenRx:{ host:d.hostRx?.ts||0, guest:d.guestRx?.ts||0 } };
   document.querySelectorAll(".modal-backdrop.active").forEach(m=>m.classList.remove("active"));
-  openModal("battleModal");
+  openModal("battleModal"); setPvpRxVisible(true);
+  syncMyDuelStats(code, iAmHost?"host":"guest");
   renderDuelBattle(d);
 }
+/* Mana/Rage income, granted to a player the moment the turn comes back to them
+   (so it's applied when their opponent finishes acting):
+     Mana:  +1 every turn, +2 more if their last move was Guard, +5 more if it was Skip
+     Rage:  +1 for an attack, +2 for a Power Strike or Guard */
+function turnMana(last){ return 1 + (last==="guard" ? 2 : last==="skip" ? 5 : 0); }
+function turnRage(last){ return last==="guard" || last==="power" ? 2 : (last && ATTACK_SKILLS.some(s=>s.id===last)) ? 1 : 0; }
 function renderDuelBattle(d){
   const b = state.battle;
+  b.d = d;                                   // latest room data (used by the Eat overlay)
   const iAmHost = b.iAmHost;
   const myHp = iAmHost ? d.hostHp : d.guestHp, myMax = iAmHost ? d.hostHpMax : d.guestHpMax;
   const oppHp = iAmHost ? d.guestHp : d.hostHp, oppMax = iAmHost ? d.guestHpMax : d.hostHpMax;
@@ -2882,95 +3021,131 @@ function renderDuelBattle(d){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,myHp)}/${myMax}`;
   const me = iAmHost ? "host" : "guest", pp = state.profile;
   const myFx = d[me+"Fx"]||{}, opFxNow = d[(iAmHost?"guest":"host")+"Fx"]||{};
-  document.getElementById("battleStaminaLabel").textContent = `Mana ${d[me+"Mana"] ?? pp.mana}/${pp.manaMax} · One move per turn` + (myFx.focus?" · 🎯 Focused":"") + (myFx.guard?" · 🛡️ Guarding":"") + (myFx.counter?" · ↩️ Countering":"") + (opFxNow.guard?" · Foe guarding":"") + (opFxNow.counter?" · Foe countering":"");
-  document.getElementById("battleRageLabel").textContent = `${d[me+"Rage"] ?? pp.rage}/${pp.rageMax}`;
+  const manaNow = d[me+"Mana"] ?? pp.mana, manaMax = d[me+"ManaMax"] ?? pp.manaMax;
+  const rageNow = d[me+"Rage"] ?? pp.rage, rageMax = d[me+"RageMax"] ?? pp.rageMax;
+  document.getElementById("battleStaminaLabel").textContent = `Mana ${manaNow}/${manaMax} · One move per turn` + (myFx.focus?" · 🎯 Focused":"") + (myFx.guard?" · 🛡️ Guarding":"") + (opFxNow.guard?" · Foe guarding":"");
+  document.getElementById("battleRageLabel").textContent = `${rageNow}/${rageMax}`;
   // The log is stored on the room doc itself (not local state) so both
   // players see the same "who did what" history, attributed by name.
   const logEl = document.getElementById("battleLog");
   logEl.innerHTML = (d.log||[]).slice(-30).map(m=>`<div>${escapeHTML(m)}</div>`).join("");
   logEl.scrollTop = logEl.scrollHeight;
+  if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
   const actions = document.getElementById("battleActions");
   actions.innerHTML="";
   if(d.status==="finished") return;
   const isMyTurn = d.turn === state.uid;
-  const mana = d[me+"Mana"] ?? pp.mana, rage = d[me+"Rage"] ?? pp.rage;
-  const addBtn = (id, label, tip, extraDis, cls)=>{
+  const addBtn = (id, label, tip, extraDis, cls, fn)=>{
     const el = document.createElement("button");
     el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip;
-    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;   // greyed when it isn't your turn (or Guard/Counter on cooldown)
-    el.addEventListener("click", ()=> duelAct(d, id)); actions.appendChild(el);
+    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;   // greyed when it isn't your turn (or Guard on cooldown)
+    el.addEventListener("click", fn || (()=> duelAct(d, id))); actions.appendChild(el);
   };
   ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
-    addBtn(s.id, s.name, s.desc, false, "btn-pink"));
-  addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit and gain 2 Rage. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
+    addBtn(s.id, s.name, s.desc + (s.id==="power" ? " Gives +2 Rage when your turn returns." : " Gives +1 Rage when your turn returns."), false, "btn-pink"));
+  addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit. When your turn returns: +2 Rage and +2 Mana. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
-  addBtn("counter", d[me+"Last"]==="counter" ? "Counter (cooldown)" : "Counter", "If they attack next, negate it and bounce the damage back at them. Can only be used every other turn.", d[me+"Last"]==="counter", "btn-blue");
-  const food = duelFood(d[me+"HpMax"] - myHp);
-  addBtn("eat", food?`Eat ${food.name} (+${healText(food.stats)})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", false, "btn-green");
+  addBtn("skip", "Skip Turn", "Pass your turn. When your turn returns: +5 Mana.", false, "btn-blue");
+  // Eat is a free action and opens the food picker instead of forcing one food.
+  const eatEl = document.createElement("button");
+  eatEl.className = "doodle-btn btn-sm btn-green"; eatEl.textContent = "🍖 Eat"; eatEl.title = "Pick food from your inventory. Free action — does not end your turn.";
+  eatEl.disabled = !isMyTurn || myHp<=0 || oppHp<=0;
+  eatEl.addEventListener("click", openEatModal); actions.appendChild(eatEl);
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
   fleeBtn.className = "doodle-btn btn-sm btn-yellow"; fleeBtn.textContent = "Flee";
   fleeBtn.addEventListener("click", ()=> duelFlee(d));
   actions.appendChild(fleeBtn);
 }
-function duelFood(missing){
-  const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal).sort((a,c)=>a.stats.heal-c.stats.heal);
-  return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
-}
-/* Each move can be used once per cycle; once every move has been used the
-   list refreshes. Each side stores its own Hp/Mana/Rage/Fx/Used on the room. */
 async function duelAct(d, move){
   const b = state.battle; if(!b || b.mode!=="duel" || b.busy) return;
   if(d.turn !== state.uid){ toast("It's not your turn."); return; }
   b.busy = true;   // lock immediately so a fast double-click can't fire a second action off stale room data
-  try{ await duelActInner(d, move); } finally { b.busy = false; }
+  try{ await duelActInner(b.d || d, move); } finally { b.busy = false; }
 }
 async function duelActInner(d, move){
   const b = state.battle;
   const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
-  if((move==="guard"||move==="counter") && d[me+"Last"]===move){ toast(`${move==="guard"?"Guard":"Counter"} is on cooldown.`); return; }
+  if(move==="guard" && d[me+"Last"]==="guard"){ toast("Guard is on cooldown."); return; }
   const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
   let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
+  const rageMax = d[me+"RageMax"] ?? p.rageMax;
   const myFx = { ...(d[me+"Fx"]||{}) }, opFx = { ...(d[op+"Fx"]||{}) }, lines = [], rnd = ()=>0.9+Math.random()*0.2;
-  let eatId = null;
-  if(move==="guard"){ myFx.guard = true; rage = Math.min(p.rageMax, rage+2); lines.push(`${myName} raises their guard.`); }
-  else if(move==="counter"){ myFx.counter = true; lines.push(`${myName} readies a counter…`); }
+  if(move==="guard"){ myFx.guard = true; lines.push(`${myName} raises their guard.`); }
   else if(move==="focus"){ myFx.focus = true; lines.push(`${myName} focuses their strength.`); }
-  else if(move==="eat"){
-    const f = duelFood(d[me+"HpMax"] - myHp); if(!f){ toast("You have no food."); return; }
-    const heal = Math.min(rollHeal(f), d[me+"HpMax"] - myHp); myHp += heal; eatId = f.id;
-    lines.push(`${myName} eats ${f.name} (+${heal} HP).`);
-  } else {
+  else if(move==="skip"){ lines.push(`${myName} skips their turn.`); }
+  else {
     const s = attackSkillById(move);
-    if((s.needsFullRage && rage<p.rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
-    if(s.needsFullRage) rage = 0; if(s.manaCost) mana -= s.manaCost; else if(s.id==="basic") rage = Math.min(p.rageMax, rage+1);
+    if((s.needsFullRage && rage<rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
+    if(s.needsFullRage) rage = 0;
+    if(s.manaCost) mana -= s.manaCost;
     let dmg = playerAttackPower()*s.dmgMult()*rnd()*(myFx.focus?2:1); myFx.focus = false;
-    if(opFx.counter){ const back = Math.max(1,Math.round(dmg)); myHp -= back; lines.push(`${opName} counters! ${myName}'s ${s.name} is turned back for ${back} damage.`); }
-    else { if(opFx.guard) dmg *= 0.35; dmg = Math.max(1,Math.round(dmg)); opHp -= dmg; lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`); }
+    if(opFx.guard) dmg *= 0.35;
+    dmg = Math.max(1, Math.round(dmg)); opHp -= dmg;
+    lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);
   }
-  opFx.guard = false; opFx.counter = false;   // their stance lasts one action of mine
-  let patch;
-  if(move==="eat"){
-    // free action: heal only, keep the turn, don't touch stances or the used list
-    patch = { [me+"Hp"]:Math.max(0,myHp), log:[...(d.log||[]), ...lines].slice(-60) };
-  } else {
-    patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
-      [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Last"]:move, turn:opUid, log:[...(d.log||[]), ...lines].slice(-60) };
-    if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
-    else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
+  opFx.guard = false;   // their stance lasts one action of mine
+  const patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
+    [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Last"]:move, turn:opUid };
+  if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
+  else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
+  else {
+    // The turn is going back to the opponent: pay out THEIR income for what they did last turn.
+    const opLast = d[op+"Last"];
+    const opMana = d[op+"Mana"] ?? 0, opManaMax = d[op+"ManaMax"] ?? opMana, opRage = d[op+"Rage"] ?? 0, opRageMax = d[op+"RageMax"] ?? opRage;
+    const newMana = Math.min(opManaMax, opMana + turnMana(opLast)), newRage = Math.min(opRageMax, opRage + turnRage(opLast));
+    patch[op+"Mana"] = newMana; patch[op+"Rage"] = newRage;
+    const gm = newMana-opMana, gr = newRage-opRage;
+    if(gm>0 || gr>0) lines.push(`${opName} recovers ${[gm>0?`${gm} mana`:"", gr>0?`${gr} rage`:""].filter(Boolean).join(" and ")}.`);
   }
-  const ok = await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), patch));
-  if(ok!==null && eatId) changeInvQty(eatId, -1);
+  patch.log = [...(d.log||[]), ...lines].slice(-60);
+  await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), patch));
 }
 async function duelFlee(d){
   const b = state.battle;
   if(!b || b.mode!=="duel") return;
   const rref = doc(db,"duelRooms",b.code);
   const winner = b.iAmHost ? d.guestUid : d.hostUid;
-  const loser = state.uid;
   await withErrorToast(()=> updateDoc(rref, {
     status:"finished", winner, fledBy: state.uid, log: arrayUnion(`${state.profile.username} fled the duel.`)
   }));
+}
+
+/* --- PvP reaction buttons: 😡 😂 🤯 🤔, 3s cooldown. Sent through the duel room
+   doc (one small field per player), so no extra collection/rules are needed.
+   They pop up over the sender's side of the screen. --- */
+const PVP_RX = ["😡","😂","🤯","🤔"];
+let lastPvpRx = 0;
+function setPvpRxVisible(on){ document.getElementById("pvpRxRow").style.display = on ? "flex" : "none"; }
+function setPvpRxCooldown(){
+  const btns = document.querySelectorAll("[data-pvprx]");
+  btns.forEach(x=>{ x.disabled = true; x.classList.add("cooling"); });
+  setTimeout(()=> btns.forEach(x=>{ x.disabled = false; x.classList.remove("cooling"); }), 3000);
+}
+document.querySelectorAll("[data-pvprx]").forEach(btn=> btn.addEventListener("click", async ()=>{
+  const b = state.battle, emoji = btn.dataset.pvprx;
+  if(!b || b.mode!=="duel" || b.resolved || !PVP_RX.includes(emoji) || Date.now()-lastPvpRx < 3000) return;
+  lastPvpRx = Date.now(); setPvpRxCooldown();
+  await withErrorToast(()=> updateDoc(doc(db,"duelRooms",b.code), { [(b.iAmHost?"host":"guest")+"Rx"]: { emoji, ts: Date.now() } }));
+}));
+function pvpReactionsFromRoom(d){
+  const b = state.battle, mine = b.iAmHost ? "host" : "guest";
+  ["host","guest"].forEach(role=>{
+    const rx = d[role+"Rx"];
+    if(!rx || !PVP_RX.includes(rx.emoji) || !(rx.ts > (b.seenRx[role]||0))) return;
+    b.seenRx[role] = rx.ts;
+    spawnPvpReaction(role===mine, rx.emoji, role==="host" ? d.hostName : d.guestName);
+  });
+}
+function spawnPvpReaction(isMine, emoji, name){
+  const el = document.createElement("div"); el.className = "pvp-rx-bubble " + (isMine ? "mine" : "foe");
+  const e = document.createElement("span"); e.className = "pvp-rx-emoji"; e.textContent = emoji;
+  const u = document.createElement("span"); u.className = "pvp-rx-name"; u.textContent = name || "";
+  el.append(e, u);
+  // yours rise on the right (your side), theirs on the left (their side)
+  el.style.left = (isMine ? 66 + Math.random()*20 : 10 + Math.random()*20) + "%";
+  document.getElementById("pvpRxLayer").appendChild(el);
+  setTimeout(()=> el.remove(), 2300);
 }
 let queueUnsub=null, queueGuestUnsub=null;
 function setQueueUI(on){ document.getElementById("queueFloat").style.display = on?"flex":"none"; }
@@ -2997,7 +3172,7 @@ async function joinQueue(){
     if(label) label.textContent = ` ${Math.floor(seconds/60)}m ${seconds%60}s`;
   },1000);
   const ok = await withErrorToast(()=> setDoc(doc(db,"queue",state.uid), {
-    username: state.profile.username, hpMax: state.profile.hpMax, joinedAt: Date.now()
+    username: state.profile.username, ...duelSide("", state.profile), joinedAt: Date.now()
   }));
   if(ok===null) return;
   setQueueUI(true);
@@ -3016,9 +3191,9 @@ async function joinQueue(){
       const code = randCode();
       const created = await withErrorToast(()=> setDoc(doc(db,"duelRooms",code), {
         hostUid: state.uid, hostName: state.profile.username,
-        hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
+        ...duelSide("host", state.profile),
         guestUid: opp.uid, guestName: opp.username,
-        guestHp: opp.hpMax||100, guestHpMax: opp.hpMax||100,
+        ...duelSide("guest", { hp:opp.Hp ?? opp.hpMax ?? 100, hpMax:opp.HpMax ?? opp.hpMax ?? 100, mana:opp.Mana ?? 0, manaMax:opp.ManaMax ?? 0, rage:opp.Rage ?? 0, rageMax:opp.RageMax ?? 0 }),
         status:"active", turn: Math.random()<0.5 ? state.uid : opp.uid, winner:null, createdAt: Date.now(), log:[]
       }));
       if(created===null) return;
@@ -3099,6 +3274,8 @@ async function payPlayer(uid, username, amount){
 async function showRecap(since){
   if(!since) return;                       // brand-new account: nothing to recap
   if(document.getElementById("recapModal").classList.contains("active")) return;
+  const inGame = ()=> state.profile && document.getElementById("screen-game").classList.contains("active");
+  if(!inGame()) return;
   let sold=0, soldN=0, paid=0, paidN=0;
   const friendReqs = [], payers = {}, dmFrom = {};
   try{
@@ -3113,6 +3290,7 @@ async function showRecap(since){
     const counts = await Promise.all(uids.map(u=> getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,u),"messages"), where("ts",">",since))).then(sn=>sn.docs.filter(d=>d.data().uid!==state.uid && !d.data().system).length).catch(()=>0)));
     uids.forEach((u,i)=>{ if(counts[i] > (dmFrom[u]?.n||0)) dmFrom[u] = { name:dmFrom[u]?.name || state.pmContactsExtra[u] || "a friend", n:counts[i] }; });
   }catch(e){ console.error(e); }
+  if(!inGame()) return;                    // logged out while the recap was loading
   const dms = Object.values(dmFrom).reduce((a,x)=>a+x.n,0), fr = friendReqs.length;
   const list = (arr)=> arr.length ? `<div class="recap-detail">${arr.slice(0,5).map(escapeHTML).join(", ")}${arr.length>5?", …":""}</div>` : "";
   const nothing = !soldN && !paidN && !fr && !dms;
@@ -3126,13 +3304,9 @@ async function showRecap(since){
     </div>${nothing?'<p class="recap-away">Nothing new while you were gone.</p>':""}`;
   openModal("recapModal");
 }
-// returning to the tab after a while shows the recap again
-let hiddenAt = null;
-document.addEventListener("visibilitychange", ()=>{
-  if(document.hidden){ hiddenAt = Date.now(); return; }
-  if(hiddenAt && state.profile && Date.now()-hiddenAt >= 60000 && !state.battle) showRecap(hiddenAt);
-  hiddenAt = null;
-});
+// The recap is shown once per login only (from enterGame). It is NOT re-shown
+// when you tab back in, and it is wiped on logout so it can never appear on
+// the title/login screen.
 document.getElementById("btnRecapOk").addEventListener("click", ()=> closeModal("recapModal"));
 document.querySelectorAll("[data-pay]").forEach(b=> b.addEventListener("click", ()=>{
   const inp = document.getElementById("payAmount");

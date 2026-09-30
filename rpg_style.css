@@ -578,3 +578,28 @@ body{
 .dm-receipt{ font-size:11px; color:#9a9a9a; text-align:right; margin-top:2px; }
 
 .recap-detail{ font-size:13px; opacity:.7; margin-top:2px; }
+
+
+/* ---------- eat overlay (sits above the battle modal) ---------- */
+#eatModal{ z-index:60; }
+.eat-card{ width:520px; }
+.eat-bars{ display:flex; flex-direction:column; gap:6px; margin:6px 0 12px; }
+.eat-grid{ grid-template-rows:none; grid-auto-rows:minmax(70px,auto); min-height:0; max-height:250px; overflow-y:auto; margin-bottom:10px; }
+#btnEatNow{ margin-top:10px; width:100%; }
+
+/* ---------- PvP reactions ---------- */
+.pvp-rx-row{ display:flex; gap:10px; justify-content:center; margin-top:4px; }
+.pvp-rx{ width:46px; height:46px; font-size:24px; }
+.pvp-rx.cooling{ opacity:.4; cursor:not-allowed; }
+.pvp-rx-layer{ position:fixed; inset:0; pointer-events:none; z-index:65; overflow:hidden; }
+.pvp-rx-bubble{ position:absolute; bottom:18%; display:flex; flex-direction:column; align-items:center; animation:pvpRxRise 2.2s cubic-bezier(.2,.7,.3,1) forwards; }
+.pvp-rx-emoji{ font-size:64px; line-height:1; filter:drop-shadow(3px 3px 0 rgba(74,63,53,.35)); }
+.pvp-rx-name{ font-size:15px; margin-top:2px; padding:0 8px; border:2px solid var(--ink); border-radius:8px; color:var(--ink); }
+.pvp-rx-bubble.mine .pvp-rx-name{ background:var(--blue,#BFD9F2); }
+.pvp-rx-bubble.foe .pvp-rx-name{ background:#F6B4B4; }
+@keyframes pvpRxRise{
+  0%   { transform:translateY(0) scale(.3) rotate(-8deg); opacity:0; }
+  12%  { transform:translateY(-30px) scale(1.35) rotate(6deg); opacity:1; }
+  25%  { transform:translateY(-70px) scale(1) rotate(-4deg); }
+  100% { transform:translateY(-320px) scale(.9) rotate(3deg); opacity:0; }
+}

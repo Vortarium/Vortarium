@@ -387,6 +387,28 @@
       &middot; Rage: <span id="battleRageLabel">0/10</span>
     </div>
     <div class="battle-actions" id="battleActions"></div>
+    <div class="pvp-rx-row" id="pvpRxRow" style="display:none">
+      <button class="rx-btn pvp-rx" data-pvprx="😡" title="Angry">😡</button>
+      <button class="rx-btn pvp-rx" data-pvprx="😂" title="Laugh">😂</button>
+      <button class="rx-btn pvp-rx" data-pvprx="🤯" title="Mind blown">🤯</button>
+      <button class="rx-btn pvp-rx" data-pvprx="🤔" title="Hmm">🤔</button>
+    </div>
+  </div>
+  <div id="pvpRxLayer" class="pvp-rx-layer"></div>
+</div>
+
+<!-- ================= EAT OVERLAY (battles) ================= -->
+<div id="eatModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel eat-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2">Eat</h2>
+    <div class="eat-bars">
+      <div class="bar-row"><span>HP</span><div class="bar bar-hp"><div class="bar-fill" id="eatBarHP"></div></div><span class="bar-num" id="eatNumHP">0/0</span></div>
+      <div class="bar-row"><span>MANA</span><div class="bar bar-mana"><div class="bar-fill" id="eatBarMANA"></div></div><span class="bar-num" id="eatNumMANA">0/0</span></div>
+    </div>
+    <div class="inv-grid eat-grid" id="eatGrid"></div>
+    <div class="item-detail doodle-panel" id="eatDetail">Select a food to read about it.</div>
+    <button class="doodle-btn btn-green btn-lg" id="btnEatNow" disabled>Eat</button>
   </div>
 </div>
 
