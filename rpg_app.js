@@ -10,7 +10,7 @@ import {
   deleteUser, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
-  getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
+  initializeFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
   increment, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
@@ -26,7 +26,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 setPersistence(auth, browserLocalPersistence).catch(()=>{});
 
 /* Firebase Auth needs an email under the hood. Usernames are mapped to a
@@ -262,6 +262,7 @@ const JOB_ITEM_BANK = [
   { id:"forage_herb", name:"Healing Herb", type:"material", rarity:"uncommon", sellPrice:9, desc:"A useful herb.", stats:{} },
   { id:"forage_mushroom", name:"Wild Mushroom", type:"material", rarity:"common", sellPrice:5, desc:"Foraged mushroom.", stats:{} }
 ];
+// Durability tiers: basic 3 -> 10 -> 25 -> 50 -> 100 (best). Tiers 5 and 6 both top out at 100.
 const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fishingrod2:10, tool_pickaxe3:25, tool_fishingrod3:25 };
 [["tool_pickaxe2","Sturdy Pickaxe",150,"uncommon",10],["tool_pickaxe3","Iron Pickaxe",400,"rare",25],
  ["tool_fishingrod2","Sturdy Fishing Rod",150,"uncommon",10],["tool_fishingrod3","Iron Fishing Rod",400,"rare",25]]
@@ -448,12 +449,12 @@ function playMusic(src){
 /* =========================================================================
    TOASTS
    ========================================================================= */
-function toast(msg){
+function toast(msg, ms=3500, cls=""){
   const stack = document.getElementById("toast-stack");
   const t = document.createElement("div");
-  t.className="toast"; t.textContent=msg;
+  t.className="toast"+(cls?" "+cls:""); t.textContent=msg;
   stack.appendChild(t);
-  setTimeout(()=>t.remove(), 3500);
+  setTimeout(()=>t.remove(), ms);
 }
 
 /* =========================================================================
@@ -874,7 +875,10 @@ async function grantXP(amount){
   });
 }
 async function grantMoney(amount){
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: Math.max(0, state.profile.money + amount) }));
+  await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), snap = await tx.get(ref);
+    tx.update(ref, { money: Math.max(0, (snap.data().money||0) + amount) });
+  }));
 }
 
 /* =========================================================================
@@ -918,6 +922,34 @@ function renderInventory(){
 document.getElementById("invPrev").addEventListener("click", ()=>{ state.invPage=Math.max(0,state.invPage-1); renderInventory(); });
 document.getElementById("invNext").addEventListener("click", ()=>{ state.invPage++; renderInventory(); });
 
+// One-line effect summary for the inspect panel: heal/mana for consumables,
+// damage for weapons, defense/HP for armor, +/- stat buffs for trinkets, uses for tools.
+function itemEffectText(item){
+  const st = item.stats || {};
+  if(item.type==="consumable"){
+    const bits = [];
+    if(st.heal) bits.push(`Restores ${st.heal} HP`);
+    if(st.mana) bits.push(`Restores ${st.mana} mana`);
+    return bits.join(" · ") || "No effect";
+  }
+  if(item.type==="weapon") return `Damage: +${st.attack||0} attack`;
+  if(item.type==="armor"){
+    const bits = [];
+    if(st.defense) bits.push(`+${st.defense} defense`);
+    if(st.hp) bits.push(`+${st.hp} max HP`);
+    Object.keys(st).filter(k=>!["defense","hp","curse"].includes(k)).forEach(k=> bits.push(`${st[k]>=0?"+":""}${st[k]} ${k}`));
+    return `${item.armorSlot?item.armorSlot[0].toUpperCase()+item.armorSlot.slice(1)+": ":""}${bits.join(", ")||"No bonuses"}`;
+  }
+  if(item.type==="trinket"){
+    const bits = Object.keys(st).filter(k=>k!=="curse").map(k=>{
+      const v = st[k]; const n = st.curse ? -Math.abs(v) : v;
+      return `${n>=0?"+":""}${n} ${k}${st.curse?" (cursed)":""}`;
+    });
+    return bits.join(", ") || "No bonuses";
+  }
+  if(item.type==="tool") return `Durability: ${TOOL_USES[item.id]||"?"} uses before it breaks`;
+  return "Crafting material — no combat effect";
+}
 function selectInvItem(entry){
   state.selectedInvItem = entry;
   const canEquip = ["weapon","armor","trinket"].includes(entry.item.type);
@@ -925,6 +957,7 @@ function selectInvItem(entry){
   detail.innerHTML = `
     <b>${entry.item.name}</b> <i>(${entry.item.rarity})</i><br>
     ${entry.item.desc}<br>
+    <b>${escapeHTML(itemEffectText(entry.item))}</b><br>
     <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
       ${canEquip? `<button class="doodle-btn btn-sm btn-blue" id="btnEquip">Equip</button>`:""}
       ${entry.item.type==="consumable"? `<button class="doodle-btn btn-sm btn-green" id="btnUse">Use</button>`:""}
@@ -1018,15 +1051,39 @@ async function sellItem(item){
 }
 async function equipItem(item){
   const slot = item.type==="armor" ? item.armorSlot : item.type; // weapon/helmet/chestplate/leggings/boots/trinket
-  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`equipped.${slot}`]: item.id }));
-  if(ok!==null) toast(`Equipped ${item.name}`);
+  let swapped = null;
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const pref = doc(db,"players",state.uid), snap = await tx.get(pref), d = snap.data()||{};
+    const inv = (d.inventory||[]).map(e=>({...e}));
+    const idx = inv.findIndex(e=>e.itemId===item.id);
+    if(idx<0 || inv[idx].qty<1) throw new Error(`insufficient-item:${item.id}`);
+    inv[idx].qty -= 1;
+    const old = d.equipped?.[slot] || null;
+    if(old){                                   // swap: old piece goes back to the bag
+      const oi = inv.findIndex(e=>e.itemId===old);
+      if(oi>=0) inv[oi].qty += 1; else inv.push({ itemId:old, qty:1 });
+      swapped = old;
+    }
+    tx.update(pref, { inventory: inv.filter(e=>e.qty>0), [`equipped.${slot}`]: item.id });
+  }));
+  if(ok!==null){
+    toast(`Equipped ${item.name}` + (swapped ? ` (${ITEM_BY_ID[swapped]?.name||"old item"} returned to inventory)` : ""));
+    afterInvChangeRefreshDetail(item.id);
+  }
 }
 async function unequipItem(slot){
-  const p = state.profile;
-  const itemId = p.equipped?.[slot];
-  if(!itemId) return;
-  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`equipped.${slot}`]: null }));
-  if(ok!==null) toast(`Unequipped ${ITEM_BY_ID[itemId]?.name||"item"}`);
+  let name = "item";
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const pref = doc(db,"players",state.uid), snap = await tx.get(pref), d = snap.data()||{};
+    const itemId = d.equipped?.[slot];
+    if(!itemId) return;
+    name = ITEM_BY_ID[itemId]?.name || "item";
+    const inv = (d.inventory||[]).map(e=>({...e}));
+    const idx = inv.findIndex(e=>e.itemId===itemId);
+    if(idx>=0) inv[idx].qty += 1; else inv.push({ itemId, qty:1 });
+    tx.update(pref, { inventory: inv, [`equipped.${slot}`]: null });
+  }));
+  if(ok!==null) toast(`${name} moved back to your inventory`);
 }
 const EQUIP_SLOTS = ["weapon","helmet","chestplate","leggings","boots","trinket"];
 function renderEquipSlots(){
@@ -1091,11 +1148,15 @@ async function getLb(cat){
   const rows = snap.docs.filter(d=>!d.data().banned).map(d=>({id:d.id, data:d.data()}));
   lbCache[cat] = { t:Date.now(), rows }; return rows;
 }
-async function renderLeaderboard(cat){
+let lbUnsub = null;
+function renderLeaderboard(cat){
   const field = LB_FIELDS[cat], list = document.getElementById("lbList");
+  if(lbUnsub){ lbUnsub(); lbUnsub = null; }
+  else state.unsubs.push(()=>{ if(lbUnsub){ lbUnsub(); lbUnsub = null; } });
   list.innerHTML = "<li>Loading…</li>";
-  try{
-    const rows = (await getLb(cat)).slice(0,10);
+  lbUnsub = onSnapshot(query(collection(db,"players"), orderBy(field,"desc"), limit(30)), snap=>{
+    lbCache[cat] = { t:Date.now(), rows: snap.docs.filter(d=>!d.data().banned).map(d=>({id:d.id, data:d.data()})) };
+    const rows = lbCache[cat].rows.slice(0,10);
     list.innerHTML = "";
     rows.forEach((r,i)=>{
       const data = r.data, li = document.createElement("li");
@@ -1104,7 +1165,7 @@ async function renderLeaderboard(cat){
       list.appendChild(li);
     });
     if(!rows.length) list.innerHTML = "<li>No players yet.</li>";
-  }catch(e){ console.error(e); list.innerHTML = "<li>Leaderboard unavailable right now.</li>"; }
+  }, e=>{ console.error(e); list.innerHTML = "<li>Leaderboard unavailable right now.</li>"; });
 }
 function openProfileBook(uid, data, rank, cat){
   document.getElementById("profileName").textContent = data.username;
@@ -1742,8 +1803,9 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   }
   const text = moderateChatText(raw);
   if(!text) return;
+  input.value=""; markRead(document.getElementById("chatLogGlobal"), "global");
   const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now() }));
-  if(ok!==null){ input.value=""; markRead(document.getElementById("chatLogGlobal"), "global"); }
+  if(ok===null) input.value = raw;
 });
 
 /* ---------- slash commands ---------- */
@@ -1905,11 +1967,11 @@ function subscribePrivateThread(){
   document.getElementById("chatLogPrivate").dataset.init="";
   if(!state.currentChatPartner) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
-  const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","asc"), limit(100));
+  const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","desc"), limit(100));
   pmUnsub = onSnapshot(q, snap=>{
     const log = document.getElementById("chatLogPrivate");
     const rows = [];
-    snap.forEach(d=>rows.push({id:d.id, ...d.data()}));
+    snap.forEach(d=>rows.unshift({id:d.id, ...d.data()}));
     renderChatLog(log, rows, "pm_"+threadId, `privateChats/${threadId}/messages`);
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
@@ -1917,11 +1979,13 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   e.preventDefault();
   if(!state.currentChatPartner) { toast("Pick a friend to message."); return; }
   const input = document.getElementById("privateChatInput");
-  const text = moderateChatText(input.value.trim());
+  const raw = input.value.trim();
+  const text = moderateChatText(raw);
   if(!text) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
+  input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+threadId);
   const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now() }));
-  if(ok!==null){ input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+pmThreadId(state.uid, state.currentChatPartner.uid)); }
+  if(ok===null) input.value = raw;
 });
 /* Friend requests / accept notifications only ever write to the CURRENT
    user's own player doc — never to another player's — because the
@@ -1942,9 +2006,9 @@ async function sendFriendRequest(uid, username){
   });
   if(ok!==null){ toast(`Friend request sent to ${username}`); closeModal("profileModal"); }
 }
-let crediting = false;
+let crediting = false, creditQueued = null;
 async function creditInbox(docs){
-  if(crediting) return; crediting = true;
+  if(crediting){ creditQueued = docs; return; } crediting = true;
   const items = [];
   try{
     await runTransaction(db, async tx=>{
@@ -1957,11 +2021,24 @@ async function creditInbox(docs){
     });
     items.forEach(n=>{ const it = Object.values(ITEM_BY_ID).find(i=>i.name===n); if(it) addItemToInv(it.id,1); });
   }catch(e){ console.error(e); toast(friendlyFirebaseError(e)); }
-  finally{ crediting = false; }
+  finally{
+    crediting = false;
+    if(creditQueued){ const q = creditQueued; creditQueued = null; creditInbox(q); }
+  }
 }
 function subscribeInbox(){
   const q = query(collection(db,"players",state.uid,"inbox"), orderBy("ts","desc"));
+  let inboxFirst = true;
   const unsub = onSnapshot(q, snap=>{
+    // Pop-up notification the instant a payment / auction sale lands
+    // (the first snapshot is skipped; the welcome-back recap covers those).
+    if(!inboxFirst) snap.docChanges().forEach(ch=>{
+      if(ch.type!=="added") return;
+      const n = ch.doc.data();
+      if(n.type==="payment_received" && !n.credited){ toast(`💰 ${n.fromUsername} paid you $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
+      else if(n.type==="auction_sold" && !n.credited){ toast(`🏷️ ${n.buyerName||"Someone"} bought your ${n.itemName} for $${fmtMoney(n.amount)}!`, 6000, "toast-money"); playSfx("buy"); }
+    });
+    inboxFirst = false;
     // Auto-credit ALL not-yet-credited auction sales in this batch as ONE
     // combined write (not one write per doc) — several sales landing in
     // the same snapshot and each reading state.profile.money separately
@@ -2010,7 +2087,7 @@ function subscribeInbox(){
           await deleteDoc(doc(db,"players",state.uid,"inbox",d.id));
         }));
       } else if(n.type==="payment_received"){
-        li.innerHTML = `<span>${escapeHTML(n.fromUsername)} paid you $${n.amount}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.innerHTML = `<span>${escapeHTML(n.fromUsername)} paid you $${fmtMoney(n.amount)}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else if(n.type==="duel_won"){
         const itemMsg = n.itemName ? ` and their ${escapeHTML(n.itemName)}` : "";
@@ -2019,7 +2096,7 @@ function subscribeInbox(){
       } else if(n.type==="auction_sold"){
         // Money is auto-credited above the moment this doc is seen — this
         // is now purely a dismissible reminder, no claim step.
-        li.innerHTML = `<span>Your ${escapeHTML(n.itemName)} sold for $${n.amount}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.innerHTML = `<span>${escapeHTML(n.buyerName||"Someone")} bought your ${escapeHTML(n.itemName)} for $${fmtMoney(n.amount)}! (credited to your balance)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else {
         li.innerHTML = `<span>${escapeHTML(n.text||"Notification")}</span><button class="doodle-btn btn-sm" data-a="ok">OK</button>`;
@@ -2128,30 +2205,39 @@ function hideAuctionDetail(){
 }
 async function buyAuctionListing(listingId, listing, item){
   const buyBtn = document.getElementById("aucDetailBuyBtn");
-  const totalCost = listing.pricePer * listing.qty;
-  if(state.profile.money < totalCost){ toast("Not enough money!"); return; }
   buyBtn.disabled = true; buyBtn.textContent = "Buying…";
-  const bought = await withErrorToast(async ()=>{
-    await runTransaction(db, async (tx)=>{
-      const lref = doc(db,"auction",listingId);
-      const lsnap = await tx.get(lref);
-      if(!lsnap.exists() || lsnap.data().status !== "active") throw new Error("gone");
-      // buyer marks it sold (allowed by rules) instead of deleting a
-      // listing they don't own; buyer also debits their OWN money here
-      tx.update(lref, { status:"sold", buyerUid: state.uid, soldAt: Date.now() });
-      tx.update(doc(db,"players",state.uid), { money: state.profile.money - totalCost });
+  let bought = null, err = null;
+  try{
+    bought = await runTransaction(db, async (tx)=>{
+      const lref = doc(db,"auction",listingId), pref = doc(db,"players",state.uid);
+      const lsnap = await tx.get(lref), psnap = await tx.get(pref);
+      if(!lsnap.exists() || lsnap.data().status !== "active" || lsnap.data().expiresAt < Date.now()) throw new Error("gone");
+      const L = lsnap.data(), cost = L.pricePer * L.qty, d = psnap.data() || {};
+      if(L.sellerUid === state.uid) throw new Error("own");
+      if((d.money||0) < cost) throw new Error("nomoney");
+      const inv = (d.inventory||[]).map(e=>({...e}));
+      const idx = inv.findIndex(e=>e.itemId===L.itemId);
+      if(idx>=0) inv[idx].qty += L.qty; else inv.push({ itemId:L.itemId, qty:L.qty });
+      tx.update(lref, { status:"sold", buyerUid: state.uid, buyerName: state.profile.username, soldAt: Date.now() });
+      tx.update(pref, { money: (d.money||0) - cost, inventory: inv });
+      return { cost, qty:L.qty, sellerUid:L.sellerUid };
     });
-    return true;
-  });
-  if(!bought) { toast("That listing is no longer available."); buyBtn.disabled=false; buyBtn.textContent="Buy"; return; }
-  await addItemToInv(item.id, listing.qty);
+  }catch(e){ err = e; }
+  buyBtn.disabled=false; buyBtn.textContent="Buy";
+  if(!bought){
+    if(err?.message==="nomoney") toast("Not enough money!");
+    else if(err?.message==="own") toast("You can't buy your own listing.");
+    else if(err?.message==="gone") toast("That listing is no longer available.");
+    else toast(friendlyFirebaseError(err));
+    return;
+  }
   hideAuctionDetail();
-  // seller credits themselves from this notification — see subscribeInbox()
-  await withErrorToast(()=> addDoc(collection(db,"players",listing.sellerUid,"inbox"), {
-    type:"auction_sold", itemName:item.name, amount: totalCost, ts: Date.now()
-  }));
   playSfx("buy");
-  toast(`Bought ${item.name} x${listing.qty}`);
+  toast(`Bought ${item.name} x${bought.qty}`);
+  // seller credits themselves from this notification — see subscribeInbox()
+  await withErrorToast(()=> addDoc(collection(db,"players",bought.sellerUid,"inbox"), {
+    type:"auction_sold", itemName:item.name, amount: bought.cost, buyerName: state.profile.username, ts: Date.now()
+  }));
 }
 function populatePostForm(){
   const sel = document.getElementById("postItemSelect");
@@ -2192,10 +2278,11 @@ document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
   toast("Posted to auction house!");
   populatePostForm();
 });
-async function renderMySlots(){
-  try{
-    const q = query(collection(db,"auction"), where("sellerUid","==",state.uid));
-    const snap = await getDocs(q);
+let mySlotsUnsub = null;
+function renderMySlots(){
+  if(mySlotsUnsub) return; // already live
+  const q = query(collection(db,"auction"), where("sellerUid","==",state.uid));
+  mySlotsUnsub = onSnapshot(q, snap=>{
     const grid = document.getElementById("myAuctionSlots");
     grid.innerHTML="";
     snap.forEach(d=>{
@@ -2211,11 +2298,11 @@ async function renderMySlots(){
         const ok = await withErrorToast(()=> deleteDoc(doc(db,"auction",d.id)));
         if(ok===null) return;
         await addItemToInv(item.id, listing.qty);
-        renderMySlots();
       });
       grid.appendChild(cell);
     });
-  }catch(err){ toast(friendlyFirebaseError(err)); }
+  }, err=> toast(friendlyFirebaseError(err)));
+  state.unsubs.push(()=>{ if(mySlotsUnsub){ mySlotsUnsub(); mySlotsUnsub = null; } });
 }
 
 /* --- crafting: recipe book (banners you scroll; pick one, confirm with CRAFT) --- */
@@ -2274,7 +2361,7 @@ const RECIPES = [];
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
   [["tool_fishingrod","ing_copper"],["tool_fishingrod2","ing_iron"],["tool_fishingrod3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,1],["forage_herb",2]]));
   // gem/mineral tools: far more durable
-  [[4,"Gold","ing_gold","rare",40],[5,"Emerald","gem_emerald_cut","epic",80],[6,"Diamond","gem_diamond_cut","legendary",200]].forEach(([n,nm,mat,rar,u])=>{
+  [[4,"Gold","ing_gold","rare",50],[5,"Emerald","gem_emerald_cut","epic",100],[6,"Diamond","gem_diamond_cut","legendary",100]].forEach(([n,nm,mat,rar,u])=>{
     TOOL_USES["tool_pickaxe"+n] = u; TOOL_USES["tool_fishingrod"+n] = u;
     add("tool_pickaxe"+n, `${nm} Pickaxe`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,2],["ing_steel",1]]);
     add("tool_fishingrod"+n, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,1],["ing_steel",1],["forage_herb",2]]);
@@ -2867,10 +2954,19 @@ document.querySelector('[data-jtab="players"]').addEventListener("click", render
 async function payPlayer(uid, username, amount){
   amount = Math.floor(amount);
   if(!(amount>0)){ toast("Enter an amount."); return false; }
-  if(amount > (state.profile.money||0)){ toast("You don't have that much money."); return false; }
-  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: (state.profile.money||0) - amount }));
-  if(ok===null) return false;
-  await withErrorToast(()=> addDoc(collection(db,"players",uid,"inbox"), { type:"payment_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false }));
+  if(uid === state.uid){ toast("You can't pay yourself."); return false; }
+  try{
+    await runTransaction(db, async tx=>{
+      const ref = doc(db,"players",state.uid), snap = await tx.get(ref), m = snap.data()?.money||0;
+      if(m < amount) throw new Error("nomoney");
+      tx.update(ref, { money: m - amount });
+    });
+  }catch(e){
+    toast(e.message==="nomoney" ? "You don't have that much money." : friendlyFirebaseError(e));
+    return false;
+  }
+  const sent = await withErrorToast(()=> addDoc(collection(db,"players",uid,"inbox"), { type:"payment_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false }));
+  if(sent===null){ await grantMoney(amount); return false; } // refund
   toast(`Paid $${fmtMoney(amount)} to ${username}.`);
   return true;
 }

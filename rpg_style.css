@@ -508,6 +508,7 @@ body{
   padding:10px 16px; font-size:18px; box-shadow:3px 3px 0 rgba(74,63,53,.2);
   animation:toastIn .25s ease;
 }
+.toast.toast-money{ background:var(--green,#BFE8C4); font-weight:bold; }
 @keyframes toastIn{from{transform:translateX(40px); opacity:0;} to{transform:translateX(0); opacity:1;}}
 
 @media (max-width:760px){
