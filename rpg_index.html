@@ -119,10 +119,18 @@
 
   <!-- CENTER STAGE: open-world exploration -->
   <main class="game-stage" id="gameStage">
-    <canvas id="worldCanvas"></canvas>
-    <canvas id="minimapCanvas" width="150" height="150"></canvas>
-    <div id="interactPrompt" class="interact-prompt"></div>
-    <div id="stageLog" class="stage-log"></div>
+            <div class="boss-wrap">
+      <div class="boss-name">The Slumbering Dragon</div>
+      <svg id="bossDragon" class="dragon-doodle boss-dragon" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="bossbar"><div class="bossbar-fill" id="bossFill"></div><span class="bossbar-num" id="bossNum"></span></div>
+      <div class="boss-sub">Click the dragon to hurt it — everyone online is fighting it together. Your damage: <b id="bossMine">0</b></div>
+      <div class="rx-row">
+        <button class="rx-btn" data-rx="❤️">❤️</button><button class="rx-btn" data-rx="⚔️">⚔️</button>
+        <button class="rx-btn" data-rx="🔥">🔥</button><button class="rx-btn" data-rx="😭">😭</button>
+      </div>
+    </div>
+    <div id="reactionLayer" class="rx-layer"></div>
+    <div id="queueFloat" class="queue-float" style="display:none"><span>Searching for a duel…</span><button class="doodle-btn btn-sm btn-yellow" id="btnLeaveQueue">Leave Queue</button></div>
 
     <div id="fishOverlay" class="fish-overlay">
       <div class="fish-overlay-card doodle-panel">
@@ -136,7 +144,6 @@
       </div>
     </div>
 
-    <div id="hotbar" class="hotbar-row"></div>
   </main>
 
   <!-- FOOTER -->
@@ -223,6 +230,8 @@
     <button class="doodle-x" data-close-modal>&times;</button>
     <div class="tab-row wrap">
       <button class="tab-btn active" data-ctab="map">Map</button>
+      <button class="tab-btn" data-ctab="jobs">Jobs</button>
+      <button class="tab-btn" data-ctab="monsters">Monsters</button>
       <button class="tab-btn" data-ctab="shop">Shop</button>
       <button class="tab-btn" data-ctab="chat">Chat</button>
       <button class="tab-btn" data-ctab="auction">Auction</button>
@@ -234,15 +243,32 @@
       <div class="region-grid" id="regionGrid"></div>
     </div>
 
+    <div class="ctab-page" id="ctab-jobs">
+      <p class="doodle-sub">Gather goods to eat, sell or craft. Mining and fishing are unlimited, but tools break (basic = 3 uses). Foraging is free, every 20s.</p>
+      <div class="job-row">
+        <button class="doodle-btn btn-lg btn-green" id="btnForage">Forage</button>
+        <button class="doodle-btn btn-lg btn-yellow" id="btnMine">Mine</button>
+        <button class="doodle-btn btn-lg btn-blue" id="btnFish">Fish</button>
+      </div>
+      <div class="doodle-panel" id="jobToolStatus"></div>
+      <p class="doodle-sub" id="jobLog"></p>
+    </div>
+
+    <div class="ctab-page" id="ctab-monsters">
+      <p class="doodle-sub">Turn-based fights in your current region. Read the monster's intent, then pick your move — Guard, Counter, Focus, skills or food. Fleeing costs nothing.</p>
+      <div class="job-row">
+        <button class="doodle-btn btn-lg btn-green" data-pve="easy">Easy</button>
+        <button class="doodle-btn btn-lg btn-yellow" data-pve="medium">Medium</button>
+        <button class="doodle-btn btn-lg btn-danger" data-pve="hard">Hard</button>
+      </div>
+    </div>
+
     <div class="ctab-page" id="ctab-shop">
       <p class="doodle-sub" id="shopRegionLabel">Enchanted Forest Shop</p>
-      <div class="tool-shelf doodle-panel">
+      <div class="tool-shelf doodle-panel" id="toolShelf">
         <p class="doodle-sub" style="margin:0 0 8px;">Job Tools</p>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Buy Pickaxe ($60)</button>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Buy Fishing Rod ($60)</button>
-      </div>
-      <div class="tool-shelf doodle-panel" id="buildShelf">
-        <p class="doodle-sub" style="margin:0 0 8px;">Building Supplies — place these from your hotbar in the open world</p>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Pickaxe ($60, 3 uses)</button>
+        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Fishing Rod ($60, 3 uses)</button>
       </div>
       <div class="daily-item-box doodle-panel" id="dailyItemBox"></div>
       <div class="shop-grid" id="shopGrid"></div>

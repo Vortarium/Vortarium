@@ -518,3 +518,29 @@ body{
   .compass-card, .journal-card, .battle-card{width:94vw;}
   .battle-arena{flex-direction:column; gap:10px;}
 }
+
+/* ---------- world boss + reactions + chat unread line + queue ---------- */
+.game-stage{flex-direction:column;}
+.boss-wrap{position:relative; z-index:2; width:min(92%,520px); display:flex; flex-direction:column; align-items:center; gap:8px;}
+.boss-name{font-family:'Caveat',cursive; font-size:32px; color:var(--ink);}
+.boss-dragon{max-width:460px; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;}
+.boss-dragon.hit{animation:bossHit .18s ease;}
+@keyframes bossHit{0%{transform:scale(1)}40%{transform:scale(.96) rotate(-1deg)}100%{transform:scale(1)}}
+.bossbar{position:relative; width:100%; height:30px; border:3px solid var(--ink); border-radius:14px; background:#FFFDF7; overflow:hidden;}
+.bossbar-fill{height:100%; width:100%; background:#E0574F; transition:width .3s ease;}
+.bossbar-num{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:17px; color:var(--ink); text-shadow:0 0 3px #fff,0 0 3px #fff;}
+.boss-sub{font-size:15px; text-align:center; color:var(--ink);}
+.rx-row{display:flex; gap:10px;}
+.rx-btn{font-size:26px; width:52px; height:52px; border-radius:50%; border:3px solid var(--ink); background:#FFFDF7; cursor:pointer;}
+.rx-btn:active{transform:scale(.9);}
+.rx-layer{position:absolute; inset:0; pointer-events:none; z-index:6; overflow:hidden;}
+.rx-bubble{position:absolute; bottom:26%; display:flex; flex-direction:column; align-items:center; animation:rxFloat 2s ease-out forwards;}
+.rx-emoji{font-size:34px; background:#FFFDF7; border:3px solid var(--ink); border-radius:50%; width:56px; height:56px; display:flex; align-items:center; justify-content:center;}
+.rx-name{font-size:14px; margin-top:2px; background:rgba(255,253,247,.9); border:2px solid var(--ink); border-radius:8px; padding:0 6px; color:var(--ink);}
+@keyframes rxFloat{0%{transform:translateY(0) scale(.6); opacity:0}15%{opacity:1; transform:translateY(-20px) scale(1)}100%{transform:translateY(-170px); opacity:0}}
+.dmg-pop{position:absolute; font-family:'Caveat',cursive; font-size:26px; color:#B0302A; animation:dmgUp .9s ease-out forwards; transform:translate(-50%,-50%);}
+@keyframes dmgUp{to{transform:translate(-50%,-140%); opacity:0}}
+.job-row{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin:14px 0;}
+.chat-log{position:relative;}
+.unread-line{border-top:3px dotted #E03131; margin:8px 0;}
+.queue-float{position:fixed; top:70px; right:12px; z-index:60; display:flex; gap:8px; align-items:center; background:#FFFDF7; border:3px solid var(--ink); border-radius:12px; padding:6px 10px; color:var(--ink);}

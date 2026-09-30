@@ -153,6 +153,7 @@ const REGIONS = {
   reef:      { name:"Coral Reef Cove",  element:"water", css:"region-reef",      track:"rpg_water.mp3" }
 };
 const RARITIES = ["common","uncommon","rare","epic","legendary"];
+const HEAL_BY_RARITY = { common:10, uncommon:40, rare:120, epic:300, legendary:500 };
 const RARITY_MULT = { common:1, uncommon:1.4, rare:2, epic:3, legendary:4.5 };
 
 function fmtMoney(n){
@@ -237,10 +238,11 @@ function itemStats(type, rarity){
     const stat = pool[Math.floor(Math.random()*pool.length)];
     return { [stat]: Math.round(1*m), curse: Math.random()<0.15 };
   }
-  if(type==="consumable") return { heal: Math.round(10*m), mana: Math.round(5*m) };
+  if(type==="consumable") return { heal: HEAL_BY_RARITY[rarity], mana: Math.round(5*m) };
   return {}; // material: no combat stats, used in crafting
 }
 const ITEM_BANK = buildItemBank();
+ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=>{ i.price=Math.max(2,Math.round(i.price*0.3)); i.sellPrice=Math.max(1,Math.round(i.price*0.4)); });
 const ITEM_BY_ID = Object.fromEntries(ITEM_BANK.map(i=>[i.id,i]));
 
 /* ---------- job items: fish, ores/gems, and the tools jobs need ---------- */
@@ -260,23 +262,17 @@ const JOB_ITEM_BANK = [
   { id:"forage_herb", name:"Healing Herb", type:"material", rarity:"uncommon", sellPrice:9, desc:"A useful herb.", stats:{} },
   { id:"forage_mushroom", name:"Wild Mushroom", type:"material", rarity:"common", sellPrice:5, desc:"Foraged mushroom.", stats:{} }
 ];
+const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fishingrod2:10, tool_pickaxe3:25, tool_fishingrod3:25 };
+[["tool_pickaxe2","Sturdy Pickaxe",150,"uncommon",10],["tool_pickaxe3","Iron Pickaxe",400,"rare",25],
+ ["tool_fishingrod2","Sturdy Fishing Rod",150,"uncommon",10],["tool_fishingrod3","Iron Fishing Rod",400,"rare",25]]
+ .forEach(([id,name,price,rarity,uses])=> JOB_ITEM_BANK.push({ id,name,type:"tool",rarity,price,sellPrice:Math.round(price/3),desc:`Breaks after ${uses} uses.`,stats:{} }));
+JOB_ITEM_BANK.push(
+ { id:"forage_apple", name:"Wild Apple", type:"consumable", rarity:"uncommon", sellPrice:8, desc:"A crisp foraged apple.", stats:{} },
+ { id:"forage_truffle", name:"Forest Truffle", type:"consumable", rarity:"rare", sellPrice:25, desc:"A prized foraged truffle.", stats:{} },
+ { id:"forage_goldapple", name:"Golden Apple", type:"consumable", rarity:"legendary", sellPrice:100, desc:"Glows faintly. Restores a ton.", stats:{} });
+JOB_ITEM_BANK.filter(i=>i.id==="tool_pickaxe"||i.id==="tool_fishingrod").forEach(i=> i.desc+=" Breaks after 3 uses.");
+JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = HEAL_BY_RARITY[i.rarity]);
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
-
-/* ---------- placeable building items for the open world ---------- */
-const BUILD_ITEM_BANK = [
-  { id:"build_bench", name:"Wooden Bench", type:"material", rarity:"common", price:40, sellPrice:8, desc:"Place it to mark a spot as yours.", stats:{}, placeable:true, buildType:"bench" },
-  { id:"build_fence", name:"Fence Post", type:"material", rarity:"common", price:20, sellPrice:5, desc:"Mark out territory.", stats:{}, placeable:true, buildType:"fence" },
-  { id:"build_bed", name:"Cozy Bed", type:"material", rarity:"uncommon", price:150, sellPrice:20, desc:"Place it and you'll respawn there instead of your spawn point.", stats:{}, placeable:true, buildType:"bed" },
-  { id:"build_home", name:"Small Home Kit", type:"material", rarity:"rare", price:500, sellPrice:60, desc:"A tiny house frame you can build on your land.", stats:{}, placeable:true, buildType:"home" },
-  { id:"build_guard", name:"Guard Post", type:"material", rarity:"uncommon", price:200, sellPrice:25, desc:"Warns off wandering monsters that wander too close.", stats:{}, placeable:true, buildType:"guard" }
-];
-BUILD_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
-document.getElementById("buildShelf").insertAdjacentHTML("beforeend",
-  BUILD_ITEM_BANK.map(i=>`<button class="doodle-btn btn-sm btn-green" data-buy-build="${i.id}">Buy ${i.name} ($${i.price})</button>`).join(" ")
-);
-document.querySelectorAll("[data-buy-build]").forEach(btn=>{
-  btn.addEventListener("click", ()=> buyItem(ITEM_BY_ID[btn.dataset.buyBuild]));
-});
 
 /* ---------- procedural enemy bank: 4 regions x 3 difficulties x 10 = 120 ---------- */
 const ENEMY_NAME_PARTS = {
@@ -504,8 +500,8 @@ function defaultPlayerDoc(username, archetype, klass){
     lastForageTs: 0, mineHourStart: 0, minePicksThisHour: 0, fishingXp: 0, miningXp: 0, foragingXp: 0
   };
 }
-const HP_REGEN_PER_HOUR = 10;
-const HP_REGEN_MS = 60*60*1000;
+const HP_REGEN_PER_HOUR = 1; // now per MINUTE
+const HP_REGEN_MS = 60*1000;
 /* Catches up HP regen for however long the player was away (or since the
    last catch-up), at 10 HP per full hour elapsed, capped at hpMax. Safe to
    call often — it's a no-op unless at least one full hour has passed. Also
@@ -775,7 +771,7 @@ renderClassGrid();
 function cleanupSubs(){
   state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false; pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
-  if(worldUnsubAll) worldUnsubAll();
+  stopManaRegen(); bossCleanup();
   if(state.hpRegenInterval){ clearInterval(state.hpRegenInterval); state.hpRegenInterval=null; }
 }
 
@@ -797,7 +793,7 @@ function enterGame(){
     }
     if(firstSnapshot){
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      ensureSpawnPoint().then(pos=> initWorld(pos));
+      initBoss(); startManaRegen();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -807,25 +803,8 @@ function enterGame(){
   // Re-check every minute while the tab is open so regen still lands on
   // the hour even without a reload; catchUpHpRegen itself no-ops unless a
   // full hour has actually elapsed.
-  state.hpRegenInterval = setInterval(()=> catchUpHpRegen(state.profile), 60*1000);
+  state.hpRegenInterval = setInterval(()=> catchUpHpRegen(state.profile), 15*1000);
 }
-// Every account gets a random permanent spawn point the first time it
-// enters the open world (existing accounts from before this update get
-// one lazily assigned here too), between -10000..10000 on both axes.
-// Returns the coordinates to actually start at, so initWorld() never has
-// to guess whether state.profile has caught up with this write yet.
-async function ensureSpawnPoint(){
-  const p = state.profile;
-  if(p.spawnX!=null && p.spawnY!=null && p.x!=null && p.y!=null){
-    return { x:p.x, y:p.y };
-  }
-  const spawnX = Math.floor(Math.random()*20001)-10000;
-  const spawnY = Math.floor(Math.random()*20001)-10000;
-  const x = p.x ?? spawnX, y = p.y ?? spawnY;
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { spawnX, spawnY, x, y }));
-  return { x, y };
-}
-
 function renderHUD(){
   const p = state.profile; if(!p) return;
   document.getElementById("hudName").textContent = p.username;
@@ -846,7 +825,7 @@ function renderHUD(){
   document.getElementById("statSTRENGTH").textContent = p.stats.STRENGTH;
   document.getElementById("statCHARM").textContent = p.stats.CHARM;
   document.getElementById("statSMARTS").textContent = p.stats.SMARTS;
-  renderHotbar();
+  const bm=document.getElementById("bossMine"); if(bm) bm.textContent=fmtBig(p.bossDamage||0);
 }
 function setBar(key, val, max){
   const pct = Math.max(0, Math.min(100, (val/max)*100));
@@ -1355,7 +1334,7 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
     btn.classList.add("active");
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
     document.getElementById("ctab-"+btn.dataset.ctab).classList.add("active");
-    if(btn.dataset.ctab==="chat") ensureChatSubscriptions();
+    if(btn.dataset.ctab==="chat"){ ensureChatSubscriptions(); setTimeout(focusVisibleChat,0); }
   });
 });
 
@@ -1363,7 +1342,6 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
 /* --- map: now doubles as fast-travel — clicking a region teleports you
    into that quadrant instead of just flipping a cosmetic field, since your
    region is normally whatever quadrant your live x/y position is in. --- */
-const QUADRANT_TRAVEL_POINT = { forest:{x:2000,y:2000}, reef:{x:-2000,y:2000}, mountains:{x:-2000,y:-2000}, volcano:{x:2000,y:-2000} };
 function renderRegionGrid(){
   const grid = document.getElementById("regionGrid");
   grid.innerHTML="";
@@ -1373,9 +1351,8 @@ function renderRegionGrid(){
     card.innerHTML = `<div style="font-size:30px">${{forest:"🌲",mountains:"⛰️",volcano:"🌋",reef:"🪸"}[key]}</div><div>${r.name}</div>`;
     card.addEventListener("click", async ()=>{
       if(state.profile.region===key) return;
-      const pt = QUADRANT_TRAVEL_POINT[key];
-      teleportTo(pt.x, pt.y);
-      closeModal("compassModal");
+      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { region:key }));
+      renderRegionGrid(); renderShop();
       toast(`Traveled to ${r.name}`);
     });
     grid.appendChild(card);
@@ -1445,10 +1422,38 @@ async function buyItem(item){
    to a tree/bush/rocky cliff/pond in the open world and pressing Space.
    The reward math is unchanged from the old tab-based version.
    ========================================================================= */
+function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(l) l.textContent=msg; }
+async function useTool(kind){
+  const id = ["tool_"+kind,"tool_"+kind+"2","tool_"+kind+"3"].find(hasItem);
+  if(!id){ toast(`You need a ${kind==="pickaxe"?"Pickaxe":"Fishing Rod"} — buy one in the Shop.`); return false; }
+  const uses = { ...(state.profile.toolUses||{}) };
+  const left = (uses[id] ?? TOOL_USES[id]) - 1;
+  if(left<=0){ delete uses[id]; await changeInvQty(id,-1); jobLog(`Your ${ITEM_BY_ID[id].name} broke!`); } else uses[id]=left;
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { toolUses: uses }));
+  return true;
+}
+function toolUsesLeft(kind){
+  const id = ["tool_"+kind,"tool_"+kind+"2","tool_"+kind+"3"].find(hasItem);
+  return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":"fishing rod"}`;
+}
+[["pickaxe","Pickaxe"],["fishingrod","Fishing Rod"]].forEach(([k,n])=>[2,3].forEach(t=>{
+  const it = ITEM_BY_ID[`tool_${k}${t}`];
+  document.getElementById("toolShelf").insertAdjacentHTML("beforeend", ` <button class="doodle-btn btn-sm btn-yellow" data-buytool="${it.id}">${it.name} ($${it.price})</button>`);
+}));
+document.querySelectorAll("[data-buytool]").forEach(b=> b.addEventListener("click", ()=> buyItem(ITEM_BY_ID[b.dataset.buytool])));
+document.getElementById("btnForage").addEventListener("click", doForageAction);
+document.getElementById("btnMine").addEventListener("click", doMineAction);
+document.getElementById("btnFish").addEventListener("click", ()=>{ closeModal("compassModal"); doFishAction(); });
+setInterval(()=>{
+  if(!state.profile) return;
+  const r = forageReadyIn(), fb = document.getElementById("btnForage");
+  fb.disabled = r>0; fb.textContent = r>0 ? `Forage (${Math.ceil(r/1000)}s)` : "Forage";
+  document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")}`;
+}, 500);
 function hasItem(itemId){ return (state.profile.inventory||[]).some(e=>e.itemId===itemId && e.qty>0); }
 
 /* --- foraging (bush): free, once every 60s, 5% money / 45% item / 50% nothing --- */
-const FORAGE_COOLDOWN_MS = 60*1000;
+const FORAGE_COOLDOWN_MS = 20*1000;
 function forageReadyIn(){ return FORAGE_COOLDOWN_MS - (Date.now() - (state.profile.lastForageTs||0)); }
 async function doForageAction(){
   if(forageReadyIn() > 0) return;
@@ -1459,14 +1464,14 @@ async function doForageAction(){
   if(roll < 0.05){
     const amt = 5 + Math.floor(Math.random()*15);
     await grantMoney(amt);
-    worldLogMsg(`You found $${amt} in the bush!`);
+    jobLog(`You found $${amt} in the bush!`);
   } else if(roll < 0.50){
-    const pool = ["forage_berry","forage_herb","forage_mushroom"];
-    const pick = pool[Math.floor(Math.random()*pool.length)];
+    const pool = [...Array(10).fill("forage_berry"),...Array(4).fill("forage_mushroom"),...Array(3).fill("forage_herb"),"forage_apple","forage_apple","forage_truffle"];
+    const pick = Math.random()<0.01 ? "forage_goldapple" : pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
-    worldLogMsg(`You foraged a ${ITEM_BY_ID[pick].name}!`);
+    jobLog(`You foraged a ${ITEM_BY_ID[pick].name}!`);
   } else {
-    worldLogMsg("Nothing this time.");
+    jobLog("Nothing this time.");
   }
 }
 
@@ -1482,12 +1487,11 @@ function minePicksLeft(){
   return inWindow ? Math.max(0, 3-(p.minePicksThisHour||0)) : 3;
 }
 async function doMineAction(){
-  if(!hasItem("tool_pickaxe")){ toast("You need a Pickaxe (buy it in the Shop) to mine."); return; }
+  if(!(await useTool("pickaxe"))) return;
   const p = state.profile;
   const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
   const hourStart = inWindow ? p.mineHourStart : Date.now();
   const picks = inWindow ? (p.minePicksThisHour||0) : 0;
-  if(picks >= 3){ toast("Out of rock pulls for this hour."); return; }
   const roll = Math.random();
   let msg;
   const updates = { mineHourStart: hourStart, minePicksThisHour: picks+1, miningXp: (p.miningXp||0)+1 };
@@ -1521,7 +1525,7 @@ async function doMineAction(){
     }
   }
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), updates));
-  worldLogMsg(msg);
+  jobLog(msg);
 }
 
 /* --- fishing (pond): vertical hold-to-catch minigame, needs a Fishing Rod --- */
@@ -1544,10 +1548,10 @@ function rollFishTrait(){
   for(const t of FISH_TRAITS){ if((r-=t.weight)<=0) return t; }
   return FISH_TRAITS[0];
 }
-function doFishAction(){
-  if(!hasItem("tool_fishingrod")){ toast("You need a Fishing Rod (buy it in the Shop) to fish."); return; }
+async function doFishAction(){
   if(fishGame) return;
-  worldState.controlsSuspended = true; // movement/attack pause while the minigame overlay is up
+  if(!(await useTool("fishingrod"))) return;
+  if(fishGame) return;
   document.getElementById("fishOverlay").classList.add("show");
   const trait = rollFishTrait();
   toast(`Something's biting — feels ${trait.label}!`);
@@ -1609,7 +1613,6 @@ async function endFishing(success, trait){
   clearInterval(fishGame); fishGame.cleanup?.(); fishGame = null;
   document.getElementById("fishOverlay").classList.remove("show");
   document.getElementById("fishProgressFill").style.height = "0%";
-  worldState.controlsSuspended = false;
   if(success){
     // Roll is nudged up by the fish's speed trait — a fast bite is harder
     // to reel in but skews the catch toward the rarer/higher-quality pools.
@@ -1618,9 +1621,9 @@ async function endFishing(success, trait){
     const pick = pool[Math.floor(Math.random()*pool.length)];
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1 }));
-    worldLogMsg(`Caught a ${ITEM_BY_ID[pick].name}!`);
+    jobLog(`Caught a ${ITEM_BY_ID[pick].name}!`);
   } else {
-    worldLogMsg("The fish got away.");
+    jobLog("The fish got away.");
   }
 }
 document.getElementById("btnCancelFish").addEventListener("click", ()=> endFishing(false));
@@ -1656,6 +1659,32 @@ function chatMessageHTML(m, id, collectionPath){
         ${canDelete ? `<button class="chat-del-btn" data-del="${id}" data-cpath="${collectionPath}" title="Delete message">&times;</button>` : ""}
       </div>`;
 }
+const lrKey = k=> `lr_${state.uid}_${k}`;
+function chatAtBottom(log){ return log.scrollHeight - log.scrollTop - log.clientHeight < 8; }
+function markRead(log, key){ localStorage.setItem(lrKey(key), String(Date.now())); log?.querySelector(".unread-line")?.remove(); }
+function renderChatLog(log, rows, key, path){
+  log._key = key;
+  if(localStorage.getItem(lrKey(key))===null) localStorage.setItem(lrKey(key), String(Date.now()));
+  const last = +localStorage.getItem(lrKey(key));
+  const visible = log.offsetParent!==null, first = !log.dataset.init;
+  const wasBottom = chatAtBottom(log), prevTop = log.scrollTop;
+  const fu = rows.findIndex(m=> m.ts>last && m.uid!==state.uid);
+  const live = !first && visible && wasBottom;           // new msg arrives while you're reading the bottom: no line
+  log.innerHTML = rows.map((m,i)=> (i===fu && !live ? '<div class="unread-line"></div>' : "") + chatMessageHTML(m, m.id, path)).join("");
+  wireChatRowInteractions(log);
+  if(!log._sw){ log._sw = true; log.addEventListener("scroll", ()=>{ if(chatAtBottom(log) && log.querySelector(".unread-line")) markRead(log, log._key); }); }
+  log.dataset.init = "1";
+  if(first){ if(visible) focusChatLog(log); }
+  else if(live){ log.scrollTop = log.scrollHeight; markRead(log, key); }
+  else log.scrollTop = prevTop;
+}
+function focusChatLog(log){
+  const line = log.querySelector(".unread-line");
+  log.scrollTop = line ? Math.max(0, line.offsetTop-10) : log.scrollHeight;
+  if(line && chatAtBottom(log)) setTimeout(()=>{ if(log.querySelector(".unread-line")) markRead(log, log._key); }, 2000);
+}
+function focusVisibleChat(){ ["chatLogGlobal","chatLogPrivate"].forEach(id=>{ const l=document.getElementById(id); if(l.offsetParent!==null) focusChatLog(l); }); }
+document.querySelectorAll("[data-chatsub]").forEach(b=> b.addEventListener("click", ()=> setTimeout(focusVisibleChat,0)));
 function wireChatRowInteractions(log){
   log.querySelectorAll(".chat-username").forEach(el=>{
     el.addEventListener("click", ()=> openProfileByUid(el.dataset.uid));
@@ -1674,9 +1703,7 @@ function subscribeGlobalChat(){
     const log = document.getElementById("chatLogGlobal");
     const rows = [];
     snap.forEach(d=>rows.unshift({id:d.id, ...d.data()}));
-    log.innerHTML = rows.map(m=> chatMessageHTML(m, m.id, "globalChat")).join("");
-    log.scrollTop = log.scrollHeight;
-    wireChatRowInteractions(log);
+    renderChatLog(log, rows, "global", "globalChat");
   }, (err)=> toast(friendlyFirebaseError(err)));
   state.unsubs.push(unsub);
 }
@@ -1695,7 +1722,7 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   const text = moderateChatText(raw);
   if(!text) return;
   const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now() }));
-  if(ok!==null) input.value="";
+  if(ok!==null){ input.value=""; markRead(document.getElementById("chatLogGlobal"), "global"); }
 });
 
 /* ---------- slash commands ---------- */
@@ -1854,6 +1881,7 @@ async function renderPMContacts(friendUids){
 let pmUnsub = null;
 function subscribePrivateThread(){
   if(pmUnsub) pmUnsub();
+  document.getElementById("chatLogPrivate").dataset.init="";
   if(!state.currentChatPartner) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
   const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","asc"), limit(100));
@@ -1861,9 +1889,7 @@ function subscribePrivateThread(){
     const log = document.getElementById("chatLogPrivate");
     const rows = [];
     snap.forEach(d=>rows.push({id:d.id, ...d.data()}));
-    log.innerHTML = rows.map(m=> chatMessageHTML(m, m.id, `privateChats/${threadId}/messages`)).join("");
-    log.scrollTop = log.scrollHeight;
-    wireChatRowInteractions(log);
+    renderChatLog(log, rows, "pm_"+threadId, `privateChats/${threadId}/messages`);
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
 document.getElementById("privateChatForm").addEventListener("submit", async (e)=>{
@@ -1874,7 +1900,7 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   if(!text) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
   const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now() }));
-  if(ok!==null) input.value="";
+  if(ok!==null){ input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+pmThreadId(state.uid, state.currentChatPartner.uid)); }
 });
 /* Friend requests / accept notifications only ever write to the CURRENT
    user's own player doc — never to another player's — because the
@@ -2311,6 +2337,145 @@ async function applyDeathPenalty(extraFields={}){
 }
 
 
+/* =========================================================================
+   PvE: strategic turn-based monster battles (Monsters tab)
+   Each turn the monster TELEGRAPHS its intent (hard/medium ones sometimes
+   feint). Pick a move that answers it, and manage Mana, Rage and food.
+   ========================================================================= */
+const INTENTS = {
+  attack:{ icon:"⚔️", label:"Attack",     tip:"A normal hit." },
+  heavy: { icon:"💥", label:"Heavy Slam", tip:"2.2x damage — Guard or Counter it!" },
+  brace: { icon:"🛡️", label:"Brace",      tip:"Takes 60% less damage — set up a Focus, or use Precision." },
+  drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." }
+};
+const INTENT_WEIGHTS = { easy:{attack:5,heavy:1,brace:2,drain:1}, medium:{attack:4,heavy:2,brace:2,drain:2}, hard:{attack:3,heavy:3,brace:2,drain:3} };
+const FEINT_CHANCE = { easy:0, medium:0.12, hard:0.25 };
+const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
+function rollIntent(diff){
+  const bag = Object.entries(INTENT_WEIGHTS[diff]).flatMap(([k,n])=>Array(n).fill(k));
+  return bag[Math.floor(Math.random()*bag.length)];
+}
+function nextIntent(b){
+  b.shown = rollIntent(b.m.difficulty);
+  b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty) : b.shown;
+  battleLogPush(`Enemy intends: ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label} — ${INTENTS[b.shown].tip}`);
+}
+function startPve(diff){
+  const p = state.profile, m = pickEnemy(diff);
+  if(!m){ toast("No monsters here."); return; }
+  if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
+  state.battle = { mode:"pve", m, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false };
+  document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
+  openModal("battleModal");
+  battleLogPush(`A wild ${m.name} (Lv.${m.level}) appears!`);
+  nextIntent(state.battle);
+  renderPve();
+}
+function renderPve(){
+  const b = state.battle, p = state.profile, m = b.m;
+  document.getElementById("battleEnemyName").textContent = `${m.name} Lv.${m.level} — ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label}`;
+  document.getElementById("battleEnemySprite").textContent = REGION_SPRITE[m.region]||"🐉";
+  document.getElementById("battleEnemyHPBar").style.width = (100*Math.max(0,b.ehp)/m.hp)+"%";
+  document.getElementById("battleEnemyHPNum").textContent = `${Math.max(0,b.ehp)}/${m.hp}`;
+  document.getElementById("battlePlayerName").textContent = p.username;
+  document.getElementById("battlePlayerHPBar").style.width = (100*Math.max(0,b.php)/p.hpMax)+"%";
+  document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.php)}/${p.hpMax}`;
+  document.getElementById("battleStaminaLabel").textContent = `Mana ${b.mana}/${p.manaMax}${b.focus?" · 🎯 Focused (next hit x2)":""}`;
+  document.getElementById("battleRageLabel").textContent = `${b.rage}/${p.rageMax}`;
+  const box = document.getElementById("battleActions"); box.innerHTML = "";
+  if(b.over) return;
+  const add = (label, tip, fn, disabled, cls="btn-pink")=>{
+    const el = document.createElement("button");
+    el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip; el.disabled = !!disabled;
+    el.addEventListener("click", fn); box.appendChild(el);
+  };
+  ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel).forEach(s=>{
+    const dis = (s.needsFullRage && b.rage<p.rageMax) || (s.manaCost && b.mana<s.manaCost);
+    add(s.name, s.desc, ()=>pveAct(s.id), dis);
+  });
+  add("Guard", "Take 65% less damage this turn and gain 2 Rage.", ()=>pveAct("guard"), false, "btn-blue");
+  add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), b.focus, "btn-blue");
+  add("Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints!", ()=>pveAct("counter"), false, "btn-blue");
+  const food = bestFood();
+  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Uses your turn.", ()=>pveAct("eat"), !food, "btn-green");
+  add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
+}
+function bestFood(){
+  const b = state.battle, missing = state.profile.hpMax - b.php;
+  const foods = (state.profile.inventory||[]).filter(e=>e.qty>0).map(e=>ITEM_BY_ID[e.itemId]).filter(i=>i && i.type==="consumable" && i.stats.heal);
+  foods.sort((a,c)=>a.stats.heal-c.stats.heal);
+  return foods.find(f=>f.stats.heal>=missing) || foods[foods.length-1] || null;
+}
+async function pveAct(move){
+  const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
+  b.busy = true;
+  const p = state.profile, m = b.m, intent = b.actual, rnd = ()=>0.9+Math.random()*0.2;
+  const brace = intent==="brace";
+  let guard=false, counter=false;
+  if(move==="guard"){ guard=true; b.rage=Math.min(p.rageMax,b.rage+2); battleLogPush("You raise your guard."); }
+  else if(move==="counter"){ counter=true; battleLogPush("You ready a counter…"); }
+  else if(move==="focus"){ b.focus=true; battleLogPush("You focus, gathering strength."); }
+  else if(move==="eat"){
+    const f = bestFood();
+    if(f){ const heal=Math.min(f.stats.heal, p.hpMax-b.php); b.php+=heal; await changeInvQty(f.id,-1); battleLogPush(`You eat ${f.name}: +${heal} HP.`); }
+  } else {
+    const s = attackSkillById(move);
+    if(s.needsFullRage) b.rage = 0;
+    if(s.manaCost) b.mana -= s.manaCost;
+    else if(s.id==="basic") b.rage = Math.min(p.rageMax, b.rage+1);
+    let d = playerAttackPower()*s.dmgMult()*rnd()*(b.focus?2:1);
+    if(brace && s.id!=="precision") d*=0.4;
+    d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
+    battleLogPush(`You use ${s.name}: ${d} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
+  }
+  if(b.ehp<=0) return pveEnd(true);
+  // enemy turn
+  if(intent!==b.shown) battleLogPush(`It feinted! It actually used ${INTENTS[intent].label}.`);
+  if(intent==="brace") battleLogPush(`${m.name} braces itself.`);
+  else {
+    const mult = intent==="heavy"?2.2 : intent==="drain"?0.6 : 1;
+    if(counter && (intent==="attack"||intent==="heavy")){
+      const back = Math.max(1,Math.round(playerAttackPower()*1.5*rnd())); b.ehp-=back;
+      battleLogPush(`Countered! ${m.name}'s ${INTENTS[intent].label} is negated and you deal ${back}.`);
+    } else {
+      let d = m.attack*mult*rnd() - playerDefense()*0.5;
+      if(guard) d*=0.35; if(counter) d*=1.3;
+      d = Math.max(1, Math.round(d)); b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
+      battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
+      if(intent==="drain"){ b.ehp=Math.min(m.hp,b.ehp+d); battleLogPush(`${m.name} heals ${d}.`); }
+    }
+  }
+  if(b.ehp<=0) return pveEnd(true);
+  if(b.php<=0) return pveEnd(false);
+  nextIntent(b); b.busy=false; renderPve();
+}
+async function pveFlee(){
+  const b = state.battle; if(!b || b.mode!=="pve" || b.over) return;
+  b.over = true;
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage }));
+  toast("You fled safely — nothing lost.");
+  closeModal("battleModal"); state.battle = null;
+}
+async function pveEnd(won){
+  const b = state.battle, m = b.m; b.over = true; renderPve();
+  if(won){
+    battleLogPush(`Victory! +${m.xpReward} XP, +$${m.moneyReward}.`);
+    await grantMoney(m.moneyReward); await grantXP(m.xpReward);
+    if(Math.random()<m.dropChance){
+      const pool = ITEM_BANK.filter(i=>i.element===m.element && i.type!=="consumable");
+      const it = pool[Math.floor(Math.random()*pool.length)];
+      if(it){ await addItemToInv(it.id,1); battleLogPush(`It dropped ${it.name}!`); }
+    }
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage, monstersKilled:increment(1) }));
+  } else {
+    battleLogPush("You were defeated…");
+    const r = await applyDeathPenalty({ mana:b.mana });
+    toast(`Defeated. Lost $${r.moneyLoss}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+  }
+  setTimeout(()=>{ closeModal("battleModal"); state.battle=null; }, 1800);
+}
+document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("click", ()=> startPve(btn.dataset.pve)));
+
 /* --- duel (challenge a friend) --- */
 document.getElementById("btnFightFriend").addEventListener("click", renderDuelPanel);
 function renderDuelPanel(){
@@ -2323,7 +2488,7 @@ function renderDuelPanel(){
     </div>
     <div style="margin-top:8px;">
       <button class="doodle-btn btn-sm btn-yellow" id="btnJoinQueue">Join Random Queue</button>
-      <button class="doodle-btn btn-sm" id="btnCancelQueue">Cancel Queue</button>
+      <button class="doodle-btn btn-sm" id="btnCancelQueue">Leave Queue</button>
       <span id="queueTimerLabel"></span>
     </div>
     <div id="roomStatus" style="margin-top:8px;"></div>`;
@@ -2366,7 +2531,7 @@ async function joinDuelRoom(code){
       guestUid: state.uid, guestName: state.profile.username,
       guestHp: state.profile.hpMax, guestHpMax: state.profile.hpMax,
       guestMana: state.profile.mana, guestManaMax: state.profile.manaMax,
-      status:"active"
+      status:"active", turn: Math.random()<0.5 ? state.uid : snap.data().hostUid
     });
     document.getElementById("roomStatus").textContent = "Duel starting…";
     watchDuelRoom(code);
@@ -2407,7 +2572,9 @@ function watchDuelRoom(code){
         // writes another player's doc), then forwards the exact amount/
         // item to the WINNER's inbox — same pattern as auction payouts —
         // so the winner's subscribeInbox() can credit it to their own doc.
-        applyDeathPenalty().then(({moneyLoss,lostItemName})=>{
+        (d.fledBy===state.uid ? Promise.resolve(null) : applyDeathPenalty()).then((res)=>{
+          if(!res){ toast("You fled the duel — nothing lost."); return; }
+          const {moneyLoss,lostItemName} = res;
           const lossMsg = lostItemName ? `Lost $${moneyLoss} and your ${lostItemName}.` : `Lost $${moneyLoss}.`;
           toast(`Duel lost. ${lossMsg}`);
           withErrorToast(()=> addDoc(collection(db,"players",d.winner,"inbox"), {
@@ -2423,7 +2590,7 @@ function watchDuelRoom(code){
 function openDuelBattle(code, d){
   const iAmHost = d.hostUid===state.uid;
   state.battle = { mode:"duel", code, iAmHost, resolved:false, log:[`${d.hostName} vs ${d.guestName} — fight!`] };
-  closeModal("compassModal");
+  document.querySelectorAll(".modal-backdrop.active").forEach(m=>m.classList.remove("active"));
   openModal("battleModal");
   renderDuelBattle(d);
 }
@@ -2485,11 +2652,13 @@ async function duelFlee(d){
   const winner = b.iAmHost ? d.guestUid : d.hostUid;
   const loser = state.uid;
   await withErrorToast(()=> updateDoc(rref, {
-    status:"finished", winner, log: arrayUnion(`${state.profile.username} fled the duel.`)
+    status:"finished", winner, fledBy: state.uid, log: arrayUnion(`${state.profile.username} fled the duel.`)
   }));
 }
 let queueUnsub=null, queueGuestUnsub=null;
+function setQueueUI(on){ document.getElementById("queueFloat").style.display = on?"flex":"none"; }
 function leaveQueueListeners(){
+  setQueueUI(false);
   clearInterval(queueInterval); queueInterval=null;
   if(queueUnsub){ queueUnsub(); queueUnsub=null; }
   if(queueGuestUnsub){ queueGuestUnsub(); queueGuestUnsub=null; }
@@ -2514,6 +2683,7 @@ async function joinQueue(){
     username: state.profile.username, hpMax: state.profile.hpMax, joinedAt: Date.now()
   }));
   if(ok===null) return;
+  setQueueUI(true);
 
   // Real matchmaking: watch the whole queue for another waiting player.
   // Whoever has the lexicographically lower uid becomes host and creates
@@ -2532,7 +2702,7 @@ async function joinQueue(){
         hostHp: state.profile.hpMax, hostHpMax: state.profile.hpMax,
         guestUid: opp.uid, guestName: opp.username,
         guestHp: opp.hpMax||100, guestHpMax: opp.hpMax||100,
-        status:"active", winner:null, createdAt: Date.now(), log:[]
+        status:"active", turn: Math.random()<0.5 ? state.uid : opp.uid, winner:null, createdAt: Date.now(), log:[]
       }));
       if(created===null) return;
       await withErrorToast(()=> deleteDoc(doc(db,"queue",state.uid)));
@@ -2570,613 +2740,79 @@ document.addEventListener("mouseover", (e)=>{ if(e.target.closest(".doodle-btn")
 document.addEventListener("click", (e)=>{ if(e.target.closest(".doodle-btn")) playSfx("click"); });
 
 /* =========================================================================
-   OPEN WORLD — replaces the old dragon idle screen. Birds-eye, WASD to
-   move, Space to gather/attack/pick up depending on what's nearby.
-
-   Honest simplifications (documented rather than hidden):
-   - Resource nodes and monster POSITIONS are deterministic (a pure hash of
-     chunk coordinates), so everyone's world looks the same without any
-     server storage. Monster STATS scale to whichever player is viewing
-     them (matches "spawning based on your level" literally) — two players
-     standing in the same spot can therefore see a monster at different
-     strength. Node/monster "defeated" state is tracked per-client with a
-     respawn timer, not synced across players — true shared monster HP
-     would need a much heavier chunk-document architecture.
-   - Player positions, attacks (PvP), loot drops and placed buildings ARE
-     fully synced through Firestore, so those are genuinely multiplayer.
-   ========================================================================= */
-const WORLD_BOUND = 10000;
-const CHUNK = 500;
-const VIEW_CHUNK_RADIUS = 2;       // how many chunks out to draw nodes/monsters
-const NODE_RESPAWN_MS = 120000;    // 2 min, client-local
-const MONSTER_RESPAWN_MS = 180000; // 3 min, client-local
-const ATTACK_COOLDOWN_MS = 450;
-const GATHER_RANGE = 46, ATTACK_RANGE = 46, AGGRO_RANGE = 150, PICKUP_RANGE = 40;
-const POS_SYNC_MS = 180;
-const MONSTER_HIT_INTERVAL = 1400;
-
-function mulberry32(seed){
-  return function(){
-    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function hashCoords(x,y){ return (Math.imul(x|0, 374761393) ^ Math.imul(y|0, 668265263)) | 0; }
-function chunkOf(x,y){ return { cx: Math.floor(x/CHUNK), cy: Math.floor(y/CHUNK) }; }
-function chunkKeyStr(cx,cy){ return `${cx}_${cy}`; }
-// Quadrant -> region, per spec: Q1 forest/earth, Q2 ocean/water, Q3 snowy
-// cliffs/wind, Q4 fire/volcano. (0,0) is where all four meet.
-function quadrantRegion(x,y){
-  if(x>=0 && y>=0) return "forest";
-  if(x<0 && y>=0)  return "reef";
-  if(x<0 && y<0)   return "mountains";
-  return "volcano";
-}
-const QUADRANT_COLOR = { forest:"#bfe3a8", reef:"#a8d8e3", mountains:"#dce6ee", volcano:"#e3a89c" };
-const QUADRANT_GLYPH = { tree:"🌳", bush:"🌿", pond:"💧", rock:"🪨" };
-
-const worldState = {
-  x:0, y:0, facing:"down",
-  keys:{}, lastAttackTs:0, lastPosSentTs:0, lastSentX:null, lastSentY:null,
-  currentChunkKey:null, controlsSuspended:false,
-  nearbyPlayers:{}, nearbyPlayersUnsub:null,
-  nearbyLoot:{}, nearbyLootUnsub:null,
-  nearbyObjects:{}, nearbyObjectsUnsub:null,
-  incomingHitsUnsub:null, killCreditsUnsub:null,
-  chunkNodeCache:{}, chunkMonsterCache:{},
-  interactTarget:null, canvas:null, ctx:null, mmCtx:null, raf:null, lastTs:0,
-  respawning:false
-};
-function worldUnsubAll(){
-  [worldState.nearbyPlayersUnsub, worldState.nearbyLootUnsub, worldState.nearbyObjectsUnsub,
-   worldState.incomingHitsUnsub, worldState.killCreditsUnsub].forEach(u=> u && u());
-  if(worldState.raf) cancelAnimationFrame(worldState.raf);
-  stopManaRegen();
-}
-
-function generateChunkNodes(cx,cy){
-  const key = chunkKeyStr(cx,cy);
-  if(worldState.chunkNodeCache[key]) return worldState.chunkNodeCache[key];
-  const rnd = mulberry32(hashCoords(cx, cy));
-  const count = 4 + Math.floor(rnd()*5);
-  const types = ["tree","bush","pond","rock"];
-  const nodes = [];
-  for(let i=0;i<count;i++){
-    nodes.push({
-      id:`${key}_n${i}`, type: types[Math.floor(rnd()*types.length)],
-      x: cx*CHUNK + rnd()*CHUNK, y: cy*CHUNK + rnd()*CHUNK,
-      depletedAt: 0
-    });
-  }
-  worldState.chunkNodeCache[key] = nodes;
-  return nodes;
-}
-function generateChunkMonsters(cx,cy){
-  const key = chunkKeyStr(cx,cy);
-  if(worldState.chunkMonsterCache[key]) return worldState.chunkMonsterCache[key];
-  const rnd = mulberry32(hashCoords(cx*7+3, cy*7+3));
-  const region = quadrantRegion(cx*CHUNK+1, cy*CHUNK+1);
-  const monsters = [];
-  if(rnd() >= 0.4){ // 60% of chunks have monsters
-    const count = 1 + Math.floor(rnd()*3);
-    const playerLevel = state.profile.level||1;
-    const diffPool = playerLevel<8 ? ["easy"] : playerLevel<20 ? ["easy","medium"] : ["medium","hard"];
-    for(let i=0;i<count;i++){
-      const diff = diffPool[Math.floor(rnd()*diffPool.length)];
-      const pool = ENEMY_BANK.filter(e=>e.region===region && e.difficulty===diff);
-      const slot = pool[Math.floor(rnd()*pool.length)];
-      if(!slot) continue;
-      // Level/stats are rolled relative to the player's level AT SPAWN
-      // TIME and then frozen on the monster (tmpl) — a monster you spawned
-      // at level 3 stays that level even if you level up before fighting it.
-      const tmpl = makeMonsterFromSlot(slot, playerLevel, rnd);
-      monsters.push({
-        id:`${key}_m${i}`, x: cx*CHUNK + rnd()*CHUNK, y: cy*CHUNK + rnd()*CHUNK,
-        tmpl, hp: tmpl.hp, maxHp: tmpl.hp, dead:false, deadAt:0, lastHitTs:0
-      });
-    }
-  }
-  worldState.chunkMonsterCache[key] = monsters;
-  return monsters;
-}
-function nodesNearPlayer(){
-  const {cx,cy} = chunkOf(worldState.x, worldState.y);
-  const out = [];
-  for(let dx=-VIEW_CHUNK_RADIUS; dx<=VIEW_CHUNK_RADIUS; dx++)
-    for(let dy=-VIEW_CHUNK_RADIUS; dy<=VIEW_CHUNK_RADIUS; dy++)
-      out.push(...generateChunkNodes(cx+dx, cy+dy).filter(n=> !n.depletedAt || Date.now()-n.depletedAt > NODE_RESPAWN_MS));
-  return out;
-}
-function monstersNearPlayer(){
-  const {cx,cy} = chunkOf(worldState.x, worldState.y);
-  const out = [];
-  for(let dx=-VIEW_CHUNK_RADIUS; dx<=VIEW_CHUNK_RADIUS; dx++)
-    for(let dy=-VIEW_CHUNK_RADIUS; dy<=VIEW_CHUNK_RADIUS; dy++)
-      out.push(...generateChunkMonsters(cx+dx, cy+dy).filter(m=> !m.dead || Date.now()-m.deadAt > MONSTER_RESPAWN_MS));
-  // respawn: reset hp once past the timer
-  out.forEach(m=>{ if(m.dead && Date.now()-m.deadAt>MONSTER_RESPAWN_MS){ m.dead=false; m.hp=m.maxHp; } });
-  return out;
-}
-
-/* ---------- init ---------- */
-function initWorld(pos){
-  worldState.x = pos.x; worldState.y = pos.y;
-  worldState.canvas = document.getElementById("worldCanvas");
-  worldState.ctx = worldState.canvas.getContext("2d");
-  worldState.mmCtx = document.getElementById("minimapCanvas").getContext("2d");
-  resizeWorldCanvas();
-  window.addEventListener("resize", resizeWorldCanvas);
-
-  window.addEventListener("keydown", (e)=>{
-    if(worldControlsBlocked()) return;
-    if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=true;
-    if(e.code==="Space"){ e.preventDefault(); handleSpacebar("basic"); }
-    if(["1","2","3","4"].includes(e.key)){
-      const skill = ATTACK_SKILLS.find(s=>s.key===e.key);
-      if(skill) handleSpacebar(skill.id);
-    }
-  });
-  window.addEventListener("keyup", (e)=>{
-    if(["w","a","s","d","W","A","S","D"].includes(e.key)) worldState.keys[e.key.toLowerCase()]=false;
-  });
-
-  updateNearbySubscriptions(true);
-  setupIncomingHitsListener();
-  setupKillCreditsListener();
-  renderHotbar();
-  startManaRegen();
-  worldState.raf = requestAnimationFrame(worldTick);
-}
-function resizeWorldCanvas(){
-  const c = worldState.canvas, stage = document.getElementById("gameStage");
-  if(!c || !stage) return;
-  c.width = stage.clientWidth; c.height = stage.clientHeight;
-}
-function worldControlsBlocked(){
-  if(worldState.controlsSuspended) return true;
-  if(document.activeElement && ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return true;
-  if(document.querySelector(".modal-backdrop.active")) return true;
-  return false;
-}
-
-/* ---------- main loop ---------- */
-function worldTick(ts){
-  const dt = worldState.lastTs ? Math.min(50, ts-worldState.lastTs) : 16;
-  worldState.lastTs = ts;
-  if(!worldControlsBlocked()) stepMovement(dt);
-  syncPositionThrottled();
-  updateInteractTarget();
-  applyMonsterAggro();
-  drawWorld();
-  drawMinimap();
-  worldState.raf = requestAnimationFrame(worldTick);
-}
-function stepMovement(dt){
-  const p = state.profile; if(!p) return;
-  const speed = (140 + (p.stats?.SPEED||0)*5) * (dt/1000);
-  let dx=0, dy=0;
-  if(worldState.keys.w) dy -= 1;
-  if(worldState.keys.s) dy += 1;
-  if(worldState.keys.a) dx -= 1;
-  if(worldState.keys.d) dx += 1;
-  if(dx||dy){
-    const len = Math.hypot(dx,dy);
-    worldState.x = Math.max(-WORLD_BOUND, Math.min(WORLD_BOUND, worldState.x + (dx/len)*speed));
-    worldState.y = Math.max(-WORLD_BOUND, Math.min(WORLD_BOUND, worldState.y + (dy/len)*speed));
-    worldState.facing = Math.abs(dx)>Math.abs(dy) ? (dx>0?"right":"left") : (dy>0?"down":"up");
-  }
-}
-function syncPositionThrottled(){
-  const now = Date.now();
-  if(now - worldState.lastPosSentTs < POS_SYNC_MS) return;
-  const moved = worldState.lastSentX==null || Math.hypot(worldState.x-worldState.lastSentX, worldState.y-worldState.lastSentY) > 2;
-  if(!moved) return;
-  worldState.lastPosSentTs = now;
-  worldState.lastSentX = worldState.x; worldState.lastSentY = worldState.y;
-  const {cx,cy} = chunkOf(worldState.x, worldState.y);
-  const chunkKey = chunkKeyStr(cx,cy);
-  const region = quadrantRegion(worldState.x, worldState.y);
-  withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-    x: Math.round(worldState.x), y: Math.round(worldState.y), facing: worldState.facing,
-    chunkKey, region
-  }));
-  if(chunkKey !== worldState.currentChunkKey){
-    worldState.currentChunkKey = chunkKey;
-    updateNearbySubscriptions(false);
-  }
-}
-
-/* ---------- nearby players / loot / objects (real multiplayer sync) --- */
-function neighborChunkKeys(){
-  const {cx,cy} = chunkOf(worldState.x, worldState.y);
-  const keys = [];
-  for(let dx=-1; dx<=1; dx++) for(let dy=-1; dy<=1; dy++) keys.push(chunkKeyStr(cx+dx,cy+dy));
-  return keys;
-}
-function updateNearbySubscriptions(){
-  const keys = neighborChunkKeys();
-  worldState.currentChunkKey = chunkKeyStr(...Object.values(chunkOf(worldState.x, worldState.y)));
-  if(worldState.nearbyPlayersUnsub) worldState.nearbyPlayersUnsub();
-  worldState.nearbyPlayersUnsub = onSnapshot(
-    query(collection(db,"players"), where("chunkKey","in",keys)),
-    snap=>{
-      worldState.nearbyPlayers = {};
-      snap.forEach(d=>{ if(d.id!==state.uid) worldState.nearbyPlayers[d.id]=d.data(); });
-    }, ()=>{}
-  );
-  if(worldState.nearbyLootUnsub) worldState.nearbyLootUnsub();
-  worldState.nearbyLootUnsub = onSnapshot(
-    query(collection(db,"worldLoot"), where("chunkKey","in",keys)),
-    snap=>{
-      worldState.nearbyLoot = {};
-      snap.forEach(d=> worldState.nearbyLoot[d.id]={id:d.id, ...d.data()});
-    }, ()=>{}
-  );
-  if(worldState.nearbyObjectsUnsub) worldState.nearbyObjectsUnsub();
-  worldState.nearbyObjectsUnsub = onSnapshot(
-    query(collection(db,"worldObjects"), where("chunkKey","in",keys)),
-    snap=>{
-      worldState.nearbyObjects = {};
-      snap.forEach(d=> worldState.nearbyObjects[d.id]={id:d.id, ...d.data()});
-    }, ()=>{}
-  );
-}
-
-/* ---------- PvP: incoming hits + kill credits (self-write-only pattern) - */
-function setupIncomingHitsListener(){
-  worldState.incomingHitsUnsub = onSnapshot(
-    collection(db,"players",state.uid,"incomingHits"),
-    snap=> snap.docChanges().forEach(ch=>{ if(ch.type==="added") processIncomingHit(ch.doc); }),
-    ()=>{}
-  );
-}
-async function processIncomingHit(hitDoc){
-  const hit = hitDoc.data();
-  await withErrorToast(()=> deleteDoc(hitDoc.ref));
-  const p = state.profile;
-  const newHp = Math.max(0, p.hp - hit.dmg);
-  if(newHp <= 1){
-    worldLogMsg(`${hit.fromUsername} defeated you!`);
-    await worldPlayerDeath(hit.fromUid, hit.fromUsername);
-  } else {
-    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:newHp }));
-    worldLogMsg(`${hit.fromUsername} hit you for ${hit.dmg}!`);
-  }
-}
-function setupKillCreditsListener(){
-  worldState.killCreditsUnsub = onSnapshot(
-    collection(db,"players",state.uid,"killCredits"),
-    snap=> snap.docChanges().forEach(async ch=>{
-      if(ch.type!=="added") return;
-      const c = ch.doc.data();
-      await withErrorToast(()=> deleteDoc(ch.doc.ref));
-      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-        kills:(state.profile.kills||0)+1, killstreak:(state.profile.killstreak||0)+1
-      }));
-      worldLogMsg(`You defeated ${c.victimUsername}!`);
-    }),
-    ()=>{}
-  );
-}
-// Victim's own client drops their loot bag, credits the killer, respawns.
-async function worldPlayerDeath(killerUid, killerUsername){
-  const { moneyLoss, lostItemName } = await applyDeathPenalty();
-  await withErrorToast(()=> addDoc(collection(db,"worldLoot"), {
-    x: worldState.x, y: worldState.y, chunkKey: worldState.currentChunkKey,
-    money: moneyLoss, itemName: lostItemName||null, ts: Date.now()
-  }));
-  if(killerUid){
-    await withErrorToast(()=> addDoc(collection(db,"players",killerUid,"killCredits"), {
-      victimUsername: state.profile.username, ts: Date.now()
-    }));
-  }
-  respawnPlayer();
-}
-function respawnPlayer(){
-  const p = state.profile;
-  const rx = p.bedX ?? p.spawnX ?? 0, ry = p.bedY ?? p.spawnY ?? 0;
-  teleportTo(rx, ry);
-  toast("You respawned.");
-}
-function teleportTo(x,y){
-  worldState.x = x; worldState.y = y;
-  worldState.lastSentX = null; // force an immediate position sync
-  const chunkKey = chunkKeyStr(...Object.values(chunkOf(x,y)));
-  const region = quadrantRegion(x,y);
-  withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { x:Math.round(x), y:Math.round(y), chunkKey, region }));
-  updateNearbySubscriptions();
-}
-
-/* ---------- monster AI: simple aggro + periodic hit --------------------- */
-function applyMonsterAggro(){
-  if(worldControlsBlocked()) return;
-  const now = Date.now();
-  monstersNearPlayer().forEach(m=>{
-    if(m.dead) return;
-    const d = Math.hypot(m.x-worldState.x, m.y-worldState.y);
-    if(d > AGGRO_RANGE) return;
-    if(now - m.lastHitTs < MONSTER_HIT_INTERVAL) return;
-    m.lastHitTs = now;
-    const dmg = Math.round(Math.max(1, m.tmpl.attack - playerDefense()) * (0.8+Math.random()*0.4));
-    const newHp = Math.max(0, (state.profile.hp||1) - dmg);
-    if(newHp <= 1){
-      worldLogMsg(`${m.tmpl.name} defeated you!`);
-      applyDeathPenalty().then(()=> respawnPlayer());
-    } else {
-      withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:newHp }));
-      worldLogMsg(`${m.tmpl.name} hits you for ${dmg}.`);
-    }
-  });
-}
-async function killMonsterReward(m){
-  m.dead = true; m.deadAt = Date.now();
-  await grantXP(m.tmpl.xpReward);
-  await grantMoney(m.tmpl.moneyReward);
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { monstersKilled:(state.profile.monstersKilled||0)+1 }));
-  if(Math.random() < m.tmpl.dropChance){
-    const pool = ITEM_BANK.filter(i=>i.element===m.tmpl.element);
-    const drop = pool[Math.floor(Math.random()*pool.length)];
-    if(drop){ await addItemToInv(drop.id,1); worldLogMsg(`Defeated ${m.tmpl.name}! +${m.tmpl.xpReward} XP, +$${m.tmpl.moneyReward}, found ${drop.name}!`); return; }
-  }
-  worldLogMsg(`Defeated ${m.tmpl.name}! +${m.tmpl.xpReward} XP, +$${m.tmpl.moneyReward}`);
-}
-
-/* ---------- interact target + Space handling ---------------------------- */
-function updateInteractTarget(){
-  const prompt = document.getElementById("interactPrompt");
-  let best = null, bestDist = Infinity;
-  nodesNearPlayer().forEach(n=>{
-    const d = Math.hypot(n.x-worldState.x, n.y-worldState.y);
-    if(d<GATHER_RANGE && d<bestDist){ bestDist=d; best={kind:"node", ref:n}; }
-  });
-  monstersNearPlayer().forEach(m=>{
-    if(m.dead) return;
-    const d = Math.hypot(m.x-worldState.x, m.y-worldState.y);
-    if(d<ATTACK_RANGE && d<bestDist){ bestDist=d; best={kind:"monster", ref:m}; }
-  });
-  Object.values(worldState.nearbyPlayers).forEach(op=>{
-    const d = Math.hypot((op.x||0)-worldState.x, (op.y||0)-worldState.y);
-    if(d<ATTACK_RANGE && d<bestDist){ bestDist=d; best={kind:"player", ref:op}; }
-  });
-  Object.values(worldState.nearbyLoot).forEach(l=>{
-    const d = Math.hypot(l.x-worldState.x, l.y-worldState.y);
-    if(d<PICKUP_RANGE && d<bestDist){ bestDist=d; best={kind:"loot", ref:l}; }
-  });
-  Object.values(worldState.nearbyObjects).forEach(o=>{
-    if(o.ownerUid!==state.uid) return;
-    const d = Math.hypot(o.x-worldState.x, o.y-worldState.y);
-    if(d<PICKUP_RANGE && d<bestDist){ bestDist=d; best={kind:"object", ref:o}; }
-  });
-  worldState.interactTarget = best;
-  if(!best){ prompt.classList.remove("show"); return; }
-  const labels = {
-    node: n=> `Space to ${n.type==="pond"?"fish":n.type==="rock"?"mine":"forage"}`,
-    monster: m=> `Space to attack ${m.tmpl.name} (Lv.${m.tmpl.level})`,
-    player: p=> `Space to attack ${p.username}`,
-    loot: l=> `Space to pick up loot`,
-    object: o=> `Space to reclaim your ${o.type}`
-  };
-  prompt.textContent = labels[best.kind](best.ref);
-  prompt.classList.add("show");
-}
-function handleSpacebar(skillId="basic"){
-  const now = Date.now();
-  const t = worldState.interactTarget;
-  if(!t) return;
-  if(t.kind==="node"){ interactNode(t.ref); return; }
-  if(now - worldState.lastAttackTs < ATTACK_COOLDOWN_MS) return;
-  const skill = attackSkillById(skillId);
-  if(!checkAndSpendAttackCost(skill)) return;
-  worldState.lastAttackTs = now;
-  if(t.kind==="monster") attackWorldMonster(t.ref, skill);
-  else if(t.kind==="player") attackWorldPlayer(t.ref, skill);
-  else if(t.kind==="loot") pickupWorldLoot(t.ref);
-  else if(t.kind==="object") reclaimWorldObject(t.ref);
-}
-// Validates a skill can be used (level unlock, full-rage requirement, mana
-// cost) and, if so, spends its cost (rage reset to 0, or mana deducted).
-// Returns false (and toasts why) without spending anything if it can't be used.
-function checkAndSpendAttackCost(skill){
-  const p = state.profile;
-  if((p.level||1) < skill.unlockLevel){ toast(`${skill.name} unlocks at Lv.${skill.unlockLevel}.`); return false; }
-  if(skill.needsFullRage){
-    if((p.rage||0) < (p.rageMax||10)){ toast(`${skill.name} needs full Rage.`); return false; }
-    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { rage:0 }));
-    return true;
-  }
-  if(skill.manaCost){
-    if((p.mana||0) < skill.manaCost){ toast(`${skill.name} needs ${skill.manaCost} mana.`); return false; }
-    withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { mana: p.mana - skill.manaCost }));
-  }
-  return true;
-}
-function interactNode(n){
-  if(n.type==="pond") doFishAction();
-  else if(n.type==="rock") doMineAction();
-  else doForageAction(); // tree or bush
-  n.depletedAt = Date.now();
-}
-async function attackWorldMonster(m, skill=ATTACK_SKILLS[0]){
-  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3) * skill.dmgMult());
-  m.hp -= dmg;
-  playSfx("attack");
-  worldLogMsg(`You hit ${m.tmpl.name} with ${skill.name} for ${dmg}.`);
-  if(m.hp <= 0) await killMonsterReward(m);
-}
-async function attackWorldPlayer(op, skill=ATTACK_SKILLS[0]){
-  const targetUid = Object.keys(worldState.nearbyPlayers).find(uid=> worldState.nearbyPlayers[uid]===op);
-  if(!targetUid) return;
-  const dmg = Math.round(playerAttackPower() * (0.85+Math.random()*0.3) * skill.dmgMult());
-  playSfx("attack");
-  worldLogMsg(`You hit ${op.username} with ${skill.name} for ${dmg}.`);
-  await withErrorToast(()=> addDoc(collection(db,"players",targetUid,"incomingHits"), {
-    fromUid: state.uid, fromUsername: state.profile.username, dmg, ts: Date.now()
-  }));
-}
-async function pickupWorldLoot(l){
-  await withErrorToast(()=> deleteDoc(doc(db,"worldLoot",l.id)));
-  if(l.money) await grantMoney(l.money);
-  if(l.itemName){
-    const item = ITEM_BANK.find(i=>i.name===l.itemName) || Object.values(ITEM_BY_ID).find(i=>i.name===l.itemName);
-    if(item) await addItemToInv(item.id, 1);
-  }
-  worldLogMsg(`Picked up loot${l.money?` (+$${l.money})`:""}.`);
-}
-async function reclaimWorldObject(o){
-  await withErrorToast(()=> deleteDoc(doc(db,"worldObjects",o.id)));
-  await addItemToInv(o.itemId, 1);
-  if(o.type==="bed"){
-    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bedX:null, bedY:null }));
-  }
-  worldLogMsg(`Reclaimed your ${o.type}.`);
-}
-function worldLogMsg(msg){
-  const el = document.getElementById("stageLog");
-  const line = document.createElement("div");
-  line.className = "stage-log-line";
-  line.textContent = msg;
-  el.appendChild(line);
-  setTimeout(()=> line.remove(), 4000);
-}
-
-/* ---------- hotbar: first 9 items, click to Drop or Place --------------- */
-function renderHotbar(){
-  const bar = document.getElementById("hotbar");
-  if(!bar || !state.profile) return;
-  const entries = invExpanded().slice(0,9);
-  bar.innerHTML = entries.map((e,i)=>`
-    <div class="hotbar-slot" data-hb="${i}">
-      <span class="hb-key">${i+1}</span>
-      <span>${e.item.name.split(" ").slice(0,2).join(" ")}</span>
-      <span class="qty-badge">x${e.qty}</span>
-    </div>`).join("");
-  bar.querySelectorAll("[data-hb]").forEach((el,i)=>{
-    el.addEventListener("click", ()=> openHotbarAction(entries[i], el));
-  });
-}
-function openHotbarAction(entry, el){
-  document.querySelectorAll(".hb-action-popup").forEach(p=>p.remove());
-  const pop = document.createElement("div");
-  pop.className = "hb-action-popup doodle-panel";
-  pop.innerHTML = `
-    <button class="doodle-btn btn-sm" data-hba="drop">Drop</button>
-    ${entry.item.placeable ? `<button class="doodle-btn btn-sm btn-green" data-hba="place">Place</button>` : ""}
-  `;
-  el.appendChild(pop);
-  pop.querySelector('[data-hba="drop"]').addEventListener("click", (ev)=>{ ev.stopPropagation(); dropHotbarItem(entry); pop.remove(); });
-  const placeBtn = pop.querySelector('[data-hba="place"]');
-  if(placeBtn) placeBtn.addEventListener("click", (ev)=>{ ev.stopPropagation(); placeHotbarItem(entry); pop.remove(); });
-  setTimeout(()=> document.addEventListener("click", function h(ev){ if(!pop.contains(ev.target)){ pop.remove(); document.removeEventListener("click",h); } }), 0);
-}
-async function dropHotbarItem(entry){
-  await changeInvQty(entry.item.id, -1);
-  await withErrorToast(()=> addDoc(collection(db,"worldLoot"), {
-    x: worldState.x, y: worldState.y, chunkKey: worldState.currentChunkKey,
-    money:0, itemName: entry.item.name, ts: Date.now()
-  }));
-  worldLogMsg(`Dropped ${entry.item.name}.`);
-}
-async function placeHotbarItem(entry){
-  const facingOffset = { down:{x:0,y:40}, up:{x:0,y:-40}, left:{x:-40,y:0}, right:{x:40,y:0} }[worldState.facing];
-  const px = worldState.x + facingOffset.x, py = worldState.y + facingOffset.y;
-  await changeInvQty(entry.item.id, -1);
-  await withErrorToast(()=> addDoc(collection(db,"worldObjects"), {
-    x:px, y:py, chunkKey: chunkKeyStr(...Object.values(chunkOf(px,py))),
-    type: entry.item.buildType, itemId: entry.item.id, ownerUid: state.uid, ts: Date.now()
-  }));
-  if(entry.item.buildType==="bed"){
-    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bedX:px, bedY:py }));
-  }
-  worldLogMsg(`Placed a ${entry.item.name}.`);
-}
-
-/* ---------- rendering ---------------------------------------------------- */
-const OBJECT_GLYPH = { bench:"🪑", fence:"🚧", bed:"🛏️", home:"🏠", guard:"🛡️" };
-function drawWorld(){
-  const ctx = worldState.ctx, c = worldState.canvas;
-  if(!ctx) return;
-  const w=c.width, h=c.height;
-  ctx.clearRect(0,0,w,h);
-  const camX = worldState.x - w/2, camY = worldState.y - h/2;
-
-  // quadrant-colored ground, split at the world axes
-  const region = quadrantRegion(worldState.x, worldState.y);
-  ctx.fillStyle = QUADRANT_COLOR[region];
-  ctx.fillRect(0,0,w,h);
-  ctx.strokeStyle = "rgba(74,63,53,.12)"; ctx.lineWidth=1;
-  for(let gx = Math.floor(camX/100)*100; gx < camX+w; gx+=100){ ctx.beginPath(); ctx.moveTo(gx-camX,0); ctx.lineTo(gx-camX,h); ctx.stroke(); }
-  for(let gy = Math.floor(camY/100)*100; gy < camY+h; gy+=100){ ctx.beginPath(); ctx.moveTo(0,gy-camY); ctx.lineTo(w,gy-camY); ctx.stroke(); }
-  // world-axis lines (x=0 / y=0) drawn heavier — "quadrants collide" marker
-  ctx.strokeStyle = "rgba(74,63,53,.35)"; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(0-camX,0); ctx.lineTo(0-camX,h); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,0-camY); ctx.lineTo(w,0-camY); ctx.stroke();
-
-  ctx.font = "28px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  nodesNearPlayer().forEach(n=>{
-    if(n.depletedAt && Date.now()-n.depletedAt<NODE_RESPAWN_MS) return;
-    ctx.fillText(QUADRANT_GLYPH[n.type], n.x-camX, n.y-camY);
-  });
-  Object.values(worldState.nearbyObjects).forEach(o=>{
-    ctx.fillText(OBJECT_GLYPH[o.type]||"📦", o.x-camX, o.y-camY);
-  });
-  Object.values(worldState.nearbyLoot).forEach(l=>{
-    ctx.fillText("💰", l.x-camX, l.y-camY);
-  });
-  monstersNearPlayer().forEach(m=>{
-    if(m.dead) return;
-    ctx.fillText("👹", m.x-camX, m.y-camY);
-    drawMiniHpBar(ctx, m.x-camX, m.y-camY-24, m.hp/m.maxHp, "#c0392b");
-    ctx.font = "10px sans-serif"; ctx.fillStyle="#2a2016";
-    ctx.fillText(`${m.tmpl.name} Lv.${m.tmpl.level}`, m.x-camX, m.y-camY-32);
-    ctx.font = "28px sans-serif";
-  });
-  Object.entries(worldState.nearbyPlayers).forEach(([uid,op])=>{
-    const ox=(op.x||0)-camX, oy=(op.y||0)-camY;
-    ctx.fillText("🧙", ox, oy);
-    ctx.font = "11px sans-serif"; ctx.fillStyle="#2a2016";
-    ctx.fillText(op.username||"?", ox, oy-24);
-    ctx.font = "28px sans-serif";
-  });
-  // self, always centered
-  ctx.fillText("🧝", w/2, h/2);
-  ctx.font = "11px sans-serif"; ctx.fillStyle="#2a2016";
-  ctx.fillText(state.profile.username, w/2, h/2-24);
-}
-function drawMiniHpBar(ctx,x,y,pct,color){
-  ctx.fillStyle="rgba(0,0,0,.25)"; ctx.fillRect(x-16,y,32,4);
-  ctx.fillStyle=color; ctx.fillRect(x-16,y,32*Math.max(0,pct),4);
-}
-function drawMinimap(){
-  const ctx = worldState.mmCtx; if(!ctx) return;
-  const size = 150, range = 1200; // world units shown across the minimap
-  ctx.clearRect(0,0,size,size);
-  // 4 quadrant quarters, colored, always centered on true (0,0) so the
-  // "where all 4 sections collide" point is visually anchored
-  const originPx = size/2 - (worldState.x/range)*size;
-  const originPy = size/2 - (worldState.y/range)*size;
-  ctx.fillStyle = QUADRANT_COLOR.forest;    ctx.fillRect(originPx, originPy-size, size, size);
-  ctx.fillStyle = QUADRANT_COLOR.reef;      ctx.fillRect(originPx-size, originPy-size, size, size);
-  ctx.fillStyle = QUADRANT_COLOR.mountains; ctx.fillRect(originPx-size, originPy, size, size);
-  ctx.fillStyle = QUADRANT_COLOR.volcano;   ctx.fillRect(originPx, originPy, size, size);
-  ctx.strokeStyle="#4a3f35"; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(originPx,0); ctx.lineTo(originPx,size); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0,originPy); ctx.lineTo(size,originPy); ctx.stroke();
-  // nearby players as dots
-  ctx.fillStyle="#2a6fdb";
-  Object.values(worldState.nearbyPlayers).forEach(op=>{
-    const px = size/2 + ((op.x||0)-worldState.x)/range*size, py = size/2 + ((op.y||0)-worldState.y)/range*size;
-    if(px>=0&&px<=size&&py>=0&&py<=size){ ctx.beginPath(); ctx.arc(px,py,3,0,7); ctx.fill(); }
-  });
-  // self, always dead-center
-  ctx.fillStyle="#c0392b";
-  ctx.beginPath(); ctx.arc(size/2,size/2,4,0,7); ctx.fill();
-}
-
-
-/* =========================================================================
    BOOT
    ========================================================================= */
+/* =========================================================================
+   WORLD BOSS — the sleeping dragon (shared, multiplayer) + emoji reactions
+   ========================================================================= */
+const BOSS_MAX = 1000000000;
+const bossRef = ()=> doc(db,"boss","main");
+let bossUnsub=null, rxUnsub=null, bossPending=0, bossTimer=null, bossHp=BOSS_MAX, bossResetTimer=null, lastRx=0;
+function fmtBig(n){ return Math.max(0,Math.round(n)).toLocaleString(); }
+function renderBoss(){
+  document.getElementById("bossFill").style.width = (100*Math.max(0,bossHp)/BOSS_MAX)+"%";
+  document.getElementById("bossNum").textContent = bossHp<=0 ? "DEFEATED — it stirs again soon…" : `${fmtBig(bossHp)} / ${fmtBig(BOSS_MAX)}`;
+}
+async function initBoss(){
+  bossCleanup();
+  const snap = await getDoc(bossRef()).catch(()=>null);
+  if(snap && !snap.exists()) await setDoc(bossRef(), { hp:BOSS_MAX, hpMax:BOSS_MAX }).catch(()=>{});
+  bossUnsub = onSnapshot(bossRef(), s=>{
+    if(!s.exists()) return;
+    bossHp = s.data().hp - bossPending; renderBoss();
+    if(s.data().hp<=0 && !bossResetTimer) bossResetTimer = setTimeout(async ()=>{
+      bossResetTimer=null;
+      await runTransaction(db, async tx=>{ const c=await tx.get(bossRef()); if(c.data().hp<=0) tx.update(bossRef(),{hp:BOSS_MAX}); }).catch(()=>{});
+    }, 6000);
+  }, err=> toast(friendlyFirebaseError(err)));
+  rxUnsub = onSnapshot(query(collection(db,"reactions"), orderBy("ts","desc"), limit(20)), snap=>{
+    snap.docChanges().forEach(c=>{
+      const r = c.doc.data();
+      if(c.type==="added" && Date.now()-r.ts < 4000) spawnReaction(r);
+    });
+  }, ()=>{});
+}
+function bossCleanup(){
+  if(bossUnsub){ bossUnsub(); bossUnsub=null; } if(rxUnsub){ rxUnsub(); rxUnsub=null; }
+  if(bossTimer){ clearTimeout(bossTimer); bossTimer=null; }
+}
+async function flushBoss(){
+  bossTimer = null;
+  const dmg = bossPending; bossPending = 0; if(!dmg) return;
+  await withErrorToast(()=> runTransaction(db, async tx=>{
+    const s = await tx.get(bossRef()); const hp = s.data().hp; if(hp<=0) return;
+    tx.update(bossRef(), { hp: Math.max(0, hp-dmg) });
+  }));
+  updateDoc(doc(db,"players",state.uid), { bossDamage: increment(dmg) }).catch(()=>{});
+}
+document.getElementById("bossDragon").addEventListener("click", (e)=>{
+  if(!state.profile) return;
+  if(bossHp<=0){ toast("The dragon has fallen! It will stir again soon."); return; }
+  const dmg = Math.max(1, Math.round(playerAttackPower()));
+  bossPending += dmg; bossHp -= dmg; renderBoss();
+  const svg = e.currentTarget; svg.classList.remove("hit"); void svg.getBoundingClientRect(); svg.classList.add("hit");
+  const n = document.createElement("div"); n.className="dmg-pop"; n.textContent = "-"+fmtBig(dmg);
+  const r = document.getElementById("gameStage").getBoundingClientRect();
+  n.style.left = (e.clientX-r.left)+"px"; n.style.top = (e.clientY-r.top)+"px";
+  document.getElementById("reactionLayer").appendChild(n); setTimeout(()=>n.remove(), 900);
+  playSfx("attack");
+  if(!bossTimer) bossTimer = setTimeout(flushBoss, 600);
+});
+const RX_EMOJI = ["❤️","⚔️","🔥","😭"];
+document.querySelectorAll("[data-rx]").forEach(btn=> btn.addEventListener("click", async ()=>{
+  if(!state.profile || !RX_EMOJI.includes(btn.dataset.rx) || Date.now()-lastRx < 500) return;
+  lastRx = Date.now();
+  const ref = await withErrorToast(()=> addDoc(collection(db,"reactions"), { uid:state.uid, username:state.profile.username, emoji:btn.dataset.rx, ts:Date.now() }));
+  if(ref) setTimeout(()=> deleteDoc(ref).catch(()=>{}), 6000);
+}));
+function spawnReaction(r){
+  const el = document.createElement("div"); el.className = "rx-bubble";
+  const e = document.createElement("span"); e.className="rx-emoji"; e.textContent = r.emoji;
+  const u = document.createElement("span"); u.className="rx-name"; u.textContent = r.username;
+  el.append(e,u); el.style.left = (15+Math.random()*70)+"%";
+  document.getElementById("reactionLayer").appendChild(el); setTimeout(()=>el.remove(), 2200);
+}
+document.getElementById("btnLeaveQueue").addEventListener("click", cancelQueue);
+
 setupDragonAnim();
 setTimeout(()=>{ showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }, 900);

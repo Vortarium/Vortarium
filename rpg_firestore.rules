@@ -55,39 +55,25 @@ service cloud.firestore {
         // may read, update or delete their own inbox entries.
         allow create: if isSignedIn();
       }
-      // Open-world PvP damage: an attacker can never write to a victim's
-      // player doc directly (write is self-only, above). Instead they
-      // create a "hit" here; the VICTIM's own client applies it to their
-      // own hp and deletes it. Same pattern as inbox, just for combat.
-      match /incomingHits/{hitId} {
-        allow read, delete: if isOwner(uid);
-        allow create: if isSignedIn();
       }
-      // Credits a PvP kill back to the attacker (written by the victim's
-      // own client when their hp hits 0) — same self-write-only pattern.
-      match /killCredits/{creditId} {
-        allow read, delete: if isOwner(uid);
-        allow create: if isSignedIn();
-      }
+
+    // World boss: one shared doc. Anyone signed in may create it at full HP,
+    // only lower its hp (at most 100000 per write), or reset it once it is 0.
+    match /boss/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.hp == 1000000000 && request.resource.data.hpMax == 1000000000;
+      allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hp']) && (
+        (request.resource.data.hp >= 0 && request.resource.data.hp < resource.data.hp && resource.data.hp - request.resource.data.hp <= 100000) ||
+        (resource.data.hp <= 0 && request.resource.data.hp == 1000000000)
+      );
     }
 
-    // World loot bags (dropped on death, or manually dropped from the
-    // hotbar): anyone can see them, anyone can create one, and anyone can
-    // pick one up (delete it) — this is a shared, first-come pickup, same
-    // trust model as the rest of this client-only game.
-    match /worldLoot/{lootId} {
+    // Emoji reactions shown above the dragon; sender may delete their own.
+    match /reactions/{rid} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow delete: if isSignedIn();
-    }
-
-    // Player-placed world objects (benches, fences, beds, homes, guard
-    // posts). Public read so everyone sees the same world; only the
-    // original placer may remove (reclaim) their own object.
-    match /worldObjects/{objId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow delete: if isSignedIn() && isOwner(resource.data.ownerUid);
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭'];
+      allow delete: if isSignedIn() && isOwner(resource.data.uid);
+      allow update: if false;
     }
 
     match /globalChat/{msgId} {
