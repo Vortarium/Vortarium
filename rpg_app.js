@@ -449,10 +449,11 @@ function playMusic(src){
 /* =========================================================================
    TOASTS
    ========================================================================= */
-function toast(msg, ms=3500, cls=""){
+function toast(msg, ms=3500, cls="", onClick=null){
   const stack = document.getElementById("toast-stack");
   const t = document.createElement("div");
-  t.className="toast"+(cls?" "+cls:""); t.textContent=msg;
+  t.className="toast"+(cls?" "+cls:"")+(onClick?" toast-click":""); t.textContent=msg;
+  if(onClick){ t.title="Click to open"; t.addEventListener("click", ()=>{ t.remove(); onClick(); }); }
   stack.appendChild(t);
   setTimeout(()=>t.remove(), ms);
 }
@@ -1734,11 +1735,12 @@ async function openProfileByUid(uid){
 }
 function chatMessageHTML(m, id, collectionPath){
   const canDelete = m.uid===state.uid || isAdminUI();
+  if(m.system==="deleted") return `<div class="chat-system" data-mid="${id}">${escapeHTML(m.username)} deleted a message</div>`;
   return `
       <div class="chat-msg ${m.uid===state.uid?'mine':'theirs'}" data-mid="${id}">
         <div class="who chat-username" data-uid="${m.uid}">${escapeHTML(m.username)}</div>
         <div class="bubble">${escapeHTML(m.text)}</div>
-        ${canDelete ? `<button class="chat-del-btn" data-del="${id}" data-cpath="${collectionPath}" title="Delete message">&times;</button>` : ""}
+        ${canDelete ? `<button class="chat-del-btn" data-del="${id}" data-ts="${m.ts||Date.now()}" data-cpath="${collectionPath}" title="Delete message">&times;</button>` : ""}
       </div>`;
 }
 const lrKey = k=> `lr_${state.uid}_${k}`;
@@ -1775,7 +1777,11 @@ function wireChatRowInteractions(log){
     btn.addEventListener("click", async ()=>{
       const [col, ...rest] = btn.dataset.cpath.split("/");
       const ref = rest.length ? doc(db, col, ...rest, btn.dataset.del) : doc(db, col, btn.dataset.del);
-      await withErrorToast(()=> deleteDoc(ref));
+      // Leave a "[user] deleted a message" notice in the same spot, then remove the real message.
+      await withErrorToast(async ()=>{
+        await addDoc(collection(db, col, ...rest), { uid:state.uid, username:state.profile.username, text:"", system:"deleted", ts:+btn.dataset.ts || Date.now() });
+        await deleteDoc(ref);
+      });
     });
   });
 }
@@ -2043,7 +2049,7 @@ function subscribeInbox(){
       if(n.type==="new_message"){
         const log = document.getElementById("chatLogPrivate");
         const viewing = log && log.offsetParent!==null && state.currentChatPartner?.uid===n.fromUid;
-        if(!inboxFirst && !viewing) toast(`💬 ${n.fromUsername} sent you a new message`, 5000, "toast-money");
+        if(!inboxFirst && !viewing) toast(`💬 ${n.fromUsername} sent you a new message — click to open`, 8000, "toast-money", ()=> openPrivateChatWith(n.fromUid, n.fromUsername));
         deleteDoc(ch.doc.ref).catch(()=>{});
         return;
       }
@@ -2557,14 +2563,13 @@ function renderPve(){
     el.addEventListener("click", fn); box.appendChild(el);
   };
   ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel).forEach(s=>{
-    const dis = (s.needsFullRage && b.rage<p.rageMax) || (s.manaCost && b.mana<s.manaCost);
-    add(s.name, s.desc, ()=>pveAct(s.id), dis);
+    add(s.name, s.desc, ()=>pveAct(s.id), false);
   });
   add("Guard", "Take 65% less damage this turn and gain 2 Rage.", ()=>pveAct("guard"), false, "btn-blue");
-  add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), b.focus, "btn-blue");
-  add(b.lastMove==="counter" ? "Counter (recovering)" : "Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Ends your turn, and can't be used two turns in a row.", ()=>pveAct("counter"), b.lastMove==="counter", "btn-blue");
+  add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
+  add("Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Ends your turn.", ()=>pveAct("counter"), false, "btn-blue");
   const food = bestFood();
-  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), !food, "btn-green");
+  add(food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal using food from your inventory. Free action — does NOT end your turn.", ()=>pveAct("eat"), false, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
 }
 function bestFood(){
@@ -2577,7 +2582,11 @@ async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
   b.busy = true;
   const p = state.profile, m = b.m, intent = b.actual, rnd = ()=>0.9+Math.random()*0.2;
-  if(move==="counter" && b.lastMove==="counter"){ toast("You can't Counter two turns in a row."); b.busy=false; return; }
+  // Buttons are never greyed out; moves you can't afford just tell you why (and don't use your turn).
+  const sk = ATTACK_SKILLS.find(x=>x.id===move);
+  if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
+  if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
+  if(move==="eat" && !bestFood()){ toast("You have no food."); b.busy=false; return; }
   // Eating is a free action: heal and stay on your turn (no enemy response).
   if(move==="eat"){
     const f = bestFood();
@@ -2798,16 +2807,16 @@ function renderDuelBattle(d){
   const addBtn = (id, label, tip, extraDis, cls)=>{
     const el = document.createElement("button");
     el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip;
-    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;
+    el.disabled = !isMyTurn || myHp<=0 || oppHp<=0;   // ONLY greyed when it isn't your turn
     el.addEventListener("click", ()=> duelAct(d, id)); actions.appendChild(el);
   };
   ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
-    addBtn(s.id, s.name, s.desc, (s.needsFullRage && rage<pp.rageMax) || (s.manaCost && mana<s.manaCost), "btn-pink"));
+    addBtn(s.id, s.name, s.desc, false, "btn-pink"));
   addBtn("guard", "Guard", "Take 65% less from their next hit and gain 2 Rage.", false, "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
   addBtn("counter", "Counter", "If they attack next, negate it and bounce the damage back at them. Ends your turn.", false, "btn-blue");
   const food = duelFood(d[me+"HpMax"] - myHp);
-  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", !food, "btn-green");
+  addBtn("eat", food?`Eat ${food.name} (+${food.stats.heal})`:"Eat (no food)", "Heal with food from your inventory. Free action — does not end your turn.", false, "btn-green");
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
   fleeBtn.className = "doodle-btn btn-sm btn-yellow"; fleeBtn.textContent = "Flee";
