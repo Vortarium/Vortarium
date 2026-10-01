@@ -673,3 +673,15 @@ body{
 .farm-cell.sel{ outline:3px solid var(--ink); outline-offset:2px; }
 .farm-tools{ margin-bottom:8px; font-size:15px; }
 .farm-detail{ min-height:64px; font-size:16px; }
+
+
+/* ---------- mutes ---------- */
+.acct-mute{ color:#c0392b; font-weight:700; font-size:16px; line-height:1.2; }
+.chat-input-row .mute-bar{ display:none; flex:1 1 100%; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;
+  background:#c0392b; color:#fff; border:2px solid var(--ink); border-radius:10px; padding:10px 12px; font-size:18px; text-align:center; }
+.chat-input-row .mute-bar-time{ font-variant-numeric:tabular-nums; font-size:20px; }
+.chat-input-row.muted .mute-bar{ display:flex; }
+.chat-input-row.muted > input, .chat-input-row.muted > button[type="submit"], .chat-input-row.muted > .reply-compose{ display:none; }
+.mute-box{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:center; margin:8px 0; }
+.mute-box input{ flex:1 1 180px; min-width:0; font-family:'Patrick Hand'; font-size:16px; padding:6px 10px; border:2px solid var(--ink); border-radius:8px; }
+.mute-box .mute-status{ flex:1 1 100%; margin:0; font-size:15px; text-align:center; }

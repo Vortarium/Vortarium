@@ -12,7 +12,7 @@ import {
 import {
   initializeFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp
+  increment, serverTimestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -399,30 +399,35 @@ const ENEMY_NAME_PARTS = {
   volcano:["Ember Imp","Ash Drake","Magma Crab","Cinder Wolf","Lava Golem","Flare Bat","Coal Fiend","Soot Hound","Sulfur Wisp","Brimstone Ogre"],
   reef:["Coral Crab","Tide Serpent","Bubble Jelly","Pearl Turtle","Riptide Shark","Kelp Wisp","Foam Sprite","Shell Guardian","Abyssal Eel","Barnacle Brute"]
 };
+/* Difficulty was shifted up one tier: "easy" is now what "medium" used to be,
+   "medium" is what "hard" used to be, and "hard" is tougher still. The labels
+   shown to the player are unchanged. Rewards: easy pays less, hard pays more,
+   and every tier gets a small bonus per monster level (see makeMonsterFromSlot). */
 const DIFF = {
-  easy:{ mult:0.9, xp:[4,8], money:[8,20] },
-  medium:{ mult:1.0, xp:[8,14], money:[15,35] },
-  hard:{ mult:1.3, xp:[16,32], money:[35,80] }
+  easy:{ mult:1.0, xp:[3,6], money:[6,15] },
+  medium:{ mult:1.3, xp:[9,15], money:[16,38] },
+  hard:{ mult:1.6, xp:[18,34], money:[40,90] }
 };
+const REWARD_PER_LEVEL = 0.04;   // +4% xp/money per monster level above 1
 /* Monster level is generated RELATIVE to the player's CURRENT level at the
    moment the monster spawns, per design:
-     easy:   playerLevel - (0 to 2), floored at level 1
-     medium: playerLevel +/- 3, randomly
-     hard:   playerLevel + (1 to 3)
+     easy:   playerLevel +/- 3, randomly            (old "medium")
+     medium: playerLevel + (1 to 3)                 (old "hard")
+     hard:   playerLevel + (3 to 5)                 (new, tougher)
    buildEnemyBank() only enumerates the 10 name slots per region for
    variety; level/stats are computed fresh in makeMonsterFromSlot() using
    whatever the player's level is right now. */
 function rollMonsterLevel(diff, playerLevel, rnd=Math.random){
   playerLevel = Math.max(1, playerLevel||1);
-  if(diff==="easy"){
-    const under = Math.floor(rnd()*3); // 0-2 levels under, min level 1
-    return Math.max(1, playerLevel - under);
-  }
   if(diff==="hard"){
+    const over = 3 + Math.floor(rnd()*3); // 3-5 levels over
+    return playerLevel + over;
+  }
+  if(diff==="medium"){
     const over = 1 + Math.floor(rnd()*3); // 1-3 levels over
     return playerLevel + over;
   }
-  const delta = Math.floor(rnd()*7) - 3; // medium: -3..+3, randomly
+  const delta = Math.floor(rnd()*7) - 3; // easy: -3..+3, randomly
   return Math.max(1, playerLevel + delta);
 }
 function buildEnemyBank(){
@@ -449,8 +454,8 @@ function makeMonsterFromSlot(slot, playerLevel, rnd=Math.random){
     level: lvl, element: REGIONS[slot.region].element,
     hp: Math.round((20 + lvl*8) * d.mult),
     attack: Math.round((3 + lvl*1.5) * d.mult),
-    xpReward: Math.round(d.xp[0] + rnd()*(d.xp[1]-d.xp[0])),
-    moneyReward: Math.round(d.money[0] + rnd()*(d.money[1]-d.money[0])),
+    xpReward: Math.max(1, Math.round((d.xp[0] + rnd()*(d.xp[1]-d.xp[0])) * (1 + REWARD_PER_LEVEL*(lvl-1)))),
+    moneyReward: Math.max(1, Math.round((d.money[0] + rnd()*(d.money[1]-d.money[0])) * (1 + REWARD_PER_LEVEL*(lvl-1)))),
     dropChance: slot.difficulty==="easy"?0.25:slot.difficulty==="medium"?0.45:0.7
   };
 }
@@ -601,14 +606,19 @@ const state = {
 
 /* Player doc must be creatable with NO archetype/class yet (signup happens
    before archetype/class selection), so every lookup below is guarded. */
+/* Max Rage is set by level: 8 at level 1, +1 every 3 levels (Lv3=9, Lv6=10,
+   Lv9=11, Lv12=12 ...). The Fire archetype's Rage boon is kept as a flat +4. */
+function rageMaxFor(level, archetype){
+  const boon = (archetype && ELEMENTS[archetype]) ? ELEMENTS[archetype].boon : null;
+  return 8 + Math.floor(Math.max(1, level||1)/3) + (boon==="rage" ? 4 : 0);
+}
 function defaultPlayerDoc(username, archetype, klass){
   const bonus = (klass && CLASSES[klass]) ? CLASSES[klass].bonus : {};
   const stats = { SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0, ...bonus };
   const boon = (archetype && ELEMENTS[archetype]) ? ELEMENTS[archetype].boon : null;
-  const bars = { hp:100, hpMax:100, mana:20, manaMax:20, rage:10, rageMax:10, xp:0, xpMax:10 };
+  const bars = { hp:100, hpMax:100, mana:20, manaMax:20, rage:rageMaxFor(1,archetype), rageMax:rageMaxFor(1,archetype), xp:0, xpMax:10 };
   if(boon==="hp"){ bars.hp=120; bars.hpMax=120; }
   if(boon==="mana"){ bars.mana=26; bars.manaMax=26; }
-  if(boon==="rage"){ bars.rage=14; bars.rageMax=14; }
   return {
     username, archetype: archetype||null, klass: klass||null, level:1, money:0, backpackTier:0,
     stats, ...bars,
@@ -654,7 +664,7 @@ function archetypeClassUpdates(archetype, klass){
   const updates = { archetype, klass, stats };
   if(boon==="hp"){ updates.hp=120; updates.hpMax=120; }
   if(boon==="mana"){ updates.mana=26; updates.manaMax=26; }
-  if(boon==="rage"){ updates.rage=14; updates.rageMax=14; }
+  updates.rageMax = rageMaxFor(1, archetype); updates.rage = updates.rageMax;
   return updates;
 }
 
@@ -952,6 +962,8 @@ function enterGame(){
       playMusic(r.track);
     }
     if(firstSnapshot){
+      { const rm = rageMaxFor(state.profile.level, state.profile.archetype);   // bring existing accounts onto the level-based Rage cap
+        if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
       const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen(); startOnlineBeat();
@@ -973,6 +985,7 @@ function renderHUD(){
   document.getElementById("hudArchetype").textContent = ELEMENTS[p.archetype].name;
   document.getElementById("hudClass").textContent = CLASSES[p.klass].name;
   document.getElementById("hudMoney").textContent = fmtMoney(p.money);
+  updateMuteUI();
   document.getElementById("hudRegion").textContent = REGIONS[p.region].name;
 
   document.getElementById("regionBg").className = "paper-bg " + REGIONS[p.region].css;
@@ -1020,6 +1033,7 @@ async function grantXP(amount){
       updates.hp = updates.hpMax;
       updates.manaMax = p.manaMax + 3*levelsGained;
       updates.mana = updates.manaMax;
+      updates.rageMax = rageMaxFor(level, p.archetype);   // max Rage grows with level
       playSfx("levelup");
       toast(`Level up! You are now level ${level} (+${levelsGained} skill point${levelsGained>1?"s":""}).`);
     }
@@ -1398,6 +1412,27 @@ function openProfileBook(uid, data, rank, cat){
   if(!isSelf && isAdminUI()){
     banBtn.onclick = ()=> banUser(uid, data.username);
   }
+  // mod-only mute box
+  const muteBox = document.getElementById("muteBox");
+  muteBox.style.display = (!isSelf && isAdminUI()) ? "" : "none";
+  if(!isSelf && isAdminUI()){
+    const durInput = document.getElementById("muteDuration"), status = document.getElementById("muteStatus"), unBtn = document.getElementById("btnUnmuteUser");
+    durInput.value = "";
+    const showStatus = d=>{
+      const left = muteLeftMs(d);
+      status.textContent = left>0 ? `Currently muted — ${fmtMuteLeft(left)} left.` : "Not muted.";
+      status.style.color = left>0 ? "#c0392b" : "";
+      unBtn.style.display = left>0 ? "" : "none";
+    };
+    showStatus(data);
+    getDoc(doc(db,"players",uid)).then(s=>{ if(s.exists()) showStatus(s.data()); }).catch(()=>{});   // fresh value, the one passed in may be a cached leaderboard row
+    document.getElementById("btnMuteUser").onclick = async ()=>{
+      const r = parseMuteDuration(durInput.value);
+      if(r.err){ toast(r.err); return; }
+      if(await muteUser(uid, data.username, r.ms)){ durInput.value = ""; showStatus({ mutedUntil: Date.now()+r.ms }); }
+    };
+    unBtn.onclick = async ()=>{ if(await unmuteUser(uid, data.username)) showStatus({ mutedUntil:0 }); };
+  }
   if(!isSelf){
     pmBtn.onclick = ()=>{ closeModal("profileModal"); openPrivateChatWith(uid, data.username); };
     const isFriend = (state.profile.friends||[]).includes(uid);
@@ -1441,14 +1476,53 @@ function openProfileBook(uid, data, rank, cat){
    leaderboards and scrubs their name in the meantime. */
 async function banUser(uid, username){
   if(!isAdminUI()) return;
-  if(!confirm(`Ban ${username}? This scrubs their name everywhere and cannot be undone from here.`)) return;
+  if(!confirm(`Ban ${username}? This scrubs their name and deletes everything they contributed (chat, private messages, auction listings, friendships and requests). It cannot be undone from here.`)) return;
   const bannedName = `banneduser_${Math.floor(10000 + Math.random()*90000)}`;
-  const ok = await withErrorToast(async ()=>{
-    await updateDoc(doc(db,"players",uid), { username: bannedName, banned:true });
-    const gcSnap = await getDocs(query(collection(db,"globalChat"), where("uid","==",uid)));
-    for(const d of gcSnap.docs) await deleteDoc(d.ref);
+  // Remember who they had sent friend requests to BEFORE we blank that list (their pending requests get cleaned up below).
+  let sentTargets = [];
+  try{ sentTargets = (await getDoc(doc(db,"players",uid))).data()?.sentFriendRequests || []; }catch(_){}
+  // 1) Flag first, so they are kicked out immediately and the name can never be re-registered.
+  const flagged = await withErrorToast(async ()=>{
+    await updateDoc(doc(db,"players",uid), { username: bannedName, banned:true, friends:[], sentFriendRequests:[], mutedUntil:0 });
   });
-  if(ok!==null){ toast(`${username} has been banned.`); closeModal("profileModal"); }
+  if(flagged===null) return;
+  // 2) Sweep up their data. Each step is independent: one failing (e.g. a missing index) never stops the rest.
+  const failed = [], counts = {};
+  const step = async (label, fn)=>{ try{ counts[label] = await fn(); }catch(e){ console.error("ban cleanup:", label, e); failed.push(label); } };
+  const delAll = async (q)=>{ const snap = await getDocs(q); await Promise.all(snap.docs.map(d=> deleteDoc(d.ref))); return snap.size; };
+
+  await step("chat messages", ()=> delAll(query(collection(db,"globalChat"), where("uid","==",uid))));
+  // private messages they sent, in every thread (a collection-group query — see the note in rpg_firestore.rules about its index)
+  await step("private messages", ()=> delAll(query(collectionGroup(db,"messages"), where("uid","==",uid))));
+  await step("auction listings", ()=> delAll(query(collection(db,"auction"), where("sellerUid","==",uid))));
+  await step("reactions", ()=> delAll(query(collection(db,"reactions"), where("uid","==",uid))));
+  await step("duel rooms", ()=> delAll(query(collection(db,"duelRooms"), where("hostUid","==",uid))));
+  await step("duel queue", async ()=>{ await deleteDoc(doc(db,"queue",uid)); return 1; });
+  // remove them from every friends list, and from every pending-request list
+  await step("friends lists", async ()=>{
+    const snap = await getDocs(query(collection(db,"players"), where("friends","array-contains",uid)));
+    await Promise.all(snap.docs.map(d=> updateDoc(d.ref, { friends: arrayRemove(uid) })));
+    return snap.size;
+  });
+  await step("friend requests", async ()=>{
+    const snap = await getDocs(query(collection(db,"players"), where("sentFriendRequests","array-contains",uid)));
+    await Promise.all(snap.docs.map(d=> updateDoc(d.ref, { sentFriendRequests: arrayRemove(uid) })));
+    return snap.size;
+  });
+  // their own outstanding friend requests sitting in other players' inboxes
+  await step("pending requests sent", async ()=>{
+    let n = 0;
+    for(const t of sentTargets){
+      const ib = await getDocs(query(collection(db,"players",t,"inbox"), where("fromUid","==",uid)));
+      await Promise.all(ib.docs.map(d=> deleteDoc(d.ref))); n += ib.size;
+    }
+    return n;
+  });
+
+  closeModal("profileModal");
+  const summary = Object.entries(counts).filter(([,n])=>n).map(([k,n])=>`${n} ${k}`).join(", ");
+  toast(`${username} has been banned.${summary ? " Removed: "+summary+"." : ""}`, 8000);
+  if(failed.length) toast(`⚠️ Banned, but couldn't clear: ${failed.join(", ")}. Check the console / Firestore rules & indexes.`, 12000);
 }
 
 /* =========================================================================
@@ -2066,7 +2140,16 @@ function toolUsesLeft(kind){
 }
 document.getElementById("btnForage").addEventListener("click", doForageAction);
 document.getElementById("btnMine").addEventListener("click", doMineAction);
-document.getElementById("btnFish").addEventListener("click", ()=>{ closeModal("compassModal"); doFishAction(); });
+// The compass has to hide while the fishing minigame is on screen (it would cover it),
+// but it comes straight back when the minigame ends so you can keep going.
+let fishReopenCompass = false;
+function reopenCompassIf(flag){ if(flag && state.profile && !state.battle) openModal("compassModal"); }
+document.getElementById("btnFish").addEventListener("click", async ()=>{
+  fishReopenCompass = document.getElementById("compassModal").classList.contains("active");
+  closeModal("compassModal");
+  await doFishAction();
+  if(!fishGame){ reopenCompassIf(fishReopenCompass); fishReopenCompass = false; }   // couldn't start (no rod etc.)
+});
 setInterval(()=>{
   if(!state.profile) return;
   const r = forageReadyIn(), fb = document.getElementById("btnForage");
@@ -2228,6 +2311,7 @@ async function endFishing(success, trait){
   clearInterval(fishGame); fishGame.cleanup?.(); fishGame = null;
   document.getElementById("fishOverlay").classList.remove("show");
   document.getElementById("fishProgressFill").style.height = "0%";
+  reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   if(success){
     // Roll is nudged up by the fish's speed trait — a fast bite is harder
     // to reel in but skews the catch toward the rarer/higher-quality pools.
@@ -2254,6 +2338,66 @@ let chatSubbed = false;
 // modified client that fakes this check still gets rejected server-side.
 const ADMIN_USERNAME = "Vortarium";
 function isAdminUI(){ return state.profile?.username === ADMIN_USERNAME; }
+
+/* ---------- MUTES ----------
+   A mod mutes someone from their profile. The mute is just a timestamp,
+   players/{uid}.mutedUntil (ms since epoch), set by the mod and enforced
+   server-side in rpg_firestore.rules (chat, auction listings, payments and
+   friend requests all check it). It expires on its own — nothing has to be
+   cleared. A muted player can still READ every chat; their type boxes are
+   swapped for a red live countdown bar and the header shows the countdown too. */
+const muteLeftMs = (d=state.profile)=> Math.max(0, (d?.mutedUntil||0) - Date.now());
+const isMuted = ()=> muteLeftMs() > 0;
+function fmtMuteLeft(ms){
+  let t = Math.ceil(ms/1000);
+  const d = Math.floor(t/86400); t -= d*86400;
+  const h = Math.floor(t/3600); t -= h*3600;
+  const m = Math.floor(t/60), sec = t - m*60;
+  return [d?`${d}d`:"", (d||h)?`${h}h`:"", (d||h||m)?`${m}m`:"", `${sec}s`].filter(Boolean).join(" ");
+}
+/* "1d 2m 30s", "5m 10s", "2d", "90m", "1d2m30s" … d = days, m = minutes, s = seconds (h = hours also works). */
+function parseMuteDuration(str){
+  const src = String(str||"").trim().toLowerCase();
+  if(!src) return { err:"Enter how long to mute for, e.g. 1d 2m 30s" };
+  const re = /(\d+(?:\.\d+)?)\s*([dhms])/g, UNIT = { d:86400000, h:3600000, m:60000, s:1000 };
+  let total = 0, m, used = "", any = false;
+  while((m = re.exec(src))){ total += parseFloat(m[1]) * UNIT[m[2]]; used += m[0]; any = true; }
+  if(!any || src.replace(/\s+/g,"") !== used.replace(/\s+/g,"")) return { err:"Use d, m and s — like 1d 2m 30s, 5m 10s, 2d or 15m." };
+  total = Math.round(total);
+  if(total < 1000) return { err:"Mute must be at least 1 second." };
+  return { ms: total };
+}
+function muteBlockedToast(what){ toast(`🔇 You're muted for ${fmtMuteLeft(muteLeftMs())} — you can't ${what}.`); }
+let wasMuted = false;
+function updateMuteUI(){
+  const left = muteLeftMs(), muted = left > 0;
+  document.querySelectorAll(".chat-input-row").forEach(f=> f.classList.toggle("muted", muted));
+  document.querySelectorAll(".mute-bar-time").forEach(el=> el.textContent = muted ? fmtMuteLeft(left) : "");
+  const hud = document.getElementById("hudMute");
+  if(hud){ hud.style.display = muted ? "" : "none"; document.getElementById("hudMuteTime").textContent = muted ? fmtMuteLeft(left) : ""; }
+  if(muted){ hideChatCmdPopup?.(); }
+  if(wasMuted && !muted) toast("🔊 Your mute has ended — you can talk again.");
+  wasMuted = muted;
+}
+setInterval(()=>{ if(state.profile) updateMuteUI(); }, 1000);
+
+/* Mod-side: mute / unmute from a profile. Only the admin's client shows the controls;
+   rpg_firestore.rules is what actually lets only the admin write another player's mutedUntil. */
+async function muteUser(uid, username, ms){
+  if(!isAdminUI()) return false;
+  const until = Date.now() + ms;
+  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",uid), { mutedUntil: until }));
+  if(ok===null) return false;
+  toast(`🔇 ${username} is muted for ${fmtMuteLeft(ms)}.`);
+  return true;
+}
+async function unmuteUser(uid, username){
+  if(!isAdminUI()) return false;
+  const ok = await withErrorToast(()=> updateDoc(doc(db,"players",uid), { mutedUntil: 0 }));
+  if(ok===null) return false;
+  toast(`🔊 ${username} was unmuted.`);
+  return true;
+}
 /* ---------- online status: a green dot means "logged in with the tab open" ----------
    Every logged-in client stamps `onlineAt` on its own player doc every 45s; anyone whose
    stamp is under 2.5 minutes old counts as online. Logging out / closing the tab clears it. */
@@ -2387,7 +2531,7 @@ function wireChatRowInteractions(log){
       const ref = rest.length ? doc(db, col, ...rest, btn.dataset.del) : doc(db, col, btn.dataset.del);
       // Leave a "[user] deleted a message" notice in the same spot, then remove the real message.
       await withErrorToast(async ()=>{
-        await addDoc(collection(db, col, ...rest), { uid:state.uid, username:state.profile.username, text:"", system:"deleted", ts:+btn.dataset.ts || Date.now() });
+        if(!isMuted()) await addDoc(collection(db, col, ...rest), { uid:state.uid, username:state.profile.username, text:"", system:"deleted", ts:+btn.dataset.ts || Date.now() });   // (muted players can't post, so no notice line)
         await deleteDoc(ref);
       });
     });
@@ -2409,6 +2553,7 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   const input = document.getElementById("globalChatInput");
   const raw = input.value.trim();
   if(!raw) return;
+  if(isMuted()){ muteBlockedToast("send chat messages"); return; }
   hideChatCmdPopup();
   if(raw.startsWith("/")){
     await runChatCommand(raw);
@@ -2460,6 +2605,7 @@ async function runChatCommand(raw){
   const parts = raw.trim().split(/\s+/);
   const cmd = parts[0].toLowerCase();
   if(cmd === "/pay"){
+    if(isMuted()){ muteBlockedToast("pay people"); return; }
     const [ , username, amountStr ] = parts;
     const pa = parseAmount(amountStr||"");
     if(!username){ toast("Usage: /pay [username] [amount]"); return; }
@@ -2482,6 +2628,7 @@ async function runChatCommand(raw){
   }
   if(cmd === "/ah"){
     if(parts[1]?.toLowerCase() === "sell"){
+      if(isMuted()){ muteBlockedToast("list items on the auction"); return; }
       const itemName = parts[2];
       if(!itemName){ toast("Usage: /ah sell [item] [price]"); return; }
       const pa = parseAmount(parts[3]||"");
@@ -2572,7 +2719,7 @@ async function renderPMContacts(friendUids){
   for(const uid of allUids){
     try{
       const snap = await getDoc(doc(db,"players",uid));
-      if(!snap.exists()) continue;
+      if(!snap.exists() || snap.data().banned) continue;
       const li = document.createElement("li");
       li.innerHTML = escapeHTML(snap.data().username) + onlineDot(snap.data());
       if(state.currentChatPartner?.uid===uid) li.classList.add("active");
@@ -2706,6 +2853,7 @@ document.querySelectorAll("[data-chatsub],[data-ctab],[data-close-modal]").forEa
 document.getElementById("privateChatForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
   if(!state.currentChatPartner) { toast("Pick a friend to message."); return; }
+  if(isMuted()){ muteBlockedToast("send chat messages"); return; }
   const input = document.getElementById("privateChatInput");
   const raw = input.value.trim();
   const text = moderateChatText(raw);
@@ -2728,6 +2876,7 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
    The other side of the handshake is applied by the OTHER player's own
    client, triggered by an inbox notification only they can read. */
 async function sendFriendRequest(uid, username){
+  if(isMuted()){ muteBlockedToast("send friend requests"); return; }
   if(uid === state.uid){ toast("You can't friend yourself!"); return; }
   if((state.profile.friends||[]).includes(uid)){ toast("You're already friends."); return; }
   if((state.profile.sentFriendRequests||[]).includes(uid)){ toast("Request already pending."); return; }
@@ -2760,6 +2909,33 @@ async function creditInbox(docs){
     crediting = false;
     if(creditQueued){ const q = creditQueued; creditQueued = null; creditInbox(q); }
   }
+}
+const returnsInFlight = new Set();
+async function claimReturnedAuctionItems(docs){
+  const todo = docs.filter(d=> !returnsInFlight.has(d.id));
+  if(!todo.length) return;
+  todo.forEach(d=> returnsInFlight.add(d.id));
+  try{
+    const names = [];
+    await runTransaction(db, async tx=>{
+      names.length = 0;
+      const pref = doc(db,"players",state.uid), ps = await tx.get(pref), fresh = [];
+      for(const d of todo){ const s = await tx.get(d.ref); if(s.exists() && !s.data().claimed) fresh.push(s); }
+      if(!fresh.length) return;
+      const inv = (ps.data().inventory||[]).map(e=>({...e}));
+      // A mod refund is never dropped for lack of space: it is added even if the bag is already full.
+      for(const s of fresh){
+        const { itemId, qty } = s.data(); if(!ITEM_BY_ID[itemId]) continue;
+        const idx = inv.findIndex(e=>e.itemId===itemId);
+        if(idx>=0 && inv[idx].qty>0) inv[idx].qty += qty; else if(idx>=0) inv[idx].qty = qty; else inv.push({ itemId, qty });
+        names.push(`${ITEM_BY_ID[itemId].name} x${qty}`);
+      }
+      tx.update(pref, { inventory: inv });
+      fresh.forEach(s=> tx.update(s.ref, { claimed:true }));
+    });
+    if(names.length) toast(`🛡️ A moderator removed your auction listing — ${names.join(", ")} returned to your inventory.`, 8000);
+  }catch(e){ console.error(e); }
+  finally{ todo.forEach(d=> returnsInFlight.delete(d.id)); }
 }
 function subscribeInbox(){
   const q = query(collection(db,"players",state.uid,"inbox"), orderBy("ts","desc"));
@@ -2794,6 +2970,8 @@ function subscribeInbox(){
     // would race the same way the old crafting bug did.
     const uncredited = snap.docs.filter(d=> ["auction_sold","duel_won","payment_received"].includes(d.data().type) && !d.data().credited);
     if(uncredited.length) creditInbox(uncredited);
+    const unclaimedReturns = snap.docs.filter(d=> d.data().type==="auction_returned" && !d.data().claimed);
+    if(unclaimedReturns.length) claimReturnedAuctionItems(unclaimedReturns);
     const list = document.getElementById("inboxList");
     list.innerHTML="";
     snap.forEach(d=>{
@@ -2842,6 +3020,9 @@ function subscribeInbox(){
       } else if(n.type==="duel_won"){
         const itemMsg = n.itemName ? ` and their ${escapeHTML(n.itemName)}` : "";
         li.innerHTML = `<span>You won a duel vs ${escapeHTML(n.fromUsername)}! +$${fmtMoney(n.amount)}${itemMsg} (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
+      } else if(n.type==="auction_returned"){
+        li.innerHTML = `<span>A moderator removed your ${escapeHTML(n.itemName||"item")} x${n.qty||1} from the auction — it was returned to your inventory.</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else if(n.type==="auction_sold"){
         // Money is auto-credited above the moment this doc is seen — this
@@ -2935,6 +3116,11 @@ function showAuctionDetail(id){
   buyBtn.disabled = false;
   buyBtn.textContent = "Buy";
   buyBtn.onclick = ()=> buyAuctionListing(id, listing, item);
+  // mods get a Remove Item button: takes the listing down and gives the item back to the seller
+  const rmBtn = document.getElementById("aucDetailRemoveBtn");
+  rmBtn.style.display = isAdminUI() ? "" : "none";
+  rmBtn.disabled = false; rmBtn.textContent = "Remove Item (mod)";
+  rmBtn.onclick = ()=> modRemoveAuctionListing(id, listing, item);
   if(auctionDetailTimerInterval) clearInterval(auctionDetailTimerInterval);
   const tick = ()=>{
     const entryNow = auctionListingsCache[id];
@@ -2946,6 +3132,33 @@ function showAuctionDetail(id){
   };
   tick();
   auctionDetailTimerInterval = setInterval(tick, 1000);
+}
+/* Mod removal: delete the listing (only if it's still active — never races a purchase)
+   and drop an "auction_returned" notice in the seller's inbox. The SELLER's own client
+   puts the item back in their inventory (see claimReturnedAuctionItems), because rules
+   don't let anyone write another player's inventory directly. */
+async function modRemoveAuctionListing(listingId, listing, item){
+  if(!isAdminUI()) return;
+  if(!confirm(`Remove ${item.name} x${listing.qty} from ${listing.sellerName}'s listing? It will be returned to them.`)) return;
+  const rmBtn = document.getElementById("aucDetailRemoveBtn");
+  rmBtn.disabled = true; rmBtn.textContent = "Removing…";
+  let res = null, err = null;
+  try{
+    res = await runTransaction(db, async tx=>{
+      const lref = doc(db,"auction",listingId), snap = await tx.get(lref);
+      if(!snap.exists() || snap.data().status !== "active") throw new Error("gone");
+      const L = snap.data();
+      tx.delete(lref);
+      return { sellerUid:L.sellerUid, itemId:L.itemId, qty:L.qty };
+    });
+  }catch(e){ err = e; }
+  rmBtn.disabled = false; rmBtn.textContent = "Remove Item (mod)";
+  if(!res){ toast(err?.message==="gone" ? "That listing was already sold or removed." : friendlyFirebaseError(err)); return; }
+  hideAuctionDetail();
+  await withErrorToast(()=> addDoc(collection(db,"players",res.sellerUid,"inbox"), {
+    type:"auction_returned", itemId:res.itemId, itemName:item.name, qty:res.qty, ts:Date.now(), claimed:false
+  }));
+  toast(`Removed ${item.name} x${res.qty} — returned to ${listing.sellerName}.`);
 }
 function hideAuctionDetail(){
   auctionSelectedId = null;
@@ -3010,6 +3223,7 @@ function updatePostTotal(){
 document.getElementById("postQty").addEventListener("input", updatePostTotal);
 document.getElementById("postPrice").addEventListener("input", updatePostTotal);
 document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
+  if(isMuted()){ muteBlockedToast("list items on the auction"); return; }
   const itemId = document.getElementById("postItemSelect").value;
   const qty = Number(document.getElementById("postQty").value);
   const pa = parseAmount(document.getElementById("postPrice").value);
@@ -3331,14 +3545,15 @@ async function applyDeathPenalty(extraFields={}){
    Each turn the monster TELEGRAPHS its intent (hard/medium ones sometimes
    feint). Pick a move that answers it, and manage Mana, Rage and food.
    ========================================================================= */
+const MAX_EATS_PER_TURN = 3;   // food items you may eat in one turn, PvE and duels alike
 const INTENTS = {
   attack:{ icon:"⚔️", label:"Attack",     tip:"A normal hit." },
   heavy: { icon:"💥", label:"Heavy Slam", tip:"2.2x damage — Guard or Counter it!" },
   brace: { icon:"🛡️", label:"Brace",      tip:"Takes 60% less damage — set up a Focus, or use Precision." },
   drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." }
 };
-const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:1}, medium:{attack:4,heavy:2,brace:2,drain:2}, hard:{attack:3,heavy:3,brace:2,drain:2} };
-const FEINT_CHANCE = { easy:0.05, medium:0.12, hard:0.2 };
+const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:2}, medium:{attack:3,heavy:3,brace:2,drain:2}, hard:{attack:2,heavy:4,brace:2,drain:2} };
+const FEINT_CHANCE = { easy:0.12, medium:0.2, hard:0.28 };
 const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
 function rollIntent(diff){
   const bag = Object.entries(INTENT_WEIGHTS[diff]).flatMap(([k,n])=>Array(n).fill(k));
@@ -3353,7 +3568,8 @@ function startPve(diff){
   const p = state.profile, m = pickEnemy(diff);
   if(!m){ toast("No monsters here."); return; }
   if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
-  state.battle = { mode:"pve", m, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false };
+  state.battle = { mode:"pve", m, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false, eats:0,
+    reopenCompass: document.getElementById("compassModal").classList.contains("active") };   // put the compass back when the fight is over
   document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
   openModal("battleModal"); setPvpRxVisible(false);
   battleLogPush(`A wild ${m.name} (Lv.${m.level}) appears!`);
@@ -3384,7 +3600,8 @@ function renderPve(){
   });
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
-  add("🍖 Eat", "Open your food bag and pick what to eat. Free action — does NOT end your turn.", openEatModal, false, "btn-green");
+  const eatsLeftNow = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
+  add(eatsLeftNow>0 ? "🍖 Eat" : "🍖 Eat (max 3)", `Open your food bag and pick what to eat. Free action — does NOT end your turn. Max ${MAX_EATS_PER_TURN} items per turn.`, openEatModal, eatsLeftNow<=0, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
 }
 async function pveAct(move){
@@ -3432,6 +3649,7 @@ async function pveAct(move){
   }
   if(b.ehp<=0) return pveEnd(true);
   if(b.php<=0) return pveEnd(false);
+  b.eats = 0;                                        // new turn: eating is available again
   nextIntent(b); b.busy=false; renderPve();
 }
 async function pveFlee(){
@@ -3439,7 +3657,7 @@ async function pveFlee(){
   b.over = true;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage }));
   toast("You fled safely — nothing lost.");
-  closeModal("eatModal"); closeModal("battleModal"); state.battle = null;
+  closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle = null; reopenCompassIf(rc);
 }
 async function pveEnd(won){
   const b = state.battle, m = b.m; b.over = true; renderPve();
@@ -3457,7 +3675,7 @@ async function pveEnd(won){
     const r = await applyDeathPenalty({ mana:b.mana });
     toast(`Defeated. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
   }
-  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); state.battle=null; }, 1800);
+  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc); }, 1800);
 }
 document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("click", ()=> startPve(btn.dataset.pve)));
 
@@ -3470,11 +3688,13 @@ document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("clic
 let eatSel = null, eatBusy = false;
 function eatContext(){
   const b = state.battle, p = state.profile; if(!b || !p) return null;
-  if(b.mode==="pve") return { hp:b.php, hpMax:p.hpMax, mana:b.mana, manaMax:p.manaMax, canEat:!b.over, why:"" };
+  const eatsLeft = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
+  if(b.mode==="pve") return { hp:b.php, hpMax:p.hpMax, mana:b.mana, manaMax:p.manaMax, canEat:!b.over && eatsLeft>0, eatsLeft, why: eatsLeft>0 ? "" : `You can only eat ${MAX_EATS_PER_TURN} items per turn.` };
   if(b.mode==="duel" && b.d){
     const d = b.d, me = b.iAmHost?"host":"guest";
     return { hp:d[me+"Hp"], hpMax:d[me+"HpMax"], mana:d[me+"Mana"] ?? p.mana, manaMax:d[me+"ManaMax"] ?? p.manaMax,
-      canEat: d.turn===state.uid && d.status!=="finished", why:"You can only eat on your turn." };
+      canEat: d.turn===state.uid && d.status!=="finished" && eatsLeft>0, eatsLeft,
+      why: d.turn!==state.uid ? "You can only eat on your turn." : `You can only eat ${MAX_EATS_PER_TURN} items per turn.` };
   }
   return null;
 }
@@ -3509,6 +3729,7 @@ function renderEatModal(){
     ? `<b>${escapeHTML(sel.name)}</b> <i>(${sel.rarity})</i><br>${escapeHTML(sel.desc||"")}<br><b>${escapeHTML(itemEffectText(sel))}</b>` + (!ctx.canEat && ctx.why ? `<br><small>${ctx.why}</small>` : "")
     : "Select a food to read about it.";
   btn.disabled = !sel || !ctx.canEat;
+  btn.textContent = `Eat (${ctx.eatsLeft}/${MAX_EATS_PER_TURN} left this turn)`;
 }
 document.getElementById("btnEatNow").addEventListener("click", eatSelected);
 async function eatSelected(){
@@ -3526,6 +3747,7 @@ async function eatSelected(){
     const gains = [heal>0?`+${heal} HP`:"", manaGain>0?`+${manaGain} mana`:""].filter(Boolean).join(", ");
     const removed = await changeInvQty(item.id, -1);   // inventory first: no free heals if the item isn't really there
     if(removed===null) return;
+    b.eats = (b.eats||0) + 1;                          // counts toward this turn's limit of 3
     if(b.mode==="pve"){
       b.php += heal; b.mana += manaGain;
       battleLogPush(`You eat ${item.name}: ${gains}. (free action)`);
@@ -3536,6 +3758,7 @@ async function eatSelected(){
         [me+"Hp"]: ctx.hp+heal, [me+"Mana"]: ctx.mana+manaGain,
         log: [...(d.log||[]), `${state.profile.username} eats ${item.name} (${gains}).`].slice(-60)
       }));
+      if(b.d) renderDuelBattle(b.d);
     }
   } finally { eatBusy = false; renderEatModal(); }
 }
@@ -3713,6 +3936,7 @@ function renderDuelBattle(d){
   actions.innerHTML="";
   if(d.status==="finished") return;
   const isMyTurn = d.turn === state.uid;
+  if(!isMyTurn) b.eats = 0;                  // my turn is over: eating resets for my next one
   const addBtn = (id, label, tip, extraDis, cls, fn)=>{
     const el = document.createElement("button");
     el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip;
@@ -3727,7 +3951,9 @@ function renderDuelBattle(d){
   // Eat is a free action and opens the food picker instead of forcing one food.
   const eatEl = document.createElement("button");
   eatEl.className = "doodle-btn btn-sm btn-green"; eatEl.textContent = "🍖 Eat"; eatEl.title = "Pick food from your inventory. Free action — does not end your turn.";
-  eatEl.disabled = !isMyTurn || myHp<=0 || oppHp<=0;
+  const duelEatsLeft = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
+  if(isMyTurn && duelEatsLeft<=0) eatEl.textContent = "🍖 Eat (max 3)";
+  eatEl.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || duelEatsLeft<=0;
   eatEl.addEventListener("click", openEatModal); actions.appendChild(eatEl);
   if(!isMyTurn){ const w = document.createElement("span"); w.textContent = "Waiting for opponent…"; actions.appendChild(w); }
   const fleeBtn = document.createElement("button");
@@ -3931,6 +4157,7 @@ document.getElementById("playerSearch").addEventListener("input", ()=>{ clearTim
 document.querySelector('[data-jtab="players"]').addEventListener("click", renderPlayerList);
 
 async function payPlayer(uid, username, amount){
+  if(isMuted()){ muteBlockedToast("pay people"); return false; }
   amount = Math.floor(amount);
   if(!(amount>0)){ toast("Enter an amount."); return false; }
   if(uid === state.uid){ toast("You can't pay yourself."); return false; }

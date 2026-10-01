@@ -111,6 +111,7 @@
       <span class="acct-name" id="hudName">Adventurer</span>
       <span class="acct-line">Lv. <b id="hudLevel">1</b> &middot; <span id="hudArchetype">Earth</span> <span id="hudClass">Warrior</span></span>
       <span class="acct-money">$<span id="hudMoney">0</span></span>
+      <span class="acct-mute" id="hudMute" style="display:none" title="You are muted — you can read chat but not talk, pay, friend-request or list auction items.">&#9203; <span id="hudMuteTime"></span></span>
     </div>
     <div class="header-right">
       <button class="icon-btn circle-btn" id="btnJournal" title="Journal">&#128214;</button>
@@ -231,6 +232,12 @@
     </div>
     <button class="doodle-btn btn-pink" id="btnPM">Private Message</button>
     <button class="doodle-btn btn-blue" id="btnFriendReq">Add Friend</button>
+    <div class="mute-box" id="muteBox" style="display:none">
+      <input type="text" id="muteDuration" placeholder="Mute for… (e.g. 1d 2m 30s, 5m, 2d)" autocomplete="off">
+      <button class="doodle-btn btn-yellow btn-sm" id="btnMuteUser">Mute</button>
+      <button class="doodle-btn btn-sm" id="btnUnmuteUser" style="display:none">Unmute</button>
+      <p class="mute-status" id="muteStatus"></p>
+    </div>
     <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
   </div>
 </div>
@@ -282,6 +289,7 @@
         <div class="chat-log" id="chatLogGlobal"></div>
         <form class="chat-input-row" id="globalChatForm" style="position:relative;">
           <div id="chatCmdPopup" class="chat-cmd-popup doodle-panel" style="display:none;"></div>
+          <div class="mute-bar"><span>&#128263; Muted &mdash; you can read chat but can't talk for</span> <b class="mute-bar-time"></b></div>
           <input type="text" id="globalChatInput" maxlength="200" placeholder="Say something... (try /)" autocomplete="off">
           <button class="doodle-btn btn-sm" type="submit">Send</button>
         </form>
@@ -294,7 +302,8 @@
             <div class="chat-log" id="chatLogPrivate"></div>
             <div class="dm-status" id="dmStatus"><div class="dm-bubble"></div></div>
             <form class="chat-input-row" id="privateChatForm">
-              <input type="text" id="privateChatInput" maxlength="200" placeholder="Message...">
+              <div class="mute-bar"><span>&#128263; Muted &mdash; you can read chat but can't talk for</span> <b class="mute-bar-time"></b></div>
+          <input type="text" id="privateChatInput" maxlength="200" placeholder="Message...">
               <button class="doodle-btn btn-sm" type="submit">Send</button>
             </form>
           </div>
@@ -317,6 +326,7 @@
           <p id="aucDetailMeta"></p>
           <p id="aucDetailTimer"></p>
           <button class="doodle-btn btn-green btn-block" id="aucDetailBuyBtn">Buy</button>
+          <button class="doodle-btn btn-danger btn-block" id="aucDetailRemoveBtn" style="display:none">Remove Item (mod)</button>
         </div>
       </div>
       <div class="aucsub-page" id="aucsub-mine">

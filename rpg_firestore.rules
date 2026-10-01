@@ -19,6 +19,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usernames/vortarium).data.uid == request.auth.uid;
     }
 
+    // Mutes: a mod sets players/{uid}.mutedUntil (ms since epoch). While it is in
+    // the future the player may not post chat, list auction items, pay anyone or
+    // send friend requests. Enforced here so a modified client can't skip it.
+    function notMuted() {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/players/$(request.auth.uid)).data.get('mutedUntil', 0) <= request.time.toMillis();
+    }
+
     // Reserved usernames: only the owning account may create/read its own
     // claim; nobody may overwrite someone else's.
     match /usernames/{uname} {
@@ -46,7 +54,10 @@ service cloud.firestore {
       allow create: if isOwner(uid);
       // Admin may also update another player's doc — used only for banning
       // (setting banned:true and scrubbing displayName to banneduser_#####).
-      allow update: if isOwner(uid) || isAdmin();
+      // A player can never edit their own ban / mute flags — only the admin can.
+      // The admin also uses this to strip a banned user out of everyone's friends list.
+      allow update: if isAdmin()
+        || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['banned','mutedUntil']));
       allow delete: if isOwner(uid) || isAdmin(); // player-initiated or admin ban deletion
 
       match /quests/{questId} {
@@ -57,11 +68,16 @@ service cloud.firestore {
         allow read, write: if isOwner(uid);
       }
       match /inbox/{notifId} {
-        allow read, update, delete: if isOwner(uid);
+        allow update: if isOwner(uid);
+        // The admin may read/delete inbox entries only so a ban can clear the
+        // banned user's pending friend requests out of other players' inboxes.
+        allow read, delete: if isOwner(uid) || isAdmin();
         // any signed-in player may notify another (friend requests,
         // friend-accept, auction-sold receipts) — but only the recipient
         // may read, update or delete their own inbox entries.
-        allow create: if isSignedIn();
+        // Payments and friend requests are blocked while the sender is muted.
+        allow create: if isSignedIn()
+          && (!(request.resource.data.get('type', '') in ['payment_received', 'friend_request']) || notMuted());
       }
       }
 
@@ -80,13 +96,13 @@ service cloud.firestore {
     match /reactions/{rid} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭'];
-      allow delete: if isSignedIn() && isOwner(resource.data.uid);
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
       allow update: if false;
     }
 
     match /globalChat/{msgId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && notMuted() && request.resource.data.uid == request.auth.uid;
       // A user may delete their own message; the admin may delete anyone's.
       allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
       allow update: if false;
@@ -98,14 +114,25 @@ service cloud.firestore {
       // is no request.resource, so a combined condition that references it
       // rejects every read (this was the permission-denied bug).
       allow read: if isSignedIn() && threadId.split('_').hasAny([request.auth.uid]);
-      allow create: if isSignedIn() &&
+      allow create: if isSignedIn() && notMuted() &&
         threadId.split('_').hasAny([request.auth.uid]) &&
         request.resource.data.uid == request.auth.uid;
-      // Sender may delete their own message; admin may delete anyone's.
+      // Sender may delete their own message; the admin may delete anyone's in ANY
+      // thread (needed to wipe a banned user's private messages).
       allow delete: if isSignedIn() &&
-        threadId.split('_').hasAny([request.auth.uid]) &&
-        (isOwner(resource.data.uid) || isAdmin());
+        ((threadId.split('_').hasAny([request.auth.uid]) && isOwner(resource.data.uid)) || isAdmin());
       allow update: if false;
+    }
+
+    // Admin-only collection-group read of every "messages" collection. The ban
+    // cleanup uses collectionGroup("messages").where("uid","==",bannedUid) to find
+    // the banned user's private messages across all threads. That query also needs
+    // a collection-group single-field index on messages.uid (Firestore console >
+    // Indexes > Single field > Add exemption: collection ID "messages", field "uid",
+    // enable Collection group scope) — the first failed attempt logs a link that
+    // creates it for you.
+    match /{path=**}/messages/{msgId} {
+      allow read: if isAdmin();
     }
 
     // Live "typing" / "watching" status for a DM thread. Each participant owns
@@ -125,10 +152,12 @@ service cloud.firestore {
     // that gap completely.
     match /auction/{listingId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && notMuted()
         && request.resource.data.sellerUid == request.auth.uid
         && request.resource.data.status == "active";
-      allow delete: if isSignedIn() && isOwner(resource.data.sellerUid);
+      // Seller cancels their own listing; the admin may remove any listing
+      // (mod "Remove Item" and banning a seller).
+      allow delete: if isSignedIn() && (isOwner(resource.data.sellerUid) || isAdmin());
       allow update: if isSignedIn() && (
         // seller may edit their own still-active listing
         isOwner(resource.data.sellerUid) ||
@@ -161,12 +190,12 @@ service cloud.firestore {
           request.resource.data.hostUid == resource.data.hostUid
         )
       );
-      allow delete: if isSignedIn() && isOwner(resource.data.hostUid);
+      allow delete: if isSignedIn() && (isOwner(resource.data.hostUid) || isAdmin());
     }
 
     match /queue/{uid} {
       allow read: if isSignedIn();
-      allow write: if isOwner(uid);
+      allow write: if isOwner(uid) || (isAdmin() && request.method == 'delete');
     }
   }
 }
