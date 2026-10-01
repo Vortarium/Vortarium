@@ -54,6 +54,11 @@ function friendlyFirebaseError(err){
     const itemId = err.message.split(":")[1];
     return `You don't have enough ${ITEM_BY_ID[itemId]?.name || "of that item"} for that.`;
   }
+  { const m = String(err?.message||"");
+    if(m==="inv-full") return "Your inventory is full — sell something or buy a bigger backpack.";
+    if(m==="nomoney") return "Not enough money!";
+    if(m==="backpack-owned") return "You already own that backpack (or a better one).";
+    if(m.startsWith("backpack-order:")) return `You need Backpack Tier ${m.split(":")[1]} first — backpacks must be bought in order.`; }
   const code = err?.code || "";
   if(DEBUG_AUTH_ERRORS){
     return `[DEBUG] ${code || "unknown-code"}: ${err?.message || String(err)}`;
@@ -156,13 +161,39 @@ const RARITIES = ["common","uncommon","rare","epic","legendary"];
 const HEAL_BY_RARITY = { common:10, uncommon:40, rare:120, epic:300, legendary:500 };
 const RARITY_MULT = { common:1, uncommon:1.4, rare:2, epic:3, legendary:4.5 };
 
+/* Numbers simplify at 1,000: 1.34K, 2.5M, 1B ... (max 2 decimals, never rounded up). */
 function fmtMoney(n){
-  n = Math.floor(n);
+  n = Math.floor(Number(n)||0);
+  const sign = n<0 ? "-" : "", a = Math.abs(n);
   const units = [[1e15,"Q"],[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]];
   for(const [val,suf] of units){
-    if(Math.abs(n) >= val) return (n/val).toFixed(2)+suf;
+    if(a >= val) return sign + (Math.floor(a/val*100)/100).toFixed(2).replace(/\.?0+$/,"") + suf;
   }
-  return String(n);
+  return sign + String(a);
+}
+/* Parses typed amounts: "500", "1.34k", "2m". Whole numbers only — a decimal is
+   only allowed together with a K/M/B/T suffix, and at most 2 decimals (1.34k ok, 1.3482k not). */
+function parseAmount(raw){
+  const m = String(raw ?? "").trim().toLowerCase().replace(/[,\s$]/g,"").match(/^(\d+(?:\.\d+)?)([kmbtq]?)$/);
+  if(!m) return { err:"Enter a whole number, like 500 or 1.34k." };
+  const [ , num, suf ] = m, mult = { "":1, k:1e3, m:1e6, b:1e9, t:1e12, q:1e15 }[suf];
+  const dec = (num.split(".")[1]||"").length;
+  if(!suf && dec) return { err:"Whole numbers only — no decimals (use 1.34k for 1,340)." };
+  if(dec > 2) return { err:"Too many decimals — use at most 2, like 1.34k." };
+  const value = Math.round(Number(num.replace(".","")) * mult / Math.pow(10, dec));
+  if(!Number.isSafeInteger(value) || value < 1) return { err:"That amount isn't valid." };
+  return { value };
+}
+// "7d 0m" style countdown (zero hours are skipped)
+function fmtAuctionLeft(ms){
+  ms = Math.max(0, ms);
+  const d = Math.floor(ms/864e5), h = Math.floor(ms%864e5/36e5), m = Math.floor(ms%36e5/6e4);
+  return [d?`${d}d`:"", h?`${h}h`:"", `${m}m`].filter(Boolean).join(" ");
+}
+function fmtDur(ms){
+  let s = Math.max(0, Math.ceil(ms/1000));
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60); s = s%60;
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${s}s` : `${s}s`;
 }
 
 /* ---------- procedural item bank: 5 types x 96 = 480 items ---------- */
@@ -304,6 +335,62 @@ JOB_ITEM_BANK.push(
 JOB_ITEM_BANK.filter(i=>i.id==="tool_pickaxe"||i.id==="tool_fishingrod").forEach(i=> i.desc+=" Breaks after 3 uses.");
 JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = Math.round(HEAL_BY_RARITY[i.rarity]*(i.id.startsWith("fish_")?0.6:1)));
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
+
+/* ---------- farming + backpack items ---------- */
+// Hoes till 1 tile per use, watering cans water 1 tile per use. 5 durability tiers each.
+const FARM_TOOL_TIERS = [["Wooden",10,60,"common"],["Sturdy",30,160,"uncommon"],["Iron",80,420,"rare"],["Gold",200,1100,"epic"],["Diamond",500,2800,"legendary"]];
+const FARM_TOOLS = [];
+[["hoe","Hoe","Tills 1 tile per use."],["can","Watering Can","Waters 1 tile per use."]].forEach(([k,nm,d])=> FARM_TOOL_TIERS.forEach(([pre,uses,price,rar],i)=>{
+  const id = i===0 ? `tool_${k}` : `tool_${k}${i+1}`;
+  TOOL_USES[id] = uses;
+  const it = { id, name:`${pre} ${nm}`, type:"tool", rarity:rar, price, sellPrice:Math.round(price/3), desc:`${d} Breaks after ${uses} uses.`, stats:{} };
+  ITEM_BY_ID[id] = it; FARM_TOOLS.push(it);
+}));
+const GROW_HOURS = { common:[16,24], uncommon:[20,30], rare:[24,36], epic:[36,50], legendary:[50,100] };
+const DECAY_HOURS = { common:16, uncommon:12, rare:8, epic:4, legendary:2 };
+const CROP_YIELDS = { common:[5,10], uncommon:[6,11], rare:[8,14], epic:[9,17], legendary:[10,20] };
+// Mystery seeds: [chance of a real crop of the seed's rarity, chance of a plain common crop]; the rest grows nothing.
+const MYSTERY_ODDS = { common:[.15,.45], uncommon:[.25,.45], rare:[.35,.42], epic:[.45,.40], legendary:[.60,.32] };
+const CROP_SELL = { common:14, uncommon:38, rare:95, epic:230, legendary:520 };
+const SEED_PRICE = { common:40, uncommon:110, rare:300, epic:800, legendary:2200 };
+const CROP_DEFS = {
+  common:[["carrot","Carrot","🥕"],["potato","Potato","🥔"],["cabbage","Cabbage","🥬"],["radish","Radish","🌱"],["turnip","Turnip","🍠"]],
+  uncommon:[["tomato","Tomato","🍅"],["corn","Corn","🌽"],["onion","Onion","🧅"],["pumpkin","Pumpkin","🎃"],["eggplant","Eggplant","🍆"]],
+  rare:[["strawberry","Strawberry","🍓"],["pineapple","Pineapple","🍍"],["watermelon","Watermelon","🍉"],["grape","Grape","🍇"],["chili","Chili Pepper","🌶️"]],
+  epic:[["dragonfruit","Dragonfruit","🐲"],["starfruit","Starfruit","⭐"],["moonmelon","Moonmelon","🌙"],["frostberry","Frostberry","❄️"],["emberpepper","Emberpepper","🔥"]],
+  legendary:[["sunpetal","Sunpetal Bloom","🌻"],["phoenixfruit","Phoenix Fruit","🪶"],["worldroot","Worldroot","🌳"],["starorchid","Starlight Orchid","🌸"],["voidberry","Voidberry","🫐"]]
+};
+const CROP_ITEMS = [], SEED_ITEMS = [], CROPS_BY_RARITY = {};
+RARITIES.forEach(rar=>{
+  CROPS_BY_RARITY[rar] = [];
+  CROP_DEFS[rar].forEach(([slug,name,emoji],i)=>{
+    const crop = { id:`crop_${slug}`, name, type:"material", rarity:rar, price:0, emoji,
+      sellPrice: Math.round(CROP_SELL[rar]*(0.9+i*0.05)), stats:{},
+      desc:`A freshly harvested ${name.toLowerCase()}. Sell it, or craft 3 into a preserve worth far more.` };
+    const [g1,g2] = GROW_HOURS[rar], [y1,y2] = CROP_YIELDS[rar];
+    const seed = { id:`seed_${slug}`, name:`${name} Seeds`, type:"seed", rarity:rar, price:SEED_PRICE[rar], sellPrice:Math.round(SEED_PRICE[rar]*0.3),
+      cropId:crop.id, farmRarity:rar, emoji:"🌱", stats:{},
+      desc:`Grows in ${g1}–${g2}h and yields ${y1}–${y2} ${name}. Waters dry out; a thirsty plant dies ${DECAY_HOURS[rar]}h after drying out.` };
+    ITEM_BY_ID[crop.id] = crop; ITEM_BY_ID[seed.id] = seed;
+    CROP_ITEMS.push(crop); SEED_ITEMS.push(seed); CROPS_BY_RARITY[rar].push(crop.id);
+  });
+  const cap = rar[0].toUpperCase()+rar.slice(1), [y1,y2] = CROP_YIELDS[rar];
+  const mystery = { id:`seed_random_${rar}`, name:`Mystery Seeds (${cap})`, type:"seed", rarity:rar, price:Math.round(SEED_PRICE[rar]*0.8),
+    sellPrice:Math.round(SEED_PRICE[rar]*0.25), cropId:null, farmRarity:rar, random:true, emoji:"❓", stats:{},
+    desc:`Who knows what grows? Takes 16–100h. Could be a real ${rar} crop (${y1}–${y2} yields), a plain common crop… or nothing at all. You won't know until harvest.` };
+  ITEM_BY_ID[mystery.id] = mystery; SEED_ITEMS.push(mystery);
+});
+// Backpacks are permanent upgrades bought in order (Tier 1, then 2, ...). They never enter your inventory.
+const BACKPACK_SLOTS = [12,24,48,72,108,180];
+const BACKPACK_PRICE = [0,800,3000,10000,30000,100000];
+const BACKPACK_ITEMS = [1,2,3,4,5].map(t=>{
+  const it = { id:`backpack_${t}`, name:`Backpack Tier ${t}`, type:"backpack", tier:t, rarity:RARITIES[t-1], price:BACKPACK_PRICE[t], sellPrice:0,
+    desc:`Permanent upgrade: ${BACKPACK_SLOTS[t-1]} → ${BACKPACK_SLOTS[t]} inventory slots. Must be bought in order (you need Tier ${t-1>0?t-1:"0 (none)"} first).`, stats:{} };
+  ITEM_BY_ID[it.id] = it; return it;
+});
+const invCap = p=> BACKPACK_SLOTS[Math.min(5, Math.max(0, (p&&p.backpackTier)||0))];
+const invUsed = inv=> (inv||[]).filter(e=>e.qty>0).length;
+const AUCTION_MS = 7*24*60*60*1000;   // auction listings last 7 days
 
 /* ---------- procedural enemy bank: 4 regions x 3 difficulties x 10 = 120 ---------- */
 const ENEMY_NAME_PARTS = {
@@ -523,10 +610,10 @@ function defaultPlayerDoc(username, archetype, klass){
   if(boon==="mana"){ bars.mana=26; bars.manaMax=26; }
   if(boon==="rage"){ bars.rage=14; bars.rageMax=14; }
   return {
-    username, archetype: archetype||null, klass: klass||null, level:1, money:100,
+    username, archetype: archetype||null, klass: klass||null, level:1, money:0, backpackTier:0,
     stats, ...bars,
     region:"forest",
-    inventory: [], // {itemId, qty}
+    inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
     equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
     friends: [], sentFriendRequests: [], createdAt: Date.now(),
@@ -602,6 +689,15 @@ let authFlowBusy = false;
 /* Shared by onAuthStateChanged (page load / token refresh / other tabs)
    and the auth form itself (right after a signup/login it just performed),
    so both paths route the player the same way without racing each other. */
+const BANNED_MSG = "This account was banned and will no longer work.";
+let banKicked = false;
+async function forceBanLogout(){
+  if(banKicked) return; banKicked = true;
+  stopPresence(); stopOnlineBeat();
+  await signOut(auth).catch(()=>{});
+  toast("🚫 You have been banned. This account will no longer work.", 10000);
+  setTimeout(()=>{ banKicked = false; }, 2500);
+}
 async function loadPlayerAndRoute(user){
   cleanupSubs();
   if(!user){ resetSessionUI(); showScreen("screen-title"); playMusic("rpg_title.mp3"); return; }
@@ -624,6 +720,7 @@ async function loadPlayerAndRoute(user){
     return;
   }
   const p = psnap.data();
+  if(p.banned){ await signOut(auth).catch(()=>{}); showScreen("screen-title"); toast(BANNED_MSG, 8000); return; }
   state.username = p.username;
   if(!p.archetype || !p.klass){
     showScreen("screen-archetype");
@@ -652,7 +749,13 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
       try{
         takenSnap = await getDoc(doc(db,"usernames",uname.toLowerCase()));
       }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
-      if(takenSnap.exists()){ errEl.textContent="That username is taken."; return; }
+      if(takenSnap.exists()){
+        // a banned account's name can never be re-registered
+        let banned = false;
+        try{ const ps = await getDoc(doc(db,"players",takenSnap.data().uid)); banned = !!(ps.exists() && ps.data().banned); }catch(_){}
+        errEl.textContent = banned ? BANNED_MSG : "That username is taken.";
+        return;
+      }
 
       let cred;
       try{
@@ -676,6 +779,13 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
       closeModal("authModal");
       await loadPlayerAndRoute(cred.user);
     } else {
+      try{    // banned usernames can't log back in
+        const us = await getDoc(doc(db,"usernames",uname.toLowerCase()));
+        if(us.exists()){
+          const ps = await getDoc(doc(db,"players",us.data().uid));
+          if(ps.exists() && ps.data().banned){ errEl.textContent = BANNED_MSG; return; }
+        }
+      }catch(_){}
       let cred;
       try{
         cred = await signInWithEmailAndPassword(auth, usernameToEmail(uname), pass);
@@ -690,6 +800,8 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
 });
 document.getElementById("btnLogout").addEventListener("click", async ()=>{
   stopPresence();                                    // tell the other side we've left BEFORE we lose auth
+  stopOnlineBeat();
+  if(state.uid) await updateDoc(doc(db,"players",state.uid), { onlineAt: 0 }).catch(()=>{});   // show as offline immediately
   await withErrorToast(()=> signOut(auth));
   closeModal("settingsModal");
 });
@@ -716,6 +828,7 @@ document.getElementById("btnConfirmDeleteAccount").addEventListener("click", asy
     // the client is signed out and loses write access to clean anything up.
     const questsSnap = await getDocs(collection(db,"players",state.uid,"quests"));
     for(const d of questsSnap.docs) await deleteDoc(d.ref);
+    await deleteDoc(doc(db,"players",state.uid,"farm","plots")).catch(()=>{});
     const inboxSnap = await getDocs(collection(db,"players",state.uid,"inbox"));
     for(const d of inboxSnap.docs) await deleteDoc(d.ref);
     await deleteDoc(doc(db,"players",state.uid));
@@ -806,11 +919,12 @@ renderClassGrid();
 // Clears everything tied to the logged-in session so nothing from it (like the
 // Welcome Back popup) can leak onto the title screen.
 function resetSessionUI(){
+  farm.plots = null; farm.loaded = false; farm.sel = null; farm.seedSig = "";
   state.profile = null; state.recapPromise = null; state.battle = null;
   ["recapModal","eatModal","battleModal","journalModal","compassModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
 }
 function cleanupSubs(){
-  stopPresence();
+  stopPresence(); stopOnlineBeat();
   state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false;
   if(pmUnsub){ pmUnsub(); } pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
@@ -825,6 +939,7 @@ function enterGame(){
     if(!snap.exists()) return;
     const prevRegion = state.profile?.region;
     state.profile = snap.data();
+    if(state.profile.banned){ forceBanLogout(); return; }   // an admin just banned you: logged out right now
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
     if(document.getElementById("journalModal").classList.contains("active")) renderInventory();
@@ -839,7 +954,7 @@ function enterGame(){
     if(firstSnapshot){
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen(); startOnlineBeat();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -939,7 +1054,8 @@ function renderInventory(){
   const grid = document.getElementById("invGrid");
   const items = invExpanded();
   const perPage = 12;
-  const pages = Math.max(1, Math.ceil(items.length/perPage));
+  const cap = invCap(state.profile);
+  const pages = Math.max(1, Math.ceil(Math.max(cap, items.length)/perPage));
   state.invPage = Math.min(state.invPage, pages-1);
   const slice = items.slice(state.invPage*perPage, state.invPage*perPage+perPage);
   grid.innerHTML="";
@@ -953,7 +1069,7 @@ function renderInventory(){
     }
     grid.appendChild(cell);
   }
-  document.getElementById("invPageLabel").textContent = `Page ${state.invPage+1}/${pages}`;
+  document.getElementById("invPageLabel").textContent = `Page ${state.invPage+1}/${pages} · ${invUsed(state.profile.inventory)}/${cap} slots`;
   renderEquipSlots();
 }
 document.getElementById("invPrev").addEventListener("click", ()=>{ state.invPage=Math.max(0,state.invPage-1); renderInventory(); });
@@ -984,6 +1100,11 @@ function itemEffectText(item){
     return bits.join(", ") || "No bonuses";
   }
   if(item.type==="tool") return `Durability: ${TOOL_USES[item.id]||"?"} uses before it breaks`;
+  if(item.type==="seed"){
+    const r = item.farmRarity, [g1,g2] = item.random ? [16,100] : GROW_HOURS[r], [y1,y2] = CROP_YIELDS[r];
+    return `Grows ${g1}–${g2}h · ${y1}–${y2} yields${item.random?" (maybe)":""} · dies ${DECAY_HOURS[r]}h after drying out`;
+  }
+  if(item.type==="backpack") return `Inventory ${BACKPACK_SLOTS[item.tier-1]} → ${BACKPACK_SLOTS[item.tier]} slots (permanent)`;
   return "Crafting material — no combat effect";
 }
 function selectInvItem(entry){
@@ -997,17 +1118,15 @@ function selectInvItem(entry){
     <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
       ${canEquip? `<button class="doodle-btn btn-sm btn-blue" id="btnEquip">Equip</button>`:""}
       ${entry.item.type==="consumable"? `<button class="doodle-btn btn-sm btn-green" id="btnUse">Use</button>`:""}
-      <button class="doodle-btn btn-sm" id="btnToss">Toss</button>
-      <button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${entry.item.sellPrice})</button>
+      ${entry.item.type==="seed"? `<button class="doodle-btn btn-sm btn-green" id="btnPlantSeed">Plant 🌱</button>`:""}
+      <button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${fmtMoney(entry.item.sellPrice)})</button>
     </div>`;
   const eq = document.getElementById("btnEquip");
   if(eq) eq.addEventListener("click", ()=> equipItem(entry.item));
   const use = document.getElementById("btnUse");
   if(use) use.addEventListener("click", ()=> useConsumable(entry.item));
-  document.getElementById("btnToss").addEventListener("click", async ()=>{
-    await changeInvQty(entry.item.id, -1);
-    afterInvChangeRefreshDetail(entry.item.id);
-  });
+  const plantBtn = document.getElementById("btnPlantSeed");
+  if(plantBtn) plantBtn.addEventListener("click", ()=> startPlantingFromInventory(entry.item.id));
   document.getElementById("btnSell").addEventListener("click", async ()=>{
     await sellItem(entry.item);
     afterInvChangeRefreshDetail(entry.item.id);
@@ -1046,10 +1165,15 @@ function afterInvChangeRefreshDetail(itemId){
 // callers that need to compute a field off the CURRENT server value (like
 // healing off current hp, not the possibly-stale local state.profile.hp)
 // can do so from inside the same transaction that validates/spends items.
-async function applyInvChanges({remove=[], add=[]}={}, extraFields={}){
-  return withErrorToast(async ()=>{
+async function applyInvChanges({remove=[], add=[], strict=false}={}, extraFields={}){
+  /* Slot cap: every distinct item is one slot. A NEW item that doesn't fit is
+     dropped (and you're told) — unless strict is set (purchases, crafting,
+     harvests), in which case the whole action is refused instead. */
+  let dropped = [];
+  const res = await withErrorToast(async ()=>{
     const pref = doc(db,"players",state.uid);
     await runTransaction(db, async (tx)=>{
+      dropped = [];
       const snap = await tx.get(pref);
       const data = snap.data() || {};
       const inv = (data.inventory||[]).map(e=>({...e}));
@@ -1061,15 +1185,19 @@ async function applyInvChanges({remove=[], add=[]}={}, extraFields={}){
         }
         inv[idx].qty -= qty;
       }
+      const cap = invCap(data);
       for(const {itemId, qty} of add){
         const idx = inv.findIndex(e=>e.itemId===itemId);
-        if(idx>=0) inv[idx].qty += qty;
-        else inv.push({ itemId, qty });
+        if(idx>=0 && inv[idx].qty>0){ inv[idx].qty += qty; continue; }
+        if(invUsed(inv) >= cap){ if(strict) throw new Error("inv-full"); dropped.push(itemId); continue; }
+        if(idx>=0) inv[idx].qty = qty; else inv.push({ itemId, qty });
       }
       const fields = typeof extraFields==="function" ? extraFields(data) : extraFields;
       tx.update(pref, { inventory: inv.filter(e=>e.qty>0), ...fields });
     });
   });
+  if(res!==null && dropped.length) toast(`🎒 Inventory full — ${[...new Set(dropped)].map(id=>ITEM_BY_ID[id]?.name||"an item").join(", ")} couldn't be picked up and was lost.`, 5000);
+  return res;
 }
 async function changeInvQty(itemId, delta){
   return delta>=0
@@ -1083,7 +1211,7 @@ async function sellItem(item){
   await changeInvQty(item.id, -1);
   await grantMoney(item.sellPrice);
   playSfx("sell");
-  toast(`Sold ${item.name} for $${item.sellPrice}`);
+  toast(`Sold ${item.name} for $${fmtMoney(item.sellPrice)}`);
 }
 async function equipItem(item){
   const slot = item.type==="armor" ? item.armorSlot : item.type; // weapon/helmet/chestplate/leggings/boots/trinket
@@ -1117,7 +1245,8 @@ async function unequipItem(slot){
     name = ITEM_BY_ID[itemId]?.name || "item";
     const inv = (d.inventory||[]).map(e=>({...e}));
     const idx = inv.findIndex(e=>e.itemId===itemId);
-    if(idx>=0) inv[idx].qty += 1; else inv.push({ itemId, qty:1 });
+    if(idx>=0 && inv[idx].qty>0) inv[idx].qty += 1;
+    else { if(invUsed(inv) >= invCap(d)) throw new Error("inv-full"); if(idx>=0) inv[idx].qty = 1; else inv.push({ itemId, qty:1 }); }
     const newEq = { ...(d.equipped||{}), [slot]: null };
     tx.update(pref, { inventory: inv, [`equipped.${slot}`]: null, ...gearSyncFields(d, newEq) });
   }));
@@ -1225,7 +1354,7 @@ function renderLeaderboard(cat){
     list.innerHTML = "";
     rows.forEach((r,i)=>{
       const data = r.data, li = document.createElement("li");
-      li.innerHTML = `<span>#${i+1} ${escapeHTML(data.username)}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
+      li.innerHTML = `<span>#${i+1} ${escapeHTML(data.username)}${onlineDot(data, r.id===state.uid)}</span><span>${cat==="money"? "$"+fmtMoney(data[field]||0) : (data[field]||0)}</span>`;
       li.addEventListener("click", ()=> openProfileBook(r.id, data, i+1, cat));
       list.appendChild(li);
     });
@@ -1233,7 +1362,7 @@ function renderLeaderboard(cat){
   }, e=>{ console.error(e); list.innerHTML = "<li>Leaderboard unavailable right now.</li>"; });
 }
 function openProfileBook(uid, data, rank, cat){
-  document.getElementById("profileName").textContent = data.username;
+  document.getElementById("profileName").innerHTML = escapeHTML(data.username) + onlineDot(data, uid===state.uid);
   document.getElementById("profileStats").innerHTML = `
     Level ${data.level} ${ELEMENTS[data.archetype]?.name||""} ${CLASSES[data.klass]?.name||""}<br>
     Money: $${fmtMoney(data.money||0)}<br>
@@ -1251,7 +1380,7 @@ function openProfileBook(uid, data, rank, cat){
   const payBox = document.getElementById("payBox");
   payBox.style.display = uid===state.uid ? "none" : "";
   document.getElementById("payAmount").value = "";
-  document.getElementById("btnPay").onclick = async ()=>{ if(await payPlayer(uid, data.username, Number(document.getElementById("payAmount").value))) document.getElementById("payAmount").value=""; };
+  document.getElementById("btnPay").onclick = async ()=>{ const pa = parseAmount(document.getElementById("payAmount").value); if(pa.err){ toast(pa.err); return; } if(await payPlayer(uid, data.username, pa.value)) document.getElementById("payAmount").value=""; };
   // Followers = friends + people who have a pending friend request out to
   // this player (i.e. anyone whose own sentFriendRequests contains them).
   computeFollowerCount(uid, (data.friends||[]).length).then(count=>{
@@ -1347,7 +1476,7 @@ const QUEST_TEMPLATES = [
     const target = Math.round({ I:60, II:150, III:400 }[tier] + rnd()*100);
     return {
       type:"money", target,
-      label:`Earn $${target}`,
+      label:`Earn $${fmtMoney(target)}`,
       itemRewardId: QUEST_MATERIAL_IDS[Math.floor(rnd()*QUEST_MATERIAL_IDS.length)],
       itemRewardQty: {I:1,II:2,III:3}[tier]
     };
@@ -1448,7 +1577,7 @@ function renderEmptySlotRow(slotKey){
   const hrsLeft = Math.max(1, Math.round(msLeft/3600000));
   return `<li class="quest-row">
     <div><b>Tier ${tier}:</b> ${q.label}</div>
-    <div style="font-size:12px">Rerolls in ~${hrsLeft}h if not accepted &middot; Reward: ${q.moneyReward?`$${q.moneyReward}`:""}${q.itemRewardId?` + ${q.itemRewardQty}x ${ITEM_BY_ID[q.itemRewardId].name}`:""}</div>
+    <div style="font-size:12px">Rerolls in ~${hrsLeft}h if not accepted &middot; Reward: ${q.moneyReward?`$${fmtMoney(q.moneyReward)}`:""}${q.itemRewardId?` + ${q.itemRewardQty}x ${ITEM_BY_ID[q.itemRewardId].name}`:""}</div>
     <button class="doodle-btn btn-sm btn-green" data-quest-accept="${slotKey}" data-quest-tier="${tier}">Accept (24h)</button>
   </li>`;
 }
@@ -1492,7 +1621,7 @@ async function claimQuest(slotKey){
     if(quest.itemRewardId) await addItemToInv(quest.itemRewardId, quest.itemRewardQty||1);
     await updateDoc(ref, { rewardClaimed:true });
   });
-  toast(`Quest reward claimed!${quest.moneyReward?` +$${quest.moneyReward}`:""}`);
+  toast(`Quest reward claimed!${quest.moneyReward?` +$${fmtMoney(quest.moneyReward)}`:""}`);
   renderQuests();
 }
 
@@ -1509,6 +1638,7 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
     document.getElementById("ctab-"+btn.dataset.ctab).classList.add("active");
     if(btn.dataset.ctab==="chat"){ ensureChatSubscriptions(); setTimeout(focusVisibleChat,0); }
+    if(btn.dataset.ctab==="farm") loadFarm();
   });
 });
 
@@ -1534,70 +1664,384 @@ function renderRegionGrid(){
 }
 
 /* --- shop ---
-   Stock is 2 random weapons, 2 armor, 2 trinkets, 2 consumables
-   (food/potion) and 2 materials — reshuffled once per day per region, but
-   stable across re-renders/reloads on the same day (seeded by date+region
-   so it doesn't change every time the shop is opened). */
-const SHOP_TYPES = ["weapon","armor","trinket","consumable","material"];
+   Each regional shop stocks 6 items that rotate every day (seeded by the date +
+   region, so the stock is stable across reloads on the same day):
+     5 random items from that region's element pool + 1 seed packet.
+   Backpacks (permanent inventory upgrades) rarely take over a slot — higher
+   tiers are rarer. Job + farm tools live on the tool shelf. Click an item to
+   read about it, then press Buy in the detail box. */
+const SHOP_SIZE = 6;
+const SEED_ROLL = { common:.40, uncommon:.28, rare:.18, epic:.10, legendary:.04 };
+const BACKPACK_ODDS = { 5:.02, 4:.04, 3:.06, 2:.09, 1:.12 };
 const dayIndex = ()=>{ const d=new Date(); return Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000); };
-const shufflePools = {};
-function shuffledPool(element, type){
-  const key = element+"|"+type;
-  if(!shufflePools[key]){
-    const pool = ITEM_BANK.filter(i=>i.element===element && i.type===type);
-    const rnd = seededRand([...key].reduce((a,ch)=>a*31+ch.charCodeAt(0),7) + 4242);
-    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
-    shufflePools[key] = pool;
-  }
-  return shufflePools[key];
-}
-// Each region walks its own fixed shuffled list 2 items per type per day, so
-// today's stock never overlaps yesterday's, and every item gets its turn before
-// anything comes back around. Names are also kept unique across all 4 shops per day.
 let shopStockCache = { day:-1, stock:null };
 function shopStock(){
   const day = dayIndex();
   if(shopStockCache.day===day) return shopStockCache.stock;
   const used = new Set(), stock = {};
-  for(const region of Object.keys(REGIONS)){
+  Object.keys(REGIONS).forEach((region, ri)=>{
+    const rnd = seededRand(day*7919 + ri*104729 + 31); rnd(); rnd(); rnd();
+    const pool = ITEM_BANK.filter(i=>i.element===REGIONS[region].element);
+    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
     const items = [];
-    for(const type of SHOP_TYPES){
-      const pool = shuffledPool(REGIONS[region].element, type);
-      if(!pool.length) continue;
-      const start = (day*2) % pool.length;
-      let picked = 0;
-      for(let step=0; step<pool.length && picked<2; step++){
-        const it = pool[(start+step)%pool.length];
-        if(used.has(it.name)) continue;
-        used.add(it.name); items.push(it); picked++;
-      }
-    }
+    for(const it of pool){ if(items.length >= SHOP_SIZE-1) break; if(used.has(it.name)) continue; used.add(it.name); items.push(it); }
+    // seed slot: pick a rarity by weight, then one of that rarity's 6 seed packets
+    let r = rnd(), rar = "common";
+    for(const k of RARITIES){ r -= SEED_ROLL[k]; if(r<=0){ rar = k; break; } rar = k; }
+    const seeds = SEED_ITEMS.filter(s=>s.rarity===rar);
+    items.push(seeds[Math.floor(rnd()*seeds.length)]);
+    // a backpack may rarely replace one regular slot
+    for(let t=5;t>=1;t--){ if(rnd() < BACKPACK_ODDS[t]){ items[SHOP_SIZE-2] = ITEM_BY_ID["backpack_"+t]; break; } }
     stock[region] = items;
-  }
+  });
   shopStockCache = { day, stock };
   return stock;
 }
 function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
+let shopSel = null;
+const SHELF_TOOL_IDS = ["tool_pickaxe","tool_pickaxe2","tool_pickaxe3","tool_fishingrod","tool_fishingrod2","tool_fishingrod3", ...FARM_TOOLS.map(t=>t.id)];
+function selectShopItem(id){ shopSel = id; renderShop(); }
+function renderToolShelf(){
+  const shelf = document.getElementById("toolShelf");
+  const btn = id=>{ const it = ITEM_BY_ID[id]; return `<button class="doodle-btn btn-sm btn-yellow${shopSel===id?" selected":""}" data-shelf="${id}">${escapeHTML(it.name)} ($${fmtMoney(it.price)})</button>`; };
+  shelf.innerHTML = `<p class="doodle-sub" style="margin:0 0 6px;flex:0 0 100%;">Job tools</p>${SHELF_TOOL_IDS.slice(0,6).map(btn).join("")}
+    <p class="doodle-sub" style="margin:8px 0 6px;flex:0 0 100%;">Farm tools (🪓 hoes till, 🚿 cans water — 1 tile per use)</p>${SHELF_TOOL_IDS.slice(6).map(btn).join("")}`;
+  shelf.querySelectorAll("[data-shelf]").forEach(b=> b.addEventListener("click", ()=> selectShopItem(b.dataset.shelf)));
+}
+function renderShopDetail(){
+  const box = document.getElementById("shopDetail"), it = shopSel && ITEM_BY_ID[shopSel];
+  if(!it || !(SHELF_TOOL_IDS.includes(it.id) || shopItemsForRegion().some(i=>i.id===it.id))){ shopSel = null; box.innerHTML = "Select an item to see what it does."; return; }
+  box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
+    (it.type==="backpack" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
+    `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button></div>`;
+  document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
+}
 function renderShop(){
-  document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop`;
+  document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop — 6 items, new stock every day`;
   const grid = document.getElementById("shopGrid");
-  grid.innerHTML="";
+  grid.innerHTML = "";
   shopItemsForRegion().forEach(item=>{
     const cell = document.createElement("div");
-    cell.className="shop-cell";
-    cell.innerHTML = `<b>${item.name}</b><span>${item.rarity}</span><span>$${item.price}</span><button class="doodle-btn btn-sm btn-green">Buy</button>`;
-    cell.querySelector("button").addEventListener("click", ()=> buyItem(item));
+    cell.className = "shop-cell" + (shopSel===item.id ? " selected" : "");
+    cell.innerHTML = `<b>${escapeHTML(item.name)}</b><span>${item.rarity}</span><span>$${fmtMoney(item.price)}</span>`;
+    cell.addEventListener("click", ()=> selectShopItem(item.id));
     grid.appendChild(cell);
   });
+  renderToolShelf();
+  renderShopDetail();
+}
+async function buyBackpack(item){
+  const t = item.tier;
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, cur = d.backpackTier||0;
+    if(t <= cur) throw new Error("backpack-owned");
+    if(t !== cur+1) throw new Error("backpack-order:"+(cur+1));
+    if((d.money||0) < item.price) throw new Error("nomoney");
+    tx.update(ref, { money:(d.money||0)-item.price, backpackTier:t, shopBought:(d.shopBought||0)+1 });
+  }));
+  if(ok!==null){ playSfx("buy"); toast(`🎒 Backpack upgraded! You now have ${BACKPACK_SLOTS[t]} inventory slots.`, 5000); renderShop(); }
 }
 async function buyItem(item){
+  if(item.type==="backpack") return buyBackpack(item);
   if(state.profile.money < item.price){ toast("Not enough money!"); return; }
-  await grantMoney(-item.price);
-  await addItemToInv(item.id, 1);
-  updateDoc(doc(db,"players",state.uid), { shopBought: increment(1) }).catch(()=>{});   // feeds shopping sidequests
+  // charge + add in ONE transaction; refused if there is no free slot
+  const ok = await applyInvChanges({ add:[{itemId:item.id, qty:1}], strict:true }, d=>{
+    if((d.money||0) < item.price) throw new Error("nomoney");
+    return { money:(d.money||0)-item.price, shopBought:(d.shopBought||0)+1 };   // shopBought feeds shopping sidequests
+  });
+  if(ok===null) return;
   playSfx("buy");
   toast(`Bought ${item.name}`);
+  renderShopDetail();
 }
+
+
+/* =========================================================================
+   FARMING — 3x3 plots. Hoe tills (3 days of usable soil), watering can waters
+   (8h of water), seeds grow only while the plot is tilled AND watered.
+   While dry, growth pauses and a decay timer runs; re-watering resets+pauses
+   it; if decay hits 0 the plant dies. A fully grown plant's decay timer runs
+   no matter what, so harvest quickly. When soil crumbles the plot (and anything
+   in it) is lost. Plot state is simulated lazily from timestamps, so it keeps
+   progressing while you're away.
+   ========================================================================= */
+const FARM_PLOTS = 9, TILL_MS = 3*24*3600*1000, WET_MS = 8*3600*1000, HOUR_MS = 3600*1000;
+const emptyPlot = ()=>({ tillUntil:0, wetUntil:0, plant:null, t:Date.now() });
+const farm = { plots:null, mode:"inspect", seed:null, sel:null, busy:false, loaded:false, built:false, seedSig:"" };
+const farmRef = ()=> doc(db,"players",state.uid,"farm","plots");
+const farmTabVisible = ()=> document.getElementById("compassModal").classList.contains("active") && document.getElementById("ctab-farm").classList.contains("active");
+
+// Advance one plot from plot.t to `now`, respecting every boundary (water drying, soil crumbling, growth finishing, decay running out).
+function simPlot(plot, now){
+  const ev = [], pl = JSON.parse(JSON.stringify(plot||emptyPlot()));
+  let t = pl.t || now, guard = 0;
+  while(t < now && guard++ < 60){
+    if(!pl.tillUntil){ t = now; break; }                       // untilled ground: nothing happens
+    if(pl.tillUntil <= t){ ev.push({ type:"crumbled", had:!!pl.plant }); pl.tillUntil = 0; pl.wetUntil = 0; pl.plant = null; t = now; break; }
+    const wet = t < (pl.wetUntil||0), p = pl.plant;
+    let next = Math.min(now, pl.tillUntil), mode = "idle";
+    if(wet && pl.wetUntil > t) next = Math.min(next, pl.wetUntil);
+    if(p){
+      if(p.ready){ mode = "decay"; next = Math.min(next, t + p.decayLeft); }          // ripe: decays regardless of water
+      else if(wet){ mode = "grow"; p.decayLeft = p.decayMs; next = Math.min(next, t + p.growLeft); }   // watered: grows, decay reset + paused
+      else { mode = "decay"; next = Math.min(next, t + p.decayLeft); }                // dry: growth paused, decay runs
+    }
+    const dt = next - t;
+    if(mode==="grow") p.growLeft -= dt; else if(mode==="decay") p.decayLeft -= dt;
+    t = next;
+    if(p && mode==="grow" && p.growLeft <= 0){ p.growLeft = 0; p.ready = true; p.decayLeft = p.decayMs; ev.push({ type:"ready" }); }
+    if(p && mode==="decay" && p.decayLeft <= 0){ ev.push({ type: p.ready ? "rotted" : "withered" }); pl.plant = null; }
+  }
+  if(pl.tillUntil && pl.tillUntil <= now){ ev.push({ type:"crumbled", had:!!pl.plant }); pl.tillUntil = 0; pl.wetUntil = 0; pl.plant = null; }
+  pl.t = now;
+  return { plot:pl, ev };
+}
+function simAll(plots, now){
+  const ev = [], out = plots.map((p,i)=>{ const r = simPlot(p, now); r.ev.forEach(e=>ev.push({ ...e, idx:i })); return r.plot; });
+  return { plots:out, ev };
+}
+function announceFarmEvents(ev){
+  const msgs = ev.map(e=>{
+    const n = e.idx+1;
+    if(e.type==="ready") return `🧺 Plot ${n} is ready to harvest!`;
+    if(e.type==="withered") return `🥀 The plant on plot ${n} withered — it was left dry too long.`;
+    if(e.type==="rotted") return `🥀 The plant on plot ${n} rotted — it wasn't harvested in time.`;
+    if(e.type==="crumbled") return `🟫 Plot ${n}'s soil crumbled away${e.had?" and its plant was lost":""}. Re-till plots before 3 days pass!`;
+    return "";
+  }).filter(Boolean);
+  msgs.slice(0,4).forEach((m,i)=> setTimeout(()=> toast(m, 6000), i*400));
+  if(msgs.length>4) setTimeout(()=> toast(`…and ${msgs.length-4} more farm updates.`, 5000), 1700);
+}
+async function persistFarm(){ await setDoc(farmRef(), { plots:farm.plots }).catch(()=>{}); }
+async function loadFarm(){
+  if(!state.uid) return;
+  const snap = await getDoc(farmRef()).catch(()=>null);
+  let plots = snap?.exists() && Array.isArray(snap.data().plots) ? snap.data().plots : [];
+  while(plots.length < FARM_PLOTS) plots.push(emptyPlot());
+  const r = simAll(plots.slice(0,FARM_PLOTS), Date.now());
+  farm.plots = r.plots; farm.loaded = true;
+  if(r.ev.length){ announceFarmEvents(r.ev); persistFarm(); }
+  renderFarm();
+}
+// Runs fn(plots, now) against the latest saved + simulated plots inside a transaction and saves the result.
+async function farmTx(fn){
+  let finalPlots = null;
+  try{
+    await runTransaction(db, async tx=>{
+      const snap = await tx.get(farmRef());
+      let plots = snap.exists() && Array.isArray(snap.data().plots) ? snap.data().plots : [];
+      while(plots.length < FARM_PLOTS) plots.push(emptyPlot());
+      const now = Date.now(), r = simAll(plots.slice(0,FARM_PLOTS), now);
+      const out = fn(r.plots, now);
+      finalPlots = r.plots;
+      tx.set(farmRef(), { plots:finalPlots });
+      finalPlots._out = out;
+    });
+  }catch(e){
+    if(String(e.message).startsWith("farm:")) toast(e.message.slice(5)); else toast(friendlyFirebaseError(e));
+    return null;
+  }
+  const out = finalPlots._out; delete finalPlots._out;
+  farm.plots = finalPlots;
+  return { out };
+}
+const farmFail = msg=>{ throw new Error("farm:"+msg); };
+const farmToolId = kind=> toolIds(kind).find(hasItem);
+function farmToolStatus(kind, label){
+  const id = farmToolId(kind);
+  return id ? `${label}: ${ITEM_BY_ID[id].name} (${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left)` : `${label}: none — buy one in the Shop`;
+}
+async function farmDoTill(i){
+  if(!farmToolId("hoe")){ toast("You need a hoe — buy one in the Shop."); return false; }
+  const r = await farmTx((plots,now)=>{ const p = plots[i]; p.tillUntil = now + TILL_MS; p.t = now; });
+  if(!r) return false;
+  await useTool("hoe");
+  return true;
+}
+async function farmDoWater(i){
+  const cur = farm.plots[i];
+  if(!cur.tillUntil){ toast("Till this plot with a hoe first."); return false; }
+  if(!farmToolId("can")){ toast("You need a watering can — buy one in the Shop."); return false; }
+  const r = await farmTx((plots,now)=>{
+    const p = plots[i];
+    if(!p.tillUntil) farmFail("That plot's soil has crumbled — till it again first.");
+    p.wetUntil = now + WET_MS; p.t = now;
+  });
+  if(!r) return false;
+  await useTool("can");
+  return true;
+}
+function pickCrop(rar){ const a = CROPS_BY_RARITY[rar]; return a[Math.floor(Math.random()*a.length)]; }
+function makePlant(seed){
+  const rar = seed.farmRarity, int = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
+  const growH = seed.random ? 16 + Math.random()*84 : GROW_HOURS[rar][0] + Math.random()*(GROW_HOURS[rar][1]-GROW_HOURS[rar][0]);
+  const growMs = Math.round(growH*HOUR_MS), decayMs = DECAY_HOURS[rar]*HOUR_MS;
+  let outcome = "real", cropId = seed.cropId, yieldRarity = rar;
+  if(seed.random){                                    // good / mid / bad — hidden until harvest
+    const [good, mid] = MYSTERY_ODDS[rar], r = Math.random();
+    if(r < good){ outcome = "real"; cropId = pickCrop(rar); }
+    else if(r < good+mid){ outcome = "mid"; cropId = pickCrop("common"); yieldRarity = "common"; }
+    else { outcome = "none"; cropId = null; }
+  }
+  return { seedId:seed.id, rarity:rar, mystery:!!seed.random, outcome, cropId, yieldRarity, growMs, growLeft:growMs, decayMs, decayLeft:decayMs, ready:false, plantedAt:Date.now() };
+}
+async function farmDoPlant(i){
+  const seed = farm.seed && ITEM_BY_ID[farm.seed];
+  if(!seed || !hasItem(seed.id)){ toast("Pick a seed from your inventory first (Plant mode)."); return false; }
+  const cur = farm.plots[i], now = Date.now();
+  if(!cur.tillUntil) { toast("Till this plot first."); return false; }
+  if(!(cur.wetUntil > now)){ toast("Water this plot first — seeds need damp, tilled soil."); return false; }
+  if(cur.plant){ toast("Something is already growing here."); return false; }
+  const removed = await changeInvQty(seed.id, -1);          // take the seed first
+  if(removed===null) return false;
+  const r = await farmTx((plots,n)=>{
+    const p = plots[i];
+    if(!p.tillUntil) farmFail("That plot's soil has crumbled.");
+    if(!(p.wetUntil > n)) farmFail("That plot dried out — water it first.");
+    if(p.plant) farmFail("Something is already growing here.");
+    p.plant = makePlant(seed); p.t = n;
+  });
+  if(!r){ await addItemToInv(seed.id, 1); return false; }  // put the seed back if planting failed
+  toast(`🌱 Planted ${seed.name}.`);
+  return true;
+}
+async function farmDoHarvest(i){
+  const cur = farm.plots[i];
+  if(!cur.plant){ toast("Nothing is planted here."); return false; }
+  if(!cur.plant.ready){ toast("It isn't ready yet."); return false; }
+  const cropId = cur.plant.cropId;
+  if(cropId && !hasItem(cropId) && invUsed(state.profile.inventory) >= invCap(state.profile)){ toast("Your inventory is full — free a slot first so the harvest isn't lost."); return false; }
+  const r = await farmTx((plots,n)=>{
+    const p = plots[i].plant;
+    if(!p || !p.ready) farmFail("It isn't ready (anymore).");
+    const [a,b] = CROP_YIELDS[p.yieldRarity], qty = p.outcome==="none" ? 0 : a + Math.floor(Math.random()*(b-a+1));
+    plots[i].plant = null; plots[i].t = n;
+    return { cropId:p.cropId, qty, mystery:p.mystery, outcome:p.outcome };
+  });
+  if(!r) return false;
+  const { cropId:cid, qty, mystery, outcome } = r.out;
+  if(!qty || !cid){ toast("🥀 The mystery seeds were duds — nothing grew."); return true; }
+  const ok = await applyInvChanges({ add:[{ itemId:cid, qty }], strict:true });
+  if(ok===null) return true;
+  const name = ITEM_BY_ID[cid].name;
+  toast(`🧺 Harvested ${qty}x ${name}!` + (mystery ? (outcome==="mid" ? " (just a plain crop…)" : " (a real one!)") : ""), 6000);
+  return true;
+}
+async function farmDoDig(i){
+  if(!farm.plots[i].plant){ toast("Nothing is planted here."); return false; }
+  if(!confirm("Dig up this plant? You won't get anything back.")) return false;
+  return !!(await farmTx((plots,n)=>{ plots[i].plant = null; plots[i].t = n; }));
+}
+async function farmAct(i){
+  if(farm.busy || !farm.loaded) return;
+  farm.sel = i;
+  const mode = farm.mode;
+  if(mode==="inspect"){ renderFarm(); return; }
+  farm.busy = true;
+  try{
+    if(mode==="till") await farmDoTill(i);
+    else if(mode==="water") await farmDoWater(i);
+    else if(mode==="plant") await farmDoPlant(i);
+    else if(mode==="harvest") await farmDoHarvest(i);
+    else if(mode==="dig") await farmDoDig(i);
+  } finally { farm.busy = false; renderFarm(); }
+}
+async function farmBulk(kind){
+  if(farm.busy || !farm.loaded) return;
+  farm.busy = true; let n = 0;
+  try{
+    for(let i=0;i<FARM_PLOTS;i++){
+      if(kind==="water" && !farm.plots[i].tillUntil) continue;
+      if(!farmToolId(kind==="till"?"hoe":"can")){ toast(`Your ${kind==="till"?"hoe":"watering can"} is used up.`); break; }
+      const ok = kind==="till" ? await farmDoTill(i) : await farmDoWater(i);
+      if(!ok) break; n++;
+    }
+    if(n) toast(`${kind==="till"?"⛏️ Tilled":"💧 Watered"} ${n} plot${n===1?"":"s"}.`);
+  } finally { farm.busy = false; renderFarm(); }
+}
+function startPlantingFromInventory(seedId){
+  farm.seed = seedId; farm.mode = "plant";
+  closeModal("journalModal"); openModal("compassModal");
+  document.querySelector('[data-ctab="farm"]').click();
+}
+function plotView(p, now){
+  const pl = p.plant, wet = p.wetUntil > now;
+  const out = { cls:"untilled", icon:"⬜", name:"Untilled", lines:[] };
+  if(!p.tillUntil) return out;
+  out.cls = wet ? "wet" : "dry"; out.icon = wet ? "💧" : "🟫"; out.name = wet ? "Wet soil" : "Dry soil";
+  out.lines.push(`Soil ${fmtDur(p.tillUntil-now)}`);
+  if(wet) out.lines.push(`💧 ${fmtDur(p.wetUntil-now)}`);
+  if(pl){
+    const crop = pl.cropId && ITEM_BY_ID[pl.cropId];
+    out.name = pl.mystery ? "Mystery plant" : crop.name;
+    if(pl.ready){ out.cls = "ready"; out.icon = pl.mystery ? "❓" : crop.emoji; out.lines = [`🧺 Harvest! Rots ${fmtDur(pl.decayLeft)}`, ...out.lines.slice(0,1)]; }
+    else if(wet){ out.cls = "growing"; out.icon = pl.mystery ? "🌱" : "🌱"; out.lines = [`Ready in ${fmtDur(pl.growLeft)}${p.wetUntil-now < pl.growLeft ? " (needs water)" : ""}`, ...out.lines]; }
+    else { out.cls = "thirsty"; out.icon = "🥀"; out.lines = [`⏸ Paused · dies in ${fmtDur(pl.decayLeft)}`, ...out.lines]; }
+  }
+  return out;
+}
+function farmDetailHTML(i, now){
+  const p = farm.plots[i]; if(!p) return "";
+  const v = plotView(p, now), L = [`<b>Plot ${i+1}</b> — ${v.name}`];
+  if(!p.tillUntil) L.push("Untilled ground. Use the 🪓 Hoe to till it (soil lasts 3 days, then crumbles unless you re-till).");
+  else {
+    L.push(`Soil is tilled — it crumbles in ${fmtDur(p.tillUntil-now)} (tilling again resets it to 3 days).`);
+    L.push(p.wetUntil > now ? `💧 Watered — dries out in ${fmtDur(p.wetUntil-now)}.` : "🏜️ Dry — water it (water lasts 8 hours).");
+  }
+  if(p.plant){
+    const pl = p.plant, s = ITEM_BY_ID[pl.seedId];
+    L.push(`Planted: ${s.name} (${pl.rarity})${pl.mystery ? " — you won't know what it becomes until harvest." : ""}`);
+    if(pl.ready) L.push(`✅ Ready! Harvest it before it rots in ${fmtDur(pl.decayLeft)} (ripe plants decay even when watered).`);
+    else if(p.wetUntil > now) L.push(`🌱 Growing — ready in ${fmtDur(pl.growLeft)}${p.wetUntil-now < pl.growLeft ? ", but the water runs out first." : "."}`);
+    else L.push(`⏸ Growth paused. It will die in ${fmtDur(pl.decayLeft)} unless you water it (watering resets this).`);
+  }
+  return L.join("<br>");
+}
+const FARM_HINT = { inspect:"Click a plot to inspect it.", till:"Hoe: click a plot to till it (1 use each).", water:"Watering can: click a tilled plot to water it (1 use each).",
+  plant:"Pick a seed, then click a tilled AND watered empty plot.", harvest:"Click a ripe plot to harvest it.", dig:"Click a plot to dig up its plant." };
+function renderFarm(){
+  const grid = document.getElementById("farmGrid"); if(!grid || !farm.plots) return;
+  const now = Date.now();
+  if(!farm.built){
+    grid.innerHTML = "";
+    for(let i=0;i<FARM_PLOTS;i++){
+      const c = document.createElement("div"); c.className = "farm-cell untilled"; c.dataset.i = i;
+      c.addEventListener("click", ()=> farmAct(i)); grid.appendChild(c);
+    }
+    document.querySelectorAll("[data-fmode]").forEach(b=> b.addEventListener("click", ()=>{ farm.mode = b.dataset.fmode; renderFarm(); }));
+    document.getElementById("farmTillAll").addEventListener("click", ()=> farmBulk("till"));
+    document.getElementById("farmWaterAll").addEventListener("click", ()=> farmBulk("water"));
+    document.getElementById("farmSeedSelect").addEventListener("change", e=>{ farm.seed = e.target.value || null; });
+    farm.built = true;
+  }
+  [...grid.children].forEach((c,i)=>{
+    const v = plotView(farm.plots[i], now);
+    const html = `<div class="fc-icon">${v.icon}</div><div class="fc-name">${escapeHTML(v.name)}</div>${v.lines.map(l=>`<div class="fc-time">${escapeHTML(l)}</div>`).join("")}`;
+    if(c._html !== html){ c.innerHTML = html; c._html = html; }
+    c.className = `farm-cell ${v.cls}${farm.sel===i?" sel":""}`;
+  });
+  document.querySelectorAll("[data-fmode]").forEach(b=> b.classList.toggle("active", b.dataset.fmode===farm.mode));
+  document.getElementById("farmHint").textContent = FARM_HINT[farm.mode] || "";
+  document.getElementById("farmTools").innerHTML = `⛏️ ${escapeHTML(farmToolStatus("hoe","Hoe"))} &nbsp;·&nbsp; 💧 ${escapeHTML(farmToolStatus("can","Can"))}`;
+  // seed picker lists every seed in your inventory
+  const seeds = invExpanded().filter(e=>e.item.type==="seed"), sig = seeds.map(e=>e.itemId+":"+e.qty).join(",") + "|" + farm.seed;
+  const sel = document.getElementById("farmSeedSelect");
+  if(farm.seedSig !== sig){
+    farm.seedSig = sig;
+    if(farm.seed && !seeds.some(e=>e.itemId===farm.seed)) farm.seed = null;
+    if(!farm.seed && seeds.length) farm.seed = seeds[0].itemId;
+    sel.innerHTML = seeds.length ? seeds.map(e=>`<option value="${e.itemId}"${e.itemId===farm.seed?" selected":""}>${escapeHTML(e.item.name)} (x${e.qty})</option>`).join("") : `<option value="">No seeds in your inventory</option>`;
+  }
+  sel.style.display = farm.mode==="plant" ? "" : "none";
+  document.getElementById("farmDetail").innerHTML = farm.sel!=null ? farmDetailHTML(farm.sel, now) : "Select a plot to see its details.";
+}
+setInterval(()=>{
+  if(!farm.loaded || !state.profile || !farmTabVisible()) return;
+  const r = simAll(farm.plots, Date.now());
+  farm.plots = r.plots;
+  if(r.ev.length){ announceFarmEvents(r.ev); persistFarm(); }
+  renderFarm();
+}, 1000);
 
 /* =========================================================================
    WORLD RESOURCE GATHERING — foraging, mining, fishing
@@ -1609,7 +2053,7 @@ function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(
 const toolIds = kind=> ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
 async function useTool(kind){
   const id = toolIds(kind).find(hasItem);
-  if(!id){ toast(`You need a ${kind==="pickaxe"?"Pickaxe":"Fishing Rod"} — buy one in the Shop.`); return false; }
+  if(!id){ toast(`You need a ${{pickaxe:"Pickaxe",fishingrod:"Fishing Rod",hoe:"Hoe",can:"Watering Can"}[kind]||kind} — buy one in the Shop.`); return false; }
   const uses = { ...(state.profile.toolUses||{}) };
   const left = (uses[id] ?? TOOL_USES[id]) - 1;
   if(left<=0){ delete uses[id]; await changeInvQty(id,-1); jobLog(`Your ${ITEM_BY_ID[id].name} broke!`); } else uses[id]=left;
@@ -1620,11 +2064,6 @@ function toolUsesLeft(kind){
   const id = toolIds(kind).find(hasItem);
   return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":"fishing rod"}`;
 }
-[["pickaxe","Pickaxe"],["fishingrod","Fishing Rod"]].forEach(([k,n])=>[2,3].forEach(t=>{
-  const it = ITEM_BY_ID[`tool_${k}${t}`];
-  document.getElementById("toolShelf").insertAdjacentHTML("beforeend", ` <button class="doodle-btn btn-sm btn-yellow" data-buytool="${it.id}">${it.name} ($${it.price})</button>`);
-}));
-document.querySelectorAll("[data-buytool]").forEach(b=> b.addEventListener("click", ()=> buyItem(ITEM_BY_ID[b.dataset.buytool])));
 document.getElementById("btnForage").addEventListener("click", doForageAction);
 document.getElementById("btnMine").addEventListener("click", doMineAction);
 document.getElementById("btnFish").addEventListener("click", ()=>{ closeModal("compassModal"); doFishAction(); });
@@ -1648,7 +2087,7 @@ async function doForageAction(){
   if(roll < 0.05){
     const amt = 5 + Math.floor(Math.random()*15);
     await grantMoney(amt);
-    jobLog(`You found $${amt} in the bush!`);
+    jobLog(`You found $${fmtMoney(amt)} in the bush!`);
   } else if(roll < 0.50){
     const pool = [...Array(10).fill("forage_berry"),...Array(4).fill("forage_mushroom"),...Array(3).fill("forage_herb"),"forage_apple","forage_apple","forage_truffle"];
     const pick = Math.random()<0.01 ? "forage_goldapple" : pool[Math.floor(Math.random()*pool.length)];
@@ -1661,10 +2100,6 @@ async function doForageAction(){
 
 /* --- mining (rocky cliff): 3 pulls per hour, needs a Pickaxe --- */
 const MINE_HOUR_MS = 60*60*1000;
-document.getElementById("btnBuyPickaxe").addEventListener("click", async ()=>{
-  if(hasItem("tool_pickaxe")){ toast("You already have a pickaxe."); return; }
-  await buyItem(ITEM_BY_ID.tool_pickaxe);
-});
 function minePicksLeft(){
   const p = state.profile;
   const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
@@ -1687,7 +2122,7 @@ async function doMineAction(){
     if(pick==="money"){
       const amt = 20 + Math.floor(Math.random()*80);
       updates.money = p.money + amt;
-      msg = `Found $${amt} under the rock!`;
+      msg = `Found $${fmtMoney(amt)} under the rock!`;
     } else {
       await addItemToInv(pick, 1);
       msg = `Found a ${ITEM_BY_ID[pick].name}!`;
@@ -1701,7 +2136,7 @@ async function doMineAction(){
     if(Math.random()<0.5){
       const loss = Math.round(p.money * (0.03+Math.random()*0.07));
       updates.money = Math.max(0, p.money - loss);
-      msg = `A trap! Lost $${loss}.`;
+      msg = `A trap! Lost $${fmtMoney(loss)}.`;
     } else {
       const hpLoss = Math.round(p.hpMax * (0.05+Math.random()*0.1));
       updates.hp = Math.max(1, p.hp - hpLoss);
@@ -1713,10 +2148,6 @@ async function doMineAction(){
 }
 
 /* --- fishing (pond): vertical hold-to-catch minigame, needs a Fishing Rod --- */
-document.getElementById("btnBuyRod").addEventListener("click", async ()=>{
-  if(hasItem("tool_fishingrod")){ toast("You already have a fishing rod."); return; }
-  await buyItem(ITEM_BY_ID.tool_fishingrod);
-});
 let fishGame = null;
 // Each fish that bites gets a random speed trait — slow/medium/fast —
 // picked once per bite. Faster fish are harder to keep the bar on, but
@@ -1823,6 +2254,19 @@ let chatSubbed = false;
 // modified client that fakes this check still gets rejected server-side.
 const ADMIN_USERNAME = "Vortarium";
 function isAdminUI(){ return state.profile?.username === ADMIN_USERNAME; }
+/* ---------- online status: a green dot means "logged in with the tab open" ----------
+   Every logged-in client stamps `onlineAt` on its own player doc every 45s; anyone whose
+   stamp is under 2.5 minutes old counts as online. Logging out / closing the tab clears it. */
+const ONLINE_BEAT_MS = 45000, ONLINE_FRESH_MS = 150000;
+let onlineTimer = null;
+const isOnline = d=> !!(d && !d.banned && (Date.now() - (d.onlineAt||0)) < ONLINE_FRESH_MS);
+const onlineDot = (d, force)=> (force || isOnline(d)) ? '<span class="online-dot" title="Online"></span>' : "";
+function beatOnline(){ if(state.uid && state.profile && !state.profile.banned) updateDoc(doc(db,"players",state.uid), { onlineAt: Date.now() }).catch(()=>{}); }
+function startOnlineBeat(){ stopOnlineBeat(); beatOnline(); onlineTimer = setInterval(beatOnline, ONLINE_BEAT_MS); }
+function stopOnlineBeat(){ if(onlineTimer){ clearInterval(onlineTimer); onlineTimer = null; } }
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && onlineTimer) beatOnline(); });
+window.addEventListener("pageshow", ()=>{ if(onlineTimer) beatOnline(); });
+window.addEventListener("pagehide", ()=>{ if(state.uid && state.profile) updateDoc(doc(db,"players",state.uid), { onlineAt: 0 }).catch(()=>{}); });
 function ensureChatSubscriptions(){
   if(chatSubbed) return; chatSubbed=true;
   subscribeInbox();
@@ -2017,8 +2461,10 @@ async function runChatCommand(raw){
   const cmd = parts[0].toLowerCase();
   if(cmd === "/pay"){
     const [ , username, amountStr ] = parts;
-    const amount = Number(amountStr);
-    if(!username || !Number.isFinite(amount) || amount<=0){ toast("Usage: /pay [username] [amount]"); return; }
+    const pa = parseAmount(amountStr||"");
+    if(!username){ toast("Usage: /pay [username] [amount]"); return; }
+    if(pa.err){ toast(pa.err); return; }
+    const amount = pa.value;
     if(amount > (state.profile.money||0)){ toast("You don't have that much money."); return; }
     if(username.toLowerCase() === state.profile.username.toLowerCase()){ toast("You can't pay yourself."); return; }
     const target = await findUidByUsername(username);
@@ -2031,14 +2477,16 @@ async function runChatCommand(raw){
     await withErrorToast(()=> addDoc(collection(db,"players",target.uid,"inbox"), {
       type:"payment_received", amount, fromUsername: state.profile.username, ts: Date.now(), credited:false
     }));
-    toast(`Paid $${amount} to ${username}.`);
+    toast(`Paid $${fmtMoney(amount)} to ${username}.`);
     return;
   }
   if(cmd === "/ah"){
     if(parts[1]?.toLowerCase() === "sell"){
       const itemName = parts[2];
-      const price = Number(parts[3]);
-      if(!itemName || !Number.isFinite(price) || price<=0){ toast("Usage: /ah sell [item] [price]"); return; }
+      if(!itemName){ toast("Usage: /ah sell [item] [price]"); return; }
+      const pa = parseAmount(parts[3]||"");
+      if(pa.err){ toast(pa.err); return; }
+      const price = pa.value;
       const entry = invExpanded().find(e=> e.item.name.toLowerCase() === itemName.toLowerCase() || e.item.name.toLowerCase().replace(/\s+/g,"") === itemName.toLowerCase());
       if(!entry || entry.qty<1){ toast(`You don't have a ${itemName}.`); return; }
       try{
@@ -2050,10 +2498,10 @@ async function runChatCommand(raw){
       if(ok===null) return;
       const posted = await withErrorToast(()=> addDoc(collection(db,"auction"), {
         sellerUid: state.uid, sellerName: state.profile.username, itemId: entry.item.id, qty:1, pricePer: price,
-        status:"active", postedAt: Date.now(), expiresAt: Date.now() + 1000*60*60*24
+        status:"active", postedAt: Date.now(), expiresAt: Date.now() + AUCTION_MS
       }));
       if(posted===null){ await addItemToInv(entry.item.id, 1); return; }
-      toast(`Posted 1 ${entry.item.name} to the auction for $${price}.`);
+      toast(`Posted 1 ${entry.item.name} to the auction for $${fmtMoney(price)}.`);
       return;
     }
     document.querySelector('[data-ctab="auction"]')?.click();
@@ -2119,18 +2567,37 @@ async function renderPMContacts(friendUids){
   // Merge in anyone you've privately messaged who isn't a mutual friend,
   // so their thread stays reachable without needing to add them.
   const allUids = [...new Set([...friendUids, ...Object.keys(state.pmContactsExtra)])];
-  list.innerHTML="";
+  const token = (renderPMContacts._t = (renderPMContacts._t||0) + 1);
+  const items = [];
   for(const uid of allUids){
     try{
       const snap = await getDoc(doc(db,"players",uid));
       if(!snap.exists()) continue;
       const li = document.createElement("li");
-      li.textContent = snap.data().username;
+      li.innerHTML = escapeHTML(snap.data().username) + onlineDot(snap.data());
       if(state.currentChatPartner?.uid===uid) li.classList.add("active");
       li.addEventListener("click", ()=> openPrivateChatWith(uid, snap.data().username));
-      list.appendChild(li);
+      items.push(li);
     }catch(err){ console.error(err); }
   }
+  if(token !== renderPMContacts._t) return;       // a newer render superseded this one
+  list.replaceChildren(...items);
+}
+/* live online dot for the person you're chatting with (header + under their messages) */
+const partnerLive = { uid:null, data:null, unsub:null, html:null };
+function watchPartnerDoc(uid){
+  if(partnerLive.uid===uid && partnerLive.unsub) return;
+  if(partnerLive.unsub) partnerLive.unsub();
+  partnerLive.uid = uid; partnerLive.data = null; partnerLive.html = null;
+  partnerLive.unsub = onSnapshot(doc(db,"players",uid), s=>{ partnerLive.data = s.exists() ? s.data() : null; renderPartnerOnline(); }, ()=>{});
+}
+function renderPartnerOnline(){
+  const head = document.getElementById("dmPartner"), log = document.getElementById("chatLogPrivate");
+  const cp = state.currentChatPartner;
+  const on = !!(cp && partnerLive.uid===cp.uid && isOnline(partnerLive.data));
+  const html = cp ? escapeHTML(cp.username) + (on ? '<span class="online-dot" title="Online"></span>' : "") : "";
+  if(head && html !== partnerLive.html){ head.innerHTML = html; partnerLive.html = html; }
+  if(log) log.classList.toggle("partner-online", on);
 }
 let pmUnsub = null;
 function subscribePrivateThread(){
@@ -2139,6 +2606,7 @@ function subscribePrivateThread(){
   if(!state.currentChatPartner) return;
   const threadId = pmThreadId(state.uid, state.currentChatPartner.uid);
   if(presence.thread !== threadId){ pendingReply.private = null; renderReplyPreview("private"); }
+  watchPartnerDoc(state.currentChatPartner.uid); renderPartnerOnline();
   watchPartnerPresence(threadId);
   syncPresence(true);
   const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","desc"), limit(100));
@@ -2198,7 +2666,7 @@ function watchPartnerPresence(thread){
     presence.partner = snap.exists() ? snap.data() : null;
     renderPartnerPresence();
   }, ()=>{});
-  if(!presence.tick) presence.tick = setInterval(()=>{ syncPresence(); renderPartnerPresence(); }, 1000);
+  if(!presence.tick) presence.tick = setInterval(()=>{ syncPresence(); renderPartnerPresence(); renderPartnerOnline(); }, 1000);
 }
 function renderPartnerPresence(){
   const el = document.getElementById("dmStatus"); if(!el) return;
@@ -2219,7 +2687,9 @@ function renderPartnerPresence(){
   void bubble.offsetWidth;                              // restart the pop animation on every change / appearance
   bubble.classList.add("pop-in");
 }
+setInterval(()=>{ const l = document.getElementById("chatLogPrivate"); if(state.profile && l && l.offsetParent!==null) renderPMContacts(); }, 30000);   // keep contact dots fresh
 function stopPresence(){                                // logout / session reset
+  if(partnerLive.unsub){ partnerLive.unsub(); partnerLive.unsub = null; } partnerLive.uid = null; partnerLive.data = null; partnerLive.html = null;
   if(presence.thread && state.uid && (presence.sent.watching || presence.sent.typing)){
     setDoc(presenceRef(presence.thread), { watching:false, typing:false, ts:Date.now() }).catch(()=>{});
   }
@@ -2371,7 +2841,7 @@ function subscribeInbox(){
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else if(n.type==="duel_won"){
         const itemMsg = n.itemName ? ` and their ${escapeHTML(n.itemName)}` : "";
-        li.innerHTML = `<span>You won a duel vs ${escapeHTML(n.fromUsername)}! +$${n.amount}${itemMsg} (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
+        li.innerHTML = `<span>You won a duel vs ${escapeHTML(n.fromUsername)}! +$${fmtMoney(n.amount)}${itemMsg} (credited)</span><button class="doodle-btn btn-sm" data-a="ok">Dismiss</button>`;
         li.querySelector('[data-a="ok"]').addEventListener("click", ()=> withErrorToast(()=> deleteDoc(doc(db,"players",state.uid,"inbox",d.id))));
       } else if(n.type==="auction_sold"){
         // Money is auto-credited above the moment this doc is seen — this
@@ -2433,7 +2903,7 @@ function renderAuction(){
       const cell = document.createElement("div");
       cell.className = "inv-cell rarity-"+item.rarity + (auctionSelectedId===d.id ? " selected" : "");
       cell.dataset.listingId = d.id;
-      cell.innerHTML = `<div>${item.name}</div><span class="qty-badge">x${listing.qty}</span><div style="font-size:11px">$${listing.pricePer} ea</div>`;
+      cell.innerHTML = `<div>${item.name}</div><span class="qty-badge">x${listing.qty}</span><div style="font-size:11px">$${fmtMoney(listing.pricePer)} ea</div>`;
       // Hover OR click shows the details/buy panel — buying itself always
       // needs the separate confirm button below, never the cell itself,
       // so a stray click can't accidentally purchase something.
@@ -2458,7 +2928,7 @@ function showAuctionDetail(id){
   panel.style.display = "";
   document.getElementById("aucDetailName").textContent = `${item.name} (${item.rarity}) x${listing.qty}`;
   document.getElementById("aucDetailMeta").textContent =
-    `Posted by ${listing.sellerName} — $${listing.pricePer} each, $${listing.pricePer*listing.qty} total`;
+    `Posted by ${listing.sellerName} — $${fmtMoney(listing.pricePer)} each, $${fmtMoney(listing.pricePer*listing.qty)} total`;
   const buyBtn = document.getElementById("aucDetailBuyBtn");
   const isOwnListing = listing.sellerUid === state.uid;
   buyBtn.style.display = isOwnListing ? "none" : "";
@@ -2472,8 +2942,7 @@ function showAuctionDetail(id){
     if(!entryNow){ clearInterval(auctionDetailTimerInterval); return; }
     const msLeft = entryNow.listing.expiresAt - Date.now();
     if(msLeft <= 0){ timerEl.textContent = "Expired"; clearInterval(auctionDetailTimerInterval); return; }
-    const mins = Math.floor(msLeft/60000), secs = Math.floor((msLeft%60000)/1000);
-    timerEl.textContent = `Expires in ${mins}m ${secs}s`;
+    timerEl.textContent = `Expires in ${fmtAuctionLeft(msLeft)}`;
   };
   tick();
   auctionDetailTimerInterval = setInterval(tick, 1000);
@@ -2497,7 +2966,8 @@ async function buyAuctionListing(listingId, listing, item){
       if((d.money||0) < cost) throw new Error("nomoney");
       const inv = (d.inventory||[]).map(e=>({...e}));
       const idx = inv.findIndex(e=>e.itemId===L.itemId);
-      if(idx>=0) inv[idx].qty += L.qty; else inv.push({ itemId:L.itemId, qty:L.qty });
+      if(idx>=0 && inv[idx].qty>0) inv[idx].qty += L.qty;
+      else { if(invUsed(inv) >= invCap(d)) throw new Error("full"); if(idx>=0) inv[idx].qty = L.qty; else inv.push({ itemId:L.itemId, qty:L.qty }); }
       tx.update(lref, { status:"sold", buyerUid: state.uid, buyerName: state.profile.username, soldAt: Date.now() });
       tx.update(pref, { money: (d.money||0) - cost, inventory: inv });
       return { cost, qty:L.qty, sellerUid:L.sellerUid };
@@ -2508,6 +2978,7 @@ async function buyAuctionListing(listingId, listing, item){
     if(err?.message==="nomoney") toast("Not enough money!");
     else if(err?.message==="own") toast("You can't buy your own listing.");
     else if(err?.message==="gone") toast("That listing is no longer available.");
+    else if(err?.message==="full") toast("Your inventory is full — free a slot (or buy a bigger backpack) first.");
     else toast(friendlyFirebaseError(err));
     return;
   }
@@ -2532,16 +3003,19 @@ function populatePostForm(){
 }
 function updatePostTotal(){
   const qty = Number(document.getElementById("postQty").value)||0;
-  const price = Number(document.getElementById("postPrice").value)||0;
-  document.getElementById("postTotalLabel").textContent = `Total: $${qty*price}`;
+  const raw = document.getElementById("postPrice").value.trim();
+  const pa = raw ? parseAmount(raw) : { value:0 };
+  document.getElementById("postTotalLabel").textContent = pa.err ? pa.err : `Total: $${fmtMoney(qty*pa.value)}`;
 }
 document.getElementById("postQty").addEventListener("input", updatePostTotal);
 document.getElementById("postPrice").addEventListener("input", updatePostTotal);
 document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
   const itemId = document.getElementById("postItemSelect").value;
   const qty = Number(document.getElementById("postQty").value);
-  const price = Number(document.getElementById("postPrice").value);
-  if(!itemId || qty<1 || price<1){ toast("Enter a valid quantity and price."); return; }
+  const pa = parseAmount(document.getElementById("postPrice").value);
+  if(pa.err){ toast(pa.err); return; }
+  const price = pa.value;
+  if(!itemId || !Number.isInteger(qty) || qty<1){ toast("Quantity must be a whole number."); return; }
   try{
     const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
     const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
@@ -2552,7 +3026,7 @@ document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
   await changeInvQty(itemId, -qty);
   const ok = await withErrorToast(()=> addDoc(collection(db,"auction"), {
     sellerUid: state.uid, sellerName: state.profile.username, itemId, qty, pricePer: price,
-    status:"active", postedAt: Date.now(), expiresAt: Date.now() + 1000*60*60*24
+    status:"active", postedAt: Date.now(), expiresAt: Date.now() + AUCTION_MS
   }));
   if(ok===null){ await addItemToInv(itemId, qty); return; } // roll back on failure
   toast("Posted to auction house!");
@@ -2575,9 +3049,10 @@ function renderMySlots(){
       cell.innerHTML = `<div>${item.name}</div><span class="qty-badge">x${listing.qty}</span><button class="doodle-btn btn-sm" style="margin-top:4px">Cancel</button>`;
       cell.querySelector("button").addEventListener("click", async (ev)=>{
         ev.stopPropagation();
+        if(!hasItem(item.id) && invUsed(state.profile.inventory) >= invCap(state.profile)){ toast("Your inventory is full — free a slot before cancelling."); return; }
         const ok = await withErrorToast(()=> deleteDoc(doc(db,"auction",d.id)));
         if(ok===null) return;
-        await addItemToInv(item.id, listing.qty);
+        await applyInvChanges({ add:[{itemId:item.id, qty:listing.qty}], strict:true });
       });
       grid.appendChild(cell);
     });
@@ -2646,11 +3121,58 @@ const RECIPES = [];
     add("tool_pickaxe"+n, `${nm} Pickaxe`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,2],["ing_steel",1]]);
     add("tool_fishingrod"+n, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,1],["ing_steel",1],["forage_herb",2]]);
   });
+  // crop preserves: 3 crops -> 1 jar worth far more than the crops
+  CROP_ITEMS.forEach(c=> add("pres_"+c.id, `${c.name} Preserve`, "material", c.rarity, { sellPrice: Math.round(c.sellPrice*3*1.9), desc:"Jarred and sealed. Sells for a ton." }, [[c.id,3]]));
   // gem elixirs
   ["gem_quartz_cut","gem_ruby_cut","gem_sapphire_cut","gem_emerald_cut","gem_diamond_cut"].forEach(g=>
     add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
 })();
-/* ---------- healing rebalance ----------
+/* ---------- gear rebalance ----------
+   Every armor piece gets its OWN stat line (no two pieces match), generated
+   deterministically from the item id so every client agrees. Rarity makes
+   better outcomes more common and the numbers bigger:
+     - most pieces: +1 or 2 stats and +max HP
+     - some pieces: "+this, -that" trade-offs (more common on low rarities)
+     - rarely: a pure sacrifice (stat penalties) with a big max-HP bonus
+   Weapon damage also scales much harder with rarity. */
+(function rebalanceGear(){
+  const ARMOR_RANGES = { common:[1,2,3,8], uncommon:[1,3,6,14], rare:[2,4,10,22], epic:[3,6,16,32], legendary:[4,8,25,50] };
+  const ATTACK_RANGES = { common:[4,7], uncommon:[7,12], rare:[12,19], epic:[19,29], legendary:[30,45] };
+  const FAV = { helmet:["SMARTS","CHARM","SMARTS","SPEED"], chestplate:["STRENGTH","STRENGTH","SMARTS","CHARM"],
+                leggings:["SPEED","SPEED","STRENGTH","CHARM"], boots:["SPEED","CHARM","SPEED","STRENGTH"] };
+  const hash = id=> ([...id].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0, 7) % 2147483000) + 101;
+  const seen = new Set();
+  Object.values(ITEM_BY_ID).forEach(it=>{
+    if(it.type!=="armor" && it.type!=="weapon") return;
+    const rnd = seededRand(hash(it.id)); rnd(); rnd();
+    const int = (a,b)=> a + Math.floor(rnd()*(b-a+1)), ri = RARITIES.indexOf(it.rarity);
+    if(it.type==="weapon"){
+      const [lo,hi] = ATTACK_RANGES[it.rarity] || ATTACK_RANGES.common;
+      it.stats = { attack: int(lo,hi) + (String(it.id).startsWith("gear_") ? 2 : 0) };
+      return;
+    }
+    const [smin,smax,hmin,hmax] = ARMOR_RANGES[it.rarity] || ARMOR_RANGES.common;
+    const fav = FAV[it.armorSlot] || FAV.chestplate;
+    const pick = ()=> rnd()<0.6 ? fav[int(0,fav.length-1)] : SKILL_KEYS[int(0,3)];
+    const other = not=>{ const o = SKILL_KEYS.filter(k=>k!==not); return o[int(0,o.length-1)]; };
+    const pA = 0.5 + 0.1*ri, pC = Math.max(0.03, 0.18 - 0.04*ri), roll = rnd(), out = {};
+    const s1 = pick();
+    if(roll < pA){                                   // pure boost
+      out[s1] = int(smin,smax); out.hp = int(hmin,hmax);
+      if(ri>=2 && rnd() < 0.25 + 0.1*(ri-2)) out[other(s1)] = Math.max(1, Math.round(int(smin,smax)/2));
+    } else if(roll < 1-pC){                          // trade-off: + this, - that
+      out[s1] = int(smin,smax)+1; out[other(s1)] = -int(1, Math.max(1, Math.ceil(smax/2))); out.hp = int(hmin,hmax);
+    } else {                                         // pure sacrifice: only penalties, but a big HP bonus
+      out[s1] = -int(1, Math.max(1, Math.ceil(smax/2))); out.hp = int(hmax, Math.round(hmax*1.7));
+    }
+    const sig = o=> [o.hp, ...SKILL_KEYS.map(k=>o[k]||0)].join("|");
+    let guard = 0; while(seen.has(sig(out)) && guard++ < 500) out.hp += 1;   // guarantee uniqueness
+    seen.add(sig(out));
+    it.stats = out;
+  });
+})();
+
+/* ---------- healing rebalance (all heal amounts halved) ----------
    Every consumable gets a heal RANGE; the actual amount is rolled each time
    it is eaten/drunk. stats.heal stays as the average (used for sorting).
      berries / herbs / mushrooms / apples ..... 5-20
@@ -2681,7 +3203,8 @@ function healRangeFor(it){
 }
 Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
   i.stats = i.stats || {};
-  const [lo,hi] = healRangeFor(i);
+  const [lo0,hi0] = healRangeFor(i);
+  const lo = Math.max(1, Math.round(lo0/2)), hi = Math.max(lo, Math.round(hi0/2));   // foods now heal half as much
   i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
 });
 function rollHeal(item){
@@ -2713,14 +3236,14 @@ function renderCraftInv(){
   if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
   const it = ITEM_BY_ID[sel.out], st = it.stats||{};
   const eff = st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: it.type==="armor"?itemEffectText(it): Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
-  det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p>` +
+  det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p><p><b>Sells for $${fmtMoney(it.sellPrice||0)}</b></p>` +
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
 }
 document.getElementById("btnCraft").addEventListener("click", async ()=>{
   const r = RECIPES.find(x=>x.id===state.selRecipe); if(!r) return;
   if(!canCraft(r)){ toast("You're missing ingredients."); return; }
-  const ok = await applyInvChanges({ remove:r.ing.map(([itemId,qty])=>({itemId,qty})), add:[{itemId:r.out, qty:1}] });
+  const ok = await applyInvChanges({ remove:r.ing.map(([itemId,qty])=>({itemId,qty})), add:[{itemId:r.out, qty:1}], strict:true });
   if(ok===null) return;
   toast(`Crafted ${ITEM_BY_ID[r.out].name}!`);
   renderCraftInv();
@@ -2861,7 +3384,6 @@ function renderPve(){
   });
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
-  add(b.lastMove==="counter" ? "Counter (cooldown)" : "Counter", "Negate an Attack/Slam and hit back 1.5x. Against Brace/Drain you take +30%. Beware feints! Can only be used every other turn.", ()=>pveAct("counter"), b.lastMove==="counter", "btn-blue");
   add("🍖 Eat", "Open your food bag and pick what to eat. Free action — does NOT end your turn.", openEatModal, false, "btn-green");
   add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
 }
@@ -2922,7 +3444,7 @@ async function pveFlee(){
 async function pveEnd(won){
   const b = state.battle, m = b.m; b.over = true; renderPve();
   if(won){
-    battleLogPush(`Victory! +${m.xpReward} XP, +$${m.moneyReward}.`);
+    battleLogPush(`Victory! +${m.xpReward} XP, +$${fmtMoney(m.moneyReward)}.`);
     await grantMoney(m.moneyReward); await grantXP(m.xpReward);
     if(Math.random()<m.dropChance){
       const pool = ITEM_BANK.filter(i=>i.element===m.element && i.type!=="consumable");
@@ -2933,7 +3455,7 @@ async function pveEnd(won){
   } else {
     battleLogPush("You were defeated…");
     const r = await applyDeathPenalty({ mana:b.mana });
-    toast(`Defeated. Lost $${r.moneyLoss}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+    toast(`Defeated. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
   }
   setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); state.battle=null; }, 1800);
 }
@@ -3136,7 +3658,7 @@ function watchDuelRoom(code){
         (fled ? withErrorToast(()=> updateDoc(doc(db,"players",state.uid), fin)).then(()=>null) : applyDeathPenalty({ mana: fin.mana })).then((res)=>{
           if(!res){ toast("You fled the duel — nothing lost."); return; }
           const {moneyLoss,lostItemName} = res;
-          const lossMsg = lostItemName ? `Lost $${moneyLoss} and your ${lostItemName}.` : `Lost $${moneyLoss}.`;
+          const lossMsg = lostItemName ? `Lost $${fmtMoney(moneyLoss)} and your ${lostItemName}.` : `Lost $${fmtMoney(moneyLoss)}.`;
           toast(`Duel lost. ${lossMsg}`);
           withErrorToast(()=> addDoc(collection(db,"players",d.winner,"inbox"), {
             type:"duel_won", amount: moneyLoss, itemName: lostItemName,
@@ -3399,7 +3921,7 @@ async function renderPlayerList(){
     rows.forEach(r=>{
       const d = r.data, el = document.createElement("div");
       el.className = "player-card"; el.style.background = ELEMENTS[d.archetype]?.color || "#FFFDF7";
-      el.innerHTML = `<b>${escapeHTML(d.username)}</b><span>Lv.${d.level||1} ${ELEMENTS[d.archetype]?.name||""} ${CLASSES[d.klass]?.name||""}</span>${friends.has(r.id)?"<em>★ Friend</em>":""}`;
+      el.innerHTML = `<b>${escapeHTML(d.username)}${onlineDot(d)}</b><span>Lv.${d.level||1} ${ELEMENTS[d.archetype]?.name||""} ${CLASSES[d.klass]?.name||""}</span>${friends.has(r.id)?"<em>★ Friend</em>":""}`;
       el.addEventListener("click", ()=> openProfileBook(r.id, d, null, null));
       list.appendChild(el);
     });

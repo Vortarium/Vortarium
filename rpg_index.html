@@ -225,7 +225,7 @@
     <div class="profile-stats" id="profileStats"></div>
     <p class="profile-rank" id="profileRank"></p>
     <div class="pay-box" id="payBox">
-      <input type="number" id="payAmount" min="1" placeholder="Amount to pay">
+      <input type="text" inputmode="text" id="payAmount" placeholder="Amount (e.g. 500 or 1.34k)">
       <div class="pay-quick"><button class="doodle-btn btn-sm" data-pay="1">+1</button><button class="doodle-btn btn-sm" data-pay="10">+10</button><button class="doodle-btn btn-sm" data-pay="100">+100</button><button class="doodle-btn btn-sm" data-pay="1000">+1000</button></div>
       <button class="doodle-btn btn-green btn-sm" id="btnPay">Pay</button>
     </div>
@@ -246,6 +246,7 @@
       <button class="tab-btn" data-ctab="chat">Chat</button>
       <button class="tab-btn" data-ctab="auction">Auction</button>
       <button class="tab-btn" data-ctab="craft">Craft</button>
+      <button class="tab-btn" data-ctab="farm">Farm</button>
       <button class="tab-btn" data-ctab="duel">Battle</button>
     </div>
 
@@ -266,12 +267,9 @@
 
     <div class="ctab-page" id="ctab-shop">
       <p class="doodle-sub" id="shopRegionLabel">Enchanted Forest Shop</p>
-      <div class="tool-shelf doodle-panel" id="toolShelf">
-        <p class="doodle-sub" style="margin:0 0 8px;">Job Tools</p>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyPickaxe">Pickaxe ($60, 3 uses)</button>
-        <button class="doodle-btn btn-sm btn-yellow" id="btnBuyRod">Fishing Rod ($60, 3 uses)</button>
-      </div>
+      <div class="tool-shelf doodle-panel" id="toolShelf"></div>
       <div class="shop-grid" id="shopGrid"></div>
+      <div class="shop-detail doodle-panel" id="shopDetail">Select an item to see what it does.</div>
     </div>
 
     <div class="ctab-page" id="ctab-chat">
@@ -292,6 +290,7 @@
         <div class="pm-layout">
           <ul class="pm-contacts" id="pmContacts"></ul>
           <div class="pm-thread">
+            <div class="dm-partner" id="dmPartner"></div>
             <div class="chat-log" id="chatLogPrivate"></div>
             <div class="dm-status" id="dmStatus"><div class="dm-bubble"></div></div>
             <form class="chat-input-row" id="privateChatForm">
@@ -323,8 +322,8 @@
       <div class="aucsub-page" id="aucsub-mine">
         <div class="post-form doodle-panel">
           <select id="postItemSelect"></select>
-          <input type="number" id="postQty" min="1" value="1" placeholder="Qty">
-          <input type="number" id="postPrice" min="1" placeholder="$ each">
+          <input type="number" id="postQty" min="1" step="1" value="1" placeholder="Qty">
+          <input type="text" inputmode="text" id="postPrice" placeholder="$ each (e.g. 1.34k)">
           <span id="postTotalLabel">Total: $0</span>
           <button class="doodle-btn btn-sm btn-green" id="btnPostAuction">Post</button>
         </div>
@@ -344,6 +343,24 @@
         <button class="doodle-btn btn-lg btn-blue" id="btnFightFriend">Challenge a Friend</button>
       </div>
       <div class="duel-panel doodle-panel" id="duelPanel"></div>
+    </div>
+
+    <div class="ctab-page" id="ctab-farm">
+      <p class="doodle-sub">Till → water → plant → harvest. Tilled soil lasts 3 days; water lasts 8 hours. Dry plants stop growing and start to die.</p>
+      <div class="farm-modes">
+        <button class="doodle-btn btn-sm active" data-fmode="inspect">👆 Inspect</button>
+        <button class="doodle-btn btn-sm" data-fmode="till">🪓 Hoe</button>
+        <button class="doodle-btn btn-sm" data-fmode="water">🚿 Water</button>
+        <button class="doodle-btn btn-sm" data-fmode="plant">🌱 Plant</button>
+        <button class="doodle-btn btn-sm" data-fmode="harvest">🧺 Harvest</button>
+        <button class="doodle-btn btn-sm" data-fmode="dig">🗑️ Dig up</button>
+        <button class="doodle-btn btn-sm btn-yellow" id="farmTillAll">Till all</button>
+        <button class="doodle-btn btn-sm btn-blue" id="farmWaterAll">Water all</button>
+      </div>
+      <div class="farm-bar"><span id="farmHint"></span><select id="farmSeedSelect" style="display:none"></select></div>
+      <div class="farm-grid" id="farmGrid"></div>
+      <div class="doodle-panel farm-tools" id="farmTools"></div>
+      <div class="doodle-panel farm-detail" id="farmDetail">Select a plot to see its details.</div>
     </div>
 
     <div class="ctab-page" id="ctab-craft">

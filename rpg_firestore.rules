@@ -52,6 +52,10 @@ service cloud.firestore {
       match /quests/{questId} {
         allow read, write: if isOwner(uid);
       }
+      // farm plots (players/{uid}/farm/plots) — private to the owner
+      match /farm/{docId} {
+        allow read, write: if isOwner(uid);
+      }
       match /inbox/{notifId} {
         allow read, update, delete: if isOwner(uid);
         // any signed-in player may notify another (friend requests,
