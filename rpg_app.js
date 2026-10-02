@@ -14,6 +14,7 @@ import {
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
   increment, serverTimestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { registerItems, addExpansionRecipes, buildPool, rollPool, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG } from "./rpg_content.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
@@ -28,6 +29,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+/* Phones/tablets (Android, iPhone, iPad incl. iPadOS that reports as a Mac) get a compact layout via body.is-mobile. */
+const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  || navigator.userAgentData?.mobile === true;
+if(IS_MOBILE) document.body.classList.add("is-mobile");
 
 /* Firebase Auth needs an email under the hood. Usernames are mapped to a
    synthetic address on the "players.dragoneer.game" domain so players only
@@ -57,6 +64,8 @@ function friendlyFirebaseError(err){
   { const m = String(err?.message||"");
     if(m==="inv-full") return "Your inventory is full — sell something or buy a bigger backpack.";
     if(m==="nomoney") return "Not enough money!";
+    if(m==="daily-claimed") return "You already claimed today's daily reward.";
+    if(m==="daily-changed") return "Your daily streak changed — reopen the Dailies tab and try again.";
     if(m==="backpack-owned") return "You already own that backpack (or a better one).";
     if(m.startsWith("backpack-order:")) return `You need Backpack Tier ${m.split(":")[1]} first — backpacks must be bought in order.`; }
   const code = err?.code || "";
@@ -335,6 +344,8 @@ JOB_ITEM_BANK.push(
 JOB_ITEM_BANK.filter(i=>i.id==="tool_pickaxe"||i.id==="tool_fishingrod").forEach(i=> i.desc+=" Breaks after 3 uses.");
 JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = Math.round(HEAL_BY_RARITY[i.rarity]*(i.id.startsWith("fish_")?0.6:1)));
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
+// Content expansion: 50 forageables, 30 minerals, 90 fish (see rpg_content.js)
+const CATALOG = registerItems(ITEM_BY_ID);
 
 /* ---------- farming + backpack items ---------- */
 // Hoes till 1 tile per use, watering cans water 1 tile per use. 5 durability tiers each.
@@ -626,7 +637,7 @@ function defaultPlayerDoc(username, archetype, klass){
     inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
     equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
-    friends: [], sentFriendRequests: [], createdAt: Date.now(),
+    friends: [], sentFriendRequests: [], privateSocial: false, createdAt: Date.now(),
     lastHpRegenTs: Date.now(), // used to catch up 10hp/hour regen even while the game was closed
     lastForageTs: 0, mineHourStart: 0, minePicksThisHour: 0, fishingXp: 0, miningXp: 0, foragingXp: 0
   };
@@ -952,7 +963,7 @@ function enterGame(){
     if(state.profile.banned){ forceBanLogout(); return; }   // an admin just banned you: logged out right now
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
-    if(document.getElementById("journalModal").classList.contains("active")) renderInventory();
+    if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); }
     if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
     // Keep music in sync with whatever region is actually on the player
     // doc — on first load (including re-signing in mid-session) and any
@@ -1000,6 +1011,7 @@ function renderHUD(){
   document.getElementById("statCHARM").textContent = p.stats.CHARM;
   document.getElementById("statSMARTS").textContent = p.stats.SMARTS;
   const bm=document.getElementById("bossMine"); if(bm) bm.textContent=fmtBig(p.bossDamage||0);
+  updateDailyDot();
 }
 function setBar(key, val, max){
   const pct = Math.max(0, Math.min(100, (val/max)*100));
@@ -1050,7 +1062,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -1382,7 +1394,7 @@ function openProfileBook(uid, data, rank, cat){
     Money: $${fmtMoney(data.money||0)}<br>
     Monsters Killed: ${data.monstersKilled||0}<br>
     PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}<br>
-    Friends: ${(data.friends||[]).length} &middot; Followers: <span id="profileFollowerCount">…</span><br>
+    Friends: <a class="social-link" id="profileFriendsLink">${(data.friends||[]).length}</a> &middot; Followers: <a class="social-link" id="profileFollowersLink"><span id="profileFollowerCount">…</span></a><br>
     Playtime: ${fmtPlaytime(data.playtime||0)}<div class="lb-bubbles" id="lbBubbles"></div>`;
   document.getElementById("profileRank").textContent = rank? `Ranked #${rank} in ${cat}` : "";
   const card = document.querySelector("#profileModal .book-card");
@@ -1401,6 +1413,12 @@ function openProfileBook(uid, data, rank, cat){
     const el = document.getElementById("profileFollowerCount");
     if(el) el.textContent = count;
   });
+  { const locked = !!data.privateSocial && uid!==state.uid;   // private lists: shown as locked, and re-checked live when clicked
+    [["friends","profileFriendsLink"],["followers","profileFollowersLink"]].forEach(([kind,id])=>{
+      const a = document.getElementById(id); if(!a) return;
+      a.classList.toggle("locked", locked); if(locked) a.append(" 🔒");
+      a.onclick = ()=> openSocialList(uid, kind);
+    }); }
 
   const pmBtn = document.getElementById("btnPM");
   const friendBtn = document.getElementById("btnFriendReq");
@@ -1747,7 +1765,12 @@ function renderRegionGrid(){
 const SHOP_SIZE = 6;
 const SEED_ROLL = { common:.40, uncommon:.28, rare:.18, epic:.10, legendary:.04 };
 const BACKPACK_ODDS = { 5:.02, 4:.04, 3:.06, 2:.09, 1:.12 };
-const dayIndex = ()=>{ const d=new Date(); return Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000); };
+/* Everything daily (shop stock for ALL regions + the Dailies path) rolls over at 12:00am US Eastern time,
+   for every player no matter where they live. (America/New_York, so it follows EST/EDT.) */
+const ET_DATE = new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit" });
+const ET_CLOCK = new Intl.DateTimeFormat("en-GB", { timeZone:"America/New_York", hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23" });
+const dayIndex = ()=>{ const [y,m,d] = ET_DATE.format(new Date()).split("-").map(Number); return Math.floor(Date.UTC(y,m-1,d)/86400000); };
+const msUntilEtMidnight = ()=>{ const [h,m,sec] = ET_CLOCK.format(new Date()).split(":").map(Number); return 86400000 - ((h*60+m)*60+sec)*1000; };
 let shopStockCache = { day:-1, stock:null };
 function shopStock(){
   const day = dayIndex();
@@ -1791,7 +1814,7 @@ function renderShopDetail(){
   document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
 }
 function renderShop(){
-  document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop — 6 items, new stock every day`;
+  document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop — 6 items, new stock every day at 12am ET`;
   const grid = document.getElementById("shopGrid");
   grid.innerHTML = "";
   shopItemsForRegion().forEach(item=>{
@@ -2125,11 +2148,11 @@ setInterval(()=>{
    ========================================================================= */
 function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(l) l.textContent=msg; }
 const toolIds = kind=> ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
-async function useTool(kind){
+async function useTool(kind, wear=1){
   const id = toolIds(kind).find(hasItem);
   if(!id){ toast(`You need a ${{pickaxe:"Pickaxe",fishingrod:"Fishing Rod",hoe:"Hoe",can:"Watering Can"}[kind]||kind} — buy one in the Shop.`); return false; }
   const uses = { ...(state.profile.toolUses||{}) };
-  const left = (uses[id] ?? TOOL_USES[id]) - 1;
+  const left = (uses[id] ?? TOOL_USES[id]) - wear;      // yellow mining wears 2, red mining wears 3
   if(left<=0){ delete uses[id]; await changeInvQty(id,-1); jobLog(`Your ${ITEM_BY_ID[id].name} broke!`); } else uses[id]=left;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { toolUses: uses }));
   return true;
@@ -2138,6 +2161,28 @@ function toolUsesLeft(kind){
   const id = toolIds(kind).find(hasItem);
   return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":"fishing rod"}`;
 }
+
+/* --- job modes: 🟢 green (normal) / 🟡 yellow (risky) / 🔴 red (extreme). Client-side choice, remembered on this device. --- */
+let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); return MODES[m] ? m : "green"; }catch{ return "green"; } })();
+const POOLS = { forage:{}, mine:{}, fish:{} };
+Object.keys(MODES).forEach(m=>{
+  POOLS.forage[m] = buildPool(CATALOG.forage.map(id=>ITEM_BY_ID[id]), RARITY_W.forage[m], "forage"+m);
+  POOLS.mine[m]   = buildPool(CATALOG.mineral.map(id=>ITEM_BY_ID[id]), RARITY_W.mine[m], "mine"+m);
+  POOLS.fish[m]   = buildPool(CATALOG.fish[FISH_RULES[m].tier].map(id=>ITEM_BY_ID[id]), RARITY_W.fish[m], "fish"+m);
+});
+function setJobMode(m){
+  if(!MODES[m]) return;
+  jobMode = m; try{ localStorage.setItem("dragoneer_jobmode", m); }catch{}
+  document.querySelectorAll("[data-jmode]").forEach(b=> b.classList.toggle("active", b.dataset.jmode===m));
+  const page = document.getElementById("ctab-jobs"); page.dataset.mode = m;
+  document.getElementById("jobModeDesc").textContent = `${MODES[m].emoji} ${MODES[m].blurb}`;
+  const mr = MINE_RULES[m];
+  document.getElementById("btnMine").title = `Uses ${mr.wear} durability`;
+  document.getElementById("btnFish").title = `${FISH_RULES[m].tier} fish`;
+  tickJobButtons();
+}
+document.querySelectorAll("[data-jmode]").forEach(b=> b.addEventListener("click", ()=> setJobMode(b.dataset.jmode)));
+
 document.getElementById("btnForage").addEventListener("click", doForageAction);
 document.getElementById("btnMine").addEventListener("click", doMineAction);
 // The compass has to hide while the fishing minigame is on screen (it would cover it),
@@ -2150,182 +2195,187 @@ document.getElementById("btnFish").addEventListener("click", async ()=>{
   await doFishAction();
   if(!fishGame){ reopenCompassIf(fishReopenCompass); fishReopenCompass = false; }   // couldn't start (no rod etc.)
 });
-setInterval(()=>{
+function tickJobButtons(){
   if(!state.profile) return;
   const r = forageReadyIn(), fb = document.getElementById("btnForage");
-  fb.disabled = r>0; fb.textContent = r>0 ? `Forage (${Math.ceil(r/1000)}s)` : "Forage";
+  fb.disabled = r>0; fb.textContent = r>0 ? `Forage (${fmtDur(r)})` : "Forage";
+  document.getElementById("btnMine").textContent = MINE_RULES[jobMode].wear>1 ? `Mine (−${MINE_RULES[jobMode].wear} 🔧)` : "Mine";
   document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")}`;
-}, 500);
+}
+setInterval(tickJobButtons, 500);
 function hasItem(itemId){ return (state.profile.inventory||[]).some(e=>e.itemId===itemId && e.qty>0); }
+const pluralize = (id, q)=> `${q>1?q+"× ":"a "}${ITEM_BY_ID[id].name}`;
 
-/* --- foraging (bush): free, once every 60s, 5% money / 45% item / 50% nothing --- */
-const FORAGE_COOLDOWN_MS = 20*1000;
-function forageReadyIn(){ return FORAGE_COOLDOWN_MS - (Date.now() - (state.profile.lastForageTs||0)); }
+/* --- foraging: free. Each mode has its OWN cooldown (20s / 5 min / 30 min) --- */
+const forageTsKey = m=> m==="green" ? "lastForageTs" : "lastForageTs_"+m;
+function forageReadyIn(m=jobMode){ return FORAGE_RULES[m].cooldown - (Date.now() - (state.profile[forageTsKey(m)]||0)); }
 async function doForageAction(){
-  if(forageReadyIn() > 0) return;
+  const m = jobMode, rule = FORAGE_RULES[m];
+  if(forageReadyIn(m) > 0) return;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
-    lastForageTs: Date.now(), foragingXp: (state.profile.foragingXp||0)+1
+    [forageTsKey(m)]: Date.now(), foragingXp: (state.profile.foragingXp||0)+1
   }));
-  const roll = Math.random();
-  if(roll < 0.05){
-    const amt = 5 + Math.floor(Math.random()*15);
-    await grantMoney(amt);
-    jobLog(`You found $${fmtMoney(amt)} in the bush!`);
-  } else if(roll < 0.50){
-    const pool = [...Array(10).fill("forage_berry"),...Array(4).fill("forage_mushroom"),...Array(3).fill("forage_herb"),"forage_apple","forage_apple","forage_truffle"];
-    const pick = Math.random()<0.01 ? "forage_goldapple" : pool[Math.floor(Math.random()*pool.length)];
-    await addItemToInv(pick, 1);
-    jobLog(`You foraged a ${ITEM_BY_ID[pick].name}!`);
-  } else {
-    jobLog("Nothing this time.");
-  }
+  if(Math.random() >= rule.chance){ jobLog("Nothing this time."); return; }
+  const n = rule.qty[0] + Math.floor(Math.random()*(rule.qty[1]-rule.qty[0]+1));
+  const got = {};
+  for(let i=0;i<n;i++){ const id = rollPool(POOLS.forage[m]); got[id] = (got[id]||0)+1; }
+  await applyInvChanges({ add:Object.entries(got).map(([itemId,qty])=>({itemId,qty})) });
+  jobLog(`You foraged ${Object.entries(got).map(([id,q])=>pluralize(id,q)).join(" and ")}!`);
 }
 
-/* --- mining (rocky cliff): 3 pulls per hour, needs a Pickaxe --- */
-const MINE_HOUR_MS = 60*60*1000;
-function minePicksLeft(){
-  const p = state.profile;
-  const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
-  return inWindow ? Math.max(0, 3-(p.minePicksThisHour||0)) : 3;
-}
+/* --- mining: needs a Pickaxe. Green = 50% reward / 50% hazard (1 durability); yellow = 2 durability; red = 3 durability --- */
+const MINE_NEG_APPLY = {
+  trap(p,u){ const loss = Math.round((p.money||0) * (0.03+Math.random()*0.07)); u.money = Math.max(0,(p.money||0)-loss); return loss ? `A trap! Lost $${fmtMoney(loss)}.` : "A trap! Luckily you had no money to lose."; },
+  cavein(p,u){ const l = Math.max(1,Math.round(p.hpMax*(0.05+Math.random()*0.10))); u.hp = Math.max(1,p.hp-l); return `Cave-in! Lost ${l} HP.`; },
+  gas(p,u){ const ml = Math.round((p.mana||0)*(0.20+Math.random()*0.20)), hl = Math.max(1,Math.round(p.hpMax*0.03)); u.mana = Math.max(0,(p.mana||0)-ml); u.hp = Math.max(1,p.hp-hl); return `Poison gas! Lost ${ml} mana and ${hl} HP.`; },
+  rockslide(p,u){ const ml = Math.round((p.money||0)*(0.02+Math.random()*0.03)), hl = Math.max(1,Math.round(p.hpMax*(0.03+Math.random()*0.05))); u.money = Math.max(0,(p.money||0)-ml); u.hp = Math.max(1,p.hp-hl); return `Rockslide! Lost $${fmtMoney(ml)} and ${hl} HP.`; }
+};
 async function doMineAction(){
-  if(!(await useTool("pickaxe"))) return;
-  const p = state.profile;
-  const inWindow = Date.now() - (p.mineHourStart||0) < MINE_HOUR_MS;
-  const hourStart = inWindow ? p.mineHourStart : Date.now();
-  const picks = inWindow ? (p.minePicksThisHour||0) : 0;
-  const roll = Math.random();
+  const m = jobMode, rule = MINE_RULES[m];
+  if(!(await useTool("pickaxe", rule.wear))) return;
+  const updates = { miningXp: (state.profile.miningXp||0)+1 };
   let msg;
-  const updates = { mineHourStart: hourStart, minePicksThisHour: picks+1, miningXp: (p.miningXp||0)+1 };
-  if(roll < 0.4){ // good
-    const pool = ["ore_copper","ore_iron","ore_coal","gem_quartz","ore_silver","ore_gold","gem_ruby","gem_sapphire","gem_emerald","gem_diamond","money"];
-    const w = [0.16,0.13,0.32,0.10,0.08,0.05,0.04,0.04,0.02,0.01,0.05];
-    let r = Math.random(), pick=pool[0], acc=0;
-    for(let i=0;i<pool.length;i++){ acc+=w[i]; if(r<=acc){ pick=pool[i]; break; } }
-    if(pick==="money"){
-      const amt = 20 + Math.floor(Math.random()*80);
-      updates.money = p.money + amt;
+  if(Math.random() < rule.pos){
+    if(Math.random() < MINE_CASH_SHARE){
+      const amt = rule.cash[0] + Math.floor(Math.random()*(rule.cash[1]-rule.cash[0]+1));
+      await grantMoney(amt);
       msg = `Found $${fmtMoney(amt)} under the rock!`;
     } else {
-      await addItemToInv(pick, 1);
-      msg = `Found a ${ITEM_BY_ID[pick].name}!`;
+      const id = rollPool(POOLS.mine[m]), qty = 1 + (Math.random()<rule.double ? 1 : 0);
+      await addItemToInv(id, qty);
+      msg = `Found ${pluralize(id, qty)}!`;
     }
-  } else if(roll < 0.75){ // neutral
-    const pool = ["ore_copper","ore_coal","ore_coal","forage_mushroom"];
-    const pick = pool[Math.floor(Math.random()*pool.length)];
-    await addItemToInv(pick, 1);
-    msg = `Just some ${ITEM_BY_ID[pick].name}.`;
-  } else { // negative
-    if(Math.random()<0.5){
-      const loss = Math.round(p.money * (0.03+Math.random()*0.07));
-      updates.money = Math.max(0, p.money - loss);
-      msg = `A trap! Lost $${fmtMoney(loss)}.`;
-    } else {
-      const hpLoss = Math.round(p.hpMax * (0.05+Math.random()*0.1));
-      updates.hp = Math.max(1, p.hp - hpLoss);
-      msg = `Ouch! Lost ${hpLoss} HP.`;
-    }
+  } else {
+    const total = MINE_NEG.reduce((s,n)=>s+n.w,0); let r = Math.random()*total, pick = MINE_NEG[0];
+    for(const n of MINE_NEG){ if((r-=n.w)<=0){ pick = n; break; } }
+    msg = MINE_NEG_APPLY[pick.id](state.profile, updates);
   }
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), updates));
   jobLog(msg);
 }
 
-/* --- fishing (pond): vertical hold-to-catch minigame, needs a Fishing Rod --- */
+/* --- fishing (pond): hold-to-catch minigame, needs a Fishing Rod.
+   The fish now has real behaviour: it swims toward a target, hovers, changes its mind,
+   and darts. Harder modes make it faster, twitchier, and shrink your catch bar. --- */
 let fishGame = null;
-// Each fish that bites gets a random speed trait — slow/medium/fast —
-// picked once per bite. Faster fish are harder to keep the bar on, but
-// bias the catch roll toward higher quality/rarity as a reward for landing one.
-const FISH_TRAITS = [
-  { id:"slow",   label:"slow",   weight:50, speedMult:0.6,  rarityBonus:0 },
-  { id:"medium", label:"medium", weight:35, speedMult:1.0,  rarityBonus:0.12 },
-  { id:"fast",   label:"fast",   weight:15, speedMult:1.6,  rarityBonus:0.28 }
-];
-function rollFishTrait(){
-  const total = FISH_TRAITS.reduce((s,t)=>s+t.weight,0);
-  let r = Math.random()*total;
-  for(const t of FISH_TRAITS){ if((r-=t.weight)<=0) return t; }
-  return FISH_TRAITS[0];
-}
 async function doFishAction(){
   if(fishGame) return;
+  const m = jobMode, rule = FISH_RULES[m];
   if(!(await useTool("fishingrod"))) return;
   if(fishGame) return;
-  document.getElementById("fishOverlay").classList.add("show");
-  const trait = rollFishTrait();
-  toast(`Something's biting — feels ${trait.label}!`);
+  const overlay = document.getElementById("fishOverlay");
+  overlay.classList.add("show");
+  toast(`${MODES[m].emoji} Something's biting — a ${rule.tier} fish!`);
   const track = document.querySelector(".fish-track-v");
-  const trackH = track.clientHeight || 260;
-  const barH = 64;
-  let barY = trackH - barH;
-  let vel = 0;
-  let held = false;
-  let progress = 0;
-  const progressNeeded = 100;
-  let fishY = Math.random()*(trackH-26);
-  let fishVel = (Math.random()<0.5?-1:1) * (0.6+Math.random()*0.8) * trait.speedMult;
-  const emojiEl = document.getElementById("fishEmoji");
-  const barEl = document.getElementById("fishBar");
-  const fillEl = document.getElementById("fishProgressFill");
+  const trackH = track.clientHeight || 260, barH = rule.bar, fishH = 26, maxFish = trackH - fishH;
+  let barY = trackH - barH, vel = 0, held = false, progress = 20, tick = 0;
+  let fishY = Math.random()*maxFish, target = fishY, pause = 0, dash = 0, dashDir = 1;
+  const emojiEl = document.getElementById("fishEmoji"), barEl = document.getElementById("fishBar"), fillEl = document.getElementById("fishProgressFill");
+  const timerEl = document.getElementById("fishTimer"), startedAt = Date.now();
+  barEl.style.height = barH+"px";
 
-  const holdOn = ()=> held = true;
-  const holdOff = ()=> held = false;
-  const keyDown = (e)=>{ if(e.code==="Space"){ e.preventDefault(); held=true; } };
-  const keyUp = (e)=>{ if(e.code==="Space"){ held=false; } };
-  track.addEventListener("mousedown", holdOn); track.addEventListener("touchstart", holdOn);
-  window.addEventListener("mouseup", holdOff); window.addEventListener("touchend", holdOff);
+  const down = e=>{ if(e.target.closest("#btnCancelFish")) return; held = true; };
+  const up = ()=>{ held = false; };
+  const keyDown = e=>{ if(e.code==="Space"){ e.preventDefault(); held = true; } };
+  const keyUp = e=>{ if(e.code==="Space") held = false; };
+  overlay.addEventListener("pointerdown", down);
+  window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
   window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp);
 
+  const newTarget = ()=>{
+    // 35%: a long dart across the bar, otherwise a shorter drift around the current spot
+    target = Math.random()<0.35 ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
+    if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
+  };
   const GRAVITY = 0.9, LIFT = -1.8, MAXV = 6;
-  fishGame = setInterval(()=>{
-    fishY += fishVel;
-    if(fishY < 0){ fishY = 0; fishVel = Math.abs(fishVel); }
-    if(fishY > trackH-26){ fishY = trackH-26; fishVel = -Math.abs(fishVel); }
-    if(Math.random()<0.03) fishVel = (Math.random()<0.5?-1:1) * (0.5+Math.random()*1.2) * trait.speedMult;
+  const game = fishGame = { id:null, cleanup:null };
+  game.id = setInterval(()=>{
+    tick++;
+    // --- fish AI ---
+    if(dash>0){ fishY += dashDir*rule.speed*3.2; dash--; if(fishY<=0||fishY>=maxFish){ dash = 0; } }
+    else if(pause>0){ pause--; fishY += Math.sin(tick/2)*0.8; }          // hovers and wobbles
+    else {
+      if(Math.random() < rule.jitter) newTarget();
+      if(Math.random() < rule.dash){ dash = 4 + Math.floor(Math.random()*5); dashDir = Math.random()<0.5 ? -1 : 1; }
+      const dist = target - fishY, step = rule.speed*(1 + Math.min(1.5, Math.abs(dist)/trackH*3));
+      if(Math.abs(dist) <= step){ fishY = target; newTarget(); } else fishY += Math.sign(dist)*step;
+    }
+    fishY = Math.max(0, Math.min(maxFish, fishY));
     emojiEl.style.top = fishY+"px";
+    emojiEl.style.transform = `translateX(${Math.sin(tick/3)*(dash>0?7:3)}px) scaleX(${dashDir<0 && dash>0 ? -1 : 1})`;
 
+    // --- your catch bar ---
     vel += held ? LIFT : GRAVITY;
     vel = Math.max(-MAXV, Math.min(MAXV, vel));
     barY += vel;
     if(barY < 0){ barY = 0; vel = 0; }
     if(barY > trackH-barH){ barY = trackH-barH; vel = 0; }
-    barEl.style.height = barH+"px";
     barEl.style.top = barY+"px";
 
-    const fishCenter = fishY + 13;
-    const inBar = fishCenter >= barY && fishCenter <= barY+barH;
-    progress += inBar ? 1.4 : -1.2;
-    progress = Math.max(0, Math.min(progressNeeded, progress));
+    const center = fishY + fishH/2, inBar = center >= barY && center <= barY+barH;
+    progress += inBar ? rule.gain : -rule.loss;
+    progress = Math.max(0, Math.min(100, progress));
     fillEl.style.height = progress+"%";
+    const left = Math.max(0, rule.time - (Date.now()-startedAt));
+    if(timerEl) timerEl.textContent = `${(left/1000).toFixed(1)}s`;
 
-    if(progress >= progressNeeded){ endFishing(true, trait); }
+    if(progress >= 100) endFishing(true, m);
+    else if(left <= 0) endFishing(false, m, true);          // the fish slips the hook on its own
   }, 50);
-  setTimeout(()=>{ if(fishGame) endFishing(false, trait); }, 15000);
-  fishGame.cleanup = ()=>{
-    track.removeEventListener("mousedown", holdOn); track.removeEventListener("touchstart", holdOn);
-    window.removeEventListener("mouseup", holdOff); window.removeEventListener("touchend", holdOff);
+  game.cleanup = ()=>{
+    overlay.removeEventListener("pointerdown", down);
+    window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
     window.removeEventListener("keydown", keyDown); window.removeEventListener("keyup", keyUp);
+    emojiEl.style.transform = "";
   };
 }
-async function endFishing(success, trait){
+async function endFishing(success, m=jobMode, timedOut=false){
   if(!fishGame) return;
-  clearInterval(fishGame); fishGame.cleanup?.(); fishGame = null;
+  clearInterval(fishGame.id); fishGame.cleanup?.(); fishGame = null;
   document.getElementById("fishOverlay").classList.remove("show");
   document.getElementById("fishProgressFill").style.height = "0%";
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   if(success){
-    // Roll is nudged up by the fish's speed trait — a fast bite is harder
-    // to reel in but skews the catch toward the rarer/higher-quality pools.
-    const roll = Math.min(0.999, Math.random() + (trait?.rarityBonus||0));
-    const pool = roll<0.55 ? ["fish_minnow"] : roll<0.85 ? ["fish_bass","fish_trout"] : roll<0.98 ? ["fish_swordfish"] : ["fish_golden"];
-    const pick = pool[Math.floor(Math.random()*pool.length)];
+    const pick = rollPool(POOLS.fish[m]);
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1 }));
-    jobLog(`Caught a ${ITEM_BY_ID[pick].name}!`);
+    jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
   } else {
-    jobLog("The fish got away.");
+    jobLog(timedOut ? "Too slow — the fish slipped off the hook!" : "The fish got away.");
   }
 }
 document.getElementById("btnCancelFish").addEventListener("click", ()=> endFishing(false));
+
+/* --- Chance Sheet: the exact odds behind every job, per mode --- */
+const pctText = p=> { const v = p*100; return (v>=10 ? v.toFixed(1) : v>=1 ? v.toFixed(2) : v.toFixed(3)) + "%"; };
+let chanceTab = "forage";
+function renderChanceSheet(){
+  const m = jobMode, box = document.getElementById("chanceBody"), head = document.getElementById("chanceHead");
+  document.querySelectorAll("[data-chancetab]").forEach(b=> b.classList.toggle("active", b.dataset.chancetab===chanceTab));
+  document.querySelectorAll("[data-cmode]").forEach(b=> b.classList.toggle("active", b.dataset.cmode===m));
+  const row = (name, rar, p, extra="")=> `<div class="chance-row rarity-${rar}"><span>${escapeHTML(name)}${extra}</span><em>${rar}</em><b>${pctText(p)}</b></div>`;
+  let html = "";
+  if(chanceTab==="forage"){
+    const r = FORAGE_RULES[m];
+    head.textContent = `🌿 Forage (${MODES[m].label}) — ${Math.round(r.chance*100)}% to find ${r.qty[0]===r.qty[1]?r.qty[0]:r.qty[0]+"–"+r.qty[1]} item${r.qty[1]>1?"s":""}, ${Math.round((1-r.chance)*100)}% nothing. Cooldown ${fmtDur(r.cooldown)}. Odds below are per item found (${CATALOG.forage.length} possible items).`;
+    html = row("Nothing", "common", 1-r.chance) + POOLS.forage[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, r.chance*e.p)).join("");
+  } else if(chanceTab==="mine"){
+    const r = MINE_RULES[m], negTotal = MINE_NEG.reduce((s,n)=>s+n.w,0);
+    head.textContent = `⛏️ Mine (${MODES[m].label}) — ${Math.round(r.pos*100)}% good / ${Math.round(r.neg*100)}% hazard. Uses ${r.wear} durability. ${r.double?`${Math.round(r.double*100)}% chance a mineral drops x2. `:""}${CATALOG.mineral.length} minerals.`;
+    html = `<div class="chance-sub">Good finds</div>` + row(`Cash ($${r.cash[0]}–$${r.cash[1]})`, "uncommon", r.pos*MINE_CASH_SHARE)
+      + POOLS.mine[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, r.pos*(1-MINE_CASH_SHARE)*e.p)).join("")
+      + `<div class="chance-sub">Hazards</div>` + MINE_NEG.map(n=> row(n.label, "epic", r.neg*n.w/negTotal, `<small> — ${n.desc}</small>`)).join("");
+  } else {
+    const r = FISH_RULES[m];
+    head.textContent = `🎣 Fish (${MODES[m].label}) — ${r.tier} fish, ${(r.time/1000)}s to land one. Odds below are per fish landed (${CATALOG.fish[r.tier].length} species).`;
+    html = POOLS.fish[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, e.p)).join("");
+  }
+  box.innerHTML = html;
+}
+document.getElementById("btnChanceSheet").addEventListener("click", ()=>{ renderChanceSheet(); openModal("chanceModal"); });
+document.querySelectorAll("[data-chancetab]").forEach(b=> b.addEventListener("click", ()=>{ chanceTab = b.dataset.chancetab; renderChanceSheet(); }));
+document.querySelectorAll("[data-cmode]").forEach(b=> b.addEventListener("click", ()=>{ setJobMode(b.dataset.cmode); renderChanceSheet(); }));
+setJobMode(jobMode);
 
 
 /* =========================================================================
@@ -3340,6 +3390,8 @@ const RECIPES = [];
   // gem elixirs
   ["gem_quartz_cut","gem_ruby_cut","gem_sapphire_cut","gem_emerald_cut","gem_diamond_cut"].forEach(g=>
     add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
+  // content expansion: smelting, gems, 18 more gear tiers, cooking, teas, potions (~400 recipes)
+  addExpansionRecipes(add, I, { RARITY_MULT, armorStats, cat:CATALOG });
 })();
 /* ---------- gear rebalance ----------
    Every armor piece gets its OWN stat line (no two pieces match), generated
@@ -3411,12 +3463,18 @@ function healRangeFor(it){
   if(id.startsWith("roast_")) return (id==="roast_forage_truffle"||id==="roast_forage_goldapple") ? [40,90] : [10,40];
   if(id==="forage_truffle") return [20,60];
   if(id==="forage_goldapple") return [40,100];
-  if(id.startsWith("forage_")) return [5,20];
+  if(id.startsWith("forage_")) return ({ rare:[20,60], epic:[40,90], legendary:[60,120] })[r] || [5,20];
   if(/(Potion|Elixir|Tonic|Draught|Brew)$/.test(it.name)) return [5,150];
   return [5,40];
 }
 Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
   i.stats = i.stats || {};
+  if(i.healFinal){   // potions define their exact heal range (b===0 means "no heal", e.g. mana potions)
+    const [a,b] = i.healFinal;
+    if(b>0){ i.stats.healMin = a; i.stats.healMax = b; i.stats.heal = Math.round((a+b)/2); }
+    else { delete i.stats.heal; delete i.stats.healMin; delete i.stats.healMax; }
+    return;
+  }
   const [lo0,hi0] = healRangeFor(i);
   const lo = Math.max(1, Math.round(lo0/2)), hi = Math.max(lo, Math.round(hi0/2));   // foods now heal half as much
   i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
@@ -4228,7 +4286,7 @@ document.getElementById("payAmount").addEventListener("input", (e)=>{
 // Notification toggles (ON = show popups, OFF = hide them). Saved on the player doc so they follow the account.
 const notifOn = k=> state.profile?.notifSettings?.[k] !== false;
 const NOTIF_BOXES = { chat:"notifChat", pay:"notifPay", auction:"notifAuction" };
-function syncNotifBoxes(){ Object.entries(NOTIF_BOXES).forEach(([k,id])=>{ const el=document.getElementById(id); if(el) el.checked = notifOn(k); }); }
+function syncNotifBoxes(){ Object.entries(NOTIF_BOXES).forEach(([k,id])=>{ const el=document.getElementById(id); if(el) el.checked = notifOn(k); }); const ps=document.getElementById("privateSocial"); if(ps) ps.checked = !!state.profile?.privateSocial; }
 Object.entries(NOTIF_BOXES).forEach(([k,id])=>{
   document.getElementById(id).addEventListener("change", (e)=>{
     withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [`notifSettings.${k}`]: e.target.checked }));
@@ -4322,6 +4380,188 @@ function spawnReaction(r){
 }
 window.addEventListener("pagehide", ()=>{ if(bossPending) flushBoss(); });
 document.getElementById("btnLeaveQueue").addEventListener("click", cancelQueue);
+
+
+/* =========================================================================
+   DAILIES — a path of day-nodes in the Journal. Claim one node per day (resets 12am ET,
+   same moment the shop rotates). Miss a day and the path resets to Day 1.
+   Every 4 days the pattern restarts, buffed: 💰 Money → 💎 Minerals → ⚔️ Weapon/Armor → 🛠️ Tool
+   ========================================================================= */
+const DAILY_CYCLE = [
+  { kind:"money",   icon:"💰", name:"Money" },
+  { kind:"mineral", icon:"💎", name:"Minerals" },
+  { kind:"gear",    icon:"⚔️", name:"Weapon / Armor" },
+  { kind:"tool",    icon:"🛠️", name:"Tool" }
+];
+// $10, $30, $80, $150, $250, then +$150 every round (capped at $3,000) — meaningful early, never runaway
+const MONEY_LADDER = [10,30,80,150,250];
+const dailyMoney = c=> c < MONEY_LADDER.length ? MONEY_LADDER[c] : Math.min(3000, 250 + (c-4)*150);
+// cheap stuff first (coal, copper…), climbing to gems and rare ores
+const MINERAL_STEPS = ["ore_coal","ore_copper","ore_tin","ore_iron","gem_garnet","ore_silver","gem_quartz","ore_gold","gem_amethyst","gem_sapphire","gem_ruby","ore_platinum","gem_emerald","ore_mithril","gem_opal","gem_diamond","ore_adamantite"];
+function dailyMinerals(c){
+  const lad = MINERAL_STEPS.filter(id=>ITEM_BY_ID[id]);
+  const p = Math.min(lad.length-1, c), distinct = Math.min(4, 1+Math.floor(c/3)), qty = Math.min(8, 2+Math.floor(c/2));
+  const out = [];
+  for(let j=0;j<distinct;j++){ const id = lad[Math.max(0,p-j*2)], ex = out.find(o=>o.itemId===id); if(ex) ex.qty += qty; else out.push({ itemId:id, qty }); }
+  return out;
+}
+const dailyRarityWeights = c=>{ const mu = Math.min(3.4, c*0.45); return RARITIES.map((r,i)=> Math.exp(-((i-mu)**2)/0.72)); };
+function dailyGearBand(c){
+  const w = dailyRarityWeights(c);
+  return RARITIES.map((r,i)=>({r,w:w[i]})).sort((a,b)=>b.w-a.w).slice(0,2).map(x=>x.r).sort((a,b)=>RARITIES.indexOf(a)-RARITIES.indexOf(b));
+}
+const gearByRarity = {};
+function rollDailyGear(c){
+  const w = dailyRarityWeights(c), sum = w.reduce((a,b)=>a+b,0);
+  let r = Math.random()*sum, rar = "common";
+  for(let i=0;i<RARITIES.length;i++){ if((r-=w[i])<=0){ rar = RARITIES[i]; break; } }
+  const pool = gearByRarity[rar] ||= Object.values(ITEM_BY_ID).filter(i=> (i.type==="weapon"||i.type==="armor") && i.rarity===rar);
+  return pool.length ? pool[Math.floor(Math.random()*pool.length)].id : null;
+}
+const DAILY_TOOL_KINDS = [["pickaxe",6],["fishingrod",6],["hoe",5],["can",5]];
+const dailyToolHi = c=> Math.min(6, 1+Math.floor(c*0.75));
+function rollDailyTool(c){
+  const [kind,cap] = DAILY_TOOL_KINDS[Math.floor(Math.random()*DAILY_TOOL_KINDS.length)];
+  const hi = Math.min(cap, dailyToolHi(c)), lo = Math.max(1, hi-1), tier = Math.random()<0.5 ? lo : hi;
+  const id = tier===1 ? "tool_"+kind : "tool_"+kind+tier;
+  return ITEM_BY_ID[id] ? id : "tool_"+kind;
+}
+const capWords = s=> s.charAt(0).toUpperCase()+s.slice(1);
+// What a day gives (previews for the path; rollDailyReward makes the real random picks at claim time)
+function dailyPlan(n){
+  const c = Math.floor((n-1)/4), slot = DAILY_CYCLE[(n-1)%4];
+  if(slot.kind==="money"){ const amt = dailyMoney(c); return { ...slot, short:`$${fmtMoney(amt)}`, text:`$${fmtMoney(amt)} cash` }; }
+  if(slot.kind==="mineral"){
+    const list = dailyMinerals(c), first = list[0];
+    return { ...slot, short: `${ITEM_BY_ID[first.itemId].name.replace(/ Ore$/,"")} ×${first.qty}${list.length>1?` +${list.length-1}`:""}`,
+      text: list.map(m=>`${m.qty}× ${ITEM_BY_ID[m.itemId].name}`).join(", ") };
+  }
+  if(slot.kind==="gear"){ const band = dailyGearBand(c); return { ...slot, short:"Gear", text:`A random ${band.map(capWords).join("/")} weapon or armor piece` }; }
+  const hi = dailyToolHi(c); return { ...slot, short:`Tool T${hi}`, text:`A random tool (tier ${Math.max(1,hi-1)}–${hi}): pickaxe, fishing rod, hoe or watering can` };
+}
+function rollDailyReward(n){
+  const c = Math.floor((n-1)/4), kind = DAILY_CYCLE[(n-1)%4].kind;
+  if(kind==="money"){ const amt = dailyMoney(c); return { money:amt, add:[], label:`$${fmtMoney(amt)}` }; }
+  if(kind==="mineral"){ const list = dailyMinerals(c); return { add:list, label:list.map(m=>`${m.qty}× ${ITEM_BY_ID[m.itemId].name}`).join(", ") }; }
+  const id = kind==="gear" ? rollDailyGear(c) : rollDailyTool(c);
+  return id ? { add:[{ itemId:id, qty:1 }], label:`${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})` } : { add:[], money:dailyMoney(c), label:`$${fmtMoney(dailyMoney(c))}` };
+}
+function dailyInfo(){
+  const d = state.profile?.dailies || {}, today = dayIndex();
+  const claimedToday = d.day===today, alive = d.day===today || d.day===today-1;
+  return { today, claimedToday, streak: alive ? (d.streak||0) : 0, missed: !alive && (d.streak||0) > 0 };
+}
+function updateDailyDot(){
+  if(!state.profile) return;
+  const open = !dailyInfo().claimedToday;
+  const dot = document.getElementById("dailyDot"); if(dot) dot.style.display = open ? "" : "none";
+  document.getElementById("btnJournal")?.classList.toggle("has-daily", open);
+}
+const fmtClock = ms=>{ const s = Math.max(0,Math.floor(ms/1000)); return [Math.floor(s/3600), Math.floor(s%3600/60), s%60].map(x=>String(x).padStart(2,"0")).join(":"); };
+function renderDailies(){
+  const page = document.getElementById("jtab-dailies");
+  if(!state.profile || !page || !page.classList.contains("active") || !document.getElementById("journalModal").classList.contains("active")) return;
+  const info = dailyInfo(), streak = info.streak, claimable = !info.claimedToday, focusN = claimable ? streak+1 : streak;
+  const startCycle = Math.floor((Math.max(1,focusN)-1)/4);
+  let html = "";
+  for(let c=startCycle; c<startCycle+3; c++){
+    html += `<div class="daily-round">Round ${c+1}${c>0?` <small>— buffed rewards</small>`:""}</div><div class="daily-row${c%2?" rev":""}">`;
+    for(let k=0;k<4;k++){
+      const n = c*4+k+1, plan = dailyPlan(n);
+      const cls = n<=streak ? "done" : n===streak+1 ? (claimable ? "today" : "tomorrow") : "locked";
+      if(k>0) html += `<span class="daily-link${n<=streak ? " done" : ""}"></span>`;
+      html += `<button class="daily-node ${cls}${n===streak&&info.claimedToday?" just":""}" data-n="${n}" title="${escapeHTML(plan.text)}"><span class="dn-day">Day ${n}</span><span class="dn-ico">${n<=streak?"✅":plan.icon}</span><span class="dn-rw">${escapeHTML(plan.short)}</span></button>`;
+    }
+    html += `</div>` + (c<startCycle+2 ? `<div class="daily-turn ${c%2?"l":"r"}"></div>` : "");
+  }
+  document.getElementById("dailyPath").innerHTML = html;
+  document.getElementById("dailyPath").querySelectorAll(".daily-node.today").forEach(b=> b.addEventListener("click", claimDaily));
+  document.getElementById("dailyHeader").textContent = info.missed
+    ? "You missed a day, so the path reset. Claim Day 1 to start a new streak."
+    : `🔥 Streak: ${streak} day${streak===1?"":"s"} — ${claimable ? "today's reward is ready!" : "claimed today. Come back tomorrow!"}`;
+  const next = streak+1, plan = dailyPlan(claimable ? next : next);
+  document.getElementById("dailyReward").innerHTML = `<b>${claimable?"Today":"Tomorrow"} — Day ${next}:</b> ${escapeHTML(plan.text)}`;
+  const btn = document.getElementById("btnDailyClaim");
+  btn.disabled = !claimable; btn.textContent = claimable ? `Claim Day ${next}` : "Claimed ✓";
+  tickDailyClock();
+}
+function tickDailyClock(){
+  const el = document.getElementById("dailyCountdown"); if(el) el.textContent = `New reward in ${fmtClock(msUntilEtMidnight())} (resets 12am ET)`;
+}
+let dailyBusy = false;
+async function claimDaily(){
+  if(dailyBusy || !state.profile) return;
+  const info = dailyInfo();
+  if(info.claimedToday){ toast("You already claimed today's reward — it resets at 12am ET."); return; }
+  const n = info.streak+1, rw = rollDailyReward(n), today = info.today;
+  dailyBusy = true;
+  try{
+    const ok = await applyInvChanges({ add:rw.add, strict:true }, d=>{
+      const dd = d.dailies || {};
+      if(dd.day===today) throw new Error("daily-claimed");
+      const streak = dd.day===today-1 ? (dd.streak||0)+1 : 1;
+      if(streak!==n) throw new Error("daily-changed");
+      return { dailies:{ day:today, streak }, ...(rw.money ? { money:(d.money||0)+rw.money } : {}) };
+    });
+    if(ok===null) return;
+    playSfx("buy"); toast(`🎁 Day ${n} claimed: ${rw.label}`, 6000, "toast-money");
+  } finally { dailyBusy = false; renderDailies(); updateDailyDot(); }
+}
+document.getElementById("btnDailyClaim").addEventListener("click", claimDaily);
+document.querySelector('[data-jtab="dailies"]').addEventListener("click", renderDailies);
+let seenEtDay = dayIndex();
+setInterval(()=>{
+  if(!state.profile) return;
+  if(document.getElementById("jtab-dailies").classList.contains("active")) tickDailyClock();
+  const d = dayIndex();
+  if(d!==seenEtDay){                       // midnight ET passed: dailies + every region's shop roll over
+    seenEtDay = d; updateDailyDot(); renderDailies();
+    if(document.getElementById("compassModal").classList.contains("active")) renderShop();
+    toast("🌅 It's a new day — fresh shop stock and a new daily reward!");
+  }
+}, 1000);
+
+/* =========================================================================
+   FRIENDS / FOLLOWERS LISTS (+ privacy setting)
+   ========================================================================= */
+async function openSocialList(uid, kind){
+  const title = document.getElementById("socialTitle"), list = document.getElementById("socialList");
+  title.textContent = kind==="friends" ? "Friends" : "Followers";
+  list.innerHTML = "<p class='doodle-sub'>Loading…</p>"; openModal("socialModal");
+  try{
+    const snap = await getDoc(doc(db,"players",uid)), d = snap.exists() ? snap.data() : {};   // fresh read, so a just-flipped privacy setting is respected
+    if(uid!==state.uid && d.privateSocial){ list.innerHTML = "<p class='doodle-sub'>🔒 This player keeps their friends and followers private.</p>"; return; }
+    const ids = (d.friends||[]).slice(0,100), rows = new Map();
+    (await Promise.all(ids.map(id=> getDoc(doc(db,"players",id)).catch(()=>null)))).forEach((s,i)=>{
+      if(s?.exists() && !s.data().banned) rows.set(ids[i], { data:s.data(), friend:true });
+    });
+    if(kind==="followers"){   // followers = friends + everyone with a friend request out to this player
+      const q = await getDocs(query(collection(db,"players"), where("sentFriendRequests","array-contains",uid)));
+      q.docs.forEach(x=>{ if(!x.data().banned && !rows.has(x.id)) rows.set(x.id, { data:x.data(), friend:false }); });
+    }
+    list.innerHTML = rows.size ? "" : `<p class='doodle-sub'>${kind==="friends" ? "No friends yet." : "No followers yet."}</p>`;
+    [...rows.entries()].sort((a,b)=> (b[1].data.level||0)-(a[1].data.level||0)).forEach(([id,r])=>{
+      const x = r.data, el = document.createElement("div");
+      el.className = "player-card"; el.style.background = ELEMENTS[x.archetype]?.color || "#FFFDF7";
+      el.innerHTML = `<b>${escapeHTML(x.username)}${onlineDot(x, id===state.uid)}</b><span>Lv.${x.level||1} ${ELEMENTS[x.archetype]?.name||""} ${CLASSES[x.klass]?.name||""}</span>${r.friend ? "<em>★ Friend</em>" : "<em>Follower</em>"}`;
+      el.addEventListener("click", ()=>{ closeModal("socialModal"); openProfileBook(id, x, null, null); });
+      list.appendChild(el);
+    });
+  }catch(e){ console.error(e); list.innerHTML = "<p class='doodle-sub'>Couldn't load that list.</p>"; }
+}
+document.getElementById("privateSocial").addEventListener("change", e=>{
+  withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { privateSocial: e.target.checked }));
+});
+
+/* =========================================================================
+   MOBILE: the "⋯" menu (Journal / Compass / Settings) in the compact header
+   ========================================================================= */
+{
+  const menu = document.getElementById("mobileMenu"), btn = document.getElementById("btnMobileMore");
+  btn.addEventListener("click", e=>{ e.stopPropagation(); menu.classList.toggle("open"); });
+  menu.querySelectorAll("[data-mm]").forEach(b=> b.addEventListener("click", ()=>{ menu.classList.remove("open"); document.getElementById(b.dataset.mm).click(); }));
+  document.addEventListener("click", e=>{ if(!e.target.closest("#mobileMenu") && !e.target.closest("#btnMobileMore")) menu.classList.remove("open"); });
+}
 
 setupDragonAnim();
 setTimeout(()=>{ showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }, 900);

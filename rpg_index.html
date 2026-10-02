@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Dragoneer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -109,12 +109,18 @@
     </div>
     <div class="header-center" id="accountSummary">
       <span class="acct-name" id="hudName">Adventurer</span>
-      <span class="acct-line">Lv. <b id="hudLevel">1</b> &middot; <span id="hudArchetype">Earth</span> <span id="hudClass">Warrior</span></span>
+      <span class="acct-line">Lv. <b id="hudLevel">1</b><span class="acct-sub"> &middot; <span id="hudArchetype">Earth</span> <span id="hudClass">Warrior</span></span></span>
       <span class="acct-money">$<span id="hudMoney">0</span></span>
       <span class="acct-mute" id="hudMute" style="display:none" title="You are muted — you can read chat but not talk, pay, friend-request or list auction items.">&#9203; <span id="hudMuteTime"></span></span>
     </div>
     <div class="header-right">
       <button class="icon-btn circle-btn" id="btnJournal" title="Journal">&#128214;</button>
+      <button class="icon-btn circle-btn mobile-more" id="btnMobileMore" title="Menu" aria-label="Menu">&#8943;</button>
+      <div class="mobile-menu doodle-panel" id="mobileMenu">
+        <button class="doodle-btn" data-mm="btnJournal">&#128214; Journal</button>
+        <button class="doodle-btn" data-mm="btnCompass">&#129517; Compass</button>
+        <button class="doodle-btn" data-mm="btnSettings">&#9881; Settings</button>
+      </div>
     </div>
   </header>
 
@@ -135,7 +141,8 @@
 
     <div id="fishOverlay" class="fish-overlay">
       <div class="fish-overlay-card doodle-panel">
-        <p class="doodle-sub">Hold Space (or click and hold) to pull the green bar onto the fish. Let go and it drops.</p>
+        <p class="doodle-sub">Hold Space (or press and hold anywhere) to lift the green bar onto the fish. Let go and it drops. Fish dart around — stay with it!</p>
+        <p class="fish-timer" id="fishTimer"></p>
         <div class="fish-track-v">
           <span class="fish-emoji-target" id="fishEmoji">🐟</span>
           <div class="fish-catchbar" id="fishBar"></div>
@@ -176,6 +183,7 @@
       <button class="tab-btn" data-jtab="leaderboard">Leaderboard</button>
       <button class="tab-btn" data-jtab="players">Friends</button>
       <button class="tab-btn" data-jtab="quests">Sidequests</button>
+      <button class="tab-btn" data-jtab="dailies">Dailies <span class="daily-dot" id="dailyDot" style="display:none">!</span></button>
     </div>
 
     <div class="jtab-page active" id="jtab-inventory">
@@ -214,6 +222,17 @@
 
     <div class="jtab-page" id="jtab-quests">
       <ul class="quest-list" id="questList"></ul>
+    </div>
+
+    <div class="jtab-page" id="jtab-dailies">
+      <p class="doodle-sub" id="dailyHeader"></p>
+      <p class="daily-legend">💰 Money → 💎 Minerals → ⚔️ Weapon/Armor → 🛠️ Tool → repeat, buffed. Miss a day and you start over at Day 1.</p>
+      <div class="daily-path" id="dailyPath"></div>
+      <div class="daily-reward doodle-panel" id="dailyReward"></div>
+      <div class="daily-foot">
+        <button class="doodle-btn btn-green btn-lg" id="btnDailyClaim">Claim</button>
+        <span class="daily-countdown" id="dailyCountdown"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -262,13 +281,19 @@
     </div>
 
     <div class="ctab-page" id="ctab-jobs">
-      <p class="doodle-sub">Gather goods to eat, sell or craft. Mining and fishing are unlimited, but tools break (basic = 3 uses). Foraging is free, every 20s.</p>
+      <div class="mode-row">
+        <button class="mode-dot mode-green active" data-jmode="green" title="Green: normal" aria-label="Green mode"></button>
+        <button class="mode-dot mode-yellow" data-jmode="yellow" title="Yellow: risky, better rewards" aria-label="Yellow mode"></button>
+        <button class="mode-dot mode-red" data-jmode="red" title="Red: extreme, best rewards" aria-label="Red mode"></button>
+      </div>
+      <p class="doodle-sub job-mode-desc" id="jobModeDesc"></p>
       <div class="job-row">
         <button class="doodle-btn btn-lg btn-green" id="btnForage">Forage</button>
         <button class="doodle-btn btn-lg btn-yellow" id="btnMine">Mine</button>
         <button class="doodle-btn btn-lg btn-blue" id="btnFish">Fish</button>
       </div>
       <div class="doodle-panel" id="jobToolStatus"></div>
+      <div class="job-row"><button class="doodle-btn btn-sm btn-blue" id="btnChanceSheet">&#128202; Chance Sheet</button></div>
       <p class="doodle-sub" id="jobLog"></p>
     </div>
 
@@ -382,6 +407,35 @@
   </div>
 </div>
 
+<!-- ================= FRIENDS / FOLLOWERS LIST ================= -->
+<div id="socialModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel social-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2" id="socialTitle">Friends</h2>
+    <div class="player-list" id="socialList"></div>
+  </div>
+</div>
+
+<!-- ================= CHANCE SHEET ================= -->
+<div id="chanceModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel chance-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2">Chance Sheet</h2>
+    <div class="tab-row">
+      <button class="tab-btn active" data-chancetab="forage">Forage</button>
+      <button class="tab-btn" data-chancetab="mine">Mine</button>
+      <button class="tab-btn" data-chancetab="fish">Fish</button>
+      <span class="mode-row mini">
+        <button class="mode-dot mode-green" data-cmode="green" aria-label="Green"></button>
+        <button class="mode-dot mode-yellow" data-cmode="yellow" aria-label="Yellow"></button>
+        <button class="mode-dot mode-red" data-cmode="red" aria-label="Red"></button>
+      </span>
+    </div>
+    <p class="doodle-sub chance-head" id="chanceHead"></p>
+    <div class="chance-body" id="chanceBody"></div>
+  </div>
+</div>
+
 <!-- ================= WELCOME BACK RECAP ================= -->
 <div id="recapModal" class="modal-backdrop">
   <div class="modal-card doodle-panel recap-card">
@@ -450,6 +504,7 @@
     <label class="doodle-check"><input type="checkbox" id="notifChat" checked> Chat notifications</label>
     <label class="doodle-check"><input type="checkbox" id="notifPay" checked> Pay notifications</label>
     <label class="doodle-check"><input type="checkbox" id="notifAuction" checked> Auction notifications</label>
+    <label class="doodle-check"><input type="checkbox" id="privateSocial"> Make my friends &amp; followers private</label>
     <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
 
     <hr class="danger-hr">

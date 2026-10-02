@@ -405,7 +405,7 @@ body{
 .mine-rock{ transition:transform .15s; }
 .mine-rock:hover{ transform:scale(1.1); }
 .fish-track-v{ position:relative; width:70px; height:260px; margin:0 auto 14px; background:#dcdcdc; border:2px solid var(--ink); border-radius:10px; overflow:hidden; }
-.fish-emoji-target{ position:absolute; left:0; right:0; text-align:center; font-size:26px; user-select:none; top:0; transition:top .08s linear; }
+.fish-emoji-target{ position:absolute; left:0; right:0; text-align:center; font-size:26px; user-select:none; top:0; transition:top .05s linear; }
 .fish-catchbar{ position:absolute; left:6px; right:6px; bottom:0; height:64px; background:rgba(46,204,113,.55); border:2px solid #27ae60; border-radius:6px; }
 .fish-progress-track{ position:absolute; right:4px; top:4px; bottom:4px; width:8px; background:#fff; border:2px solid var(--ink); border-radius:6px; overflow:hidden; }
 .fish-progress-fill{ position:absolute; left:0; right:0; bottom:0; height:0%; background:var(--yellow); transition:height .1s linear; }
@@ -685,3 +685,139 @@ body{
 .mute-box{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:center; margin:8px 0; }
 .mute-box input{ flex:1 1 180px; min-width:0; font-family:'Patrick Hand'; font-size:16px; padding:6px 10px; border:2px solid var(--ink); border-radius:8px; }
 .mute-box .mute-status{ flex:1 1 100%; margin:0; font-size:15px; text-align:center; }
+
+
+/* =========================================================================
+   NEW: job modes, chance sheet, dailies, social lists, fishing timer
+   ========================================================================= */
+.mode-row{display:flex; gap:16px; justify-content:center; align-items:center; margin:10px 0 4px;}
+.mode-row.mini{display:inline-flex; margin:0 0 0 auto; gap:8px;}
+.mode-dot{
+  width:46px; height:46px; border:3px solid var(--ink); cursor:pointer; padding:0;
+  border-radius:52% 48% 51% 49% / 48% 52% 49% 51%; box-shadow:3px 3px 0 rgba(74,63,53,.25);
+  opacity:.55; transition:transform .12s ease, opacity .12s ease;
+}
+.mode-row.mini .mode-dot{width:28px; height:28px; border-width:2.5px; box-shadow:2px 2px 0 rgba(74,63,53,.25);}
+.mode-green{background:#7ED36B;} .mode-yellow{background:#FFD84D;} .mode-red{background:#F0645C;}
+.mode-dot:hover{opacity:.85;}
+.mode-dot.active{opacity:1; transform:scale(1.15); outline:3px solid var(--ink); outline-offset:2px;}
+.job-mode-desc{text-align:center; min-height:50px; font-size:17px; margin:4px 0 0;}
+.fish-timer{font-family:'Caveat',cursive; font-size:26px; margin:0 0 6px; color:var(--ink);}
+.fish-overlay{touch-action:none; user-select:none; -webkit-user-select:none;}
+
+.chance-card{width:640px;}
+.chance-head{font-size:16px; margin:4px 0 8px;}
+.chance-body{max-height:48vh; overflow-y:auto; display:flex; flex-direction:column; gap:4px; padding:2px;}
+.chance-row{display:grid; grid-template-columns:1fr auto 78px; gap:8px; align-items:center; border:2px solid var(--ink-soft); border-radius:10px; padding:4px 10px; font-size:16px; background:#FBF6EC;}
+.chance-row em{font-size:13px; color:var(--ink-soft);} .chance-row b{text-align:right;} .chance-row small{color:var(--ink-soft); font-size:13px;}
+.chance-row.rarity-uncommon{background:var(--green);} .chance-row.rarity-rare{background:var(--blue);}
+.chance-row.rarity-epic{background:var(--purple);} .chance-row.rarity-legendary{background:var(--yellow);}
+.chance-sub{font-family:'Caveat',cursive; font-size:24px; margin-top:6px;}
+
+.daily-dot{display:inline-block; background:#E03131; color:#fff; border-radius:50%; width:18px; height:18px; font-size:13px; line-height:18px; text-align:center; margin-left:4px; font-family:'Patrick Hand',cursive;}
+#btnJournal.has-daily{position:relative;}
+#btnJournal.has-daily::after{content:""; position:absolute; top:-2px; right:-2px; width:14px; height:14px; border-radius:50%; background:#E03131; border:2px solid var(--ink);}
+.daily-legend{font-size:15px; color:var(--ink-soft); margin:2px 0 8px;}
+.daily-path{display:flex; flex-direction:column; align-items:stretch; margin:6px 0 10px;}
+.daily-round{font-family:'Caveat',cursive; font-size:24px; margin-top:6px;}
+.daily-row{display:flex; align-items:center; justify-content:space-between;}
+.daily-row.rev{flex-direction:row-reverse;}
+.daily-node{
+  width:98px; min-height:104px; border:3px solid var(--ink); border-radius:22px 26px 20px 24px; padding:6px 4px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; flex:0 0 auto;
+  font-family:'Patrick Hand',cursive; color:var(--ink); background:#EDE7DA; cursor:default; opacity:.8;
+}
+.daily-node .dn-day{font-size:14px; font-weight:700;} .daily-node .dn-ico{font-size:30px; line-height:1.1;}
+.daily-node .dn-rw{font-size:12px; text-align:center; line-height:1.15; overflow-wrap:anywhere;}
+.daily-node.done{background:var(--green); opacity:1;}
+.daily-node.tomorrow{background:#FFFDF7; border-style:dashed; opacity:1;}
+.daily-node.today{background:var(--yellow); opacity:1; cursor:pointer; outline:4px solid var(--ink); outline-offset:3px; animation:dailyPulse 1.4s ease-in-out infinite;}
+@keyframes dailyPulse{0%,100%{box-shadow:0 0 0 0 rgba(242,207,107,.9);} 50%{box-shadow:0 0 0 12px rgba(242,207,107,0);}}
+.daily-link{flex:1 1 auto; height:0; border-top:5px dotted var(--ink-soft); margin:0 4px;}
+.daily-link.done{border-top:5px solid var(--green-d);}
+.daily-turn{height:26px; display:flex; margin:0 49px;}
+.daily-turn::after{content:""; height:100%; border-left:5px dotted var(--ink-soft);}
+.daily-turn.r{justify-content:flex-end;} .daily-turn.l{justify-content:flex-start;}
+.daily-reward{margin:8px 0; font-size:17px;}
+.daily-foot{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+.daily-countdown{font-size:16px; color:var(--ink-soft);}
+
+.social-link{text-decoration:underline dotted; cursor:pointer; font-weight:700;}
+.social-link.locked{opacity:.7;}
+#socialModal{z-index:80;}
+.social-card{width:420px;}
+
+/* =========================================================================
+   MOBILE (body.is-mobile is added in JS for Android / iPhone / iPad)
+   ========================================================================= */
+.mobile-more, .mobile-menu{display:none;}
+.is-mobile{font-size:15px; -webkit-text-size-adjust:100%;}
+.is-mobile .doodle-btn, .is-mobile .circle-btn, .is-mobile .doodle-panel{filter:none;}   /* the wobble filter is heavy on phones */
+.is-mobile .doodle-btn{font-size:19px; padding:7px 14px;}
+.is-mobile .btn-lg{font-size:22px; padding:9px 18px;}
+.is-mobile .btn-sm{font-size:16px; padding:5px 10px;}
+.is-mobile .doodle-h1{font-size:36px;} .is-mobile .doodle-h2{font-size:28px;}
+.is-mobile .doodle-sub{font-size:16px;} .is-mobile .item-detail, .is-mobile .shop-detail{font-size:15px;}
+
+/* compact header: just name / level / money in the middle, "⋯" menu top-right */
+.is-mobile .game-header{top:max(6px, env(safe-area-inset-top)); left:6px; right:6px; padding:6px 52px 6px 12px; flex-direction:row; justify-content:center; align-items:center; min-height:48px;}
+.is-mobile .header-left, .is-mobile #btnJournal, .is-mobile .region-pill{display:none;}
+.is-mobile .header-center{flex-direction:row; flex-wrap:wrap; justify-content:center; align-items:baseline; gap:2px 10px; font-size:14px; line-height:1.2;}
+.is-mobile .acct-name{font-size:21px;} .is-mobile .acct-line{font-size:15px;} .is-mobile .acct-money{font-size:17px;}
+.is-mobile .acct-sub{display:none;} .is-mobile .acct-mute{font-size:12px;}
+.is-mobile .header-right{position:absolute; top:50%; right:8px; transform:translateY(-50%);}
+.is-mobile .mobile-more{display:flex; width:38px; height:38px; font-size:22px; padding:0;}
+.is-mobile .mobile-menu{display:none; position:absolute; top:calc(100% + 10px); right:0; flex-direction:column; gap:8px; padding:10px; min-width:170px; z-index:30;}
+.is-mobile .mobile-menu.open{display:flex;}
+.is-mobile .mobile-menu .doodle-btn{text-align:left; white-space:nowrap;}
+
+/* footer: every bar + every stat, always visible */
+.is-mobile .game-footer{left:6px; right:6px; bottom:max(6px, env(safe-area-inset-bottom)); flex-direction:row; align-items:stretch; gap:6px;}
+.is-mobile .compass-btn{display:none;}
+.is-mobile .footer-left{flex:1 1 auto; min-width:0; gap:3px; padding:6px 8px;}
+.is-mobile .footer-right{flex:0 0 auto; min-width:0; display:grid; grid-template-columns:auto auto; gap:2px 12px; padding:6px 10px; align-content:center;}
+.is-mobile .bar-row{font-size:12px; gap:4px;} .is-mobile .bar-row span:first-child{width:36px;}
+.is-mobile .bar{height:12px; border-width:2px; border-radius:7px;} .is-mobile .bar-num{font-size:11px; width:56px;}
+.is-mobile .stat-row{font-size:14px; gap:8px;}
+
+/* stage: dragon in the middle, reactions down the right-hand side */
+.is-mobile .game-stage{padding:64px 0 118px;}
+.is-mobile .boss-wrap{position:static; width:calc(100% - 128px); max-width:420px; gap:6px;}
+.is-mobile .boss-name{font-size:24px;} .is-mobile .boss-sub{font-size:12px;}
+.is-mobile .boss-dragon{max-width:100%;}
+.is-mobile .bossbar{height:24px;} .is-mobile .bossbar-num{font-size:13px;}
+.is-mobile .rx-row{position:absolute; right:8px; top:50%; transform:translateY(-50%); flex-direction:column; gap:10px; z-index:8;}
+.is-mobile .rx-btn{width:46px; height:46px; font-size:22px;}
+.is-mobile .rx-emoji{width:44px; height:44px; font-size:26px;}
+.is-mobile .queue-float{top:62px; right:8px; font-size:14px;}
+.is-mobile #toast-stack{top:64px; left:8px; right:8px; align-items:stretch;}
+.is-mobile .toast{font-size:15px; padding:8px 12px;}
+.is-mobile .fish-track-v{height:min(260px, 38vh);}
+
+/* modals: full-width cards, scrolling tab strips, no overlap */
+.is-mobile .modal-card{min-width:0; width:96vw; max-width:96vw; max-height:90vh; padding:12px; overflow-wrap:anywhere;}
+.is-mobile .journal-card, .is-mobile .compass-card, .is-mobile .battle-card, .is-mobile .chance-card, .is-mobile .social-card, .is-mobile .eat-card{width:96vw;}
+.is-mobile .tab-row, .is-mobile .tab-row.wrap{flex-wrap:nowrap; overflow-x:auto; gap:6px; padding:0 34px 4px 0; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.is-mobile .tab-row::-webkit-scrollbar{display:none;}
+.is-mobile .tab-btn{flex:0 0 auto; font-size:18px; padding:6px 12px; white-space:nowrap;}
+.is-mobile .tab-row .mode-row.mini{flex:0 0 auto; margin-left:10px;}
+.is-mobile .doodle-x{top:4px; right:8px; font-size:28px; z-index:3;}
+.is-mobile .inv-grid{grid-template-columns:repeat(3,1fr); gap:6px; min-height:0;}
+.is-mobile .inv-cell{min-height:66px; font-size:12px; padding:3px;}
+.is-mobile .equip-row{grid-template-columns:repeat(3,1fr); gap:6px;} .is-mobile .equip-slot{font-size:11px;}
+.is-mobile .shop-grid{grid-template-columns:repeat(2,1fr);} .is-mobile .region-grid{grid-template-columns:1fr;}
+.is-mobile .lb-cat-row, .is-mobile .chat-sub-row, .is-mobile .farm-modes{flex-wrap:wrap;}
+.is-mobile .lb-list li{font-size:16px; padding:6px 8px;}
+.is-mobile .pm-layout{flex-direction:column;} .is-mobile .pm-contacts{width:100%; max-height:110px;}
+.is-mobile .chat-log{height:200px; font-size:15px;} .is-mobile .chat-msg{max-width:88%;}
+.is-mobile .recipe-list{max-height:220px;}
+.is-mobile .farm-cell{min-height:84px; font-size:11px;} .is-mobile .farm-cell .fc-icon{font-size:22px;} .is-mobile .farm-cell .fc-name{font-size:12px;}
+.is-mobile .battle-arena{flex-direction:column; gap:6px;} .is-mobile .fighter{width:100%;} .is-mobile .fighter-sprite{font-size:40px;}
+.is-mobile .battle-log{height:110px;} .is-mobile .battle-actions .doodle-btn{flex:1 1 44%;}
+.is-mobile .rune-grid, .is-mobile .class-grid{grid-template-columns:repeat(2,1fr); gap:10px; margin:14px 0;}
+.is-mobile .doodle-form{width:100%;}
+.is-mobile .pay-quick{flex-wrap:wrap;}
+.is-mobile .mode-dot{width:40px; height:40px;}
+.is-mobile .chance-body{max-height:50vh;} .is-mobile .chance-row{font-size:14px; grid-template-columns:1fr auto 64px; gap:6px; padding:4px 8px;}
+.is-mobile .daily-node{width:21vw; min-height:88px;} .is-mobile .daily-node .dn-ico{font-size:24px;} .is-mobile .daily-node .dn-rw{font-size:11px;}
+.is-mobile .daily-turn{margin:0 calc(10.5vw - 2px);}
