@@ -52,6 +52,11 @@
   <audio id="sfx-buy" src="rpg_buy.mp3" preload="none"></audio>
   <audio id="sfx-sell" src="rpg_sell.mp3" preload="none"></audio>
   <audio id="sfx-levelup" src="rpg_levelup.mp3" preload="none"></audio>
+  <audio id="sfx-till" src="till.mp3" preload="none"></audio>
+  <audio id="sfx-send" src="send.mp3" preload="none"></audio>
+  <audio id="sfx-forage" src="forage.mp3" preload="none"></audio>
+  <audio id="sfx-mine" src="mine.mp3" preload="none"></audio>
+  <audio id="sfx-fish" src="fish.mp3" preload="none"></audio>
   <audio id="music-player" loop></audio>
 </section>
 
@@ -346,6 +351,11 @@
       </div>
       <div class="aucsub-page active" id="aucsub-browse">
         <div class="inv-grid" id="auctionGrid"></div>
+        <div class="page-nav" id="auctionNav" style="display:none">
+          <button class="doodle-btn btn-sm" id="aucPrev">&larr;</button>
+          <span id="aucPageLabel">Page 1</span>
+          <button class="doodle-btn btn-sm" id="aucNext">&rarr;</button>
+        </div>
         <div class="auction-detail doodle-panel" id="auctionDetail" style="display:none">
           <h3 id="aucDetailName"></h3>
           <p id="aucDetailMeta"></p>
@@ -505,6 +515,7 @@
     <label class="doodle-check"><input type="checkbox" id="notifPay" checked> Pay notifications</label>
     <label class="doodle-check"><input type="checkbox" id="notifAuction" checked> Auction notifications</label>
     <label class="doodle-check"><input type="checkbox" id="privateSocial"> Make my friends &amp; followers private</label>
+    <label class="doodle-check"><input type="checkbox" id="privateProfile"> Private profile (only friends can view it)</label>
     <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
 
     <hr class="danger-hr">
@@ -516,6 +527,30 @@
       <p class="doodle-error" id="deleteAccountError"></p>
       <button class="doodle-btn btn-block btn-danger" id="btnConfirmDeleteAccount">Yes, permanently delete my account</button>
     </div>
+  </div>
+</div>
+
+<!-- ================= FULL-BAG PICKUP MENU ================= -->
+<div id="overflowModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel overflow-card">
+    <button class="doodle-x" id="ovClose">&times;</button>
+    <h2 class="doodle-h2">🎒 Bag Full!</h2>
+    <p class="ov-hint">Sell something to make room. Items from the tower on the right move into empty slots automatically.</p>
+    <div class="inv-grid" id="ovInvGrid"></div>
+    <div class="page-nav">
+      <button class="doodle-btn btn-sm" id="ovInvPrev">&larr;</button>
+      <span id="ovInvLabel">Page 1</span>
+      <button class="doodle-btn btn-sm" id="ovInvNext">&rarr;</button>
+    </div>
+    <div class="item-detail doodle-panel" id="ovDetail">Tap an item in your bag to sell it and make room.</div>
+    <button class="doodle-btn btn-block btn-green" id="ovDone" style="margin-top:10px">Done (discard the rest)</button>
+  </div>
+  <div class="ov-side doodle-panel">
+    <div class="ov-side-title">Picked up</div>
+    <button class="doodle-btn btn-sm" id="ovUp">&#9650;</button>
+    <div class="ov-tower" id="ovTower"></div>
+    <button class="doodle-btn btn-sm" id="ovDown">&#9660;</button>
+    <div id="ovPageLabel" class="ov-page-label"></div>
   </div>
 </div>
 

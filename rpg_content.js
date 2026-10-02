@@ -108,9 +108,93 @@ const FISH_BLURB = {
   hard:   n=>`A ${n.toLowerCase()}: elusive, strong, and a real trophy catch.`
 };
 
+
+/* =========================================================================
+   GEAR — every weapon and armor piece in the game lives here.
+   100 weapons (20 per rarity) and 200 armor pieces (10 per body part per rarity).
+   Everything is explicit data + deterministic maths, so all players see identical items.
+   ========================================================================= */
+export const WEAPON_DAMAGE = {          // [lowest, highest] attack in each rarity; the 20 weapons are spread evenly across it
+  common:[1,10], uncommon:[10,25], rare:[15,40], epic:[20,50], legendary:[30,80]
+};
+const WEAPON_NAMES = {
+  common:["Wooden Club","Stone Dagger","Sharpened Stick","Rusty Sword","Hunting Knife","Short Bow","Wooden Staff","Hand Axe","Slingshot","Bone Club",
+          "Flint Spear","Farmer's Pitchfork","Iron Nail Bat","Cracked Mace","Fishing Spear","Practice Sword","Cudgel","Woodcutter's Axe","Reed Blowgun","Hatchet"],
+  uncommon:["Iron Sword","Steel Dagger","Oak Longbow","Battle Axe","Spiked Mace","Hunter's Spear","Bronze Rapier","Ash Staff","Iron Cleaver","Silver-Tipped Bow",
+            "Warhammer","Brass Knuckles","Sailor's Cutlass","Throwing Axe","Tempered Shortsword","Crossbow","Guardsman's Halberd","Birch Wand","Scimitar","Morning Star"],
+  rare:["Enchanted Blade","Frostbite Dagger","Flameforged Axe","Stormcaller Bow","Moonsilver Spear","Thunder Mace","Runed Staff","Venomfang Dagger","Knight's Claymore","Windrunner Rapier",
+        "Emberstrike Hammer","Tidal Trident","Shadowstep Katana","Crystal Wand","Ironbark Greataxe","Sunfire Scimitar","Hawkeye Longbow","Stonebreaker Maul","Glacier Pike","Phantom Chakram"],
+  epic:["Dragonbone Sword","Voidpiercer Dagger","Inferno Greataxe","Tempest Warbow","Celestial Spear","Earthshaker Warhammer","Archmage Staff","Nightshade Katana","Soulreaver Scythe","Stormbringer Blade",
+        "Obsidian Claymore","Leviathan Trident","Wyrmtooth Rapier","Starfall Wand","Titan's Cleaver","Bloodmoon Axe","Hellfire Crossbow","Frostfang Glaive","Thornlord Mace","Aether Chakram"],
+  legendary:["Dragoneer's Edge","Sunforged Greatsword","Worldsplitter Axe","Eclipse Dagger","Heavenfall Spear","Ragnarok Hammer","Staff of Eternity","Phoenix Longbow","Voidlord's Scythe","Kraken's Wrath Trident",
+             "Starlight Rapier","Doomcaller Mace","Primordial Katana","Wand of Creation","Oblivion Blade","Titanbane Glaive","Stormking's Warbow","Elderwyrm Fang","Ashen Crown Cleaver","Moonfall Chakram"]
+};
+const ARMOR_MATERIALS = {
+  common:["Burlap","Leather","Wooden","Hide","Padded","Linen","Reed","Bone","Tin","Rawhide"],
+  uncommon:["Studded","Chainmail","Bronze","Iron","Hardened","Oakbark","Wolfhide","Brass","Scaled","Ringed"],
+  rare:["Steel","Silvered","Frostforged","Emberweave","Moonlit","Stormhide","Ironbark","Crystal","Jade","Shadowsilk"],
+  epic:["Dragonscale","Obsidian","Mithril","Voidweave","Starforged","Wyrmhide","Thunderplate","Bloodsteel","Celestial","Abyssal"],
+  legendary:["Adamantine","Divine","Eternal","Elderwyrm","Worldforged","Sunsteel","Eclipse","Primordial","Titanbone","Dragoneer's"]
+};
+const ARMOR_NOUNS = {   // the 10 pieces of each body part (index j = tier within the rarity, weakest to strongest)
+  helmet:    ["Cap","Hood","Helm","Coif","Visor","Cowl","Circlet","Mask","Crown","Greathelm"],
+  chestplate:["Vest","Tunic","Jerkin","Cuirass","Breastplate","Hauberk","Mantle","Brigandine","Plate","Chestguard"],
+  leggings:  ["Trousers","Leggings","Greaves","Chaps","Legguards","Cuisses","Pants","Kilt","Legwraps","Tassets"],
+  boots:     ["Sandals","Boots","Shoes","Treads","Sabatons","Stompers","Walkers","Slippers","Striders","Footguards"]
+};
+const ARMOR_RANGES = {   // [min stat, max stat, min max-HP, max max-HP] across the 10 pieces of a body part
+  common:[1,2,3,8], uncommon:[1,3,6,14], rare:[2,4,10,22], epic:[3,6,16,32], legendary:[4,8,25,50]
+};
+const ARMOR_FAV = { helmet:["SMARTS","CHARM","SMARTS","SPEED"], chestplate:["STRENGTH","STRENGTH","SMARTS","CHARM"],
+                    leggings:["SPEED","SPEED","STRENGTH","CHARM"], boots:["SPEED","CHARM","SPEED","STRENGTH"] };
+const GEAR_STATS = ["SPEED","STRENGTH","CHARM","SMARTS"];
+const ELEMENT_KEYS = ["fire","water","earth","air"];
+const WEAPON_PRICE_BASE = { common:12, uncommon:30, rare:70, epic:150, legendary:320 };
+const ARMOR_PRICE_BASE  = { common:40, uncommon:100, rare:260, epic:650, legendary:1600 };
+export const GEAR_SHOP_WEIGHT = { common:1, uncommon:.6, rare:.3, epic:.12, legendary:.05 };   // rarer gear turns up less in shops and drops
+
+/* Registers all 300 pieces in ITEM_BY_ID (I). Returns their ids. `fixedStats` keeps the
+   gear-rebalance pass in rpg_app.js from touching their numbers. */
+function registerGear(I){
+  const ids = { weapon:[], armor:[] };
+  const seen = new Set();
+  R.forEach((rar, ri)=>{
+    const [lo,hi] = WEAPON_DAMAGE[rar];
+    WEAPON_NAMES[rar].forEach((name, i)=>{
+      const id = `wpn_${rar}_${i+1}`, attack = Math.round(lo + (hi-lo)*i/19);
+      const price = Math.round(WEAPON_PRICE_BASE[rar] + attack*5);
+      I[id] = { id, name, type:"weapon", rarity:rar, element:ELEMENT_KEYS[(i+ri)%4], price, sellPrice:Math.max(1,Math.round(price*0.35)),
+        desc:`${rar==="epic"?"An":"A"} ${rar} weapon. Deals ${attack} damage.`, stats:{ attack }, fixedStats:true };
+      ids.weapon.push(id);
+    });
+    const [smin,smax,hmin,hmax] = ARMOR_RANGES[rar];
+    Object.keys(ARMOR_NOUNS).forEach((slot, si)=>{
+      for(let j=0;j<10;j++){
+        const id = `arm_${rar}_${slot}_${j+1}`, t = j/9, fav = ARMOR_FAV[slot];
+        const main = Math.round(smin + (smax-smin)*t), stat = fav[j%4];
+        const out = { hp: Math.round(hmin + (hmax-hmin)*t) };
+        out[stat] = main;
+        if(j%3===2){                                   // every third piece is a trade-off: a bit less of another stat for more HP
+          const other = GEAR_STATS.filter(k=>k!==stat)[(j+si)%3];
+          out[other] = -Math.max(1, Math.round(main/3)); out.hp += Math.round((hmax-hmin)/9);
+        }
+        const sig = o=> `${slot}|${rar}|${o.hp}|` + GEAR_STATS.map(k=>o[k]||0).join("|");
+        let guard = 0; while(seen.has(sig(out)) && guard++ < 200) out.hp += 1;     // no two pieces of a body part share a stat line
+        seen.add(sig(out));
+        const name = `${ARMOR_MATERIALS[rar][j]} ${ARMOR_NOUNS[slot][j]}`;
+        const price = Math.round(ARMOR_PRICE_BASE[rar]*(0.7+0.06*j));
+        I[id] = { id, name, type:"armor", armorSlot:slot, rarity:rar, element:ELEMENT_KEYS[(j+si+ri)%4], price, sellPrice:Math.max(1,Math.round(price*0.35)),
+          desc:`${rar[0].toUpperCase()+rar.slice(1)} ${slot} armor. Wearing it shifts your stats.`, stats:out, fixedStats:true };
+        ids.armor.push(id);
+      }
+    });
+  });
+  return ids;
+}
+
 /* Registers every new item in ITEM_BY_ID (I) and returns the catalog of ids. */
 export function registerItems(I){
-  const cat = { forage:[...FORAGE_LEGACY], mineral:[...MINERAL_LEGACY], fish:{ easy:[], medium:[], hard:[] } };
+  const cat = { forage:[...FORAGE_LEGACY], mineral:[...MINERAL_LEGACY], fish:{ easy:[], medium:[], hard:[] }, gear:registerGear(I) };
   FORAGE_NEW.forEach(([s,name,type,rarity,sell,desc])=>{
     const id = "forage_"+s;
     if(!I[id]) I[id] = { id, name, type, rarity, sellPrice:sell, desc, stats:{} };
@@ -132,24 +216,27 @@ export function registerItems(I){
       cat.fish[tier].push(id);
     });
   });
+  cat.gearAll = [...cat.gear.weapon, ...cat.gear.armor];
   return cat;
 }
 
 /* ---------- job modes: green = normal, yellow = risky, red = extreme ---------- */
 export const MODES = {
-  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (20s cooldown). Mine: 50% reward / 50% hazard, 1 durability. Fish: easy fish." },
-  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, fewer hazards. Fish: medium fish." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, fewest hazards. Fish: hard fish." }
+  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 50% reward / 50% hazard, 1 durability, 1 mineral. Fish: easy fish." },
+  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 50% hazard. Fish: medium fish." },
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 50% hazard. Fish: hard fish." }
 };
 export const FORAGE_RULES = {
-  green:  { chance:.50, qty:[1,1], cooldown:20*1000 },
+  green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
   yellow: { chance:.75, qty:[1,2], cooldown:5*60*1000 },
   red:    { chance:.90, qty:[1,3], cooldown:30*60*1000 }
 };
+// Every mode: always exactly 1 mineral (double:0) and the SAME 50% hazard chance.
+// Higher modes only cost more durability and shift the gem rarity odds (see RARITY_W).
 export const MINE_RULES = {
-  green:  { pos:.50, neg:.50, wear:1, double:0,   cash:[20,100] },
-  yellow: { pos:.70, neg:.30, wear:2, double:.25, cash:[50,220] },
-  red:    { pos:.85, neg:.15, wear:3, double:.50, cash:[100,450] }
+  green:  { pos:.50, neg:.50, wear:1, double:0, cash:[20,100] },
+  yellow: { pos:.50, neg:.50, wear:2, double:0, cash:[50,220] },
+  red:    { pos:.50, neg:.50, wear:3, double:0, cash:[100,450] }
 };
 export const MINE_CASH_SHARE = 0.08;     // share of "good" swings that turn up cash instead of a mineral
 export const FISH_RULES = {
@@ -161,9 +248,10 @@ export const FISH_RULES = {
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
 export const RARITY_W = {
-  forage: { green:{common:50,uncommon:28,rare:14,epic:6,legendary:2}, yellow:{common:28,uncommon:33,rare:24,epic:11,legendary:4}, red:{common:12,uncommon:28,rare:33,epic:20,legendary:7} },
-  mine:   { green:{common:55,uncommon:28,rare:12,epic:4,legendary:1}, yellow:{common:30,uncommon:33,rare:24,epic:10,legendary:3}, red:{common:12,uncommon:25,rare:33,epic:22,legendary:8} },
-  fish:   { green:{common:55,uncommon:30,rare:12,epic:3,legendary:0}, yellow:{common:10,uncommon:35,rare:35,epic:17,legendary:3}, red:{common:0,uncommon:5,rare:35,epic:40,legendary:20} }
+  forage: { green:{common:78,uncommon:16,rare:4.5,epic:1.2,legendary:.3}, yellow:{common:66,uncommon:22,rare:9,epic:2.4,legendary:.6}, red:{common:54,uncommon:26,rare:13,epic:5,legendary:2} },
+  mine:   { green:{common:80,uncommon:15,rare:4,epic:.8,legendary:.2},    yellow:{common:68,uncommon:21,rare:8,epic:2.4,legendary:.6}, red:{common:56,uncommon:25,rare:12,epic:5,legendary:2} },
+  // fish tiers only contain some rarities (easy has no legendary, hard has no common/uncommon) — absent rarities are skipped and the rest re-normalised
+  fish:   { green:{common:70,uncommon:22,rare:6.5,epic:1.5,legendary:0}, yellow:{common:50,uncommon:32,rare:13,epic:4.2,legendary:.8}, red:{common:0,uncommon:0,rare:72,epic:22,legendary:6} }
 };
 export const MINE_NEG = [
   { id:"trap",      label:"Hidden trap",   w:30, desc:"Lose 3–10% of your money" },

@@ -821,3 +821,54 @@ body{
 .is-mobile .chance-body{max-height:50vh;} .is-mobile .chance-row{font-size:14px; grid-template-columns:1fr auto 64px; gap:6px; padding:4px 8px;}
 .is-mobile .daily-node{width:21vw; min-height:88px;} .is-mobile .daily-node .dn-ico{font-size:24px;} .is-mobile .daily-node .dn-rw{font-size:11px;}
 .is-mobile .daily-turn{margin:0 calc(10.5vw - 2px);}
+
+
+/* ---------- full-bag pickup menu ---------- */
+.overflow-card{width:520px;}
+.ov-hint{margin:4px 0 10px; font-size:15px;}
+.ov-side{
+  position:fixed; right:14px; top:50%; transform:translateY(-50%); z-index:5;
+  width:128px; padding:10px 8px; display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+.ov-side-title{font-weight:700; font-size:15px;}
+.ov-tower{display:flex; flex-direction:column; gap:8px; width:100%;}
+.ov-tower .inv-cell{min-height:72px; font-size:13px;}
+.ov-tower .inv-cell.ov-empty{opacity:.35; background:transparent;}
+.ov-page-label{font-size:13px;}
+.ov-side button:disabled{opacity:.4; cursor:default;}
+@media (max-width:760px){
+  .overflow-card{width:calc(96vw - 104px); margin-right:100px;}
+  .ov-side{right:4px; width:92px; padding:6px 4px;}
+  .ov-tower .inv-cell{min-height:60px; font-size:11px;}
+}
+.is-mobile .overflow-card{width:calc(96vw - 104px); max-width:none; margin-right:100px;}
+.is-mobile .ov-side{right:4px; width:92px; padding:6px 4px;}
+
+
+/* ---------- unread red dots ---------- */
+.has-unread{position:relative;}
+.has-unread::after{
+  content:""; position:absolute; top:-4px; right:-4px; width:13px; height:13px; border-radius:50%;
+  background:#E63946; border:2px solid #fff; box-shadow:0 0 0 1px var(--ink,#333); pointer-events:none; z-index:2;
+}
+.tab-btn.has-unread::after, .chat-sub.has-unread::after{top:3px; right:3px;}
+.pm-contacts li.has-unread::after{position:static; display:inline-block; vertical-align:middle; margin-left:8px;}
+
+/* ---------- private profile ---------- */
+.profile-locked{text-align:center; padding:18px 8px;}
+.profile-locked .lock-big{font-size:64px; line-height:1;}
+.profile-locked p{font-size:20px; margin:10px 0 0;}
+
+/* ---------- gold / silver / copper ranks ---------- */
+:root{ --rank-gold:#E6B800; --rank-silver:#9AA3AD; --rank-copper:#B8692E; }
+.lb-list li.rank-gold{color:var(--rank-gold); font-weight:700;}
+.lb-list li.rank-silver{color:var(--rank-silver); font-weight:700;}
+.lb-list li.rank-copper{color:var(--rank-copper); font-weight:700;}
+.lb-list li.rank-gold:hover, .lb-list li.rank-silver:hover, .lb-list li.rank-copper:hover{color:var(--ink,#222);}
+.profile-rank.rank-gold{color:var(--rank-gold); font-weight:700;}
+.profile-rank.rank-silver{color:var(--rank-silver); font-weight:700;}
+.profile-rank.rank-copper{color:var(--rank-copper); font-weight:700;}
+.lb-bubble.rank-gold{background:#FFE066; border-color:var(--rank-gold); color:#6B5200; font-weight:700;}
+.lb-bubble.rank-silver{background:#E3E7EB; border-color:var(--rank-silver); color:#4A525A; font-weight:700;}
+.lb-bubble.rank-copper{background:#F0C9A6; border-color:var(--rank-copper); color:#6B3A14; font-weight:700;}
+.lb-bubble.rank-plain{background:#fff; color:var(--ink,#222);}
