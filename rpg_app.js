@@ -14,6 +14,7 @@ import {
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
   increment, serverTimestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, describeSkill } from "./rpg_skilltree.js";
 import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG } from "./rpg_content.js";
 
 const firebaseConfig = {
@@ -554,7 +555,7 @@ function setupDragonAnim(){
 const musicEl = () => document.getElementById("music-player");
 function playSfx(name){
   if(state.settings.muteSfx) return;
-  const el = document.getElementById(`sfx-${name}`); if(!el) return;
+  const el = document.getElementById(`sfx-${name}`); if(!el) return;   // files are named rpg_<name>.mp3 (see index.html)
   // a fresh Audio per play, so repeated sounds overlap instead of restarting
   const a = new Audio(el.currentSrc || el.src); a.volume = el.volume;
   a.addEventListener("ended", ()=> a.remove?.()); a.play().catch(()=>{});
@@ -939,7 +940,7 @@ renderClassGrid();
 function resetSessionUI(){
   farm.plots = null; farm.loaded = false; farm.sel = null; farm.seedSig = "";
   state.profile = null; state.recapPromise = null; state.battle = null;
-  ["recapModal","eatModal","battleModal","journalModal","compassModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
+  ["recapModal","eatModal","battleModal","journalModal","compassModal","skillModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
 }
 function cleanupSubs(){
   stopPresence(); stopOnlineBeat();
@@ -1010,6 +1011,7 @@ function renderHUD(){
   document.getElementById("statSMARTS").textContent = p.stats.SMARTS;
   const bm=document.getElementById("bossMine"); if(bm) bm.textContent=fmtBig(p.bossDamage||0);
   updateDailyDot();
+  updateSkillUI();
 }
 function setBar(key, val, max){
   const pct = Math.max(0, Math.min(100, (val/max)*100));
@@ -1816,6 +1818,115 @@ async function claimQuest(slotKey){
   toast(`Quest reward claimed!${quest.moneyReward?` +$${fmtMoney(quest.moneyReward)}`:""}`);
   renderQuests();
 }
+
+
+/* =========================================================================
+   SKILL TREE (⭐ button next to the Compass)
+   Every level = +1 skill token. Own ONE node per row; buying one locks the
+   rest of its row and unlocks the next. Tokens left = level − tokens spent.
+   ========================================================================= */
+function ownedSkills(p){ return (p && Array.isArray(p.skillNodes)) ? p.skillNodes.map(id=>SKILL_BY_ID[id]).filter(Boolean) : []; }
+function skillDamage(p){ return ownedSkills(p).reduce((a,n)=> a + (n.kind==="D" ? n.val : 0), 0); }
+function skillTokensLeft(p){ return Math.max(0, (p.level||1) - ownedSkills(p).reduce((a,n)=>a+n.cost,0)); }
+function skillNodeState(p, n){
+  const owned = new Set(p.skillNodes||[]);
+  if(owned.has(n.id)) return "owned";
+  const list = SKILL_NODES[n.el];
+  if(list.some(m=>m.row===n.row && owned.has(m.id))) return "locked";            // another node in this row was taken
+  if(n.row>1){
+    const prev = list.find(m=>m.row===n.row-1 && owned.has(m.id));
+    if(!prev) return "locked";                                                  // previous row not bought yet
+    if(n.parent && n.parent!==prev.id) return "locked";                         // not on the path you are following
+  }
+  return "available";
+}
+let skillSel = null;
+const skillOpen = ()=> document.getElementById("skillModal").classList.contains("active");
+function updateSkillUI(){
+  const p = state.profile; if(!p) return;
+  const left = p.archetype ? skillTokensLeft(p) : 0, b = document.getElementById("starBadge");
+  if(b){ b.textContent = left; b.style.display = left>0 ? "" : "none"; }
+  if(skillOpen()) renderSkillTree();
+}
+function skillShort(n){ return n.kind==="A" ? `New attack · ${n.mana} mana` : describeSkill(n).replace("Max ",""); }
+function renderSkillTree(){
+  const p = state.profile; if(!p || !p.archetype) return;
+  const el = p.archetype, tree = SKILL_TREES[el], card = document.getElementById("skillCard");
+  card.className = `modal-card doodle-panel skill-card sk-${el}`;
+  document.getElementById("skillTitle").textContent = `${tree.icon} ${tree.title}`;
+  document.getElementById("skillSub").textContent = tree.sub;
+  document.getElementById("skillTokens").textContent = `⭐ ${skillTokensLeft(p)}`;
+  const scroll = document.getElementById("skillScroll"), keep = scroll.scrollTop, board = document.getElementById("skillBoard");
+  board.innerHTML = '<svg class="sk-lines" id="skLines"></svg>';
+  tree.rows.forEach((_, r)=>{
+    const row = document.createElement("div"); row.className = "sk-row";
+    const nm = tree.rowNames[r+1];
+    row.innerHTML = `<div class="sk-rowlabel">ROW ${r+1}${nm ? " — "+nm : ""}</div>`;
+    const box = document.createElement("div"); box.className = "sk-nodes";
+    SKILL_NODES[el].filter(n=>n.row===r+1).forEach(n=>{
+      const st = skillNodeState(p, n), b = document.createElement("button");
+      b.className = `sk-node ${st}${n.kind==="A"?" attack":""}${skillSel===n.id?" sel":""}`; b.dataset.node = n.id;
+      b.innerHTML = `<b>${n.name}</b><span>${skillShort(n)}</span><em>${st==="owned" ? "✔ owned" : n.cost+" ⭐"}</em>`;
+      b.addEventListener("click", ()=>{ skillSel = n.id; renderSkillTree(); });
+      box.appendChild(b);
+    });
+    row.appendChild(box); board.appendChild(row);
+  });
+  scroll.scrollTop = keep;
+  drawSkillLines(el);
+  renderSkillDetail();
+}
+function drawSkillLines(el){
+  const board = document.getElementById("skillBoard"), svg = document.getElementById("skLines"); if(!board||!svg) return;
+  const br = board.getBoundingClientRect(); if(!br.width) return;
+  const owned = new Set(state.profile.skillNodes||[]), at = id=> board.querySelector(`[data-node="${id}"]`);
+  let out = "";
+  SKILL_NODES[el].forEach(n=>{
+    // Fire is linked node-to-node; the other trees just show the trunk between rows you have unlocked.
+    const parents = n.parent ? [n.parent] : (n.row>1 && !SKILL_TREES[el].linked ? SKILL_NODES[el].filter(m=>m.row===n.row-1).map(m=>m.id) : []);
+    parents.forEach(pid=>{
+      const a = at(pid), b = at(n.id); if(!a||!b) return;
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const hot = owned.has(pid) && owned.has(n.id);
+      out += `<line x1="${ra.left+ra.width/2-br.left}" y1="${ra.bottom-br.top}" x2="${rb.left+rb.width/2-br.left}" y2="${rb.top-br.top}" stroke="${hot?"#4A3F35":"#4A3F35"}" stroke-width="${hot?5:2}" stroke-dasharray="${hot?"":"6 6"}" opacity="${hot?0.9:0.25}"/>`;
+    });
+  });
+  svg.innerHTML = out;
+}
+function renderSkillDetail(){
+  const p = state.profile, d = document.getElementById("skillDetail"), n = skillSel && SKILL_BY_ID[skillSel];
+  if(!n || n.el!==p.archetype){ d.textContent = "Tap a node to read what it does. You can only follow one path — one node per row."; return; }
+  const st = skillNodeState(p, n), left = skillTokensLeft(p);
+  let note = st==="owned" ? "You own this node." : st==="locked" ? "Locked — you can only build one path (one node per row, following the row above)."
+           : left<n.cost ? `Not enough tokens — you have ${left}, need ${n.cost}.` : "Ready to unlock.";
+  d.innerHTML = `<div><div class="sd-name">${n.name}</div><div>${describeSkill(n)}</div><div class="sd-note">Cost: ${n.cost} ⭐ · Row ${n.row} · ${note}</div></div>`;
+  if(st==="available"){
+    const btn = document.createElement("button"); btn.className = "doodle-btn btn-green"; btn.textContent = `Unlock (${n.cost} ⭐)`; btn.disabled = left<n.cost;
+    btn.addEventListener("click", ()=> buySkill(n)); d.appendChild(btn);
+  }
+}
+async function buySkill(n){
+  await withErrorToast(async ()=>{
+    const ref = doc(db,"players",state.uid);
+    await runTransaction(db, async tx=>{
+      const snap = await tx.get(ref), p = snap.data();                       // re-check against the saved data, not the screen
+      if(p.archetype!==n.el) throw new Error("That node is not in your archetype's tree.");
+      if(skillNodeState(p, n)!=="available") throw new Error("That node is locked.");
+      if(skillTokensLeft(p) < n.cost) throw new Error("Not enough skill tokens.");
+      const u = { skillNodes: [ ...(p.skillNodes||[]), n.id ] };
+      if(n.kind==="H"){ u.hpMax = p.hpMax+n.val; u.hp = Math.min(u.hpMax, p.hp+n.val); }
+      if(n.kind==="M"){ u.manaMax = p.manaMax+n.val; u.mana = Math.min(u.manaMax, p.mana+n.val); }
+      tx.update(ref, u);
+    });
+    playSfx("buy");
+    toast(n.kind==="A" ? `⚔️ New attack unlocked: ${n.name}!` : `⭐ Unlocked ${n.name} (${describeSkill(n)})`);
+  });
+}
+document.getElementById("btnSkills").addEventListener("click", ()=>{
+  if(!state.profile || !state.profile.archetype){ toast("Pick an archetype first."); return; }
+  openModal("skillModal"); renderSkillTree();
+});
+window.addEventListener("resize", ()=>{ if(skillOpen()) renderSkillTree(); });
 
 /* =========================================================================
    COMPASS: MAP / SHOP / CHAT / AUCTION / BATTLE / CRAFT
@@ -3740,7 +3851,7 @@ function pickEnemy(difficulty){
 function playerAttackPower(){
   const p = state.profile;
   const weapon = p.equipped.weapon && ITEM_BY_ID[p.equipped.weapon];
-  return 4 + p.stats.STRENGTH*1.5 + p.stats.SMARTS + (weapon?.stats.attack||0);
+  return 4 + p.stats.STRENGTH*1.5 + p.stats.SMARTS + (weapon?.stats.attack||0) + skillDamage(p);
 }
 /* Skill-based attacks: Space = basic attack, number keys 1-4 in the open
    world trigger the others (see WORLD section). Kept from the old menu
@@ -3755,7 +3866,13 @@ const ATTACK_SKILLS = [
   { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:12,
     dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 12 mana. Devastating hit." },
 ];
-function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || ATTACK_SKILLS[0]; }
+function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || treeAttacks(state.profile).find(s=>s.id===id) || ATTACK_SKILLS[0]; }
+/* Skill-tree attacks (Firebolt, Cyclone, ...) join the normal attack list once bought. */
+function treeAttacks(p){
+  return ownedSkills(p).filter(n=>n.kind==="A").map(n=>({ id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, flatDmg:n.val,
+    dmgMult:()=>1, desc:`Skill tree attack. Costs ${n.mana} mana. Deals +${n.val} damage compared with a basic attack.` }));
+}
+function knownAttacks(p){ return [ ...ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel), ...treeAttacks(p) ]; }
 // Mana regenerates 1 point/minute while the world is loaded. Persisted to
 // Firestore, not just local state, so it survives navigating away.
 let manaRegenInterval=null;
@@ -3858,7 +3975,7 @@ function renderPve(){
     el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip; el.disabled = !!disabled;
     el.addEventListener("click", fn); box.appendChild(el);
   };
-  ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel).forEach(s=>{
+  knownAttacks(p).forEach(s=>{
     add(s.name, s.desc, ()=>pveAct(s.id), false);
   });
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
@@ -3874,7 +3991,7 @@ async function pveAct(move){
   // Guard and Counter have a 1-turn cooldown: greyed out the turn right after you use them.
   if((move==="guard"||move==="counter") && b.lastMove===move){ toast(`${move==="guard"?"Guard":"Counter"} is on cooldown.`); b.busy=false; return; }
   // Other moves are never greyed out; ones you can't afford just tell you why (and don't use your turn).
-  const sk = ATTACK_SKILLS.find(x=>x.id===move);
+  const sk = [...ATTACK_SKILLS, ...treeAttacks(p)].find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
   b.lastMove = move;
@@ -3888,7 +4005,7 @@ async function pveAct(move){
     if(s.needsFullRage) b.rage = 0;
     if(s.manaCost) b.mana -= s.manaCost;
     else if(s.id==="basic") b.rage = Math.min(p.rageMax, b.rage+1);
-    let d = playerAttackPower()*s.dmgMult()*rnd()*(b.focus?2:1);
+    let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
     if(brace && s.id!=="precision") d*=0.4;
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
     battleLogPush(`You use ${s.name}: ${d} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
@@ -4170,7 +4287,7 @@ function openDuelBattle(code, d){
      Mana:  +1 every turn, +2 more if their last move was Guard, +5 more if it was Skip
      Rage:  +1 for an attack, +2 for a Power Strike or Guard */
 function turnMana(last){ return 1 + (last==="guard" ? 2 : last==="skip" ? 5 : 0); }
-function turnRage(last){ return last==="guard" || last==="power" ? 2 : (last && ATTACK_SKILLS.some(s=>s.id===last)) ? 1 : 0; }
+function turnRage(last){ return last==="guard" || last==="power" ? 2 : (last && (ATTACK_SKILLS.some(s=>s.id===last) || String(last).startsWith("tree_"))) ? 1 : 0; }
 function renderDuelBattle(d){
   const b = state.battle;
   b.d = d;                                   // latest room data (used by the Eat overlay)
@@ -4206,7 +4323,7 @@ function renderDuelBattle(d){
     el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;   // greyed when it isn't your turn (or Guard on cooldown)
     el.addEventListener("click", fn || (()=> duelAct(d, id))); actions.appendChild(el);
   };
-  ATTACK_SKILLS.filter(s=>pp.level>=s.unlockLevel).forEach(s=>
+  knownAttacks(pp).forEach(s=>
     addBtn(s.id, s.name, s.desc + (s.id==="power" ? " Gives +2 Rage when your turn returns." : " Gives +1 Rage when your turn returns."), false, "btn-pink"));
   addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit. When your turn returns: +2 Rage and +2 Mana. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
@@ -4246,7 +4363,7 @@ async function duelActInner(d, move){
     if((s.needsFullRage && rage<rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
     if(s.needsFullRage) rage = 0;
     if(s.manaCost) mana -= s.manaCost;
-    let dmg = playerAttackPower()*s.dmgMult()*rnd()*(myFx.focus?2:1); myFx.focus = false;
+    let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= 0.35;
     dmg = Math.max(1, Math.round(dmg)); opHp -= dmg;
     lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);

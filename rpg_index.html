@@ -52,11 +52,11 @@
   <audio id="sfx-buy" src="rpg_buy.mp3" preload="none"></audio>
   <audio id="sfx-sell" src="rpg_sell.mp3" preload="none"></audio>
   <audio id="sfx-levelup" src="rpg_levelup.mp3" preload="none"></audio>
-  <audio id="sfx-till" src="till.mp3" preload="none"></audio>
-  <audio id="sfx-send" src="send.mp3" preload="none"></audio>
-  <audio id="sfx-forage" src="forage.mp3" preload="none"></audio>
-  <audio id="sfx-mine" src="mine.mp3" preload="none"></audio>
-  <audio id="sfx-fish" src="fish.mp3" preload="none"></audio>
+  <audio id="sfx-till" src="rpg_till.mp3" preload="none"></audio>
+  <audio id="sfx-send" src="rpg_send.mp3" preload="none"></audio>
+  <audio id="sfx-forage" src="rpg_forage.mp3" preload="none"></audio>
+  <audio id="sfx-mine" src="rpg_mine.mp3" preload="none"></audio>
+  <audio id="sfx-fish" src="rpg_fish.mp3" preload="none"></audio>
   <audio id="music-player" loop></audio>
 </section>
 
@@ -123,6 +123,7 @@
       <button class="icon-btn circle-btn mobile-more" id="btnMobileMore" title="Menu" aria-label="Menu">&#8943;</button>
       <div class="mobile-menu doodle-panel" id="mobileMenu">
         <button class="doodle-btn" data-mm="btnJournal">&#128214; Journal</button>
+        <button class="doodle-btn" data-mm="btnSkills">&#11088; Skill Tree</button>
         <button class="doodle-btn" data-mm="btnCompass">&#129517; Compass</button>
         <button class="doodle-btn" data-mm="btnSettings">&#9881; Settings</button>
       </div>
@@ -168,7 +169,10 @@
       <div class="bar-row"><span>XP</span><div class="bar bar-xp"><div class="bar-fill" id="barXP"></div></div><span class="bar-num" id="numXP">0/10</span></div>
     </div>
 
-    <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
+    <div class="footer-center">
+      <button class="icon-btn circle-btn compass-btn star-btn" id="btnSkills" title="Skill Tree">&#11088;<span class="star-badge" id="starBadge" style="display:none">0</span></button>
+      <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
+    </div>
 
     <div class="footer-right doodle-panel">
       <div class="stat-row"><span>SPD</span><b id="statSPEED">0</b></div>
@@ -263,6 +267,19 @@
       <p class="mute-status" id="muteStatus"></p>
     </div>
     <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
+  </div>
+</div>
+
+<!-- ================= SKILL TREE MODAL ================= -->
+<div id="skillModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel skill-card" id="skillCard">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <div class="skill-head">
+      <div><div class="skill-title doodle-h2" id="skillTitle">Skill Tree</div><p class="doodle-sub" id="skillSub"></p></div>
+      <div class="skill-tokens" id="skillTokens" title="Skill tokens: +1 per level">&#11088; 0</div>
+    </div>
+    <div class="skill-scroll" id="skillScroll"><div class="skill-board" id="skillBoard"></div></div>
+    <div class="skill-detail" id="skillDetail">Tap a node to read what it does.</div>
   </div>
 </div>
 

@@ -872,3 +872,43 @@ body{
 .lb-bubble.rank-silver{background:#E3E7EB; border-color:var(--rank-silver); color:#4A525A; font-weight:700;}
 .lb-bubble.rank-copper{background:#F0C9A6; border-color:var(--rank-copper); color:#6B3A14; font-weight:700;}
 .lb-bubble.rank-plain{background:#fff; color:var(--ink,#222);}
+
+
+/* ---------- skill tree ---------- */
+.footer-center{display:flex; gap:12px; align-items:flex-end;}
+.star-btn{position:relative;}
+.star-badge{position:absolute; top:-8px; right:-6px; min-width:24px; height:24px; padding:0 6px; border-radius:12px; background:#E85D5D; color:#fff; border:2px solid var(--ink); font-size:15px; line-height:20px; text-align:center;}
+.skill-card{width:min(780px,95vw); height:88vh; overflow:hidden; display:flex; flex-direction:column; padding-bottom:10px;}
+.skill-head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding-right:40px;}
+.skill-title{font-size:34px; line-height:1.1;}
+.skill-tokens{font-size:26px; border:3px solid var(--ink); border-radius:16px; background:#FFF3B8; padding:4px 14px; white-space:nowrap; box-shadow:3px 3px 0 rgba(74,63,53,.25);}
+.skill-scroll{flex:1; overflow-y:auto; margin:8px 0; border:3px solid var(--ink); border-radius:14px; background:var(--sk-bg,#fffdf7);}
+.skill-board{position:relative; padding:14px 10px 30px; display:flex; flex-direction:column; gap:18px;}
+.skill-board svg.sk-lines{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:0;}
+.sk-row{position:relative; z-index:1;}
+.sk-rowlabel{font-size:17px; color:var(--ink-soft); text-align:center; margin-bottom:6px; letter-spacing:1px;}
+.sk-nodes{display:flex; justify-content:center; gap:12px; flex-wrap:wrap;}
+.sk-node{font-family:inherit; cursor:pointer; width:150px; min-height:84px; padding:8px 6px; color:var(--ink);
+  border:3px solid var(--ink); background:var(--sk-node,#fff); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  box-shadow:3px 3px 0 rgba(74,63,53,.25); transition:transform .12s, box-shadow .12s, opacity .2s;}
+.sk-node b{font-size:19px; line-height:1.05;} .sk-node span{font-size:16px;} .sk-node em{font-style:normal; font-size:14px; color:var(--ink-soft);}
+.sk-node:hover{transform:translate(-1px,-2px) scale(1.04);}
+.sk-node.sel{outline:4px solid var(--ink); outline-offset:2px;}
+.sk-node.available{background:var(--sk-avail,#FFF3B8); animation:skPulse 1.6s ease-in-out infinite;}
+.sk-node.owned{background:var(--sk-owned,#9BE08F); box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 14px 4px var(--sk-glow,#ffd24a);}
+.sk-node.locked{opacity:.42; filter:grayscale(.7);}
+.sk-node.attack{width:190px; min-height:104px; border-width:4px; border-color:#B8860B; background-image:linear-gradient(135deg,rgba(255,215,0,.35),transparent);}
+.sk-node.attack b::before{content:"\2694\FE0F "; }
+.skill-detail{border:3px solid var(--ink); border-radius:14px; background:#FFFEFA; padding:8px 12px; font-size:20px; min-height:84px; display:flex; justify-content:space-between; align-items:center; gap:12px;}
+.skill-detail .sd-name{font-size:26px; line-height:1.1;} .skill-detail .sd-note{font-size:17px; color:var(--ink-soft);}
+@keyframes skPulse{0%,100%{box-shadow:3px 3px 0 rgba(74,63,53,.25);}50%{box-shadow:3px 3px 0 rgba(74,63,53,.25),0 0 14px 3px var(--sk-glow,#ffd24a);}}
+/* per-archetype looks */
+.sk-fire{--sk-bg:linear-gradient(#fff1e4,#ffd9c2 60%,#ffb199); --sk-node:#fff6ee; --sk-avail:#FFD08A; --sk-owned:#FF9A6B; --sk-glow:#ff6a2a;}
+.sk-fire .sk-node{border-radius:6px 26px 6px 26px; transform:skewX(-3deg);}
+.sk-air{--sk-bg:linear-gradient(#f6f0ff,#e4d6f7 60%,#d4c4f0); --sk-node:#fbf8ff; --sk-avail:#E9DDFF; --sk-owned:#B9A5F0; --sk-glow:#a58bff;}
+.sk-air .sk-node{border-radius:44px; border-style:dashed; width:140px;} .sk-air .sk-node.attack{width:180px;}
+.sk-water{--sk-bg:linear-gradient(#eaf7ff,#cfe9f8 60%,#a8d8f0); --sk-node:#f4fbff; --sk-avail:#BFE6FF; --sk-owned:#6EC6F0; --sk-glow:#35b0ff;}
+.sk-water .sk-node{border-radius:34px 34px 34px 8px;}
+.sk-earth{--sk-bg:linear-gradient(#f1fae9,#d3eec3 60%,#b7e4a8); --sk-node:#f8fcf3; --sk-avail:#E6E3A8; --sk-owned:#8FC86F; --sk-glow:#8aa63a;}
+.sk-earth .sk-node{border-radius:3px; border-width:4px; box-shadow:4px 4px 0 rgba(74,63,53,.4);}
+@media (max-width:640px){ .sk-node{width:46%;} .sk-node.attack{width:92%;} .sk-air .sk-node{width:46%;} .skill-title{font-size:26px;} }
