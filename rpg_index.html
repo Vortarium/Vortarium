@@ -125,6 +125,8 @@
         <button class="doodle-btn" data-mm="btnJournal">&#128214; Journal</button>
         <button class="doodle-btn" data-mm="btnSkills">&#11088; Skill Tree</button>
         <button class="doodle-btn" data-mm="btnCompass">&#129517; Compass</button>
+        <button class="doodle-btn dg-out-only" data-mm="btnDungeon">&#128367;&#65039; Dungeon</button>
+        <button class="doodle-btn dg-in-only" data-mm="btnDungeonExit">&#10060; Exit Dungeon</button>
         <button class="doodle-btn" data-mm="btnSettings">&#9881; Settings</button>
       </div>
     </div>
@@ -142,6 +144,7 @@
         <button class="rx-btn" data-rx="🔥">🔥</button><button class="rx-btn" data-rx="😭">😭</button>
       </div>
     </div>
+    <div id="dungeonStage" class="dg-stage"></div>
     <div id="reactionLayer" class="rx-layer"></div>
     <div id="queueFloat" class="queue-float" style="display:none"><span>Searching for a duel…</span><button class="doodle-btn btn-sm btn-yellow" id="btnLeaveQueue">Leave Queue</button></div>
 
@@ -172,6 +175,8 @@
     <div class="footer-center">
       <button class="icon-btn circle-btn compass-btn star-btn" id="btnSkills" title="Skill Tree">&#11088;<span class="star-badge" id="starBadge" style="display:none">0</span></button>
       <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
+      <button class="icon-btn circle-btn compass-btn dungeon-btn dg-out-only" id="btnDungeon" title="Dungeon">&#128367;&#65039;<span class="dg-timer" id="dgTimer"></span></button>
+      <button class="icon-btn circle-btn compass-btn dg-exit-btn dg-in-only" id="btnDungeonExit" title="Exit the dungeon">&#10060; EXIT</button>
     </div>
 
     <div class="footer-right doodle-panel">
@@ -204,6 +209,7 @@
         <div class="equip-slot" id="equipBoots" data-slot="boots"><span>Boots</span></div>
         <div class="equip-slot" id="equipTrinket" data-slot="trinket"><span>Trinket</span></div>
       </div>
+      <div class="dg-lootnote" id="dgLootNote" style="display:none"></div>
       <div class="inv-grid" id="invGrid"></div>
       <div class="page-nav">
         <button class="doodle-btn btn-sm" id="invPrev">&larr;</button>
@@ -267,6 +273,18 @@
       <p class="mute-status" id="muteStatus"></p>
     </div>
     <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
+  </div>
+</div>
+
+<!-- ================= DUNGEON CONFIRM MODAL ================= -->
+<div id="dgModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel dg-confirm">
+    <div class="skill-title doodle-h2" id="dgModalTitle"></div>
+    <div id="dgModalBody" class="dg-modal-body"></div>
+    <div class="dg-modal-btns">
+      <button class="doodle-btn btn-yellow" id="dgModalNo">Cancel</button>
+      <button class="doodle-btn btn-danger" id="dgModalYes">Confirm</button>
+    </div>
   </div>
 </div>
 
@@ -571,6 +589,7 @@
   </div>
 </div>
 
+<div id="candleOverlay"></div>
 <script type="module" src="rpg_app.js"></script>
 </body>
 </html>

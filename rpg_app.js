@@ -14,6 +14,7 @@ import {
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
   increment, serverTimestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, describeSkill } from "./rpg_skilltree.js";
 import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG } from "./rpg_content.js";
 
@@ -940,7 +941,8 @@ renderClassGrid();
 function resetSessionUI(){
   farm.plots = null; farm.loaded = false; farm.sel = null; farm.seedSig = "";
   state.profile = null; state.recapPromise = null; state.battle = null;
-  ["recapModal","eatModal","battleModal","journalModal","compassModal","skillModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
+  document.body.classList.remove("dungeon-mode");   // never leave the title screen dark
+  ["recapModal","eatModal","battleModal","journalModal","compassModal","skillModal","dgModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
 }
 function cleanupSubs(){
   stopPresence(); stopOnlineBeat();
@@ -969,7 +971,7 @@ function enterGame(){
     // time the region field itself changes, not just on manual travel.
     if(firstSnapshot || state.profile.region !== prevRegion){
       const r = REGIONS[state.profile.region] || REGIONS.forest;
-      playMusic(r.track);
+      playMusic(dgActive() ? DG_TRACK : r.track);
     }
     if(firstSnapshot){
       { const rm = rageMaxFor(state.profile.level, state.profile.archetype);   // bring existing accounts onto the level-based Rage cap
@@ -1012,6 +1014,7 @@ function renderHUD(){
   const bm=document.getElementById("bossMine"); if(bm) bm.textContent=fmtBig(p.bossDamage||0);
   updateDailyDot();
   updateSkillUI();
+  updateDungeonUI();
 }
 function setBar(key, val, max){
   const pct = Math.max(0, Math.min(100, (val/max)*100));
@@ -1077,6 +1080,7 @@ function invExpanded(){
   return (p.inventory||[]).map(entry => ({ ...entry, item: ITEM_BY_ID[entry.itemId] })).filter(e=>e.item);
 }
 function renderInventory(){
+  dgRenderLootNote();
   const grid = document.getElementById("invGrid");
   const items = invExpanded();
   const perPage = 12;
@@ -1933,9 +1937,11 @@ window.addEventListener("resize", ()=>{ if(skillOpen()) renderSkillTree(); });
    ========================================================================= */
 document.getElementById("btnCompass").addEventListener("click", ()=>{
   openModal("compassModal"); renderRegionGrid(); renderShop(); renderAuction(); renderCraftInv();
+  if(dgActive()) document.querySelector('[data-ctab="map"]').click();   // dungeon: land on the one tab that still works
 });
 document.querySelectorAll("[data-ctab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
+    if(dgActive() && DG_LOCKED_TABS.includes(btn.dataset.ctab)){ toast("🖍️ The dungeon has scribbled over this part of your compass."); return; }
     document.querySelectorAll("[data-ctab]").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
@@ -1957,6 +1963,7 @@ function renderRegionGrid(){
     card.className = `region-card ${r.css}-c` + (state.profile.region===key? " current":"");
     card.innerHTML = `<div style="font-size:30px">${{forest:"🌲",mountains:"⛰️",volcano:"🌋",reef:"🪸"}[key]}</div><div>${r.name}</div>`;
     card.addEventListener("click", async ()=>{
+      if(dgActive()){ toast("🕯️ There is no map down here."); return; }
       if(state.profile.region===key) return;
       await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { region:key }));
       renderRegionGrid(); renderShop();
@@ -3944,11 +3951,11 @@ function nextIntent(b){
   b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty) : b.shown;
   battleLogPush(`Enemy intends: ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label} — ${INTENTS[b.shown].tip}`);
 }
-function startPve(diff){
-  const p = state.profile, m = pickEnemy(diff);
+function startPve(diff, dg=null){
+  const p = state.profile, m = dg ? dg.m : pickEnemy(diff);
   if(!m){ toast("No monsters here."); return; }
   if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
-  state.battle = { mode:"pve", m, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false, eats:0,
+  state.battle = { mode:"pve", m, dg, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false, eats:0,
     reopenCompass: document.getElementById("compassModal").classList.contains("active") };   // put the compass back when the fight is over
   document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
   openModal("battleModal"); setPvpRxVisible(false);
@@ -3959,7 +3966,7 @@ function startPve(diff){
 function renderPve(){
   const b = state.battle, p = state.profile, m = b.m;
   document.getElementById("battleEnemyName").textContent = `${m.name} Lv.${m.level} — ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label}`;
-  document.getElementById("battleEnemySprite").textContent = REGION_SPRITE[m.region]||"🐉";
+  document.getElementById("battleEnemySprite").textContent = m.sprite || REGION_SPRITE[m.region] || "🐉";
   document.getElementById("battleEnemyHPBar").style.width = (100*Math.max(0,b.ehp)/m.hp)+"%";
   document.getElementById("battleEnemyHPNum").textContent = `${Math.max(0,b.ehp)}/${m.hp}`;
   document.getElementById("battlePlayerName").textContent = p.username;
@@ -3982,7 +3989,7 @@ function renderPve(){
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
   const eatsLeftNow = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
   add(eatsLeftNow>0 ? "🍖 Eat" : "🍖 Eat (max 3)", `Open your food bag and pick what to eat. Free action — does NOT end your turn. Max ${MAX_EATS_PER_TURN} items per turn.`, openEatModal, eatsLeftNow<=0, "btn-green");
-  add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");
+  if(!b.dg) add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");   // no fleeing from the dungeon
 }
 async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
@@ -4044,7 +4051,7 @@ async function pveEnd(won){
   if(won){
     battleLogPush(`Victory! +${m.xpReward} XP, +$${fmtMoney(m.moneyReward)}.`);
     await grantMoney(m.moneyReward); await grantXP(m.xpReward);
-    if(Math.random()<m.dropChance){
+    if(!b.dg && Math.random()<m.dropChance){
       const pool = shopPool(m.element).filter(i=>i.type!=="consumable");
       const it = weightedShuffle(pool)[0];
       if(it){ await addItemToInv(it.id,1); battleLogPush(`It dropped ${it.name}!`); }
@@ -4052,10 +4059,13 @@ async function pveEnd(won){
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage, monstersKilled:increment(1) }));
   } else {
     battleLogPush("You were defeated…");
-    const r = await applyDeathPenalty({ mana:b.mana });
-    toast(`Defeated. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+    if(!b.dg){
+      const r = await applyDeathPenalty({ mana:b.mana });
+      toast(`Defeated. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+    }
   }
-  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc); }, 1800);
+  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc);
+    if(b.dg){ if(won) b.dg.onWin(); else dgLeave("death", b.mana); } }, 1800);
 }
 document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("click", ()=> startPve(btn.dataset.pve)));
 
@@ -4877,6 +4887,268 @@ document.getElementById("privateProfile").addEventListener("change", e=>{
 document.getElementById("privateSocial").addEventListener("change", e=>{
   withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { privateSocial: e.target.checked }));
 });
+
+
+/* =========================================================================
+   DUNGEON (🕯️ next to the Compass)
+   Run state lives on the player doc as `dungeon` = { floor, ev, loot } (null when outside),
+   so a reload drops you back on the same floor. Other fields: dungeonRecord (best floor),
+   dungeonNextOpen (ms timestamp the door re-opens). Pure odds/scaling are in rpg_dungeon.js.
+   ========================================================================= */
+const dgRun = ()=> (state.profile && state.profile.dungeon) || null;
+const dgActive = ()=> !!dgRun();
+let dgLastHtml = "", dgCandleInit = false;
+
+/* ----- pools for chests / the vendor ----- */
+function dgGearPool(){ return Object.values(ITEM_BY_ID).filter(i=> (i.type==="weapon"||i.type==="armor"||i.type==="trinket") && String(i.id).startsWith("gear_")); }
+function dgPick(list){ return list[Math.floor(Math.random()*list.length)]; }
+function dgItemOfRarity(list, rarity){
+  const order = ["common","uncommon","rare","epic","legendary"], at = order.indexOf(rarity);
+  for(let d=0; d<5; d++) for(const r of [order[at-d], order[at+d]]){ const m = list.filter(i=>i.rarity===r); if(r && m.length) return dgPick(m); }
+  return dgPick(list);
+}
+function dgRollChest(f){
+  const n = 1 + Math.floor(Math.random()*3), gear = dgGearPool(), mats = Object.values(ITEM_BY_ID).filter(i=>i.type==="material");
+  const out = [];
+  for(let i=0;i<n;i++){
+    const r = Math.random(), rar = rollRarity(f);
+    const it = r<0.4 ? dgItemOfRarity(mats, rar) : r<0.7 ? dgItemOfRarity(gear.filter(g=>g.type==="weapon"), rar) : dgItemOfRarity(gear.filter(g=>g.type!=="weapon"), rar);
+    if(it) out.push({ itemId:it.id, qty: it.type==="material" ? 1+Math.floor(Math.random()*2) : 1 });
+  }
+  return out;
+}
+const dgPrice = it=> Math.max(15, Math.round((it.price || (it.sellPrice||5)*4) * 1.5));
+function dgRollShop(f){
+  const foods = Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable" && ((i.stats?.heal||0)>0 || (i.stats?.mana||0)>0));
+  const food = dgItemOfRarity(foods, rollRarity(f));
+  const gearItem = dgItemOfRarity(dgGearPool(), rollRarity(f));
+  return { items:[food, gearItem].map(it=>({ itemId:it.id, price:dgPrice(it), sold:false })), skipSold:false };
+}
+
+/* ----- events ----- */
+function dgRollEvent(f){
+  if(isCheckpoint(f)) return { type:"safe" };
+  const t = rollEventType(f), lvl = state.profile.level||1;
+  if(t==="nothing") return { type:"nothing" };
+  if(t==="chest")   return { type:"chest", opened:false, loot:[] };
+  if(t==="shop")    return { type:"shop", ...dgRollShop(f) };
+  if(t==="doors")   return { type:"doors", pick:-1, outcome:"", note:"" };
+  if(t==="boss")    return { type:"boss", done:false, ms:[buildMonster(f,"boss",lvl)], idx:0 };
+  if(t==="waves")   return { type:"waves", done:false, ms:Array.from({length:waveSize(f)}, ()=>buildMonster(f,"wave",lvl)), idx:0 };
+  return { type:"battle", done:false, ms:[buildMonster(f,"normal",lvl)], idx:0 };
+}
+const dgEvDone = ev=> ev.type==="start"||ev.type==="safe"||ev.type==="nothing"||ev.type==="shop" ? true : ev.type==="chest" ? ev.opened : ev.type==="doors" ? ev.pick>=0 : !!ev.done;
+
+async function dgSave(run){
+  state.profile.dungeon = run; dgLastHtml = ""; updateDungeonUI();
+  await updateDoc(doc(db,"players",state.uid), { dungeon: run }).catch(e=>toast(friendlyFirebaseError(e)));
+}
+function dgAddLoot(run, list){ list.forEach(({itemId,qty})=>{ const e = run.loot.find(x=>x.itemId===itemId); if(e) e.qty += qty; else run.loot.push({ itemId, qty }); }); }
+/* gives items and records only what really fit in the bag (overflow is handled by the normal overflow popup) */
+async function dgGive(list){
+  let dropped = [];
+  const ok = await applyInvChanges({ add:list, onDropped:d=>{ dropped = d; queueOverflow(d); } });
+  if(ok===null) return false;
+  const run = dgRun(); if(!run) return true;
+  const got = list.map(x=>({ ...x })).map(x=>{ const d = dropped.find(y=>y.itemId===x.itemId); return d ? { ...x, qty:x.qty-d.qty } : x; }).filter(x=>x.qty>0);
+  dgAddLoot(run, got); return true;
+}
+
+/* ----- stage rendering ----- */
+function dgItemCard(itemId, extra=""){
+  const it = ITEM_BY_ID[itemId]; if(!it) return "";
+  return `<div class="dg-card rarity-${it.rarity}"><b>${escapeHTML(it.name)}</b><span>${it.rarity}</span><span>${escapeHTML(itemEffectText(it)||"")}</span>${extra}</div>`;
+}
+function dgStageHTML(run){
+  const p = state.profile, ev = run.ev, f = run.floor, rec = p.dungeonRecord||0;
+  let body = "", arrow = true, door = "🚪";
+  if(ev.type==="start") body = `<div>The door groans open. Death down here kicks you out and costs you your loot.</div>`;
+  else if(ev.type==="safe") { door = "🕯️"; arrow = false; body = `<div><b>Checkpoint.</b> Nothing here but quiet.</div><div class="dg-note">Your progress is only saved on this floor — you can leave now with everything, or push forward.</div>
+      <div><button class="doodle-btn btn-green" data-act="leave">Leave safely</button> <button class="doodle-btn btn-pink" data-act="next">Push forward ⬇️</button></div>`; }
+  else if(ev.type==="nothing") body = `<div>An empty room. The path onward is free.</div>`;
+  else if(ev.type==="chest") body = ev.opened
+      ? `<div>📦 You took:</div><div class="dg-items">${ev.loot.map(l=>dgItemCard(l.itemId, l.qty>1?`<span>x${l.qty}</span>`:"")).join("")}</div>`
+      : `<button class="doodle-btn btn-lg btn-yellow" data-act="chest">📦 Open the chest</button>`;
+  else if(ev.type==="shop"){
+    body = `<div>🛒 A hooded vendor lights a lantern. <span class="dg-note">You have $${fmtMoney(p.money)}</span></div><div class="dg-items">` +
+      ev.items.map((s,i)=> dgItemCard(s.itemId, s.sold ? `<span>SOLD</span>` : `<button class="doodle-btn btn-sm btn-green" data-act="buy" data-i="${i}">Buy $${fmtMoney(s.price)}</button>`).replace('class="dg-card','class="dg-card'+(s.sold?" sold":""))).join("") +
+      `<div class="dg-card${ev.skipSold?" sold":""}"><b>⏬ Floor Skip</b><span>Next arrow drops you down 2 floors.</span>${ev.skipSold?"<span>BOUGHT</span>":`<button class="doodle-btn btn-sm btn-green" data-act="skip">Buy $${DG_SKIP_PRICE}</button>`}</div></div>`;
+  }
+  else if(ev.type==="doors"){
+    body = ev.pick<0 ? `<div>Three doors. Only one way forward each... but not all are kind.</div><div class="dg-doors">${[0,1,2].map(i=>`<button data-act="door" data-i="${i}">🚪</button>`).join("")}</div>`
+      : `<div class="dg-doors">${[0,1,2].map(i=>`<button disabled>${i===ev.pick ? (ev.outcome==="safe"?"✅":ev.outcome==="spike"?"🩸":"💸") : "🚪"}</button>`).join("")}</div><div>${escapeHTML(ev.note)}</div>`;
+  }
+  else {                                                                         // battle / boss / waves
+    const m = ev.ms[Math.min(ev.idx, ev.ms.length-1)], tag = ev.type==="boss" ? "👁️ BOSS" : ev.type==="waves" ? `⚔️ WAVE ${Math.min(ev.idx+1,ev.ms.length)}/${ev.ms.length}` : "⚔️ BATTLE";
+    body = ev.done ? `<div>The room falls silent. ${ev.type==="battle"?"It is dead.":ev.type==="boss"?"The boss is dead.":"All enemies are dead."}</div>`
+      : `<div>${tag}: ${escapeHTML(m.name)} (Lv.${m.level})</div><button class="doodle-btn btn-lg btn-danger" data-act="fight">Fight!</button>`;
+  }
+  const done = dgEvDone(ev), nextN = (ev.type==="shop" && ev.skipSold) ? 2 : 1;
+  const next = arrow && done ? `<button class="doodle-btn btn-lg btn-green dg-arrow" data-act="next">➜ ${ev.type==="nothing"||ev.type==="start" ? "Enter" : "Next floor"}${nextN===2?" (skip 2)":""}</button>` : "";
+  return `<div class="dg-record">🏆 Record floor: ${rec}</div><div class="dg-floor">Floor ${f}</div><div class="dg-door">${door}</div><div class="doodle-panel dg-panel">${body}</div>${next}`;
+}
+function dgRenderStage(){
+  const run = dgRun(), el = document.getElementById("dungeonStage"); if(!el) return;
+  if(!run){ el.innerHTML = ""; dgLastHtml = ""; return; }
+  const html = dgStageHTML(run);
+  if(html!==dgLastHtml){ el.innerHTML = html; dgLastHtml = html; }
+}
+function dgRenderLootNote(){
+  const n = document.getElementById("dgLootNote"), run = dgRun(); if(!n) return;
+  if(!run){ n.style.display = "none"; return; }
+  const list = run.loot.map(l=>`${escapeHTML(ITEM_BY_ID[l.itemId]?.name||l.itemId)} x${l.qty}`);
+  n.style.display = ""; n.innerHTML = `🕯️ <b>Dungeon loot</b> — lost if you leave off a checkpoint or die: ${list.length ? list.join(", ") : "nothing yet"}`;
+}
+function updateDungeonUI(){
+  const p = state.profile; if(!p) return;
+  const on = dgActive();
+  document.body.classList.toggle("dungeon-mode", on);
+  document.querySelectorAll('[data-ctab]').forEach(b=> b.classList.toggle("dg-locked", on && DG_LOCKED_TABS.includes(b.dataset.ctab)));
+  if(on){
+    document.getElementById("hudRegion").textContent = `🕯️ Floor ${dgRun().floor} · Record ${p.dungeonRecord||0}`;
+    document.getElementById("regionBg").className = "paper-bg region-dungeon";
+    dgRenderStage();
+  }
+  dgRenderLootNote(); dgTick();
+}
+function dgTick(){
+  const p = state.profile, b = document.getElementById("btnDungeon"), t = document.getElementById("dgTimer"); if(!p||!b) return;
+  const left = (p.dungeonNextOpen||0) - Date.now();
+  b.classList.toggle("locked", left>0);
+  t.textContent = left>0 ? fmtCountdown(left) : "";
+  b.title = left>0 ? `The door is sealed. Re-opens in ${fmtCountdown(left)}` : "Dungeon";
+}
+setInterval(dgTick, 1000);
+
+/* ----- confirm dialog ----- */
+function dgConfirm({ title, html, yes="Confirm", no="Cancel", danger=true, onYes }){
+  document.getElementById("dgModalTitle").textContent = title;
+  document.getElementById("dgModalBody").innerHTML = html;
+  const y = document.getElementById("dgModalYes"), n = document.getElementById("dgModalNo");
+  y.textContent = yes; n.textContent = no; y.className = "doodle-btn " + (danger ? "btn-danger" : "btn-green");
+  y.onclick = ()=>{ closeModal("dgModal"); onYes(); }; n.onclick = ()=> closeModal("dgModal");
+  openModal("dgModal");
+}
+
+/* ----- enter / leave ----- */
+document.getElementById("btnDungeon").addEventListener("click", ()=>{
+  const p = state.profile; if(!p) return;
+  if(!p.archetype){ toast("Pick an archetype first."); return; }
+  if(state.battle){ toast("Finish your battle first."); return; }
+  const left = (p.dungeonNextOpen||0) - Date.now();
+  if(left>0){ toast(`🔒 The dungeon door is sealed. It opens again in ${fmtCountdown(left)}.`); return; }
+  dgConfirm({ title:"🕯️ Enter the Dungeon?", yes:"Descend",
+    html:`<p><b>Death kicks you out</b> — you lose the items you found and your progress. The deeper you go, the harder it gets and the stronger the enemies.</p>
+          <p>You can only back out safely on <b>checkpoint floors</b> (5, 10, 15 …). Leaving anywhere else means dropping everything you found, losing 50% of your money and being left on 1 HP.</p>
+          <p>Your Compass will be tampered with: Jobs, Shop, Farm and Battle are locked while you are inside. Leaving locks the door for 24 hours.</p>`,
+    onYes: async ()=>{
+      ["compassModal","journalModal","skillModal"].forEach(closeModal);
+      await dgSave({ floor:0, ev:{ type:"start" }, loot:[] });
+      playMusic(DG_TRACK); toast("🕯️ The door closes behind you…");
+    }});
+});
+document.getElementById("btnDungeonExit").addEventListener("click", ()=>{
+  const run = dgRun(); if(!run || state.battle) return;
+  if(isCheckpoint(run.floor)) dgConfirm({ title:"Leave the dungeon?", yes:"Leave safely", danger:false,
+    html:`<p>You are on a checkpoint (floor ${run.floor}). Your items <b>WILL be saved</b> when leaving.</p><p>The door will lock for 24 hours, and re-entering starts you back at floor 0.</p>`, onYes:()=> dgLeave("safe") });
+  else dgConfirm({ title:"⚠️ Leave now?", yes:"Leave and lose it all",
+    html:`<p>You are on floor ${run.floor}, not a checkpoint. If you leave now you will <b>drop every item you found in the dungeon</b>, <b>lose 50% of your money</b> and be left on <b>1 HP</b>.</p><p>The next checkpoint is floor ${Math.ceil((run.floor+1)/5)*5}.</p>`, onYes:()=> dgLeave("unsafe") });
+});
+/* reason: "safe" | "unsafe" | "death". Unsafe/death drop dungeon loot, take half the money and leave 1 HP. */
+async function dgLeave(reason, manaLeft=null){
+  const run = dgRun(); if(!run) return;
+  const penalty = reason!=="safe";
+  let lostMoney = 0;
+  await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {};
+    const upd = { dungeon:null, dungeonNextOpen: Date.now()+DG_COOLDOWN_MS, dungeonRecord: Math.max(d.dungeonRecord||0, run.floor) };
+    if(penalty){
+      const inv = (d.inventory||[]).map(e=>({...e})), eq = { ...(d.equipped||{}) }; let eqChanged = false;
+      for(const { itemId, qty } of run.loot){
+        let left = qty; const i = inv.findIndex(e=>e.itemId===itemId);
+        if(i>=0){ const t = Math.min(left, inv[i].qty); inv[i].qty -= t; left -= t; }
+        for(const slot of Object.keys(eq)) if(left>0 && eq[slot]===itemId){ eq[slot] = null; left--; eqChanged = true; }
+      }
+      upd.inventory = inv.filter(e=>e.qty>0);
+      if(eqChanged){ upd.equipped = eq; Object.assign(upd, gearSyncFields(d, eq)); }
+      lostMoney = Math.floor((d.money||0)*0.5); upd.money = (d.money||0) - lostMoney;
+      upd.hp = 1; upd.rage = 0; upd.killstreak = 0;
+      if(manaLeft!==null) upd.mana = manaLeft;
+      if(reason==="death") upd.deaths = (d.deaths||0)+1;
+    }
+    tx.update(ref, upd);
+  }));
+  state.profile.dungeon = null; dgLastHtml = "";
+  document.body.classList.remove("dungeon-mode");
+  playMusic((REGIONS[state.profile.region]||REGIONS.forest).track);
+  renderHUD();
+  toast(reason==="safe" ? "🕯️ You left the dungeon safely. The door seals for 24 hours."
+    : reason==="death" ? `💀 You died on floor ${run.floor}. You lost your dungeon loot and $${fmtMoney(lostMoney)}.`
+    : `🏃 You fled from floor ${run.floor}: dungeon loot dropped, $${fmtMoney(lostMoney)} lost, 1 HP left.`, 6000);
+}
+
+/* ----- stage actions ----- */
+async function dgAdvance(){
+  const run = dgRun(); if(!run) return;
+  const step = (run.ev.type==="shop" && run.ev.skipSold) ? 2 : 1, f = run.floor+step;
+  const next = { floor:f, ev:dgRollEvent(f), loot:run.loot };
+  if(f > (state.profile.dungeonRecord||0)){ state.profile.dungeonRecord = f; updateDoc(doc(db,"players",state.uid), { dungeonRecord:f }).catch(()=>{}); }
+  await dgSave(next);
+}
+function dgStartFight(){
+  const run = dgRun(), ev = run && run.ev; if(!ev || state.battle) return;
+  const m = ev.ms[ev.idx];
+  startPve("medium", { m, onWin: async ()=>{
+    const r = dgRun(); if(!r) return;
+    r.ev.idx++;
+    if(r.ev.idx < r.ev.ms.length){ await dgSave(r); toast(`Next enemy: ${r.ev.ms[r.ev.idx].name}!`); setTimeout(dgStartFight, 600); }
+    else { r.ev.idx = r.ev.ms.length-1; r.ev.done = true; await dgSave(r); }
+  }});
+}
+document.getElementById("dungeonStage").addEventListener("click", async (e)=>{
+  const btn = e.target.closest("[data-act]"); if(!btn || btn.disabled) return;
+  const run = dgRun(); if(!run || state.battle) return;
+  const act = btn.dataset.act, ev = run.ev, i = +btn.dataset.i;
+  if(act==="next"){ if(dgEvDone(ev)) dgAdvance(); }
+  else if(act==="leave"){ document.getElementById("btnDungeonExit").click(); }
+  else if(act==="fight") dgStartFight();
+  else if(act==="chest" && ev.type==="chest" && !ev.opened){
+    ev.opened = true; ev.loot = dgRollChest(run.floor); await dgSave(run);   // saved first so a reload can't reroll it
+    playSfx("buy"); await dgGive(ev.loot); await dgSave(run);
+  }
+  else if(act==="buy" && ev.type==="shop"){
+    const s = ev.items[i]; if(!s || s.sold) return;
+    if(state.profile.money < s.price){ toast("Not enough money!"); return; }
+    const ok = await applyInvChanges({ add:[{ itemId:s.itemId, qty:1 }], strict:true }, d=>{ if((d.money||0)<s.price) throw new Error("nomoney"); return { money:(d.money||0)-s.price }; });
+    if(ok===null) return;
+    s.sold = true; dgAddLoot(run, [{ itemId:s.itemId, qty:1 }]); playSfx("buy"); await dgSave(run);
+  }
+  else if(act==="skip" && ev.type==="shop" && !ev.skipSold){
+    if(state.profile.money < DG_SKIP_PRICE){ toast("Not enough money!"); return; }
+    await withErrorToast(()=> runTransaction(db, async tx=>{ const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data()||{}; if((d.money||0)<DG_SKIP_PRICE) throw new Error("nomoney"); tx.update(ref, { money:d.money-DG_SKIP_PRICE }); }));
+    ev.skipSold = true; playSfx("buy"); await dgSave(run);
+  }
+  else if(act==="door" && ev.type==="doors" && ev.pick<0){
+    const out = doorOutcome(), p = state.profile; ev.pick = i; ev.outcome = out;
+    if(out==="safe") ev.note = "The door swings open onto a quiet passage. Safe.";
+    else if(out==="spike"){
+      const dmg = Math.max(1, Math.round(p.hpMax*doorPct())), hp = Math.max(1, p.hp-dmg);
+      ev.note = `Spikes! You lose ${p.hp-hp} HP.`; await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp }));
+    } else {
+      const loss = Math.floor((p.money||0)*doorPct());
+      ev.note = loss>0 ? `A pickpocket snatches $${fmtMoney(loss)}!` : "A pickpocket reaches in… and finds nothing.";
+      if(loss>0) await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { money: Math.max(0,(p.money||0)-loss) }));
+    }
+    await dgSave(run);
+  }
+});
+/* candle light follows the pointer (mouse or finger) */
+{
+  const o = document.getElementById("candleOverlay"), mv = (x,y)=>{ o.style.setProperty("--mx", x+"px"); o.style.setProperty("--my", y+"px"); };
+  window.addEventListener("pointermove", e=> mv(e.clientX, e.clientY), { passive:true });
+  window.addEventListener("touchstart", e=>{ const t = e.touches[0]; if(t) mv(t.clientX, t.clientY); }, { passive:true });
+  window.addEventListener("touchmove",  e=>{ const t = e.touches[0]; if(t) mv(t.clientX, t.clientY); }, { passive:true });
+}
 
 /* =========================================================================
    MOBILE: the "⋯" menu (Journal / Compass / Settings) in the compact header
