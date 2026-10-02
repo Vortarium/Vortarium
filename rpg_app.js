@@ -1883,17 +1883,15 @@ function renderSkillTree(){
 function drawSkillLines(el){
   const board = document.getElementById("skillBoard"), svg = document.getElementById("skLines"); if(!board||!svg) return;
   const br = board.getBoundingClientRect(); if(!br.width) return;
-  const owned = new Set(state.profile.skillNodes||[]), at = id=> board.querySelector(`[data-node="${id}"]`);
+  const owned = new Set(state.profile.skillNodes||[]), at = id=> board.querySelector(`[data-node="${id}"]`), list = SKILL_NODES[el];
   let out = "";
-  SKILL_NODES[el].forEach(n=>{
-    // Fire is linked node-to-node; the other trees just show the trunk between rows you have unlocked.
-    const parents = n.parent ? [n.parent] : (n.row>1 && !SKILL_TREES[el].linked ? SKILL_NODES[el].filter(m=>m.row===n.row-1).map(m=>m.id) : []);
-    parents.forEach(pid=>{
-      const a = at(pid), b = at(n.id); if(!a||!b) return;
-      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-      const hot = owned.has(pid) && owned.has(n.id);
-      out += `<line x1="${ra.left+ra.width/2-br.left}" y1="${ra.bottom-br.top}" x2="${rb.left+rb.width/2-br.left}" y2="${rb.top-br.top}" stroke="${hot?"#4A3F35":"#4A3F35"}" stroke-width="${hot?5:2}" stroke-dasharray="${hot?"":"6 6"}" opacity="${hot?0.9:0.25}"/>`;
-    });
+  // The path reconnects to whatever you chose: from your pick in a row to your pick (solid) or to the choices you can still make (dashed) in the next row.
+  list.forEach(n=>{
+    const prev = list.find(m=>m.row===n.row-1 && owned.has(m.id)); if(!prev) return;
+    const st = skillNodeState(state.profile, n); if(st==="locked") return;
+    const a = at(prev.id), b = at(n.id); if(!a||!b) return;
+    const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(), hot = st==="owned";
+    out += `<line x1="${ra.left+ra.width/2-br.left}" y1="${ra.bottom-br.top}" x2="${rb.left+rb.width/2-br.left}" y2="${rb.top-br.top}" stroke="#4A3F35" stroke-width="${hot?5:2.5}" stroke-dasharray="${hot?"":"6 6"}" opacity="${hot?0.9:0.4}"/>`;
   });
   svg.innerHTML = out;
 }
@@ -1901,7 +1899,7 @@ function renderSkillDetail(){
   const p = state.profile, d = document.getElementById("skillDetail"), n = skillSel && SKILL_BY_ID[skillSel];
   if(!n || n.el!==p.archetype){ d.textContent = "Tap a node to read what it does. You can only follow one path — one node per row."; return; }
   const st = skillNodeState(p, n), left = skillTokensLeft(p);
-  let note = st==="owned" ? "You own this node." : st==="locked" ? "Locked — you can only build one path (one node per row, following the row above)."
+  let note = st==="owned" ? "You own this node." : st==="locked" ? "Locked — you can only take one node per row, and you can\'t go back to earlier rows."
            : left<n.cost ? `Not enough tokens — you have ${left}, need ${n.cost}.` : "Ready to unlock.";
   d.innerHTML = `<div><div class="sd-name">${n.name}</div><div>${describeSkill(n)}</div><div class="sd-note">Cost: ${n.cost} ⭐ · Row ${n.row} · ${note}</div></div>`;
   if(st==="available"){

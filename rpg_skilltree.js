@@ -2,8 +2,8 @@
    DRAGONEER — rpg_skilltree.js
    Skill trees for the four archetypes. Pure data + helpers (no Firebase).
    Every level = +1 skill token. You may own ONE node per row: buying a node
-   locks the rest of its row and unlocks the next row. In the Fire tree each
-   node is linked to the node above it, so a path is really followed down.
+   locks the rest of its row and unlocks the next row. Any node in a row can be
+   picked (no column restrictions); you just can never go back up.
    Node format: "Name|cost|code"  code: M#=+Mana  H#=+HP  D#=+Damage
                 A<mana>:<dmg> = new attack costing <mana> that deals +<dmg> over a basic attack
    ========================================================================= */
@@ -23,7 +23,7 @@ export const SKILL_TREES = {
     ["Inferno Mastery|3|D3","Sunfire Reservoir|3|M20","Living Volcano|3|H20","Hellstorm|3|D4"],
     ["Grand Inferno|3|D4","Solar Furnace|3|M20","Volcanic Colossus|3|H25","Worldfire|3|D4"],
     ["Supernova|4|A30:40","Eternal Inferno|4|M25","Heart of the Volcano|4|H30","Lord of Flame|4|D5"],
-  ], true), title:"Fire Skill Tree", sub:"Highest damage growth, aggressive paths and a smaller high-HP path.", icon:"🔥", rowNames:{1:"The First Flame",2:"Kindling",3:"Rising Heat",4:"The Fire Splits",6:"First Major Choice",9:"Second Major Choice",12:"Final Flame"} },
+  ], false), title:"Fire Skill Tree", sub:"Highest damage growth, aggressive paths and a smaller high-HP path.", icon:"🔥", rowNames:{1:"The First Flame",2:"Kindling",3:"Rising Heat",4:"The Fire Splits",6:"First Major Choice",9:"Second Major Choice",12:"Final Flame"} },
 
   air: { ...T([
     ["Gentle Breeze|1|M5","Skybound Heart|1|D1","Windborne Body|1|H5"],
@@ -79,8 +79,6 @@ Object.keys(SKILL_TREES).forEach(el=>{
     const [name, cost, code] = s.split("|"), kind = code[0];
     const n = { id:`${el}_${r+1}_${c+1}`, el, row:r+1, col:c, name, cost:+cost, kind, parent:null };
     if(kind==="A"){ const [m,d] = code.slice(1).split(":"); n.mana=+m; n.val=+d; } else n.val = +code.slice(1);
-    // Fire only: rows 2-3 and 5-12 are linked to the same column of the row above (row 4 is the free "split").
-    if(t.linked && n.row>1 && n.row!==4) n.parent = `${el}_${n.row-1}_${c+1}`;
     list.push(n);
   }));
   SKILL_NODES[el] = list;
