@@ -5,7 +5,7 @@
    ========================================================================= */
 export const DG_TRACK = "rpg_dungeon.mp3";
 export const DG_COOLDOWN_MS = 24*60*60*1000;      // the door re-opens 24h after you leave
-export const DG_LOCKED_TABS = ["jobs","shop","farm","duel"];
+export const DG_LOCKED_TABS = ["map","jobs","shop","farm","duel"];
 export const DG_SKIP_PRICE = 100;
 export const isCheckpoint = f => f % 5 === 0;     // 0, 5, 10, 15 ... (0 is the entrance)
 

@@ -1935,7 +1935,7 @@ window.addEventListener("resize", ()=>{ if(skillOpen()) renderSkillTree(); });
    ========================================================================= */
 document.getElementById("btnCompass").addEventListener("click", ()=>{
   openModal("compassModal"); renderRegionGrid(); renderShop(); renderAuction(); renderCraftInv();
-  if(dgActive()) document.querySelector('[data-ctab="map"]').click();   // dungeon: land on the one tab that still works
+  if(dgActive()) document.querySelector('[data-ctab="craft"]').click();   // dungeon: land on a tab that still works
 });
 document.querySelectorAll("[data-ctab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
