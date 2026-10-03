@@ -175,7 +175,7 @@
     <div class="footer-center">
       <button class="icon-btn circle-btn compass-btn star-btn" id="btnSkills" title="Skill Tree">&#11088;<span class="star-badge" id="starBadge" style="display:none">0</span></button>
       <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
-      <button class="icon-btn circle-btn compass-btn dungeon-btn dg-out-only" id="btnDungeon" title="Dungeon">&#128367;&#65039;<span class="dg-timer" id="dgTimer"></span></button>
+      <button class="icon-btn circle-btn compass-btn dungeon-btn dg-out-only" id="btnDungeon" title="Dungeon">&#128367;&#65039;</button>
       <button class="icon-btn circle-btn compass-btn dg-exit-btn dg-in-only" id="btnDungeonExit" title="Exit the dungeon">&#10060;</button>
     </div>
 
@@ -294,7 +294,7 @@
     <button class="doodle-x" data-close-modal>&times;</button>
     <div class="skill-head">
       <div><div class="skill-title doodle-h2" id="skillTitle">Skill Tree</div><p class="doodle-sub" id="skillSub"></p></div>
-      <div class="skill-tokens" id="skillTokens" title="Skill tokens: +1 per level">&#11088; 0</div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end"><div class="skill-tokens" id="skillTokens" title="Skill tokens: +1 per level">&#11088; 0</div><button class="doodle-btn btn-sm btn-yellow" id="skillReset" style="display:none" title="Reset the whole tree and refund every skill point">&#8635; Reset &amp; refund</button></div>
     </div>
     <div class="skill-scroll" id="skillScroll"><div class="skill-board" id="skillBoard"></div></div>
     <div class="skill-detail" id="skillDetail">Tap a node to read what it does.</div>

@@ -398,6 +398,9 @@ const BACKPACK_ITEMS = [1,2,3,4,5].map(t=>{
     desc:`Permanent upgrade: ${BACKPACK_SLOTS[t-1]} → ${BACKPACK_SLOTS[t]} inventory slots. Must be bought in order (you need Tier ${t-1>0?t-1:"0 (none)"} first).`, stats:{} };
   ITEM_BY_ID[it.id] = it; return it;
 });
+/* Rebirth: rare shop item. Using it refunds every skill-tree point (see resetSkillTree). */
+ITEM_BY_ID.rebirth_scroll = { id:"rebirth_scroll", name:"Rebirth", type:"rebirth", rarity:"legendary", price:5000, sellPrice:0,
+  desc:"A swirl of ash and light. Use it to refund ALL your skill tree points and reset the tree back to the top.", stats:{} };
 const invCap = p=> BACKPACK_SLOTS[Math.min(5, Math.max(0, (p&&p.backpackTier)||0))];
 const invUsed = inv=> (inv||[]).filter(e=>e.qty>0).length;
 const AUCTION_MS = 7*24*60*60*1000;   // auction listings last 7 days
@@ -1134,6 +1137,7 @@ function itemEffectText(item){
     const r = item.farmRarity, [g1,g2] = item.random ? [16,100] : GROW_HOURS[r], [y1,y2] = CROP_YIELDS[r];
     return `Grows ${g1}–${g2}h · ${y1}–${y2} yields${item.random?" (maybe)":""} · dies ${DECAY_HOURS[r]}h after drying out`;
   }
+  if(item.type==="rebirth") return "Resets your skill tree and refunds every skill point (consumed on use)";
   if(item.type==="backpack") return `Inventory ${BACKPACK_SLOTS[item.tier-1]} → ${BACKPACK_SLOTS[item.tier]} slots (permanent)`;
   return "Crafting material — no combat effect";
 }
@@ -1148,8 +1152,9 @@ function selectInvItem(entry){
     <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
       ${canEquip? `<button class="doodle-btn btn-sm btn-blue" id="btnEquip">Equip</button>`:""}
       ${entry.item.type==="consumable"? `<button class="doodle-btn btn-sm btn-green" id="btnUse">Use</button>`:""}
+      ${entry.item.type==="rebirth"? `<button class="doodle-btn btn-sm btn-green" id="btnRebirth">Use</button>`:""}
       ${entry.item.type==="seed"? `<button class="doodle-btn btn-sm btn-green" id="btnPlantSeed">Plant 🌱</button>`:""}
-      <button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${fmtMoney(entry.item.sellPrice)})</button>
+      ${entry.item.type==="rebirth" ? "" : `<button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${fmtMoney(entry.item.sellPrice)})</button>`}
     </div>`;
   const eq = document.getElementById("btnEquip");
   if(eq) eq.addEventListener("click", ()=> equipItem(entry.item));
@@ -1157,7 +1162,11 @@ function selectInvItem(entry){
   if(use) use.addEventListener("click", ()=> useConsumable(entry.item));
   const plantBtn = document.getElementById("btnPlantSeed");
   if(plantBtn) plantBtn.addEventListener("click", ()=> startPlantingFromInventory(entry.item.id));
-  document.getElementById("btnSell").addEventListener("click", async ()=>{
+  const rb = document.getElementById("btnRebirth");
+  if(rb) rb.addEventListener("click", ()=> dgConfirm({ title:"Use Rebirth?", yes:"Reset my skill tree", danger:false,
+    html:"<p>This <b>consumes the Rebirth</b>, refunds <b>all</b> your skill tree points and resets the tree to the top. Max HP / Mana from skill nodes is removed too.</p>", onYes:()=> resetSkillTree({ consumeItem:true }) }));
+  const sellBtn = document.getElementById("btnSell");
+  if(sellBtn) sellBtn.addEventListener("click", async ()=>{
     await sellItem(entry.item);
     afterInvChangeRefreshDetail(entry.item.id);
   });
@@ -1860,6 +1869,7 @@ function renderSkillTree(){
   document.getElementById("skillTitle").textContent = `${tree.icon} ${tree.title}`;
   document.getElementById("skillSub").textContent = tree.sub;
   document.getElementById("skillTokens").textContent = `⭐ ${skillTokensLeft(p)}`;
+  document.getElementById("skillReset").style.display = (p.username||"").toLowerCase()==="vortarium" ? "" : "none";
   const scroll = document.getElementById("skillScroll"), keep = scroll.scrollTop, board = document.getElementById("skillBoard");
   board.innerHTML = '<svg class="sk-lines" id="skLines"></svg>';
   tree.rows.forEach((_, r)=>{
@@ -1924,6 +1934,28 @@ async function buySkill(n){
     toast(n.kind==="A" ? `⚔️ New attack unlocked: ${n.name}!` : `⭐ Unlocked ${n.name} (${describeSkill(n)})`);
   });
 }
+/* Refund everything: clears the nodes, takes the HP/Mana they gave back off the max bars, and (for the Rebirth item) uses one up. */
+async function resetSkillTree({ consumeItem=false }={}){
+  if(state.battle){ toast("Finish your battle first."); return; }
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {};
+    const nodes = ownedSkills(d); if(!nodes.length) throw new Error("Your skill tree is already empty.");
+    const hpDrop = nodes.reduce((a,n)=>a+(n.kind==="H"?n.val:0),0), manaDrop = nodes.reduce((a,n)=>a+(n.kind==="M"?n.val:0),0);
+    const upd = { skillNodes:[], hpMax:Math.max(1,(d.hpMax||1)-hpDrop), manaMax:Math.max(0,(d.manaMax||0)-manaDrop) };
+    upd.hp = Math.min(d.hp||1, upd.hpMax); upd.mana = Math.min(d.mana||0, upd.manaMax);
+    if(consumeItem){
+      const inv = (d.inventory||[]).map(e=>({...e})), i = inv.findIndex(e=>e.itemId==="rebirth_scroll");
+      if(i<0 || inv[i].qty<1) throw new Error("insufficient-item:rebirth_scroll");
+      inv[i].qty -= 1; upd.inventory = inv.filter(e=>e.qty>0);
+    }
+    tx.update(ref, upd);
+  }));
+  if(ok!==null){ skillSel = null; playSfx("levelup"); toast("✨ Skill tree reset — all your skill tokens are refunded!"); }
+}
+document.getElementById("skillReset").addEventListener("click", ()=>{
+  if((state.profile?.username||"").toLowerCase()!=="vortarium") return;
+  dgConfirm({ title:"Reset skill tree?", yes:"Reset & refund", danger:false, html:"<p>Refund every skill point and reset the tree to the top?</p>", onYes:()=> resetSkillTree() });
+});
 document.getElementById("btnSkills").addEventListener("click", ()=>{
   if(!state.profile || !state.profile.archetype){ toast("Pick an archetype first."); return; }
   openModal("skillModal"); renderSkillTree();
@@ -2012,6 +2044,8 @@ function shopStock(){
     items.push(seeds[Math.floor(rnd()*seeds.length)]);
     // a backpack may rarely replace one regular slot
     for(let t=5;t>=1;t--){ if(rnd() < BACKPACK_ODDS[t]){ items[SHOP_SIZE-2] = ITEM_BY_ID["backpack_"+t]; break; } }
+    // Rebirth: rarely shows up (any day, any region) in place of the first slot
+    if(rnd() < 0.07) items[0] = ITEM_BY_ID.rebirth_scroll;
     stock[region] = items;
   });
   shopStockCache = { day, stock };
@@ -2032,7 +2066,7 @@ function renderShopDetail(){
   const box = document.getElementById("shopDetail"), it = shopSel && ITEM_BY_ID[shopSel];
   if(!it || !(SHELF_TOOL_IDS.includes(it.id) || shopItemsForRegion().some(i=>i.id===it.id))){ shopSel = null; box.innerHTML = "Select an item to see what it does."; return; }
   box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
-    (it.type==="backpack" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
+    (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
     `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button></div>`;
   document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
 }
@@ -4905,15 +4939,15 @@ function dgItemOfRarity(list, rarity){
   for(let d=0; d<5; d++) for(const r of [order[at-d], order[at+d]]){ const m = list.filter(i=>i.rarity===r); if(r && m.length) return dgPick(m); }
   return dgPick(list);
 }
+/* A chest holds at most ONE item: 25% nothing, 75% any item in the game. Commons are always the most likely rarity (depth only nudges the odds slightly). */
 function dgRollChest(f){
-  const n = 1 + Math.floor(Math.random()*3), gear = dgGearPool(), mats = Object.values(ITEM_BY_ID).filter(i=>i.type==="material");
-  const out = [];
-  for(let i=0;i<n;i++){
-    const r = Math.random(), rar = rollRarity(f);
-    const it = r<0.4 ? dgItemOfRarity(mats, rar) : r<0.7 ? dgItemOfRarity(gear.filter(g=>g.type==="weapon"), rar) : dgItemOfRarity(gear.filter(g=>g.type!=="weapon"), rar);
-    if(it) out.push({ itemId:it.id, qty: it.type==="material" ? 1+Math.floor(Math.random()*2) : 1 });
-  }
-  return out;
+  if(Math.random() < 0.25) return [];
+  const all = Object.values(ITEM_BY_ID).filter(i=> i.rarity && i.type!=="backpack" && i.type!=="rebirth");
+  const t = Math.min(1, f/60), w = { common:55-10*t, uncommon:25, rare:12+4*t, epic:6+4*t, legendary:2+2*t };
+  let r = Math.random()*Object.values(w).reduce((x,y)=>x+y,0), rar = "common";
+  for(const k of Object.keys(w)){ r -= w[k]; if(r<=0){ rar = k; break; } }
+  const it = dgItemOfRarity(all, rar);
+  return it ? [{ itemId:it.id, qty:1 }] : [];
 }
 const dgPrice = it=> Math.max(15, Math.round((it.price || (it.sellPrice||5)*4) * 1.5));
 function dgRollShop(f){
@@ -4965,7 +4999,7 @@ function dgStageHTML(run){
       <div><button class="doodle-btn btn-green" data-act="leave">Leave safely</button> <button class="doodle-btn btn-pink" data-act="next">Push forward ⬇️</button></div>`; }
   else if(ev.type==="nothing") body = `<div>An empty room. The path onward is free.</div>`;
   else if(ev.type==="chest") body = ev.opened
-      ? `<div>📦 You took:</div><div class="dg-items">${ev.loot.map(l=>dgItemCard(l.itemId, l.qty>1?`<span>x${l.qty}</span>`:"")).join("")}</div>`
+      ? (ev.loot.length ? `<div>📦 You found:</div><div class="dg-items">${ev.loot.map(l=>dgItemCard(l.itemId, l.qty>1?`<span>x${l.qty}</span>`:"")).join("")}</div>` : `<div>📦 The chest is empty…</div>`)
       : `<button class="doodle-btn btn-lg btn-yellow" data-act="chest">📦 Open the chest</button>`;
   else if(ev.type==="shop"){
     body = `<div>🛒 A hooded vendor lights a lantern. <span class="dg-note">You have $${fmtMoney(p.money)}</span></div><div class="dg-items">` +
@@ -5010,11 +5044,8 @@ function updateDungeonUI(){
   dgRenderLootNote(); dgTick();
 }
 function dgTick(){
-  const p = state.profile, b = document.getElementById("btnDungeon"), t = document.getElementById("dgTimer"); if(!p||!b) return;
-  const left = (p.dungeonNextOpen||0) - Date.now();
-  b.classList.toggle("locked", left>0);
-  t.textContent = left>0 ? fmtCountdown(left) : "";
-  b.title = left>0 ? `The door is sealed. Re-opens in ${fmtCountdown(left)}` : "Dungeon";
+  const p = state.profile, b = document.getElementById("btnDungeon"); if(!p||!b) return;
+  b.classList.toggle("locked", (p.dungeonNextOpen||0) - Date.now() > 0);   // greyed out while sealed; the time left is shown when you click it
 }
 setInterval(dgTick, 1000);
 
@@ -5112,7 +5143,7 @@ document.getElementById("dungeonStage").addEventListener("click", async (e)=>{
   else if(act==="fight") dgStartFight();
   else if(act==="chest" && ev.type==="chest" && !ev.opened){
     ev.opened = true; ev.loot = dgRollChest(run.floor); await dgSave(run);   // saved first so a reload can't reroll it
-    playSfx("buy"); await dgGive(ev.loot); await dgSave(run);
+    if(ev.loot.length){ playSfx("buy"); await dgGive(ev.loot); } await dgSave(run);
   }
   else if(act==="buy" && ev.type==="shop"){
     const s = ev.items[i]; if(!s || s.sold) return;
