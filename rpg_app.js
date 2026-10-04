@@ -2644,7 +2644,7 @@ async function doFishAction(){
 
   const newTarget = ()=>{
     // 35%: a long dart across the bar, otherwise a shorter drift around the current spot
-    target = Math.random()<0.35 ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
+    target = Math.random()<(rule.longMove ?? 0.35) ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
     if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
   };
   const GRAVITY = 0.9, LIFT = -1.8, MAXV = 6;
@@ -2652,11 +2652,11 @@ async function doFishAction(){
   game.id = setInterval(()=>{
     tick++;
     // --- fish AI ---
-    if(dash>0){ fishY += dashDir*rule.speed*3.2; dash--; if(fishY<=0||fishY>=maxFish){ dash = 0; } }
-    else if(pause>0){ pause--; fishY += Math.sin(tick/2)*0.8; }          // hovers and wobbles
+    if(dash>0){ if(rule.flip && Math.random()<rule.flip) dashDir = -dashDir; fishY += dashDir*rule.speed*(rule.dashMul ?? 3.2); dash--; if(fishY<=0||fishY>=maxFish){ dash = 0; } }
+    else if(pause>0){ pause--; fishY += Math.sin(tick/2)*(rule.wobble ?? 0.8); }          // hovers and wobbles
     else {
       if(Math.random() < rule.jitter) newTarget();
-      if(Math.random() < rule.dash){ dash = 4 + Math.floor(Math.random()*5); dashDir = Math.random()<0.5 ? -1 : 1; }
+      if(Math.random() < rule.dash){ { const [dMin,dMax] = rule.dashLen || [4,8]; dash = dMin + Math.floor(Math.random()*(dMax-dMin+1)); } dashDir = Math.random()<0.5 ? -1 : 1; }
       const dist = target - fishY, step = rule.speed*(1 + Math.min(1.5, Math.abs(dist)/trackH*3));
       if(Math.abs(dist) <= step){ fishY = target; newTarget(); } else fishY += Math.sign(dist)*step;
     }
