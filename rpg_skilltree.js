@@ -10,8 +10,8 @@
      M#=+Max Mana   H#=+Max HP   D#=+Damage
      S:<STAT>:<n>            = +n to SPEED / STRENGTH / CHARM / SMARTS  (+1 or +2)
      A<mana>:<dmg>           = new attack costing <mana> that deals +<dmg> over a basic attack
-     L<mana>:<lo>-<hi>:<cd>  = attack that also HEALS lo-hi HP, cooldown of <cd> of your moves after each use
-     N<mana>:<lo>-<hi>:<cd>  = attack that also restores lo-hi MANA, cooldown of <cd> of your moves after each use
+     L<mana>:<lo>-<hi>:<cd>  = attack that also HEALS lo-hi HP, usable once every <cd> of your moves
+     N<mana>:<lo>-<hi>:<cd>:<hp> = attack that also restores lo-hi MANA but costs <hp> HP to cast, cooldown <cd> moves
    ========================================================================= */
 export const SKILL_TREES = {
   fire: { rows:[
@@ -20,26 +20,26 @@ export const SKILL_TREES = {
     ["Kindled Blood|1|H6", "Kindled Soul|1|M6", "Solar Might|2|S:STRENGTH:1", "Kindled Fury|1|D2"],
     ["Cinder Skin|1|H7", "Cinder Reservoir|1|M8", "Cinder Flame|1|D2"],
     ["Molten Flesh|2|H8", "Molten Fist|2|D2", "Molten Core|2|M9"],
-    ["Blazing Edge|2|D3", "Blazing Spark|2|M11", "Blazing Heart|2|H10", "Firebolt|3|A15:15"],
+    ["Blazing Edge|2|D3", "Blazing Spark|2|M11", "Blazing Heart|2|H10", "Firebolt|3|A25:15"],
     ["Ashen Body|2|H11", "Ashen Strike|2|D3", "Ashen Well|2|M12"],
-    ["Searing Fury|2|D4", "Ember Mending|3|L10:50-65:2", "Searing Soul|2|M14", "Searing Blood|2|H13"],
+    ["Searing Fury|2|D4", "Ember Mending|3|L40:50-65:2", "Searing Soul|2|M14", "Searing Blood|2|H13"],
     ["Radiant Allure|3|S:CHARM:1", "Infernal Reservoir|2|M15", "Infernal Skin|2|H14", "Infernal Flame|2|D4"],
-    ["Crimson Flesh|2|H15", "Crimson Fist|2|D4", "Crimson Core|2|M17", "Spark Siphon|3|N5:25-32:2"],
+    ["Crimson Flesh|2|H15", "Crimson Fist|2|D4", "Crimson Core|2|M17", "Spark Siphon|3|N10:25-32:2:40"],
     ["Hellfire Wit|4|S:SMARTS:2", "Smoldering Heart|2|H17", "Smoldering Edge|2|D5", "Smoldering Spark|2|M18"],
     ["Eternal Might|3|S:STRENGTH:1", "Volcanic Strike|2|D5", "Volcanic Body|2|H18", "Volcanic Well|2|M20"],
-    ["Magma Blood|3|H20", "Meteor Burst|4|A30:35", "Magma Soul|3|M21", "Magma Fury|3|D6"],
+    ["Magma Blood|3|H20", "Meteor Burst|4|A50:35", "Magma Soul|3|M21", "Magma Fury|3|D6"],
     ["Ember Wit|4|S:SMARTS:1", "Phoenix Reservoir|3|M22", "Phoenix Skin|3|H21", "Phoenix Flame|3|D6"],
-    ["Solar Core|3|M24", "Solar Fist|3|D6", "Solar Flesh|3|H22", "Cinder Focus|4|N8:32-42:3"],
+    ["Solar Core|3|M24", "Solar Fist|3|D6", "Solar Flesh|3|H22", "Cinder Focus|4|N15:32-42:3:60"],
     ["Obsidian Edge|3|D7", "Kindled Allure|4|S:CHARM:1", "Obsidian Spark|3|M25", "Obsidian Heart|3|H24"],
-    ["Phoenix Rite|4|L15:65-85:3", "Pyre Body|3|H25", "Pyre Strike|3|D7", "Pyre Well|3|M27"],
+    ["Phoenix Rite|4|L70:65-85:3", "Pyre Body|3|H25", "Pyre Strike|3|D7", "Pyre Well|3|M27"],
     ["Brimstone Soul|3|M28", "Brimstone Fury|3|D7", "Brimstone Blood|3|H26"],
     ["Wildfire Skin|3|H28", "Wildfire Reservoir|3|M30", "Blazing Swiftness|5|S:SPEED:2", "Wildfire Flame|3|D8"],
     ["Furnace Flesh|3|H29", "Furnace Fist|3|D8", "Furnace Core|3|M31"],
-    ["Radiant Spark|4|M33", "Radiant Heart|4|H30", "Supernova|5|A60:50", "Radiant Edge|4|D8"],
+    ["Radiant Spark|4|M33", "Radiant Heart|4|H30", "Supernova|5|A100:50", "Radiant Edge|4|D8"],
     ["Infernal Wit|5|S:SMARTS:1", "Scarlet Strike|4|D9", "Scarlet Well|4|M34", "Scarlet Body|4|H32"],
-    ["Hellfire Fury|4|D9", "Hellfire Blood|4|H33", "Hellfire Soul|4|M36", "Rebirth Flame|5|L20:80-100:4"],
+    ["Hellfire Fury|4|D9", "Hellfire Blood|4|H33", "Hellfire Soul|4|M36", "Rebirth Flame|5|L100:80-100:4"],
     ["Eternal Reservoir|4|M37", "Eternal Skin|4|H35", "Eternal Flame|4|D10"],
-    ["Worldfire Flesh|4|H36", "Worldfire Core|4|M38", "Worldfire Fist|4|D10", "Solar Draw|5|N10:40-50:4"]
+    ["Worldfire Flesh|4|H36", "Worldfire Core|4|M38", "Worldfire Fist|4|D10", "Solar Draw|5|N20:40-50:4:80"]
   ], linked:false, title:"Fire Skill Tree", sub:"Highest damage growth, aggressive paths and a smaller high-HP path.", icon:"🔥", rowNames:{ 1:"The First Flame", 6:"First Spell: Firebolt", 13:"Second Spell: Meteor Burst", 21:"Final Spell: Supernova", 25:"Final Flame" } },
 
   air: { rows:[
@@ -47,24 +47,24 @@ export const SKILL_TREES = {
     ["Upper Allure|2|S:CHARM:1", "Skybound Slash|1|D1", "Skybound Frame|1|H4", "Skybound Soul|1|M7"],
     ["Windborne Body|1|H5", "Windborne Well|1|M9", "Windborne Fury|1|D2"],
     ["Thunderhead Wit|2|S:SMARTS:1", "Open Breath|1|H6", "Open Sky|1|M11", "Open Gust|1|D2"],
-    ["Soothing Breeze|3|L10:50-65:2", "Highwind Edge|2|D2", "Highwind Heart|2|H7", "Highwind Current|2|M13"],
-    ["Cloudstep Breeze|2|M15", "Cloudstep Strike|2|D3", "Cloudstep Spirit|2|H8", "Wind Slash|3|A15:15"],
+    ["Soothing Breeze|3|L40:50-65:2", "Highwind Edge|2|D2", "Highwind Heart|2|H7", "Highwind Current|2|M13"],
+    ["Cloudstep Breeze|2|M15", "Cloudstep Strike|2|D3", "Cloudstep Spirit|2|H8", "Wind Slash|3|A25:15"],
     ["Razor Frame|2|H9", "Razor Slash|2|D3", "Storm Might|3|S:STRENGTH:1", "Razor Soul|2|M18"],
     ["Boreal Wit|3|S:SMARTS:1", "Cyclone Well|2|M20", "Cyclone Body|2|H11", "Cyclone Fury|2|D3"],
-    ["Stormheart Gust|2|D4", "Stormheart Breath|2|H12", "Breath of Focus|3|N5:25-32:2", "Stormheart Sky|2|M22"],
+    ["Stormheart Gust|2|D4", "Stormheart Breath|2|H12", "Breath of Focus|3|N10:25-32:2:40", "Stormheart Sky|2|M22"],
     ["Gale Current|2|M24", "Gale Edge|2|D4", "Gale Heart|2|H13"],
-    ["Tempest Strike|2|D4", "Tempest Spirit|2|H14", "Healing Gale|3|L15:65-85:3", "Tempest Breeze|2|M26"],
+    ["Tempest Strike|2|D4", "Tempest Spirit|2|H14", "Healing Gale|3|L70:65-85:3", "Tempest Breeze|2|M26"],
     ["Jetstream Soul|2|M28", "Jetstream Slash|2|D5", "Jetstream Frame|2|H15"],
-    ["Zephyr Fury|3|D5", "Zephyr Body|3|H16", "Cyclone|4|A30:35", "Zephyr Well|3|M30"],
+    ["Zephyr Fury|3|D5", "Zephyr Body|3|H16", "Cyclone|4|A50:35", "Zephyr Well|3|M30"],
     ["Upper Gust|3|D5", "Upper Breath|3|H17", "Upper Sky|3|M32"],
-    ["Heaven's Current|3|M34", "Heaven's Heart|3|H19", "Sky Siphon|4|N8:32-42:3", "Heaven's Edge|3|D6"],
+    ["Heaven's Current|3|M34", "Heaven's Heart|3|H19", "Sky Siphon|4|N15:32-42:3:60", "Heaven's Edge|3|D6"],
     ["Thunderhead Breeze|3|M36", "Thunderhead Strike|3|D6", "Thunderhead Spirit|3|H20"],
     ["Skyward Frame|3|H21", "Skyward Soul|3|M38", "Skyward Slash|3|D6", "Open Might|4|S:STRENGTH:1"],
-    ["Featherlight Well|3|M40", "Featherlight Fury|3|D7", "Heaven's Mercy|4|L20:80-100:4", "Featherlight Body|3|H22"],
+    ["Featherlight Well|3|M40", "Featherlight Fury|3|D7", "Heaven's Mercy|4|L100:80-100:4", "Featherlight Body|3|H22"],
     ["Cloudstep Swiftness|4|S:SPEED:1", "Storm Sky|3|M42", "Storm Gust|3|D7", "Storm Breath|3|H23"],
     ["Razor Allure|4|S:CHARM:1", "Boreal Heart|3|H24", "Boreal Edge|3|D7", "Boreal Current|3|M45"],
-    ["Cirrus Spirit|4|H25", "Cirrus Strike|4|D8", "Divine Hurricane|5|A60:50", "Cirrus Breeze|4|M47"],
-    ["Celestial Frame|4|H27", "Celestial Soul|4|M49", "Celestial Slash|4|D8", "Aether Draw|5|N10:40-50:4"],
+    ["Cirrus Spirit|4|H25", "Cirrus Strike|4|D8", "Divine Hurricane|5|A100:50", "Cirrus Breeze|4|M47"],
+    ["Celestial Frame|4|H27", "Celestial Soul|4|M49", "Celestial Slash|4|D8", "Aether Draw|5|N20:40-50:4:80"],
     ["Monsoon Body|4|H28", "Monsoon Fury|4|D8", "Monsoon Well|4|M51"],
     ["Eye of Breath|4|H29", "Eye of Gust|4|D9", "Eye of Sky|4|M53"],
     ["Infinite Edge|4|D9", "Jetstream Might|5|S:STRENGTH:1", "Infinite Current|4|M55", "Infinite Heart|4|H30"]
@@ -75,26 +75,26 @@ export const SKILL_TREES = {
     ["Deepwater Wave|1|D1", "Deepwater Depth|1|M8", "Deepwater Heart|1|H6"],
     ["Clear Force|1|D1", "Clear Stream|1|M10", "Clear Blood|1|H8"],
     ["Riverstone Tide|1|M12", "Riverstone Flesh|1|H10", "Riverstone Strike|1|D1"],
-    ["Tidal Focus|3|N5:25-32:2", "Tidal Surge|2|D2", "Tidal Body|2|H11", "Tidal Reservoir|2|M15"],
-    ["Rushing Spring|2|M17", "Rushing Hull|2|H13", "Water Spear|3|A15:15", "Rushing Crash|2|D2"],
+    ["Tidal Focus|3|N10:25-32:2:40", "Tidal Surge|2|D2", "Tidal Body|2|H11", "Tidal Reservoir|2|M15"],
+    ["Rushing Spring|2|M17", "Rushing Hull|2|H13", "Water Spear|3|A25:15", "Rushing Crash|2|D2"],
     ["Oceanic Depth|2|M19", "Oceanic Wave|2|D2", "Oceanic Heart|2|H15"],
     ["Trench Might|3|S:STRENGTH:1", "Abyssal Blood|2|H17", "Abyssal Force|2|D3", "Abyssal Stream|2|M22"],
-    ["Mending Stream|3|L10:50-65:2", "Drowning Flesh|2|H19", "Drowning Strike|2|D3", "Drowning Tide|2|M24"],
+    ["Mending Stream|3|L40:50-65:2", "Drowning Flesh|2|H19", "Drowning Strike|2|D3", "Drowning Tide|2|M24"],
     ["Undertow Surge|2|D3", "Undertow Body|2|H20", "Undertow Reservoir|2|M26"],
-    ["Leviathan Spring|2|M28", "Leviathan Crash|2|D3", "Leviathan Hull|2|H22", "Restoring Tide|3|L15:65-85:3"],
+    ["Leviathan Spring|2|M28", "Leviathan Crash|2|D3", "Leviathan Hull|2|H22", "Restoring Tide|3|L70:65-85:3"],
     ["Coral Depth|2|M31", "Boundless Allure|4|S:CHARM:2", "Coral Heart|2|H24", "Coral Wave|2|D4"],
-    ["Brine Blood|3|H26", "Brine Stream|3|M33", "Tidal Crash|4|A30:35", "Brine Force|3|D4"],
+    ["Brine Blood|3|H26", "Brine Stream|3|M33", "Tidal Crash|4|A50:35", "Brine Force|3|D4"],
     ["Sea Flesh|3|H28", "Gentle Swiftness|4|S:SPEED:1", "Sea Strike|3|D4", "Sea Tide|3|M35"],
-    ["Crushing Surge|3|D4", "Crushing Reservoir|3|M38", "Crushing Body|3|H30", "Moonwell Draw|4|N8:32-42:3"],
+    ["Crushing Surge|3|D4", "Crushing Reservoir|3|M38", "Crushing Body|3|H30", "Moonwell Draw|4|N15:32-42:3:60"],
     ["Mariner's Crash|3|D5", "Clear Wit|4|S:SMARTS:1", "Mariner's Spring|3|M40", "Mariner's Hull|3|H32"],
     ["Stormtide Wave|3|D5", "Stormtide Depth|3|M42", "Stormtide Heart|3|H33", "Riverstone Wit|5|S:SMARTS:2"],
     ["Glacial Blood|3|H35", "Glacial Stream|3|M44", "Glacial Force|3|D5"],
     ["Moonlit Tide|3|M47", "Moonlit Strike|3|D5", "Moonlit Flesh|3|H37", "Rushing Allure|4|S:CHARM:1"],
-    ["Trench Reservoir|3|M49", "Deep Meditation|4|N10:40-50:4", "Trench Surge|3|D6", "Trench Body|3|H39"],
-    ["Kraken Hull|4|H41", "Kraken Crash|4|D6", "Ocean's End|5|A60:50", "Kraken Spring|4|M51"],
+    ["Trench Reservoir|3|M49", "Deep Meditation|4|N20:40-50:4:80", "Trench Surge|3|D6", "Trench Body|3|H39"],
+    ["Kraken Hull|4|H41", "Kraken Crash|4|D6", "Ocean's End|5|A100:50", "Kraken Spring|4|M51"],
     ["Tsunami Heart|4|H42", "Tsunami Depth|4|M54", "Tsunami Wave|4|D6", "Drowning Swiftness|6|S:SPEED:2"],
     ["Primordial Force|4|D6", "Undertow Might|6|S:STRENGTH:2", "Primordial Blood|4|H44", "Primordial Stream|4|M56"],
-    ["Boundless Strike|4|D7", "Boundless Flesh|4|H46", "Boundless Tide|4|M58", "Spring of Life|5|L20:80-100:4"],
+    ["Boundless Strike|4|D7", "Boundless Flesh|4|H46", "Boundless Tide|4|M58", "Spring of Life|5|L100:80-100:4"],
     ["Endless Surge|4|D7", "Endless Reservoir|4|M61", "Endless Body|4|H48", "Coral Allure|5|S:CHARM:1"]
   ], linked:false, title:"Water Skill Tree", sub:"The Mana-heavy archetype, balanced with HP and moderate Damage.", icon:"🌊", rowNames:{ 1:"First Drop", 6:"First Spell: Water Spear", 13:"Second Spell: Tidal Crash", 21:"Final Spell: Ocean's End", 25:"The Deep" } },
 
@@ -103,25 +103,25 @@ export const SKILL_TREES = {
     ["Stone Heart|1|H9", "Stone Hands|1|D1", "Bedrock Wit|2|S:SMARTS:1", "Stone Well|1|M3"],
     ["Granite Core|1|H11", "Obsidian Swiftness|2|S:SPEED:1", "Granite Reservoir|1|M4", "Granite Might|1|D1"],
     ["Cavern Might|2|S:STRENGTH:1", "Solid Hide|1|H14", "Solid Force|1|D2", "Solid Seam|1|M4"],
-    ["Crystal Focus|3|N5:25-32:2", "Ironstone Core|2|M5", "Ironstone Body|2|H17", "Ironstone Fist|2|D2"],
-    ["Stone Spike|3|A15:15", "Boulder Vein|2|M6", "Boulder Frame|2|H20", "Boulder Strike|2|D2"],
+    ["Crystal Focus|3|N10:25-32:2:40", "Ironstone Core|2|M5", "Ironstone Body|2|H17", "Ironstone Fist|2|D2"],
+    ["Stone Spike|3|A25:15", "Boulder Vein|2|M6", "Boulder Frame|2|H20", "Boulder Strike|2|D2"],
     ["Monolith Swiftness|3|S:SPEED:1", "Mountain Well|2|M7", "Mountain Hands|2|D3", "Mountain Heart|2|H22"],
-    ["Tremor Core|2|H25", "Tremor Might|2|D3", "Tremor Reservoir|2|M8", "Mossy Salve|3|L10:50-65:2"],
+    ["Tremor Core|2|H25", "Tremor Might|2|D3", "Tremor Reservoir|2|M8", "Mossy Salve|3|L40:50-65:2"],
     ["Buried Force|2|D3", "Buried Hide|2|H28", "Buried Seam|2|M9"],
     ["Ancient Fist|2|D4", "Ancient Core|2|M10", "Ancient Body|2|H31"],
-    ["Titan's Frame|2|H34", "Titan's Strike|2|D4", "Titan's Vein|2|M10", "Geode Draw|3|N8:32-42:3"],
+    ["Titan's Frame|2|H34", "Titan's Strike|2|D4", "Titan's Vein|2|M10", "Geode Draw|3|N15:32-42:3:60"],
     ["Continental Hands|2|D4", "Continental Heart|2|H36", "Continental Well|2|M11", "Unbreakable Might|3|S:STRENGTH:1"],
-    ["Seismic Reservoir|3|M12", "Earthquake|4|A30:35", "Seismic Core|3|H39", "Seismic Might|3|D4"],
+    ["Seismic Reservoir|3|M12", "Earthquake|4|A50:35", "Seismic Core|3|H39", "Seismic Might|3|D4"],
     ["Bedrock Hide|3|H42", "Bedrock Seam|3|M13", "Bedrock Force|3|D5"],
-    ["Stone Mending|4|L15:65-85:3", "Obsidian Body|3|H44", "Obsidian Core|3|M14", "Obsidian Fist|3|D5"],
+    ["Stone Mending|4|L70:65-85:3", "Obsidian Body|3|H44", "Obsidian Core|3|M14", "Obsidian Fist|3|D5"],
     ["Cavern Frame|3|H47", "Cavern Strike|3|D5", "Granite Allure|5|S:CHARM:2", "Cavern Vein|3|M14"],
     ["Basalt Well|3|M15", "Basalt Hands|3|D6", "Basalt Heart|3|H50"],
     ["Colossus Core|3|H53", "Colossus Reservoir|3|M16", "Ironstone Wit|4|S:SMARTS:1", "Colossus Might|3|D6"],
     ["Monolith Seam|3|M17", "Monolith Force|3|D6", "Monolith Hide|3|H56"],
-    ["Quarry Body|3|H58", "Quarry Core|3|M18", "Quarry Fist|3|D6", "Ley Line|4|N10:40-50:4"],
-    ["Meteorite|5|A60:50", "Geode Strike|4|D7", "Geode Vein|4|M19", "Geode Frame|4|H61"],
+    ["Quarry Body|3|H58", "Quarry Core|3|M18", "Quarry Fist|3|D6", "Ley Line|4|N20:40-50:4:80"],
+    ["Meteorite|5|A100:50", "Geode Strike|4|D7", "Geode Vein|4|M19", "Geode Frame|4|H61"],
     ["Buried Allure|5|S:CHARM:1", "Tectonic Well|4|M20", "Tectonic Heart|4|H64", "Tectonic Hands|4|D7"],
-    ["Life of the Mountain|5|L20:80-100:4", "Primeval Might|4|D7", "Primeval Reservoir|4|M20", "Primeval Core|4|H66"],
+    ["Life of the Mountain|5|L100:80-100:4", "Primeval Might|4|D7", "Primeval Reservoir|4|M20", "Primeval Core|4|H66"],
     ["Unbreakable Seam|4|M21", "Unbreakable Hide|4|H69", "Unbreakable Force|4|D8"],
     ["Worldshaker Fist|4|D8", "Worldshaker Core|4|M22", "Worldshaker Body|4|H72"]
   ], linked:false, title:"Earth Skill Tree", sub:"The highest HP potential and strong Damage, but little Mana.", icon:"🪨", rowNames:{ 1:"Stone Awakening", 6:"First Spell: Stone Spike", 13:"Second Spell: Earthquake", 21:"Final Spell: Meteorite", 25:"The Colossus" } }
@@ -140,7 +140,7 @@ Object.keys(SKILL_TREES).forEach(el=>{
     const [name, cost, code] = s.split("|"), kind = code[0];
     const n = { id:`${el}_${r+1}_${c+1}`, el, row:r+1, col:c, name, cost:+cost, kind, parent:null };
     if(kind==="A"){ const [m,d] = code.slice(1).split(":"); n.mana=+m; n.val=+d; }
-    else if(kind==="L" || kind==="N"){ const [m,range,cd] = code.slice(1).split(":"), [lo,hi] = range.split("-"); n.mana=+m; n.lo=+lo; n.hi=+hi; n.cd=+cd; }
+    else if(kind==="L" || kind==="N"){ const [m,range,cd,hp] = code.slice(1).split(":"), [lo,hi] = range.split("-"); n.mana=+m; n.lo=+lo; n.hi=+hi; n.cd=+cd; n.hpCost=+(hp||0); }
     else if(kind==="S"){ const [, stat, v] = code.split(":"); n.stat=stat; n.val=+v; }
     else n.val = +code.slice(1);
     list.push(n);
@@ -159,6 +159,6 @@ export function describeSkill(n){
   if(n.kind==="D") return `+${n.val} Damage`;
   if(n.kind==="S") return `+${n.val} ${n.stat.charAt(0)+n.stat.slice(1).toLowerCase()}`;
   if(n.kind==="L") return `HEALING ATTACK — costs ${n.mana} Mana, a basic hit that also heals ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves`;
-  if(n.kind==="N") return `MANA ATTACK — costs ${n.mana} Mana, a basic hit that also restores ${n.lo}-${n.hi} Mana. Cooldown: ${n.cd} moves`;
+  if(n.kind==="N") return `MANA ATTACK — costs ${n.mana} Mana AND ${n.hpCost} HP, a basic hit that also restores ${n.lo}-${n.hi} Mana. Cooldown: ${n.cd} moves`;
   return `NEW ATTACK — costs ${n.mana} Mana, deals +${n.val} damage compared with a basic attack`;
 }

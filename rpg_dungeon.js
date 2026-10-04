@@ -7,6 +7,9 @@ export const DG_TRACK = "rpg_dungeon.mp3";
 export const DG_COOLDOWN_MS = 24*60*60*1000;      // the door re-opens 24h after you leave
 export const DG_LOCKED_TABS = ["map","jobs","shop","farm","duel"];
 export const DG_SKIP_PRICE = 100;
+/* Cash per kill follows the same tiers as the open world (bosses pay triple). */
+export const DG_MONEY = { easy:[1,15], medium:[5,40], hard:[10,75] };
+const rndRange = ([lo,hi], rnd)=> lo + Math.floor(rnd()*(hi-lo+1));
 export const isCheckpoint = f => f % 5 === 0;     // 0, 5, 10, 15 ... (0 is the entrance)
 
 const pickWeighted = (w, rnd)=>{
@@ -47,7 +50,7 @@ export function buildMonster(f, kind, playerLevel, rnd=Math.random){
     id:"dg_"+name.toLowerCase().replace(/\W+/g,""), name, region:"dungeon", difficulty, level:lvl, element:"earth",
     sprite: kind==="boss" ? "👁️" : (SPRITES[name]||"💀"),
     hp: Math.round((20+lvl*8)*creep*hpM), attack: Math.max(1, Math.round((3+lvl*1.5)*creep*atkM)),
-    xpReward: Math.round((6+lvl*0.8)*rewM), moneyReward: Math.round((8+lvl*1.2+f)*rewM), dropChance:0
+    xpReward: Math.round((6+lvl*0.8)*rewM), moneyReward: Math.round(rndRange(DG_MONEY[difficulty], rnd)*(kind==="boss" ? 3 : 1)), dropChance:0
   };
 }
 export const waveSize = (f, rnd=Math.random)=> 2 + Math.floor(rnd()*3) + Math.floor(f/15);   // 2-4, +1 per 15 floors

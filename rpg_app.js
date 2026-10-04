@@ -12,7 +12,7 @@ import {
 import {
   initializeFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp, collectionGroup
+  increment, serverTimestamp, collectionGroup, getAggregateFromServer, sum
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
@@ -417,9 +417,9 @@ const ENEMY_NAME_PARTS = {
    shown to the player are unchanged. Rewards: easy pays less, hard pays more,
    and every tier gets a small bonus per monster level (see makeMonsterFromSlot). */
 const DIFF = {
-  easy:{ mult:1.0, xp:[3,6], money:[6,15] },
-  medium:{ mult:1.3, xp:[9,15], money:[16,38] },
-  hard:{ mult:1.6, xp:[18,34], money:[40,90] }
+  easy:{ mult:1.0, xp:[3,6], money:[1,15] },
+  medium:{ mult:1.3, xp:[9,15], money:[5,40] },
+  hard:{ mult:1.6, xp:[18,34], money:[10,75] }
 };
 const REWARD_PER_LEVEL = 0.04;   // +4% xp/money per monster level above 1
 /* Monster level is generated RELATIVE to the player's CURRENT level at the
@@ -468,7 +468,7 @@ function makeMonsterFromSlot(slot, playerLevel, rnd=Math.random){
     hp: Math.round((20 + lvl*8) * d.mult),
     attack: Math.round((3 + lvl*1.5) * d.mult),
     xpReward: Math.max(1, Math.round((d.xp[0] + rnd()*(d.xp[1]-d.xp[0])) * (1 + REWARD_PER_LEVEL*(lvl-1)))),
-    moneyReward: Math.max(1, Math.round((d.money[0] + rnd()*(d.money[1]-d.money[0])) * (1 + REWARD_PER_LEVEL*(lvl-1)))),
+    moneyReward: d.money[0] + Math.floor(rnd()*(d.money[1]-d.money[0]+1)),   // exactly the tier range (easy $1-15, medium $5-40, hard $10-75)
     dropChance: slot.difficulty==="easy"?0.25:slot.difficulty==="medium"?0.45:0.7
   };
 }
@@ -624,7 +624,7 @@ const state = {
 function rageMaxFor(level, archetype, smarts=0){
   const boon = (archetype && ELEMENTS[archetype]) ? ELEMENTS[archetype].boon : null;
   const base = 8 + Math.floor(Math.max(1, level||1)/3) + (boon==="rage" ? 4 : 0);
-  return Math.max(2, base - Math.max(0, smarts||0));      // every point of SMARTS = -1 max Rage (never below 2)
+  return Math.max(2, base - Math.floor(Math.max(0, smarts||0)/3));   // every 3 points of SMARTS = -1 max Rage (rounded down, never below 2)
 }
 function defaultPlayerDoc(username, archetype, klass){
   const bonus = (klass && CLASSES[klass]) ? CLASSES[klass].bonus : {};
@@ -2142,8 +2142,10 @@ function renderShopDetail(){
   if(!it || !(SHELF_TOOL_IDS.includes(it.id) || shopItemsForRegion().some(i=>i.id===it.id))){ shopSel = null; box.innerHTML = "Select an item to see what it does."; return; }
   box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
     (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
-    `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button></div>`;
+    `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button>` +
+    (it.type==="backpack"||it.type==="rebirth" ? "" : ` <button class="doodle-btn btn-green" id="btnShopBuy10">Buy 10 ($${fmtMoney(it.price*10)})</button>`) + `</div>`;
   document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
+  document.getElementById("btnShopBuy10")?.addEventListener("click", ()=> buyItem(it, 10));
 }
 function renderShop(){
   document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop — 6 items, new stock every day at 12am ET`;
@@ -2170,17 +2172,18 @@ async function buyBackpack(item){
   }));
   if(ok!==null){ playSfx("buy"); toast(`🎒 Backpack upgraded! You now have ${BACKPACK_SLOTS[t]} inventory slots.`, 5000); renderShop(); }
 }
-async function buyItem(item){
+async function buyItem(item, qty=1){
   if(item.type==="backpack") return buyBackpack(item);
-  if(state.profile.money < item.price){ toast("Not enough money!"); return; }
+  const cost = item.price*qty;
+  if(state.profile.money < cost){ toast("Not enough money!"); return; }
   // charge + add in ONE transaction; refused if there is no free slot
-  const ok = await applyInvChanges({ add:[{itemId:item.id, qty:1}], strict:true }, d=>{
-    if((d.money||0) < item.price) throw new Error("nomoney");
-    return { money:(d.money||0)-item.price, shopBought:(d.shopBought||0)+1 };   // shopBought feeds shopping sidequests
+  const ok = await applyInvChanges({ add:[{itemId:item.id, qty}], strict:true }, d=>{
+    if((d.money||0) < cost) throw new Error("nomoney");
+    return { money:(d.money||0)-cost, shopBought:(d.shopBought||0)+qty };   // shopBought feeds shopping sidequests
   });
   if(ok===null) return;
   playSfx("buy");
-  toast(`Bought ${item.name}`);
+  toast(qty>1 ? `Bought ${qty}x ${item.name} for $${fmtMoney(cost)}` : `Bought ${item.name}`);
   renderShopDetail();
 }
 
@@ -3962,6 +3965,13 @@ function pickEnemy(difficulty){
   const slot = pool[Math.floor(Math.random()*pool.length)];
   return slot && makeMonsterFromSlot(slot, state.profile.level);
 }
+/* How hard an enemy hits, relative to YOUR own attack power (dungeon enemies use their own floor scaling):
+     easy ~0.6x, medium ~1x, hard ~1.5x — blended 50/50 with the monster's level-based attack so it still grows with level. */
+const ENEMY_HIT_REF = { easy:0.6, medium:1.0, hard:1.5 };
+function enemyHitBase(m, b){
+  if(b && b.dg) return m.attack;
+  return (m.attack + playerAttackPower()*(ENEMY_HIT_REF[m.difficulty]||1)) / 2;
+}
 function playerAttackPower(){
   const p = state.profile;
   const weapon = p.equipped.weapon && ITEM_BY_ID[p.equipped.weapon];
@@ -3975,20 +3985,20 @@ const ATTACK_SKILLS = [
     dmgMult:()=>1, desc:"A standard strike. Always available." },
   { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
     dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
-  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:6,
-    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 6 mana. Extra damage that cuts through a brace." },
-  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:12,
-    dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 12 mana. Devastating hit." },
+  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:10,
+    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 10 mana. Extra damage that cuts through a brace." },
+  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:20,
+    dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 20 mana. Devastating hit." },
 ];
 const spellRoll = ([lo,hi])=> lo + Math.floor(Math.random()*(hi-lo+1));
 function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || treeAttacks(state.profile).find(s=>s.id===id) || ATTACK_SKILLS[0]; }
 /* Skill-tree attacks (Firebolt, Cyclone, ...) join the normal attack list once bought. */
 function treeAttacks(p){
   return ownedSkills(p).filter(isSpellNode).map(n=>{
-    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, flatDmg:0, dmgMult:()=>1, cooldown:0 };
+    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, hpCost:0, flatDmg:0, dmgMult:()=>1, cooldown:0 };
     if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${n.mana} mana. Deals +${n.val} damage compared with a basic attack.`; }
     else if(n.kind==="L"){ s.healHp = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana. A basic attack that also heals you for ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves.`; }
-    else { s.healMana = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
+    else { s.healMana = [n.lo,n.hi]; s.hpCost = n.hpCost||0; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana and ${s.hpCost} HP. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
     return s;
   });
 }
@@ -4062,7 +4072,6 @@ function rollIntent(diff){
 function nextIntent(b){
   b.shown = rollIntent(b.m.difficulty);
   b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty) : b.shown;
-  battleLogPush(`Enemy intends: ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label} — ${INTENTS[b.shown].tip}`);
 }
 function startPve(diff, dg=null){
   const p = state.profile, m = dg ? dg.m : pickEnemy(diff);
@@ -4078,7 +4087,7 @@ function startPve(diff, dg=null){
 }
 function renderPve(){
   const b = state.battle, p = state.profile, m = b.m;
-  document.getElementById("battleEnemyName").textContent = `${m.name} Lv.${m.level} — ${INTENTS[b.shown].icon} ${INTENTS[b.shown].label}`;
+  document.getElementById("battleEnemyName").textContent = `${m.name} Lv.${m.level}`;
   document.getElementById("battleEnemySprite").textContent = m.sprite || REGION_SPRITE[m.region] || "🐉";
   document.getElementById("battleEnemyHPBar").style.width = (100*Math.max(0,b.ehp)/m.hp)+"%";
   document.getElementById("battleEnemyHPNum").textContent = `${Math.max(0,b.ehp)}/${m.hp}`;
@@ -4115,6 +4124,7 @@ async function pveAct(move){
   const sk = [...ATTACK_SKILLS, ...treeAttacks(p)].find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
+  if(sk && sk.hpCost && b.php <= sk.hpCost){ toast(`Not enough HP — ${sk.name} costs ${sk.hpCost} HP.`); b.busy=false; return; }
   if(sk && sk.cooldown && ((b.cd||{})[sk.id]||0)>0){ toast(`${sk.name} is on cooldown (${b.cd[sk.id]} more moves).`); b.busy=false; return; }
   b.cd = b.cd || {};                                                            // every move you make ticks the spell cooldowns down
   Object.keys(b.cd).forEach(k=>{ if(b.cd[k]>0) b.cd[k]--; });
@@ -4130,6 +4140,7 @@ async function pveAct(move){
     if(s.needsFullRage) b.rage = 0;
     if(s.manaCost) b.mana -= s.manaCost;
     else if(s.id==="basic") b.rage = Math.min(p.rageMax, b.rage+1);
+    if(s.hpCost){ b.php -= s.hpCost; battleLogPush(`${s.name} costs you ${s.hpCost} HP.`); }
     let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
     if(brace && s.id!=="precision") d*=0.4;
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
@@ -4139,7 +4150,6 @@ async function pveAct(move){
   }
   if(b.ehp<=0) return pveEnd(true);
   // enemy turn
-  if(intent!==b.shown) battleLogPush(`It feinted! It actually used ${INTENTS[intent].label}.`);
   if(intent==="brace") battleLogPush(`${m.name} braces itself.`);
   else {
     const mult = intent==="heavy"?2.2 : intent==="drain"?0.6 : 1;
@@ -4147,7 +4157,7 @@ async function pveAct(move){
       const back = Math.max(1,Math.round(playerAttackPower()*1.5*rnd())); b.ehp-=back;
       battleLogPush(`Countered! ${m.name}'s ${INTENTS[intent].label} is negated and you deal ${back}.`);
     } else {
-      let d = m.attack*mult*rnd();
+      let d = enemyHitBase(m, b)*mult*rnd();
       if(guard) d*=0.35; if(counter) d*=1.3;
       d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0));       // every point of CHARM = 1 less damage taken (min 1)
       b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
@@ -4500,8 +4510,10 @@ async function duelActInner(d, move){
   else {
     const s = attackSkillById(move);
     if((s.needsFullRage && rage<rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
+    if(s.hpCost && myHp <= s.hpCost){ toast(`Not enough HP — ${s.name} costs ${s.hpCost} HP.`); return; }
     if(s.needsFullRage) rage = 0;
     if(s.manaCost) mana -= s.manaCost;
+    if(s.hpCost){ myHp -= s.hpCost; lines.push(`${myName} pays ${s.hpCost} HP.`); }
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= 0.35;
     dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0));    // their CHARM trims 1 damage per point (min 1)
@@ -4777,28 +4789,45 @@ document.addEventListener("click", (e)=>{ if(e.target.closest(".doodle-btn")) pl
 const BOSS_MAX = 1000000000;
 const bossRef = ()=> doc(db,"boss","main");
 let bossUnsub=null, rxUnsub=null, bossPending=0, bossClicks=0, bossTimer=null, bossHp=BOSS_MAX, bossResetTimer=null, lastRx=0;
+/* The dragon's HP is NOT a number somebody keeps decrementing (that drifted away from reality whenever a write was
+   rejected or lost). It is always worked out from the players themselves:
+       HP = 1,000,000,000 − (everyone's total bossDamage − the total at the moment the dragon last woke up)
+   so it is exactly max HP minus the sum of every account's dragon damage, and can never disagree with the leaderboard. */
+let bossTotalSeen = 0, bossBaseSeen = 0;
 function fmtBig(n){ return Math.max(0,Math.round(n)).toLocaleString(); }
 function renderBoss(){
   document.getElementById("bossFill").style.width = (100*Math.max(0,bossHp)/BOSS_MAX)+"%";
   document.getElementById("bossNum").textContent = bossHp<=0 ? "DEFEATED — it stirs again soon…" : `${fmtBig(bossHp)} / ${fmtBig(BOSS_MAX)}`;
 }
+async function bossFetch(){
+  const [s, agg] = await Promise.all([ getDoc(bossRef()), getAggregateFromServer(collection(db,"players"), { total: sum("bossDamage") }) ]);
+  return { base: (s.exists() && s.data().base) || 0, total: agg.data().total || 0 };
+}
 let bossPoll=null;
 async function pollBoss(){
   if(document.hidden) return;
-  const s = await getDoc(bossRef()).catch(()=>null);
-  if(!s || !s.exists()) return;
-  bossHp = s.data().hp - bossPending; renderBoss();
-  if(s.data().hp<=0 && !bossResetTimer) bossResetTimer = setTimeout(async ()=>{
-    bossResetTimer=null;
-    await runTransaction(db, async tx=>{ const c=await tx.get(bossRef()); if(c.data().hp<=0) tx.update(bossRef(),{hp:BOSS_MAX}); }).catch(()=>{});
+  let r; try{ r = await bossFetch(); }catch(err){ console.error(err); return; }
+  bossBaseSeen = r.base; bossTotalSeen = r.total;
+  const real = BOSS_MAX - (r.total - r.base);                    // what everyone's saved damage adds up to
+  bossHp = real - bossPending; renderBoss();                      // plus what I've clicked but not saved yet
+  if(real<=0 && !bossResetTimer) bossResetTimer = setTimeout(async ()=>{
+    bossResetTimer = null;
+    try{
+      const f = await bossFetch(); if(BOSS_MAX - (f.total - f.base) > 0) return;       // somebody else already woke it
+      await runTransaction(db, async tx=>{
+        const c = await tx.get(bossRef());
+        if(((c.data()||{}).base||0) !== f.base) return;            // already reset by another player
+        tx.update(bossRef(), { hp:BOSS_MAX, base:f.total });
+      });
+    }catch(err){ console.error(err); }
   }, 6000);
 }
 async function initBoss(){
   bossCleanup();
   const snap = await getDoc(bossRef()).catch(()=>null);
-  if(snap && !snap.exists()) await setDoc(bossRef(), { hp:BOSS_MAX, hpMax:BOSS_MAX }).catch(()=>{});
+  if(snap && !snap.exists()) await setDoc(bossRef(), { hp:BOSS_MAX, hpMax:BOSS_MAX, base:0 }).catch(()=>{});
   loadBossState();
-  pollBoss(); bossPoll = setInterval(pollBoss, 5000);   // live bar refreshes every 5s (was a live listener)
+  pollBoss(); bossPoll = setInterval(pollBoss, 7000);   // the bar refreshes every 7s
   rxUnsub = onSnapshot(query(collection(db,"reactions"), where("ts",">",Date.now()-3000)), snap=>{
     snap.docChanges().forEach(c=>{ if(c.type==="added" && Date.now()-c.doc.data().ts < 4000) spawnReaction(c.doc.data()); });
   }, ()=>{});
@@ -4808,61 +4837,35 @@ function bossCleanup(){
   if(rxUnsub){ rxUnsub(); rxUnsub=null; }
   if(bossTimer){ clearTimeout(bossTimer); bossTimer=null; }
 }
-/* Damage bookkeeping (so the dragon's HP always equals max HP minus everybody's real damage):
-     bossPending = dealt on this screen, not yet taken off the dragon
-     bossCredit  = taken off the dragon, not yet credited to MY profile (bossDamage / dragonClicks)
-   Both are mirrored to localStorage, so closing the tab or a failed write never loses damage — it is retried.
-   The rules let one write lower the dragon by at most 100,000, so big totals are sent in chunks (they used to be
-   rejected whole). Only damage that really landed is credited, so players' totals add up to what the dragon lost. */
-const BOSS_WRITE_CAP = 100000;
-let bossFlushing = false, bossCredit = { dmg:0, clicks:0 };
+/* Clicks are batched for 3s and then added to MY player doc (bossDamage / dragonClicks) — that is the single source
+   of truth. Unsaved clicks are mirrored to localStorage, so closing the tab or a failed write never loses damage;
+   they are retried until they land. */
+let bossFlushing = false;
 const bossStoreKey = ()=> "dragoneer_boss_"+(state.uid||"");
 function saveBossState(){
-  try{
-    if(bossPending>0 || bossClicks>0 || bossCredit.dmg>0 || bossCredit.clicks>0) localStorage.setItem(bossStoreKey(), JSON.stringify({ p:bossPending, c:bossClicks, cd:bossCredit.dmg, cc:bossCredit.clicks }));
-    else localStorage.removeItem(bossStoreKey());
-  }catch{}
+  try{ if(bossPending>0 || bossClicks>0) localStorage.setItem(bossStoreKey(), JSON.stringify({ p:bossPending, c:bossClicks })); else localStorage.removeItem(bossStoreKey()); }catch{}
 }
 function loadBossState(){
   try{
     const s = JSON.parse(localStorage.getItem(bossStoreKey())||"null"); if(!s) return;
-    bossPending += s.p||0; bossClicks += s.c||0; bossCredit.dmg += s.cd||0; bossCredit.clicks += s.cc||0;
-    localStorage.removeItem(bossStoreKey()); saveBossState();
-    if(bossPending>0 || bossCredit.dmg>0 || bossCredit.clicks>0) flushBoss();
+    bossPending += s.p||0; bossClicks += s.c||0; saveBossState();
+    if(bossPending>0) flushBoss();
   }catch{}
 }
 async function flushBoss(){
   bossTimer = null;
-  if(bossFlushing) return;
+  if(bossFlushing || !state.uid) return;
+  const dmg = bossPending, clicks = bossClicks; if(!dmg && !clicks) return;
   bossFlushing = true;
-  let failed = false;
+  let ok = true;
   try{
-    while(bossPending > 0){
-      const chunk = Math.min(bossPending, BOSS_WRITE_CAP);
-      const clicksNow = bossClicks>0 ? Math.min(bossClicks, Math.max(1, Math.round(bossClicks*chunk/bossPending))) : 0;
-      let applied = 0;
-      try{
-        await runTransaction(db, async tx=>{
-          const s = await tx.get(bossRef()), hp = s.data().hp;
-          applied = Math.min(chunk, Math.max(0, hp));
-          if(applied > 0) tx.update(bossRef(), { hp: hp - applied });
-        });
-      }catch(err){ console.error(err); failed = true; break; }       // nothing was written: keep it pending and retry
-      bossPending -= chunk; bossClicks = Math.max(0, bossClicks - clicksNow);
-      bossCredit.dmg += applied; bossCredit.clicks += clicksNow;
-      saveBossState();
-    }
-    if(bossCredit.dmg>0 || bossCredit.clicks>0){
-      const { dmg, clicks } = bossCredit;
-      try{
-        await updateDoc(doc(db,"players",state.uid), { bossDamage: increment(dmg), dragonClicks: increment(clicks) });
-        bossCredit.dmg -= dmg; bossCredit.clicks -= clicks;
-      }catch(err){ console.error(err); failed = true; }
-    }
+    await updateDoc(doc(db,"players",state.uid), { bossDamage: increment(dmg), dragonClicks: increment(clicks) });
+    bossPending -= dmg; bossClicks -= clicks;                    // clicks made during the write stay pending
     saveBossState();
-  } finally { bossFlushing = false; }
-  if(failed){ if(!bossTimer) bossTimer = setTimeout(flushBoss, 5000); }   // try again shortly
-  else if(bossPending>0 && !bossTimer) bossTimer = setTimeout(flushBoss, 1000);   // clicks that landed while we were writing
+  }catch(err){ console.error(err); ok = false; }
+  finally{ bossFlushing = false; }
+  if(!ok) bossTimer = setTimeout(flushBoss, 5000);
+  else if(bossPending>0 && !bossTimer) bossTimer = setTimeout(flushBoss, 1000);
 }
 document.getElementById("bossDragon").addEventListener("click", (e)=>{
   if(!state.profile) return;
