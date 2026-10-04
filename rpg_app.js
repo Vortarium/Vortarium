@@ -16,7 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
-import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
+import { gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
@@ -1117,7 +1117,7 @@ function itemEffectText(item){
   if(item.type==="consumable"){
     const bits = [];
     if(st.heal) bits.push(`Restores ${healText(st)} HP`);
-    if(st.mana) bits.push(`Restores ${st.mana} mana`);
+    if(st.mana) bits.push(`Restores ${manaText(st)} mana`);
     if(st.luck) bits.push(`+${Math.round(st.luck*100)}% luck for ${Math.round(st.luckMs/60000)} min`);
     return bits.join(" · ") || "No effect";
   }
@@ -1451,11 +1451,11 @@ async function useConsumable(item){
   // reading the server's current inventory each time. That's what stops a
   // double-click (or eating right after crafting) from consuming an item
   // you don't actually have anymore, or applying its effect twice.
-  const rolled = rollHeal(item);
+  const rolled = rollHeal(item), rolledMana = rollMana(item);
   const ok = await applyInvChanges({ remove:[{itemId:item.id, qty:1}] }, (fresh)=>{
     const fields = {};
     if(item.stats.heal) fields.hp = Math.min(fresh.hpMax, fresh.hp+rolled);
-    if(item.stats.mana) fields.mana = Math.min(fresh.manaMax, fresh.mana+item.stats.mana);
+    if(item.stats.mana) fields.mana = Math.min(fresh.manaMax, fresh.mana+rolledMana);
     if(item.stats.luck){ fields.luckPct = item.stats.luck; fields.luckUntil = Date.now() + item.stats.luckMs; }
     return fields;
   });
@@ -1463,7 +1463,7 @@ async function useConsumable(item){
     afterInvChangeRefreshDetail(item.id);
     return;
   }
-  toast(item.stats.luck ? `🍀 ${item.name}: +${Math.round(item.stats.luck*100)}% luck for ${Math.round(item.stats.luckMs/60000)} minutes!` : `Used ${item.name}${rolled?` (+${rolled} HP)`:""}`);
+  toast(item.stats.luck ? `🍀 ${item.name}: +${Math.round(item.stats.luck*100)}% luck for ${Math.round(item.stats.luckMs/60000)} minutes!` : `Used ${item.name}${rolled?` (+${rolled} HP)`:""}${item.stats.mana?` (+${rolledMana} mana)`:""}`);
   afterInvChangeRefreshDetail(item.id);
 }
 
@@ -1489,10 +1489,13 @@ document.querySelectorAll(".lb-cat").forEach(b=>{
 const LB_FIELDS = { money:"money", level:"level", kills:"monstersKilled", pvpkills:"kills", deaths:"deaths" };
 const LB_LABEL = { money:"💰", level:"⭐", kills:"👹", pvpkills:"⚔️", deaths:"💀" };
 const lbCache = {};
+/* Highest level first; players on the same level are ordered by XP (more XP ranks higher). */
+const lvlThenXp = (x,y)=> ((y.data.level||0)-(x.data.level||0)) || ((y.data.xp||0)-(x.data.xp||0));
 async function getLb(cat){
   const c = lbCache[cat]; if(c && Date.now()-c.t < 60000) return c.rows;
-  const snap = await getDocs(query(collection(db,"players"), orderBy(LB_FIELDS[cat],"desc"), limit(30)));
+  const snap = await getDocs(query(collection(db,"players"), orderBy(LB_FIELDS[cat],"desc"), limit(cat==="level" ? 100 : 30)));
   const rows = snap.docs.filter(d=>!d.data().banned).map(d=>({id:d.id, data:d.data()}));
+  if(cat==="level") rows.sort(lvlThenXp);
   lbCache[cat] = { t:Date.now(), rows }; return rows;
 }
 let lbUnsub = null;
@@ -1501,8 +1504,9 @@ function renderLeaderboard(cat){
   if(lbUnsub){ lbUnsub(); lbUnsub = null; }
   else state.unsubs.push(()=>{ if(lbUnsub){ lbUnsub(); lbUnsub = null; } });
   list.innerHTML = "<li>Loading…</li>";
-  lbUnsub = onSnapshot(query(collection(db,"players"), orderBy(field,"desc"), limit(30)), snap=>{
+  lbUnsub = onSnapshot(query(collection(db,"players"), orderBy(field,"desc"), limit(cat==="level" ? 100 : 30)), snap=>{
     lbCache[cat] = { t:Date.now(), rows: snap.docs.filter(d=>!d.data().banned).map(d=>({id:d.id, data:d.data()})) };
+    if(cat==="level") lbCache[cat].rows.sort(lvlThenXp);
     const rows = lbCache[cat].rows.slice(0,10);
     list.innerHTML = "";
     rows.forEach((r,i)=>{
@@ -2593,6 +2597,7 @@ const MINE_NEG_APPLY = {
   gas(p,u){ const ml = Math.round((p.mana||0)*(0.20+Math.random()*0.20)), hl = Math.max(1,Math.round(p.hpMax*0.03)); u.mana = Math.max(0,(p.mana||0)-ml); u.hp = Math.max(1,p.hp-hl); return `Poison gas! Lost ${ml} mana and ${hl} HP.`; },
   rockslide(p,u){ const ml = Math.round((p.money||0)*(0.02+Math.random()*0.03)), hl = Math.max(1,Math.round(p.hpMax*(0.03+Math.random()*0.05))); u.money = Math.max(0,(p.money||0)-ml); u.hp = Math.max(1,p.hp-hl); return `Rockslide! Lost $${fmtMoney(ml)} and ${hl} HP.`; }
 };
+const MINE_HP_HAZARDS = new Set(["cavein","gas","rockslide"]);   // these always cost HP
 async function doMineAction(){
   const m = jobMode, rule = MINE_RULES[m];
   if(mineReadyIn() > 0) return;
@@ -2614,6 +2619,13 @@ async function doMineAction(){
   } else {
     const total = MINE_NEG.reduce((s,n)=>s+n.w,0); let r = Math.random()*total, pick = MINE_NEG[0];
     for(const n of MINE_NEG){ if((r-=n.w)<=0){ pick = n; break; } }
+    if(MINE_HP_HAZARDS.has(pick.id) && (state.profile.hp||0) <= 1){
+      // already on 1 HP and the mine hurts you again: that's a death (same penalty as losing a fight)
+      const r = await applyDeathPenalty(updates);
+      toast(`💀 ${pick.label}! You died. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+      jobLog(`💀 ${pick.label} finished you off at 1 HP — lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
+      return;
+    }
     msg = MINE_NEG_APPLY[pick.id](state.profile, updates);
   }
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), updates));
@@ -3802,12 +3814,12 @@ const RECIPES = [];
                  ["Emerald","gem_emerald_cut","epic","SPEED"],["Diamond","gem_diamond_cut","legendary","STRENGTH"]];
   const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
-  tiers.forEach(([t,mat,rar,stat],ti)=>{
-    const m = RARITY_MULT[rar], k = t.toLowerCase();
-    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, gearExtra({ attack:craftedWeaponAttack(rar,i) }, `A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.`), [[mat,2+(i%2)],["ore_coal",1]]));
-    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, ...gearExtra(craftedArmorStats(slot, rar, stat, ti%5), `Sturdy ${t.toLowerCase()} gear. Forged gear beats anything off the shelf.`) }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, gearExtra(craftedTrinketStats("ring", rar, stat), `A ${t.toLowerCase()} ring boosting ${stat}.`), [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, gearExtra(craftedTrinketStats("amulet", rar, stat), `A ${t.toLowerCase()} amulet boosting ${stat}.`), [[mat,2],["forage_herb",2]]);
+  tiers.forEach(([t,mat,rar0,stat],ti)=>{
+    const k = t.toLowerCase(), rar = gearRarity(k, rar0);
+    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, gearExtra({ attack:craftedWeaponAttack(rar,i,k) }, `A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.`), [[mat,2+(i%2)],["ore_coal",1]]));
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, ...gearExtra(craftedArmorStats(slot, rar, stat, 0, k), `Sturdy ${t.toLowerCase()} gear.`) }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, gearExtra(craftedTrinketStats("ring", rar, stat, k), `A ${t.toLowerCase()} ring boosting ${stat}.`), [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, gearExtra(craftedTrinketStats("amulet", rar, stat, k), `A ${t.toLowerCase()} amulet boosting ${stat}.`), [[mat,2],["forage_herb",2]]);
   });
   // tools
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
@@ -3910,6 +3922,7 @@ function healRangeFor(it){
 }
 Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
   i.stats = i.stats || {};
+  if(i.manaFinal){ i.stats.manaMin = i.manaFinal[0]; i.stats.manaMax = i.manaFinal[1]; i.stats.mana = Math.round((i.manaFinal[0]+i.manaFinal[1])/2); }
   if(i.healFinal){   // potions define their exact heal range (b===0 means "no heal", e.g. mana potions)
     const [a,b] = i.healFinal;
     if(b>0){ i.stats.healMin = a; i.stats.healMax = b; i.stats.heal = Math.round((a+b)/2); }
@@ -3926,6 +3939,8 @@ function rollHeal(item){
   if(st.healMin==null) return st.heal||0;
   return st.healMin + Math.floor(Math.random()*(st.healMax-st.healMin+1));
 }
+const rollMana = item=>{ const st = item.stats||{}; return st.manaMin==null ? (st.mana||0) : st.manaMin + Math.floor(Math.random()*(st.manaMax-st.manaMin+1)); };
+const manaText = st=> st.manaMin!=null ? `${st.manaMin}-${st.manaMax}` : `${st.mana}`;
 const healText = st=> st.healMin!=null ? `${st.healMin}-${st.healMax}` : `${st.heal}`;
 const haveQty = id=> (state.profile.inventory||[]).find(e=>e.itemId===id)?.qty||0;
 const canCraft = r=> r.ing.every(([id,q])=> haveQty(id)>=q);

@@ -123,13 +123,13 @@ const FISH_BLURB = {
    Everything is explicit data + deterministic maths, so all players see identical items.
    ========================================================================= */
 export const WEAPON_DAMAGE = {          // [lowest, highest] attack in each rarity; the 20 weapons are spread evenly across it
-  common:[1,10], uncommon:[10,25], rare:[15,40], epic:[20,50], legendary:[30,80]
+  common:[1,8], uncommon:[5,20], rare:[15,45], epic:[40,100], legendary:[80,200]
 };
 const WEAPON_NAMES = {
   common:["Wooden Club","Stone Dagger","Sharpened Stick","Rusty Sword","Hunting Knife","Short Bow","Wooden Staff","Hand Axe","Slingshot","Bone Club",
           "Flint Spear","Farmer's Pitchfork","Iron Nail Bat","Cracked Mace","Fishing Spear","Practice Sword","Cudgel","Woodcutter's Axe","Reed Blowgun","Hatchet"],
-  uncommon:["Iron Sword","Steel Dagger","Oak Longbow","Battle Axe","Spiked Mace","Hunter's Spear","Bronze Rapier","Ash Staff","Iron Cleaver","Silver-Tipped Bow",
-            "Warhammer","Brass Knuckles","Sailor's Cutlass","Throwing Axe","Tempered Shortsword","Crossbow","Guardsman's Halberd","Birch Wand","Scimitar","Morning Star"],
+  uncommon:["Birch Wand","Ash Staff","Brass Knuckles","Bronze Rapier","Sailor's Cutlass","Throwing Axe","Hunter's Spear","Oak Longbow","Crossbow","Spiked Mace",
+            "Battle Axe","Warhammer","Scimitar","Morning Star","Guardsman's Halberd","Tempered Shortsword","Iron Cleaver","Iron Sword","Silver-Tipped Bow","Steel Dagger"],
   rare:["Enchanted Blade","Frostbite Dagger","Flameforged Axe","Stormcaller Bow","Moonsilver Spear","Thunder Mace","Runed Staff","Venomfang Dagger","Knight's Claymore","Windrunner Rapier",
         "Emberstrike Hammer","Tidal Trident","Shadowstep Katana","Crystal Wand","Ironbark Greataxe","Sunfire Scimitar","Hawkeye Longbow","Stonebreaker Maul","Glacier Pike","Phantom Chakram"],
   epic:["Dragonbone Sword","Voidpiercer Dagger","Inferno Greataxe","Tempest Warbow","Celestial Spear","Earthshaker Warhammer","Archmage Staff","Nightshade Katana","Soulreaver Scythe","Stormbringer Blade",
@@ -139,10 +139,10 @@ const WEAPON_NAMES = {
 };
 const ARMOR_MATERIALS = {
   common:["Burlap","Leather","Wooden","Hide","Padded","Linen","Reed","Bone","Tin","Rawhide"],
-  uncommon:["Studded","Chainmail","Bronze","Iron","Hardened","Oakbark","Wolfhide","Brass","Scaled","Ringed"],
-  rare:["Steel","Silvered","Frostforged","Emberweave","Moonlit","Stormhide","Ironbark","Crystal","Jade","Shadowsilk"],
-  epic:["Dragonscale","Obsidian","Mithril","Voidweave","Starforged","Wyrmhide","Thunderplate","Bloodsteel","Celestial","Abyssal"],
-  legendary:["Adamantine","Divine","Eternal","Elderwyrm","Worldforged","Sunsteel","Eclipse","Primordial","Titanbone","Dragoneer's"]
+  uncommon:["Studded","Oakbark","Wolfhide","Scaled","Ringed","Chainmail","Brass","Bronze","Hardened","Iron"],
+  rare:["Silvered","Frostforged","Emberweave","Moonlit","Stormhide","Ironbark","Crystal","Jade","Shadowsilk","Steel"],
+  epic:["Dragonscale","Obsidian","Voidweave","Starforged","Wyrmhide","Thunderplate","Bloodsteel","Celestial","Abyssal","Mithril"],
+  legendary:["Divine","Eternal","Elderwyrm","Worldforged","Sunsteel","Eclipse","Primordial","Titanbone","Dragoneer's","Adamantine"]
 };
 const ARMOR_NOUNS = {   // the 10 pieces of each body part (index j = tier within the rarity, weakest to strongest)
   helmet:    ["Cap","Hood","Helm","Coif","Visor","Cowl","Circlet","Mask","Crown","Greathelm"],
@@ -151,7 +151,7 @@ const ARMOR_NOUNS = {   // the 10 pieces of each body part (index j = tier withi
   boots:     ["Sandals","Boots","Shoes","Treads","Sabatons","Stompers","Walkers","Slippers","Striders","Footguards"]
 };
 const ARMOR_RANGES = {   // [min stat, max stat, min max-HP, max max-HP] across the 10 pieces of a body part
-  common:[1,2,3,8], uncommon:[1,3,6,14], rare:[2,4,10,22], epic:[3,6,16,32], legendary:[4,8,25,50]
+  common:[1,2,1,10], uncommon:[2,4,5,20], rare:[4,8,10,50], epic:[8,14,20,100], legendary:[14,24,50,200]
 };
 const ARMOR_FAV = { helmet:["SMARTS","CHARM","SMARTS","SPEED"], chestplate:["STRENGTH","STRENGTH","SMARTS","CHARM"],
                     leggings:["SPEED","SPEED","STRENGTH","CHARM"], boots:["SPEED","CHARM","SPEED","STRENGTH"] };
@@ -254,9 +254,9 @@ export const FISH_RULES = {
   // Difficulty shift: old medium -> easy, old hard -> medium, and a brand-new chaotic hard.
   // Optional extras (defaults keep the old behaviour): dashMul = dart speed multiplier, dashLen = [min,max] dart ticks,
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
-  green:  { tier:"easy",   bar:58, time:14000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
-  yellow: { tier:"medium", bar:46, time:12000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
-  red:    { tier:"hard",   bar:72, time:11000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
+  green:  { tier:"easy",   bar:72, time:20000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
+  yellow: { tier:"medium", bar:72, time:20000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
+  red:    { tier:"hard",   bar:72, time:20000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
@@ -309,16 +309,37 @@ export function rollPool(pool, luck=0){
    Each ore sets a main stat and a paired second stat: helmet+chestplate lean on the main stat, leggings+boots on the pair.
    Crafted armor beats the best regular armor of its rarity on both the stat line and max HP. */
 const STAT_PAIR = { SPEED:"CHARM", STRENGTH:"SPEED", CHARM:"SMARTS", SMARTS:"STRENGTH" };
-const CRAFT_MAIN = { common:4, uncommon:5, rare:7, epic:9, legendary:13 };
-const CRAFT_HP   = { common:11, uncommon:19, rare:29, epic:42, legendary:65 };
-const CRAFT_SLOT = { helmet:{pri:0,pm:1,hp:.9}, chestplate:{pri:0,pm:1.15,hp:1.3}, leggings:{pri:1,pm:1,hp:1}, boots:{pri:1,pm:.85,hp:.8} };
-export function craftedArmorStats(slot, rar, stat, variant=0){
-  const c = CRAFT_SLOT[slot], main = Math.round(CRAFT_MAIN[rar]*c.pm), other = STAT_PAIR[stat];
+/* Metal progression (weakest -> strongest):
+     tin -> copper -> lead -> iron -> silver -> platinum -> steel -> gold -> titanium -> mithril -> adamantite
+   Every crafted set is [rarity, t]: its rarity and how far through that rarity's range (0 = bottom, 1 = top) it sits.
+   Weapons, max HP and stat bonuses all interpolate inside the same per-rarity ranges as shop gear
+   (WEAPON_DAMAGE / ARMOR_RANGES), so progression is gradual and never jumps a rarity band. */
+export const GEAR_TIER = {
+  tin:["common",.25], copper:["common",.6], lead:["common",1],
+  zinc:["uncommon",.05], pewter:["uncommon",.15], bronze:["uncommon",.3], brass:["uncommon",.4],
+  garnet:["uncommon",.3], citrine:["uncommon",.4], onyx:["uncommon",.5], peridot:["uncommon",.6],
+  iron:["uncommon",.8], silver:["uncommon",1],
+  platinum:["rare",.2], quartz:["rare",.05], sapphire:["rare",.2], amethyst:["rare",.3], steel:["rare",.35],
+  topaz:["rare",.45], electrum:["rare",.55], jade:["rare",.6], gold:["rare",.85],
+  titanium:["epic",.3], opal:["epic",.35], ruby:["epic",.4], emerald:["epic",.5], darksteel:["epic",.55], mithril:["epic",.75],
+  adamantite:["legendary",.5], diamond:["legendary",.65], starmetal:["legendary",1]
+};
+const gearPower = (key, rar)=> GEAR_TIER[String(key||"").toLowerCase()] || [rar, .5];
+export const gearRarity = (key, rar)=> gearPower(key, rar)[0];
+const clamp01 = x=> Math.max(0, Math.min(1, x));
+const lerpR = ([lo,hi], t)=> Math.round(lo + (hi-lo)*clamp01(t));
+const CRAFT_SLOT = { helmet:{pri:0,pm:1,sh:-.05}, chestplate:{pri:0,pm:1.15,sh:.1}, leggings:{pri:1,pm:1,sh:0}, boots:{pri:1,pm:.85,sh:-.1} };
+export function craftedArmorStats(slot, rar, stat, variant=0, key){
+  const [r, t] = gearPower(key, rar), c = CRAFT_SLOT[slot], [smin,smax,hmin,hmax] = ARMOR_RANGES[r];
+  const main = Math.max(1, Math.round(lerpR([smin,smax], t)*c.pm)), other = STAT_PAIR[stat];
   const [p, q] = c.pri===0 ? [stat, other] : [other, stat];
-  return { hp: Math.round(CRAFT_HP[rar]*c.hp) + variant, [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
+  return { hp: lerpR([hmin,hmax], t + c.sh), [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
 }
-const CRAFT_ATK = { common:9, uncommon:14, rare:22, epic:33, legendary:50 };
-export const craftedWeaponAttack = (rar, i=0)=> CRAFT_ATK[rar] + (i%3) + Math.floor(i/3);
+const WEAPON_SHIFT = [0, -.06, .06, 0, .04, -.04];   // sword, dagger, axe, spear, mace, bow
+export const craftedWeaponAttack = (rar, i=0, key)=>{
+  const [r, t] = gearPower(key, rar);
+  return lerpR(WEAPON_DAMAGE[r], t + WEAPON_SHIFT[i%6]);
+};
 export function gearStatText(st){
   const bits = [];
   if(st.attack) bits.push(`+${st.attack} attack`);
@@ -326,10 +347,11 @@ export function gearStatText(st){
   ["STRENGTH","SPEED","CHARM","SMARTS"].forEach(k=>{ if(st[k]) bits.push(`${st[k]>0?"+":""}${st[k]} ${k}`); });
   return bits.join(", ");
 }
-export const gearExtra = (stats, desc)=> ({ stats, fixedStats:true, desc:`${desc} [${gearStatText(stats)}]` });
-const CRAFT_TRINK = { common:2, uncommon:3, rare:5, epic:7, legendary:10 };
-export function craftedTrinketStats(kind, rar, stat){
-  const base = CRAFT_TRINK[rar];
+/* The stat line is shown by the item panel itself, so it is no longer repeated in [brackets] inside the description. */
+export const gearExtra = (stats, desc)=> ({ stats, fixedStats:true, desc });
+const CRAFT_TRINK = { common:[1,2], uncommon:[2,4], rare:[4,7], epic:[7,12], legendary:[12,20] };
+export function craftedTrinketStats(kind, rar, stat, key){
+  const [r, t] = gearPower(key, rar), base = lerpR(CRAFT_TRINK[r], t);
   return kind==="ring" ? { [stat]:base, curse:false } : { [stat]:base+2, [STAT_PAIR[stat]]:Math.max(1,Math.round(base*0.6)), curse:false };
 }
 
@@ -380,14 +402,14 @@ export function addExpansionRecipes(add, I, ctx){
   ];
   const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
-  tiers.forEach(([t,mat,rr,stat],ti)=>{
-    const m = RARITY_MULT[rr], k = t.toLowerCase(), lc = t.toLowerCase();
+  tiers.forEach(([t,mat,rr0,stat],ti)=>{
+    const k = t.toLowerCase(), lc = t.toLowerCase(), rr = gearRarity(k, rr0);
     weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rr,
-      gearExtra({ attack:craftedWeaponAttack(rr,i) }, `A ${lc} ${w.toLowerCase()}, forged with your own hands.`), [[mat,2+(i%2)],["ore_coal",1]]));
+      gearExtra({ attack:craftedWeaponAttack(rr,i,k) }, `A ${lc} ${w.toLowerCase()}, forged with your own hands.`), [[mat,2+(i%2)],["ore_coal",1]]));
     armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rr,
-      { armorSlot:slot, ...gearExtra(craftedArmorStats(slot,rr,stat,ti%5), `Sturdy ${lc} protection for your ${slot}. Forged gear beats anything off the shelf.`) }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, gearExtra(craftedTrinketStats("ring",rr,stat), `A ${lc} ring that sharpens your ${stat.toLowerCase()}.`), [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, gearExtra(craftedTrinketStats("amulet",rr,stat), `A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.`), [[mat,2],["forage_herb",2]]);
+      { armorSlot:slot, ...gearExtra(craftedArmorStats(slot,rr,stat,0,k), `Sturdy ${lc} protection for your ${slot}.`) }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, gearExtra(craftedTrinketStats("ring",rr,stat,k), `A ${lc} ring that sharpens your ${stat.toLowerCase()}.`), [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, gearExtra(craftedTrinketStats("amulet",rr,stat,k), `A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.`), [[mat,2],["forage_herb",2]]);
   });
 
   // ---- cooking: every new fish, every new edible forage ----
@@ -416,15 +438,15 @@ export function addExpansionRecipes(add, I, ctx){
 
   // ---- potions: healing / mana / restoration, 5 tiers each ----
   const T = ["Minor","Lesser","Greater","Superior","Supreme"];
-  const heal = [[12,24],[25,50],[50,90],[90,150],[150,250]], mana = [8,16,30,50,80], rest = [[8,16],[16,32],[30,55],[55,90],[90,150]], restMana = [5,10,18,30,50];
+  const heal = [[8,30],[25,65],[55,110],[100,160],[150,200]], mana = [[5,12],[10,25],[20,45],[35,80],[60,120]], rest = [[6,24],[20,50],[45,90],[85,140],[130,190]], restMana = [[3,8],[6,15],[12,28],[20,45],[35,70]];
   const healIng = [[["forage_herb",2],["forage_berry",1]],[["forage_chamomile",2],["forage_herb",2]],[["forage_ginseng",1],["forage_chamomile",2],["forage_royaljelly",1]],[["forage_dragonroot",1],["forage_ginseng",2],["gem_ruby_cut",1]],[["forage_heartwood",1],["forage_dragonroot",1],["gem_diamond_cut",1]]];
   const manaIng = [[["forage_mint",2],["forage_blueberry",1]],[["forage_mint",2],["forage_lavender",2]],[["forage_moonpetal",2],["gem_sapphire_cut",1]],[["forage_starcap",1],["forage_moonpetal",2],["gem_amethyst_cut",1]],[["forage_worldtreedew",1],["forage_starcap",1],["gem_opal_cut",1]]];
   T.forEach((t,i)=>{
     add(`potion_heal_${i+1}`, `${t} Healing Potion`, "consumable", R[i], { healFinal:heal[i], stats:{}, desc:`Restores ${heal[i][0]}–${heal[i][1]} HP. Tastes like pond water and hope.` }, healIng[i]);
-    add(`potion_mana_${i+1}`, `${t} Mana Potion`, "consumable", R[i], { healFinal:[0,0], stats:{mana:mana[i]}, desc:`Restores ${mana[i]} mana. Fizzes blue and tingles.` }, manaIng[i]);
+    add(`potion_mana_${i+1}`, `${t} Mana Potion`, "consumable", R[i], { healFinal:[0,0], manaFinal:mana[i], stats:{}, desc:`Restores ${mana[i][0]}–${mana[i][1]} mana. Fizzes blue and tingles.` }, manaIng[i]);
   });
   T.forEach((t,i)=>
-    add(`potion_rest_${i+1}`, `${t} Restoration Potion`, "consumable", R[i], { healFinal:rest[i], stats:{mana:restMana[i]}, desc:`Restores ${rest[i][0]}–${rest[i][1]} HP and ${restMana[i]} mana in one swig.` }, [[`potion_heal_${i+1}`,1],[`potion_mana_${i+1}`,1]]));
+    add(`potion_rest_${i+1}`, `${t} Restoration Potion`, "consumable", R[i], { healFinal:rest[i], manaFinal:restMana[i], stats:{}, desc:`Restores ${rest[i][0]}–${rest[i][1]} HP and ${restMana[i][0]}–${restMana[i][1]} mana in one swig.` }, [[`potion_heal_${i+1}`,1],[`potion_mana_${i+1}`,1]]));
 
   // ---- luck potions (brewed from Four-Leaf Clovers; also rarely sold in shops) ----
   // [numeral, luck fraction, minutes, rarity, shop price, sell price (pre the global 10% sell cut), ingredients]
