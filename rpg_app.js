@@ -1227,6 +1227,7 @@ function enterGame(){
     refreshDmReceipt(); syncNotifBoxes();
     if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); if(typeof refreshBestiary==="function") refreshBestiary(); }
     if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
+    if(typeof checkQuestsDone==="function") checkQuestsDone();
     if(document.getElementById("overflowModal").classList.contains("active")) renderOverflow();
     // Keep music in sync with whatever region is actually on the player
     // doc — on first load (including re-signing in mid-session) and any
@@ -2037,15 +2038,34 @@ const questOfferCache = {};
 /* Active quests live in memory, kept fresh by a listener that starts at login, and the offers are computed
    locally — so the Quests tab draws instantly instead of waiting on three database reads. */
 let questDocs = {}, questUnsub = null;
-const questBusy = {};
+const questBusy = {}, questNotified = new Set();
+let questSeeded = false;
+const inQuestMenu = ()=> !!document.getElementById("journalModal")?.classList.contains("active") && !!document.getElementById("jtab-quests")?.classList.contains("active");
+/* A sidequest finished while you're NOT looking at the Sidequests tab -> one clickable notification per quest. */
+function checkQuestsDone(){
+  const p = state.profile; if(!p || !questSeeded) return;
+  Object.entries(questDocs).forEach(([slot,q])=>{
+    if(!q || q.rewardClaimed || Date.now() >= q.deadlineAt) return;
+    const key = slot+":"+q.acceptedAt;
+    if(questNotified.has(key) || questProgress(q,p) < q.target) return;
+    questNotified.add(key);
+    if(inQuestMenu()) return;
+    playSfx("levelup");
+    toast(`📜 Sidequest complete: ${q.label} — click to check your sidequests and claim your reward!`, 10000, "toast-money", ()=>{
+      closeModal("compassModal"); document.getElementById("btnJournal").click(); document.querySelector('[data-jtab="quests"]').click();
+    });
+  });
+}
 function startQuestListener(){
   if(questUnsub) questUnsub();
   questUnsub = onSnapshot(collection(db,"players",state.uid,"quests"), snap=>{
     const next = {}; snap.forEach(d=>{ next[d.id] = d.data(); });
     questDocs = next;
+    if(!questSeeded){ questSeeded = true; Object.entries(next).forEach(([slot,q])=>{ if(q && !q.rewardClaimed && questProgress(q,state.profile) >= q.target) questNotified.add(slot+":"+q.acceptedAt); }); }   // already done before login: no pop-up
+    checkQuestsDone();
     if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests();
   }, err=> console.error(err));
-  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; });
+  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; questSeeded = false; questNotified.clear(); });
 }
 function renderQuests(){
   const list = document.getElementById("questList"); if(!list) return;
@@ -4898,10 +4918,9 @@ async function openBossChests(){
 const BOSS_INVITE_MS = 30000;          // friends have 30 seconds to accept
 const BOSS_WAVE_HP_MULT = 5;           // every enemy before the boss: 5x the HP of the strongest player (highest max HP)
 const BOSS_HP_MULT = 20;               // the boss: 20x the HP of the strongest player
-const BOSS_EAT_MAX = 1;                // boss fights: 0 or 1 food per turn, fed to a teammate
-const BOSS_ALLOW_SELF_EAT = false;     // true = you may also pick yourself in the Eat menu
+const BOSS_EAT_SELF = 3, BOSS_EAT_FRIEND = 1;   // boss fights: per turn you may eat 0-3 foods yourself AND/OR give a friend 0-1 food
 const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
-const BOSS_ATK_PCT = 0.5, BOSS_WAVE_ATK_SCALE = 0.6;    // enemy attack = (party's average max HP / 8) x these
+const BOSS_BASE_DMG_DIV = 4;           // every enemy's base damage = strongest player's max HP / 4 (Attack = x1, Weak x0.6, Strong x1.9)
 let partyUnsub = null, partyCode = null, partyData = null, partyTimer = null, partyStarting = false, partyHidden = false, partyBusyStall = false;
 const partyFinalized = new Set(), partyUi = { sel:new Set() };
 const partyRef = code=> doc(db,"bossParties",code);
@@ -4919,7 +4938,7 @@ function renderBossPanel(){
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
   else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
-  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player, the boss has <b>${BOSS_HP_MULT}×</b>. In boss fights Eat lets you feed <b>one teammate one food per turn</b>. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4. In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
   box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   partyEl("btnBossGo")?.addEventListener("click", ()=>{
@@ -5098,7 +5117,7 @@ function buildPartyEnemy(stage, d){
   if(stage >= BOSS_WAVES.length){
     const bd = bossDef(d.cycle);
     return { name:bd.name, sprite:bd.sprite, element:bd.element, boss:true, level:d.bossLvl, difficulty:"hard",
-      hp:Math.round(d.strongHp*BOSS_HP_MULT), attack:Math.max(1, Math.round(d.avgHp/TIER_HITS*BOSS_ATK_PCT)),
+      hp:Math.round(d.strongHp*BOSS_HP_MULT), attack:Math.max(1, Math.round(d.strongHp/BOSS_BASE_DMG_DIV)),
       xpReward:Math.round(150+d.plvl*10), moneyReward:Math.round(300+d.plvl*30) };
   }
   const tier = TIER_BY_ID[BOSS_WAVES[stage]];
@@ -5106,34 +5125,37 @@ function buildPartyEnemy(stage, d){
   const slot = pool.length ? pool[Math.floor(Math.random()*pool.length)] : null;
   return { name:slot?.name || "Wild Beast", sprite:REGION_SPRITE[slot?.region || d.region] || "🐉", element:(slot && REGIONS[slot.region]?.element) || "earth", boss:false,
     level:Math.max(1, d.plvl + ri(tier.lv[0], tier.lv[1])), difficulty:tier.diff,
-    hp:Math.round(d.strongHp*BOSS_WAVE_HP_MULT), attack:Math.max(1, Math.round(d.avgHp/TIER_HITS*tier.pct*BOSS_WAVE_ATK_SCALE)),
+    hp:Math.round(d.strongHp*BOSS_WAVE_HP_MULT), attack:Math.max(1, Math.round(d.strongHp/BOSS_BASE_DMG_DIV)),
     xpReward:ri(...tier.xp), moneyReward:ri(...tier.money) };
 }
 
 /* ---------- the rules (pure: works on a copy of the doc and returns the patch to write) ---------- */
 function partyPickIntent(d){
-  const e = d.enemy, prev = d.intent, tgt = d.members[d.target] || d.members[partyAlive(d)[0]];
+  const e = d.enemy, prev = d.intent, tgt = d.members[partyAlive(d)[0]];
   if(e.boss && prev==="strong" && Math.random()<0.45) return "stun";
   return rollIntent(e.boss ? BOSS_WEIGHTS : (INTENT_WEIGHTS[e.difficulty] || INTENT_WEIGHTS.medium), prev, { ehp:d.ehp, m:{ hp:e.hp }, mana:tgt?.mana||0 });
 }
-function partyRetarget(d){ const a = partyAlive(d); d.target = a[Math.floor(Math.random()*a.length)] || null; }
+function partyRetarget(d){ d.target = null; }   // the enemy always hits everyone now
 function partyEnemyTurn(d, lines){
-  const e = d.enemy, intent = d.intent, rnd = ()=>0.9+Math.random()*0.2;
-  if(!d.members[d.target]?.alive) partyRetarget(d);
-  const t = d.members[d.target];
+  const e = d.enemy, intent = d.intent, rnd = ()=>0.9+Math.random()*0.2, team = partyAlive(d);
   if(intent==="wait") lines.push(`${e.name} sizes the party up and holds back.`);
   else if(intent==="stun") lines.push(`${e.name} is stunned and skips its turn!`);
   else if(intent==="heal"){ const h = Math.round(e.hp*(e.boss?0.05:0.08)); d.ehp = Math.min(e.hp, d.ehp+h); lines.push(`${e.name} recovers ${h} HP.`); }
   else if(intent==="guard") lines.push(`${e.name} braces itself.`);
-  else if(intent==="mana" && t){
-    const take = Math.min(t.mana, Math.max(1, Math.round(t.mana*0.25))); t.mana -= take; const h = take*2; d.ehp = Math.min(e.hp, d.ehp+h);
-    lines.push(`${e.name} drains ${take} of ${t.name}'s mana and heals ${h}.`);
-  } else if(t){
-    let dmg = e.attack*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
-    dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0));
-    t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
-    lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on ${t.name}: ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
-    if(t.hp<=0){ t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
+  else if(intent==="mana"){
+    let healed = 0;
+    team.forEach(u=>{ const t = d.members[u], take = Math.min(t.mana, Math.max(1, Math.round(t.mana*0.25))); if(take<=0) return; t.mana -= take; healed += take*2; lines.push(`${e.name} drains ${take} of ${t.name}'s mana.`); });
+    if(healed){ d.ehp = Math.min(e.hp, d.ehp+healed); lines.push(`${e.name} heals ${healed} HP from the drain.`); }
+  } else {
+    lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on the whole party!`);
+    team.forEach(u=>{
+      const t = d.members[u];
+      let dmg = e.attack*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
+      dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0));
+      t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
+      lines.push(`  ${t.name} takes ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
+      if(t.hp<=0){ t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
+    });
   }
   d.order.forEach(u=>{ if(d.members[u].fx) d.members[u].fx.guard = false; });
 }
@@ -5214,7 +5236,7 @@ async function partyAct(move){
 
 /* ---------- the battle screen ---------- */
 function openBossBattle(d){
-  state.battle = { mode:"party", code:d.code, d, busy:false, eats:0, eatTarget:null, over:false, log:[], reopenCompass:false };
+  state.battle = { mode:"party", code:d.code, d, busy:false, eatsSelf:0, eatsFriend:0, eatTarget:null, over:false, log:[], reopenCompass:false };
   document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
   openModal("battleModal"); setPvpRxVisible(false);
   renderPartyBattle(d);
@@ -5222,7 +5244,7 @@ function openBossBattle(d){
 function renderPartyBattle(d){
   const b = state.battle; if(!b || b.mode!=="party") return; b.d = d;
   const me = d.members[state.uid], e = d.enemy, myTurn = d.status==="active" && d.turn===state.uid && me.alive;
-  if(d.turn!==state.uid) b.eats = 0;
+  if(d.turn!==state.uid){ b.eatsSelf = 0; b.eatsFriend = 0; }
   partyEl("battleEnemyName").textContent = `${e.name} Lv.${e.level}`;
   partyEl("battleEnemySprite").textContent = e.sprite || "🐉";
   partyEl("battleEnemyHPBar").style.width = (100*Math.max(0,d.ehp)/e.hp)+"%";
@@ -5232,8 +5254,8 @@ function renderPartyBattle(d){
   partyEl("battlePlayerHPNum").textContent = `${Math.max(0,me.hp)}/${me.hpMax}`;
   partyEl("battleStaminaLabel").textContent = `Mana ${me.mana}/${me.manaMax}${me.fx?.focus?" · 🎯 Focused (next hit x2)":""}${me.fx?.guard?" · 🛡️ Guarding":""} · Wave ${d.stage+1}/6 · Round ${d.round||1}`;
   partyEl("battleRageLabel").textContent = `${me.rage}/${me.rageMax}`;
-  const it = INTENTS[d.intent] || INTENTS.normal, tgt = d.members[d.target];
-  partyEl("battleIntent").innerHTML = d.status==="active" ? `${it.icon} <b>${it.label}</b>${it.atk||d.intent==="mana" ? ` → <b>${escapeHTML(tgt?.name||"?")}</b>` : ""} — ${escapeHTML(it.tip)}` : "";
+  const it = INTENTS[d.intent] || INTENTS.normal;
+  partyEl("battleIntent").innerHTML = d.status==="active" ? `${it.icon} <b>${it.label}</b>${it.atk||d.intent==="mana" ? ` → <b>the whole team</b>` : ""} — ${escapeHTML(it.tip)}` : "";
   let strip = partyEl("partyStrip");
   if(!strip){ strip = document.createElement("div"); strip.id = "partyStrip"; strip.className = "party-strip"; document.querySelector("#battleModal .battle-arena").after(strip); }
   strip.style.display = "";
@@ -5247,11 +5269,11 @@ function renderPartyBattle(d){
   const add = (label, tip, fn, disabled, cls="btn-pink")=>{ const el = document.createElement("button"); el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip; el.disabled = !!disabled; el.addEventListener("click", fn); box.appendChild(el); };
   if(me.alive){
     knownAttacks(state.profile).forEach(s=>{ const cd = (me.cd||{})[s.id]||0; add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>partyAct(s.id), !myTurn || cd>0); });
-    add(me.last==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of a hit aimed at you this round and gain 2 Rage. Every other turn only.", ()=>partyAct("guard"), !myTurn || me.last==="guard", "btn-blue");
+    add(me.last==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the enemy's next attack on you and gain 2 Rage. Every other turn only.", ()=>partyAct("guard"), !myTurn || me.last==="guard", "btn-blue");
     add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>partyAct("focus"), !myTurn, "btn-blue");
     add("Pass", "Do nothing this turn.", ()=>partyAct("skip"), !myTurn, "btn-blue");
-    const left = Math.max(0, BOSS_EAT_MAX-(b.eats||0));
-    add(left>0 ? "🍖 Eat (teammate)" : "🍖 Eat (used)", `Feed ONE teammate ONE food per turn. Free action — does not end your turn.`, openEatModal, !myTurn || left<=0, "btn-green");
+    const sl = Math.max(0, BOSS_EAT_SELF-(b.eatsSelf||0)), fl = Math.max(0, BOSS_EAT_FRIEND-(b.eatsFriend||0));
+    add(sl+fl>0 ? `🍖 Eat (you ${sl}/${BOSS_EAT_SELF} · friend ${fl}/${BOSS_EAT_FRIEND})` : "🍖 Eat (used up)", `Eat up to ${BOSS_EAT_SELF} foods yourself and give a friend up to ${BOSS_EAT_FRIEND} per turn. Free action — does not end your turn.`, openEatModal, !myTurn || sl+fl<=0, "btn-green");
     if(!myTurn){ const w = document.createElement("span"); w.textContent = `Waiting for ${d.turn==="enemy" ? "the enemy" : (d.members[d.turn]?.name||"…")}…`; box.appendChild(w); }
     add("Leave", "Leave the fight. You forfeit the rewards.", ()=> dgConfirm({ title:"Leave the boss fight?", yes:"Leave (forfeit rewards)", html:"<p>Your party fights on without you and you won't receive any chests.</p>", onYes:partyLeave }), false, "btn-yellow");
   } else {
@@ -5312,11 +5334,12 @@ function eatContext(){
   const b = state.battle, p = state.profile; if(!b || !p) return null;
   const eatsLeft = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
   if(b.mode==="party" && b.d){
-    const d = b.d, me = d.members[state.uid], tgt = b.eatTarget && d.members[b.eatTarget], tOk = !!(tgt && tgt.alive);
-    const left = Math.max(0, BOSS_EAT_MAX - (b.eats||0)), myTurn = d.status==="active" && d.turn===state.uid && !!me?.alive;
-    return { partyEat:true, maxEats:BOSS_EAT_MAX, targetName: tOk ? tgt.name : null, hp: tOk?tgt.hp:0, hpMax: tOk?tgt.hpMax:1, mana: tOk?tgt.mana:0, manaMax: tOk?(tgt.manaMax||1):1,
+    const d = b.d, me = d.members[state.uid], tgt = b.eatTarget && d.members[b.eatTarget], tOk = !!(tgt && tgt.alive), self = b.eatTarget===state.uid;
+    const selfLeft = Math.max(0, BOSS_EAT_SELF-(b.eatsSelf||0)), friendLeft = Math.max(0, BOSS_EAT_FRIEND-(b.eatsFriend||0)), left = self ? selfLeft : friendLeft;
+    const myTurn = d.status==="active" && d.turn===state.uid && !!me?.alive;
+    return { partyEat:true, selfLeft, friendLeft, isSelf:self, targetName: tOk ? (self?"yourself":tgt.name) : null, hp: tOk?tgt.hp:0, hpMax: tOk?tgt.hpMax:1, mana: tOk?tgt.mana:0, manaMax: tOk?(tgt.manaMax||1):1,
       canEat: myTurn && left>0 && tOk, eatsLeft:left,
-      why: !myTurn ? "You can only feed a teammate on your turn." : left<=0 ? "You can only use 1 food per turn." : "Pick a teammate first." };
+      why: !myTurn ? "You can only eat on your turn." : !tOk ? "Pick who to feed first." : self ? `You can only eat ${BOSS_EAT_SELF} foods yourself per turn.` : `You can only feed a friend ${BOSS_EAT_FRIEND} food per turn.` };
   }
   if(b.mode==="pve") return { hp:b.php, hpMax:p.hpMax, mana:b.mana, manaMax:p.manaMax, canEat:!b.over && eatsLeft>0, eatsLeft, why: eatsLeft>0 ? "" : `You can only eat ${MAX_EATS_PER_TURN} items per turn.` };
   if(b.mode==="duel" && b.d){
@@ -5346,10 +5369,10 @@ function renderEatModal(){
     if(tr){
       if(!ctx.partyEat) tr.style.display = "none";
       else {
-        const d = state.battle.d, cands = d.order.filter(u=> d.members[u].alive && (BOSS_ALLOW_SELF_EAT || u!==state.uid));
+        const d = state.battle.d, cands = d.order.filter(u=> d.members[u].alive).sort((x,y)=> (y===state.uid)-(x===state.uid));
         tr.style.display = "";
-        tr.innerHTML = `<p class="doodle-sub" style="margin:0 0 4px">Who do you want to feed? (one teammate, one food)</p>` + (cands.length ? cands.map(u=>{ const m = d.members[u];
-          return `<button class="doodle-btn btn-sm ${state.battle.eatTarget===u?"btn-green":"btn-blue"}" data-eattgt="${u}">${escapeHTML(m.name)} · ${Math.max(0,m.hp)}/${m.hpMax} HP</button>`; }).join(" ") : `<small>No teammate is left standing to feed.</small>`);
+        tr.innerHTML = `<p class="doodle-sub" style="margin:0 0 4px">Who do you want to feed? Yourself: up to ${BOSS_EAT_SELF} per turn (${Math.max(0,BOSS_EAT_SELF-(state.battle.eatsSelf||0))} left) · a friend: ${BOSS_EAT_FRIEND} per turn (${Math.max(0,BOSS_EAT_FRIEND-(state.battle.eatsFriend||0))} left)</p>` + (cands.length ? cands.map(u=>{ const m = d.members[u];
+          return `<button class="doodle-btn btn-sm ${state.battle.eatTarget===u?"btn-green":"btn-blue"}" data-eattgt="${u}">${u===state.uid?"🙋 Yourself":escapeHTML(m.name)} · ${Math.max(0,m.hp)}/${m.hpMax} HP</button>`; }).join(" ") : `<small>Nobody is left standing to feed.</small>`);
         tr.querySelectorAll("[data-eattgt]").forEach(bt=> bt.addEventListener("click", ()=>{ state.battle.eatTarget = bt.dataset.eattgt; renderEatModal(); }));
       }
     } }
@@ -5369,7 +5392,7 @@ function renderEatModal(){
     ? `<b>${escapeHTML(sel.name)}</b> <i>(${sel.rarity})</i><br>${escapeHTML(sel.desc||"")}<br><b>${escapeHTML(itemEffectText(sel))}</b>` + (!ctx.canEat && ctx.why ? `<br><small>${ctx.why}</small>` : "")
     : "Select a food to read about it.";
   btn.disabled = !sel || !ctx.canEat;
-  btn.textContent = ctx.partyEat ? `Feed ${ctx.targetName||"teammate"} (${ctx.eatsLeft}/${ctx.maxEats} left this turn)` : `Eat (${ctx.eatsLeft}/${MAX_EATS_PER_TURN} left this turn)`;
+  btn.textContent = ctx.partyEat ? (ctx.targetName ? `Feed ${ctx.targetName} (${ctx.eatsLeft} left this turn)` : "Pick who to feed") : `Eat (${ctx.eatsLeft}/${MAX_EATS_PER_TURN} left this turn)`;
 }
 document.getElementById("btnEatNow").addEventListener("click", eatSelected);
 async function eatSelected(){
@@ -5382,7 +5405,7 @@ async function eatSelected(){
   try{
     const b = state.battle;
     if(b.mode==="party"){
-      const tUid = b.eatTarget, heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0, manaGain = item.stats.mana ? Math.min(item.stats.mana, ctx.manaMax-ctx.mana) : 0;
+      const tUid = b.eatTarget, toSelf = tUid===state.uid, heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0, manaGain = item.stats.mana ? Math.min(item.stats.mana, ctx.manaMax-ctx.mana) : 0;
       if(heal<=0 && manaGain<=0){ toast(`${ctx.targetName} is already full — save it for later.`); return; }
       const gains = [heal>0?`+${heal} HP`:"", manaGain>0?`+${manaGain} mana`:""].filter(Boolean).join(", ");
       const removed = await changeInvQty(item.id, -1);          // inventory first: no free heals if the item isn't really there
@@ -5392,11 +5415,11 @@ async function eatSelected(){
         const cur = s.data(), t = cur.members[tUid];
         if(cur.status!=="active" || cur.turn!==state.uid || !t || !t.alive) return "bad";
         tx.update(r, { [`members.${tUid}.hp`]: Math.min(t.hpMax, t.hp+heal), [`members.${tUid}.mana`]: Math.min(t.manaMax, t.mana+manaGain),
-          log:[...(cur.log||[]), `${state.profile.username} feeds ${t.name} ${item.name} (${gains}).`].slice(-60) });
+          log:[...(cur.log||[]), toSelf ? `${t.name} eats ${item.name} (${gains}).` : `${state.profile.username} feeds ${t.name} ${item.name} (${gains}).`].slice(-60) });
         return "ok";
       }).catch(err=>{ console.error(err); return "bad"; });
       if(res!=="ok"){ await addItemToInv(item.id, 1); toast("Couldn't feed them — you keep your food."); return; }   // refund
-      b.eats = (b.eats||0) + 1;
+      if(toSelf) b.eatsSelf = (b.eatsSelf||0) + 1; else b.eatsFriend = (b.eatsFriend||0) + 1;
       return;
     }
     const heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0;
