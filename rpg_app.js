@@ -16,7 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
-import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats } from "./rpg_content.js";
+import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
@@ -3804,10 +3804,10 @@ const RECIPES = [];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
   tiers.forEach(([t,mat,rar,stat],ti)=>{
     const m = RARITY_MULT[rar], k = t.toLowerCase();
-    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, { stats:{attack:Math.round(3*m)+2+(i%3)}, desc:`A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.` }, [[mat,2+(i%2)],["ore_coal",1]]));
-    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:craftedArmorStats(slot, rar, stat, ti%5), fixedStats:true, desc:`Sturdy ${t.toLowerCase()} gear. Forged gear beats anything off the shelf.` }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, { stats:craftedTrinketStats("ring", rar, stat), fixedStats:true, desc:`A ${t.toLowerCase()} ring boosting ${stat}.` }, [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, { stats:craftedTrinketStats("amulet", rar, stat), fixedStats:true, desc:`A ${t.toLowerCase()} amulet boosting ${stat}.` }, [[mat,2],["forage_herb",2]]);
+    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, gearExtra({ attack:craftedWeaponAttack(rar,i) }, `A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.`), [[mat,2+(i%2)],["ore_coal",1]]));
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, ...gearExtra(craftedArmorStats(slot, rar, stat, ti%5), `Sturdy ${t.toLowerCase()} gear. Forged gear beats anything off the shelf.`) }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, gearExtra(craftedTrinketStats("ring", rar, stat), `A ${t.toLowerCase()} ring boosting ${stat}.`), [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, gearExtra(craftedTrinketStats("amulet", rar, stat), `A ${t.toLowerCase()} amulet boosting ${stat}.`), [[mat,2],["forage_herb",2]]);
   });
   // tools
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));

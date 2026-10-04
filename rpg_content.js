@@ -86,10 +86,10 @@ const MINERAL_NEW = [
   ["ore_mithril","Mithril Ore","epic",125,"Faintly glowing ore, light as a feather."],
   ["ore_adamantite","Adamantite Ore","legendary",340,"Nearly unbreakable ore. Your pickaxe winces."]
 ];
-export const MINERAL_SELL = {   // what the item actually sells for (common 10-30, uncommon 25-60, rare 50-130, epic 110-230, legendary 200-600)
-  rock_granite:10, rock_limestone:11, ore_coal:11, rock_slate:12, rock_flint:14, ore_lead:18, ore_tin:20, ore_copper:22,
-  ore_zinc:28, ore_iron:34, rock_obsidian:38, gem_garnet:40, gem_onyx:44, ore_silver:48, gem_citrine:52, gem_peridot:58,
-  gem_amethyst:70, ore_titanium:84, gem_topaz:92, ore_gold:104, gem_jade:112, gem_quartz:76, gem_sapphire:124,
+export const MINERAL_SELL = {   // what each mineral actually sells for (common ~7-15, uncommon ~24-49, rare ~64-114, epic 150-228, legendary 380-560)
+  rock_granite:7, rock_limestone:8, ore_coal:8, rock_slate:8, rock_flint:10, ore_lead:13, ore_tin:14, ore_copper:15,
+  ore_zinc:24, ore_iron:29, rock_obsidian:32, gem_garnet:34, gem_onyx:37, ore_silver:41, gem_citrine:44, gem_peridot:49,
+  gem_amethyst:64, ore_titanium:77, gem_topaz:85, ore_gold:96, gem_jade:103, gem_quartz:70, gem_sapphire:114,
   gem_emerald:150, gem_ruby:176, ore_platinum:196, gem_opal:212, ore_mithril:228,
   gem_diamond:380, ore_adamantite:560
 };
@@ -263,7 +263,8 @@ export const FISH_RULES = {
 export const RARITY_W = {
   // yellow and red now lean much harder into rare+ finds; uncommon is boosted too (green is unchanged)
   forage: { green:{common:78,uncommon:16,rare:4.5,epic:1.2,legendary:.3}, yellow:{common:46,uncommon:29,rare:15,epic:7,legendary:3}, red:{common:28,uncommon:30,rare:22,epic:13,legendary:7} },
-  mine:   { green:{common:80,uncommon:15,rare:4,epic:.8,legendary:.2},    yellow:{common:48,uncommon:28,rare:14,epic:7,legendary:3}, red:{common:30,uncommon:29,rare:21,epic:13,legendary:7} },
+  // mining: weights are tuned so every single item's odds fall in order common > uncommon > rare > epic > legendary (8/8/7/5/2 minerals per rarity)
+  mine:   { green:{common:80,uncommon:15,rare:4,epic:.8,legendary:.2},    yellow:{common:49,uncommon:29,rare:15.5,epic:5.5,legendary:1}, red:{common:44,uncommon:30,rare:17,epic:7,legendary:2} },
   // fish tiers only contain some rarities (easy has no legendary, hard has no common/uncommon) — absent rarities are skipped and the rest re-normalised
   fish:   { green:{common:70,uncommon:22,rare:6.5,epic:1.5,legendary:0}, yellow:{common:32,uncommon:34,rare:20,epic:10,legendary:4}, red:{common:0,uncommon:0,rare:52,epic:33,legendary:15} }
 };
@@ -316,6 +317,16 @@ export function craftedArmorStats(slot, rar, stat, variant=0){
   const [p, q] = c.pri===0 ? [stat, other] : [other, stat];
   return { hp: Math.round(CRAFT_HP[rar]*c.hp) + variant, [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
 }
+const CRAFT_ATK = { common:9, uncommon:14, rare:22, epic:33, legendary:50 };
+export const craftedWeaponAttack = (rar, i=0)=> CRAFT_ATK[rar] + (i%3) + Math.floor(i/3);
+export function gearStatText(st){
+  const bits = [];
+  if(st.attack) bits.push(`+${st.attack} attack`);
+  if(st.hp) bits.push(`+${st.hp} max HP`);
+  ["STRENGTH","SPEED","CHARM","SMARTS"].forEach(k=>{ if(st[k]) bits.push(`${st[k]>0?"+":""}${st[k]} ${k}`); });
+  return bits.join(", ");
+}
+export const gearExtra = (stats, desc)=> ({ stats, fixedStats:true, desc:`${desc} [${gearStatText(stats)}]` });
 const CRAFT_TRINK = { common:2, uncommon:3, rare:5, epic:7, legendary:10 };
 export function craftedTrinketStats(kind, rar, stat){
   const base = CRAFT_TRINK[rar];
@@ -372,11 +383,11 @@ export function addExpansionRecipes(add, I, ctx){
   tiers.forEach(([t,mat,rr,stat],ti)=>{
     const m = RARITY_MULT[rr], k = t.toLowerCase(), lc = t.toLowerCase();
     weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rr,
-      { stats:{ attack:Math.round(3*m)+2+(i%3) }, desc:`A ${lc} ${w.toLowerCase()}, forged with your own hands.` }, [[mat,2+(i%2)],["ore_coal",1]]));
+      gearExtra({ attack:craftedWeaponAttack(rr,i) }, `A ${lc} ${w.toLowerCase()}, forged with your own hands.`), [[mat,2+(i%2)],["ore_coal",1]]));
     armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rr,
-      { armorSlot:slot, stats:craftedArmorStats(slot,rr,stat,ti%5), fixedStats:true, desc:`Sturdy ${lc} protection for your ${slot}. Forged gear beats anything off the shelf.` }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, { stats:craftedTrinketStats("ring",rr,stat), fixedStats:true, desc:`A ${lc} ring that sharpens your ${stat.toLowerCase()}.` }, [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, { stats:craftedTrinketStats("amulet",rr,stat), fixedStats:true, desc:`A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.` }, [[mat,2],["forage_herb",2]]);
+      { armorSlot:slot, ...gearExtra(craftedArmorStats(slot,rr,stat,ti%5), `Sturdy ${lc} protection for your ${slot}. Forged gear beats anything off the shelf.`) }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, gearExtra(craftedTrinketStats("ring",rr,stat), `A ${lc} ring that sharpens your ${stat.toLowerCase()}.`), [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, gearExtra(craftedTrinketStats("amulet",rr,stat), `A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.`), [[mat,2],["forage_herb",2]]);
   });
 
   // ---- cooking: every new fish, every new edible forage ----
