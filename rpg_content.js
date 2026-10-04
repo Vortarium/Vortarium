@@ -19,6 +19,7 @@ const FORAGE_NEW = [
   ["pinecone","Pine Cone","material","common",2,"Spiky and resinous. Burns well."],
   ["dandelion","Dandelion","material","common",3,"A cheerful yellow weed with surprising uses."],
   ["clover","Clover Patch","material","common",3,"Soft clover. Rarely, it has four leaves."],
+  ["fourleafclover","Four-Leaf Clover","material","rare",33,"A genuine four-leaf clover. Luck potions are brewed from these."],
   ["wildgarlic","Wild Garlic","consumable","common",4,"Pungent forest garlic."],
   ["cattail","Cattail Reed","material","common",3,"A fuzzy marsh reed."],
   ["twigs","Dry Twigs","material","common",2,"A bundle of snappy kindling."],
@@ -85,6 +86,13 @@ const MINERAL_NEW = [
   ["ore_mithril","Mithril Ore","epic",125,"Faintly glowing ore, light as a feather."],
   ["ore_adamantite","Adamantite Ore","legendary",340,"Nearly unbreakable ore. Your pickaxe winces."]
 ];
+export const MINERAL_SELL = {   // what the item actually sells for (common 10-30, uncommon 25-60, rare 50-130, epic 110-230, legendary 200-600)
+  rock_granite:10, rock_limestone:11, ore_coal:11, rock_slate:12, rock_flint:14, ore_lead:18, ore_tin:20, ore_copper:22,
+  ore_zinc:28, ore_iron:34, rock_obsidian:38, gem_garnet:40, gem_onyx:44, ore_silver:48, gem_citrine:52, gem_peridot:58,
+  gem_amethyst:70, ore_titanium:84, gem_topaz:92, ore_gold:104, gem_jade:112, gem_quartz:76, gem_sapphire:124,
+  gem_emerald:150, gem_ruby:176, ore_platinum:196, gem_opal:212, ore_mithril:228,
+  gem_diamond:380, ore_adamantite:560
+};
 const MINERAL_LEGACY = ["ore_copper","ore_iron","ore_coal","gem_quartz","ore_silver","ore_gold","gem_ruby","gem_sapphire","gem_emerald","gem_diamond"];
 const FORAGE_LEGACY = ["forage_berry","forage_mushroom","forage_herb","forage_apple","forage_truffle","forage_goldapple"];
 
@@ -216,27 +224,28 @@ export function registerItems(I){
       cat.fish[tier].push(id);
     });
   });
+  cat.mineral.forEach(id=>{ if(MINERAL_SELL[id] && I[id]) I[id].sellPrice = Math.round(MINERAL_SELL[id]/0.9); });   // /0.9 because every sell price is later cut 10%
   cat.gearAll = [...cat.gear.weapon, ...cat.gear.armor];
   return cat;
 }
 
 /* ---------- job modes: green = normal, yellow = risky, red = extreme ---------- */
 export const MODES = {
-  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 60% reward / 40% hazard, 1 durability, 1 mineral. Fish: easy fish." },
-  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 40% hazard. Fish: medium fish." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 40% hazard. Fish: hard fish." }
+  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 80% reward / 20% hazard, 1 durability, 1 mineral. Fish: easy fish." },
+  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 20% hazard. Fish: medium fish." },
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 20% hazard. Fish: hard fish." }
 };
 export const FORAGE_RULES = {
   green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
   yellow: { chance:.75, qty:[1,2], cooldown:5*60*1000 },
   red:    { chance:.90, qty:[1,3], cooldown:30*60*1000 }
 };
-// Every mode: always exactly 1 mineral (double:0) and the SAME 40% hazard chance.
+// Every mode: always exactly 1 mineral (double:0) and the SAME 20% hazard chance.
 // Higher modes only cost more durability and shift the gem rarity odds (see RARITY_W).
 export const MINE_RULES = {
-  green:  { pos:.60, neg:.40, wear:1, double:0, cash:[20,100] },
-  yellow: { pos:.60, neg:.40, wear:2, double:0, cash:[50,220] },
-  red:    { pos:.60, neg:.40, wear:3, double:0, cash:[100,450] }
+  green:  { pos:.80, neg:.20, wear:1, double:0, cash:[20,100] },
+  yellow: { pos:.80, neg:.20, wear:2, double:0, cash:[50,220] },
+  red:    { pos:.80, neg:.20, wear:3, double:0, cash:[100,450] }
 };
 export const MINE_CASH_SHARE = 0.08;     // share of "good" swings that turn up cash instead of a mineral
 export const FISH_RULES = {
@@ -252,10 +261,11 @@ export const FISH_RULES = {
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
 export const RARITY_W = {
-  forage: { green:{common:78,uncommon:16,rare:4.5,epic:1.2,legendary:.3}, yellow:{common:66,uncommon:22,rare:9,epic:2.4,legendary:.6}, red:{common:54,uncommon:26,rare:13,epic:5,legendary:2} },
-  mine:   { green:{common:80,uncommon:15,rare:4,epic:.8,legendary:.2},    yellow:{common:68,uncommon:21,rare:8,epic:2.4,legendary:.6}, red:{common:56,uncommon:25,rare:12,epic:5,legendary:2} },
+  // yellow and red now lean much harder into rare+ finds; uncommon is boosted too (green is unchanged)
+  forage: { green:{common:78,uncommon:16,rare:4.5,epic:1.2,legendary:.3}, yellow:{common:46,uncommon:29,rare:15,epic:7,legendary:3}, red:{common:28,uncommon:30,rare:22,epic:13,legendary:7} },
+  mine:   { green:{common:80,uncommon:15,rare:4,epic:.8,legendary:.2},    yellow:{common:48,uncommon:28,rare:14,epic:7,legendary:3}, red:{common:30,uncommon:29,rare:21,epic:13,legendary:7} },
   // fish tiers only contain some rarities (easy has no legendary, hard has no common/uncommon) — absent rarities are skipped and the rest re-normalised
-  fish:   { green:{common:70,uncommon:22,rare:6.5,epic:1.5,legendary:0}, yellow:{common:50,uncommon:32,rare:13,epic:4.2,legendary:.8}, red:{common:0,uncommon:0,rare:72,epic:22,legendary:6} }
+  fish:   { green:{common:70,uncommon:22,rare:6.5,epic:1.5,legendary:0}, yellow:{common:32,uncommon:34,rare:20,epic:10,legendary:4}, red:{common:0,uncommon:0,rare:52,epic:33,legendary:15} }
 };
 export const MINE_NEG = [
   { id:"trap",      label:"Hidden trap",   w:30, desc:"Lose 3–10% of your money" },
@@ -279,10 +289,37 @@ export function buildPool(items, weights, seed){
   }
   return raw.map(e=>({ ...e, p:e.p/total })).sort((a,b)=> b.p-a.p);
 }
-export function rollPool(pool){
+/* luck (0.1 = +10% luck): rare items weigh x(1+luck), epics x(1+2*luck), legendaries x(1+3*luck), then odds are re-normalised. */
+export function rollPool(pool, luck=0){
+  if(luck > 0){
+    const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+    const w = pool.map(e=> e.p*(mult[e.rarity]||1)), tot = w.reduce((a,b)=>a+b,0);
+    let t = Math.random()*tot;
+    for(let i=0;i<pool.length;i++){ t -= w[i]; if(t<=0) return pool[i].id; }
+    return pool[pool.length-1].id;
+  }
   let r = Math.random(), acc = 0;
   for(const e of pool){ acc += e.p; if(r <= acc) return e.id; }
   return pool[pool.length-1].id;
+}
+
+
+/* ---------- crafted gear stats: forged pieces are always better than any shop/drop piece of the same rarity ----------
+   Each ore sets a main stat and a paired second stat: helmet+chestplate lean on the main stat, leggings+boots on the pair.
+   Crafted armor beats the best regular armor of its rarity on both the stat line and max HP. */
+const STAT_PAIR = { SPEED:"CHARM", STRENGTH:"SPEED", CHARM:"SMARTS", SMARTS:"STRENGTH" };
+const CRAFT_MAIN = { common:4, uncommon:5, rare:7, epic:9, legendary:13 };
+const CRAFT_HP   = { common:11, uncommon:19, rare:29, epic:42, legendary:65 };
+const CRAFT_SLOT = { helmet:{pri:0,pm:1,hp:.9}, chestplate:{pri:0,pm:1.15,hp:1.3}, leggings:{pri:1,pm:1,hp:1}, boots:{pri:1,pm:.85,hp:.8} };
+export function craftedArmorStats(slot, rar, stat, variant=0){
+  const c = CRAFT_SLOT[slot], main = Math.round(CRAFT_MAIN[rar]*c.pm), other = STAT_PAIR[stat];
+  const [p, q] = c.pri===0 ? [stat, other] : [other, stat];
+  return { hp: Math.round(CRAFT_HP[rar]*c.hp) + variant, [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
+}
+const CRAFT_TRINK = { common:2, uncommon:3, rare:5, epic:7, legendary:10 };
+export function craftedTrinketStats(kind, rar, stat){
+  const base = CRAFT_TRINK[rar];
+  return kind==="ring" ? { [stat]:base, curse:false } : { [stat]:base+2, [STAT_PAIR[stat]]:Math.max(1,Math.round(base*0.6)), curse:false };
 }
 
 /* ---------- recipes: ~400 more (smelting, gems, gear tiers, cooking, teas, potions) ---------- */
@@ -327,18 +364,19 @@ export function addExpansionRecipes(add, I, ctx){
     ["Topaz","gem_topaz_cut","rare","CHARM"],["Jade","gem_jade_cut","rare","SPEED"],["Electrum","ing_electrum","rare","CHARM"],
     ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","epic","CHARM"],
     ["Opal","gem_opal_cut","epic","SMARTS"],["Mithril","ing_mithril","epic","SPEED"],
-    ["Adamantite","ing_adamantite","legendary","STRENGTH"],["Starmetal","ing_starmetal","legendary","SPEED"]
+    ["Adamantite","ing_adamantite","legendary","STRENGTH"],["Starmetal","ing_starmetal","legendary","SPEED"],
+    ["Lead","ing_lead","common","STRENGTH"],["Zinc","ing_zinc","uncommon","SPEED"]      // every smeltable ore now has its own set
   ];
   const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
-  tiers.forEach(([t,mat,rr,stat])=>{
+  tiers.forEach(([t,mat,rr,stat],ti)=>{
     const m = RARITY_MULT[rr], k = t.toLowerCase(), lc = t.toLowerCase();
     weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rr,
       { stats:{ attack:Math.round(3*m)+2+(i%3) }, desc:`A ${lc} ${w.toLowerCase()}, forged with your own hands.` }, [[mat,2+(i%2)],["ore_coal",1]]));
     armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rr,
-      { armorSlot:slot, stats:armorStats(slot,m,1), desc:`Sturdy ${lc} protection for your ${slot}.` }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, { stats:{[stat]:Math.max(1,Math.round(m)), curse:false}, desc:`A ${lc} ring that sharpens your ${stat.toLowerCase()}.` }, [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, { stats:{[stat]:Math.max(1,Math.round(m))+1, curse:false}, desc:`A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.` }, [[mat,2],["forage_herb",2]]);
+      { armorSlot:slot, stats:craftedArmorStats(slot,rr,stat,ti%5), fixedStats:true, desc:`Sturdy ${lc} protection for your ${slot}. Forged gear beats anything off the shelf.` }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, { stats:craftedTrinketStats("ring",rr,stat), fixedStats:true, desc:`A ${lc} ring that sharpens your ${stat.toLowerCase()}.` }, [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, { stats:craftedTrinketStats("amulet",rr,stat), fixedStats:true, desc:`A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.` }, [[mat,2],["forage_herb",2]]);
   });
 
   // ---- cooking: every new fish, every new edible forage ----
@@ -376,4 +414,13 @@ export function addExpansionRecipes(add, I, ctx){
   });
   T.forEach((t,i)=>
     add(`potion_rest_${i+1}`, `${t} Restoration Potion`, "consumable", R[i], { healFinal:rest[i], stats:{mana:restMana[i]}, desc:`Restores ${rest[i][0]}–${rest[i][1]} HP and ${restMana[i]} mana in one swig.` }, [[`potion_heal_${i+1}`,1],[`potion_mana_${i+1}`,1]]));
+
+  // ---- luck potions (brewed from Four-Leaf Clovers; also rarely sold in shops) ----
+  // [numeral, luck fraction, minutes, rarity, shop price, sell price (pre the global 10% sell cut), ingredients]
+  [["I",.10,3,"uncommon",60,33,[["forage_fourleafclover",1],["forage_clover",2],["forage_dandelion",1]]],
+   ["II",.20,5,"rare",140,78,[["forage_fourleafclover",2],["gem_jade_cut",1],["forage_silverleaf",1]]],
+   ["III",.40,8,"epic",300,167,[["forage_fourleafclover",3],["gem_emerald_cut",1],["forage_starcap",1]]]]
+   .forEach(([n,pct,min,rr,price,sell,ing],i)=>
+     add(`potion_luck_${i+1}`, `Luck Potion ${n}`, "consumable", rr, { healFinal:[0,0], stats:{ luck:pct, luckMs:min*60000 }, price, sellPrice:sell,
+       desc:`Drink for +${Math.round(pct*100)}% luck for ${min} minutes: better odds on rare finds while foraging, mining and fishing.` }, ing));
 }

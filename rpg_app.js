@@ -16,7 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
-import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG } from "./rpg_content.js";
+import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats } from "./rpg_content.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
@@ -1118,6 +1118,7 @@ function itemEffectText(item){
     const bits = [];
     if(st.heal) bits.push(`Restores ${healText(st)} HP`);
     if(st.mana) bits.push(`Restores ${st.mana} mana`);
+    if(st.luck) bits.push(`+${Math.round(st.luck*100)}% luck for ${Math.round(st.luckMs/60000)} min`);
     return bits.join(" · ") || "No effect";
   }
   if(item.type==="weapon") return `Damage: +${st.attack||0} attack`;
@@ -1399,11 +1400,11 @@ async function unequipItem(slot){
    later) always removes the right amount. */
 function gearBonus(equipped){
   const out = { hp:0, stats:{ SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0 } };
-  ARMOR_SLOTS.forEach(slot=>{
+  [...ARMOR_SLOTS, "trinket"].forEach(slot=>{
     const it = equipped?.[slot] && ITEM_BY_ID[equipped[slot]]; if(!it) return;
-    const st = it.stats||{};
+    const st = it.stats||{}, sign = (slot==="trinket" && st.curse) ? -1 : 1;     // trinkets give their stats now (cursed ones take them away)
     out.hp += st.hp||0;
-    SKILL_KEYS.forEach(k=> out.stats[k] += st[k]||0);
+    SKILL_KEYS.forEach(k=> out.stats[k] += sign*(st[k]||0));
   });
   return out;
 }
@@ -1441,7 +1442,10 @@ function renderEquipSlots(){
     }
   });
 }
+/* Luck potions: profile.luckPct (0.1 / 0.2 / 0.4) until profile.luckUntil (ms). */
+function activeLuck(){ const p = state.profile; return p && (p.luckUntil||0) > Date.now() ? (p.luckPct||0) : 0; }
 async function useConsumable(item){
+  if(item.stats.luck && activeLuck() > item.stats.luck){ toast("A stronger luck potion is still working."); return; }
   // Everything — the qty check, the qty decrement, AND the hp/mana gain —
   // happens inside ONE transaction now (via applyInvChanges' extraFields),
   // reading the server's current inventory each time. That's what stops a
@@ -1452,13 +1456,14 @@ async function useConsumable(item){
     const fields = {};
     if(item.stats.heal) fields.hp = Math.min(fresh.hpMax, fresh.hp+rolled);
     if(item.stats.mana) fields.mana = Math.min(fresh.manaMax, fresh.mana+item.stats.mana);
+    if(item.stats.luck){ fields.luckPct = item.stats.luck; fields.luckUntil = Date.now() + item.stats.luckMs; }
     return fields;
   });
   if(ok===null){
     afterInvChangeRefreshDetail(item.id);
     return;
   }
-  toast(`Used ${item.name}${rolled?` (+${rolled} HP)`:""}`);
+  toast(item.stats.luck ? `🍀 ${item.name}: +${Math.round(item.stats.luck*100)}% luck for ${Math.round(item.stats.luckMs/60000)} minutes!` : `Used ${item.name}${rolled?` (+${rolled} HP)`:""}`);
   afterInvChangeRefreshDetail(item.id);
 }
 
@@ -2087,6 +2092,7 @@ function renderRegionGrid(){
    read about it, then press Buy in the detail box. */
 const SHOP_SIZE = 6;
 const SEED_ROLL = { common:.40, uncommon:.28, rare:.18, epic:.10, legendary:.04 };
+const LUCK_SHOP_ODDS = { 3:.03, 2:.06, 1:.12 };
 const BACKPACK_ODDS = { 5:.02, 4:.04, 3:.06, 2:.09, 1:.12 };
 /* Everything daily (shop stock for ALL regions + the Dailies path) rolls over at 12:00am US Eastern time,
    for every player no matter where they live. (America/New_York, so it follows EST/EDT.) */
@@ -2121,6 +2127,8 @@ function shopStock(){
     for(let t=5;t>=1;t--){ if(rnd() < BACKPACK_ODDS[t]){ items[SHOP_SIZE-2] = ITEM_BY_ID["backpack_"+t]; break; } }
     // Rebirth: rarely shows up (any day, any region) in place of the first slot
     if(rnd() < 0.07) items[0] = ITEM_BY_ID.rebirth_scroll;
+    // Luck potions: rarely replace the middle slot (tier 3 is the rarest)
+    for(let t=3;t>=1;t--){ if(rnd() < LUCK_SHOP_ODDS[t]){ items[2] = ITEM_BY_ID["potion_luck_"+t]; break; } }
     stock[region] = items;
   });
   shopStockCache = { day, stock };
@@ -2550,7 +2558,7 @@ function tickJobButtons(){
   const mr = mineReadyIn(), mb = document.getElementById("btnMine"), fr = fishReadyIn(), fbtn = document.getElementById("btnFish");
   mb.disabled = mr>0; mb.textContent = mr>0 ? `Mine (${fmtDur(mr)})` : (MINE_RULES[jobMode].wear>1 ? `Mine (−${MINE_RULES[jobMode].wear} 🔧)` : "Mine");
   fbtn.disabled = fr>0 || !!fishGame; fbtn.textContent = fr>0 ? `Fish (${fmtDur(fr)})` : "Fish";
-  document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")}`;
+  document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")}` + (activeLuck() ? ` &nbsp;·&nbsp; 🍀 +${Math.round(activeLuck()*100)}% (${fmtDur(state.profile.luckUntil-Date.now())})` : "");
 }
 setInterval(tickJobButtons, 500);
 function hasItem(itemId){ return (state.profile.inventory||[]).some(e=>e.itemId===itemId && e.qty>0); }
@@ -2569,10 +2577,10 @@ async function doForageAction(){
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), {
     [forageTsKey(m)]: Date.now(), foragingXp: (state.profile.foragingXp||0)+1
   }));
-  if(Math.random() >= rule.chance){ jobLog("Nothing this time."); return; }
+  if(Math.random() >= Math.min(0.98, rule.chance*(1+activeLuck()))){ jobLog("Nothing this time."); return; }
   const n = rule.qty[0] + Math.floor(Math.random()*(rule.qty[1]-rule.qty[0]+1));
   const got = {};
-  for(let i=0;i<n;i++){ const id = rollPool(POOLS.forage[m]); got[id] = (got[id]||0)+1; }
+  for(let i=0;i<n;i++){ const id = rollPool(POOLS.forage[m], activeLuck()); got[id] = (got[id]||0)+1; }
   await applyInvChanges({ add:Object.entries(got).map(([itemId,qty])=>({itemId,qty})) },
     Object.fromEntries(Object.entries(got).map(([id,q])=>["finds."+id, increment(q)])));
   jobLog(`You foraged ${Object.entries(got).map(([id,q])=>pluralize(id,q)).join(" and ")}!`);
@@ -2592,13 +2600,13 @@ async function doMineAction(){
   playSfx("mine");
   const updates = { miningXp: (state.profile.miningXp||0)+1 };
   let msg;
-  if(Math.random() < rule.pos){
+  if(Math.random() < Math.min(0.97, rule.pos + (1-rule.pos)*activeLuck())){     // luck also dodges hazards
     if(Math.random() < MINE_CASH_SHARE){
       const amt = rule.cash[0] + Math.floor(Math.random()*(rule.cash[1]-rule.cash[0]+1));
       await grantMoney(amt);
       msg = `Found $${fmtMoney(amt)} under the rock!`;
     } else {
-      const id = rollPool(POOLS.mine[m]);            // always exactly 1 mineral, in every mode
+      const id = rollPool(POOLS.mine[m], activeLuck());            // always exactly 1 mineral, in every mode
       await addItemToInv(id, 1);
       updates["finds."+id] = increment(1);           // feeds "obtain an item" sidequests
       msg = `Found ${pluralize(id, 1)}!`;
@@ -2647,7 +2655,7 @@ async function doFishAction(){
     target = Math.random()<(rule.longMove ?? 0.35) ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
     if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
   };
-  const GRAVITY = 0.9, LIFT = -1.8, MAXV = 6;
+  const GRAVITY = 1.9, LIFT = -3.6, MAXV = 12;      // much snappier bar: rises and falls about twice as fast
   const game = fishGame = { id:null, cleanup:null };
   game.id = setInterval(()=>{
     tick++;
@@ -2697,7 +2705,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the fight ends
   if(success){
-    const pick = rollPool(POOLS.fish[m]);
+    const pick = rollPool(POOLS.fish[m], activeLuck());
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
@@ -3794,12 +3802,12 @@ const RECIPES = [];
                  ["Emerald","gem_emerald_cut","epic","SPEED"],["Diamond","gem_diamond_cut","legendary","STRENGTH"]];
   const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"];
   const armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
-  tiers.forEach(([t,mat,rar,stat])=>{
+  tiers.forEach(([t,mat,rar,stat],ti)=>{
     const m = RARITY_MULT[rar], k = t.toLowerCase();
     weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rar, { stats:{attack:Math.round(3*m)+2+(i%3)}, desc:`A ${t.toLowerCase()} ${w.toLowerCase()} you forged yourself.` }, [[mat,2+(i%2)],["ore_coal",1]]));
-    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:armorStats(slot, m, 1), desc:`Sturdy ${t.toLowerCase()} gear.` }, [[mat,q],["ore_coal",1]]));
-    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m)), curse:false}, desc:`A ${t.toLowerCase()} ring boosting ${stat}.` }, [[mat,1],["ore_coal",1]]);
-    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, { stats:{[stat]:Math.max(1,Math.round(m))+1, curse:false}, desc:`A ${t.toLowerCase()} amulet boosting ${stat}.` }, [[mat,2],["forage_herb",2]]);
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rar, { armorSlot:slot, stats:craftedArmorStats(slot, rar, stat, ti%5), fixedStats:true, desc:`Sturdy ${t.toLowerCase()} gear. Forged gear beats anything off the shelf.` }, [[mat,q],["ore_coal",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rar, { stats:craftedTrinketStats("ring", rar, stat), fixedStats:true, desc:`A ${t.toLowerCase()} ring boosting ${stat}.` }, [[mat,1],["ore_coal",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rar, { stats:craftedTrinketStats("amulet", rar, stat), fixedStats:true, desc:`A ${t.toLowerCase()} amulet boosting ${stat}.` }, [[mat,2],["forage_herb",2]]);
   });
   // tools
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
@@ -3941,7 +3949,7 @@ function renderCraftInv(){
   const sel = RECIPES.find(r=>r.id===state.selRecipe), det = document.getElementById("recipeDetail"), btn = document.getElementById("btnCraft");
   if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
   const it = ITEM_BY_ID[sel.out], st = it.stats||{};
-  const eff = st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: it.type==="armor"?itemEffectText(it): Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
+  const eff = st.luck?itemEffectText(it): st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: it.type==="armor"?itemEffectText(it): Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
   det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p><p><b>Sells for $${fmtMoney(it.sellPrice||0)}</b></p>` +
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
