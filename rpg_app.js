@@ -551,6 +551,34 @@ JOB_ITEM_BANK.push(
  { id:"forage_goldapple", name:"Golden Apple", type:"consumable", rarity:"legendary", sellPrice:100, desc:"Glows faintly. Restores a ton.", stats:{} });
 JOB_ITEM_BANK.filter(i=>i.id==="tool_pickaxe"||i.id==="tool_fishingrod").forEach(i=> i.desc+=" Breaks after 3 uses.");
 JOB_ITEM_BANK.filter(i=>i.type==="consumable").forEach(i=> i.stats.heal = Math.round(HEAL_BY_RARITY[i.rarity]*(i.id.startsWith("fish_")?0.6:1)));
+
+/* ---------- BUG CATCHING: nets follow the SAME ladder as pickaxes and fishing rods ---------- */
+TOOL_LADDER.forEach(([sf,nm,u,price,rar])=>{
+  const id = jobToolId("net", sf); TOOL_USES[id] = u;
+  JOB_ITEM_BANK.push({ id, name:`${nm} Net`, type:"tool", rarity:rar, price, sellPrice:Math.max(1,Math.round(price*0.3)), desc:`Needed to catch bugs. Breaks after ${u} uses.`, stats:{} });
+});
+/* 40 bugs: [name, emoji]. Rarity layout: 10 common, 10 uncommon, 9 rare, 6 epic, 5 legendary */
+const BUG_LIST = {
+  common:   [["Ladybug","🐞"],["Garden Ant","🐜"],["Housefly","🪰"],["Pill Bug","🐛"],["Field Cricket","🦗"],["Gnat","🪰"],["Earwig","🪲"],["Aphid","🐛"],["Mosquito","🦟"],["Silverfish","🪳"]],
+  uncommon: [["Honeybee","🐝"],["Grasshopper","🦗"],["Firefly","✨"],["Dragonfly","🪰"],["Stag Beetle","🪲"],["Cicada","🦗"],["Katydid","🦗"],["Ground Beetle","🪲"],["Water Strider","🦟"],["Mayfly","🪰"]],
+  rare:     [["Monarch Butterfly","🦋"],["Luna Moth","🦋"],["Praying Mantis","🦗"],["Rhinoceros Beetle","🪲"],["Jewel Wasp","🐝"],["Damselfly","🪰"],["Orchid Mantis","🦗"],["Tarantula Hawk","🐝"],["Velvet Ant","🐜"]],
+  epic:     [["Atlas Moth","🦋"],["Hercules Beetle","🪲"],["Goliath Beetle","🪲"],["Blue Morpho","🦋"],["Giant Stick Insect","🦗"],["Bullet Ant","🐜"]],
+  legendary:[["Golden Scarab","🪲"],["Phoenix Moth","🦋"],["Crystal Cicada","🦗"],["Queen Mantis","🦗"],["Sunfire Beetle","🪲"]]
+};
+const BUG_SELL = { common:[3,9], uncommon:[10,20], rare:[28,50], epic:[70,120], legendary:[160,280] };
+const BUG_DEFS = [], BUG_EMOJI = {};
+Object.entries(BUG_LIST).forEach(([rarity, arr])=> arr.forEach(([name,emoji])=>{
+  const id = "bug_"+name.toLowerCase().replace(/[^a-z]+/g,"_"), h = hash("bug:"+id), [lo,hi] = BUG_SELL[rarity];
+  BUG_DEFS.push({ id, name, rarity, emoji });
+  BUG_EMOJI[id] = emoji;
+  JOB_ITEM_BANK.push({ id, name, type:"material", rarity, sellPrice: lo + Math.round(rng01(h,5)*(hi-lo)), desc:`A ${rarity} bug. Fry it, craft with it, or sell it.`, stats:{} });
+}));
+// which net-modes each bug can appear in (green = easy, yellow = medium, red = hard) — same shape as the fish tiers
+const BUG_CATALOG = { easy:[], medium:[], hard:[] };
+{ const by = r=> BUG_DEFS.filter(b=>b.rarity===r).map(b=>b.id);
+  BUG_CATALOG.easy   = [...by("common"), ...by("uncommon"), ...by("rare").slice(0,4), ...by("epic").slice(0,1)];
+  BUG_CATALOG.medium = [...by("common"), ...by("uncommon"), ...by("rare"), ...by("epic"), ...by("legendary").slice(0,2)];
+  BUG_CATALOG.hard   = [...by("rare"), ...by("epic"), ...by("legendary")]; }
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
 // Content expansion: 50 forageables, 30 minerals, 90 fish (see rpg_content.js)
 const CATALOG = registerItems(ITEM_BY_ID);
@@ -853,7 +881,7 @@ function defaultPlayerDoc(username, archetype, klass){
     username, archetype: archetype||null, klass: klass||null, level:1, money:0, backpackTier:0,
     stats, ...bars,
     region:"forest",
-    inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
+    inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }, { itemId:"tool_net2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
     equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
     friends: [], sentFriendRequests: [], privateSocial: false, privateProfile: false, skillTreeVer: SKILL_TREE_VERSION, createdAt: Date.now(),
@@ -2362,18 +2390,18 @@ function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
 let shopSel = null, shopTab = "market", shopCat = "gradient", shopPage = 0;
 const SHOP_PER_PAGE = 12;                                           // 3 rows x 4 columns per page
 /* Tools tab: the full pickaxe + fishing-rod ladder, then the 5 tiers of hoes and watering cans */
-const SHOP_TOOL_IDS = [...["pickaxe","fishingrod"].flatMap(k=> TOOL_LADDER.map(t=>jobToolId(k,t[0]))), ...FARM_TOOLS.map(t=>t.id)].filter(id=>ITEM_BY_ID[id]);
+const shopToolIds = ()=> [...["pickaxe","fishingrod","net"].flatMap(k=> TOOL_LADDER.map(t=>jobToolId(k,t[0]))), ...FARM_TOOLS.map(t=>t.id)].filter(id=>ITEM_BY_ID[id]);   // evaluated on demand: the in-between tiers are registered later in the file
 const cosOwned = ()=> state.profile?.cosmetics || [];
-/* Rotating cosmetics: each day (12am ET) a fixed handful of the rotating pool is on sale — 4 gradients, 3 fonts, 2 reactions. Same in every region. */
-const ROT_PER_DAY = { gradient:4, font:3, reaction:2 };
+/* Rotating cosmetics: each day (12am ET) a fixed handful of EVERY cosmetic is on sale — 4 gradients, 2 fonts, 2 reactions in total. Same in every region. */
+const ROT_PER_DAY = { gradient:4, font:2, reaction:2 };
 function rotatingToday(kind){
-  const pool = ALL_COSMETICS.filter(c=>c.kind===kind && c.rot), rnd = seededRand(dayIndex()*104729 + kind.length*7919 + 11); rnd(); rnd();
+  const pool = ALL_COSMETICS.filter(c=>c.kind===kind), rnd = seededRand(dayIndex()*104729 + kind.length*7919 + 11); rnd(); rnd();
   const a = [...pool]; for(let i=a.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; }
   return a.slice(0, ROT_PER_DAY[kind]||0);
 }
-const cosCategory = ()=>{ const today = new Set(rotatingToday(shopCat).map(c=>c.id)); return ALL_COSMETICS.filter(c=> c.kind===shopCat && (!c.rot || today.has(c.id))); };
+const cosCategory = ()=>{ const today = new Set(rotatingToday(shopCat).map(c=>c.id)); return ALL_COSMETICS.filter(c=> c.kind===shopCat && today.has(c.id)); };
 function shopList(){
-  if(shopTab==="tools") return SHOP_TOOL_IDS.map(id=>({ id, kind:"item", it:ITEM_BY_ID[id] }));
+  if(shopTab==="tools") return shopToolIds().map(id=>({ id, kind:"item", it:ITEM_BY_ID[id] }));
   if(shopTab==="cosmetics") return cosCategory().map(c=>({ id:c.id, kind:"cosmetic", c }));
   return shopItemsForRegion().map(it=>({ id:it.id, kind:"item", it }));
 }
@@ -2402,7 +2430,7 @@ function renderShopDetail(){
 function renderShop(){
   const label = document.getElementById("shopRegionLabel");
   label.textContent = shopTab==="market" ? `${REGIONS[state.profile.region].name} Market — ${SHOP_SIZE} items, new stock every day at 12am ET`
-    : shopTab==="tools" ? "Tools — job tools & farming tools, every rarity" : "Cosmetics — permanent once bought. 🔄 items rotate daily at 12am ET (same in every region)";
+    : shopTab==="tools" ? "Tools — pickaxes, fishing rods, bug nets & farming tools, every tier" : "Cosmetics — permanent once bought. 🔄 items rotate daily at 12am ET (same in every region)";
   document.querySelectorAll("[data-shoptab]").forEach(b=> b.classList.toggle("active", b.dataset.shoptab===shopTab));
   const catRow = document.getElementById("shopCatRow"); catRow.style.display = shopTab==="cosmetics" ? "" : "none";
   catRow.querySelectorAll("[data-shopcat]").forEach(b=> b.classList.toggle("selected", b.dataset.shopcat===shopCat));
@@ -2415,7 +2443,7 @@ function renderShop(){
     if(e.kind==="cosmetic"){
       const c = e.c, owned = cosOwned().includes(c.id);
       cell.innerHTML = `<b style="${c.kind==="font"?`font-family:${c.family}`:""}">${c.kind==="reaction"?c.emoji+" ":""}${escapeHTML(c.name)}</b>` +
-        (c.rot ? `<span>🔄 today only</span>` : "") + (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
+        `<span>🔄 today only</span>` + (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
     } else cell.innerHTML = `<b>${escapeHTML(e.it.name)}</b><span>${e.it.rarity}</span><span>$${fmtMoney(e.it.price)}</span>`;
     cell.addEventListener("click", ()=> selectShopItem(e.id));
     grid.appendChild(cell);
@@ -2782,10 +2810,10 @@ setInterval(()=>{
    The reward math is unchanged from the old tab-based version.
    ========================================================================= */
 function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(l) l.textContent=msg; }
-const toolIds = kind=> (kind==="pickaxe"||kind==="fishingrod") ? [...TOOL_LADDER].reverse().map(t=>jobToolId(kind,t[0])) : ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
+const toolIds = kind=> (kind==="pickaxe"||kind==="fishingrod"||kind==="net") ? [...TOOL_LADDER].reverse().map(t=>jobToolId(kind,t[0])) : ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
 const toolLeft = id => (state.profile.toolUses||{})[id] ?? TOOL_USES[id];
 async function useTool(kind, wear=1, extra={}){
-  const label = {pickaxe:"Pickaxe",fishingrod:"Fishing Rod",hoe:"Hoe",can:"Watering Can"}[kind]||kind;
+  const label = {pickaxe:"Pickaxe",fishingrod:"Fishing Rod",net:"Net",hoe:"Hoe",can:"Watering Can"}[kind]||kind;
   const owned = toolIds(kind).filter(hasItem);                       // best tool first
   if(!owned.length){ toast(`You need a ${label} — buy one in the Shop.`); return false; }
   // A swing needs its FULL durability cost: a tool with 1 use left can't do a 3-durability swing.
@@ -2803,16 +2831,23 @@ async function useTool(kind, wear=1, extra={}){
 }
 function toolUsesLeft(kind){
   const id = toolIds(kind).find(hasItem);
-  return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":"fishing rod"}`;
+  return id ? `${ITEM_BY_ID[id].name}: ${(state.profile.toolUses||{})[id] ?? TOOL_USES[id]} uses left` : `No ${kind==="pickaxe"?"pickaxe":kind==="net"?"net":"fishing rod"}`;
 }
 
 /* --- job modes: 🟢 green (normal) / 🟡 yellow (risky) / 🔴 red (extreme). Client-side choice, remembered on this device. --- */
 let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); return MODES[m] ? m : "green"; }catch{ return "green"; } })();
-const POOLS = { forage:{}, mine:{}, fish:{} };
+/* bug catching: time to catch, bug speed (px/s), turns per second, chance a turn becomes a dash, and how fast the bar drains when you slip off (x the fill rate) */
+const BUG_RULES = {
+  green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5 },
+  yellow: { tier:"medium", time:15000, speed:140, turn:2.0, dash:.20, drop:.6 },
+  red:    { tier:"hard",   time:20000, speed:215, turn:3.2, dash:.35, drop:.7 }
+};
+const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
   POOLS.forage[m] = buildPool(CATALOG.forage.map(id=>ITEM_BY_ID[id]), RARITY_W.forage[m], "forage"+m);
   POOLS.mine[m]   = buildPool(CATALOG.mineral.map(id=>ITEM_BY_ID[id]), RARITY_W.mine[m], "mine"+m);
   POOLS.fish[m]   = buildPool(CATALOG.fish[FISH_RULES[m].tier].map(id=>ITEM_BY_ID[id]), RARITY_W.fish[m], "fish"+m);
+  POOLS.bug[m]    = buildPool(BUG_CATALOG[BUG_RULES[m].tier].map(id=>ITEM_BY_ID[id]), RARITY_W.fish[m], "bug"+m);
 });
 function setJobMode(m){
   if(!MODES[m]) return;
@@ -2823,6 +2858,7 @@ function setJobMode(m){
   const mr = MINE_RULES[m];
   document.getElementById("btnMine").title = `Uses ${mr.wear} durability`;
   document.getElementById("btnFish").title = `${FISH_RULES[m].tier} fish`;
+  document.getElementById("btnBug").title = `${BUG_RULES[m].tier} bugs, ${BUG_RULES[m].time/1000}s`;
   tickJobButtons();
 }
 document.querySelectorAll("[data-jmode]").forEach(b=> b.addEventListener("click", ()=> setJobMode(b.dataset.jmode)));
@@ -2845,8 +2881,10 @@ function tickJobButtons(){
   fb.disabled = r>0; fb.textContent = r>0 ? `Forage (${fmtDur(r)})` : "Forage";
   const mr = mineReadyIn(), mb = document.getElementById("btnMine"), fr = fishReadyIn(), fbtn = document.getElementById("btnFish");
   mb.disabled = mr>0; mb.textContent = mr>0 ? `Mine (${fmtDur(mr)})` : (MINE_RULES[jobMode].wear>1 ? `Mine (−${MINE_RULES[jobMode].wear} 🔧)` : "Mine");
-  fbtn.disabled = fr>0 || !!fishGame; fbtn.textContent = fr>0 ? `Fish (${fmtDur(fr)})` : "Fish";
-  document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")}` + (activeLuck() ? ` &nbsp;·&nbsp; 🍀 +${Math.round(activeLuck()*100)}% (${fmtDur(state.profile.luckUntil-Date.now())})` : "");
+  fbtn.disabled = fr>0 || !!fishGame || !!bugGame; fbtn.textContent = fr>0 ? `Fish (${fmtDur(fr)})` : "Fish";
+  const br = bugReadyIn(), bbtn = document.getElementById("btnBug");
+  bbtn.disabled = br>0 || !!bugGame || !!fishGame; bbtn.textContent = br>0 ? `Bug Catch (${fmtDur(br)})` : "Bug Catch";
+  document.getElementById("jobToolStatus").innerHTML = `⛏️ ${toolUsesLeft("pickaxe")} &nbsp;·&nbsp; 🎣 ${toolUsesLeft("fishingrod")} &nbsp;·&nbsp; 🕸️ ${toolUsesLeft("net")}` + (activeLuck() ? ` &nbsp;·&nbsp; 🍀 +${Math.round(activeLuck()*100)}% (${fmtDur(state.profile.luckUntil-Date.now())})` : "");
 }
 setInterval(tickJobButtons, 500);
 function hasItem(itemId){ return (state.profile.inventory||[]).some(e=>e.itemId===itemId && e.qty>0); }
@@ -2951,7 +2989,7 @@ async function doFishAction(){
     target = Math.random()<(rule.longMove ?? 0.35) ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
     if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
   };
-  const GRAVITY = 1.27, LIFT = -3.6, MAXV = 12;      // the bar rises at the normal rate but now sinks 1.5x slower      // much snappier bar: rises and falls about twice as fast
+  const GRAVITY = 1.52, LIFT = -3.6, MAXV = 12;      // the bar rises at the normal rate but sinks 1.25x slower than the original 1.9
   const game = fishGame = { id:null, cleanup:null };
   game.id = setInterval(()=>{
     tick++;
@@ -3011,27 +3049,124 @@ async function endFishing(success, m=jobMode, timedOut=false){
 }
 document.getElementById("btnCancelFish").addEventListener("click", ()=> endFishing(false));
 
-/* --- Bestiary (journal tab): every fish, when it bites, how likely it is right now --- */
+/* --- bug catching: a bug flies chaotically around a circle; keep the little cursor circle over it.
+   Hover on it for 3 seconds in total to catch it; the bar drains whenever you slip off. Needs a Net. --- */
+let bugGame = null, bugReopenCompass = false;
+const bugReadyIn = ()=> JOB_COOLDOWN_MS - (Date.now() - (state.profile?.lastBugTs||0));
+document.getElementById("btnBug").addEventListener("click", async ()=>{
+  bugReopenCompass = document.getElementById("compassModal").classList.contains("active");
+  closeModal("compassModal");
+  await doBugAction();
+  if(!bugGame){ reopenCompassIf(bugReopenCompass); bugReopenCompass = false; }   // couldn't start (no net etc.)
+});
+async function doBugAction(){
+  if(bugGame || fishGame) return;
+  const m = jobMode, rule = BUG_RULES[m];
+  if(bugReadyIn() > 0) return;
+  if(!(await useTool("net", 1, { lastBugTs: Date.now() }))) return;
+  if(bugGame) return;
+  playSfx("fish");
+  const overlay = document.getElementById("bugOverlay"), arena = document.getElementById("bugArena"), bugEl = document.getElementById("bugEmoji"),
+        stubEl = document.getElementById("bugStub"), fillEl = document.getElementById("bugProgressFill"), timerEl = document.getElementById("bugTimer");
+  overlay.classList.add("show");
+  toast(`${MODES[m].emoji} A ${rule.tier} bug is buzzing around!`);
+  bugEl.textContent = pickFrom(BUG_CATALOG[rule.tier].map(id=>BUG_EMOJI[id]));
+  const R = arena.clientWidth/2 || 140, BUG_R = 14, STUB_R = 24, reach = R-BUG_R, startedAt = Date.now();
+  let bx = (Math.random()-.5)*R, by = (Math.random()-.5)*R, ang = Math.random()*Math.PI*2, spd = rule.speed, dashT = 0, sx = 0, sy = 0, progress = 0, last = performance.now();
+  const place = ()=>{ bugEl.style.transform = `translate(${R+bx-BUG_R}px,${R+by-BUG_R}px)`; stubEl.style.transform = `translate(${R+sx-STUB_R}px,${R+sy-STUB_R}px)`; };
+  const move = e=>{
+    const r = arena.getBoundingClientRect(); let dx = e.clientX-(r.left+r.width/2), dy = e.clientY-(r.top+r.height/2);
+    const lim = R-STUB_R, d = Math.hypot(dx,dy); if(d>lim){ dx *= lim/d; dy *= lim/d; }
+    sx = dx; sy = dy;
+  };
+  overlay.addEventListener("pointermove", move); overlay.addEventListener("pointerdown", move);
+  place();
+  const game = bugGame = { id:null, cleanup:null };
+  game.id = setInterval(()=>{
+    const now = performance.now(), dt = Math.min(0.05, (now-last)/1000); last = now;
+    // --- the bug: random heading + random speed changes, occasional dashes, bounces off the circle wall ---
+    if(dashT>0) dashT -= dt;
+    if(Math.random() < rule.turn*dt){ ang = Math.random()*Math.PI*2; spd = rule.speed*(0.35+Math.random()*1.5); if(Math.random()<rule.dash) dashT = 0.25+Math.random()*0.25; }
+    const v = spd*(dashT>0 ? 2.6 : 1)*dt;
+    bx += Math.cos(ang)*v; by += Math.sin(ang)*v;
+    const d = Math.hypot(bx,by);
+    if(d > reach){ bx *= reach/d; by *= reach/d; ang = Math.atan2(-by,-bx) + (Math.random()-.5)*1.4; }
+    // --- catching ---
+    const onBug = Math.hypot(sx-bx, sy-by) <= STUB_R + BUG_R*0.5;
+    progress += (onBug ? 100/3 : -(100/3)*rule.drop)*dt;            // 3 seconds of hovering fills the bar; slipping off drains it
+    progress = Math.max(0, Math.min(100, progress));
+    stubEl.classList.toggle("on", onBug);
+    fillEl.style.width = progress+"%";
+    place();
+    const left = Math.max(0, rule.time - (Date.now()-startedAt));
+    if(timerEl) timerEl.textContent = `${(left/1000).toFixed(1)}s`;
+    if(progress >= 100) endBug(true, m);
+    else if(left <= 0) endBug(false, m, true);
+  }, 16);
+  game.cleanup = ()=>{ overlay.removeEventListener("pointermove", move); overlay.removeEventListener("pointerdown", move); stubEl.classList.remove("on"); };
+}
+async function endBug(success, m=jobMode, timedOut=false){
+  if(!bugGame) return;
+  clearInterval(bugGame.id); bugGame.cleanup?.(); bugGame = null;
+  document.getElementById("bugOverlay").classList.remove("show");
+  document.getElementById("bugProgressFill").style.width = "0%";
+  reopenCompassIf(bugReopenCompass); bugReopenCompass = false;
+  updateDoc(doc(db,"players",state.uid), { lastBugTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the chase ends
+  if(success){
+    const pick = rollPool(POOLS.bug[m], activeLuck());
+    await addItemToInv(pick, 1);
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bugXp: (state.profile.bugXp||0)+1, ["finds."+pick]: increment(1) }));
+    jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
+  } else {
+    jobLog(timedOut ? "Too slow — the bug flew away!" : "The bug got away.");
+  }
+}
+document.getElementById("btnCancelBug").addEventListener("click", ()=> endBug(false));
+
+/* --- Bestiary (journal tab): every fish and bug, when it bites / where it lives, how likely it is --- */
 const pctText = p=> { const v = p*100; return (v>=10 ? v.toFixed(1) : v>=1 ? v.toFixed(2) : v.toFixed(3)) + "%"; };
 const FISH_TIERS = [["easy","green","Green"],["medium","yellow","Yellow"],["hard","red","Red"]];
-let beSel = null;
+let beSel = null, beKind = "fish";
 function beFishList(){ return FISH_TIERS.flatMap(([tier,mode])=> CATALOG.fish[tier].map(id=>({ id, tier, mode, item:ITEM_BY_ID[id] }))); }
+function beBugList(){
+  const seen = new Set(), out = [];
+  FISH_TIERS.forEach(([tier,mode])=> BUG_CATALOG[tier].forEach(id=>{ if(!seen.has(id)){ seen.add(id); out.push({ id, tier, mode, item:ITEM_BY_ID[id], bug:true }); } }));
+  const order = RARITIES; return out.sort((x,y)=> order.indexOf(x.item.rarity)-order.indexOf(y.item.rarity));
+}
 function renderBestiary(){
   const grid = document.getElementById("beGrid"), det = document.getElementById("beDetail"), clock = document.getElementById("beClock");
   if(!grid || !state.profile) return;
-  const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, list = beFishList();
+  document.querySelectorAll("[data-besub]").forEach(b=> b.classList.toggle("active", b.dataset.besub===beKind));
+  const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, bugMode = beKind==="bug", list = bugMode ? beBugList() : beFishList();
   const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
+  clock.style.display = bugMode ? "none" : "";
   clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}`;
   grid.innerHTML = list.map(f=>{
-    const hb = fishHabit(f.id, f.item.rarity), act = activity(hb, h), caught = (finds[f.id]||0) > 0;
+    const caught = (finds[f.id]||0) > 0;
+    const act = f.bug ? 0 : activity(fishHabit(f.id, f.item.rarity), h);
     return `<button class="be-card rarity-${f.item.rarity}${beSel===f.id?" sel":""}${caught?"":" unseen"}" data-fish="${f.id}" title="${caught?escapeHTML(f.item.name):"???"}">
-      <span class="be-emo">${caught?"🐟":"❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
-      <span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span></button>`;
+      <span class="be-emo">${caught ? (f.bug ? BUG_EMOJI[f.id] : "🐟") : "❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
+      ${f.bug ? "" : `<span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span>`}</button>`;
   }).join("");
   grid.querySelectorAll("[data-fish]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.fish; renderBestiary(); }));
   const f = list.find(x=>x.id===beSel);
-  if(!f){ det.innerHTML = `<p class="doodle-sub">Tap a fish to see when it bites.</p>`; return; }
-  const it = f.item, hb = fishHabit(f.id, it.rarity), pool = POOLS.fish[f.mode], caught = (finds[f.id]||0) > 0;
+  if(!f){ det.innerHTML = `<p class="doodle-sub">${bugMode ? "Tap a bug to see where it lives." : "Tap a fish to see when it bites."}</p>`; return; }
+  const it = f.item, caught = (finds[f.id]||0) > 0;
+  if(f.bug){
+    const modes = FISH_TIERS.filter(([tier])=> BUG_CATALOG[tier].includes(f.id)), odds = modes.map(([tier,mode])=> `${MODES[mode].emoji} ${MODES[mode].label}: ${pctText(POOLS.bug[mode].find(e=>e.id===f.id)?.p||0)}`).join(" · ");
+    const recipes = RECIPES.filter(r=> r.ing.some(([id])=>id===f.id)).length;
+    det.innerHTML = `<h3 class="doodle-h3">${caught?BUG_EMOJI[f.id]+" "+escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
+      <p class="doodle-sub">${caught ? escapeHTML(it.desc||"") : "Catch one to reveal its entry."}</p>
+      <div class="be-facts">
+        <div><b>Where</b> ${modes.map(([,mode])=>MODES[mode].emoji+" "+MODES[mode].label).join(", ")} bug catching</div>
+        <div><b>Odds per catch</b> ${odds}</div>
+        <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
+        <div><b>Used in</b> ${recipes} crafting recipe${recipes===1?"":"s"}</div>
+        <div><b>Caught</b> ${finds[f.id]||0}</div>
+      </div>`;
+    return;
+  }
+  const hb = fishHabit(f.id, it.rarity), pool = POOLS.fish[f.mode];
   const odds = oddsByHour(pool, f.id), now = fishPct(hb, h)/100, max = hb.max || 1;
   const bars = odds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(3, Math.round(p/max*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${p.toFixed(1)}%"></span>`).join("");
   det.innerHTML = `<h3 class="doodle-h3">${caught?escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
@@ -3046,6 +3181,7 @@ function renderBestiary(){
     <div class="be-chart">${bars}</div>
     <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
 }
+document.querySelectorAll("[data-besub]").forEach(b=> b.addEventListener("click", ()=>{ beKind = b.dataset.besub; beSel = null; renderBestiary(); }));
 document.querySelector('[data-jtab="bestiary"]').addEventListener("click", renderBestiary);
 setInterval(()=>{ if(document.getElementById("jtab-bestiary")?.classList.contains("active") && document.getElementById("journalModal").classList.contains("active")) renderBestiary(); }, 30000);
 setJobMode(jobMode);
@@ -4135,6 +4271,15 @@ const RECIPES = [];
     add("tool_fishingrod"+sf, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, light ? [[mat,1],["forage_herb",2]] : sf==="_st" ? [[mat,2],["forage_herb",2]] : [[mat,1],["ing_steel",1],["forage_herb",2]]);
   });
   TOOL_LADDER.forEach(([sf,nm,u,price,rar])=> ["pickaxe","fishingrod"].forEach(k=>{ const it = I[jobToolId(k,sf)]; if(it){ it.price = price; it.sellPrice = Math.max(1, Math.round(price*0.3)); TOOL_USES[it.id] = u; } }));
+  TOOL_LADDER.forEach(([sf])=>{ const rod = RECIPES.find(r=> r.id==="rc_"+jobToolId("fishingrod",sf)); if(rod) add(jobToolId("net",sf), "", "tool", "common", {}, rod.ing.map(x=>[...x])); });
+  // bug catching: fried bugs (food), chitin (2 bugs of one rarity) and beetle charms
+  BUG_DEFS.forEach(b=> add("fried_"+b.id, "Fried "+b.name, "consumable", b.rarity, { stats:{heal:HEAL_BY_RARITY[b.rarity]}, desc:"Crunchy and surprisingly filling." }, [[b.id,1],["ore_coal",1]]));
+  [["common","copper","SPEED"],["uncommon","bronze","STRENGTH"],["rare","steel","SMARTS"],["epic","ruby","CHARM"],["legendary","diamond","SPEED"]].forEach(([r,key,stat])=>{
+    const list = BUG_DEFS.filter(b=>b.rarity===r), cap = r[0].toUpperCase()+r.slice(1);
+    for(let i=0;i+1<list.length;i+=2) add(`chitin_${list[i].id.slice(4)}_${list[i+1].id.slice(4)}`, `${list[i].name} & ${list[i+1].name} Chitin`, "material", r, { desc:"Hardened bug shell. Sells well." }, [[list[i].id,1],[list[i+1].id,1]]);
+    const gr = gearRarity(key, r);
+    add(`gear_bug_${r}_charm`, `${cap} Beetle Charm`, "trinket", gr, gearExtra(craftedTrinketStats("ring", gr, stat, key), `A charm of woven chitin boosting ${stat}.`), [[list[0].id,2],[list[1].id,2]]);
+  });
   // crop preserves: 3 crops -> 1 jar worth far more than the crops
   CROP_ITEMS.forEach(c=> add("pres_"+c.id, `${c.name} Preserve`, "material", c.rarity, { sellPrice: Math.round(c.sellPrice*3*1.9), desc:"Jarred and sealed. Sells for a ton." }, [[c.id,3]]));
   // gem elixirs
@@ -4212,6 +4357,9 @@ const HEAL_RANGES = {
   fishCooked:{ common:[50,80], uncommon:[60,100], rare:[80,125], epic:[95,140], legendary:[110,150] },
   dish:      { common:[40,70], uncommon:[50,90], rare:[70,110], epic:[90,125], legendary:[110,140] }
 };
+const FOOD_BAND = { common:[1,25], uncommon:[30,80], rare:[100,200], epic:[230,330], legendary:[380,410] };      // where a food's range STARTS, by rarity
+const FOOD_PRICE_MULT = { common:.5, uncommon:.75, rare:1.1, epic:1.5, legendary:2 };
+const SHOP_FOOD_IDS = new Set(ITEM_BANK.map(x=>x.id));
 function healRangeFor(it){
   const id = it.id, r = it.rarity;
   if(id.startsWith("fish_")) return HEAL_RANGES.fishRaw[r];
@@ -4234,10 +4382,22 @@ Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
     else { delete i.stats.heal; delete i.stats.healMin; delete i.stats.healMax; }
     return;
   }
-  const [lo0,hi0] = healRangeFor(i);
-  const cookedMult = /^(cooked_|dish_|roast_)/.test(i.id) ? 2 : 1;                      // crafted/cooked food heals 2x
-  const lo = Math.max(1, Math.round(lo0/2)*cookedMult), hi = Math.max(lo, Math.round(hi0/2)*cookedMult);   // foods now heal half as much (cooked ones are doubled)
+  const isPotion = i.id.startsWith("elixir_") || /(Potion|Elixir|Tonic|Draught|Brew)$/.test(i.name);
+  if(isPotion){   // potions / elixirs keep their old random 5-150 range
+    const [lo0,hi0] = healRangeFor(i);
+    const lo = Math.max(1, Math.round(lo0/2)), hi = Math.max(lo, Math.round(hi0/2));
+    i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
+    return;
+  }
+  // FOOD: healing scales hard with rarity across 1-500. Each food gets its own fixed range, 50-100 points wide.
+  const band = FOOD_BAND[i.rarity] || FOOD_BAND.common, h = hash("heal:"+i.id), raw = /^(fish_|forage_)/.test(i.id) ? 0.6 : 1;   // raw fish/forage heal less than cooked food
+  const width = 50 + Math.round(rng01(h,11)*50);
+  const lo = Math.max(1, Math.round((band[0] + rng01(h,3)*(band[1]-band[0]))*raw)), hi = Math.min(500, lo+width);
   i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
+  if(SHOP_FOOD_IDS.has(i.id)){   // shop foods: price and sell value follow the healing, so epic/legendary cost and sell for far more
+    const price = Math.max(2, Math.round(i.stats.heal*FOOD_PRICE_MULT[i.rarity]*(0.85+rng01(h,17)*0.3)));
+    i.price = price; i.sellPrice = Math.max(1, Math.round(price*0.4));
+  }
 });
 function rollHeal(item){
   const st = item.stats||{};
@@ -4317,7 +4477,7 @@ function pickEnemy(difficulty){
      easy ~0.6x, medium ~1x, hard ~1.5x — blended 50/50 with the monster's level-based attack so it still grows with level. */
 const ENEMY_HIT_REF = { easy:0.6, medium:1.0, hard:1.5 };
 function enemyHitBase(m, b){
-  if(b && b.dg) return m.attack;
+  if((b && b.dg) || m.pct) return m.attack;      // gauntlet / tier enemies already carry their final attack
   return (m.attack + playerAttackPower()*(ENEMY_HIT_REF[m.difficulty]||1)) / 2;
 }
 function playerAttackPower(){
@@ -4578,22 +4738,26 @@ async function pveEnd(won){
    BATTLE TAB — PVE tiers, PVP (+ friend challenges), Boss Fights
    ========================================================================= */
 const PVE_TIERS = [   // lv = level offset from you, rewards are the exact ranges
-  { id:"novice",   label:"Novice",   emoji:"🌱", cls:"btn-green",  diff:"easy",   lv:[-25,-15], money:[1,4],     xp:[1,3],     mult:0.8 },
-  { id:"easy",     label:"Easy",     emoji:"🍃", cls:"btn-green",  diff:"easy",   lv:[-12,-6],  money:[3,8],     xp:[3,10],    mult:1.0 },
-  { id:"skilled",  label:"Skilled",  emoji:"🗡️", cls:"btn-yellow", diff:"medium", lv:[-5,-2],   money:[5,14],    xp:[6,25],    mult:1.1 },
-  { id:"moderate", label:"Moderate", emoji:"⚔️", cls:"btn-yellow", diff:"medium", lv:[-1,1],    money:[8,25],    xp:[10,50],   mult:1.3 },
-  { id:"hard",     label:"Hard",     emoji:"🔥", cls:"btn-pink",   diff:"hard",   lv:[2,5],     money:[20,50],   xp:[25,80],   mult:1.6 },
-  { id:"deadly",   label:"Deadly",   emoji:"☠️", cls:"btn-pink",   diff:"hard",   lv:[6,10],    money:[35,80],   xp:[50,130],  mult:1.6 },
-  { id:"brutal",   label:"Brutal",   emoji:"💀", cls:"btn-danger", diff:"hard",   lv:[10,16],   money:[60,130],  xp:[90,200],  mult:1.6 },
-  { id:"extreme",  label:"Extreme",  emoji:"👹", cls:"btn-danger", diff:"hard",   lv:[15,25],   money:[100,200], xp:[130,300], mult:1.6 }
+  { id:"novice",   label:"Novice",   emoji:"🌱", cls:"btn-green",  diff:"easy",   lv:[-25,-15], money:[1,4],     xp:[1,3],     mult:0.8, pct:0.40 },
+  { id:"easy",     label:"Easy",     emoji:"🍃", cls:"btn-green",  diff:"easy",   lv:[-12,-6],  money:[3,8],     xp:[3,10],    mult:1.0, pct:0.65 },
+  { id:"skilled",  label:"Skilled",  emoji:"🗡️", cls:"btn-yellow", diff:"medium", lv:[-5,-2],   money:[5,14],    xp:[6,25],    mult:1.1, pct:0.90 },
+  { id:"moderate", label:"Moderate", emoji:"⚔️", cls:"btn-yellow", diff:"medium", lv:[-1,1],    money:[8,25],    xp:[10,50],   mult:1.3, pct:1.00 },
+  { id:"hard",     label:"Hard",     emoji:"🔥", cls:"btn-pink",   diff:"hard",   lv:[2,5],     money:[20,50],   xp:[25,80],   mult:1.6, pct:1.10 },
+  { id:"deadly",   label:"Deadly",   emoji:"☠️", cls:"btn-pink",   diff:"hard",   lv:[6,10],    money:[35,80],   xp:[50,130],  mult:1.6, pct:1.30 },
+  { id:"brutal",   label:"Brutal",   emoji:"💀", cls:"btn-danger", diff:"hard",   lv:[10,16],   money:[60,130],  xp:[90,200],  mult:1.6, pct:1.60 },
+  { id:"extreme",  label:"Extreme",  emoji:"👹", cls:"btn-danger", diff:"hard",   lv:[15,25],   money:[100,200], xp:[130,300], mult:1.6, pct:2.00 }
 ];
 const TIER_BY_ID = Object.fromEntries(PVE_TIERS.map(t=>[t.id,t]));
 const ri = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
-function buildTierMonster(tier, pl){
+/* Tier difficulty is a % of YOUR stats: HP = pct x (your attack x 8 hits), attack = pct x (your max HP / 8).
+   100% is an even fight, below 100% you are the favourite, above 100% the enemy is. */
+const TIER_HITS = 8;
+function buildTierMonster(tier, pl, scale=1){
+  const pct = tier.pct*scale, myAtk = playerAttackPower(), myHp = state.profile.hpMax;
   const pool = ENEMY_BANK.filter(e=>e.region===state.profile.region && e.difficulty===tier.diff), slot = pool[Math.floor(Math.random()*pool.length)];
   const lvl = Math.max(1, pl + ri(tier.lv[0], tier.lv[1]));
   return { id:slot.id, name:slot.name, region:slot.region, difficulty:tier.diff, level:lvl, element:REGIONS[slot.region].element,
-    hp:Math.round((20+lvl*8)*tier.mult), attack:Math.round((3+lvl*1.5)*tier.mult), xpReward:ri(...tier.xp), moneyReward:ri(...tier.money), tierId:tier.id,
+    hp:Math.max(10,Math.round(myAtk*TIER_HITS*pct)), attack:Math.max(1,Math.round(myHp/TIER_HITS*pct)), pct, xpReward:ri(...tier.xp), moneyReward:ri(...tier.money), tierId:tier.id,
     dropChance: tier.diff==="easy"?0.25 : tier.diff==="medium"?0.45 : 0.7 };
 }
 const lvTxt = t=> { const f = n=> (n>0?"+":"")+n; return t.lv[0]===t.lv[1] ? f(t.lv[0]) : `${f(t.lv[0])} to ${f(t.lv[1])}`; };
@@ -4611,7 +4775,7 @@ function updatePveGrid(){
 }
 function renderPveGrid(){
   document.getElementById("pveGrid").innerHTML = PVE_TIERS.map(t=>
-    `<button class="doodle-btn btn-lg ${t.cls}" data-pvet="${t.id}"><b>${t.emoji} ${t.label}</b><small>${lvTxt(t)} lvl · $${t.money[0]}–${t.money[1]} · ${t.xp[0]}–${t.xp[1]} XP</small><small class="pve-cd"></small></button>`).join("");
+    `<button class="doodle-btn btn-lg ${t.cls}" data-pvet="${t.id}"><b>${t.emoji} ${t.label}</b><small>${lvTxt(t)} lvl · ${Math.round(t.pct*100)}% of you · $${t.money[0]}–${t.money[1]} · ${t.xp[0]}–${t.xp[1]} XP</small><small class="pve-cd"></small></button>`).join("");
   document.querySelectorAll("[data-pvet]").forEach(b=> b.addEventListener("click", ()=>{
     const t = TIER_BY_ID[b.dataset.pvet]; if(pveCdLeft(t.id)>0) return; startPve(null, null, buildTierMonster(t, state.profile.level));
   }));
@@ -4693,7 +4857,7 @@ function rollChest(){
   const single = list=>{ const w = it=> it.rarity==="legendary" ? 1 : it.rarity==="epic" ? 3 : 6; const bag = list.flatMap(i=> Array(w(i)).fill(i)); return bag.length ? { itemId:pickFrom(bag).id, qty:1 } : null; };
   let pick = null;
   if(kind==="gear")  pick = single(CATALOG.gearAll.map(id=>ITEM_BY_ID[id]).filter(rareOrBetter));
-  if(kind==="tool")  pick = single(all.filter(i=> i.type==="tool" && /^tool_(pickaxe|fishingrod)/.test(i.id) && rareOrBetter(i)));
+  if(kind==="tool")  pick = single(all.filter(i=> i.type==="tool" && /^tool_(pickaxe|fishingrod|net)/.test(i.id) && rareOrBetter(i)));
   if(kind==="ingot") pick = stack(all.filter(i=> i.id.startsWith("ing_") && i.rarity!=="common"));
   if(kind==="gem")   pick = stack(all.filter(i=> /^gem_.*_cut$/.test(i.id) || (i.id.startsWith("gem_") && rareOrBetter(i))));
   const items = pick ? [pick] : [], val = pick ? sp(ITEM_BY_ID[pick.itemId])*pick.qty : 0;
@@ -4725,7 +4889,7 @@ function bossNextStage(){
   const onLose = async ()=>{ bossRun = null; await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,Math.round(state.profile.hpMax*0.25)) }).catch(()=>{}); toast("💀 You fell in the gauntlet… you wake up at 25% HP."); openModal("compassModal"); renderBossPanel(); };
   const onFlee = ()=>{ bossRun = null; renderBossPanel(); };
   if(run.stage < 5){
-    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0; delete m.tierId;
+    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level, 0.6); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0; delete m.tierId;
     startPve(null, { m, gauntlet:true, onLose, onFlee, onWin: ()=>{ run.stage++; bossNextStage(); } });         // the next enemy steps up right away
   } else {
     startPve(null, { m:makeBoss(run), gauntlet:true, onLose, onFlee, onWin: async ()=>{
@@ -5470,7 +5634,7 @@ function rollDailyGear(c){
   const pool = gearByRarity[rar] ||= Object.values(ITEM_BY_ID).filter(i=> (i.type==="weapon"||i.type==="armor") && i.rarity===rar);
   return pool.length ? pool[Math.floor(Math.random()*pool.length)].id : null;
 }
-const DAILY_TOOL_KINDS = [["pickaxe",6],["fishingrod",6],["hoe",5],["can",5]];
+const DAILY_TOOL_KINDS = [["pickaxe",6],["fishingrod",6],["net",6],["hoe",5],["can",5]];
 const dailyToolHi = c=> Math.min(6, 1+Math.floor(c*0.75));
 function rollDailyTool(c){
   const [kind,cap] = DAILY_TOOL_KINDS[Math.floor(Math.random()*DAILY_TOOL_KINDS.length)];

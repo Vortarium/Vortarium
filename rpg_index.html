@@ -165,6 +165,16 @@
       </div>
     </div>
 
+    <div id="bugOverlay" class="fish-overlay bug-overlay">
+      <div class="fish-overlay-card doodle-panel bug-card">
+        <p class="doodle-sub">Keep the small circle over the bug (move your mouse or finger). Stay on it for 3 seconds to catch it. The bar drains whenever you slip off!</p>
+        <p class="fish-timer" id="bugTimer"></p>
+        <div class="bug-arena" id="bugArena"><span class="bug-emoji" id="bugEmoji">&#128027;</span><div class="bug-stub" id="bugStub"></div></div>
+        <div class="bug-progress"><div class="bug-progress-fill" id="bugProgressFill"></div></div>
+        <button class="doodle-btn btn-yellow" id="btnCancelBug">Give Up</button>
+      </div>
+    </div>
+
   </main>
 
   <!-- FOOTER -->
@@ -241,7 +251,7 @@
     </div>
 
     <div class="jtab-page" id="jtab-bestiary">
-      <div class="be-sub-row"><button class="tab-btn active" data-besub="fish">&#127907; Fish</button></div>
+      <div class="be-sub-row"><button class="tab-btn active" data-besub="fish">&#127907; Fish</button><button class="tab-btn" data-besub="bug">&#128027; Bugs</button></div>
       <div class="be-clock" id="beClock"></div>
       <div class="be-layout">
         <div class="be-grid" id="beGrid"></div>
@@ -346,6 +356,7 @@
         <button class="doodle-btn btn-lg btn-green" id="btnForage">Forage</button>
         <button class="doodle-btn btn-lg btn-yellow" id="btnMine">Mine</button>
         <button class="doodle-btn btn-lg btn-blue" id="btnFish">Fish</button>
+        <button class="doodle-btn btn-lg btn-purple" id="btnBug">Bug Catch</button>
       </div>
       <div class="doodle-panel" id="jobToolStatus"></div>
       <p class="doodle-sub" id="jobLog"></p>

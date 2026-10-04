@@ -1039,3 +1039,24 @@ body.theme-dark .book-card, body.theme-dark .player-card, body.theme-dark .cz-pr
 .pve-grid .pve-cd{ font-size:14px; }
 .chest-card{ margin:8px 0; padding:8px 12px; border:3px solid var(--ink); border-radius:12px; background:var(--yellow); }
 .chest-card ul{ margin:4px 0 0 18px; padding:0; }
+
+
+/* ---------- bug catching ---------- */
+.btn-purple{background:var(--purple);} .btn-purple:hover{background:var(--purple-d);}
+.bug-card{width:min(340px,92vw);}
+.bug-arena{position:relative; width:min(280px,70vw); height:min(280px,70vw); margin:0 auto 10px; border:3px solid var(--ink); border-radius:50%; background:var(--dEAF7E0); overflow:hidden; cursor:none; touch-action:none;}
+.bug-emoji{position:absolute; left:0; top:0; width:28px; height:28px; font-size:24px; line-height:28px; text-align:center; user-select:none; pointer-events:none; will-change:transform;}
+.bug-stub{position:absolute; left:0; top:0; width:48px; height:48px; border-radius:50%; border:3px solid var(--l27AE60); background:rgba(46,204,113,.25); pointer-events:none; will-change:transform;}
+.bug-stub.on{background:rgba(255,216,77,.55); border-color:#E6A800;}
+.bug-progress{height:14px; border:2px solid var(--ink); border-radius:8px; background:var(--dFFFFFF); overflow:hidden; margin-bottom:10px;}
+.bug-progress-fill{height:100%; width:0%; background:var(--purple-d);}
+
+/* ---------- skill tree in dark mode: dark boards + nodes instead of the pastel light ones ---------- */
+body.theme-dark .sk-fire{--sk-bg:linear-gradient(#2b1812,#3b2015 60%,#52281a); --sk-node:#3c231a; --sk-avail:#6e4a1e; --sk-owned:#a8532f; --sk-glow:#ff7a3a;}
+body.theme-dark .sk-air{--sk-bg:linear-gradient(#211b33,#2c2444 60%,#382e57); --sk-node:#2d2646; --sk-avail:#4d4378; --sk-owned:#6f5ec0; --sk-glow:#a58bff;}
+body.theme-dark .sk-water{--sk-bg:linear-gradient(#14232f,#183246 60%,#1d4560); --sk-node:#1a3347; --sk-avail:#2a5878; --sk-owned:#2f7fa8; --sk-glow:#35b0ff;}
+body.theme-dark .sk-earth{--sk-bg:linear-gradient(#182316,#203020 60%,#2a4125); --sk-node:#223220; --sk-avail:#4a4a24; --sk-owned:#4f7f3a; --sk-glow:#9cc13f;}
+body.theme-dark .sk-node{box-shadow:3px 3px 0 rgba(0,0,0,.45); color:var(--ink);}
+body.theme-dark .sk-node.owned{box-shadow:0 0 0 4px rgba(255,255,255,.18), 0 0 14px 4px var(--sk-glow);}
+body.theme-dark .sk-node.attack{background-image:linear-gradient(135deg,rgba(255,200,60,.28),transparent);}
+body.theme-dark .sk-node em, body.theme-dark .sk-rowlabel{color:var(--ink-soft);}
