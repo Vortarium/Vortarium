@@ -2989,7 +2989,7 @@ async function doFishAction(){
     target = Math.random()<(rule.longMove ?? 0.35) ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
     if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
   };
-  const GRAVITY = 1.52, LIFT = -3.6, MAXV = 12;      // the bar rises at the normal rate but sinks 1.25x slower than the original 1.9
+  const GRAVITY = 1.27, LIFT = -3.6, MAXV = 12;      // catch-bar physics (back to the earlier value)
   const game = fishGame = { id:null, cleanup:null };
   game.id = setInterval(()=>{
     tick++;
@@ -3015,7 +3015,7 @@ async function doFishAction(){
     barEl.style.top = barY+"px";
 
     const center = fishY + fishH/2, inBar = center >= barY && center <= barY+barH;
-    progress += inBar ? 100/(3000/50) : 0;           // 3 seconds inside the bar (50ms ticks) lands the fish; time outside costs nothing
+    { const RISE = 100/(3000/50); progress += inBar ? RISE : -RISE/1.5; }           // 3 seconds inside the bar (50ms ticks) lands the fish; outside it the progress drains 1.5x slower than it fills
     progress = Math.max(0, Math.min(100, progress));
     fillEl.style.height = progress+"%";
     const left = Math.max(0, rule.time - (Date.now()-startedAt));
