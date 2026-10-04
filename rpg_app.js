@@ -3854,8 +3854,8 @@ Object.values(ITEM_BY_ID).forEach(it=>{
      - rarely: a pure sacrifice (stat penalties) with a big max-HP bonus
    Weapon damage also scales much harder with rarity. */
 (function rebalanceGear(){
-  const ARMOR_RANGES = { common:[1,2,3,8], uncommon:[1,3,6,14], rare:[2,4,10,22], epic:[3,6,16,32], legendary:[4,8,25,50] };
-  const ATTACK_RANGES = { common:[4,7], uncommon:[7,12], rare:[12,19], epic:[19,29], legendary:[30,45] };
+  const ARMOR_RANGES = { common:[1,2,1,10], uncommon:[2,4,5,20], rare:[4,8,10,50], epic:[8,14,20,100], legendary:[14,24,50,200] };
+  const ATTACK_RANGES = { common:[1,8], uncommon:[5,20], rare:[15,45], epic:[40,100], legendary:[80,200] };
   const FAV = { helmet:["SMARTS","CHARM","SMARTS","SPEED"], chestplate:["STRENGTH","STRENGTH","SMARTS","CHARM"],
                 leggings:["SPEED","SPEED","STRENGTH","CHARM"], boots:["SPEED","CHARM","SPEED","STRENGTH"] };
   const hash = id=> ([...id].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0, 7) % 2147483000) + 101;
@@ -3944,15 +3944,34 @@ const manaText = st=> st.manaMin!=null ? `${st.manaMin}-${st.manaMax}` : `${st.m
 const healText = st=> st.healMin!=null ? `${st.healMin}-${st.healMax}` : `${st.heal}`;
 const haveQty = id=> (state.profile.inventory||[]).find(e=>e.itemId===id)?.qty||0;
 const canCraft = r=> r.ing.every(([id,q])=> haveQty(id)>=q);
+/* crafting menu categories (tabs) */
+const CRAFT_TABS = [
+  { id:"all", label:"All" }, { id:"consumable", label:"🍖 Consumables" }, { id:"armor", label:"🛡️ Armor" }, { id:"weapon", label:"⚔️ Weapons" },
+  { id:"trinket", label:"💍 Trinkets" }, { id:"tool", label:"🛠️ Tools" }, { id:"ingot", label:"🔩 Ingots" }, { id:"material", label:"💎 Gems & Materials" }
+];
+const craftCat = it=> it.type==="material" ? (it.id.startsWith("ing_") ? "ingot" : "material") : it.type;
 function renderCraftInv(){
   const p = state.profile; if(!p) return;
   const owned = invExpanded().map(e=>e.item.id), disc = new Set(p.discovered||[]);
   const fresh = owned.filter(id=>!disc.has(id));
   if(fresh.length){ fresh.forEach(id=>disc.add(id)); updateDoc(doc(db,"players",state.uid), { discovered: arrayUnion(...fresh) }).catch(()=>{}); }
-  const unlocked = RECIPES.filter(r=> r.ing.every(([id])=> disc.has(id)));
+  const allUnlocked = RECIPES.filter(r=> r.ing.every(([id])=> disc.has(id)));
+  document.getElementById("recipeCount").textContent = `${allUnlocked.length} / ${RECIPES.length} recipes discovered`;
+  const tab = state.craftTab || "all", counts = {};
+  allUnlocked.forEach(r=>{ const c = craftCat(ITEM_BY_ID[r.out]); counts[c] = (counts[c]||0)+1; });
+  const tabsEl = document.getElementById("craftTabs"); tabsEl.innerHTML = "";
+  CRAFT_TABS.forEach(t=>{
+    const n = t.id==="all" ? allUnlocked.length : (counts[t.id]||0);
+    const b = document.createElement("button");
+    b.className = "craft-tab" + (tab===t.id?" active":"");
+    b.textContent = `${t.label} (${n})`;
+    b.addEventListener("click", ()=>{ state.craftTab = t.id; renderCraftInv(); });
+    tabsEl.appendChild(b);
+  });
+  const unlocked = allUnlocked.filter(r=> tab==="all" || craftCat(ITEM_BY_ID[r.out])===tab);
   unlocked.sort((a,b)=> canCraft(b)-canCraft(a));
-  document.getElementById("recipeCount").textContent = `${unlocked.length} / ${RECIPES.length} recipes discovered`;
   const list = document.getElementById("recipeList"); list.innerHTML = "";
+  if(!unlocked.length) list.innerHTML = "<div class=\"recipe-empty\">Nothing discovered here yet — gather more materials!</div>";
   unlocked.forEach(r=>{
     const it = ITEM_BY_ID[r.out], ok = canCraft(r);
     const el = document.createElement("div");

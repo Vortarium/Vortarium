@@ -547,6 +547,10 @@ body{
 .queue-float{position:fixed; top:70px; right:12px; z-index:60; display:flex; gap:8px; align-items:center; background:#FFFDF7; border:3px solid var(--ink); border-radius:12px; padding:6px 10px; color:var(--ink);}
 
 /* ---------- recipes, players, profile, recap ---------- */
+.craft-tabs{display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; padding:2px 4px 8px; margin-bottom:4px; -webkit-overflow-scrolling:touch;}
+.craft-tab{flex:0 0 auto; font:inherit; font-size:14px; padding:5px 12px; border:2.5px solid var(--ink-soft); border-radius:999px; background:#FBF6EC; color:var(--ink); cursor:pointer; white-space:nowrap;}
+.craft-tab.active{background:var(--yellow); border-color:var(--ink); outline:2px solid var(--ink);}
+.recipe-empty{padding:14px; text-align:center; opacity:.7;}
 .recipe-list{max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px; margin-bottom:10px;}
 .recipe-banner{display:flex; flex-direction:column; padding:8px 14px; border:2.5px solid var(--ink-soft); border-radius:12px; background:#FBF6EC; cursor:pointer; opacity:.6;}
 .recipe-banner span{font-size:14px;}
