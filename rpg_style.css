@@ -958,3 +958,61 @@ body.dungeon-mode #candleOverlay{display:block;}
 .tab-btn.dg-locked{position:relative; opacity:.55; cursor:not-allowed; text-decoration:line-through wavy; overflow:hidden;}
 .tab-btn.dg-locked::after{content:""; position:absolute; inset:0; pointer-events:none; opacity:.8;
   background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='36' viewBox='0 0 90 36'><path d='M2 6 L88 14 L4 20 L86 30 M6 30 L84 4 M2 14 L88 26' stroke='%234A3F35' stroke-width='3' fill='none' stroke-linecap='round'/></svg>") center/100% 100% no-repeat;}
+
+/* =========================================================================
+   DAY / NIGHT  (driven by rpg_daynight.js: --night 0..1, body.theme-dark)
+   ========================================================================= */
+#nightOverlay{position:fixed; inset:0; z-index:99980; pointer-events:none; display:none; --mx:50vw; --my:45vh; opacity:var(--night,0);
+  background:radial-gradient(circle calc(120px + 360px*var(--night,0)) at var(--mx) var(--my), rgba(0,0,0,0) 0%, rgba(4,6,18,.4) 55%, rgba(4,6,18,.93) 100%), rgba(4,6,18,.14);}
+#nightOverlay::after{content:""; position:absolute; inset:0; mix-blend-mode:screen;
+  background:radial-gradient(circle calc(140px + 380px*var(--night,0)) at var(--mx) var(--my), rgba(255,226,150,.30) 0%, rgba(255,200,110,.12) 45%, rgba(255,190,90,0) 75%);}
+body.has-night:not(.dungeon-mode) #nightOverlay{display:block;}
+/* journal / compass / skill buttons sit above the dark and glow like little lanterns */
+body.has-night:not(.dungeon-mode) #btnJournal, body.has-night:not(.dungeon-mode) #btnCompass, body.has-night:not(.dungeon-mode) #btnSkills{
+  position:relative; z-index:99985; box-shadow:0 0 calc(22px*var(--night,0)) calc(8px*var(--night,0)) rgba(255,214,120,.75), 3px 3px 0 rgba(74,63,53,.25);}
+
+body.theme-dark{
+  --paper:#1f1b2b; --ink:#ece4d6; --ink-soft:#b3a994;
+  --pink:#5b3a4a; --pink-d:#8a566d; --blue:#2f4658; --blue-d:#4b7494;
+  --green:#2f4a39; --green-d:#4c7a5c; --yellow:#5a4e24; --yellow-d:#8d7b34;
+  --purple:#43365e; --purple-d:#6d58a0; --fire:#7a3b2a; --water:#2d526a; --earth:#38603a; --air:#4a4066;
+  color-scheme:dark;
+}
+body.theme-dark .paper-bg{background-image:radial-gradient(circle at 10% 20%, #ffffff10 0, transparent 40%), radial-gradient(circle at 90% 80%, #ffffff10 0, transparent 40%);}
+body.theme-dark .doodle-panel, body.theme-dark .modal-card{background:#2a2438;}
+body.theme-dark input, body.theme-dark select, body.theme-dark textarea{background:#171421; color:var(--ink);}
+body.theme-dark .doodle-btn{color:var(--ink);}
+body.theme-dark .btn-danger{color:#fff;}
+
+/* =========================================================================
+   BESTIARY
+   ========================================================================= */
+.be-sub-row{display:flex; gap:8px; margin-bottom:6px;} .be-clock{font-size:20px; color:var(--ink-soft); margin-bottom:6px;}
+.be-layout{display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;}
+.be-grid{flex:1 1 260px; display:grid; grid-template-columns:repeat(auto-fill,minmax(82px,1fr)); gap:6px; max-height:320px; overflow-y:auto; padding:2px;}
+.be-card{display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 3px; font:inherit; font-size:15px; color:var(--ink); background:var(--paper); border:2.5px solid var(--ink); border-radius:10px 14px 10px 14px; cursor:pointer;}
+.be-card.sel{outline:3px solid var(--ink); background:var(--yellow);} .be-card.unseen{opacity:.6;}
+.be-emo{font-size:24px;} .be-name{max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.be-bar{display:block; width:100%; height:6px; border:1.5px solid var(--ink); border-radius:4px; background:#0001; overflow:hidden;}
+.be-bar i{display:block; height:100%; background:var(--green-d);} .be-bar.wide{display:inline-block; width:90px; vertical-align:middle; margin-left:6px;}
+.be-detail{flex:1 1 260px; min-width:0;} .be-facts{display:grid; gap:2px; margin:6px 0; font-size:18px;}
+.be-chart{display:flex; align-items:flex-end; gap:2px; height:80px; border-bottom:2px solid var(--ink); padding:0 2px;}
+.be-hr{flex:1; background:var(--blue-d); border-radius:3px 3px 0 0;} .be-hr.now{background:var(--yellow-d); outline:2px solid var(--ink);}
+.be-axis{display:flex; justify-content:space-between; font-size:14px; color:var(--ink-soft);}
+
+/* ---------- shop sub-tabs + cosmetics ---------- */
+.shop-sub-row{margin:6px 0;} .shop-cat-row{display:flex; gap:8px; flex-wrap:wrap; margin:6px 0;} .shop-cat-row .selected{outline:3px solid var(--ink); outline-offset:2px;}
+.cz-swatch{display:block; height:22px; border:2px solid var(--ink); border-radius:8px;}
+.cz-preview{margin:8px 0; padding:12px; border:2.5px solid var(--ink); border-radius:12px; text-align:center; color:#1d1a16; background:var(--paper);}
+.cz-row{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 12px;} .cz-row .selected{outline:3px solid var(--ink); outline-offset:2px;}
+.rx-btn.rx-extra{background:var(--yellow);}
+
+/* ---------- battle tab ---------- */
+.bt-sub-row{margin:4px 0 8px;} .bt-page{display:none;} .bt-page.active{display:block;}
+.pve-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px;} .pve-grid .doodle-btn{display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 6px;} .pve-grid small{font-size:14px; opacity:.85;}
+.boss-head{display:flex; gap:12px; align-items:center; margin-bottom:6px;} .boss-sprite{font-size:56px;}
+.toast.toast-duel{background:#e63946; color:#fff; border-color:#7a1018; cursor:pointer; font-weight:700; box-shadow:0 0 0 3px #fff6, 3px 3px 0 rgba(0,0,0,.3);}
+
+/* ---------- presence dots + title counter ---------- */
+.online-dot.dot-away{background:#F2C230;} .online-dot.dot-muted{background:#E04848;}
+.title-counts{display:flex; gap:18px; justify-content:center; padding:6px 16px; margin:6px auto 10px; width:max-content; max-width:92%; font-size:20px;}

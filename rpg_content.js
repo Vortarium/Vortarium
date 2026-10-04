@@ -83,7 +83,7 @@ const MINERAL_NEW = [
   ["gem_jade","Jade","rare",50,"A smooth green stone prized for luck."],
   ["ore_platinum","Platinum Ore","epic",105,"Dense, silvery-white precious ore."],
   ["gem_opal","Opal","epic",115,"Shifts through every color of the rainbow."],
-  ["ore_mithril","Mithril Ore","epic",125,"Faintly glowing ore, light as a feather."],
+  ["ore_mithril","Mythril Ore","epic",125,"Faintly glowing ore, light as a feather."],
   ["ore_adamantite","Adamantite Ore","legendary",340,"Nearly unbreakable ore. Your pickaxe winces."]
 ];
 export const MINERAL_SELL = {   // what each mineral actually sells for (common ~7-15, uncommon ~24-49, rare ~64-114, epic 150-228, legendary 380-560)
@@ -141,7 +141,7 @@ const ARMOR_MATERIALS = {
   common:["Burlap","Leather","Wooden","Hide","Padded","Linen","Reed","Bone","Tin","Rawhide"],
   uncommon:["Studded","Oakbark","Wolfhide","Scaled","Ringed","Chainmail","Brass","Bronze","Hardened","Iron"],
   rare:["Silvered","Frostforged","Emberweave","Moonlit","Stormhide","Ironbark","Crystal","Jade","Shadowsilk","Steel"],
-  epic:["Dragonscale","Obsidian","Voidweave","Starforged","Wyrmhide","Thunderplate","Bloodsteel","Celestial","Abyssal","Mithril"],
+  epic:["Dragonscale","Obsidian","Voidweave","Starforged","Wyrmhide","Thunderplate","Bloodsteel","Celestial","Abyssal","Mythril"],
   legendary:["Divine","Eternal","Elderwyrm","Worldforged","Sunsteel","Eclipse","Primordial","Titanbone","Dragoneer's","Adamantine"]
 };
 const ARMOR_NOUNS = {   // the 10 pieces of each body part (index j = tier within the rarity, weakest to strongest)
@@ -366,13 +366,13 @@ export function addExpansionRecipes(add, I, ctx){
   // ---- smelting + alloys ----
   [["tin","Tin","ore_tin","common"],["lead","Lead","ore_lead","common"],["zinc","Zinc","ore_zinc","uncommon"],
    ["titanium","Titanium","ore_titanium","rare"],["platinum","Platinum","ore_platinum","epic"],
-   ["mithril","Mithril","ore_mithril","epic"],["adamantite","Adamantite","ore_adamantite","legendary"]]
+   ["mithril","Mythril","ore_mithril","epic"],["adamantite","Adamantite","ore_adamantite","legendary"]]
    .forEach(([k,n,ore,r])=> add("ing_"+k, n+" Ingot", "material", r, { desc:`Smelted ${n.toLowerCase()}, ready for the forge.` }, [[ore,2],["ore_coal",1]]));
   add("ing_brass","Brass Ingot","material","uncommon",{desc:"A golden alloy of copper and zinc."},[["ing_copper",2],["ing_zinc",1]]);
   add("ing_pewter","Pewter Ingot","material","uncommon",{desc:"A soft, shiny tin-and-lead alloy."},[["ing_tin",2],["ing_lead",1]]);
   add("ing_electrum","Electrum Ingot","material","rare",{desc:"Gold and silver, melted together."},[["ing_gold",1],["ing_silver",1]]);
   add("ing_darksteel","Darksteel Ingot","material","epic",{desc:"Steel folded with volcanic glass. Jet black."},[["ing_steel",1],["rock_obsidian",2]]);
-  add("ing_starmetal","Starmetal Ingot","material","legendary",{desc:"Mithril and adamantite fused. It hums."},[["ing_mithril",1],["ing_adamantite",1]]);
+  add("ing_starmetal","Starmetal Ingot","material","legendary",{desc:"Mythril and adamantite fused. It hums."},[["ing_mithril",1],["ing_adamantite",1]]);
 
   // ---- stonework ----
   add("rock_granite_brick","Granite Brick","material","common",{desc:"A squared-off, polished block."},[["rock_granite",2],["ore_coal",1]]);
@@ -396,7 +396,7 @@ export function addExpansionRecipes(add, I, ctx){
     ["Titanium","ing_titanium","rare","STRENGTH"],["Amethyst","gem_amethyst_cut","rare","SMARTS"],
     ["Topaz","gem_topaz_cut","rare","CHARM"],["Jade","gem_jade_cut","rare","SPEED"],["Electrum","ing_electrum","rare","CHARM"],
     ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","epic","CHARM"],
-    ["Opal","gem_opal_cut","epic","SMARTS"],["Mithril","ing_mithril","epic","SPEED"],
+    ["Opal","gem_opal_cut","epic","SMARTS"],["Mythril","ing_mithril","epic","SPEED"],
     ["Adamantite","ing_adamantite","legendary","STRENGTH"],["Starmetal","ing_starmetal","legendary","SPEED"],
     ["Lead","ing_lead","common","STRENGTH"],["Zinc","ing_zinc","uncommon","SPEED"]      // every smeltable ore now has its own set
   ];

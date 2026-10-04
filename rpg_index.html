@@ -6,7 +6,7 @@
 <title>Dragoneer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Pacifico&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Special+Elite&family=Press+Start+2P&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="rpg_style.css">
 </head>
 <body>
@@ -40,7 +40,10 @@
   <div class="title-stage">
     <svg id="dragonSleeping" class="dragon-doodle frame-a" viewBox="0 0 360 240" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
-
+  <div class="title-counts doodle-panel" id="titleCounts" style="visibility:hidden">
+    <span>&#128101; Total players: <b id="tcTotal">–</b></span>
+    <span><i class="online-dot"></i> Online now: <b id="tcOnline">–</b></span>
+  </div>
 
   <div class="title-buttons">
     <button class="doodle-btn btn-lg btn-pink" id="btnLogin">LOG IN</button>
@@ -197,6 +200,7 @@
       <button class="tab-btn" data-jtab="leaderboard">Leaderboard</button>
       <button class="tab-btn" data-jtab="players">Friends</button>
       <button class="tab-btn" data-jtab="quests">Sidequests</button>
+      <button class="tab-btn" data-jtab="bestiary">&#128214; Bestiary</button>
       <button class="tab-btn" data-jtab="dailies">Dailies <span class="daily-dot" id="dailyDot" style="display:none">!</span></button>
     </div>
 
@@ -235,6 +239,15 @@
       <div class="player-list" id="playerList"></div>
     </div>
 
+    <div class="jtab-page" id="jtab-bestiary">
+      <div class="be-sub-row"><button class="tab-btn active" data-besub="fish">&#127907; Fish</button></div>
+      <div class="be-clock" id="beClock"></div>
+      <div class="be-layout">
+        <div class="be-grid" id="beGrid"></div>
+        <div class="be-detail" id="beDetail"><p class="doodle-sub">Tap a fish to see when it bites.</p></div>
+      </div>
+    </div>
+
     <div class="jtab-page" id="jtab-quests">
       <ul class="quest-list" id="questList"></ul>
     </div>
@@ -264,6 +277,7 @@
       <div class="pay-quick"><button class="doodle-btn btn-sm" data-pay="1">+1</button><button class="doodle-btn btn-sm" data-pay="10">+10</button><button class="doodle-btn btn-sm" data-pay="100">+100</button><button class="doodle-btn btn-sm" data-pay="1000">+1000</button></div>
       <button class="doodle-btn btn-green btn-sm" id="btnPay">Pay</button>
     </div>
+    <button class="doodle-btn btn-yellow" id="btnCustomize" style="display:none">&#127912; Customize</button>
     <button class="doodle-btn btn-pink" id="btnPM">Private Message</button>
     <button class="doodle-btn btn-blue" id="btnFriendReq">Add Friend</button>
     <div class="mute-box" id="muteBox" style="display:none">
@@ -333,14 +347,23 @@
         <button class="doodle-btn btn-lg btn-blue" id="btnFish">Fish</button>
       </div>
       <div class="doodle-panel" id="jobToolStatus"></div>
-      <div class="job-row"><button class="doodle-btn btn-sm btn-blue" id="btnChanceSheet">&#128202; Chance Sheet</button></div>
       <p class="doodle-sub" id="jobLog"></p>
     </div>
 
     <div class="ctab-page" id="ctab-shop">
       <p class="doodle-sub" id="shopRegionLabel">Enchanted Forest Shop</p>
-      <div class="tool-shelf doodle-panel" id="toolShelf"></div>
+      <div class="tab-row shop-sub-row">
+        <button class="tab-btn active" data-shoptab="market">&#128722; Market</button>
+        <button class="tab-btn" data-shoptab="tools">&#9874;&#65039; Tools</button>
+        <button class="tab-btn" data-shoptab="cosmetics">&#127912; Cosmetics</button>
+      </div>
+      <div class="shop-cat-row" id="shopCatRow" style="display:none">
+        <button class="doodle-btn btn-sm btn-yellow" data-shopcat="gradient">Profile Gradients</button>
+        <button class="doodle-btn btn-sm btn-yellow" data-shopcat="font">Fonts</button>
+        <button class="doodle-btn btn-sm btn-yellow" data-shopcat="reaction">Reactions</button>
+      </div>
       <div class="shop-grid" id="shopGrid"></div>
+      <div class="page-nav"><button class="doodle-btn btn-sm" id="shopPrev">&larr;</button><span id="shopPageLabel">Page 1</span><button class="doodle-btn btn-sm" id="shopNext">&rarr;</button></div>
       <div class="shop-detail doodle-panel" id="shopDetail">Select an item to see what it does.</div>
     </div>
 
@@ -412,17 +435,22 @@
     </div>
 
     <div class="ctab-page" id="ctab-duel">
-      <p class="doodle-sub">Fight monsters — read their intent, then pick your move. Fleeing costs nothing.</p>
-      <div class="job-row">
-        <button class="doodle-btn btn-lg btn-green" data-pve="easy">Easy</button>
-        <button class="doodle-btn btn-lg btn-yellow" data-pve="medium">Medium</button>
-        <button class="doodle-btn btn-lg btn-danger" data-pve="hard">Hard</button>
+      <div class="tab-row bt-sub-row">
+        <button class="tab-btn active" data-btsub="pve">&#128126; PVE</button>
+        <button class="tab-btn" data-btsub="pvp">&#9876;&#65039; PVP</button>
+        <button class="tab-btn" data-btsub="boss">&#128009; Boss Fights</button>
       </div>
-      <p class="doodle-sub">Duels — challenge a friend or queue for a random opponent.</p>
-      <div class="battle-choice-grid">
-        <button class="doodle-btn btn-lg btn-blue" id="btnFightFriend">Challenge a Friend</button>
+      <div class="bt-page active" id="bt-pve">
+        <p class="doodle-sub">Pick your fight — harder tiers pay far more but hit much harder. Fleeing costs nothing.</p>
+        <div class="pve-grid" id="pveGrid"></div>
       </div>
-      <div class="duel-panel doodle-panel" id="duelPanel"></div>
+      <div class="bt-page" id="bt-pvp">
+        <p class="doodle-sub">Queue for a random opponent, open a room, or challenge a friend directly.</p>
+        <div class="battle-choice-grid"><button class="doodle-btn btn-lg btn-blue" id="btnChallengePlayer">&#9876;&#65039; Challenge Player</button></div>
+        <div class="doodle-panel" id="challengeList" style="display:none"></div>
+        <div class="duel-panel doodle-panel" id="duelPanel"></div>
+      </div>
+      <div class="bt-page" id="bt-boss"><div class="doodle-panel boss-gauntlet" id="bossPanel"></div></div>
     </div>
 
     <div class="ctab-page" id="ctab-farm">
@@ -462,23 +490,15 @@
   </div>
 </div>
 
-<!-- ================= CHANCE SHEET ================= -->
-<div id="chanceModal" class="modal-backdrop">
-  <div class="modal-card doodle-panel chance-card">
+<!-- ================= PROFILE CUSTOMIZE ================= -->
+<div id="customizeModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel">
     <button class="doodle-x" data-close-modal>&times;</button>
-    <h2 class="doodle-h2">Chance Sheet</h2>
-    <div class="tab-row">
-      <button class="tab-btn active" data-chancetab="forage">Forage</button>
-      <button class="tab-btn" data-chancetab="mine">Mine</button>
-      <button class="tab-btn" data-chancetab="fish">Fish</button>
-      <span class="mode-row mini">
-        <button class="mode-dot mode-green" data-cmode="green" aria-label="Green"></button>
-        <button class="mode-dot mode-yellow" data-cmode="yellow" aria-label="Yellow"></button>
-        <button class="mode-dot mode-red" data-cmode="red" aria-label="Red"></button>
-      </span>
-    </div>
-    <p class="doodle-sub chance-head" id="chanceHead"></p>
-    <div class="chance-body" id="chanceBody"></div>
+    <h2 class="doodle-h2">Customize Profile</h2>
+    <p class="doodle-sub">Background gradient (also colors your chat bubbles)</p>
+    <div class="cz-row" id="czGradients"></div>
+    <p class="doodle-sub">Font (profile + chat text)</p>
+    <div class="cz-row" id="czFonts"></div>
   </div>
 </div>
 
@@ -547,9 +567,11 @@
     <h2 class="doodle-h2">Settings</h2>
     <label class="doodle-check"><input type="checkbox" id="muteMusic"> Mute music</label>
     <label class="doodle-check"><input type="checkbox" id="muteSfx"> Mute sound effects</label>
+    <label class="doodle-check">Theme <select id="themeMode"><option value="dynamic">Dynamic (follows the time)</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
     <label class="doodle-check"><input type="checkbox" id="notifChat" checked> Chat notifications</label>
     <label class="doodle-check"><input type="checkbox" id="notifPay" checked> Pay notifications</label>
     <label class="doodle-check"><input type="checkbox" id="notifAuction" checked> Auction notifications</label>
+    <label class="doodle-check"><input type="checkbox" id="allowDuelReq" checked> Allow duel requests</label>
     <label class="doodle-check"><input type="checkbox" id="privateSocial"> Make my friends &amp; followers private</label>
     <label class="doodle-check"><input type="checkbox" id="privateProfile"> Private profile (only friends can view it)</label>
     <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
@@ -591,6 +613,7 @@
 </div>
 
 <div id="candleOverlay"></div>
+<div id="nightOverlay"></div>
 <script type="module" src="rpg_app.js"></script>
 </body>
 </html>

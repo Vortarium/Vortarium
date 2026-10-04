@@ -81,28 +81,21 @@ service cloud.firestore {
       }
       }
 
-    // World boss: one shared doc. The dragon's HP is derived on the client as
-    // 1,000,000,000 - (sum of every player's bossDamage - base), so the only thing written here is
-    // "base" (the damage total at the moment the dragon last woke up), together with a reset hp.
-    // Anyone signed in may create it at full HP, and a reset may only raise base, never lower it.
-    // (The old "lower hp by at most 100000" branch is kept so a cached older client keeps working.)
+    // World boss: one shared doc. Anyone signed in may create it at full HP,
+    // only lower its hp (at most 100000 per write), or reset it once it is 0.
     match /boss/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.hp == 1000000000 && request.resource.data.hpMax == 1000000000;
-      allow update: if isSignedIn() && (
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hp', 'base'])
-          && request.resource.data.hp == 1000000000
-          && request.resource.data.base is number
-          && request.resource.data.base >= resource.data.get('base', 0)) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hp']) && request.resource.data.hp >= 0
-          && request.resource.data.hp < resource.data.hp && resource.data.hp - request.resource.data.hp <= 100000)
+      allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hp']) && (
+        (request.resource.data.hp >= 0 && request.resource.data.hp < resource.data.hp && resource.data.hp - request.resource.data.hp <= 100000) ||
+        (resource.data.hp <= 0 && request.resource.data.hp == 1000000000)
       );
     }
 
     // Emoji reactions shown above the dragon; sender may delete their own.
     match /reactions/{rid} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭'];
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭','🤑','💎','❌','🫩'];
       allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
       allow update: if false;
     }

@@ -6,17 +6,163 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+  onAuthStateChanged, signOut, setPersistence, browserSessionPersistence,
   deleteUser, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   initializeFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
   addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp, collectionGroup, getAggregateFromServer, sum
+  increment, serverTimestamp, collectionGroup, getAggregateFromServer, sum, count
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
 import { gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
+
+/* =========================================================================
+   DRAGONEER — rpg_daynight.js
+   Device-clock day/night cycle. Pure helpers + a small DOM driver.
+   Darkness: 0 (day) .. 1 (night).  8am-7pm = 0 | 7pm-8pm ramps to 1 | 8pm-7am = 1 | 7am-8am ramps to 0
+   ========================================================================= */
+const NIGHT_START_H = 20, NIGHT_END_H = 8, DIM_MINUTES = 60;
+
+/* ?hour=21.5 in the URL previews any time of day (handy for testing). */
+const forced = (()=>{ try{ const v = new URLSearchParams(location.search).get("hour"); return v==null ? null : +v; }catch{ return null; } })();
+const hourNow = (d=new Date())=> forced!=null && !isNaN(forced) ? forced : d.getHours() + d.getMinutes()/60 + d.getSeconds()/3600;
+
+function darkness(h=hourNow()){
+  const ramp = DIM_MINUTES/60;
+  if(h >= NIGHT_START_H || h < NIGHT_END_H - ramp) return 1;                 // 8pm .. 7am
+  if(h >= NIGHT_START_H - ramp) return (h-(NIGHT_START_H-ramp))/ramp;        // 7pm-8pm  dimming
+  if(h >= NIGHT_END_H - ramp && h < NIGHT_END_H) return 1-(h-(NIGHT_END_H-ramp))/ramp;   // 7am-8am brightening
+  return 0;
+}
+const isNight = (h=hourNow())=> h >= NIGHT_START_H || h < NIGHT_END_H;
+
+/* Time-of-day bands used by the Bestiary / fish odds. */
+const PERIODS = [
+  { id:"dawn",  label:"Dawn",  icon:"🌅", from:5,  to:8  },
+  { id:"day",   label:"Day",   icon:"☀️", from:8,  to:17 },
+  { id:"dusk",  label:"Dusk",  icon:"🌇", from:17, to:20 },
+  { id:"night", label:"Night", icon:"🌙", from:20, to:29 }     // 20:00 -> 05:00 (wraps)
+];
+function periodOf(h=hourNow()){
+  const x = h < 5 ? h+24 : h;
+  return PERIODS.find(p=> x>=p.from && x<p.to) || PERIODS[3];
+}
+
+/* "rpg_earth.mp3" -> "rpg_earth_night.mp3" while it's night (title/dungeon tracks stay as they are). */
+function trackFor(src, night=isNight()){
+  if(!night || !/^rpg_(earth|air|fire|water)\.mp3$/.test(src)) return src;
+  return src.replace(/\.mp3$/, "_night.mp3");
+}
+
+/* Theme setting: "dynamic" (default) | "light" | "dark" */
+const THEMES = ["dynamic","light","dark"];
+const wantDarkUI = (mode, d=darkness())=> mode==="dark" || (mode!=="light" && d>=0.5);
+
+/* ---- DOM driver ---- */
+let lastNight = null, lastDark = null;
+function startDayNight({ getTheme=()=>"dynamic", onNightChange=()=>{} }={}){
+  const body = document.body;
+  const tick = ()=>{
+    const d = darkness();
+    body.style.setProperty("--night", d.toFixed(3));
+    body.classList.toggle("has-night", d>0.001);
+    const dark = wantDarkUI(getTheme(), d);
+    if(dark !== lastDark){ body.classList.toggle("theme-dark", dark); lastDark = dark; }
+    const n = isNight();
+    if(n !== lastNight){ const first = lastNight===null; lastNight = n; if(!first) onNightChange(n); }
+  };
+  tick(); setInterval(tick, 15000);
+  return tick;
+}
+
+/* =========================================================================
+   DRAGONEER — rpg_bestiary.js
+   Time-of-day odds for fish (and forage). Pure functions, no DOM / Firebase.
+   Every catchable thing gets a stable "habit" from its id: a peak hour, how wide
+   its active window is, and how hard rarity makes it swing. The closer the device
+   clock is to the peak, the higher its odds climb; far from it they sink.
+   ========================================================================= */
+const hash = s=>{ let h = 2166136261; for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619); } return h>>>0; };
+
+/* rarer things swing harder: [floor at the worst hour, ceiling at the peak] (1 = the old flat odds) */
+const SWING = { common:[0.65,1.7], uncommon:[0.5,2.1], rare:[0.3,2.8], epic:[0.15,3.6], legendary:[0.05,5] };
+const PEAKS = [ {id:"dawn",label:"Dawn",icon:"🌅",hour:6}, {id:"day",label:"Day",icon:"☀️",hour:13}, {id:"dusk",label:"Dusk",icon:"🌇",hour:18.5}, {id:"night",label:"Night",icon:"🌙",hour:1} ];
+
+function habit(id, rarity="common"){
+  const h = hash(id), r = SWING[rarity] || SWING.common;
+  if(h%7===0) return { id:"any", label:"All day", icon:"🕐", peak:null, width:24, lo:1, hi:1 };       // ~1 in 7 doesn't care about the time
+  const pk = PEAKS[(h>>>3)%4], width = 4 + (h>>>7)%4;                                                   // active window 8-14h wide
+  return { id:pk.id, label:pk.label, icon:pk.icon, peak:pk.hour, width, lo:r[0], hi:r[1] };
+}
+const circ = (a,b)=>{ const d = Math.abs(a-b)%24; return Math.min(d, 24-d); };
+/* 0 (worst hour) .. 1 (peak hour), smooth */
+function activity(hb, hour){
+  if(hb.peak==null) return 1;
+  const d = circ(hour, hb.peak); if(d >= hb.width) return 0;
+  return (1+Math.cos(Math.PI*d/hb.width))/2;
+}
+const weightAt = (hb, hour)=> hb.lo + (hb.hi-hb.lo)*activity(hb, hour);
+
+/* pool: [{id, rarity, p}] -> same shape with p re-weighted for this hour and re-normalised */
+function poolAt(pool, itemById, hour){
+  const w = pool.map(e=> ({ ...e, p: e.p*weightAt(habit(e.id, e.rarity), hour) }));
+  const tot = w.reduce((a,e)=>a+e.p,0) || 1;
+  return w.map(e=>({ ...e, p:e.p/tot }));
+}
+/* 24 hourly odds (index = hour) for one entry of a pool */
+const oddsByHour = (pool, id, itemById)=> Array.from({length:24}, (_,h)=> (poolAt(pool, itemById, h+0.5).find(e=>e.id===id)||{p:0}).p);
+/* "6am – 7pm"-style text for the hours where activity >= 0.5 */
+function activeText(hb){
+  if(hb.peak==null) return "All day";
+  const hrs = []; for(let h=0;h<24;h++) if(activity(hb,h+0.5)>=0.5) hrs.push(h);
+  if(!hrs.length) return hb.label;
+  let start = hrs[0]; for(const h of hrs) if(!hrs.includes((h+23)%24)) start = h;      // beginning of the (wrapping) run
+  const end = (start+hrs.length)%24, f = h=> `${h%12||12}${h%24<12?"am":"pm"}`;
+  return `${f(start)} – ${f(end)}`;
+}
+
+/* =========================================================================
+   DRAGONEER — rpg_cosmetics.js
+   Shop cosmetics: profile gradients, profile/chat fonts, extra boss reactions.
+   Pure data + helpers. Ids are whitelisted here, so a message or profile that
+   carries an unknown id is simply ignored (nothing user-typed ever reaches CSS).
+   ========================================================================= */
+const GRADIENTS = [
+  { id:"grad_ruby",     name:"Ruby Blaze",     price:900,  css:"linear-gradient(135deg,#ff5a5a 0%,#ffb0b0 100%)" },
+  { id:"grad_emerald",  name:"Emerald Meadow", price:900,  css:"linear-gradient(135deg,#3fd16b 0%,#c6f5a0 100%)" },
+  { id:"grad_sapphire", name:"Sapphire Tide",  price:900,  css:"linear-gradient(135deg,#3f7bff 0%,#9be3ff 100%)" },
+  { id:"grad_sunset",   name:"Sunset (R→G)",   price:1400, css:"linear-gradient(135deg,#ff4d4d 0%,#ffb347 50%,#7ee26a 100%)" },
+  { id:"grad_aurora",   name:"Aurora (G→B)",   price:1400, css:"linear-gradient(135deg,#43e08a 0%,#3fc5d6 50%,#4a6bff 100%)" },
+  { id:"grad_twilight", name:"Twilight (B→R)", price:1400, css:"linear-gradient(135deg,#4a6bff 0%,#9a5cf0 50%,#ff5a7a 100%)" }
+];
+const FONTS = [
+  { id:"font_pacifico", name:"Pacifico",     price:700,  family:"'Pacifico', cursive" },
+  { id:"font_cinzel",   name:"Cinzel",       price:700,  family:"'Cinzel', serif" },
+  { id:"font_orbitron", name:"Orbitron",     price:900,  family:"'Orbitron', sans-serif" },
+  { id:"font_typewriter", name:"Special Elite", price:900, family:"'Special Elite', monospace" },
+  { id:"font_pixel",    name:"Press Start 2P", price:1100, family:"'Press Start 2P', monospace" }
+];
+const REACTIONS = [
+  { id:"rx_money",  emoji:"🤑", name:"Money Eyes", price:1000 },
+  { id:"rx_cross",  emoji:"❌", name:"Big X",      price:1500 },
+  { id:"rx_melt",   emoji:"🫩", name:"Tired Face", price:2500 },
+  { id:"rx_gem",    emoji:"💎", name:"Gem",        price:5000 }
+];
+const BASE_REACTIONS = ["❤️","⚔️","🔥","😭"];
+const ALL_COSMETICS = [...GRADIENTS.map(c=>({...c,kind:"gradient"})), ...FONTS.map(c=>({...c,kind:"font"})), ...REACTIONS.map(c=>({...c,kind:"reaction"}))];
+const COSMETIC_BY_ID = Object.fromEntries(ALL_COSMETICS.map(c=>[c.id,c]));
+const gradientCss = id=> GRADIENTS.find(g=>g.id===id)?.css || "";
+const fontFamily  = id=> FONTS.find(f=>f.id===id)?.family || "";
+const ownedReactions = owned=> REACTIONS.filter(r=> (owned||[]).includes(r.id)).map(r=>r.emoji);
+const allowedReactions = owned=> [...BASE_REACTIONS, ...ownedReactions(owned)];
+/* inline style for a chat bubble / profile card carrying this gradient+font id pair */
+function cosmeticStyle(gid, fid){
+  const g = gradientCss(gid), f = fontFamily(fid);
+  return (g ? `background:${g};color:#1d1a16;` : "") + (f ? `font-family:${f};` : "");
+}
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
@@ -30,7 +176,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
-setPersistence(auth, browserLocalPersistence).catch(()=>{});
+setPersistence(auth, browserSessionPersistence).catch(()=>{});   // session persistence: closing the tab logs you out (a refresh keeps you in)
 
 /* Phones/tablets (Android, iPhone, iPad incl. iPadOS that reports as a Mac) get a compact layout via body.is-mobile. */
 const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -481,68 +627,73 @@ function makeMonsterFromSlot(slot, playerLevel, rnd=Math.random){
    swap-every-second "gif" breathing effect.
    ========================================================================= */
 function dragonFrame(breathe){
-  const lift = breathe ? -3 : 0;     // whole body rises slightly on the "in-breath" frame
-  const INK = "#4A3F35";
-  const BODY = "#CDEFC2";
-  const BODY_D = "#A9DE9B";
-  const BELLY = "#F3FBEE";
+  /* Perched red dragon (after the reference painting): spread bat wings, plated cream belly, spiked tail,
+     standing on a rock. Two frames swapped every second give the breathing / wing-shift "gif". */
+  const lift = breathe ? -2 : 0, wing = breathe ? -2.5 : 0, chest = breathe ? 1.04 : 1;
+  const INK = "#4A3F35", RED = "#D9534F", RED_D = "#A83A3A", RED_L = "#E9766F", BONE = "#8E2F2F", CREAM = "#F3E2BD", MEM = "#EC8F86", MEM_D = "#C96A66", ROCK = "#D8C49A", ROCK_D = "#B9A173";
+  const sc = (x,y)=> `<path d="M${x},${y} q4,5 8,0" stroke="${RED_D}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
   return `
-  <!-- curled tail, drawn first so the body overlaps its base -->
-  <path d="M266,${178+lift} C298,${186+lift} 320,${164+lift} 313,${134+lift}
-           C309,${116+lift} 292,${104+lift} 277,${112+lift}
-           C289,${118+lift} 299,${132+lift} 294,${147+lift}
-           C290,${160+lift} 278,${168+lift} 264,${170+lift} Z"
-        fill="${BODY}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+  <!-- rock -->
+  <path d="M60,236 C50,210 78,192 118,190 C170,184 232,188 266,198 C292,208 300,226 292,236 Z" fill="${ROCK}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+  <path d="M96,206 q14,-8 30,-3 M176,200 q20,-5 38,2 M120,222 q18,-6 34,0 M228,214 q14,-4 26,3" stroke="${ROCK_D}" stroke-width="3" fill="none" stroke-linecap="round"/>
 
-  <!-- main curled body -->
-  <ellipse cx="190" cy="${172+lift}" rx="112" ry="50" fill="${BODY}" stroke="${INK}" stroke-width="4.5" filter="url(#doodleWobble)"/>
+  <!-- tail with spikes -->
+  <path d="M248,140 C284,142 320,136 330,112 C333,104 331,97 326,92 C331,108 323,128 302,138 C284,148 266,158 248,164 Z" fill="${RED}" stroke="${INK}" stroke-width="3.5" filter="url(#doodleWobble)"/>
+  <path d="M276,142 l-2,-9 l8,6 M292,136 l0,-10 l8,7 M306,128 l2,-10 l7,8 M318,114 l4,-9 l5,9 M326,100 l6,-6 l0,9" stroke="${INK}" stroke-width="2.5" fill="${RED_D}" stroke-linejoin="round"/>
 
-  <!-- folded wings along the spine -->
-  <path d="M152,${132+lift} Q145,${106+lift} 163,${99+lift} Q170,${116+lift} 163,${128+lift}
-           Q176,${114+lift} 188,${120+lift} Q180,${134+lift} 165,${138+lift} Z"
-        fill="${BODY_D}" stroke="${INK}" stroke-width="3" filter="url(#doodleWobble)"/>
-  <path d="M206,${130+lift} Q202,${104+lift} 220,${99+lift} Q226,${116+lift} 218,${127+lift}
-           Q231,${115+lift} 242,${122+lift} Q233,${135+lift} 219,${138+lift} Z"
-        fill="${BODY_D}" stroke="${INK}" stroke-width="3" filter="url(#doodleWobble)"/>
+  <g transform="translate(0,${lift})">
+    <!-- far wing (behind) -->
+    <g transform="rotate(${wing/2} 150 112)">
+      <path d="M150,112 L84,40 L88,26 L116,56 L116,32 L140,68 L146,48 L170,100 Z" fill="${MEM_D}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round" filter="url(#doodleWobble)"/>
+      <path d="M150,112 L86,34" stroke="${BONE}" stroke-width="4" stroke-linecap="round"/>
+    </g>
 
-  <!-- spine ridge bumps -->
-  <path d="M118,${132+lift} l9,-15 l9,15 Z" fill="${BODY_D}" stroke="${INK}" stroke-width="2"/>
-  <path d="M148,${122+lift} l8,-14 l8,14 Z" fill="${BODY_D}" stroke="${INK}" stroke-width="2"/>
+    <!-- far legs -->
+    <path d="M166,168 L180,168 L184,204 L168,206 Z" fill="${RED_D}" stroke="${INK}" stroke-width="3"/>
+    <path d="M206,166 L220,166 L226,204 L210,206 Z" fill="${RED_D}" stroke="${INK}" stroke-width="3"/>
 
-  <!-- tucked front paw -->
-  <ellipse cx="150" cy="${203+lift}" rx="17" ry="11" fill="${BODY}" stroke="${INK}" stroke-width="3"/>
-  <path d="M140,${205+lift} l-4,5 M148,${208+lift} l-2,6 M157,${208+lift} l1,6" stroke="${INK}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- body -->
+    <g transform="translate(190 150) scale(${chest} 1) translate(-190 -150)">
+      <path d="M120,134 C140,110 192,104 240,118 C266,126 272,152 252,168 C230,184 158,186 128,174 C110,166 110,148 120,134 Z" fill="${RED}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+      <path d="M128,172 C166,186 234,184 252,166 C240,178 170,174 134,160 Z" fill="${CREAM}" stroke="${INK}" stroke-width="2.5"/>
+      <path d="M150,174 l0,8 M166,177 l0,8 M182,178 l0,8 M198,178 l0,8 M214,176 l0,8 M230,172 l0,8" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>
+      ${sc(146,132)}${sc(166,124)}${sc(188,122)}${sc(210,124)}${sc(232,130)}${sc(158,146)}${sc(184,140)}${sc(210,142)}${sc(236,148)}
+      <path d="M150,110 l4,-9 l5,10 M174,106 l4,-10 l5,11 M198,106 l4,-10 l5,11 M222,111 l4,-9 l5,10" stroke="${INK}" stroke-width="2.5" fill="${RED_D}" stroke-linejoin="round"/>
+    </g>
 
-  <!-- belly shading -->
-  <path d="M108,${196+lift} Q190,${214+lift} 270,${194+lift}" stroke="${BELLY}" stroke-width="10" fill="none" opacity="0.55" stroke-linecap="round"/>
+    <!-- neck -->
+    <path d="M108,146 C84,124 82,94 96,74 L132,72 C128,98 142,116 164,126 Z" fill="${RED}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+    <path d="M98,78 C86,98 90,124 112,146 C100,122 98,100 108,80 Z" fill="${CREAM}" stroke="${INK}" stroke-width="2.5"/>
+    <path d="M92,98 l9,0 M93,108 l9,0 M97,118 l9,0 M103,128 l9,0 M110,138 l8,0" stroke="${INK}" stroke-width="2" stroke-linecap="round"/>
+    ${sc(112,92)}${sc(118,106)}${sc(126,120)}
+    <path d="M132,74 l10,-6 l-2,10 M135,88 l11,-4 l-4,10 M142,102 l11,-2 l-5,9" stroke="${INK}" stroke-width="2.5" fill="${RED_D}" stroke-linejoin="round"/>
 
-  <!-- neck bridge so head reads as part of the body, not a floating circle -->
-  <ellipse cx="132" cy="${158+lift}" rx="38" ry="31" fill="${BODY}" stroke="${INK}" stroke-width="3.5" filter="url(#doodleWobble)"/>
+    <!-- head -->
+    <path d="M134,62 C120,50 98,50 84,58 L62,68 C58,73 60,80 67,82 L90,86 C112,92 130,84 136,72 Z" fill="${RED}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+    <path d="M122,52 L150,30 L134,62 Z M110,50 L130,24 L122,56 Z" fill="${RED_D}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M138,66 l12,-2 l-9,10 M134,76 l11,2 l-10,6" stroke="${INK}" stroke-width="2.5" fill="${RED_D}" stroke-linejoin="round"/>
+    <path d="M72,82 l3,7 l4,-6 M84,85 l3,7 l4,-6" stroke="${INK}" stroke-width="2" fill="#FFF8E8" stroke-linejoin="round"/>
+    <ellipse cx="108" cy="64" rx="7" ry="4.5" fill="#F7C948" stroke="${INK}" stroke-width="2.5" transform="rotate(-12 108 64)"/>
+    <path d="M108,60 L108,68" stroke="${INK}" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M98,56 q10,-6 22,-1" stroke="${INK}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="68" cy="72" r="2.4" fill="${INK}"/>
+    ${breathe ? `<circle cx="56" cy="70" r="4.5" fill="#FFFFFF" opacity="0.75"/><circle cx="46" cy="63" r="3" fill="#FFFFFF" opacity="0.55"/><circle cx="38" cy="58" r="2" fill="#FFFFFF" opacity="0.4"/>` : ``}
 
-  <!-- head -->
-  <ellipse cx="98" cy="${149+lift}" rx="44" ry="37" fill="${BODY}" stroke="${INK}" stroke-width="4.5" filter="url(#doodleWobble)"/>
+    <!-- near wing (big, raised) -->
+    <g transform="rotate(${wing} 172 114)">
+      <path d="M172,114 L262,22 C300,34 332,60 346,94 C324,86 312,98 306,110 C290,98 272,102 264,114 C242,102 212,106 190,122 Z" fill="${MEM}" stroke="${INK}" stroke-width="4" stroke-linejoin="round" filter="url(#doodleWobble)"/>
+      <path d="M190,122 C212,106 242,102 264,114 C240,92 212,96 188,110 Z" fill="${CREAM}" opacity="0.85"/>
+      <path d="M172,114 L262,22 M262,22 L306,110 M262,22 L264,114 M262,22 L346,94" stroke="${BONE}" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M262,22 q-6,-8 -14,-4 q4,6 10,6" stroke="${INK}" stroke-width="3" fill="${BONE}" stroke-linejoin="round"/>
+    </g>
+  </g>
 
-  <!-- horns -->
-  <path d="M84,${116+lift} Q73,${92+lift} 58,${86+lift}" stroke="${INK}" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <path d="M104,${113+lift} Q99,${88+lift} 87,${79+lift}" stroke="${INK}" stroke-width="4" fill="none" stroke-linecap="round"/>
-
-  <!-- snout -->
-  <ellipse cx="60" cy="${159+lift}" rx="25" ry="18" fill="${BODY}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
-
-  <!-- closed sleepy eye -->
-  <path d="M72,${138+lift} Q83,${131+lift} 94,${138+lift}" stroke="${INK}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-  <path d="M92,${137+lift} l7,-4" stroke="${INK}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-
-  <!-- nostril + mouth -->
-  <circle cx="42" cy="${161+lift}" r="2.6" fill="${INK}"/>
-  <path d="M50,${170+lift} Q62,${176+lift} 74,${170+lift}" stroke="${INK}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-
-  <!-- breath puff, only on the exhale frame -->
-  ${breathe ? `
-  <circle cx="30" cy="${158}" r="4.5" fill="#FFFFFF" opacity="0.75"/>
-  <circle cx="20" cy="151" r="2.8" fill="#FFFFFF" opacity="0.55"/>` : ``}
-
-  <text x="150" y="${68+lift}" font-family="Caveat, cursive" font-size="28" fill="${INK}" opacity="${breathe?1:0.45}">z z z</text>
+  <!-- near legs -->
+  <path d="M140,162 C130,182 126,196 118,206 L142,212 C146,198 158,184 168,170 Z" fill="${RED}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+  <path d="M118,206 l-6,8 M126,208 l-3,9 M135,210 l-1,9 M142,212 l2,8" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>
+  <path d="M222,162 C234,178 240,196 232,208 L256,210 C258,194 254,176 248,162 Z" fill="${RED}" stroke="${INK}" stroke-width="4" filter="url(#doodleWobble)"/>
+  <path d="M232,208 l-4,9 M241,209 l-1,10 M251,210 l3,8" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>
+  ${breathe ? "" : ""}
   `;
 }
 function setupDragonAnim(){
@@ -564,8 +715,10 @@ function playSfx(name){
   const a = new Audio(el.currentSrc || el.src); a.volume = el.volume;
   a.addEventListener("ended", ()=> a.remove?.()); a.play().catch(()=>{});
 }
+let wantedTrack = null;
 function playMusic(src){
   const el = musicEl(); if(!el) return;
+  wantedTrack = src; src = trackFor(src);                       // 8pm-8am: swap in the *_night.mp3 version
   if(state.settings.muteMusic){ el.pause(); return; }
   if(el.getAttribute('data-track') === src) return;
   el.style.transition="opacity 1s";
@@ -606,7 +759,7 @@ document.querySelectorAll("[data-close-modal]").forEach(b=>{
 const state = {
   uid:null, username:null,
   profile:null,           // mirrors Firestore player doc
-  settings:{ muteMusic:false, muteSfx:false },
+  settings:{ muteMusic:false, muteSfx:false, theme:(localStorage.getItem("dragoneer_theme")||"dynamic") },
   selArchetype:null, selClass:null,
   invPage:0,
   currentChatPartner:null,
@@ -977,6 +1130,8 @@ function enterGame(){
       const r = REGIONS[state.profile.region] || REGIONS.forest;
       playMusic(dgActive() ? DG_TRACK : r.track);
     }
+    if(document.querySelectorAll(".rx-extra").length !== ownedReactions(cosOwned()).length) renderReactionBar();
+    if(document.getElementById("customizeModal").classList.contains("active")) renderCustomize();
     if(firstSnapshot){
       { const rm = rageMaxFor(state.profile.level, state.profile.archetype, state.profile.stats?.SMARTS);   // bring existing accounts onto the level-based Rage cap
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
@@ -1538,7 +1693,9 @@ function openProfileBook(uid, data, rank, cat){
     rk.textContent = (!profileHidden && rank) ? `Ranked #${rank} in ${cat}` : "";
     rk.className = "profile-rank" + ((!profileHidden && rank) ? " "+RANK_CLASS(rank-1) : ""); }
   const card = document.querySelector("#profileModal .book-card");
-  card.style.background = profileHidden ? "" : (ELEMENTS[data.archetype]?.color || "");
+  card.style.background = profileHidden ? "" : (gradientCss(data.gradient) || ELEMENTS[data.archetype]?.color || "");
+  card.style.fontFamily = profileHidden ? "" : fontFamily(data.font);
+  document.getElementById("btnCustomize").style.display = uid===state.uid ? "" : "none";
   if(!profileHidden) Promise.all(Object.keys(LB_FIELDS).map(getLb)).then(all=>{
     const box = document.getElementById("lbBubbles"); if(!box) return;
     // 1st = gold, 2nd = silver, 3rd = copper, everyone else plain white
@@ -2094,7 +2251,7 @@ function renderRegionGrid(){
    Backpacks (permanent inventory upgrades) rarely take over a slot — higher
    tiers are rarer. Job + farm tools live on the tool shelf. Click an item to
    read about it, then press Buy in the detail box. */
-const SHOP_SIZE = 6;
+const SHOP_SIZE = 8;
 const SEED_ROLL = { common:.40, uncommon:.28, rare:.18, epic:.10, legendary:.04 };
 const LUCK_SHOP_ODDS = { 3:.03, 2:.06, 1:.12 };
 const BACKPACK_ODDS = { 5:.02, 4:.04, 3:.06, 2:.09, 1:.12 };
@@ -2139,19 +2296,35 @@ function shopStock(){
   return stock;
 }
 function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
-let shopSel = null;
-const SHELF_TOOL_IDS = ["tool_pickaxe","tool_pickaxe2","tool_pickaxe3","tool_fishingrod","tool_fishingrod2","tool_fishingrod3", ...FARM_TOOLS.map(t=>t.id)];
-function selectShopItem(id){ shopSel = id; renderShop(); }
-function renderToolShelf(){
-  const shelf = document.getElementById("toolShelf");
-  const btn = id=>{ const it = ITEM_BY_ID[id]; return `<button class="doodle-btn btn-sm btn-yellow${shopSel===id?" selected":""}" data-shelf="${id}">${escapeHTML(it.name)} ($${fmtMoney(it.price)})</button>`; };
-  shelf.innerHTML = `<p class="doodle-sub" style="margin:0 0 6px;flex:0 0 100%;">Job tools</p>${SHELF_TOOL_IDS.slice(0,6).map(btn).join("")}
-    <p class="doodle-sub" style="margin:8px 0 6px;flex:0 0 100%;">Farm tools (🪓 hoes till, 🚿 cans water — 1 tile per use)</p>${SHELF_TOOL_IDS.slice(6).map(btn).join("")}`;
-  shelf.querySelectorAll("[data-shelf]").forEach(b=> b.addEventListener("click", ()=> selectShopItem(b.dataset.shelf)));
+let shopSel = null, shopTab = "market", shopCat = "gradient", shopPage = 0;
+const SHOP_PER_PAGE = 12;                                           // 3 rows x 4 columns per page
+/* job tools of every rarity: pickaxes + fishing rods tier 1-6, then the 5 tiers of hoes and watering cans */
+const JOB_TOOL_PRICE = { 4:900, 5:2200, 6:5000 };                   // gold / emerald / diamond tiers were craft-only; now buyable too
+const toolTierId = (k,n)=> n===1 ? "tool_"+k : "tool_"+k+n;
+[["pickaxe"],["fishingrod"]].forEach(([k])=> [4,5,6].forEach(n=>{ const it = ITEM_BY_ID[toolTierId(k,n)]; if(it && !(it.price>0)) it.price = JOB_TOOL_PRICE[n] * (k==="fishingrod" ? 0.8 : 1); }));
+const SHOP_TOOL_IDS = [...["pickaxe","fishingrod"].flatMap(k=> [1,2,3,4,5,6].map(n=>toolTierId(k,n))), ...FARM_TOOLS.map(t=>t.id)].filter(id=>ITEM_BY_ID[id]);
+const cosOwned = ()=> state.profile?.cosmetics || [];
+const cosCategory = ()=> ALL_COSMETICS.filter(c=>c.kind===shopCat);
+function shopList(){
+  if(shopTab==="tools") return SHOP_TOOL_IDS.map(id=>({ id, kind:"item", it:ITEM_BY_ID[id] }));
+  if(shopTab==="cosmetics") return cosCategory().map(c=>({ id:c.id, kind:"cosmetic", c }));
+  return shopItemsForRegion().map(it=>({ id:it.id, kind:"item", it }));
 }
+function selectShopItem(id){ shopSel = id; renderShop(); }
 function renderShopDetail(){
-  const box = document.getElementById("shopDetail"), it = shopSel && ITEM_BY_ID[shopSel];
-  if(!it || !(SHELF_TOOL_IDS.includes(it.id) || shopItemsForRegion().some(i=>i.id===it.id))){ shopSel = null; box.innerHTML = "Select an item to see what it does."; return; }
+  const box = document.getElementById("shopDetail"), entry = shopList().find(e=>e.id===shopSel);
+  if(!entry){ shopSel = null; box.innerHTML = "Select an item to see what it does."; return; }
+  if(entry.kind==="cosmetic"){
+    const c = entry.c, owned = cosOwned().includes(c.id);
+    const preview = c.kind==="gradient" ? `<div class="cz-preview" style="background:${c.css}">Your profile &amp; chat bubbles</div>`
+      : c.kind==="font" ? `<div class="cz-preview" style="font-family:${c.family}">The quick brown dragon jumps over the lazy knight</div>`
+      : `<div class="cz-preview" style="font-size:40px">${c.emoji}</div>`;
+    box.innerHTML = `<b>${escapeHTML(c.name)}</b> <i>(${c.kind==="gradient"?"profile gradient":c.kind==="font"?"font":"boss reaction"})</i><br>${preview}` +
+      (owned ? `<b>✅ Owned</b>${c.kind==="reaction"?" — it's on your reaction bar.":" — equip it from Customize on your own profile."}` : `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(c.price)})</button></div>`);
+    document.getElementById("btnShopBuy")?.addEventListener("click", ()=> buyCosmetic(c));
+    return;
+  }
+  const it = entry.it;
   box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
     (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
     `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button>` +
@@ -2160,19 +2333,63 @@ function renderShopDetail(){
   document.getElementById("btnShopBuy10")?.addEventListener("click", ()=> buyItem(it, 10));
 }
 function renderShop(){
-  document.getElementById("shopRegionLabel").textContent = `${REGIONS[state.profile.region].name} Shop — 6 items, new stock every day at 12am ET`;
-  const grid = document.getElementById("shopGrid");
-  grid.innerHTML = "";
-  shopItemsForRegion().forEach(item=>{
+  const label = document.getElementById("shopRegionLabel");
+  label.textContent = shopTab==="market" ? `${REGIONS[state.profile.region].name} Market — ${SHOP_SIZE} items, new stock every day at 12am ET`
+    : shopTab==="tools" ? "Tools — job tools & farming tools, every rarity" : "Cosmetics — permanent, yours forever";
+  document.querySelectorAll("[data-shoptab]").forEach(b=> b.classList.toggle("active", b.dataset.shoptab===shopTab));
+  const catRow = document.getElementById("shopCatRow"); catRow.style.display = shopTab==="cosmetics" ? "" : "none";
+  catRow.querySelectorAll("[data-shopcat]").forEach(b=> b.classList.toggle("selected", b.dataset.shopcat===shopCat));
+  const list = shopList(), pages = Math.max(1, Math.ceil(list.length/SHOP_PER_PAGE));
+  shopPage = Math.min(shopPage, pages-1);
+  const grid = document.getElementById("shopGrid"); grid.innerHTML = "";
+  list.slice(shopPage*SHOP_PER_PAGE, shopPage*SHOP_PER_PAGE+SHOP_PER_PAGE).forEach(e=>{
     const cell = document.createElement("div");
-    cell.className = "shop-cell" + (shopSel===item.id ? " selected" : "");
-    cell.innerHTML = `<b>${escapeHTML(item.name)}</b><span>${item.rarity}</span><span>$${fmtMoney(item.price)}</span>`;
-    cell.addEventListener("click", ()=> selectShopItem(item.id));
+    cell.className = "shop-cell" + (shopSel===e.id ? " selected" : "");
+    if(e.kind==="cosmetic"){
+      const c = e.c, owned = cosOwned().includes(c.id);
+      cell.innerHTML = `<b style="${c.kind==="font"?`font-family:${c.family}`:""}">${c.kind==="reaction"?c.emoji+" ":""}${escapeHTML(c.name)}</b>` +
+        (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
+    } else cell.innerHTML = `<b>${escapeHTML(e.it.name)}</b><span>${e.it.rarity}</span><span>$${fmtMoney(e.it.price)}</span>`;
+    cell.addEventListener("click", ()=> selectShopItem(e.id));
     grid.appendChild(cell);
   });
-  renderToolShelf();
+  document.getElementById("shopPageLabel").textContent = `Page ${shopPage+1}/${pages}`;
+  document.getElementById("shopPrev").disabled = shopPage<=0; document.getElementById("shopNext").disabled = shopPage>=pages-1;
   renderShopDetail();
 }
+document.querySelectorAll("[data-shoptab]").forEach(b=> b.addEventListener("click", ()=>{ shopTab = b.dataset.shoptab; shopPage = 0; shopSel = null; renderShop(); }));
+document.querySelectorAll("[data-shopcat]").forEach(b=> b.addEventListener("click", ()=>{ shopCat = b.dataset.shopcat; shopPage = 0; shopSel = null; renderShop(); }));
+document.getElementById("shopPrev").addEventListener("click", ()=>{ shopPage = Math.max(0, shopPage-1); renderShop(); });
+document.getElementById("shopNext").addEventListener("click", ()=>{ shopPage++; renderShop(); });
+
+/* ---- cosmetics: buying, equipping, applying ---- */
+async function buyCosmetic(c){
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, have = d.cosmetics || [];
+    if(have.includes(c.id)) throw new Error("cosmetic-owned");
+    if((d.money||0) < c.price) throw new Error("nomoney");
+    tx.update(ref, { money:(d.money||0)-c.price, cosmetics:[...have, c.id], shopBought:(d.shopBought||0)+1 });
+  }));
+  if(ok!==null){ playSfx("buy"); toast(`🎨 Unlocked ${c.name}!`); renderShop(); renderReactionBar(); }
+}
+function renderReactionBar(){
+  const row = document.querySelector(".rx-row"); if(!row || !state.profile) return;
+  const have = ownedReactions(cosOwned());
+  row.querySelectorAll(".rx-extra").forEach(b=>b.remove());
+  have.forEach(e=>{ const b = document.createElement("button"); b.className = "rx-btn rx-extra"; b.dataset.rx = e; b.textContent = e; b.addEventListener("click", ()=> sendReaction(b)); row.appendChild(b); });
+}
+async function equipCosmetic(field, id){
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { [field]: id }));
+  renderCustomize();
+}
+function renderCustomize(){
+  const own = cosOwned(), p = state.profile;
+  const chip = (c, field, cur)=> `<button class="doodle-btn btn-sm${cur===c.id?" selected":""}" data-eq="${field}:${c.id}" style="${c.css?`background:${c.css}`:""}${c.family?`;font-family:${c.family}`:""}">${escapeHTML(c.name)}</button>`;
+  document.getElementById("czGradients").innerHTML = `<button class="doodle-btn btn-sm${!p.gradient?" selected":""}" data-eq="gradient:">Default</button>` + GRADIENTS.filter(g=>own.includes(g.id)).map(g=>chip(g,"gradient",p.gradient)).join("");
+  document.getElementById("czFonts").innerHTML = `<button class="doodle-btn btn-sm${!p.font?" selected":""}" data-eq="font:">Default</button>` + FONTS.filter(f=>own.includes(f.id)).map(f=>chip(f,"font",p.font)).join("");
+  document.querySelectorAll("[data-eq]").forEach(b=> b.addEventListener("click", ()=>{ const [f,id] = b.dataset.eq.split(":"); equipCosmetic(f, id); }));
+}
+document.getElementById("btnCustomize").addEventListener("click", ()=>{ renderCustomize(); openModal("customizeModal"); });
 async function buyBackpack(item){
   const t = item.tier;
   const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
@@ -2584,7 +2801,7 @@ async function doForageAction(){
   if(Math.random() >= Math.min(0.98, rule.chance*(1+activeLuck()))){ jobLog("Nothing this time."); return; }
   const n = rule.qty[0] + Math.floor(Math.random()*(rule.qty[1]-rule.qty[0]+1));
   const got = {};
-  for(let i=0;i<n;i++){ const id = rollPool(POOLS.forage[m], activeLuck()); got[id] = (got[id]||0)+1; }
+  for(let i=0;i<n;i++){ const id = rollPool(poolAt(POOLS.forage[m], null, hourNow()), activeLuck()); got[id] = (got[id]||0)+1; }
   await applyInvChanges({ add:Object.entries(got).map(([itemId,qty])=>({itemId,qty})) },
     Object.fromEntries(Object.entries(got).map(([id,q])=>["finds."+id, increment(q)])));
   jobLog(`You foraged ${Object.entries(got).map(([id,q])=>pluralize(id,q)).join(" and ")}!`);
@@ -2717,7 +2934,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the fight ends
   if(success){
-    const pick = rollPool(POOLS.fish[m], activeLuck());
+    const pick = rollPool(poolAt(POOLS.fish[m], null, hourNow()), activeLuck());   // odds shift with the device clock
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
@@ -2727,35 +2944,43 @@ async function endFishing(success, m=jobMode, timedOut=false){
 }
 document.getElementById("btnCancelFish").addEventListener("click", ()=> endFishing(false));
 
-/* --- Chance Sheet: the exact odds behind every job, per mode --- */
+/* --- Bestiary (journal tab): every fish, when it bites, how likely it is right now --- */
 const pctText = p=> { const v = p*100; return (v>=10 ? v.toFixed(1) : v>=1 ? v.toFixed(2) : v.toFixed(3)) + "%"; };
-let chanceTab = "forage";
-function renderChanceSheet(){
-  const m = jobMode, box = document.getElementById("chanceBody"), head = document.getElementById("chanceHead");
-  document.querySelectorAll("[data-chancetab]").forEach(b=> b.classList.toggle("active", b.dataset.chancetab===chanceTab));
-  document.querySelectorAll("[data-cmode]").forEach(b=> b.classList.toggle("active", b.dataset.cmode===m));
-  const row = (name, rar, p, extra="")=> `<div class="chance-row rarity-${rar}"><span>${escapeHTML(name)}${extra}</span><em>${rar}</em><b>${pctText(p)}</b></div>`;
-  let html = "";
-  if(chanceTab==="forage"){
-    const r = FORAGE_RULES[m];
-    head.textContent = `🌿 Forage (${MODES[m].label}) — ${Math.round(r.chance*100)}% to find ${r.qty[0]===r.qty[1]?r.qty[0]:r.qty[0]+"–"+r.qty[1]} item${r.qty[1]>1?"s":""}, ${Math.round((1-r.chance)*100)}% nothing. Cooldown ${fmtDur(r.cooldown)}. Odds below are per item found (${CATALOG.forage.length} possible items).`;
-    html = row("Nothing", "common", 1-r.chance) + POOLS.forage[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, r.chance*e.p)).join("");
-  } else if(chanceTab==="mine"){
-    const r = MINE_RULES[m], negTotal = MINE_NEG.reduce((s,n)=>s+n.w,0);
-    head.textContent = `⛏️ Mine (${MODES[m].label}) — ${Math.round(r.pos*100)}% good / ${Math.round(r.neg*100)}% hazard. Uses ${r.wear} durability. ${r.double?`${Math.round(r.double*100)}% chance a mineral drops x2. `:""}${CATALOG.mineral.length} minerals.`;
-    html = `<div class="chance-sub">Good finds</div>` + row(`Cash ($${r.cash[0]}–$${r.cash[1]})`, "uncommon", r.pos*MINE_CASH_SHARE)
-      + POOLS.mine[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, r.pos*(1-MINE_CASH_SHARE)*e.p)).join("")
-      + `<div class="chance-sub">Hazards</div>` + MINE_NEG.map(n=> row(n.label, "epic", r.neg*n.w/negTotal, `<small> — ${n.desc}</small>`)).join("");
-  } else {
-    const r = FISH_RULES[m];
-    head.textContent = `🎣 Fish (${MODES[m].label}) — ${r.tier} fish, ${(r.time/1000)}s to land one. Odds below are per fish landed (${CATALOG.fish[r.tier].length} species).`;
-    html = POOLS.fish[m].map(e=> row(ITEM_BY_ID[e.id].name, e.rarity, e.p)).join("");
-  }
-  box.innerHTML = html;
+const FISH_TIERS = [["easy","green","Green"],["medium","yellow","Yellow"],["hard","red","Red"]];
+let beSel = null;
+function beFishList(){ return FISH_TIERS.flatMap(([tier,mode])=> CATALOG.fish[tier].map(id=>({ id, tier, mode, item:ITEM_BY_ID[id] }))); }
+function renderBestiary(){
+  const grid = document.getElementById("beGrid"), det = document.getElementById("beDetail"), clock = document.getElementById("beClock");
+  if(!grid || !state.profile) return;
+  const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, list = beFishList();
+  const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
+  clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}`;
+  grid.innerHTML = list.map(f=>{
+    const hb = habit(f.id, f.item.rarity), act = activity(hb, h), caught = (finds[f.id]||0) > 0;
+    return `<button class="be-card rarity-${f.item.rarity}${beSel===f.id?" sel":""}${caught?"":" unseen"}" data-fish="${f.id}" title="${caught?escapeHTML(f.item.name):"???"}">
+      <span class="be-emo">${caught?"🐟":"❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
+      <span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span></button>`;
+  }).join("");
+  grid.querySelectorAll("[data-fish]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.fish; renderBestiary(); }));
+  const f = list.find(x=>x.id===beSel);
+  if(!f){ det.innerHTML = `<p class="doodle-sub">Tap a fish to see when it bites.</p>`; return; }
+  const it = f.item, hb = habit(f.id, it.rarity), pool = POOLS.fish[f.mode], caught = (finds[f.id]||0) > 0;
+  const odds = oddsByHour(pool, f.id, null), now = poolAt(pool, null, h).find(e=>e.id===f.id)?.p || 0, max = Math.max(...odds) || 1;
+  const bars = odds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(4, Math.round(p/max*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${pctText(p)}"></span>`).join("");
+  det.innerHTML = `<h3 class="doodle-h3">${caught?escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
+    <p class="doodle-sub">${caught?escapeHTML(it.desc||""):"Catch one to reveal its entry."}</p>
+    <div class="be-facts">
+      <div><b>Where</b> ${MODES[f.mode].emoji} ${MODES[f.mode].label} fishing</div>
+      <div><b>Best time</b> ${hb.icon} ${hb.label} (${activeText(hb)})</div>
+      <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
+      <div><b>Caught</b> ${finds[f.id]||0}</div>
+      <div><b>Odds right now</b> ${pctText(now)} <span class="be-bar wide"><i style="width:${Math.round(activity(hb,h)*100)}%"></i></span></div>
+    </div>
+    <div class="be-chart">${bars}</div>
+    <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
 }
-document.getElementById("btnChanceSheet").addEventListener("click", ()=>{ renderChanceSheet(); openModal("chanceModal"); });
-document.querySelectorAll("[data-chancetab]").forEach(b=> b.addEventListener("click", ()=>{ chanceTab = b.dataset.chancetab; renderChanceSheet(); }));
-document.querySelectorAll("[data-cmode]").forEach(b=> b.addEventListener("click", ()=>{ setJobMode(b.dataset.cmode); renderChanceSheet(); }));
+document.querySelector('[data-jtab="bestiary"]').addEventListener("click", renderBestiary);
+setInterval(()=>{ if(document.getElementById("jtab-bestiary")?.classList.contains("active") && document.getElementById("journalModal").classList.contains("active")) renderBestiary(); }, 30000);
 setJobMode(jobMode);
 
 
@@ -2835,13 +3060,16 @@ async function unmuteUser(uid, username){
 const ONLINE_BEAT_MS = 45000, ONLINE_FRESH_MS = 150000;
 let onlineTimer = null;
 const isOnline = d=> !!(d && !d.banned && (Date.now() - (d.onlineAt||0)) < ONLINE_FRESH_MS);
-const onlineDot = (d, force)=> (force || isOnline(d)) ? '<span class="online-dot" title="Online"></span>' : "";
-function beatOnline(){ if(state.uid && state.profile && !state.profile.banned) updateDoc(doc(db,"players",state.uid), { onlineAt: Date.now() }).catch(()=>{}); }
+/* green = online · yellow = logged in but not on this tab · red = online with chat notifications turned off (yellow wins if both) */
+const presenceOf = (d, self)=> d?.away && !self ? "away" : (d?.notifSettings?.chat === false ? "muted" : "online");
+const DOT_TITLE = { online:"Online", away:"Online — away from the tab", muted:"Online — message notifications off" };
+const onlineDot = (d, force)=> { if(!(force || isOnline(d))) return ""; const k = presenceOf(d, force); return `<span class="online-dot dot-${k}" title="${DOT_TITLE[k]}"></span>`; };
+function beatOnline(){ if(state.uid && state.profile && !state.profile.banned) updateDoc(doc(db,"players",state.uid), { onlineAt: Date.now(), away: document.hidden }).catch(()=>{}); }
 function startOnlineBeat(){ stopOnlineBeat(); beatOnline(); onlineTimer = setInterval(beatOnline, ONLINE_BEAT_MS); }
 function stopOnlineBeat(){ if(onlineTimer){ clearInterval(onlineTimer); onlineTimer = null; } }
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && onlineTimer) beatOnline(); });
+document.addEventListener("visibilitychange", ()=>{ if(onlineTimer) beatOnline(); });   // flips yellow the moment you leave the tab, green when you return
 window.addEventListener("pageshow", ()=>{ if(onlineTimer) beatOnline(); });
-window.addEventListener("pagehide", ()=>{ if(state.uid && state.profile) updateDoc(doc(db,"players",state.uid), { onlineAt: 0 }).catch(()=>{}); });
+window.addEventListener("pagehide", ()=>{ if(state.uid && state.profile) updateDoc(doc(db,"players",state.uid), { onlineAt: 0, away:false }).catch(()=>{}); });
 function ensureChatSubscriptions(){
   if(chatSubbed) return; chatSubbed=true;
   subscribeInbox();
@@ -2853,6 +3081,7 @@ async function openProfileByUid(uid){
   if(!snap || !snap.exists()){ toast("That player no longer exists."); return; }
   openProfileBook(uid, snap.data(), null, null);
 }
+const cosmeticFields = ()=>{ const p = state.profile||{}, o = {}; if(p.gradient && (p.cosmetics||[]).includes(p.gradient)) o.gid = p.gradient; if(p.font && (p.cosmetics||[]).includes(p.font)) o.fid = p.font; return o; };
 function chatMessageHTML(m, id, collectionPath){
   const canDelete = m.uid===state.uid || isAdminUI();
   if(m.system==="deleted") return `<div class="chat-system" data-mid="${id}">${escapeHTML(m.username)} deleted a message</div>`;
@@ -2864,7 +3093,7 @@ function chatMessageHTML(m, id, collectionPath){
       <div class="chat-msg ${m.uid===state.uid?'mine':'theirs'}${rq?' has-reply':''}" data-mid="${id}">
         <div class="who chat-username" data-uid="${m.uid}">${escapeHTML(m.username)}</div>
         ${rq}
-        <div class="bubble">${escapeHTML(m.text)}</div>
+        <div class="bubble"${cosmeticStyle(m.gid, m.fid) ? ` style="${cosmeticStyle(m.gid, m.fid)}"` : ""}>${escapeHTML(m.text)}</div>
         <button class="chat-reply-btn" data-reply="${id}" title="Reply">&#10550;</button>
         ${canDelete ? `<button class="chat-del-btn" data-del="${id}" data-ts="${m.ts||Date.now()}" data-cpath="${collectionPath}" title="Delete message">&times;</button>` : ""}
       </div>`;
@@ -3033,7 +3262,7 @@ document.getElementById("globalChatForm").addEventListener("submit", async (e)=>
   if(!text) return;
   input.value=""; markRead(document.getElementById("chatLogGlobal"), "global");
   const replyTo = takeReply("global");
-  const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now(), ...(replyTo?{replyTo}:{}) }));
+  const ok = await withErrorToast(()=> addDoc(collection(db,"globalChat"), { uid:state.uid, username:state.profile.username, text, ts: Date.now(), ...cosmeticFields(), ...(replyTo?{replyTo}:{}) }));
   if(ok===null){ input.value = raw; if(replyTo){ pendingReply.global = replyTo; renderReplyPreview("global"); } }
 });
 
@@ -3334,7 +3563,7 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   input.value=""; markRead(document.getElementById("chatLogPrivate"), "pm_"+threadId);
   syncPresence(true);                       // box is empty now: drop the typing indicator right away
   const replyTo = takeReply("private");
-  const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now(), ...(replyTo?{replyTo}:{}) }));
+  const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now(), ...cosmeticFields(), ...(replyTo?{replyTo}:{}) }));
   if(ok===null){ input.value = raw; if(replyTo){ pendingReply.private = replyTo; renderReplyPreview("private"); } return; }
   // Ping the recipient's inbox so they get a popup if that chat isn't open
   // (the recipient's client shows the toast, then deletes this ping).
@@ -3418,6 +3647,7 @@ function subscribeInbox(){
     snap.docChanges().forEach(ch=>{
       if(ch.type!=="added") return;
       const n = ch.doc.data();
+      if(n.type==="duel_challenge"){ handleDuelInvite(n, ch.doc.ref, inboxFirst); return; }
       if(n.type==="dm_seen"){
         const cur = (state.profile?.dmSeen||{})[n.fromUid]||0;
         if(n.ts>cur) updateDoc(doc(db,"players",state.uid), { [`dmSeen.${n.fromUid}`]: n.ts }).catch(()=>{});
@@ -3449,7 +3679,7 @@ function subscribeInbox(){
     list.innerHTML="";
     snap.forEach(d=>{
       const n = d.data();
-      if(n.type==="new_message" || n.type==="dm_seen") return;
+      if(n.type==="new_message" || n.type==="dm_seen" || n.type==="duel_challenge") return;
       const li = document.createElement("li");
       if(n.type==="friend_request"){
         li.innerHTML = `<span>${escapeHTML(n.fromUsername)} wants to be friends</span>
@@ -4103,7 +4333,9 @@ const INTENTS = {
   attack:{ icon:"⚔️", label:"Attack",     tip:"A normal hit." },
   heavy: { icon:"💥", label:"Heavy Slam", tip:"2.2x damage — Guard or Counter it!" },
   brace: { icon:"🛡️", label:"Brace",      tip:"Takes 60% less damage — set up a Focus, or use Precision." },
-  drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." }
+  drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." },
+  stun:  { icon:"💫", label:"Stunned",    tip:"It skips its turn — hit it hard!" },
+  heal:  { icon:"💚", label:"Regenerate", tip:"It recovers about 5% of its HP." }
 };
 const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:2}, medium:{attack:3,heavy:3,brace:2,drain:2}, hard:{attack:2,heavy:4,brace:2,drain:2} };
 const guardTakenMult = ()=> 1 - (0.6 + Math.random()*0.3);   // Guard blocks a random 60-90% of the hit
@@ -4114,12 +4346,18 @@ function rollIntent(diff, noHeavy=false){
   return bag[Math.floor(Math.random()*bag.length)];
 }
 function nextIntent(b){
+  if(b.m.boss){                                           // bosses: mostly heal / attack / guard, with rare big slams, then a stagger
+    const heavyCd = b.actual === "heavy";
+    if(heavyCd && Math.random()<0.45){ b.shown = b.actual = "stun"; return; }
+    const W = { attack:34, heavy:heavyCd?0:18, brace:18, heal:24, drain:6 }, bag = Object.entries(W).flatMap(([k,n])=>Array(n).fill(k));
+    b.shown = b.actual = bag[Math.floor(Math.random()*bag.length)]; return;
+  }
   const cd = b.actual === "heavy";                       // Heavy Slam has a 1-turn cooldown: never twice in a row
   b.shown = rollIntent(b.m.difficulty, cd);
   b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty, cd) : b.shown;
 }
-function startPve(diff, dg=null){
-  const p = state.profile, m = dg ? dg.m : pickEnemy(diff);
+function startPve(diff, dg=null, mOverride=null){
+  const p = state.profile, m = dg ? dg.m : (mOverride || pickEnemy(diff));
   if(!m){ toast("No monsters here."); return; }
   if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
   state.battle = { mode:"pve", m, dg, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false, eats:0,
@@ -4162,7 +4400,7 @@ function renderPve(){
 async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
   b.busy = true;
-  const p = state.profile, m = b.m, intent = b.actual, rnd = ()=>0.9+Math.random()*0.2;
+  const p = state.profile, m = b.m, rnd = ()=>0.9+Math.random()*0.2; let intent = b.actual;
   // Guard and Counter have a 1-turn cooldown: greyed out the turn right after you use them.
   if((move==="guard"||move==="counter") && b.lastMove===move){ toast(`${move==="guard"?"Guard":"Counter"} is on cooldown.`); b.busy=false; return; }
   // Other moves are never greyed out; ones you can't afford just tell you why (and don't use your turn).
@@ -4189,13 +4427,16 @@ async function pveAct(move){
     let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
     if(brace && s.id!=="precision") d*=0.4;
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
+    if(m.boss && b.ehp>0 && d >= m.hp*0.10 && Math.random()<0.5){ intent = b.actual = b.shown = "stun"; battleLogPush(`${m.name} is staggered by the blow!`); }   // big hits can stun a boss
     battleLogPush(`You use ${s.name}: ${d} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
     if(s.healHp){ const h = Math.min(spellRoll(s.healHp), p.hpMax-b.php); if(h>0){ b.php += h; battleLogPush(`${s.name} heals you for ${h} HP.`); } }
     if(s.healMana){ const g = Math.min(spellRoll(s.healMana), p.manaMax-b.mana); if(g>0){ b.mana += g; battleLogPush(`${s.name} restores ${g} mana.`); } }
   }
   if(b.ehp<=0) return pveEnd(true);
   // enemy turn
-  if(intent==="brace") battleLogPush(`${m.name} braces itself.`);
+  if(intent==="stun") battleLogPush(`${m.name} is stunned and skips its turn!`);
+  else if(intent==="heal"){ const h = Math.round(m.hp*0.05); b.ehp = Math.min(m.hp, b.ehp+h); battleLogPush(`${m.name} regenerates ${h} HP.`); }
+  else if(intent==="brace") battleLogPush(`${m.name} braces itself.`);
   else {
     const mult = intent==="heavy"?2.2 : intent==="drain"?0.6 : 1;
     if(counter && (intent==="attack"||intent==="heavy")){
@@ -4243,10 +4484,138 @@ async function pveEnd(won){
     }
   }
   setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc);
-    if(b.dg){ if(won) b.dg.onWin(); else dgLeave("death", b.mana); } }, 1800);
+    if(b.dg){ if(won) b.dg.onWin(); else if(b.dg.onLose) b.dg.onLose(); else dgLeave("death", b.mana); } }, 1800);
 }
-document.querySelectorAll("[data-pve]").forEach(btn=> btn.addEventListener("click", ()=> startPve(btn.dataset.pve)));
 
+
+
+/* =========================================================================
+   BATTLE TAB — PVE tiers, PVP (+ friend challenges), Boss Fights
+   ========================================================================= */
+const PVE_TIERS = [   // lv = level offset from you, rewards are the exact ranges
+  { id:"novice",   label:"Novice",   emoji:"🌱", cls:"btn-green",  diff:"easy",   lv:[-25,-15], money:[1,4],     xp:[1,3],     mult:0.8 },
+  { id:"easy",     label:"Easy",     emoji:"🍃", cls:"btn-green",  diff:"easy",   lv:[-12,-6],  money:[3,8],     xp:[3,10],    mult:1.0 },
+  { id:"skilled",  label:"Skilled",  emoji:"🗡️", cls:"btn-yellow", diff:"medium", lv:[-5,-2],   money:[5,14],    xp:[6,25],    mult:1.1 },
+  { id:"moderate", label:"Moderate", emoji:"⚔️", cls:"btn-yellow", diff:"medium", lv:[-1,1],    money:[8,25],    xp:[10,50],   mult:1.3 },
+  { id:"hard",     label:"Hard",     emoji:"🔥", cls:"btn-pink",   diff:"hard",   lv:[2,5],     money:[20,50],   xp:[25,80],   mult:1.6 },
+  { id:"deadly",   label:"Deadly",   emoji:"☠️", cls:"btn-pink",   diff:"hard",   lv:[6,10],    money:[35,80],   xp:[50,130],  mult:1.6 },
+  { id:"brutal",   label:"Brutal",   emoji:"💀", cls:"btn-danger", diff:"hard",   lv:[10,16],   money:[60,130],  xp:[90,200],  mult:1.6 },
+  { id:"extreme",  label:"Extreme",  emoji:"👹", cls:"btn-danger", diff:"hard",   lv:[15,25],   money:[100,200], xp:[130,300], mult:1.6 }
+];
+const TIER_BY_ID = Object.fromEntries(PVE_TIERS.map(t=>[t.id,t]));
+const ri = (a,b)=> a + Math.floor(Math.random()*(b-a+1));
+function buildTierMonster(tier, pl){
+  const pool = ENEMY_BANK.filter(e=>e.region===state.profile.region && e.difficulty===tier.diff), slot = pool[Math.floor(Math.random()*pool.length)];
+  const lvl = Math.max(1, pl + ri(tier.lv[0], tier.lv[1]));
+  return { id:slot.id, name:slot.name, region:slot.region, difficulty:tier.diff, level:lvl, element:REGIONS[slot.region].element,
+    hp:Math.round((20+lvl*8)*tier.mult), attack:Math.round((3+lvl*1.5)*tier.mult), xpReward:ri(...tier.xp), moneyReward:ri(...tier.money),
+    dropChance: tier.diff==="easy"?0.25 : tier.diff==="medium"?0.45 : 0.7 };
+}
+const lvTxt = t=> { const f = n=> (n>0?"+":"")+n; return t.lv[0]===t.lv[1] ? f(t.lv[0]) : `${f(t.lv[0])} to ${f(t.lv[1])}`; };
+function renderPveGrid(){
+  document.getElementById("pveGrid").innerHTML = PVE_TIERS.map(t=>
+    `<button class="doodle-btn btn-lg ${t.cls}" data-pvet="${t.id}"><b>${t.emoji} ${t.label}</b><small>${lvTxt(t)} lvl · $${t.money[0]}–${t.money[1]} · ${t.xp[0]}–${t.xp[1]} XP</small></button>`).join("");
+  document.querySelectorAll("[data-pvet]").forEach(b=> b.addEventListener("click", ()=>{
+    const t = TIER_BY_ID[b.dataset.pvet]; startPve(null, null, buildTierMonster(t, state.profile.level));
+  }));
+}
+function setBattleSub(sub){
+  document.querySelectorAll("[data-btsub]").forEach(b=> b.classList.toggle("active", b.dataset.btsub===sub));
+  document.querySelectorAll(".bt-page").forEach(pg=> pg.classList.toggle("active", pg.id==="bt-"+sub));
+  if(sub==="pve") renderPveGrid();
+  if(sub==="pvp") renderDuelPanel();
+  if(sub==="boss") renderBossPanel();
+}
+document.querySelectorAll("[data-btsub]").forEach(b=> b.addEventListener("click", ()=> setBattleSub(b.dataset.btsub)));
+document.querySelector('[data-ctab="duel"]').addEventListener("click", ()=> setBattleSub(document.querySelector("[data-btsub].active")?.dataset.btsub || "pve"));
+
+/* ---- PVP: challenge a friend (15-second invite delivered through their inbox) ---- */
+const DUEL_INVITE_MS = 15000;
+async function sendDuelChallenge(uid, name){
+  if(state.battle){ toast("Finish your current fight first."); return; }
+  const snap = await getDoc(doc(db,"players",uid)).catch(()=>null);
+  if(!snap || !snap.exists()){ toast("Couldn't find that player."); return; }
+  if(snap.data().noDuelRequests){ toast(`🚫 ${name} has duel requests turned off.`); return; }
+  const code = randCode(), p = state.profile;
+  const ok = await withErrorToast(async ()=>{
+    await setDoc(doc(db,"duelRooms",code), { hostUid:state.uid, hostName:p.username, ...duelSide("host", p), ...NO_GUEST, turn:state.uid, status:"waiting", winner:null, createdAt:Date.now(), log:[] });
+    await addDoc(collection(db,"players",uid,"inbox"), { type:"duel_challenge", fromUid:state.uid, fromUsername:p.username, code, ts:Date.now() });
+  });
+  if(ok===null) return;
+  toast(`⚔️ Challenge sent to ${name} — they have 15 seconds.`);
+  document.getElementById("roomStatus") && (document.getElementById("roomStatus").textContent = `Waiting for ${name}…`);
+  watchDuelRoom(code);
+  setTimeout(async ()=>{                                  // nobody took it: tear the room down
+    const s = await getDoc(doc(db,"duelRooms",code)).catch(()=>null);
+    if(s && s.exists() && s.data().status==="waiting"){ roomUnsub?.(); roomUnsub = null; await deleteDoc(doc(db,"duelRooms",code)).catch(()=>{}); toast(`${name} didn't answer your duel challenge.`); }
+  }, DUEL_INVITE_MS + 1500);
+}
+async function renderChallengeList(){
+  const box = document.getElementById("challengeList"); box.style.display = ""; box.innerHTML = "Loading friends…";
+  const uids = state.profile.friends || [];
+  if(!uids.length){ box.innerHTML = `<p class="doodle-sub">You have no friends to challenge yet — add some from the Friends tab!</p>`; return; }
+  const snaps = await Promise.all(uids.map(u=> getDoc(doc(db,"players",u)).catch(()=>null)));
+  box.innerHTML = `<p class="doodle-sub" style="margin-top:0">Pick a friend to challenge:</p>` + snaps.filter(s=>s&&s.exists()).map(s=>{ const d = s.data();
+    return `<button class="doodle-btn btn-sm btn-blue" data-chal="${s.id}" data-n="${escapeHTML(d.username)}">${onlineDot(d)} ${escapeHTML(d.username)} (Lv.${d.level||1})</button>`; }).join(" ");
+  box.querySelectorAll("[data-chal]").forEach(b=> b.addEventListener("click", ()=>{ box.style.display = "none"; sendDuelChallenge(b.dataset.chal, b.dataset.n); }));
+}
+document.getElementById("btnChallengePlayer").addEventListener("click", renderChallengeList);
+document.getElementById("allowDuelReq").addEventListener("change", e=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { noDuelRequests: !e.target.checked })));
+document.getElementById("btnSettings").addEventListener("click", ()=>{ document.getElementById("allowDuelReq").checked = !state.profile?.noDuelRequests; });
+function handleDuelInvite(n, ref, first){
+  const age = Date.now() - (n.ts||0);
+  if(first || age > DUEL_INVITE_MS+5000 || state.profile?.noDuelRequests || state.battle){ deleteDoc(ref).catch(()=>{}); return; }
+  toast(`⚔️ ${n.fromUsername} challenges you to a duel, accept? [click here]`, Math.max(2000, DUEL_INVITE_MS-age), "toast-duel", ()=>{ joinDuelRoom(n.code); });
+  setTimeout(()=> deleteDoc(ref).catch(()=>{}), Math.max(1000, DUEL_INVITE_MS-age));
+}
+
+/* ---- BOSS FIGHTS: a new boss every 12h. Beat a wave of 5 (Easy → Deadly), then the boss. ---- */
+const BOSS_MS = 12*3600*1000, BOSS_WAVES = ["easy","skilled","moderate","hard","deadly"];
+const BOSS_ROSTER = [ ["Ignarok the Cinder Tyrant","🐲","fire"], ["Thalassa the Drowned Queen","🐙","water"], ["Gorgoth Stonemaw","🗿","earth"], ["Zephyrion Stormwing","🦅","air"],
+  ["Nyxaris the Hollow King","👁️","earth"], ["Magmaw the Molten","🌋","fire"], ["Leviathan Prime","🐋","water"], ["Aerion the Skybreaker","🌪️","air"] ];
+const bossCycle = ()=> Math.floor(Date.now()/BOSS_MS);
+const bossIn = ()=> (bossCycle()+1)*BOSS_MS - Date.now();
+const bossDef = c=> { const [name,sprite,element] = BOSS_ROSTER[((c*5+3)%BOSS_ROSTER.length+BOSS_ROSTER.length)%BOSS_ROSTER.length]; return { name, sprite, element }; };
+let bossRun = null;
+function makeBoss(run){
+  const pl = state.profile.level, lvl = run.lvl, d = bossDef(run.cycle);
+  return { id:"boss_"+run.cycle, boss:true, name:d.name, sprite:d.sprite, region:state.profile.region, difficulty:"hard", level:lvl, element:d.element,
+    hp:Math.round((20+lvl*8)*6), attack:Math.round((3+(pl+5)*1.5)*1.6), xpReward:Math.round(150+pl*10), moneyReward:Math.round(300+pl*30), dropChance:0 };
+}
+function bossLoot(){
+  const r = Math.random(), rar = r<0.6 ? "rare" : r<0.9 ? "epic" : "legendary";
+  const pool = CATALOG.gearAll.map(id=>ITEM_BY_ID[id]).filter(i=>i.rarity===rar);
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+function renderBossPanel(){
+  const box = document.getElementById("bossPanel"); if(!box || !state.profile) return;
+  const cyc = bossCycle(), d = bossDef(cyc), cleared = state.profile.bossCleared === cyc, run = bossRun && bossRun.cycle===cyc ? bossRun : null;
+  let body;
+  if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
+  else if(run && run.stage<5){ const t = TIER_BY_ID[BOSS_WAVES[run.stage]];
+    body = `<p>Wave ${run.stage+1}/5 — next up: <b>${t.emoji} ${t.label}</b>. Heal and eat before you go on (your HP carries over).</p><button class="doodle-btn btn-lg btn-green" id="btnBossGo">Fight wave ${run.stage+1}</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`; }
+  else if(run) body = `<p>The wave is cleared — <b>${escapeHTML(d.name)}</b> descends!</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Fight the boss!</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`;
+  else body = `<p>Fight a wave of 5 enemies (Easy → Skilled → Moderate → Hard → Deadly) back to back, then face the boss. Dying ends your run but costs nothing; your HP carries between fights.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Begin the gauntlet</button>`;
+  box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ~30–50 levels above you · enormous HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
+    <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
+  document.getElementById("btnBossGo")?.addEventListener("click", ()=>{ if(!bossRun || bossRun.cycle!==cyc) bossRun = { cycle:cyc, stage:0, lvl: state.profile.level + ri(30,50) }; bossNextStage(); });
+  document.getElementById("btnBossQuit")?.addEventListener("click", ()=>{ bossRun = null; renderBossPanel(); });
+}
+function bossNextStage(){
+  const run = bossRun; if(!run || state.battle) return;
+  const onLose = async ()=>{ bossRun = null; await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,Math.round(state.profile.hpMax*0.25)) }).catch(()=>{}); toast("💀 You fell in the gauntlet… you wake up at 25% HP."); renderBossPanel(); };
+  if(run.stage < 5){
+    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0;
+    startPve(null, { m, onLose, onWin: ()=>{ run.stage++; renderBossPanel(); } });
+  } else {
+    startPve(null, { m:makeBoss(run), onLose, onWin: async ()=>{
+      bossRun = null; await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bossCleared: run.cycle }));
+      const it = bossLoot(); if(it){ await addItemToInv(it.id,1); toast(`🏆 Boss defeated! Loot: ${it.name} (${it.rarity})`, 7000, "toast-money"); }
+      renderBossPanel();
+    } });
+  }
+}
+setInterval(()=>{ if(document.getElementById("bt-boss")?.classList.contains("active") && document.getElementById("compassModal").classList.contains("active")) renderBossPanel(); }, 1000);
 
 /* =========================================================================
    EAT OVERLAY — shared by PvE and PvP battles. Pick any food/consumable
@@ -4332,7 +4701,6 @@ async function eatSelected(){
 }
 
 /* --- duel (challenge a friend) --- */
-document.getElementById("btnFightFriend").addEventListener("click", renderDuelPanel);
 function renderDuelPanel(){
   const panel = document.getElementById("duelPanel");
   panel.innerHTML = `
@@ -4817,6 +5185,8 @@ Object.entries(NOTIF_BOXES).forEach(([k,id])=>{
 });
 document.getElementById("btnSettings").addEventListener("click", ()=>{ syncNotifBoxes(); openModal("settingsModal"); });
 document.getElementById("muteMusic").addEventListener("change", (e)=>{ state.settings.muteMusic=e.target.checked; if(e.target.checked) musicEl().pause(); else musicEl().play().catch(()=>{}); });
+{ const sel = document.getElementById("themeMode"); sel.value = THEMES.includes(state.settings.theme) ? state.settings.theme : "dynamic";
+  sel.addEventListener("change", ()=>{ state.settings.theme = sel.value; localStorage.setItem("dragoneer_theme", sel.value); dayTick(); }); }
 document.getElementById("muteSfx").addEventListener("change", (e)=>{ state.settings.muteSfx=e.target.checked; });
 
 /* =========================================================================
@@ -4925,14 +5295,14 @@ document.getElementById("bossDragon").addEventListener("click", (e)=>{
   playSfx("attack");
   if(!bossTimer) bossTimer = setTimeout(flushBoss, 3000);
 });
-const RX_EMOJI = ["❤️","⚔️","🔥","😭"];
-document.querySelectorAll("[data-rx]").forEach(btn=> btn.addEventListener("click", async ()=>{
-  if(!state.profile || !RX_EMOJI.includes(btn.dataset.rx) || Date.now()-lastRx < 3000) return;
+async function sendReaction(btn){
+  if(!state.profile || !allowedReactions(cosOwned()).includes(btn.dataset.rx) || Date.now()-lastRx < 3000) return;
   lastRx = Date.now();
-  const all = document.querySelectorAll("[data-rx]"); all.forEach(b=>b.disabled=true); setTimeout(()=>all.forEach(b=>b.disabled=false), 3000);
+  const all = document.querySelectorAll(".rx-btn"); all.forEach(b=>b.disabled=true); setTimeout(()=>all.forEach(b=>b.disabled=false), 3000);
   const ref = await withErrorToast(()=> addDoc(collection(db,"reactions"), { uid:state.uid, username:state.profile.username, emoji:btn.dataset.rx, ts:Date.now() }));
   if(ref) setTimeout(()=> deleteDoc(ref).catch(()=>{}), 6000);
-}));
+}
+document.querySelectorAll("[data-rx]").forEach(btn=> btn.addEventListener("click", ()=> sendReaction(btn)));
 function spawnReaction(r){
   const el = document.createElement("div"); el.className = "rx-bubble";
   const e = document.createElement("span"); e.className="rx-emoji"; e.textContent = r.emoji;
@@ -5372,7 +5742,7 @@ document.getElementById("dungeonStage").addEventListener("click", async (e)=>{
 });
 /* candle light follows the pointer (mouse or finger) */
 {
-  const o = document.getElementById("candleOverlay"), mv = (x,y)=>{ o.style.setProperty("--mx", x+"px"); o.style.setProperty("--my", y+"px"); };
+  const o = document.getElementById("candleOverlay"), no = document.getElementById("nightOverlay"), mv = (x,y)=>{ [o,no].forEach(el=>{ el.style.setProperty("--mx", x+"px"); el.style.setProperty("--my", y+"px"); }); };
   window.addEventListener("pointermove", e=> mv(e.clientX, e.clientY), { passive:true });
   window.addEventListener("touchstart", e=>{ const t = e.touches[0]; if(t) mv(t.clientX, t.clientY); }, { passive:true });
   window.addEventListener("touchmove",  e=>{ const t = e.touches[0]; if(t) mv(t.clientX, t.clientY); }, { passive:true });
@@ -5388,5 +5758,15 @@ document.getElementById("dungeonStage").addEventListener("click", async (e)=>{
   document.addEventListener("click", e=>{ if(!e.target.closest("#mobileMenu") && !e.target.closest("#btnMobileMore")) menu.classList.remove("open"); });
 }
 
+const dayTick = startDayNight({ getTheme:()=>state.settings.theme, onNightChange:()=>{ if(wantedTrack) playMusic(wantedTrack); } });   // at 8pm / 8am all soundtracks swap to their night / day versions
+/* title screen: total accounts + players online right now */
+async function refreshTitleCounts(){
+  const box = document.getElementById("titleCounts"); if(!box || !document.getElementById("screen-title").classList.contains("active")) return;
+  try{
+    const [t, o] = await Promise.all([ getAggregateFromServer(collection(db,"players"), { n:count() }), getAggregateFromServer(query(collection(db,"players"), where("onlineAt",">",Date.now()-ONLINE_FRESH_MS)), { n:count() }) ]);
+    document.getElementById("tcTotal").textContent = t.data().n.toLocaleString(); document.getElementById("tcOnline").textContent = o.data().n.toLocaleString(); box.style.visibility = "visible";
+  }catch{ box.style.visibility = "hidden"; }
+}
+setInterval(refreshTitleCounts, 30000); setTimeout(refreshTitleCounts, 1200);
 setupDragonAnim();
 setTimeout(()=>{ showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }, 900);
