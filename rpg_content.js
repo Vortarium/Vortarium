@@ -242,9 +242,9 @@ export const MINE_CASH_SHARE = 0.08;     // share of "good" swings that turn up 
 export const FISH_RULES = {
   // bar = catch-bar height (px), time = ms before the fish slips off, speed = fish swim speed,
   // jitter = chance/tick of picking a new target, dash = chance/tick of a sudden dart, pause = max hover ticks
-  green:  { tier:"easy",   bar:72, time:16000, speed:1.0, jitter:.025, dash:.006, pause:8,  gain:1.5, loss:1.0 },
-  yellow: { tier:"medium", bar:58, time:14000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
-  red:    { tier:"hard",   bar:46, time:12000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 }
+  green:  { tier:"easy",   bar:58, time:10000, speed:1.0, jitter:.025, dash:.006, pause:8,  gain:1.5, loss:1.0 },
+  yellow: { tier:"medium", bar:58, time:10000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
+  red:    { tier:"hard",   bar:58, time:10000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
 export const RARITY_W = {

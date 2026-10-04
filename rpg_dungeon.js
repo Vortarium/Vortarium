@@ -14,18 +14,13 @@ const pickWeighted = (w, rnd)=>{
   for(const k of keys){ t -= w[k]; if(t<=0) return k; }
   return keys[keys.length-1];
 };
-/* Odds of each room type on floor f. Easy rooms fade out, hard rooms grow with depth. */
+/* Wave rooms are rare: only ONE floor in every block of 5 (never the checkpoint) is allowed to roll a wave,
+   and which floor that is changes from block to block (but is the same for everyone).
+   Every other room type is equally likely on every floor — depth only makes enemies and loot better. */
+export const waveFloor = block => 5*block + 1 + (Math.imul(block+1, 2654435761)>>>0)%4;   // one of 5b+1 .. 5b+4
+export const canWave = f => f>0 && f%5!==0 && f===waveFloor(Math.floor(f/5));
 export function eventWeights(f){
-  const t = Math.min(1, f/40);
-  return {
-    nothing: 4 + 22*(1-t),
-    chest:   22 - 6*t,
-    shop:    8,
-    doors:   14 - 4*t,
-    battle:  18 + 14*t,
-    waves:   f<3 ? 0 : 6 + 12*t,
-    boss:    f<4 ? 0 : 2 + 10*t
-  };
+  return { nothing:1, chest:1, shop:1, doors:1, battle:1, waves: canWave(f) ? 1 : 0, boss:1 };
 }
 export const rollEventType = (f, rnd=Math.random)=> pickWeighted(eventWeights(f), rnd);
 

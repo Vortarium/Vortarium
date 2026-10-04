@@ -15,7 +15,7 @@ import {
   increment, serverTimestamp, collectionGroup
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
-import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, describeSkill } from "./rpg_skilltree.js";
+import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
 import { registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG } from "./rpg_content.js";
 
 const firebaseConfig = {
@@ -621,15 +621,16 @@ const state = {
    before archetype/class selection), so every lookup below is guarded. */
 /* Max Rage is set by level: 8 at level 1, +1 every 3 levels (Lv3=9, Lv6=10,
    Lv9=11, Lv12=12 ...). The Fire archetype's Rage boon is kept as a flat +4. */
-function rageMaxFor(level, archetype){
+function rageMaxFor(level, archetype, smarts=0){
   const boon = (archetype && ELEMENTS[archetype]) ? ELEMENTS[archetype].boon : null;
-  return 8 + Math.floor(Math.max(1, level||1)/3) + (boon==="rage" ? 4 : 0);
+  const base = 8 + Math.floor(Math.max(1, level||1)/3) + (boon==="rage" ? 4 : 0);
+  return Math.max(2, base - Math.max(0, smarts||0));      // every point of SMARTS = -1 max Rage (never below 2)
 }
 function defaultPlayerDoc(username, archetype, klass){
   const bonus = (klass && CLASSES[klass]) ? CLASSES[klass].bonus : {};
   const stats = { SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0, ...bonus };
   const boon = (archetype && ELEMENTS[archetype]) ? ELEMENTS[archetype].boon : null;
-  const bars = { hp:100, hpMax:100, mana:20, manaMax:20, rage:rageMaxFor(1,archetype), rageMax:rageMaxFor(1,archetype), xp:0, xpMax:10 };
+  const bars = { hp:100, hpMax:100, mana:20, manaMax:20, rage:rageMaxFor(1,archetype,stats.SMARTS), rageMax:rageMaxFor(1,archetype,stats.SMARTS), xp:0, xpMax:10 };
   if(boon==="hp"){ bars.hp=120; bars.hpMax=120; }
   if(boon==="mana"){ bars.mana=26; bars.manaMax=26; }
   return {
@@ -639,7 +640,7 @@ function defaultPlayerDoc(username, archetype, klass){
     inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
     equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
-    friends: [], sentFriendRequests: [], privateSocial: false, privateProfile: false, createdAt: Date.now(),
+    friends: [], sentFriendRequests: [], privateSocial: false, privateProfile: false, skillTreeVer: SKILL_TREE_VERSION, createdAt: Date.now(),
     lastHpRegenTs: Date.now(), // used to catch up 10hp/hour regen even while the game was closed
     lastForageTs: 0, mineHourStart: 0, minePicksThisHour: 0, fishingXp: 0, miningXp: 0, foragingXp: 0
   };
@@ -677,7 +678,7 @@ function archetypeClassUpdates(archetype, klass){
   const updates = { archetype, klass, stats };
   if(boon==="hp"){ updates.hp=120; updates.hpMax=120; }
   if(boon==="mana"){ updates.mana=26; updates.manaMax=26; }
-  updates.rageMax = rageMaxFor(1, archetype); updates.rage = updates.rageMax;
+  updates.rageMax = rageMaxFor(1, archetype, stats.SMARTS); updates.rage = updates.rageMax;
   return updates;
 }
 
@@ -977,11 +978,11 @@ function enterGame(){
       playMusic(dgActive() ? DG_TRACK : r.track);
     }
     if(firstSnapshot){
-      { const rm = rageMaxFor(state.profile.level, state.profile.archetype);   // bring existing accounts onto the level-based Rage cap
+      { const rm = rageMaxFor(state.profile.level, state.profile.archetype, state.profile.stats?.SMARTS);   // bring existing accounts onto the level-based Rage cap
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startManaRegen(); startOnlineBeat();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startQuestListener(); migrateSkillTree(); startManaRegen(); startOnlineBeat();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -1051,7 +1052,8 @@ async function grantXP(amount){
       updates.hp = updates.hpMax;
       updates.manaMax = p.manaMax + 3*levelsGained;
       updates.mana = updates.manaMax;
-      updates.rageMax = rageMaxFor(level, p.archetype);   // max Rage grows with level
+      updates.rageMax = rageMaxFor(level, p.archetype, stats.SMARTS);   // max Rage grows with level (and shrinks with Smarts)
+      updates.rage = Math.min(p.rage||0, updates.rageMax);
       playSfx("levelup");
       toast(`Level up! You are now level ${level} (+${levelsGained} skill point${levelsGained>1?"s":""}).`);
     }
@@ -1415,7 +1417,12 @@ function gearSyncFields(data, equipped){
   });
   if(!changed) return {};
   const hpMax = Math.max(1, (data.hpMax||1) + (want.hp - (had.hp||0)));
-  return { stats, hpMax, hp: Math.max(1, Math.min(hpMax, data.hp||1)), gearApplied: want };
+  const out = { stats, hpMax, hp: Math.max(1, Math.min(hpMax, data.hp||1)), gearApplied: want };
+  if(data.archetype && want.stats.SMARTS !== (had.stats?.SMARTS||0)){      // Smarts moved, so max Rage moves with it
+    out.rageMax = rageMaxFor(data.level, data.archetype, stats.SMARTS);
+    out.rage = Math.min(data.rage||0, out.rageMax);
+  }
+  return out;
 }
 const EQUIP_SLOTS = ["weapon","helmet","chestplate","leggings","boots","trinket"];
 function renderEquipSlots(){
@@ -1458,6 +1465,8 @@ async function useConsumable(item){
 /* =========================================================================
    LEADERBOARD + PROFILE BOOK
    ========================================================================= */
+/* Following = everyone this player has friended, plus everyone they have a friend request out to. */
+const followingIds = d => [ ...new Set([ ...(d.friends||[]), ...(d.sentFriendRequests||[]) ]) ];
 async function computeFollowerCount(uid, friendCount){
   try{
     const q = query(collection(db,"players"), where("sentFriendRequests","array-contains",uid));
@@ -1514,7 +1523,7 @@ function openProfileBook(uid, data, rank, cat){
     Money: $${fmtMoney(data.money||0)}<br>
     Monsters Killed: ${data.monstersKilled||0}<br>
     PvP Kills: ${data.kills||0} &middot; Deaths: ${data.deaths||0} &middot; Killstreak: ${data.killstreak||0}<br>
-    Friends: <a class="social-link" id="profileFriendsLink">${(data.friends||[]).length}</a> &middot; Followers: <a class="social-link" id="profileFollowersLink"><span id="profileFollowerCount">…</span></a><br>
+    Friends: <a class="social-link" id="profileFriendsLink">${(data.friends||[]).length}</a> &middot; Followers: <a class="social-link" id="profileFollowersLink"><span id="profileFollowerCount">…</span></a> &middot; Following: <a class="social-link" id="profileFollowingLink">${followingIds(data).length}</a><br>
     Playtime: ${fmtPlaytime(data.playtime||0)}<div class="lb-bubbles" id="lbBubbles"></div>`;
   { const rk = document.getElementById("profileRank");
     rk.textContent = (!profileHidden && rank) ? `Ranked #${rank} in ${cat}` : "";
@@ -1537,7 +1546,7 @@ function openProfileBook(uid, data, rank, cat){
     if(el) el.textContent = count;
   });
   { const locked = !!data.privateSocial && uid!==state.uid;   // private lists: shown as locked, and re-checked live when clicked
-    [["friends","profileFriendsLink"],["followers","profileFollowersLink"]].forEach(([kind,id])=>{
+    [["friends","profileFriendsLink"],["followers","profileFollowersLink"],["following","profileFollowingLink"]].forEach(([kind,id])=>{
       const a = document.getElementById(id); if(!a) return;
       a.classList.toggle("locked", locked); if(locked) a.append(" 🔒");
       a.onclick = ()=> openSocialList(uid, kind);
@@ -1682,8 +1691,10 @@ const QUEST_COUNTER = { mine:"miningXp", fish:"fishingXp", forage:"foragingXp", 
                         craft:"craftCount", plant:"plantCount", harvest:"harvestCount", dragon:"dragonClicks" };
 // base target per tier [I, II, III] + random spread
 const QUEST_TARGETS = { forage:[5,12,30], mine:[4,10,25], fish:[3,7,16], slay:[3,6,14], craft:[2,5,10],
-                        plant:[3,6,12], harvest:[3,6,12], dragon:[25,60,150], obtain:[1,2,3] };
-const QUEST_SPREAD  = { forage:4, mine:3, fish:2, slay:2, craft:1, plant:2, harvest:2, dragon:10, obtain:1 };
+                        plant:[3,6,12], harvest:[3,6,12], dragon:[100,500,1000], obtain:[1,2,3] };
+const QUEST_SPREAD  = { forage:4, mine:3, fish:2, slay:2, craft:1, plant:2, harvest:2, dragon:0, obtain:1 };
+// "Click the dragon" asks for a random number of clicks inside a range (rounded to the nearest 10)
+const DRAGON_CLICK_RANGE = { I:[100,1000], II:[500,5000], III:[1000,10000] };
 const QUEST_KINDS = ["forage","mine","fish","slay","craft","farm","dragon","obtain"];
 const QUEST_SOURCES = [
   { verb:"foraging", pool:()=>POOLS.forage.green },
@@ -1691,7 +1702,10 @@ const QUEST_SOURCES = [
   { verb:"mining",   pool:()=>POOLS.mine.green }
 ];
 const questKindOf = q => ({ plant:"farm", harvest:"farm" })[q.type] || q.type;
-const questTarget = (type, tier, rnd)=> QUEST_TARGETS[type][QUEST_TIERS.indexOf(tier)] + Math.floor(rnd()*(QUEST_SPREAD[type]+1));
+const questTarget = (type, tier, rnd)=>{
+  if(type==="dragon"){ const [lo,hi] = DRAGON_CLICK_RANGE[tier]; return Math.round((lo + rnd()*(hi-lo))/10)*10; }
+  return QUEST_TARGETS[type][QUEST_TIERS.indexOf(tier)] + Math.floor(rnd()*(QUEST_SPREAD[type]+1));
+};
 function buildQuest(kind, tier, rnd){
   const mk = (type, label, target, extra={})=> ({ tier, type, target, label, moneyReward:QUEST_REWARD[tier], ...extra });
   const n = t=> questTarget(t, tier, rnd);
@@ -1703,7 +1717,7 @@ function buildQuest(kind, tier, rnd){
     case "craft":  { const k=n("craft");  return mk("craft",  `Craft ${k} item${k===1?"":"s"}`, k); }
     case "farm":   { if(rnd()<.5){ const k=n("plant");   return mk("plant",   `Plant ${k} seeds`, k); }
                      const k=n("harvest"); return mk("harvest", `Harvest ${k} crops`, k); }
-    case "dragon": { const k=n("dragon"); return mk("dragon", `Click the dragon ${k} times`, k); }
+    case "dragon": { const k=n("dragon"); return mk("dragon", `Click the dragon ${k.toLocaleString()} times`, k); }
     default: {   // obtain: a likely item from foraging / fishing / mining, a few times
       const src = QUEST_SOURCES[Math.floor(rnd()*QUEST_SOURCES.length)];
       const top = src.pool().slice(0,6);                // pools are sorted most-likely first
@@ -1748,32 +1762,41 @@ function questBaseline(quest, p){
   return 0;
 }
 const questOfferCache = {};
-async function renderQuests(){
-  const list = document.getElementById("questList");
-  list.innerHTML="<li>Loading…</li>";
-  const p = state.profile;
-  const slots = [];
-  for(let i=0;i<3;i++){
+/* Active quests live in memory, kept fresh by a listener that starts at login, and the offers are computed
+   locally — so the Quests tab draws instantly instead of waiting on three database reads. */
+let questDocs = {}, questUnsub = null;
+const questBusy = {};
+function startQuestListener(){
+  if(questUnsub) questUnsub();
+  questUnsub = onSnapshot(collection(db,"players",state.uid,"quests"), snap=>{
+    const next = {}; snap.forEach(d=>{ next[d.id] = d.data(); });
+    questDocs = next;
+    if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests();
+  }, err=> console.error(err));
+  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; });
+}
+function renderQuests(){
+  const list = document.getElementById("questList"); if(!list) return;
+  const p = state.profile; if(!p) return;
+  const slots = QUEST_TIERS.map((tier,i)=>{
     const slotKey = `slot${i+1}`;
-    const ref = doc(db,"players",state.uid,"quests",slotKey);
-    const snap = await getDoc(ref).catch(()=>null);
-    let quest = snap?.exists() ? snap.data() : null;
-    if(quest && Date.now() >= quest.deadlineAt){ await deleteDoc(ref).catch(()=>{}); quest = null; }   // 24h window is up — free the slot
-    slots.push({ slotKey, ref, quest, tier:QUEST_TIERS[i] });
-  }
+    let quest = questDocs[slotKey] || null;
+    if(quest && Date.now() >= quest.deadlineAt) quest = null;      // 24h window is up — the slot is free (acceptQuest overwrites it)
+    return { slotKey, quest, tier };
+  });
   const taken = new Set(slots.filter(s=>s.quest).map(s=>questKindOf(s.quest)));
   const rows = slots.map(s=>{
-    if(s.quest) return renderActiveSlotRow(s.slotKey, s.quest, p, s.ref);
+    if(s.quest) return renderActiveSlotRow(s.slotKey, s.quest, p);
     const q = offeredQuestFor(s.tier, taken);
     taken.add(questKindOf(q)); questOfferCache[s.slotKey] = q;
     return renderEmptySlotRow(s.slotKey, q);
   });
   list.innerHTML = rows.join("");
-  document.querySelectorAll("[data-quest-accept]").forEach(btn=>{
+  list.querySelectorAll("[data-quest-accept]").forEach(btn=>{
     btn.addEventListener("click", ()=> acceptQuest(btn.dataset.questAccept, btn.dataset.questTier));
   });
-  document.querySelectorAll("[data-quest-claim]").forEach(btn=>{
-    btn.addEventListener("click", ()=> claimQuest(btn.dataset.questClaim));
+  list.querySelectorAll("[data-quest-claim]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ btn.disabled = true; claimQuest(btn.dataset.questClaim); });
   });
 }
 function renderEmptySlotRow(slotKey, q){
@@ -1785,14 +1808,14 @@ function renderEmptySlotRow(slotKey, q){
     <button class="doodle-btn btn-sm btn-green" data-quest-accept="${slotKey}" data-quest-tier="${tier}">Accept (24h)</button>
   </li>`;
 }
-function renderActiveSlotRow(slotKey, quest, p, ref){
+function renderActiveSlotRow(slotKey, quest, p){
   const progress = questProgress(quest, p);
   const done = progress >= quest.target;
   const msLeft = Math.max(0, quest.deadlineAt - Date.now());
   const hrsLeft = Math.floor(msLeft/3600000), minsLeft = Math.floor((msLeft%3600000)/60000);
   return `<li class="quest-row">
-    <div><b>Tier ${quest.tier}:</b> ${quest.label}</div>
-    <div style="font-size:12px">Progress: ${Math.min(progress,quest.target)}/${quest.target} &middot; ${hrsLeft}h ${minsLeft}m left</div>
+    <div><b>Tier ${quest.tier}:</b> ${escapeHTML(quest.label)}</div>
+    <div style="font-size:12px">Progress: ${Math.min(progress,quest.target).toLocaleString()}/${quest.target.toLocaleString()} &middot; ${hrsLeft}h ${minsLeft}m left</div>
     ${done && !quest.rewardClaimed
       ? `<button class="doodle-btn btn-sm btn-green" data-quest-claim="${slotKey}">Claim Reward</button>`
       : quest.rewardClaimed
@@ -1800,36 +1823,53 @@ function renderActiveSlotRow(slotKey, quest, p, ref){
         : `<div style="font-size:12px">In progress…</div>`}
   </li>`;
 }
+/* Accepting is one transaction: it refuses if the slot still holds a live quest, so a stale tab or a double click
+   can never overwrite a finished quest with a fresh one (which would let it be claimed twice). */
 async function acceptQuest(slotKey, tier){
-  const p = state.profile;
-  const cached = questOfferCache[slotKey];
-  const offered = (cached && cached.tier===tier) ? cached : offeredQuestFor(tier);   // exactly what the player was shown
-  const quest = {
-    ...offered,
-    baseline: questBaseline(offered, p),
-    acceptedAt: Date.now(),
-    deadlineAt: Date.now() + QUEST_ACCEPT_WINDOW_MS,
-    rewardClaimed: false
-  };
-  const saved = await withErrorToast(()=> setDoc(doc(db,"players",state.uid,"quests",slotKey), quest));
-  if(saved===null) return;
-  playSfx("send");
-  toast(`Accepted: ${offered.label}`);
-  renderQuests();
+  if(questBusy[slotKey]) return; questBusy[slotKey] = true;
+  try{
+    const cached = questOfferCache[slotKey];
+    const offered = (cached && cached.tier===tier) ? cached : offeredQuestFor(tier);   // exactly what the player was shown
+    const ref = doc(db,"players",state.uid,"quests",slotKey), pref = doc(db,"players",state.uid);
+    let quest = null;
+    const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+      const cur = await tx.get(ref), cd = cur.exists() ? cur.data() : null;
+      if(cd && Date.now() < cd.deadlineAt) throw new Error("That slot already has a quest.");
+      const pd = (await tx.get(pref)).data() || {};
+      quest = { ...offered, baseline: questBaseline(offered, pd), acceptedAt: Date.now(), deadlineAt: Date.now() + QUEST_ACCEPT_WINDOW_MS, rewardClaimed:false };
+      tx.set(ref, quest);
+      return true;
+    }));
+    if(!ok) return;
+    questDocs[slotKey] = quest; renderQuests();
+    playSfx("send"); toast(`Accepted: ${offered.label}`);
+  } finally { questBusy[slotKey] = false; }
 }
+/* Claiming is ONE transaction that re-checks everything against the saved data: the quest exists, isn't expired,
+   hasn't been claimed, and is really finished — then flips rewardClaimed and pays the money together. Rapid clicks,
+   two tabs, or a double tap can only ever pay once. */
 async function claimQuest(slotKey){
-  const ref = doc(db,"players",state.uid,"quests",slotKey);
-  const snap = await getDoc(ref).catch(()=>null);
-  if(!snap?.exists()) return;
-  const quest = snap.data();
-  if(quest.rewardClaimed) return;
-  await withErrorToast(async ()=>{
-    if(quest.moneyReward) await grantMoney(quest.moneyReward);
-    if(quest.itemRewardId) await addItemToInv(quest.itemRewardId, quest.itemRewardQty||1);
-    await updateDoc(ref, { rewardClaimed:true });
-  });
-  toast(`Quest reward claimed!${quest.moneyReward?` +$${fmtMoney(quest.moneyReward)}`:""}`);
-  renderQuests();
+  if(questBusy["claim"+slotKey]) return; questBusy["claim"+slotKey] = true;
+  try{
+    const qref = doc(db,"players",state.uid,"quests",slotKey), pref = doc(db,"players",state.uid);
+    let quest = null;
+    const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+      const qs = await tx.get(qref); if(!qs.exists()) throw new Error("That quest is gone.");
+      const q = qs.data();
+      if(q.rewardClaimed) throw new Error("You already claimed that reward.");
+      if(Date.now() >= q.deadlineAt) throw new Error("That quest has expired.");
+      const pd = (await tx.get(pref)).data() || {};
+      if(questProgress(q, pd) < q.target) throw new Error("That quest isn't finished yet.");
+      tx.update(qref, { rewardClaimed:true, claimedAt:Date.now() });
+      if(q.moneyReward) tx.update(pref, { money: Math.max(0, (pd.money||0) + q.moneyReward) });
+      quest = q; return true;
+    }));
+    if(!ok){ renderQuests(); return; }
+    questDocs[slotKey] = { ...quest, rewardClaimed:true };
+    if(quest.itemRewardId) await addItemToInv(quest.itemRewardId, quest.itemRewardQty||1);   // legacy quests only
+    toast(`Quest reward claimed!${quest.moneyReward?` +$${fmtMoney(quest.moneyReward)}`:""}`);
+    renderQuests();
+  } finally { questBusy["claim"+slotKey] = false; }
 }
 
 
@@ -1838,7 +1878,27 @@ async function claimQuest(slotKey){
    Every level = +1 skill token. Own ONE node per row; buying one locks the
    rest of its row and unlocks the next. Tokens left = level − tokens spent.
    ========================================================================= */
-function ownedSkills(p){ return (p && Array.isArray(p.skillNodes)) ? p.skillNodes.map(id=>SKILL_BY_ID[id]).filter(Boolean) : []; }
+/* An account saved on the old 12-row layout owns nothing on the new one until migrateSkillTree() refunds it
+   (an account with no nodes needs no migration). */
+const skillVerOk = p => (p.skillTreeVer||1) >= SKILL_TREE_VERSION || !(p.skillNodes && p.skillNodes.length);
+function ownedSkills(p){ return (p && Array.isArray(p.skillNodes) && skillVerOk(p)) ? p.skillNodes.map(id=>SKILL_BY_ID[id]).filter(Boolean) : []; }
+/* One-time, at login: the trees were rebuilt (25 rows, new nodes), so take the old purchases' Max HP / Max Mana
+   back off the bars, clear the old nodes and stamp the new version. Every token comes back (tokens = level − spent). */
+async function migrateSkillTree(){
+  const p = state.profile; if(!p || !p.archetype || (p.skillTreeVer||1) >= SKILL_TREE_VERSION) return;
+  let refunded = 0;
+  const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {};
+    if((d.skillTreeVer||1) >= SKILL_TREE_VERSION) return true;
+    const old = d.skillNodes || []; refunded = old.length;
+    let hpDrop = 0, manaDrop = 0;
+    old.forEach(id=>{ const c = LEGACY_SKILL_HM[id]; if(!c) return; if(c[0]==="H") hpDrop += +c.slice(1); else manaDrop += +c.slice(1); });
+    const hpMax = Math.max(1, (d.hpMax||1) - hpDrop), manaMax = Math.max(0, (d.manaMax||0) - manaDrop);
+    tx.update(ref, { skillNodes:[], skillTreeVer:SKILL_TREE_VERSION, hpMax, manaMax, hp:Math.min(d.hp||1, hpMax), mana:Math.min(d.mana||0, manaMax) });
+    return true;
+  }));
+  if(ok && refunded) toast("🌳 The skill trees grew to 25 rows! Your old picks were refunded — spend your ⭐ again.", 9000);
+}
 function skillDamage(p){ return ownedSkills(p).reduce((a,n)=> a + (n.kind==="D" ? n.val : 0), 0); }
 function skillTokensLeft(p){ return Math.max(0, (p.level||1) - ownedSkills(p).reduce((a,n)=>a+n.cost,0)); }
 function skillNodeState(p, n){
@@ -1861,7 +1921,12 @@ function updateSkillUI(){
   if(b){ b.textContent = left; b.style.display = left>0 ? "" : "none"; }
   if(skillOpen()) renderSkillTree();
 }
-function skillShort(n){ return n.kind==="A" ? `New attack · ${n.mana} mana` : describeSkill(n).replace("Max ",""); }
+function skillShort(n){
+  if(n.kind==="A") return `New attack · ${n.mana} mana`;
+  if(n.kind==="L") return `Heal ${n.lo}-${n.hi} HP · ${n.mana} mana · cd ${n.cd}`;
+  if(n.kind==="N") return `Restore ${n.lo}-${n.hi} mana · ${n.mana} mana · cd ${n.cd}`;
+  return describeSkill(n).replace("Max ","");
+}
 function renderSkillTree(){
   const p = state.profile; if(!p || !p.archetype) return;
   const el = p.archetype, tree = SKILL_TREES[el], card = document.getElementById("skillCard");
@@ -1879,7 +1944,7 @@ function renderSkillTree(){
     const box = document.createElement("div"); box.className = "sk-nodes";
     SKILL_NODES[el].filter(n=>n.row===r+1).forEach(n=>{
       const st = skillNodeState(p, n), b = document.createElement("button");
-      b.className = `sk-node ${st}${n.kind==="A"?" attack":""}${skillSel===n.id?" sel":""}`; b.dataset.node = n.id;
+      b.className = `sk-node ${st}${isSpellNode(n)?" attack":""}${skillSel===n.id?" sel":""}`; b.dataset.node = n.id;
       b.innerHTML = `<b>${n.name}</b><span>${skillShort(n)}</span><em>${st==="owned" ? "✔ owned" : n.cost+" ⭐"}</em>`;
       b.addEventListener("click", ()=>{ skillSel = n.id; renderSkillTree(); });
       box.appendChild(b);
@@ -1923,15 +1988,20 @@ async function buySkill(n){
     await runTransaction(db, async tx=>{
       const snap = await tx.get(ref), p = snap.data();                       // re-check against the saved data, not the screen
       if(p.archetype!==n.el) throw new Error("That node is not in your archetype's tree.");
+      if(!skillVerOk(p)) throw new Error("Your skill tree is still being upgraded — try again in a moment.");
       if(skillNodeState(p, n)!=="available") throw new Error("That node is locked.");
       if(skillTokensLeft(p) < n.cost) throw new Error("Not enough skill tokens.");
-      const u = { skillNodes: [ ...(p.skillNodes||[]), n.id ] };
+      const u = { skillNodes: [ ...(p.skillNodes||[]), n.id ], skillTreeVer: SKILL_TREE_VERSION };
+      if(n.kind==="S"){                                                     // +1/+2 SPEED / STRENGTH / CHARM / SMARTS
+        const st = { ...(p.stats||{}) }; st[n.stat] = (st[n.stat]||0) + n.val; u.stats = st;
+        if(n.stat==="SMARTS"){ u.rageMax = rageMaxFor(p.level, p.archetype, st.SMARTS); u.rage = Math.min(p.rage||0, u.rageMax); }
+      }
       if(n.kind==="H"){ u.hpMax = p.hpMax+n.val; u.hp = Math.min(u.hpMax, p.hp+n.val); }
       if(n.kind==="M"){ u.manaMax = p.manaMax+n.val; u.mana = Math.min(u.manaMax, p.mana+n.val); }
       tx.update(ref, u);
     });
     playSfx("buy");
-    toast(n.kind==="A" ? `⚔️ New attack unlocked: ${n.name}!` : `⭐ Unlocked ${n.name} (${describeSkill(n)})`);
+    toast(isSpellNode(n) ? `⚔️ New attack unlocked: ${n.name}!` : `⭐ Unlocked ${n.name} (${describeSkill(n)})`);
   });
 }
 /* Refund everything: clears the nodes, takes the HP/Mana they gave back off the max bars, and (for the Rebirth item) uses one up. */
@@ -1941,8 +2011,13 @@ async function resetSkillTree({ consumeItem=false }={}){
     const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {};
     const nodes = ownedSkills(d); if(!nodes.length) throw new Error("Your skill tree is already empty.");
     const hpDrop = nodes.reduce((a,n)=>a+(n.kind==="H"?n.val:0),0), manaDrop = nodes.reduce((a,n)=>a+(n.kind==="M"?n.val:0),0);
-    const upd = { skillNodes:[], hpMax:Math.max(1,(d.hpMax||1)-hpDrop), manaMax:Math.max(0,(d.manaMax||0)-manaDrop) };
+    const upd = { skillNodes:[], skillTreeVer:SKILL_TREE_VERSION, hpMax:Math.max(1,(d.hpMax||1)-hpDrop), manaMax:Math.max(0,(d.manaMax||0)-manaDrop) };
     upd.hp = Math.min(d.hp||1, upd.hpMax); upd.mana = Math.min(d.mana||0, upd.manaMax);
+    const statNodes = nodes.filter(n=>n.kind==="S");
+    if(statNodes.length){                                                   // take the stat boosts back off too
+      const st = { ...(d.stats||{}) }; statNodes.forEach(n=>{ st[n.stat] = (st[n.stat]||0) - n.val; }); upd.stats = st;
+      if(d.archetype){ upd.rageMax = rageMaxFor(d.level, d.archetype, st.SMARTS); upd.rage = Math.min(d.rage||0, upd.rageMax); }
+    }
     if(consumeItem){
       const inv = (d.inventory||[]).map(e=>({...e})), i = inv.findIndex(e=>e.itemId==="rebirth_scroll");
       if(i<0 || inv[i].qty<1) throw new Error("insufficient-item:rebirth_scroll");
@@ -2480,7 +2555,7 @@ const pluralize = (id, q)=> `${q>1?q+"× ":"a "}${ITEM_BY_ID[id].name}`;
 
 /* --- foraging: free. Each mode has its OWN cooldown (20s / 5 min / 30 min) --- */
 const forageTsKey = m=> m==="green" ? "lastForageTs" : "lastForageTs_"+m;
-const JOB_COOLDOWN_MS = 10*1000;        // mining and fishing: 10s after each use
+const JOB_COOLDOWN_MS = 5*1000;         // mining and fishing: 5s after each use
 const mineReadyIn = ()=> JOB_COOLDOWN_MS - (Date.now() - (state.profile?.lastMineTs||0));
 const fishReadyIn = ()=> JOB_COOLDOWN_MS - (Date.now() - (state.profile?.lastFishTs||0));
 function forageReadyIn(m=jobMode){ return FORAGE_RULES[m].cooldown - (Date.now() - (state.profile[forageTsKey(m)]||0)); }
@@ -2617,7 +2692,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
   document.getElementById("fishOverlay").classList.remove("show");
   document.getElementById("fishProgressFill").style.height = "0%";
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
-  updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 10s rest starts when the fight ends
+  updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the fight ends
   if(success){
     const pick = rollPool(POOLS.fish[m]);
     await addItemToInv(pick, 1);
@@ -3905,11 +3980,17 @@ const ATTACK_SKILLS = [
   { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:12,
     dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 12 mana. Devastating hit." },
 ];
+const spellRoll = ([lo,hi])=> lo + Math.floor(Math.random()*(hi-lo+1));
 function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || treeAttacks(state.profile).find(s=>s.id===id) || ATTACK_SKILLS[0]; }
 /* Skill-tree attacks (Firebolt, Cyclone, ...) join the normal attack list once bought. */
 function treeAttacks(p){
-  return ownedSkills(p).filter(n=>n.kind==="A").map(n=>({ id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, flatDmg:n.val,
-    dmgMult:()=>1, desc:`Skill tree attack. Costs ${n.mana} mana. Deals +${n.val} damage compared with a basic attack.` }));
+  return ownedSkills(p).filter(isSpellNode).map(n=>{
+    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, flatDmg:0, dmgMult:()=>1, cooldown:0 };
+    if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${n.mana} mana. Deals +${n.val} damage compared with a basic attack.`; }
+    else if(n.kind==="L"){ s.healHp = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana. A basic attack that also heals you for ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves.`; }
+    else { s.healMana = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
+    return s;
+  });
 }
 function knownAttacks(p){ return [ ...ATTACK_SKILLS.filter(s=>p.level>=s.unlockLevel), ...treeAttacks(p) ]; }
 // Mana regenerates 1 point/minute while the world is loaded. Persisted to
@@ -4015,7 +4096,8 @@ function renderPve(){
     el.addEventListener("click", fn); box.appendChild(el);
   };
   knownAttacks(p).forEach(s=>{
-    add(s.name, s.desc, ()=>pveAct(s.id), false);
+    const cd = (b.cd||{})[s.id]||0;
+    add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>pveAct(s.id), cd>0);
   });
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
@@ -4033,6 +4115,10 @@ async function pveAct(move){
   const sk = [...ATTACK_SKILLS, ...treeAttacks(p)].find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
+  if(sk && sk.cooldown && ((b.cd||{})[sk.id]||0)>0){ toast(`${sk.name} is on cooldown (${b.cd[sk.id]} more moves).`); b.busy=false; return; }
+  b.cd = b.cd || {};                                                            // every move you make ticks the spell cooldowns down
+  Object.keys(b.cd).forEach(k=>{ if(b.cd[k]>0) b.cd[k]--; });
+  if(sk && sk.cooldown) b.cd[sk.id] = sk.cooldown;
   b.lastMove = move;
   const brace = intent==="brace";
   let guard=false, counter=false;
@@ -4048,6 +4134,8 @@ async function pveAct(move){
     if(brace && s.id!=="precision") d*=0.4;
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
     battleLogPush(`You use ${s.name}: ${d} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
+    if(s.healHp){ const h = Math.min(spellRoll(s.healHp), p.hpMax-b.php); if(h>0){ b.php += h; battleLogPush(`${s.name} heals you for ${h} HP.`); } }
+    if(s.healMana){ const g = Math.min(spellRoll(s.healMana), p.manaMax-b.mana); if(g>0){ b.mana += g; battleLogPush(`${s.name} restores ${g} mana.`); } }
   }
   if(b.ehp<=0) return pveEnd(true);
   // enemy turn
@@ -4061,7 +4149,8 @@ async function pveAct(move){
     } else {
       let d = m.attack*mult*rnd();
       if(guard) d*=0.35; if(counter) d*=1.3;
-      d = Math.max(1, Math.round(d)); b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
+      d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0));       // every point of CHARM = 1 less damage taken (min 1)
+      b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
       battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
       if(intent==="drain"){ b.ehp=Math.min(m.hp,b.ehp+d); battleLogPush(`${m.name} heals ${d}.`); }
     }
@@ -4069,6 +4158,8 @@ async function pveAct(move){
   if(b.ehp<=0) return pveEnd(true);
   if(b.php<=0) return pveEnd(false);
   b.eats = 0;                                        // new turn: eating is available again
+  { const sp = p.stats?.SPEED||0;                    // every point of SPEED = +1 mana regenerated per turn
+    if(sp>0 && b.mana<p.manaMax){ const g = Math.min(sp, p.manaMax-b.mana); b.mana += g; battleLogPush(`Your speed restores ${g} mana.`); } }
   nextIntent(b); b.busy=false; renderPve();
 }
 async function pveFlee(){
@@ -4215,9 +4306,10 @@ let roomUnsub=null, queueInterval=null;
    profile so you enter the duel exactly as you are (10 HP stays 10 HP). */
 function duelSide(role, s){
   return { [role+"Hp"]:s.hp, [role+"HpMax"]:s.hpMax, [role+"Mana"]:s.mana, [role+"ManaMax"]:s.manaMax,
-           [role+"Rage"]:s.rage, [role+"RageMax"]:s.rageMax };
+           [role+"Rage"]:s.rage, [role+"RageMax"]:s.rageMax,
+           [role+"Speed"]:s.stats?.SPEED||0, [role+"Charm"]:s.stats?.CHARM||0 };     // read by the OTHER client to apply mana regen / damage reduction
 }
-const NO_GUEST = { guestUid:null, guestName:null, guestHp:null, guestHpMax:null, guestMana:null, guestManaMax:null, guestRage:null, guestRageMax:null };
+const NO_GUEST = { guestUid:null, guestName:null, guestHp:null, guestHpMax:null, guestMana:null, guestManaMax:null, guestRage:null, guestRageMax:null, guestSpeed:null, guestCharm:null, guestCd:null };
 async function startDuelRoom(){
   const code = randCode();
   const p = state.profile;
@@ -4365,8 +4457,11 @@ function renderDuelBattle(d){
     el.disabled = !isMyTurn || myHp<=0 || oppHp<=0 || !!extraDis;   // greyed when it isn't your turn (or Guard on cooldown)
     el.addEventListener("click", fn || (()=> duelAct(d, id))); actions.appendChild(el);
   };
-  knownAttacks(pp).forEach(s=>
-    addBtn(s.id, s.name, s.desc + (s.id==="power" ? " Gives +2 Rage when your turn returns." : " Gives +1 Rage when your turn returns."), false, "btn-pink"));
+  const myCdNow = d[me+"Cd"]||{};
+  knownAttacks(pp).forEach(s=>{
+    const cd = myCdNow[s.id]||0;
+    addBtn(s.id, cd>0 ? `${s.name} (${cd})` : s.name, s.desc + (s.id==="power" ? " Gives +2 Rage when your turn returns." : " Gives +1 Rage when your turn returns."), cd>0, "btn-pink");
+  });
   addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit. When your turn returns: +2 Rage and +2 Mana. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
   addBtn("skip", "Skip Turn", "Pass your turn. When your turn returns: +5 Mana.", false, "btn-blue");
@@ -4393,6 +4488,8 @@ async function duelActInner(d, move){
   const b = state.battle;
   const p = state.profile, me = b.iAmHost?"host":"guest", op = b.iAmHost?"guest":"host";
   if(move==="guard" && d[me+"Last"]==="guard"){ toast("Guard is on cooldown."); return; }
+  const myCd = { ...(d[me+"Cd"]||{}) };
+  if((myCd[move]||0)>0){ toast(`That spell is on cooldown (${myCd[move]} more moves).`); return; }
   const myName = p.username, opName = d[op+"Name"], opUid = d[op+"Uid"];
   let myHp = d[me+"Hp"], opHp = d[op+"Hp"], mana = d[me+"Mana"] ?? p.mana, rage = d[me+"Rage"] ?? p.rage;
   const rageMax = d[me+"RageMax"] ?? p.rageMax;
@@ -4407,19 +4504,24 @@ async function duelActInner(d, move){
     if(s.manaCost) mana -= s.manaCost;
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= 0.35;
-    dmg = Math.max(1, Math.round(dmg)); opHp -= dmg;
+    dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0));    // their CHARM trims 1 damage per point (min 1)
+    opHp -= dmg;
     lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);
+    if(s.healHp){ const h = Math.min(spellRoll(s.healHp), (d[me+"HpMax"]||myHp)-myHp); if(h>0){ myHp += h; lines.push(`${myName} heals ${h} HP.`); } }
+    if(s.healMana){ const g = Math.min(spellRoll(s.healMana), (d[me+"ManaMax"]||mana)-mana); if(g>0){ mana += g; lines.push(`${myName} restores ${g} mana.`); } }
   }
+  Object.keys(myCd).forEach(k=>{ if(myCd[k]>0) myCd[k]--; });                // every move ticks spell cooldowns down
+  { const used = [...ATTACK_SKILLS, ...treeAttacks(p)].find(x=>x.id===move); if(used && used.cooldown) myCd[move] = used.cooldown; }
   opFx.guard = false;   // their stance lasts one action of mine
   const patch = { [me+"Hp"]:Math.max(0,myHp), [op+"Hp"]:Math.max(0,opHp), [me+"Mana"]:mana, [me+"Rage"]:rage,
-    [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Last"]:move, turn:opUid };
+    [me+"Fx"]:myFx, [op+"Fx"]:opFx, [me+"Last"]:move, [me+"Cd"]:myCd, turn:opUid };
   if(opHp<=0 && myHp>0){ patch.status="finished"; patch.winner=state.uid; }
   else if(myHp<=0){ patch.status="finished"; patch.winner=opUid; }
   else {
     // The turn is going back to the opponent: pay out THEIR income for what they did last turn.
     const opLast = d[op+"Last"];
     const opMana = d[op+"Mana"] ?? 0, opManaMax = d[op+"ManaMax"] ?? opMana, opRage = d[op+"Rage"] ?? 0, opRageMax = d[op+"RageMax"] ?? opRage;
-    const newMana = Math.min(opManaMax, opMana + turnMana(opLast)), newRage = Math.min(opRageMax, opRage + turnRage(opLast));
+    const newMana = Math.min(opManaMax, opMana + turnMana(opLast) + (d[op+"Speed"]||0)), newRage = Math.min(opRageMax, opRage + turnRage(opLast));
     patch[op+"Mana"] = newMana; patch[op+"Rage"] = newRage;
     const gm = newMana-opMana, gr = newRage-opRage;
     if(gm>0 || gr>0) lines.push(`${opName} recovers ${[gm>0?`${gm} mana`:"", gr>0?`${gr} rage`:""].filter(Boolean).join(" and ")}.`);
@@ -4519,7 +4621,7 @@ async function joinQueue(){
         hostUid: state.uid, hostName: state.profile.username,
         ...duelSide("host", state.profile),
         guestUid: opp.uid, guestName: opp.username,
-        ...duelSide("guest", { hp:opp.Hp ?? opp.hpMax ?? 100, hpMax:opp.HpMax ?? opp.hpMax ?? 100, mana:opp.Mana ?? 0, manaMax:opp.ManaMax ?? 0, rage:opp.Rage ?? 0, rageMax:opp.RageMax ?? 0 }),
+        ...duelSide("guest", { hp:opp.Hp ?? opp.hpMax ?? 100, hpMax:opp.HpMax ?? opp.hpMax ?? 100, mana:opp.Mana ?? 0, manaMax:opp.ManaMax ?? 0, rage:opp.Rage ?? 0, rageMax:opp.RageMax ?? 0, stats:{ SPEED:opp.Speed ?? 0, CHARM:opp.Charm ?? 0 } }),
         status:"active", turn: Math.random()<0.5 ? state.uid : opp.uid, winner:null, createdAt: Date.now(), log:[]
       }));
       if(created===null) return;
@@ -4695,6 +4797,7 @@ async function initBoss(){
   bossCleanup();
   const snap = await getDoc(bossRef()).catch(()=>null);
   if(snap && !snap.exists()) await setDoc(bossRef(), { hp:BOSS_MAX, hpMax:BOSS_MAX }).catch(()=>{});
+  loadBossState();
   pollBoss(); bossPoll = setInterval(pollBoss, 5000);   // live bar refreshes every 5s (was a live listener)
   rxUnsub = onSnapshot(query(collection(db,"reactions"), where("ts",">",Date.now()-3000)), snap=>{
     snap.docChanges().forEach(c=>{ if(c.type==="added" && Date.now()-c.doc.data().ts < 4000) spawnReaction(c.doc.data()); });
@@ -4705,20 +4808,67 @@ function bossCleanup(){
   if(rxUnsub){ rxUnsub(); rxUnsub=null; }
   if(bossTimer){ clearTimeout(bossTimer); bossTimer=null; }
 }
+/* Damage bookkeeping (so the dragon's HP always equals max HP minus everybody's real damage):
+     bossPending = dealt on this screen, not yet taken off the dragon
+     bossCredit  = taken off the dragon, not yet credited to MY profile (bossDamage / dragonClicks)
+   Both are mirrored to localStorage, so closing the tab or a failed write never loses damage — it is retried.
+   The rules let one write lower the dragon by at most 100,000, so big totals are sent in chunks (they used to be
+   rejected whole). Only damage that really landed is credited, so players' totals add up to what the dragon lost. */
+const BOSS_WRITE_CAP = 100000;
+let bossFlushing = false, bossCredit = { dmg:0, clicks:0 };
+const bossStoreKey = ()=> "dragoneer_boss_"+(state.uid||"");
+function saveBossState(){
+  try{
+    if(bossPending>0 || bossClicks>0 || bossCredit.dmg>0 || bossCredit.clicks>0) localStorage.setItem(bossStoreKey(), JSON.stringify({ p:bossPending, c:bossClicks, cd:bossCredit.dmg, cc:bossCredit.clicks }));
+    else localStorage.removeItem(bossStoreKey());
+  }catch{}
+}
+function loadBossState(){
+  try{
+    const s = JSON.parse(localStorage.getItem(bossStoreKey())||"null"); if(!s) return;
+    bossPending += s.p||0; bossClicks += s.c||0; bossCredit.dmg += s.cd||0; bossCredit.clicks += s.cc||0;
+    localStorage.removeItem(bossStoreKey()); saveBossState();
+    if(bossPending>0 || bossCredit.dmg>0 || bossCredit.clicks>0) flushBoss();
+  }catch{}
+}
 async function flushBoss(){
   bossTimer = null;
-  const dmg = bossPending, clicks = bossClicks; bossPending = 0; bossClicks = 0; if(!dmg) return;
-  await withErrorToast(()=> runTransaction(db, async tx=>{
-    const s = await tx.get(bossRef()); const hp = s.data().hp; if(hp<=0) return;
-    tx.update(bossRef(), { hp: Math.max(0, hp-dmg) });
-  }));
-  updateDoc(doc(db,"players",state.uid), { bossDamage: increment(dmg), dragonClicks: increment(clicks) }).catch(()=>{});
+  if(bossFlushing) return;
+  bossFlushing = true;
+  let failed = false;
+  try{
+    while(bossPending > 0){
+      const chunk = Math.min(bossPending, BOSS_WRITE_CAP);
+      const clicksNow = bossClicks>0 ? Math.min(bossClicks, Math.max(1, Math.round(bossClicks*chunk/bossPending))) : 0;
+      let applied = 0;
+      try{
+        await runTransaction(db, async tx=>{
+          const s = await tx.get(bossRef()), hp = s.data().hp;
+          applied = Math.min(chunk, Math.max(0, hp));
+          if(applied > 0) tx.update(bossRef(), { hp: hp - applied });
+        });
+      }catch(err){ console.error(err); failed = true; break; }       // nothing was written: keep it pending and retry
+      bossPending -= chunk; bossClicks = Math.max(0, bossClicks - clicksNow);
+      bossCredit.dmg += applied; bossCredit.clicks += clicksNow;
+      saveBossState();
+    }
+    if(bossCredit.dmg>0 || bossCredit.clicks>0){
+      const { dmg, clicks } = bossCredit;
+      try{
+        await updateDoc(doc(db,"players",state.uid), { bossDamage: increment(dmg), dragonClicks: increment(clicks) });
+        bossCredit.dmg -= dmg; bossCredit.clicks -= clicks;
+      }catch(err){ console.error(err); failed = true; }
+    }
+    saveBossState();
+  } finally { bossFlushing = false; }
+  if(failed){ if(!bossTimer) bossTimer = setTimeout(flushBoss, 5000); }   // try again shortly
+  else if(bossPending>0 && !bossTimer) bossTimer = setTimeout(flushBoss, 1000);   // clicks that landed while we were writing
 }
 document.getElementById("bossDragon").addEventListener("click", (e)=>{
   if(!state.profile) return;
   if(bossHp<=0){ toast("The dragon has fallen! It will stir again soon."); return; }
   const dmg = Math.max(1, Math.round(playerAttackPower()));
-  bossPending += dmg; bossClicks++; bossHp -= dmg; renderBoss();
+  bossPending += dmg; bossClicks++; bossHp -= dmg; renderBoss(); saveBossState();
   const svg = e.currentTarget; svg.classList.remove("hit"); void svg.getBoundingClientRect(); svg.classList.add("hit");
   const n = document.createElement("div"); n.className="dmg-pop"; n.textContent = "-"+fmtBig(dmg);
   const r = document.getElementById("gameStage").getBoundingClientRect();
@@ -4742,7 +4892,7 @@ function spawnReaction(r){
   el.append(e,u); el.style.left = (15+Math.random()*70)+"%";
   document.getElementById("reactionLayer").appendChild(el); setTimeout(()=>el.remove(), 2200);
 }
-window.addEventListener("pagehide", ()=>{ if(bossPending) flushBoss(); });
+window.addEventListener("pagehide", ()=>{ saveBossState(); if(bossPending) flushBoss(); });
 document.getElementById("btnLeaveQueue").addEventListener("click", cancelQueue);
 
 
@@ -4890,24 +5040,25 @@ setInterval(()=>{
    ========================================================================= */
 async function openSocialList(uid, kind){
   const title = document.getElementById("socialTitle"), list = document.getElementById("socialList");
-  title.textContent = kind==="friends" ? "Friends" : "Followers";
+  title.textContent = kind==="friends" ? "Friends" : kind==="following" ? "Following" : "Followers";
   list.innerHTML = "<p class='doodle-sub'>Loading…</p>"; openModal("socialModal");
   try{
     const snap = await getDoc(doc(db,"players",uid)), d = snap.exists() ? snap.data() : {};   // fresh read, so a just-flipped privacy setting is respected
-    if(uid!==state.uid && d.privateSocial){ list.innerHTML = "<p class='doodle-sub'>🔒 This player keeps their friends and followers private.</p>"; return; }
-    const ids = (d.friends||[]).slice(0,100), rows = new Map();
+    if(uid!==state.uid && d.privateSocial){ list.innerHTML = "<p class='doodle-sub'>🔒 This player keeps their friends, followers and following private.</p>"; return; }
+    const friendSet = new Set(d.friends||[]);
+    const ids = (kind==="following" ? followingIds(d) : (d.friends||[])).slice(0,100), rows = new Map();
     (await Promise.all(ids.map(id=> getDoc(doc(db,"players",id)).catch(()=>null)))).forEach((s,i)=>{
-      if(s?.exists() && !s.data().banned) rows.set(ids[i], { data:s.data(), friend:true });
+      if(s?.exists() && !s.data().banned) rows.set(ids[i], { data:s.data(), friend:friendSet.has(ids[i]) });
     });
     if(kind==="followers"){   // followers = friends + everyone with a friend request out to this player
       const q = await getDocs(query(collection(db,"players"), where("sentFriendRequests","array-contains",uid)));
       q.docs.forEach(x=>{ if(!x.data().banned && !rows.has(x.id)) rows.set(x.id, { data:x.data(), friend:false }); });
     }
-    list.innerHTML = rows.size ? "" : `<p class='doodle-sub'>${kind==="friends" ? "No friends yet." : "No followers yet."}</p>`;
+    list.innerHTML = rows.size ? "" : `<p class='doodle-sub'>${kind==="friends" ? "No friends yet." : kind==="following" ? "Not following anyone yet." : "No followers yet."}</p>`;
     [...rows.entries()].sort((a,b)=> (b[1].data.level||0)-(a[1].data.level||0)).forEach(([id,r])=>{
       const x = r.data, el = document.createElement("div");
       el.className = "player-card"; el.style.background = ELEMENTS[x.archetype]?.color || "#FFFDF7";
-      el.innerHTML = `<b>${escapeHTML(x.username)}${onlineDot(x, id===state.uid)}</b><span>Lv.${x.level||1} ${ELEMENTS[x.archetype]?.name||""} ${CLASSES[x.klass]?.name||""}</span>${r.friend ? "<em>★ Friend</em>" : "<em>Follower</em>"}`;
+      el.innerHTML = `<b>${escapeHTML(x.username)}${onlineDot(x, id===state.uid)}</b><span>Lv.${x.level||1} ${ELEMENTS[x.archetype]?.name||""} ${CLASSES[x.klass]?.name||""}</span>${r.friend ? "<em>★ Friend</em>" : kind==="following" ? "<em>Requested</em>" : "<em>Follower</em>"}`;
       el.addEventListener("click", ()=>{ closeModal("socialModal"); openProfileBook(id, x, null, null); });
       list.appendChild(el);
     });
