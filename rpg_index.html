@@ -6,7 +6,7 @@
 <title>Dragoneer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Pacifico&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Special+Elite&family=Press+Start+2P&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Pacifico&family=Cinzel:wght@600&family=Orbitron:wght@600&family=Special+Elite&family=Press+Start+2P&family=Bangers&family=Lobster&family=Creepster&family=Righteous&family=Permanent+Marker&family=Audiowide&family=Indie+Flower&family=Black+Ops+One&family=Fredericka+the+Great&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="rpg_style.css">
 </head>
 <body>
@@ -113,6 +113,7 @@
   <header class="game-header doodle-panel">
     <div class="header-left">
       <button class="icon-btn" id="btnSettings" title="Settings">&#9881;</button>
+      <button class="icon-btn" id="btnMyProfile" title="My profile">&#128100;</button>
       <span class="region-pill" id="hudRegion">Enchanted Forest</span>
     </div>
     <div class="header-center" id="accountSummary">
@@ -490,6 +491,15 @@
   </div>
 </div>
 
+<!-- ================= BOSS CHESTS ================= -->
+<div id="chestModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2">&#127942; Boss Defeated!</h2>
+    <div id="chestBody"></div>
+  </div>
+</div>
+
 <!-- ================= PROFILE CUSTOMIZE ================= -->
 <div id="customizeModal" class="modal-backdrop">
   <div class="modal-card doodle-panel">
@@ -529,6 +539,7 @@
         <div class="fighter-sprite">&#128378;</div>
       </div>
     </div>
+    <div class="enemy-intent" id="battleIntent"></div>
     <div class="battle-log" id="battleLog"></div>
     <div class="battle-stamina">
       Stamina: <span id="battleStaminaLabel">4 (1 move)</span>

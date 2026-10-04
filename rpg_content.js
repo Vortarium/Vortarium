@@ -254,8 +254,8 @@ export const FISH_RULES = {
   // Difficulty shift: old medium -> easy, old hard -> medium, and a brand-new chaotic hard.
   // Optional extras (defaults keep the old behaviour): dashMul = dart speed multiplier, dashLen = [min,max] dart ticks,
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
-  green:  { tier:"easy",   bar:72, time:20000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
-  yellow: { tier:"medium", bar:72, time:20000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
+  green:  { tier:"easy",   bar:72, time:10000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
+  yellow: { tier:"medium", bar:72, time:15000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
   red:    { tier:"hard",   bar:72, time:20000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };

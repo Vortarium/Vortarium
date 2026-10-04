@@ -95,7 +95,7 @@ service cloud.firestore {
     // Emoji reactions shown above the dragon; sender may delete their own.
     match /reactions/{rid} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭','🤑','💎','❌','🫩'];
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid && request.resource.data.emoji in ['❤️','⚔️','🔥','😭','🤑','💎','❌','🫩','😂','🤔','😎','🥳','🤯','👏','💀','🙏','😡','🥶','🤡','👀','💩','🫡','😴','🍿'];
       allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
       allow update: if false;
     }

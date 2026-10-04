@@ -38,15 +38,15 @@ function darkness(h=hourNow()){
 }
 const isNight = (h=hourNow())=> h >= NIGHT_START_H || h < NIGHT_END_H;
 
-/* Time-of-day bands used by the Bestiary / fish odds. */
+/* Time-of-day bands (Bestiary): dawn 7-8am, day 8am-7pm, sunset 7-8pm, night 8pm-7am */
 const PERIODS = [
-  { id:"dawn",  label:"Dawn",  icon:"🌅", from:5,  to:8  },
-  { id:"day",   label:"Day",   icon:"☀️", from:8,  to:17 },
-  { id:"dusk",  label:"Dusk",  icon:"🌇", from:17, to:20 },
-  { id:"night", label:"Night", icon:"🌙", from:20, to:29 }     // 20:00 -> 05:00 (wraps)
+  { id:"dawn",   label:"Dawn",   icon:"🌅", from:7,  to:8  },
+  { id:"day",    label:"Day",    icon:"☀️", from:8,  to:19 },
+  { id:"sunset", label:"Sunset", icon:"🌇", from:19, to:20 },
+  { id:"night",  label:"Night",  icon:"🌙", from:20, to:31 }     // 8pm -> 7am (wraps past midnight)
 ];
 function periodOf(h=hourNow()){
-  const x = h < 5 ? h+24 : h;
+  const x = h < 7 ? h+24 : h;
   return PERIODS.find(p=> x>=p.from && x<p.to) || PERIODS[3];
 }
 
@@ -78,47 +78,58 @@ function startDayNight({ getTheme=()=>"dynamic", onNightChange=()=>{} }={}){
 }
 
 /* =========================================================================
-   DRAGONEER — rpg_bestiary.js
-   Time-of-day odds for fish (and forage). Pure functions, no DOM / Firebase.
-   Every catchable thing gets a stable "habit" from its id: a peak hour, how wide
-   its active window is, and how hard rarity makes it swing. The closer the device
-   clock is to the peak, the higher its odds climb; far from it they sink.
+   Bestiary odds. Fish (and forage) have a habit from their id: a peak hour and an active window.
+   FISH: every species has its OWN independent chance per catch (they can add up to far more than 100%),
+   rarer fish are far pickier about the hour:   max %  legendary 1-2 · epic 1-5 · rare 2-10 · uncommon 4-15 · common 5-20
+   and every fish drops to ~0% at its opposite time of day.  FORAGE keeps the older relative-weight system.
    ========================================================================= */
 const hash = s=>{ let h = 2166136261; for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619); } return h>>>0; };
-
-/* rarer things swing harder: [floor at the worst hour, ceiling at the peak] (1 = the old flat odds) */
 const SWING = { common:[0.65,1.7], uncommon:[0.5,2.1], rare:[0.3,2.8], epic:[0.15,3.6], legendary:[0.05,5] };
-const PEAKS = [ {id:"dawn",label:"Dawn",icon:"🌅",hour:6}, {id:"day",label:"Day",icon:"☀️",hour:13}, {id:"dusk",label:"Dusk",icon:"🌇",hour:18.5}, {id:"night",label:"Night",icon:"🌙",hour:1} ];
-
+const PEAKS = [ {id:"dawn",label:"Dawn",icon:"🌅",hour:7.5}, {id:"day",label:"Day",icon:"☀️",hour:13.5}, {id:"sunset",label:"Sunset",icon:"🌇",hour:19.5}, {id:"night",label:"Night",icon:"🌙",hour:1.5} ];
+const FISH_MAX = { legendary:[1,2], epic:[1,5], rare:[2,10], uncommon:[4,15], common:[5,20] };      // % at the very best hour
+const FISH_MIN = { legendary:0, epic:0, rare:0.1, uncommon:0.3, common:0.5 };                       // % at the very worst hour (close to 0)
+const FISH_WIDTH = { legendary:[2.5,3.5], epic:[3.5,4.5], rare:[4.5,6], uncommon:[6,8], common:[8,11] };   // half-width of the active window, in hours
+const rng01 = (h,k)=> ((h>>>k)%1000)/999;
 function habit(id, rarity="common"){
   const h = hash(id), r = SWING[rarity] || SWING.common;
-  if(h%7===0) return { id:"any", label:"All day", icon:"🕐", peak:null, width:24, lo:1, hi:1 };       // ~1 in 7 doesn't care about the time
-  const pk = PEAKS[(h>>>3)%4], width = 4 + (h>>>7)%4;                                                   // active window 8-14h wide
+  if(h%7===0) return { id:"any", label:"All day", icon:"🕐", peak:null, width:24, lo:1, hi:1 };
+  const pk = PEAKS[(h>>>3)%4], width = 4 + (h>>>7)%4;
   return { id:pk.id, label:pk.label, icon:pk.icon, peak:pk.hour, width, lo:r[0], hi:r[1] };
 }
+function fishHabit(id, rarity="common"){
+  const h = hash("fish:"+id), pk = PEAKS[(h>>>3)%4], [wl,wh] = FISH_WIDTH[rarity]||FISH_WIDTH.common, [ml,mh] = FISH_MAX[rarity]||FISH_MAX.common;
+  return { id:pk.id, label:pk.label, icon:pk.icon, peak:pk.hour, width: wl+(wh-wl)*rng01(h,9), max: ml+(mh-ml)*rng01(h,15), min: FISH_MIN[rarity] ?? 0.5 };
+}
 const circ = (a,b)=>{ const d = Math.abs(a-b)%24; return Math.min(d, 24-d); };
-/* 0 (worst hour) .. 1 (peak hour), smooth */
 function activity(hb, hour){
   if(hb.peak==null) return 1;
   const d = circ(hour, hb.peak); if(d >= hb.width) return 0;
   return (1+Math.cos(Math.PI*d/hb.width))/2;
 }
 const weightAt = (hb, hour)=> hb.lo + (hb.hi-hb.lo)*activity(hb, hour);
-
-/* pool: [{id, rarity, p}] -> same shape with p re-weighted for this hour and re-normalised */
-function poolAt(pool, itemById, hour){
+function poolAt(pool, itemById, hour){                        // forage: relative odds re-weighted for this hour
   const w = pool.map(e=> ({ ...e, p: e.p*weightAt(habit(e.id, e.rarity), hour) }));
   const tot = w.reduce((a,e)=>a+e.p,0) || 1;
   return w.map(e=>({ ...e, p:e.p/tot }));
 }
-/* 24 hourly odds (index = hour) for one entry of a pool */
-const oddsByHour = (pool, id, itemById)=> Array.from({length:24}, (_,h)=> (poolAt(pool, itemById, h+0.5).find(e=>e.id===id)||{p:0}).p);
-/* "6am – 7pm"-style text for the hours where activity >= 0.5 */
+/* fish: independent % chance (0-100) for one fish at an hour */
+const fishPct = (fh, hour)=> fh.min + (fh.max-fh.min)*activity(fh, hour);
+const fishPctById = (id, rarity, hour)=> fishPct(fishHabit(id, rarity), hour);
+const oddsByHour = (pool, id)=>{ const e = pool.find(x=>x.id===id); return Array.from({length:24}, (_,h)=> e ? fishPctById(e.id, e.rarity, h+0.5) : 0); };
+/* roll a catch: go through the species in random order, each passing its own independent roll; luck boosts the rarer ones */
+function rollFish(pool, hour, luck=0){
+  const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+  const order = [...pool].sort(()=> Math.random()-0.5);
+  for(const e of order) if(Math.random()*100 < Math.min(100, fishPctById(e.id, e.rarity, hour)*(mult[e.rarity]||1))) return e.id;
+  const w = pool.map(e=> fishPctById(e.id, e.rarity, hour)+0.01), tot = w.reduce((a,b)=>a+b,0);      // nothing passed: weighted fallback so every catch lands something
+  let t = Math.random()*tot; for(let i=0;i<pool.length;i++){ t -= w[i]; if(t<=0) return pool[i].id; }
+  return pool[pool.length-1].id;
+}
 function activeText(hb){
   if(hb.peak==null) return "All day";
   const hrs = []; for(let h=0;h<24;h++) if(activity(hb,h+0.5)>=0.5) hrs.push(h);
   if(!hrs.length) return hb.label;
-  let start = hrs[0]; for(const h of hrs) if(!hrs.includes((h+23)%24)) start = h;      // beginning of the (wrapping) run
+  let start = hrs[0]; for(const h of hrs) if(!hrs.includes((h+23)%24)) start = h;
   const end = (start+hrs.length)%24, f = h=> `${h%12||12}${h%24<12?"am":"pm"}`;
   return `${f(start)} – ${f(end)}`;
 }
@@ -150,6 +161,41 @@ const REACTIONS = [
   { id:"rx_melt",   emoji:"🫩", name:"Tired Face", price:2500 },
   { id:"rx_gem",    emoji:"💎", name:"Gem",        price:5000 }
 ];
+GRADIENTS.push(
+  { id:"grad_peach",    name:"Peach Fizz",      price:1200, rot:true, css:"linear-gradient(135deg,#ffb88c 0%,#ffe3d0 100%)" },
+  { id:"grad_mint",     name:"Mint Frost",      price:1200, rot:true, css:"linear-gradient(135deg,#a8f0d0 0%,#e0fff2 100%)" },
+  { id:"grad_lavender", name:"Lavender Haze",   price:1300, rot:true, css:"linear-gradient(135deg,#c9a9ff 0%,#f0e4ff 100%)" },
+  { id:"grad_cotton",   name:"Cotton Candy",    price:1500, rot:true, css:"linear-gradient(135deg,#ffb3de 0%,#b3e6ff 100%)" },
+  { id:"grad_golden",   name:"Golden Hour",     price:1500, rot:true, css:"linear-gradient(135deg,#ffd36e 0%,#ff9a6e 100%)" },
+  { id:"grad_ocean",    name:"Ocean Breeze",    price:1400, rot:true, css:"linear-gradient(135deg,#6ec6ff 0%,#b8f2e6 100%)" },
+  { id:"grad_moss",     name:"Forest Moss",     price:1300, rot:true, css:"linear-gradient(135deg,#8fd18f 0%,#d8f0a0 100%)" },
+  { id:"grad_blossom",  name:"Cherry Blossom",  price:1600, rot:true, css:"linear-gradient(135deg,#ffc2d4 0%,#fff0f5 100%)" },
+  { id:"grad_lava",     name:"Lava Flow",       price:1800, rot:true, css:"linear-gradient(135deg,#ff7a45 0%,#ffd166 100%)" },
+  { id:"grad_nlights",  name:"Northern Lights", price:2000, rot:true, css:"linear-gradient(135deg,#7dffb5 0%,#7db8ff 50%,#c58bff 100%)" },
+  { id:"grad_bubble",   name:"Bubblegum Pop",   price:1700, rot:true, css:"linear-gradient(135deg,#ff8fcf 0%,#ffe08f 100%)" },
+  { id:"grad_sky",      name:"Clear Sky",       price:1200, rot:true, css:"linear-gradient(135deg,#8ecbff 0%,#e8f6ff 100%)" }
+);
+FONTS.push(
+  { id:"font_bangers",  name:"Bangers",            price:800,  rot:true, family:"'Bangers', cursive" },
+  { id:"font_lobster",  name:"Lobster",            price:800,  rot:true, family:"'Lobster', cursive" },
+  { id:"font_creepster",name:"Creepster",          price:1000, rot:true, family:"'Creepster', cursive" },
+  { id:"font_righteous",name:"Righteous",          price:900,  rot:true, family:"'Righteous', sans-serif" },
+  { id:"font_marker",   name:"Permanent Marker",   price:900,  rot:true, family:"'Permanent Marker', cursive" },
+  { id:"font_audiowide",name:"Audiowide",          price:1000, rot:true, family:"'Audiowide', sans-serif" },
+  { id:"font_indie",    name:"Indie Flower",       price:800,  rot:true, family:"'Indie Flower', cursive" },
+  { id:"font_blackops", name:"Black Ops One",      price:1100, rot:true, family:"'Black Ops One', cursive" },
+  { id:"font_fred",     name:"Fredericka the Great",price:1200, rot:true, family:"'Fredericka the Great', cursive" }
+);
+REACTIONS.push(
+  { id:"rx_laugh", emoji:"😂", name:"Laughing",   price:1000, rot:true }, { id:"rx_think", emoji:"🤔", name:"Thinking",  price:1000, rot:true },
+  { id:"rx_cool",  emoji:"😎", name:"Cool",       price:1500, rot:true }, { id:"rx_party", emoji:"🥳", name:"Party",     price:1800, rot:true },
+  { id:"rx_mind",  emoji:"🤯", name:"Mind Blown", price:2200, rot:true }, { id:"rx_clap",  emoji:"👏", name:"Clap",      price:1200, rot:true },
+  { id:"rx_skull", emoji:"💀", name:"Skull",      price:2500, rot:true }, { id:"rx_pray",  emoji:"🙏", name:"Please",    price:1200, rot:true },
+  { id:"rx_angry", emoji:"😡", name:"Angry",      price:1500, rot:true }, { id:"rx_cold",  emoji:"🥶", name:"Freezing",  price:2000, rot:true },
+  { id:"rx_clown", emoji:"🤡", name:"Clown",      price:3000, rot:true }, { id:"rx_eyes",  emoji:"👀", name:"Eyes",      price:1800, rot:true },
+  { id:"rx_poop",  emoji:"💩", name:"Poop",       price:3500, rot:true }, { id:"rx_salute",emoji:"🫡", name:"Salute",    price:2800, rot:true },
+  { id:"rx_sleep", emoji:"😴", name:"Sleepy",     price:1600, rot:true }, { id:"rx_corn",  emoji:"🍿", name:"Popcorn",   price:4000, rot:true }
+);
 const BASE_REACTIONS = ["❤️","⚔️","🔥","😭"];
 const ALL_COSMETICS = [...GRADIENTS.map(c=>({...c,kind:"gradient"})), ...FONTS.map(c=>({...c,kind:"font"})), ...REACTIONS.map(c=>({...c,kind:"reaction"}))];
 const COSMETIC_BY_ID = Object.fromEntries(ALL_COSMETICS.map(c=>[c.id,c]));
@@ -472,6 +518,23 @@ const JOB_ITEM_BANK = [
   { id:"forage_mushroom", name:"Wild Mushroom", type:"material", rarity:"common", sellPrice:5, desc:"Foraged mushroom.", stats:{} }
 ];
 // Durability tiers: basic 3 -> 10 -> 25 -> 50 -> 100 (best). Tiers 5 and 6 both top out at 100.
+/* Pickaxe / fishing-rod ladder, worst -> best. Roughly $16 per use at every step, so a pricier tool is a fair deal, not a trap. */
+const TOOL_LADDER = [   // [id suffix, name, uses, shop price, rarity, material ingot]
+  ["",   "Wooden",    3,   60,   "common",    "ing_copper"],
+  ["_cu","Copper",    6,   105,  "common",    "ing_copper"],
+  ["2",  "Sturdy",    10,  150,  "uncommon",  "ing_iron"],
+  ["_br","Bronze",    16,  245,  "uncommon",  "ing_bronze"],
+  ["3",  "Iron",      25,  400,  "rare",      "ing_steel"],
+  ["_st","Steel",     36,  580,  "rare",      "ing_steel"],
+  ["4",  "Gold",      50,  820,  "rare",      "ing_gold"],
+  ["_pt","Platinum",  72,  1150, "epic",      "ing_platinum"],
+  ["_ti","Titanium",  95,  1550, "epic",      "ing_titanium"],
+  ["5",  "Emerald",   125, 2050, "epic",      "gem_emerald_cut"],
+  ["_my","Mythril",   165, 2700, "epic",      "ing_mithril"],
+  ["6",  "Diamond",   220, 3600, "legendary", "gem_diamond_cut"],
+  ["_ad","Adamantite",300, 4900, "legendary", "ing_adamantite"]
+];
+const jobToolId = (kind, suffix)=> "tool_"+kind+suffix;
 const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fishingrod2:10, tool_pickaxe3:25, tool_fishingrod3:25 };
 [["tool_pickaxe2","Sturdy Pickaxe",150,"uncommon",10],["tool_pickaxe3","Iron Pickaxe",400,"rare",25],
  ["tool_fishingrod2","Sturdy Fishing Rod",150,"uncommon",10],["tool_fishingrod3","Iron Fishing Rod",400,"rare",25]]
@@ -2298,13 +2361,17 @@ function shopStock(){
 function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
 let shopSel = null, shopTab = "market", shopCat = "gradient", shopPage = 0;
 const SHOP_PER_PAGE = 12;                                           // 3 rows x 4 columns per page
-/* job tools of every rarity: pickaxes + fishing rods tier 1-6, then the 5 tiers of hoes and watering cans */
-const JOB_TOOL_PRICE = { 4:900, 5:2200, 6:5000 };                   // gold / emerald / diamond tiers were craft-only; now buyable too
-const toolTierId = (k,n)=> n===1 ? "tool_"+k : "tool_"+k+n;
-[["pickaxe"],["fishingrod"]].forEach(([k])=> [4,5,6].forEach(n=>{ const it = ITEM_BY_ID[toolTierId(k,n)]; if(it && !(it.price>0)) it.price = JOB_TOOL_PRICE[n] * (k==="fishingrod" ? 0.8 : 1); }));
-const SHOP_TOOL_IDS = [...["pickaxe","fishingrod"].flatMap(k=> [1,2,3,4,5,6].map(n=>toolTierId(k,n))), ...FARM_TOOLS.map(t=>t.id)].filter(id=>ITEM_BY_ID[id]);
+/* Tools tab: the full pickaxe + fishing-rod ladder, then the 5 tiers of hoes and watering cans */
+const SHOP_TOOL_IDS = [...["pickaxe","fishingrod"].flatMap(k=> TOOL_LADDER.map(t=>jobToolId(k,t[0]))), ...FARM_TOOLS.map(t=>t.id)].filter(id=>ITEM_BY_ID[id]);
 const cosOwned = ()=> state.profile?.cosmetics || [];
-const cosCategory = ()=> ALL_COSMETICS.filter(c=>c.kind===shopCat);
+/* Rotating cosmetics: each day (12am ET) a fixed handful of the rotating pool is on sale — 4 gradients, 3 fonts, 2 reactions. Same in every region. */
+const ROT_PER_DAY = { gradient:4, font:3, reaction:2 };
+function rotatingToday(kind){
+  const pool = ALL_COSMETICS.filter(c=>c.kind===kind && c.rot), rnd = seededRand(dayIndex()*104729 + kind.length*7919 + 11); rnd(); rnd();
+  const a = [...pool]; for(let i=a.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; }
+  return a.slice(0, ROT_PER_DAY[kind]||0);
+}
+const cosCategory = ()=>{ const today = new Set(rotatingToday(shopCat).map(c=>c.id)); return ALL_COSMETICS.filter(c=> c.kind===shopCat && (!c.rot || today.has(c.id))); };
 function shopList(){
   if(shopTab==="tools") return SHOP_TOOL_IDS.map(id=>({ id, kind:"item", it:ITEM_BY_ID[id] }));
   if(shopTab==="cosmetics") return cosCategory().map(c=>({ id:c.id, kind:"cosmetic", c }));
@@ -2335,7 +2402,7 @@ function renderShopDetail(){
 function renderShop(){
   const label = document.getElementById("shopRegionLabel");
   label.textContent = shopTab==="market" ? `${REGIONS[state.profile.region].name} Market — ${SHOP_SIZE} items, new stock every day at 12am ET`
-    : shopTab==="tools" ? "Tools — job tools & farming tools, every rarity" : "Cosmetics — permanent, yours forever";
+    : shopTab==="tools" ? "Tools — job tools & farming tools, every rarity" : "Cosmetics — permanent once bought. 🔄 items rotate daily at 12am ET (same in every region)";
   document.querySelectorAll("[data-shoptab]").forEach(b=> b.classList.toggle("active", b.dataset.shoptab===shopTab));
   const catRow = document.getElementById("shopCatRow"); catRow.style.display = shopTab==="cosmetics" ? "" : "none";
   catRow.querySelectorAll("[data-shopcat]").forEach(b=> b.classList.toggle("selected", b.dataset.shopcat===shopCat));
@@ -2348,7 +2415,7 @@ function renderShop(){
     if(e.kind==="cosmetic"){
       const c = e.c, owned = cosOwned().includes(c.id);
       cell.innerHTML = `<b style="${c.kind==="font"?`font-family:${c.family}`:""}">${c.kind==="reaction"?c.emoji+" ":""}${escapeHTML(c.name)}</b>` +
-        (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
+        (c.rot ? `<span>🔄 today only</span>` : "") + (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
     } else cell.innerHTML = `<b>${escapeHTML(e.it.name)}</b><span>${e.it.rarity}</span><span>$${fmtMoney(e.it.price)}</span>`;
     cell.addEventListener("click", ()=> selectShopItem(e.id));
     grid.appendChild(cell);
@@ -2715,7 +2782,7 @@ setInterval(()=>{
    The reward math is unchanged from the old tab-based version.
    ========================================================================= */
 function jobLog(msg){ toast(msg); const l=document.getElementById("jobLog"); if(l) l.textContent=msg; }
-const toolIds = kind=> ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
+const toolIds = kind=> (kind==="pickaxe"||kind==="fishingrod") ? [...TOOL_LADDER].reverse().map(t=>jobToolId(kind,t[0])) : ["tool_"+kind+"6","tool_"+kind+"5","tool_"+kind+"4","tool_"+kind+"3","tool_"+kind+"2","tool_"+kind];  // best tool is used first
 const toolLeft = id => (state.profile.toolUses||{})[id] ?? TOOL_USES[id];
 async function useTool(kind, wear=1, extra={}){
   const label = {pickaxe:"Pickaxe",fishingrod:"Fishing Rod",hoe:"Hoe",can:"Watering Can"}[kind]||kind;
@@ -2865,7 +2932,7 @@ async function doFishAction(){
   toast(`${MODES[m].emoji} Something's biting — a ${rule.tier} fish!`);
   const track = document.querySelector(".fish-track-v");
   const trackH = track.clientHeight || 260, barH = rule.bar, fishH = 26, maxFish = trackH - fishH;
-  let barY = trackH - barH, vel = 0, held = false, progress = 20, tick = 0;
+  let barY = trackH - barH, vel = 0, held = false, progress = 0, tick = 0;
   let fishY = Math.random()*maxFish, target = fishY, pause = 0, dash = 0, dashDir = 1;
   const emojiEl = document.getElementById("fishEmoji"), barEl = document.getElementById("fishBar"), fillEl = document.getElementById("fishProgressFill");
   const timerEl = document.getElementById("fishTimer"), startedAt = Date.now();
@@ -2884,7 +2951,7 @@ async function doFishAction(){
     target = Math.random()<(rule.longMove ?? 0.35) ? Math.random()*maxFish : Math.max(0, Math.min(maxFish, fishY + (Math.random()-0.5)*maxFish*0.6));
     if(Math.random()<0.25) pause = 1 + Math.floor(Math.random()*rule.pause);
   };
-  const GRAVITY = 1.9, LIFT = -3.6, MAXV = 12;      // much snappier bar: rises and falls about twice as fast
+  const GRAVITY = 1.27, LIFT = -3.6, MAXV = 12;      // the bar rises at the normal rate but now sinks 1.5x slower      // much snappier bar: rises and falls about twice as fast
   const game = fishGame = { id:null, cleanup:null };
   game.id = setInterval(()=>{
     tick++;
@@ -2910,7 +2977,7 @@ async function doFishAction(){
     barEl.style.top = barY+"px";
 
     const center = fishY + fishH/2, inBar = center >= barY && center <= barY+barH;
-    progress += inBar ? rule.gain : -rule.loss;
+    progress += inBar ? 100/(3000/50) : 0;           // 3 seconds inside the bar (50ms ticks) lands the fish; time outside costs nothing
     progress = Math.max(0, Math.min(100, progress));
     fillEl.style.height = progress+"%";
     const left = Math.max(0, rule.time - (Date.now()-startedAt));
@@ -2934,7 +3001,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the fight ends
   if(success){
-    const pick = rollPool(poolAt(POOLS.fish[m], null, hourNow()), activeLuck());   // odds shift with the device clock
+    const pick = rollFish(POOLS.fish[m], hourNow(), activeLuck());   // each fish has its own time-of-day chance
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
@@ -2956,7 +3023,7 @@ function renderBestiary(){
   const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
   clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}`;
   grid.innerHTML = list.map(f=>{
-    const hb = habit(f.id, f.item.rarity), act = activity(hb, h), caught = (finds[f.id]||0) > 0;
+    const hb = fishHabit(f.id, f.item.rarity), act = activity(hb, h), caught = (finds[f.id]||0) > 0;
     return `<button class="be-card rarity-${f.item.rarity}${beSel===f.id?" sel":""}${caught?"":" unseen"}" data-fish="${f.id}" title="${caught?escapeHTML(f.item.name):"???"}">
       <span class="be-emo">${caught?"🐟":"❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
       <span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span></button>`;
@@ -2964,17 +3031,17 @@ function renderBestiary(){
   grid.querySelectorAll("[data-fish]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.fish; renderBestiary(); }));
   const f = list.find(x=>x.id===beSel);
   if(!f){ det.innerHTML = `<p class="doodle-sub">Tap a fish to see when it bites.</p>`; return; }
-  const it = f.item, hb = habit(f.id, it.rarity), pool = POOLS.fish[f.mode], caught = (finds[f.id]||0) > 0;
-  const odds = oddsByHour(pool, f.id, null), now = poolAt(pool, null, h).find(e=>e.id===f.id)?.p || 0, max = Math.max(...odds) || 1;
-  const bars = odds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(4, Math.round(p/max*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${pctText(p)}"></span>`).join("");
+  const it = f.item, hb = fishHabit(f.id, it.rarity), pool = POOLS.fish[f.mode], caught = (finds[f.id]||0) > 0;
+  const odds = oddsByHour(pool, f.id), now = fishPct(hb, h)/100, max = hb.max || 1;
+  const bars = odds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(3, Math.round(p/max*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${p.toFixed(1)}%"></span>`).join("");
   det.innerHTML = `<h3 class="doodle-h3">${caught?escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
     <p class="doodle-sub">${caught?escapeHTML(it.desc||""):"Catch one to reveal its entry."}</p>
     <div class="be-facts">
       <div><b>Where</b> ${MODES[f.mode].emoji} ${MODES[f.mode].label} fishing</div>
-      <div><b>Best time</b> ${hb.icon} ${hb.label} (${activeText(hb)})</div>
+      <div><b>Best time</b> ${hb.icon} ${hb.label} (${activeText(hb)}) · peak ${hb.max.toFixed(1)}%</div>
       <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
       <div><b>Caught</b> ${finds[f.id]||0}</div>
-      <div><b>Odds right now</b> ${pctText(now)} <span class="be-bar wide"><i style="width:${Math.round(activity(hb,h)*100)}%"></i></span></div>
+      <div><b>Odds right now</b> ${(now*100).toFixed(2)}% <span class="be-bar wide"><i style="width:${Math.round(activity(hb,h)*100)}%"></i></span></div>
     </div>
     <div class="be-chart">${bars}</div>
     <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
@@ -4055,11 +4122,19 @@ const RECIPES = [];
   [["tool_pickaxe","ing_copper"],["tool_pickaxe2","ing_iron"],["tool_pickaxe3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,2],["forage_mushroom",1]]));
   [["tool_fishingrod","ing_copper"],["tool_fishingrod2","ing_iron"],["tool_fishingrod3","ing_steel"]].forEach(([o,m])=> add(o,"","tool","common",{},[[m,1],["forage_herb",2]]));
   // gem/mineral tools: far more durable
-  [[4,"Gold","ing_gold","rare",50],[5,"Emerald","gem_emerald_cut","epic",100],[6,"Diamond","gem_diamond_cut","legendary",100]].forEach(([n,nm,mat,rar,u])=>{
+  [[4,"Gold","ing_gold","rare",50],[5,"Emerald","gem_emerald_cut","epic",125],[6,"Diamond","gem_diamond_cut","legendary",220]].forEach(([n,nm,mat,rar,u])=>{
     TOOL_USES["tool_pickaxe"+n] = u; TOOL_USES["tool_fishingrod"+n] = u;
     add("tool_pickaxe"+n, `${nm} Pickaxe`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,2],["ing_steel",1]]);
     add("tool_fishingrod"+n, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, [[mat,1],["ing_steel",1],["forage_herb",2]]);
   });
+  // in-between tiers and everything past diamond (the ladder above prices each at ~$16 per use)
+  TOOL_LADDER.filter(t=> ["_cu","_br","_st","_pt","_ti","_my","_ad"].includes(t[0])).forEach(([sf,nm,u,price,rar,mat])=>{
+    const light = sf==="_cu" || sf==="_br";
+    TOOL_USES["tool_pickaxe"+sf] = u; TOOL_USES["tool_fishingrod"+sf] = u;
+    add("tool_pickaxe"+sf, `${nm} Pickaxe`, "tool", rar, { desc:`Breaks after ${u} uses.` }, light ? [[mat,2],["forage_mushroom",1]] : sf==="_st" ? [[mat,3]] : [[mat,2],["ing_steel",1]]);
+    add("tool_fishingrod"+sf, `${nm} Fishing Rod`, "tool", rar, { desc:`Breaks after ${u} uses.` }, light ? [[mat,1],["forage_herb",2]] : sf==="_st" ? [[mat,2],["forage_herb",2]] : [[mat,1],["ing_steel",1],["forage_herb",2]]);
+  });
+  TOOL_LADDER.forEach(([sf,nm,u,price,rar])=> ["pickaxe","fishingrod"].forEach(k=>{ const it = I[jobToolId(k,sf)]; if(it){ it.price = price; it.sellPrice = Math.max(1, Math.round(price*0.3)); TOOL_USES[it.id] = u; } }));
   // crop preserves: 3 crops -> 1 jar worth far more than the crops
   CROP_ITEMS.forEach(c=> add("pres_"+c.id, `${c.name} Preserve`, "material", c.rarity, { sellPrice: Math.round(c.sellPrice*3*1.9), desc:"Jarred and sealed. Sells for a ton." }, [[c.id,3]]));
   // gem elixirs
@@ -4330,42 +4405,44 @@ async function applyDeathPenalty(extraFields={}){
    ========================================================================= */
 const MAX_EATS_PER_TURN = 3;   // food items you may eat in one turn, PvE and duels alike
 const INTENTS = {
-  attack:{ icon:"⚔️", label:"Attack",     tip:"A normal hit." },
-  heavy: { icon:"💥", label:"Heavy Slam", tip:"2.2x damage — Guard or Counter it!" },
-  brace: { icon:"🛡️", label:"Brace",      tip:"Takes 60% less damage — set up a Focus, or use Precision." },
-  drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." },
-  stun:  { icon:"💫", label:"Stunned",    tip:"It skips its turn — hit it hard!" },
-  heal:  { icon:"💚", label:"Regenerate", tip:"It recovers about 5% of its HP." }
+  wait:  { icon:"👀", label:"Sizing you up", tip:"It hesitates — enemies can never attack on their first turn." },
+  weak:  { icon:"🗡️", label:"Weak Attack",   tip:"A light jab, about 0.6x damage.", mult:0.6, atk:true },
+  normal:{ icon:"⚔️", label:"Attack",        tip:"A normal hit.", mult:1, atk:true },
+  strong:{ icon:"💥", label:"Strong Attack", tip:"A powerful blow, about 1.9x damage — Guard or Counter it!", mult:1.9, atk:true },
+  heal:  { icon:"💚", label:"Recover",       tip:"It heals about 8% of its max HP and does not attack." },
+  guard: { icon:"🛡️", label:"Guard",         tip:"Takes 60% less damage this turn — set up a Focus, or use Precision." },
+  mana:  { icon:"🔮", label:"Mana Drain",    tip:"Drains about 25% of your mana and heals it. Counter whiffs on this." },
+  stun:  { icon:"💫", label:"Stunned",       tip:"It skips its turn — hit it hard!" }
 };
-const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:2}, medium:{attack:3,heavy:3,brace:2,drain:2}, hard:{attack:2,heavy:4,brace:2,drain:2} };
+/* every move has a 1-turn cooldown: an enemy never picks the same move twice in a row */
+const INTENT_WEIGHTS = { easy:{weak:4,normal:4,strong:1,heal:2,guard:2,mana:1}, medium:{weak:2,normal:4,strong:3,heal:2,guard:2,mana:2}, hard:{weak:1,normal:3,strong:4,heal:2,guard:2,mana:2} };
+const BOSS_WEIGHTS = { weak:8, normal:26, strong:18, heal:22, guard:16, mana:10 };
 const guardTakenMult = ()=> 1 - (0.6 + Math.random()*0.3);   // Guard blocks a random 60-90% of the hit
-const FEINT_CHANCE = { easy:0.12, medium:0.2, hard:0.28 };
 const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
-function rollIntent(diff, noHeavy=false){
-  const bag = Object.entries(INTENT_WEIGHTS[diff]).filter(([k])=>!(noHeavy && k==="heavy")).flatMap(([k,n])=>Array(n).fill(k));
-  return bag[Math.floor(Math.random()*bag.length)];
+function rollIntent(w, prev, b){
+  const bag = Object.entries(w).filter(([k])=> k!==prev && !(k==="heal" && b.ehp > b.m.hp*0.85) && !(k==="mana" && b.mana < 3)).flatMap(([k,n])=>Array(n).fill(k));
+  return bag[Math.floor(Math.random()*bag.length)] || "normal";
 }
+/* what the enemy WILL do next turn is shown to you up front (no feints) so you can plan around it */
 function nextIntent(b){
-  if(b.m.boss){                                           // bosses: mostly heal / attack / guard, with rare big slams, then a stagger
-    const heavyCd = b.actual === "heavy";
-    if(heavyCd && Math.random()<0.45){ b.shown = b.actual = "stun"; return; }
-    const W = { attack:34, heavy:heavyCd?0:18, brace:18, heal:24, drain:6 }, bag = Object.entries(W).flatMap(([k,n])=>Array(n).fill(k));
-    b.shown = b.actual = bag[Math.floor(Math.random()*bag.length)]; return;
+  const prev = b.actual;
+  if(b.m.boss){
+    if(prev==="strong" && Math.random()<0.45){ b.shown = b.actual = "stun"; return; }      // a boss that slams is left open
+    b.shown = b.actual = rollIntent(BOSS_WEIGHTS, prev, b); return;
   }
-  const cd = b.actual === "heavy";                       // Heavy Slam has a 1-turn cooldown: never twice in a row
-  b.shown = rollIntent(b.m.difficulty, cd);
-  b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty, cd) : b.shown;
+  b.shown = b.actual = rollIntent(INTENT_WEIGHTS[b.m.difficulty] || INTENT_WEIGHTS.medium, prev, b);
 }
 function startPve(diff, dg=null, mOverride=null){
   const p = state.profile, m = dg ? dg.m : (mOverride || pickEnemy(diff));
   if(!m){ toast("No monsters here."); return; }
+  if(!dg && m.tierId && pveCdLeft(m.tierId)>0){ toast("That tier is on cooldown."); return; }
   if(state.battle && state.battle.mode==="duel"){ toast("Finish your duel first."); return; }
   state.battle = { mode:"pve", m, dg, ehp:m.hp, php:p.hp, mana:p.mana, rage:p.rage, guard:false, focus:false, counter:false, log:[], over:false, busy:false, eats:0,
     reopenCompass: document.getElementById("compassModal").classList.contains("active") };   // put the compass back when the fight is over
   document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
   openModal("battleModal"); setPvpRxVisible(false);
-  battleLogPush(`A wild ${m.name} (Lv.${m.level}) appears!`);
-  nextIntent(state.battle);
+  battleLogPush(`A wild ${m.name} (Lv.${m.level}) appears! You move first.`);
+  state.battle.shown = state.battle.actual = "wait";          // no enemy attacks on its first turn
   renderPve();
 }
 function renderPve(){
@@ -4379,6 +4456,7 @@ function renderPve(){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.php)}/${p.hpMax}`;
   document.getElementById("battleStaminaLabel").textContent = `Mana ${b.mana}/${p.manaMax}${b.focus?" · 🎯 Focused (next hit x2)":""}`;
   document.getElementById("battleRageLabel").textContent = `${b.rage}/${p.rageMax}`;
+  { const ib = document.getElementById("battleIntent"); if(ib){ const it = INTENTS[b.shown] || INTENTS.normal; ib.innerHTML = b.over ? "" : `${it.icon} <b>${it.label}</b> — ${escapeHTML(it.tip)}`; } }
   if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
   const box = document.getElementById("battleActions"); box.innerHTML = "";
   if(b.over) return;
@@ -4395,7 +4473,7 @@ function renderPve(){
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
   const eatsLeftNow = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
   add(eatsLeftNow>0 ? "🍖 Eat" : "🍖 Eat (max 3)", `Open your food bag and pick what to eat. Free action — does NOT end your turn. Max ${MAX_EATS_PER_TURN} items per turn.`, openEatModal, eatsLeftNow<=0, "btn-green");
-  if(!b.dg) add("Flee", "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");   // no fleeing from the dungeon
+  if(!b.dg || b.dg.gauntlet) add("Flee", b.dg ? "Abandon the boss gauntlet — you start again from the first enemy." : "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");   // no fleeing from the dungeon
 }
 async function pveAct(move){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over || b.busy) return;
@@ -4413,7 +4491,7 @@ async function pveAct(move){
   Object.keys(b.cd).forEach(k=>{ if(b.cd[k]>0) b.cd[k]--; });
   if(sk && sk.cooldown) b.cd[sk.id] = sk.cooldown;
   b.lastMove = move;
-  const brace = intent==="brace";
+  const brace = intent==="guard";
   let guard=false, counter=false;
   if(move==="guard"){ guard=true; b.rage=Math.min(p.rageMax,b.rage+2); battleLogPush("You raise your guard."); }
   else if(move==="counter"){ counter=true; battleLogPush("You ready a counter…"); }
@@ -4434,12 +4512,18 @@ async function pveAct(move){
   }
   if(b.ehp<=0) return pveEnd(true);
   // enemy turn
-  if(intent==="stun") battleLogPush(`${m.name} is stunned and skips its turn!`);
-  else if(intent==="heal"){ const h = Math.round(m.hp*0.05); b.ehp = Math.min(m.hp, b.ehp+h); battleLogPush(`${m.name} regenerates ${h} HP.`); }
-  else if(intent==="brace") battleLogPush(`${m.name} braces itself.`);
+  if(intent==="wait") battleLogPush(`${m.name} sizes you up and holds back.`);
+  else if(intent==="stun") battleLogPush(`${m.name} is stunned and skips its turn!`);
+  else if(intent==="heal"){ const h = Math.round(m.hp*(m.boss?0.05:0.08)); b.ehp = Math.min(m.hp, b.ehp+h); battleLogPush(`${m.name} recovers ${h} HP.`); }
+  else if(intent==="guard") battleLogPush(`${m.name} braces itself.`);
+  else if(intent==="mana"){
+    if(counter) battleLogPush(`${m.name} tries to drain your mana, but your counter whiffs past it.`);
+    const take = Math.min(b.mana, Math.max(1, Math.round(b.mana*0.25))); b.mana -= take; const h = take*2; b.ehp = Math.min(m.hp, b.ehp+h);
+    battleLogPush(`${m.name} drains ${take} of your mana and heals ${h}.`);
+  }
   else {
-    const mult = intent==="heavy"?2.2 : intent==="drain"?0.6 : 1;
-    if(counter && (intent==="attack"||intent==="heavy")){
+    const mult = INTENTS[intent]?.mult || 1;
+    if(counter && INTENTS[intent]?.atk){
       const back = Math.max(1,Math.round(playerAttackPower()*1.5*rnd())); b.ehp-=back;
       battleLogPush(`Countered! ${m.name}'s ${INTENTS[intent].label} is negated and you deal ${back}.`);
     } else {
@@ -4448,7 +4532,6 @@ async function pveAct(move){
       d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0));       // every point of CHARM = 1 less damage taken (min 1)
       b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
       battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
-      if(intent==="drain"){ b.ehp=Math.min(m.hp,b.ehp+d); battleLogPush(`${m.name} heals ${d}.`); }
     }
   }
   if(b.ehp<=0) return pveEnd(true);
@@ -4462,11 +4545,13 @@ async function pveFlee(){
   const b = state.battle; if(!b || b.mode!=="pve" || b.over) return;
   b.over = true;
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,b.php), mana:b.mana, rage:b.rage }));
-  toast("You fled safely — nothing lost.");
+  toast(b.dg?.gauntlet ? "You abandoned the gauntlet — it resets to the first enemy." : "You fled safely — nothing lost.");
   closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle = null; reopenCompassIf(rc);
+  if(b.dg?.onFlee) b.dg.onFlee(); else if(!b.dg && b.m.tierId) setPveCd(b.m.tierId);
 }
 async function pveEnd(won){
   const b = state.battle, m = b.m; b.over = true; renderPve();
+  if(!b.dg && m.tierId) setPveCd(m.tierId);
   if(won){
     battleLogPush(`Victory! +${m.xpReward} XP, +$${fmtMoney(m.moneyReward)}.`);
     await grantMoney(m.moneyReward); await grantXP(m.xpReward);
@@ -4483,7 +4568,7 @@ async function pveEnd(won){
       toast(`Defeated. Lost $${fmtMoney(r.moneyLoss)}${r.lostItemName?` and your ${r.lostItemName}`:""}.`);
     }
   }
-  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc);
+  setTimeout(()=>{ closeModal("eatModal"); closeModal("battleModal"); { const ib = document.getElementById("battleIntent"); if(ib) ib.innerHTML = ""; } const rc = b.reopenCompass; state.battle=null; reopenCompassIf(rc);
     if(b.dg){ if(won) b.dg.onWin(); else if(b.dg.onLose) b.dg.onLose(); else dgLeave("death", b.mana); } }, 1800);
 }
 
@@ -4508,16 +4593,29 @@ function buildTierMonster(tier, pl){
   const pool = ENEMY_BANK.filter(e=>e.region===state.profile.region && e.difficulty===tier.diff), slot = pool[Math.floor(Math.random()*pool.length)];
   const lvl = Math.max(1, pl + ri(tier.lv[0], tier.lv[1]));
   return { id:slot.id, name:slot.name, region:slot.region, difficulty:tier.diff, level:lvl, element:REGIONS[slot.region].element,
-    hp:Math.round((20+lvl*8)*tier.mult), attack:Math.round((3+lvl*1.5)*tier.mult), xpReward:ri(...tier.xp), moneyReward:ri(...tier.money),
+    hp:Math.round((20+lvl*8)*tier.mult), attack:Math.round((3+lvl*1.5)*tier.mult), xpReward:ri(...tier.xp), moneyReward:ri(...tier.money), tierId:tier.id,
     dropChance: tier.diff==="easy"?0.25 : tier.diff==="medium"?0.45 : 0.7 };
 }
 const lvTxt = t=> { const f = n=> (n>0?"+":"")+n; return t.lv[0]===t.lv[1] ? f(t.lv[0]) : `${f(t.lv[0])} to ${f(t.lv[1])}`; };
+const PVE_CD_MS = [10,30,60,120,180,300,600,1200].map(x=>x*1000);          // tier 1..8 cooldown after a fight: 10s 30s 1m 2m 3m 5m 10m 20m
+const pveCdLeft = id=> Math.max(0, ((state.profile?.pveCd||{})[id]||0) - Date.now());
+function setPveCd(id){
+  const i = PVE_TIERS.findIndex(t=>t.id===id); if(i<0 || !state.profile) return;
+  const until = Date.now() + PVE_CD_MS[i];
+  state.profile.pveCd = { ...(state.profile.pveCd||{}), [id]: until };
+  updateDoc(doc(db,"players",state.uid), { [`pveCd.${id}`]: until }).catch(()=>{});
+}
+function updatePveGrid(){
+  document.querySelectorAll("[data-pvet]").forEach(b=>{ const left = pveCdLeft(b.dataset.pvet), sp = b.querySelector(".pve-cd");
+    b.disabled = left>0; if(sp) sp.textContent = left>0 ? `⏳ ready in ${fmtDur(left)}` : ""; });
+}
 function renderPveGrid(){
   document.getElementById("pveGrid").innerHTML = PVE_TIERS.map(t=>
-    `<button class="doodle-btn btn-lg ${t.cls}" data-pvet="${t.id}"><b>${t.emoji} ${t.label}</b><small>${lvTxt(t)} lvl · $${t.money[0]}–${t.money[1]} · ${t.xp[0]}–${t.xp[1]} XP</small></button>`).join("");
+    `<button class="doodle-btn btn-lg ${t.cls}" data-pvet="${t.id}"><b>${t.emoji} ${t.label}</b><small>${lvTxt(t)} lvl · $${t.money[0]}–${t.money[1]} · ${t.xp[0]}–${t.xp[1]} XP</small><small class="pve-cd"></small></button>`).join("");
   document.querySelectorAll("[data-pvet]").forEach(b=> b.addEventListener("click", ()=>{
-    const t = TIER_BY_ID[b.dataset.pvet]; startPve(null, null, buildTierMonster(t, state.profile.level));
+    const t = TIER_BY_ID[b.dataset.pvet]; if(pveCdLeft(t.id)>0) return; startPve(null, null, buildTierMonster(t, state.profile.level));
   }));
+  updatePveGrid();
 }
 function setBattleSub(sub){
   document.querySelectorAll("[data-btsub]").forEach(b=> b.classList.toggle("active", b.dataset.btsub===sub));
@@ -4561,6 +4659,7 @@ async function renderChallengeList(){
 }
 document.getElementById("btnChallengePlayer").addEventListener("click", renderChallengeList);
 document.getElementById("allowDuelReq").addEventListener("change", e=> withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { noDuelRequests: !e.target.checked })));
+document.getElementById("btnMyProfile").addEventListener("click", ()=>{ if(state.profile) openProfileByUid(state.uid); });
 document.getElementById("btnSettings").addEventListener("click", ()=>{ document.getElementById("allowDuelReq").checked = !state.profile?.noDuelRequests; });
 function handleDuelInvite(n, ref, first){
   const age = Date.now() - (n.ts||0);
@@ -4582,10 +4681,30 @@ function makeBoss(run){
   return { id:"boss_"+run.cycle, boss:true, name:d.name, sprite:d.sprite, region:state.profile.region, difficulty:"hard", level:lvl, element:d.element,
     hp:Math.round((20+lvl*8)*6), attack:Math.round((3+(pl+5)*1.5)*1.6), xpReward:Math.round(150+pl*10), moneyReward:Math.round(300+pl*30), dropChance:0 };
 }
-function bossLoot(){
-  const r = Math.random(), rar = r<0.6 ? "rare" : r<0.9 ? "epic" : "legendary";
-  const pool = CATALOG.gearAll.map(id=>ITEM_BY_ID[id]).filter(i=>i.rarity===rar);
-  return pool[Math.floor(Math.random()*pool.length)];
+/* ---- boss chests: 3 chests, each worth roughly $700-$1,700 when sold (so ~$2K-$5K for the kill) ---- */
+const pickFrom = l=> l[Math.floor(Math.random()*l.length)];
+const rareOrBetter = i=> ["rare","epic","legendary"].includes(i.rarity);
+function rollChest(){
+  const V = 700 + Math.random()*1000, sp = i=> i.sellPrice||0;
+  const all = Object.values(ITEM_BY_ID), kinds = [["money",20],["gear",26],["ingot",20],["gem",20],["tool",14]];
+  let r = Math.random()*100, kind = "money"; for(const [k,w] of kinds){ r -= w; if(r<=0){ kind = k; break; } }
+  const stack = list=>{ const c = list.filter(i=> sp(i)>0 && sp(i)<=V && sp(i)>=V/12); if(!c.length) return null; const it = pickFrom(c);
+    return { itemId:it.id, qty:Math.max(1, Math.min(12, Math.round(V*(0.75+Math.random()*0.25)/sp(it)))) }; };
+  const single = list=>{ const w = it=> it.rarity==="legendary" ? 1 : it.rarity==="epic" ? 3 : 6; const bag = list.flatMap(i=> Array(w(i)).fill(i)); return bag.length ? { itemId:pickFrom(bag).id, qty:1 } : null; };
+  let pick = null;
+  if(kind==="gear")  pick = single(CATALOG.gearAll.map(id=>ITEM_BY_ID[id]).filter(rareOrBetter));
+  if(kind==="tool")  pick = single(all.filter(i=> i.type==="tool" && /^tool_(pickaxe|fishingrod)/.test(i.id) && rareOrBetter(i)));
+  if(kind==="ingot") pick = stack(all.filter(i=> i.id.startsWith("ing_") && i.rarity!=="common"));
+  if(kind==="gem")   pick = stack(all.filter(i=> /^gem_.*_cut$/.test(i.id) || (i.id.startsWith("gem_") && rareOrBetter(i))));
+  const items = pick ? [pick] : [], val = pick ? sp(ITEM_BY_ID[pick.itemId])*pick.qty : 0;
+  return { items, money: Math.max(0, Math.round((V-val)/10)*10) };
+}
+async function openBossChests(){
+  const chests = [rollChest(), rollChest(), rollChest()];
+  for(const c of chests){ if(c.money) await grantMoney(c.money); for(const it of c.items) await addItemToInv(it.itemId, it.qty); }
+  document.getElementById("chestBody").innerHTML = chests.map((c,i)=> `<div class="chest-card"><b>🎁 Chest ${i+1}</b><ul>` +
+    c.items.map(it=> `<li>${it.qty}× ${escapeHTML(ITEM_BY_ID[it.itemId].name)} <i>(${ITEM_BY_ID[it.itemId].rarity})</i></li>`).join("") + (c.money ? `<li>💰 $${fmtMoney(c.money)}</li>` : "") + `</ul></div>`).join("");
+  openModal("chestModal"); playSfx("levelup");
 }
 function renderBossPanel(){
   const box = document.getElementById("bossPanel"); if(!box || !state.profile) return;
@@ -4593,9 +4712,9 @@ function renderBossPanel(){
   let body;
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(run && run.stage<5){ const t = TIER_BY_ID[BOSS_WAVES[run.stage]];
-    body = `<p>Wave ${run.stage+1}/5 — next up: <b>${t.emoji} ${t.label}</b>. Heal and eat before you go on (your HP carries over).</p><button class="doodle-btn btn-lg btn-green" id="btnBossGo">Fight wave ${run.stage+1}</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`; }
+    body = `<p>Wave ${run.stage+1}/5 — next up: <b>${t.emoji} ${t.label}</b>. </p><button class="doodle-btn btn-lg btn-green" id="btnBossGo">Fight wave ${run.stage+1}</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`; }
   else if(run) body = `<p>The wave is cleared — <b>${escapeHTML(d.name)}</b> descends!</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Fight the boss!</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`;
-  else body = `<p>Fight a wave of 5 enemies (Easy → Skilled → Moderate → Hard → Deadly) back to back, then face the boss. Dying ends your run but costs nothing; your HP carries between fights.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Begin the gauntlet</button>`;
+  else body = `<p>Fight a wave of 5 enemies (Easy → Skilled → Moderate → Hard → Deadly) back to back, then face the boss — each next enemy steps up the moment the last one falls. Your HP carries over, dying ends the run for free, and fleeing cancels it so you restart from the first enemy. Beating the boss earns 3 chests.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Begin the gauntlet</button>`;
   box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ~30–50 levels above you · enormous HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   document.getElementById("btnBossGo")?.addEventListener("click", ()=>{ if(!bossRun || bossRun.cycle!==cyc) bossRun = { cycle:cyc, stage:0, lvl: state.profile.level + ri(30,50) }; bossNextStage(); });
@@ -4603,18 +4722,19 @@ function renderBossPanel(){
 }
 function bossNextStage(){
   const run = bossRun; if(!run || state.battle) return;
-  const onLose = async ()=>{ bossRun = null; await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,Math.round(state.profile.hpMax*0.25)) }).catch(()=>{}); toast("💀 You fell in the gauntlet… you wake up at 25% HP."); renderBossPanel(); };
+  const onLose = async ()=>{ bossRun = null; await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,Math.round(state.profile.hpMax*0.25)) }).catch(()=>{}); toast("💀 You fell in the gauntlet… you wake up at 25% HP."); openModal("compassModal"); renderBossPanel(); };
+  const onFlee = ()=>{ bossRun = null; renderBossPanel(); };
   if(run.stage < 5){
-    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0;
-    startPve(null, { m, onLose, onWin: ()=>{ run.stage++; renderBossPanel(); } });
+    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0; delete m.tierId;
+    startPve(null, { m, gauntlet:true, onLose, onFlee, onWin: ()=>{ run.stage++; bossNextStage(); } });         // the next enemy steps up right away
   } else {
-    startPve(null, { m:makeBoss(run), onLose, onWin: async ()=>{
+    startPve(null, { m:makeBoss(run), gauntlet:true, onLose, onFlee, onWin: async ()=>{
       bossRun = null; await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bossCleared: run.cycle }));
-      const it = bossLoot(); if(it){ await addItemToInv(it.id,1); toast(`🏆 Boss defeated! Loot: ${it.name} (${it.rarity})`, 7000, "toast-money"); }
-      renderBossPanel();
+      await openBossChests(); renderBossPanel();
     } });
   }
 }
+setInterval(()=>{ if(document.getElementById("bt-pve")?.classList.contains("active")) updatePveGrid(); }, 1000);
 setInterval(()=>{ if(document.getElementById("bt-boss")?.classList.contains("active") && document.getElementById("compassModal").classList.contains("active")) renderBossPanel(); }, 1000);
 
 /* =========================================================================
