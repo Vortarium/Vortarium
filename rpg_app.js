@@ -100,6 +100,10 @@ function fishHabit(id, rarity="common"){
   const h = hash("fish:"+id), pk = PEAKS[(h>>>3)%4], [wl,wh] = FISH_WIDTH[rarity]||FISH_WIDTH.common, [ml,mh] = FISH_MAX[rarity]||FISH_MAX.common;
   return { id:pk.id, label:pk.label, icon:pk.icon, peak:pk.hour, width: wl+(wh-wl)*rng01(h,9), max: ml+(mh-ml)*rng01(h,15), min: FISH_MIN[rarity] ?? 0.5 };
 }
+function bugHabit(id, rarity="common"){
+  const h = hash("bug:"+id), pk = PEAKS[(h>>>3)%4], [wl,wh] = FISH_WIDTH[rarity]||FISH_WIDTH.common, [ml,mh] = FISH_MAX[rarity]||FISH_MAX.common;
+  return { id:pk.id, label:pk.label, icon:pk.icon, peak:pk.hour, width: wl+(wh-wl)*rng01(h,9), max: ml+(mh-ml)*rng01(h,15), min: FISH_MIN[rarity] ?? 0.5 };
+}
 const circ = (a,b)=>{ const d = Math.abs(a-b)%24; return Math.min(d, 24-d); };
 function activity(hb, hour){
   if(hb.peak==null) return 1;
@@ -116,6 +120,16 @@ function poolAt(pool, itemById, hour){                        // forage: relativ
 const fishPct = (fh, hour)=> fh.min + (fh.max-fh.min)*activity(fh, hour);
 const fishPctById = (id, rarity, hour)=> fishPct(fishHabit(id, rarity), hour);
 const oddsByHour = (pool, id)=>{ const e = pool.find(x=>x.id===id); return Array.from({length:24}, (_,h)=> e ? fishPctById(e.id, e.rarity, h+0.5) : 0); };
+const bugPctById = (id, rarity, hour)=> fishPct(bugHabit(id, rarity), hour);
+const bugOddsByHour = id=>{ const it = ITEM_BY_ID[id]; return Array.from({length:24}, (_,h)=> it ? bugPctById(id, it.rarity, h+0.5) : 0); };
+function rollBug(pool, hour, luck=0){      // same independent per-species roll as fish, using each bug's own time-of-day habit
+  const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+  const order = [...pool].sort(()=> Math.random()-0.5);
+  for(const e of order) if(Math.random()*100 < Math.min(100, bugPctById(e.id, e.rarity, hour)*(mult[e.rarity]||1))) return e.id;
+  const w = pool.map(e=> bugPctById(e.id, e.rarity, hour)+0.01), tot = w.reduce((a,b)=>a+b,0);
+  let t = Math.random()*tot; for(let i=0;i<pool.length;i++){ t -= w[i]; if(t<=0) return pool[i].id; }
+  return pool[pool.length-1].id;
+}
 /* roll a catch: go through the species in random order, each passing its own independent roll; luck boosts the rarer ones */
 function rollFish(pool, hour, luck=0){
   const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
@@ -1211,7 +1225,7 @@ function enterGame(){
     if(state.profile.banned){ forceBanLogout(); return; }   // an admin just banned you: logged out right now
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
-    if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); }
+    if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); if(typeof refreshBestiary==="function") refreshBestiary(); }
     if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
     if(document.getElementById("overflowModal").classList.contains("active")) renderOverflow();
     // Keep music in sync with whatever region is actually on the player
@@ -3043,6 +3057,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
+    refreshBestiary();
   } else {
     jobLog(timedOut ? "Too slow — the fish slipped off the hook!" : "The fish got away.");
   }
@@ -3070,7 +3085,8 @@ async function doBugAction(){
         stubEl = document.getElementById("bugStub"), fillEl = document.getElementById("bugProgressFill"), timerEl = document.getElementById("bugTimer");
   overlay.classList.add("show");
   toast(`${MODES[m].emoji} A ${rule.tier} bug is buzzing around!`);
-  bugEl.textContent = pickFrom(BUG_CATALOG[rule.tier].map(id=>BUG_EMOJI[id]));
+  const picked = rollBug(POOLS.bug[m], hourNow(), activeLuck());       // decided up front so the bug you chase is the bug you get
+  bugEl.textContent = BUG_EMOJI[picked];
   const R = arena.clientWidth/2 || 140, BUG_R = 14, STUB_R = 24, reach = R-BUG_R, startedAt = Date.now();
   let bx = (Math.random()-.5)*R, by = (Math.random()-.5)*R, ang = Math.random()*Math.PI*2, spd = rule.speed, dashT = 0, sx = 0, sy = 0, progress = 0, last = performance.now();
   const place = ()=>{ bugEl.style.transform = `translate(${R+bx-BUG_R}px,${R+by-BUG_R}px)`; stubEl.style.transform = `translate(${R+sx-STUB_R}px,${R+sy-STUB_R}px)`; };
@@ -3081,7 +3097,7 @@ async function doBugAction(){
   };
   overlay.addEventListener("pointermove", move); overlay.addEventListener("pointerdown", move);
   place();
-  const game = bugGame = { id:null, cleanup:null };
+  const game = bugGame = { id:null, cleanup:null, pick:picked };
   game.id = setInterval(()=>{
     const now = performance.now(), dt = Math.min(0.05, (now-last)/1000); last = now;
     // --- the bug: random heading + random speed changes, occasional dashes, bounces off the circle wall ---
@@ -3107,16 +3123,17 @@ async function doBugAction(){
 }
 async function endBug(success, m=jobMode, timedOut=false){
   if(!bugGame) return;
-  clearInterval(bugGame.id); bugGame.cleanup?.(); bugGame = null;
+  const caughtId = bugGame.pick; clearInterval(bugGame.id); bugGame.cleanup?.(); bugGame = null;
   document.getElementById("bugOverlay").classList.remove("show");
   document.getElementById("bugProgressFill").style.width = "0%";
   reopenCompassIf(bugReopenCompass); bugReopenCompass = false;
   updateDoc(doc(db,"players",state.uid), { lastBugTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the chase ends
   if(success){
-    const pick = rollPool(POOLS.bug[m], activeLuck());
+    const pick = caughtId;
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bugXp: (state.profile.bugXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
+    refreshBestiary();
   } else {
     jobLog(timedOut ? "Too slow — the bug flew away!" : "The bug got away.");
   }
@@ -3139,31 +3156,35 @@ function renderBestiary(){
   document.querySelectorAll("[data-besub]").forEach(b=> b.classList.toggle("active", b.dataset.besub===beKind));
   const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, bugMode = beKind==="bug", list = bugMode ? beBugList() : beFishList();
   const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
-  clock.style.display = bugMode ? "none" : "";
   clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}`;
   grid.innerHTML = list.map(f=>{
     const caught = (finds[f.id]||0) > 0;
-    const act = f.bug ? 0 : activity(fishHabit(f.id, f.item.rarity), h);
+    const act = activity(f.bug ? bugHabit(f.id, f.item.rarity) : fishHabit(f.id, f.item.rarity), h);
     return `<button class="be-card rarity-${f.item.rarity}${beSel===f.id?" sel":""}${caught?"":" unseen"}" data-fish="${f.id}" title="${caught?escapeHTML(f.item.name):"???"}">
       <span class="be-emo">${caught ? (f.bug ? BUG_EMOJI[f.id] : "🐟") : "❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
-      ${f.bug ? "" : `<span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span>`}</button>`;
+      <span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span></button>`;
   }).join("");
   grid.querySelectorAll("[data-fish]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.fish; renderBestiary(); }));
   const f = list.find(x=>x.id===beSel);
   if(!f){ det.innerHTML = `<p class="doodle-sub">${bugMode ? "Tap a bug to see where it lives." : "Tap a fish to see when it bites."}</p>`; return; }
   const it = f.item, caught = (finds[f.id]||0) > 0;
   if(f.bug){
-    const modes = FISH_TIERS.filter(([tier])=> BUG_CATALOG[tier].includes(f.id)), odds = modes.map(([tier,mode])=> `${MODES[mode].emoji} ${MODES[mode].label}: ${pctText(POOLS.bug[mode].find(e=>e.id===f.id)?.p||0)}`).join(" · ");
+    const modes = FISH_TIERS.filter(([tier])=> BUG_CATALOG[tier].includes(f.id)), bh = bugHabit(f.id, it.rarity), bnow = bugPctById(f.id, it.rarity, h)/100;
     const recipes = RECIPES.filter(r=> r.ing.some(([id])=>id===f.id)).length;
+    const bodds = bugOddsByHour(f.id), bmax = bh.max || 1;
+    const bbars = bodds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(3, Math.round(p/bmax*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${p.toFixed(1)}%"></span>`).join("");
     det.innerHTML = `<h3 class="doodle-h3">${caught?BUG_EMOJI[f.id]+" "+escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
       <p class="doodle-sub">${caught ? escapeHTML(it.desc||"") : "Catch one to reveal its entry."}</p>
       <div class="be-facts">
         <div><b>Where</b> ${modes.map(([,mode])=>MODES[mode].emoji+" "+MODES[mode].label).join(", ")} bug catching</div>
-        <div><b>Odds per catch</b> ${odds}</div>
+        <div><b>Best time</b> ${bh.icon} ${bh.label} (${activeText(bh)}) · peak ${bh.max.toFixed(1)}%</div>
         <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
         <div><b>Used in</b> ${recipes} crafting recipe${recipes===1?"":"s"}</div>
         <div><b>Caught</b> ${finds[f.id]||0}</div>
-      </div>`;
+        <div><b>Odds right now</b> ${(bnow*100).toFixed(2)}% <span class="be-bar wide"><i style="width:${Math.round(activity(bh,h)*100)}%"></i></span></div>
+      </div>
+      <div class="be-chart">${bbars}</div>
+      <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
     return;
   }
   const hb = fishHabit(f.id, it.rarity), pool = POOLS.fish[f.mode];
@@ -3181,6 +3202,7 @@ function renderBestiary(){
     <div class="be-chart">${bars}</div>
     <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
 }
+function refreshBestiary(){ if(document.getElementById("jtab-bestiary")?.classList.contains("active") && document.getElementById("journalModal").classList.contains("active")) renderBestiary(); }
 document.querySelectorAll("[data-besub]").forEach(b=> b.addEventListener("click", ()=>{ beKind = b.dataset.besub; beSel = null; renderBestiary(); }));
 document.querySelector('[data-jtab="bestiary"]').addEventListener("click", renderBestiary);
 setInterval(()=>{ if(document.getElementById("jtab-bestiary")?.classList.contains("active") && document.getElementById("journalModal").classList.contains("active")) renderBestiary(); }, 30000);
