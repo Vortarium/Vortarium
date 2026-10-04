@@ -3909,7 +3909,8 @@ Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable").forEach(i=>{
     return;
   }
   const [lo0,hi0] = healRangeFor(i);
-  const lo = Math.max(1, Math.round(lo0/2)), hi = Math.max(lo, Math.round(hi0/2));   // foods now heal half as much
+  const cookedMult = /^(cooked_|dish_|roast_)/.test(i.id) ? 2 : 1;                      // crafted/cooked food heals 2x
+  const lo = Math.max(1, Math.round(lo0/2)*cookedMult), hi = Math.max(lo, Math.round(hi0/2)*cookedMult);   // foods now heal half as much (cooked ones are doubled)
   i.stats.healMin = lo; i.stats.healMax = hi; i.stats.heal = Math.round((lo+hi)/2);
 });
 function rollHeal(item){
@@ -4063,15 +4064,17 @@ const INTENTS = {
   drain: { icon:"🩸", label:"Drain",      tip:"Light hit that heals it — Counter whiffs on this." }
 };
 const INTENT_WEIGHTS = { easy:{attack:4,heavy:2,brace:2,drain:2}, medium:{attack:3,heavy:3,brace:2,drain:2}, hard:{attack:2,heavy:4,brace:2,drain:2} };
+const guardTakenMult = ()=> 1 - (0.6 + Math.random()*0.3);   // Guard blocks a random 60-90% of the hit
 const FEINT_CHANCE = { easy:0.12, medium:0.2, hard:0.28 };
 const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
-function rollIntent(diff){
-  const bag = Object.entries(INTENT_WEIGHTS[diff]).flatMap(([k,n])=>Array(n).fill(k));
+function rollIntent(diff, noHeavy=false){
+  const bag = Object.entries(INTENT_WEIGHTS[diff]).filter(([k])=>!(noHeavy && k==="heavy")).flatMap(([k,n])=>Array(n).fill(k));
   return bag[Math.floor(Math.random()*bag.length)];
 }
 function nextIntent(b){
-  b.shown = rollIntent(b.m.difficulty);
-  b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty) : b.shown;
+  const cd = b.actual === "heavy";                       // Heavy Slam has a 1-turn cooldown: never twice in a row
+  b.shown = rollIntent(b.m.difficulty, cd);
+  b.actual = Math.random()<FEINT_CHANCE[b.m.difficulty] ? rollIntent(b.m.difficulty, cd) : b.shown;
 }
 function startPve(diff, dg=null){
   const p = state.profile, m = dg ? dg.m : pickEnemy(diff);
@@ -4108,7 +4111,7 @@ function renderPve(){
     const cd = (b.cd||{})[s.id]||0;
     add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>pveAct(s.id), cd>0);
   });
-  add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
+  add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
   const eatsLeftNow = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
   add(eatsLeftNow>0 ? "🍖 Eat" : "🍖 Eat (max 3)", `Open your food bag and pick what to eat. Free action — does NOT end your turn. Max ${MAX_EATS_PER_TURN} items per turn.`, openEatModal, eatsLeftNow<=0, "btn-green");
@@ -4158,7 +4161,7 @@ async function pveAct(move){
       battleLogPush(`Countered! ${m.name}'s ${INTENTS[intent].label} is negated and you deal ${back}.`);
     } else {
       let d = enemyHitBase(m, b)*mult*rnd();
-      if(guard) d*=0.35; if(counter) d*=1.3;
+      if(guard) d*=guardTakenMult(); if(counter) d*=1.3;
       d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0));       // every point of CHARM = 1 less damage taken (min 1)
       b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
       battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
@@ -4472,7 +4475,7 @@ function renderDuelBattle(d){
     const cd = myCdNow[s.id]||0;
     addBtn(s.id, cd>0 ? `${s.name} (${cd})` : s.name, s.desc + (s.id==="power" ? " Gives +2 Rage when your turn returns." : " Gives +1 Rage when your turn returns."), cd>0, "btn-pink");
   });
-  addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Take 65% less from their next hit. When your turn returns: +2 Rage and +2 Mana. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
+  addBtn("guard", d[me+"Last"]==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of their next hit. When your turn returns: +2 Rage and +2 Mana. Can only be used every other turn.", d[me+"Last"]==="guard", "btn-blue");
   addBtn("focus", "Focus", "Your next attack deals double damage.", false, "btn-blue");
   addBtn("skip", "Skip Turn", "Pass your turn. When your turn returns: +5 Mana.", false, "btn-blue");
   // Eat is a free action and opens the food picker instead of forcing one food.
@@ -4515,7 +4518,7 @@ async function duelActInner(d, move){
     if(s.manaCost) mana -= s.manaCost;
     if(s.hpCost){ myHp -= s.hpCost; lines.push(`${myName} pays ${s.hpCost} HP.`); }
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
-    if(opFx.guard) dmg *= 0.35;
+    if(opFx.guard) dmg *= guardTakenMult();
     dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0));    // their CHARM trims 1 damage per point (min 1)
     opHp -= dmg;
     lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);

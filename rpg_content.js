@@ -222,21 +222,21 @@ export function registerItems(I){
 
 /* ---------- job modes: green = normal, yellow = risky, red = extreme ---------- */
 export const MODES = {
-  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 50% reward / 50% hazard, 1 durability, 1 mineral. Fish: easy fish." },
-  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 50% hazard. Fish: medium fish." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 50% hazard. Fish: hard fish." }
+  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 60% reward / 40% hazard, 1 durability, 1 mineral. Fish: easy fish." },
+  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 40% hazard. Fish: medium fish." },
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 40% hazard. Fish: hard fish." }
 };
 export const FORAGE_RULES = {
   green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
   yellow: { chance:.75, qty:[1,2], cooldown:5*60*1000 },
   red:    { chance:.90, qty:[1,3], cooldown:30*60*1000 }
 };
-// Every mode: always exactly 1 mineral (double:0) and the SAME 50% hazard chance.
+// Every mode: always exactly 1 mineral (double:0) and the SAME 40% hazard chance.
 // Higher modes only cost more durability and shift the gem rarity odds (see RARITY_W).
 export const MINE_RULES = {
-  green:  { pos:.50, neg:.50, wear:1, double:0, cash:[20,100] },
-  yellow: { pos:.50, neg:.50, wear:2, double:0, cash:[50,220] },
-  red:    { pos:.50, neg:.50, wear:3, double:0, cash:[100,450] }
+  green:  { pos:.60, neg:.40, wear:1, double:0, cash:[20,100] },
+  yellow: { pos:.60, neg:.40, wear:2, double:0, cash:[50,220] },
+  red:    { pos:.60, neg:.40, wear:3, double:0, cash:[100,450] }
 };
 export const MINE_CASH_SHARE = 0.08;     // share of "good" swings that turn up cash instead of a mineral
 export const FISH_RULES = {
@@ -247,7 +247,7 @@ export const FISH_RULES = {
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
   green:  { tier:"easy",   bar:58, time:14000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
   yellow: { tier:"medium", bar:46, time:12000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
-  red:    { tier:"hard",   bar:36, time:11000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
+  red:    { tier:"hard",   bar:72, time:11000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
