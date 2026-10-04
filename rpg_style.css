@@ -1060,3 +1060,12 @@ body.theme-dark .sk-node{box-shadow:3px 3px 0 rgba(0,0,0,.45); color:var(--ink);
 body.theme-dark .sk-node.owned{box-shadow:0 0 0 4px rgba(255,255,255,.18), 0 0 14px 4px var(--sk-glow);}
 body.theme-dark .sk-node.attack{background-image:linear-gradient(135deg,rgba(255,200,60,.28),transparent);}
 body.theme-dark .sk-node em, body.theme-dark .sk-rowlabel{color:var(--ink-soft);}
+
+/* ---- multiplayer boss party ---- */
+.party-pick{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.party-lobby{ list-style:none; margin:8px 0; padding:0; } .party-lobby li{ padding:4px 0; }
+.eat-targets{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; } .eat-targets p{ flex-basis:100%; }
+.party-strip{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:6px 0; }
+.party-chip{ min-width:96px; padding:4px 8px; border:2px solid var(--ink); border-radius:10px; background:#fff8; font-size:13px; display:flex; flex-direction:column; gap:2px; }
+.party-chip.me{ background:var(--yellow); } .party-chip.turn{ box-shadow:0 0 0 3px #e63946; } .party-chip.down{ opacity:.45; filter:grayscale(1); }
+.party-chip .bar{ height:8px; display:block; } .party-chip small{ font-size:11px; }

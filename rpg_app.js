@@ -1204,14 +1204,14 @@ function resetSessionUI(){
   farm.plots = null; farm.loaded = false; farm.sel = null; farm.seedSig = "";
   state.profile = null; state.recapPromise = null; state.battle = null;
   document.body.classList.remove("dungeon-mode");   // never leave the title screen dark
-  ["recapModal","eatModal","battleModal","journalModal","compassModal","skillModal","dgModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
+  ["recapModal","eatModal","battleModal","journalModal","compassModal","skillModal","dgModal","bossPartyModal","profileModal","settingsModal"].forEach(id=> closeModal(id));
 }
 function cleanupSubs(){
   stopPresence(); stopOnlineBeat();
   state.unsubs.forEach(u=>u()); state.unsubs=[]; chatSubbed=false;
   if(pmUnsub){ pmUnsub(); } pmUnsub=null;
   if(auctionUnsub){ auctionUnsub(); auctionUnsub=null; }
-  stopManaRegen(); bossCleanup();
+  stopManaRegen(); bossCleanup(); partyCleanup();
   if(state.hpRegenInterval){ clearInterval(state.hpRegenInterval); state.hpRegenInterval=null; }
 }
 
@@ -1242,7 +1242,7 @@ function enterGame(){
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); startQuestListener(); migrateSkillTree(); startManaRegen(); startOnlineBeat();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); resumeBossParty(); startQuestListener(); migrateSkillTree(); startManaRegen(); startOnlineBeat();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -1919,6 +1919,7 @@ async function banUser(uid, username){
   await step("auction listings", ()=> delAll(query(collection(db,"auction"), where("sellerUid","==",uid))));
   await step("reactions", ()=> delAll(query(collection(db,"reactions"), where("uid","==",uid))));
   await step("duel rooms", ()=> delAll(query(collection(db,"duelRooms"), where("hostUid","==",uid))));
+  await step("boss parties", ()=> delAll(query(collection(db,"bossParties"), where("hostUid","==",uid))));
   await step("duel queue", async ()=>{ await deleteDoc(doc(db,"queue",uid)); return 1; });
   // remove them from every friends list, and from every pending-request list
   await step("friends lists", async ()=>{
@@ -2854,7 +2855,7 @@ let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); r
 const BUG_RULES = {
   green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5 },
   yellow: { tier:"medium", time:15000, speed:140, turn:2.0, dash:.20, drop:.6 },
-  red:    { tier:"hard",   time:20000, speed:215, turn:3.2, dash:.35, drop:.7 }
+  red:    { tier:"hard",   time:25000, speed:150, turn:2.2, dash:.20, drop:.5 }
 };
 const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
@@ -3873,6 +3874,7 @@ function subscribeInbox(){
       if(ch.type!=="added") return;
       const n = ch.doc.data();
       if(n.type==="duel_challenge"){ handleDuelInvite(n, ch.doc.ref, inboxFirst); return; }
+      if(n.type==="boss_invite"){ handleBossInvite(n, ch.doc.ref, inboxFirst); return; }
       if(n.type==="dm_seen"){
         const cur = (state.profile?.dmSeen||{})[n.fromUid]||0;
         if(n.ts>cur) updateDoc(doc(db,"players",state.uid), { [`dmSeen.${n.fromUid}`]: n.ts }).catch(()=>{});
@@ -3904,7 +3906,7 @@ function subscribeInbox(){
     list.innerHTML="";
     snap.forEach(d=>{
       const n = d.data();
-      if(n.type==="new_message" || n.type==="dm_seen" || n.type==="duel_challenge") return;
+      if(n.type==="new_message" || n.type==="dm_seen" || n.type==="duel_challenge" || n.type==="boss_invite") return;
       const li = document.createElement("li");
       if(n.type==="friend_request"){
         li.innerHTML = `<span>${escapeHTML(n.fromUsername)} wants to be friends</span>
@@ -4827,7 +4829,7 @@ async function sendDuelChallenge(uid, name){
   });
   if(ok===null) return;
   toast(`⚔️ Challenge sent to ${name} — they have 15 seconds.`);
-  document.getElementById("roomStatus") && (document.getElementById("roomStatus").textContent = `Waiting for ${name}…`);
+  setRoomStatus(`Waiting for ${name}…`);
   watchDuelRoom(code);
   setTimeout(async ()=>{                                  // nobody took it: tear the room down
     const s = await getDoc(doc(db,"duelRooms",code)).catch(()=>null);
@@ -4850,7 +4852,7 @@ document.getElementById("btnSettings").addEventListener("click", ()=>{ document.
 function handleDuelInvite(n, ref, first){
   const age = Date.now() - (n.ts||0);
   if(first || age > DUEL_INVITE_MS+5000 || state.profile?.noDuelRequests || state.battle){ deleteDoc(ref).catch(()=>{}); return; }
-  toast(`⚔️ ${n.fromUsername} challenges you to a duel, accept? [click here]`, Math.max(2000, DUEL_INVITE_MS-age), "toast-duel", ()=>{ joinDuelRoom(n.code); });
+  toast(`⚔️ ${n.fromUsername} challenges you to a duel, accept? [click here]`, Math.max(2000, DUEL_INVITE_MS-age), "toast-duel", ()=>{ deleteDoc(ref).catch(()=>{}); joinDuelRoom(n.code); });
   setTimeout(()=> deleteDoc(ref).catch(()=>{}), Math.max(1000, DUEL_INVITE_MS-age));
 }
 
@@ -4861,12 +4863,6 @@ const BOSS_ROSTER = [ ["Ignarok the Cinder Tyrant","🐲","fire"], ["Thalassa th
 const bossCycle = ()=> Math.floor(Date.now()/BOSS_MS);
 const bossIn = ()=> (bossCycle()+1)*BOSS_MS - Date.now();
 const bossDef = c=> { const [name,sprite,element] = BOSS_ROSTER[((c*5+3)%BOSS_ROSTER.length+BOSS_ROSTER.length)%BOSS_ROSTER.length]; return { name, sprite, element }; };
-let bossRun = null;
-function makeBoss(run){
-  const pl = state.profile.level, lvl = run.lvl, d = bossDef(run.cycle);
-  return { id:"boss_"+run.cycle, boss:true, name:d.name, sprite:d.sprite, region:state.profile.region, difficulty:"hard", level:lvl, element:d.element,
-    hp:Math.round((20+lvl*8)*6), attack:Math.round((3+(pl+5)*1.5)*1.6), xpReward:Math.round(150+pl*10), moneyReward:Math.round(300+pl*30), dropChance:0 };
-}
 /* ---- boss chests: 3 chests, each worth roughly $700-$1,700 when sold (so ~$2K-$5K for the kill) ---- */
 const pickFrom = l=> l[Math.floor(Math.random()*l.length)];
 const rareOrBetter = i=> ["rare","epic","legendary"].includes(i.rarity);
@@ -4892,34 +4888,417 @@ async function openBossChests(){
     c.items.map(it=> `<li>${it.qty}× ${escapeHTML(ITEM_BY_ID[it.itemId].name)} <i>(${ITEM_BY_ID[it.itemId].rarity})</i></li>`).join("") + (c.money ? `<li>💰 $${fmtMoney(c.money)}</li>` : "") + `</ul></div>`).join("");
   openModal("chestModal"); playSfx("levelup");
 }
+/* =========================================================================
+   MULTIPLAYER BOSS FIGHT — a party of 2-4 (you + 1-3 invited friends).
+   Everything lives on one Firestore doc, bossParties/{code}; every member's client watches it.
+   Turn order: YOU -> FRIEND1 -> FRIEND2 -> FRIEND3 -> ENEMY -> loop (fallen players are skipped).
+   The LAST living player of a round resolves the enemy's turn in the very same write, so the
+   fight never depends on one specific player staying online.
+   ========================================================================= */
+const BOSS_INVITE_MS = 30000;          // friends have 30 seconds to accept
+const BOSS_WAVE_HP_MULT = 5;           // every enemy before the boss: 5x the HP of the strongest player (highest max HP)
+const BOSS_HP_MULT = 20;               // the boss: 20x the HP of the strongest player
+const BOSS_EAT_MAX = 1;                // boss fights: 0 or 1 food per turn, fed to a teammate
+const BOSS_ALLOW_SELF_EAT = false;     // true = you may also pick yourself in the Eat menu
+const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
+const BOSS_ATK_PCT = 0.5, BOSS_WAVE_ATK_SCALE = 0.6;    // enemy attack = (party's average max HP / 8) x these
+let partyUnsub = null, partyCode = null, partyData = null, partyTimer = null, partyStarting = false, partyHidden = false, partyBusyStall = false;
+const partyFinalized = new Set(), partyUi = { sel:new Set() };
+const partyRef = code=> doc(db,"bossParties",code);
+const partyEl = id=> document.getElementById(id);
+const partyAlive = d=> d.order.filter(u=> d.members[u]?.alive);
+const bossCode = ()=> String(Math.floor(100000+Math.random()*900000));
+function partyMember(s){
+  return { name:s.username, hp:s.hp, hpMax:s.hpMax, mana:s.mana||0, manaMax:s.manaMax||0, rage:s.rage||0, rageMax:s.rageMax||0,
+    charm:s.stats?.CHARM||0, speed:s.stats?.SPEED||0, alive:true, left:false, fx:{}, last:null, cd:{}, paid:-1 };
+}
 function renderBossPanel(){
-  const box = document.getElementById("bossPanel"); if(!box || !state.profile) return;
-  const cyc = bossCycle(), d = bossDef(cyc), cleared = state.profile.bossCleared === cyc, run = bossRun && bossRun.cycle===cyc ? bossRun : null;
+  const box = partyEl("bossPanel"); if(!box || !state.profile) return;
+  const cyc = bossCycle(), d = bossDef(cyc), cleared = state.profile.bossCleared === cyc, pd = partyData && partyCode ? partyData : null;
   let body;
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
-  else if(run && run.stage<5){ const t = TIER_BY_ID[BOSS_WAVES[run.stage]];
-    body = `<p>Wave ${run.stage+1}/5 — next up: <b>${t.emoji} ${t.label}</b>. </p><button class="doodle-btn btn-lg btn-green" id="btnBossGo">Fight wave ${run.stage+1}</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`; }
-  else if(run) body = `<p>The wave is cleared — <b>${escapeHTML(d.name)}</b> descends!</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Fight the boss!</button> <button class="doodle-btn btn-sm" id="btnBossQuit">Give up</button>`;
-  else body = `<p>Fight a wave of 5 enemies (Easy → Skilled → Moderate → Hard → Deadly) back to back, then face the boss — each next enemy steps up the moment the last one falls. Your HP carries over, dying ends the run for free, and fleeing cancels it so you restart from the first enemy. Beating the boss earns 3 chests.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Begin the gauntlet</button>`;
-  box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ~30–50 levels above you · enormous HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
+  else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
+  else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
+  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player, the boss has <b>${BOSS_HP_MULT}×</b>. In boss fights Eat lets you feed <b>one teammate one food per turn</b>. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
-  document.getElementById("btnBossGo")?.addEventListener("click", ()=>{ if(!bossRun || bossRun.cycle!==cyc) bossRun = { cycle:cyc, stage:0, lvl: state.profile.level + ri(30,50) }; bossNextStage(); });
-  document.getElementById("btnBossQuit")?.addEventListener("click", ()=>{ bossRun = null; renderBossPanel(); });
+  partyEl("btnBossGo")?.addEventListener("click", ()=>{
+    if(pd && pd.status==="active" && pd.members?.[state.uid]){ partyHidden = false; if(!state.battle) openBossBattle(pd); }
+    else openBossPartyMenu();
+  });
 }
-function bossNextStage(){
-  const run = bossRun; if(!run || state.battle) return;
-  const onLose = async ()=>{ bossRun = null; await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,Math.round(state.profile.hpMax*0.25)) }).catch(()=>{}); toast("💀 You fell in the gauntlet… you wake up at 25% HP."); openModal("compassModal"); renderBossPanel(); };
-  const onFlee = ()=>{ bossRun = null; renderBossPanel(); };
-  if(run.stage < 5){
-    const m = buildTierMonster(TIER_BY_ID[BOSS_WAVES[run.stage]], state.profile.level, 0.6); m.attack = Math.round(enemyHitBase(m, null)); m.dropChance = 0; delete m.tierId;
-    startPve(null, { m, gauntlet:true, onLose, onFlee, onWin: ()=>{ run.stage++; bossNextStage(); } });         // the next enemy steps up right away
-  } else {
-    startPve(null, { m:makeBoss(run), gauntlet:true, onLose, onFlee, onWin: async ()=>{
-      bossRun = null; await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { bossCleared: run.cycle }));
-      await openBossChests(); renderBossPanel();
-    } });
+
+/* ---------- lobby: pick friends, send invites ---------- */
+async function openBossPartyMenu(){
+  if(state.profile.bossCleared === bossCycle()){ toast("You already defeated this boss."); return; }
+  if(state.battle){ toast("Finish your current fight first."); return; }
+  openModal("bossPartyModal");
+  if(partyCode && partyData){ renderPartyLobby(partyData); return; }
+  partyUi.sel.clear(); await renderPartyPicker();
+}
+async function renderPartyPicker(){
+  const body = partyEl("bossPartyBody"); body.innerHTML = "Loading friends…";
+  const uids = state.profile.friends || [], cyc = bossCycle();
+  if(!uids.length){ body.innerHTML = `<p class="doodle-sub">Boss fights need a team — add friends from the Friends tab first!</p>`; return; }
+  const snaps = await Promise.all(uids.map(u=> getDoc(doc(db,"players",u)).catch(()=>null)));
+  const rows = snaps.filter(s=>s&&s.exists()).map(s=>({ uid:s.id, ...s.data() }));
+  const draw = ()=>{
+    const n = partyUi.sel.size;
+    body.innerHTML = `<p class="doodle-sub" style="margin-top:0">Pick <b>1–3 friends</b> to invite (you + ${n||"1–3"} = ${n?n+1:"2–4"} players). They get 30 seconds to accept.</p>
+      <div class="party-pick">${rows.map(r=>{ const done = r.bossCleared===cyc, on = partyUi.sel.has(r.uid);
+        return `<button class="doodle-btn btn-sm ${on?"btn-green":"btn-blue"}" data-pp="${r.uid}" ${done?"disabled":""}>${on?"✔ ":""}${onlineDot(r)} ${escapeHTML(r.username)} (Lv.${r.level||1})${done?" — already cleared":""}</button>`; }).join(" ")}</div>
+      <p><button class="doodle-btn btn-lg btn-danger" id="btnSendBossInvites" ${n<1?"disabled":""}>Send invites${n?` (${n})`:""}</button></p>`;
+    body.querySelectorAll("[data-pp]").forEach(b=> b.addEventListener("click", ()=>{
+      const u = b.dataset.pp;
+      if(partyUi.sel.has(u)) partyUi.sel.delete(u); else if(partyUi.sel.size<3) partyUi.sel.add(u); else toast("A party is at most 4 players — you can invite up to 3 friends.");
+      draw();
+    }));
+    partyEl("btnSendBossInvites")?.addEventListener("click", ()=> sendBossInvites(rows));
+  };
+  draw();
+}
+async function sendBossInvites(rows){
+  const picks = [...partyUi.sel]; if(picks.length<1 || picks.length>3 || partyCode) return;
+  const p = state.profile, code = bossCode(), now = Date.now(), invites = {};
+  picks.forEach(u=> invites[u] = { name: rows.find(r=>r.uid===u)?.username || "Player", state:"pending" });
+  const ok = await withErrorToast(async ()=>{
+    await setDoc(partyRef(code), { hostUid:state.uid, hostName:p.username, cycle:bossCycle(), status:"inviting", createdAt:now, inviteEnds:now+BOSS_INVITE_MS,
+      memberUids:[state.uid, ...picks], order:[state.uid], invites, members:{ [state.uid]: partyMember(p) },
+      region:p.region, plvl:p.level, bossLvl:p.level + ri(30,50), stage:0, log:[] });
+    await Promise.all(picks.map(u=> addDoc(collection(db,"players",u,"inbox"), { type:"boss_invite", fromUid:state.uid, fromUsername:p.username, code, ts:Date.now() })));
+  });
+  if(ok===null){ deleteDoc(partyRef(code)).catch(()=>{}); return; }
+  toast(`🐉 Invites sent — your friends have 30 seconds to accept.`);
+  watchParty(code);
+}
+function handleBossInvite(n, ref, first){
+  const age = Date.now() - (n.ts||0);
+  if(first || age > BOSS_INVITE_MS+5000 || state.battle || partyCode || dgActive()){ deleteDoc(ref).catch(()=>{}); return; }
+  toast(`🐉 ${n.fromUsername} invites you to a boss fight, join? [click here]`, Math.max(2000, BOSS_INVITE_MS-age), "toast-duel", ()=> acceptBossInvite(n, ref));
+  setTimeout(()=> deleteDoc(ref).catch(()=>{}), Math.max(1000, BOSS_INVITE_MS-age)+500);
+}
+async function acceptBossInvite(n, ref){
+  deleteDoc(ref).catch(()=>{});
+  if(state.battle){ toast("Finish your current fight first."); return; }
+  if(partyCode){ toast("You're already in a party."); return; }
+  if(dgActive()){ toast("🕯️ You can't leave the dungeon for a boss fight."); return; }
+  const res = await withErrorToast(()=> runTransaction(db, async tx=>{
+    const r = partyRef(n.code), s = await tx.get(r);
+    if(!s.exists() || s.data().status!=="inviting") return "gone";
+    const d = s.data();
+    if(!d.invites?.[state.uid] || Date.now() > d.inviteEnds + 3000) return "late";
+    if(state.profile.bossCleared === d.cycle) return "cleared";
+    tx.update(r, { [`invites.${state.uid}.state`]:"accepted", [`members.${state.uid}`]: partyMember(state.profile) });
+    return "ok";
+  }));
+  if(res===null) return;
+  if(res==="cleared"){ toast("You already defeated this boss."); return; }
+  if(res!=="ok"){ toast("Too late — that boss party is gone."); return; }
+  watchParty(n.code); openModal("bossPartyModal");
+}
+function renderPartyLobby(d){
+  const body = partyEl("bossPartyBody"); if(!body || !partyEl("bossPartyModal").classList.contains("active")) return;
+  const left = Math.max(0, d.inviteEnds - Date.now()), host = d.hostUid===state.uid;
+  const rows = [`<li>👑 <b>${escapeHTML(d.hostName)}</b> (host)</li>`, ...Object.entries(d.invites||{}).map(([u,i])=>
+    `<li>${i.state==="accepted" ? "✅" : left>0 ? "⏳" : "⌛"} <b>${escapeHTML(i.name)}</b> — ${i.state==="accepted" ? "joined" : left>0 ? "deciding…" : "didn't answer"}</li>`)].join("");
+  body.innerHTML = `<p class="doodle-sub" style="margin-top:0">${host ? "Waiting for your friends" : `Joined ${escapeHTML(d.hostName)}'s party`} — the fight starts when everyone has answered or in <b>${Math.ceil(left/1000)}s</b>.</p>
+    <ul class="party-lobby">${rows}</ul>${host ? `<button class="doodle-btn btn-sm btn-yellow" id="btnCancelParty">Cancel</button>` : `<button class="doodle-btn btn-sm btn-yellow" id="btnCancelParty">Leave party</button>`}`;
+  partyEl("btnCancelParty").addEventListener("click", async ()=>{
+    const code = partyCode; partyCleanup(); closeModal("bossPartyModal");
+    if(host) await deleteDoc(partyRef(code)).catch(()=>{});
+    else await updateDoc(partyRef(code), { [`invites.${state.uid}.state`]:"declined" }).catch(()=>{});
+  });
+}
+async function startBossParty(){
+  const code = partyCode; if(!code || partyStarting) return; partyStarting = true;
+  try{
+    await runTransaction(db, async tx=>{
+      const r = partyRef(code), s = await tx.get(r); if(!s.exists() || s.data().status!=="inviting") return;
+      const d = s.data(), acc = d.memberUids.filter(u=> u!==d.hostUid && d.invites[u]?.state==="accepted");
+      if(!acc.length){ tx.update(r, { status:"cancelled", endedAt:Date.now() }); return; }
+      const order = [d.hostUid, ...acc], hps = order.map(u=> d.members[u].hpMax);
+      const base = { ...d, order, strongHp:Math.max(...hps), avgHp:Math.max(1, Math.round(hps.reduce((a,b)=>a+b,0)/hps.length)) };
+      const enemy = buildPartyEnemy(0, base);
+      tx.update(r, { status:"active", memberUids:order, order, strongHp:base.strongHp, avgHp:base.avgHp, stage:0, enemy, ehp:enemy.hp,
+        intent:"wait", target:order[0], turn:order[0], turnStart:Date.now(), round:1,
+        log:[`A party of ${order.length} steps forward — ${enemy.name} (Lv.${enemy.level}) appears! Turn order: ${order.map(u=>d.members[u].name).join(" → ")} → Enemy.`] });
+    });
+  }catch(err){ console.error(err); toast(friendlyFirebaseError(err)); }
+  finally{ partyStarting = false; }
+}
+
+/* ---------- watching the party doc ---------- */
+function watchParty(code){
+  partyUnsub?.(); partyCode = code; partyHidden = false; partyData = null;
+  partyUnsub = onSnapshot(partyRef(code), snap=>{
+    if(!snap.exists()){ if(partyCode===code) partyGone(); return; }
+    onPartySnap({ ...snap.data(), code });
+  }, err=> toast(friendlyFirebaseError(err)));
+  if(!partyTimer) partyTimer = setInterval(partyTick, 1000);
+}
+function partyCleanup(){
+  partyUnsub?.(); partyUnsub = null; partyCode = null; partyData = null; partyHidden = false;
+  if(partyTimer){ clearInterval(partyTimer); partyTimer = null; }
+  const st = partyEl("partyStrip"); if(st) st.style.display = "none";
+}
+function partyGone(){
+  const inFight = state.battle?.mode==="party";
+  partyCleanup(); closeModal("bossPartyModal");
+  if(inFight){ closeModal("eatModal"); closeModal("battleModal"); state.battle = null; toast("The party was disbanded."); }
+  if(state.profile) renderBossPanel();
+}
+function onPartySnap(d){
+  partyData = d;
+  if(d.status==="inviting"){ renderPartyLobby(d); return; }
+  if(d.status==="cancelled"){
+    toast(d.hostUid===state.uid ? "Nobody accepted in time — the boss party was cancelled." : "The boss party was cancelled.");
+    const host = d.hostUid===state.uid, code = d.code; partyCleanup(); closeModal("bossPartyModal"); if(host) deleteDoc(partyRef(code)).catch(()=>{});
+    renderBossPanel(); return;
+  }
+  const me = d.members?.[state.uid];
+  if(!me){ partyCleanup(); closeModal("bossPartyModal"); return; }
+  if(d.status==="won" || d.status==="lost"){ finalizeParty(d); return; }
+  if(d.status==="active"){
+    partyPayWave(d, me);
+    if(state.battle?.mode==="party") renderPartyBattle(d);
+    else if(!state.battle && !partyHidden) openBossBattle(d);
+    renderBossPanel();
   }
 }
+/* every living player is paid for each enemy that falls (once — tracked on the doc so a reload can't pay twice) */
+async function partyPayWave(d, me){
+  const k = d.lastKill; if(!k || k.boss || !me.alive || (me.paid ?? -1) >= k.stage) return;
+  me.paid = k.stage;      // local guard so the next snapshot can't pay again before the write lands
+  await updateDoc(partyRef(d.code), { [`members.${state.uid}.paid`]: k.stage }).catch(()=>{});
+  await grantMoney(k.money); await grantXP(k.xp);
+  toast(`⚔️ ${k.name} defeated! +$${fmtMoney(k.money)}, +${k.xp} XP`);
+}
+function partyTick(){
+  const d = partyData; if(!d || !partyCode) return;
+  const now = Date.now();
+  if(d.status==="inviting"){
+    if(d.hostUid===state.uid && (now >= d.inviteEnds || !Object.values(d.invites||{}).some(i=>i.state==="pending"))) startBossParty();
+    renderPartyLobby(d);
+    if(d.hostUid!==state.uid && now > d.inviteEnds + 15000){ partyCleanup(); closeModal("bossPartyModal"); toast("The boss party never started."); }
+  } else if(d.status==="active" && d.turn && now - (d.turnStart||now) > BOSS_TURN_STALL_MS && d.turn!==state.uid && d.members[state.uid]?.alive && !partyBusyStall){
+    const alive = partyAlive(d), i = alive.indexOf(d.turn), rescuer = alive[(i+1)%alive.length];     // the next living player skips an idle player's turn
+    if(rescuer===state.uid){ partyBusyStall = true; partyForceSkip(d.turn).finally(()=>{ partyBusyStall = false; }); }
+  }
+}
+async function partyForceSkip(uid){
+  try{ await runTransaction(db, async tx=>{
+    const r = partyRef(partyCode), s = await tx.get(r); if(!s.exists()) return;
+    const cur = s.data(); if(cur.status!=="active" || cur.turn!==uid || Date.now()-(cur.turnStart||0) <= BOSS_TURN_STALL_MS) return;
+    const out = partyApplyAction(cur, uid, "idle"); if(!out.err) tx.update(r, out.patch);
+  }); }catch(err){ console.error(err); }
+}
+
+/* ---------- enemies ---------- */
+function buildPartyEnemy(stage, d){
+  if(stage >= BOSS_WAVES.length){
+    const bd = bossDef(d.cycle);
+    return { name:bd.name, sprite:bd.sprite, element:bd.element, boss:true, level:d.bossLvl, difficulty:"hard",
+      hp:Math.round(d.strongHp*BOSS_HP_MULT), attack:Math.max(1, Math.round(d.avgHp/TIER_HITS*BOSS_ATK_PCT)),
+      xpReward:Math.round(150+d.plvl*10), moneyReward:Math.round(300+d.plvl*30) };
+  }
+  const tier = TIER_BY_ID[BOSS_WAVES[stage]];
+  let pool = ENEMY_BANK.filter(e=> e.region===d.region && e.difficulty===tier.diff); if(!pool.length) pool = ENEMY_BANK.filter(e=> e.difficulty===tier.diff);
+  const slot = pool.length ? pool[Math.floor(Math.random()*pool.length)] : null;
+  return { name:slot?.name || "Wild Beast", sprite:REGION_SPRITE[slot?.region || d.region] || "🐉", element:(slot && REGIONS[slot.region]?.element) || "earth", boss:false,
+    level:Math.max(1, d.plvl + ri(tier.lv[0], tier.lv[1])), difficulty:tier.diff,
+    hp:Math.round(d.strongHp*BOSS_WAVE_HP_MULT), attack:Math.max(1, Math.round(d.avgHp/TIER_HITS*tier.pct*BOSS_WAVE_ATK_SCALE)),
+    xpReward:ri(...tier.xp), moneyReward:ri(...tier.money) };
+}
+
+/* ---------- the rules (pure: works on a copy of the doc and returns the patch to write) ---------- */
+function partyPickIntent(d){
+  const e = d.enemy, prev = d.intent, tgt = d.members[d.target] || d.members[partyAlive(d)[0]];
+  if(e.boss && prev==="strong" && Math.random()<0.45) return "stun";
+  return rollIntent(e.boss ? BOSS_WEIGHTS : (INTENT_WEIGHTS[e.difficulty] || INTENT_WEIGHTS.medium), prev, { ehp:d.ehp, m:{ hp:e.hp }, mana:tgt?.mana||0 });
+}
+function partyRetarget(d){ const a = partyAlive(d); d.target = a[Math.floor(Math.random()*a.length)] || null; }
+function partyEnemyTurn(d, lines){
+  const e = d.enemy, intent = d.intent, rnd = ()=>0.9+Math.random()*0.2;
+  if(!d.members[d.target]?.alive) partyRetarget(d);
+  const t = d.members[d.target];
+  if(intent==="wait") lines.push(`${e.name} sizes the party up and holds back.`);
+  else if(intent==="stun") lines.push(`${e.name} is stunned and skips its turn!`);
+  else if(intent==="heal"){ const h = Math.round(e.hp*(e.boss?0.05:0.08)); d.ehp = Math.min(e.hp, d.ehp+h); lines.push(`${e.name} recovers ${h} HP.`); }
+  else if(intent==="guard") lines.push(`${e.name} braces itself.`);
+  else if(intent==="mana" && t){
+    const take = Math.min(t.mana, Math.max(1, Math.round(t.mana*0.25))); t.mana -= take; const h = take*2; d.ehp = Math.min(e.hp, d.ehp+h);
+    lines.push(`${e.name} drains ${take} of ${t.name}'s mana and heals ${h}.`);
+  } else if(t){
+    let dmg = e.attack*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
+    dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0));
+    t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
+    lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on ${t.name}: ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
+    if(t.hp<=0){ t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
+  }
+  d.order.forEach(u=>{ if(d.members[u].fx) d.members[u].fx.guard = false; });
+}
+/* hand the turn on: next living player, or (after the last one) the enemy acts and a new round begins */
+function partyAdvance(d, uid, lines){
+  const idx = d.order.indexOf(uid);
+  for(let i=idx+1; i<d.order.length; i++) if(d.members[d.order[i]].alive){ d.turn = d.order[i]; d.turnStart = Date.now(); return; }
+  if(!partyAlive(d).length){ partyLose(d, lines); return; }
+  partyEnemyTurn(d, lines);
+  if(!partyAlive(d).length){ partyLose(d, lines); return; }
+  d.order.forEach(u=>{ const m = d.members[u]; if(m.alive && m.speed>0 && m.mana<m.manaMax) m.mana = Math.min(m.manaMax, m.mana+m.speed); });   // SPEED = mana per round
+  d.intent = partyPickIntent(d); partyRetarget(d);
+  d.turn = partyAlive(d)[0]; d.turnStart = Date.now(); d.round = (d.round||1)+1;
+}
+function partyLose(d, lines){ d.status = "lost"; d.turn = null; d.endedAt = Date.now(); lines.push("💀 The whole party has fallen…"); }
+function partyWaveCleared(d, lines){
+  const k = d.enemy;
+  d.lastKill = { stage:d.stage, xp:k.xpReward, money:k.moneyReward, name:k.name, boss:!!k.boss };
+  lines.push(`🏆 ${k.name} is defeated!`);
+  if(k.boss){ d.status = "won"; d.turn = null; d.endedAt = Date.now(); return; }
+  d.stage++; const ne = buildPartyEnemy(d.stage, d);
+  d.enemy = ne; d.ehp = ne.hp; d.intent = "wait"; partyRetarget(d);
+  d.turn = partyAlive(d)[0]; d.turnStart = Date.now(); d.round = 1;
+  lines.push(`${ne.boss ? "👁️ The boss descends:" : "Next up:"} ${ne.name} (Lv.${ne.level})!`);
+}
+function partyApplyAction(cur, uid, move){
+  const d = JSON.parse(JSON.stringify(cur)), m = d.members[uid], e = d.enemy, lines = [], rnd = ()=>0.9+Math.random()*0.2;
+  if(!m || !m.alive) return { err:"dead" };
+  m.fx = m.fx || {}; m.cd = m.cd || {};
+  if(move==="guard" && m.last==="guard") return { err:"cd", msg:"Guard is on cooldown." };
+  if((m.cd[move]||0)>0) return { err:"cd", msg:`That spell is on cooldown (${m.cd[move]} more moves).` };
+  const brace = d.intent==="guard";
+  if(move==="guard"){ m.fx.guard = true; m.rage = Math.min(m.rageMax, m.rage+2); lines.push(`${m.name} raises their guard.`); }
+  else if(move==="focus"){ m.fx.focus = true; lines.push(`${m.name} focuses their strength.`); }
+  else if(move==="skip") lines.push(`${m.name} passes.`);
+  else if(move==="idle") lines.push(`${m.name} hesitates too long and loses their turn.`);
+  else {
+    const s = attackSkillById(move);
+    if(s.needsFullRage && m.rage<m.rageMax) return { err:"res", msg:"Not enough Rage." };
+    if(s.manaCost && m.mana<s.manaCost) return { err:"res", msg:"Not enough Mana." };
+    if(s.hpCost && m.hp<=s.hpCost) return { err:"res", msg:`Not enough HP — ${s.name} costs ${s.hpCost} HP.` };
+    if(s.needsFullRage) m.rage = 0;
+    if(s.manaCost) m.mana -= s.manaCost; else if(s.id==="basic") m.rage = Math.min(m.rageMax, m.rage+1);
+    if(s.hpCost){ m.hp -= s.hpCost; lines.push(`${m.name} pays ${s.hpCost} HP.`); }
+    let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(m.fx.focus?2:1); m.fx.focus = false;
+    if(brace && s.id!=="precision") dmg *= 0.4;
+    dmg = Math.max(1, Math.round(dmg)); d.ehp -= dmg;
+    lines.push(`${m.name} uses ${s.name}: ${dmg} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
+    if(e.boss && d.ehp>0 && dmg >= e.hp*0.10 && Math.random()<0.5){ d.intent = "stun"; lines.push(`${e.name} is staggered by the blow!`); }
+    if(s.healHp){ const h = Math.min(spellRoll(s.healHp), m.hpMax-m.hp); if(h>0){ m.hp += h; lines.push(`${s.name} heals ${m.name} for ${h} HP.`); } }
+    if(s.healMana){ const g = Math.min(spellRoll(s.healMana), m.manaMax-m.mana); if(g>0){ m.mana += g; lines.push(`${s.name} restores ${g} mana.`); } }
+  }
+  Object.keys(m.cd).forEach(k=>{ if(m.cd[k]>0) m.cd[k]--; });
+  { const used = (move==="guard"||move==="focus"||move==="skip"||move==="idle") ? null : [...ATTACK_SKILLS, ...treeAttacks(state.profile)].find(x=>x.id===move); if(used?.cooldown) m.cd[move] = used.cooldown; }
+  m.last = move;
+  if(d.ehp<=0) partyWaveCleared(d, lines); else partyAdvance(d, uid, lines);
+  d.log = [...(cur.log||[]), ...lines].slice(-60);
+  const patch = { members:d.members, ehp:d.ehp, enemy:d.enemy, intent:d.intent, target:d.target ?? null, turn:d.turn ?? null, turnStart:d.turnStart||Date.now(), round:d.round||1,
+    stage:d.stage, status:d.status, log:d.log };
+  if(d.lastKill) patch.lastKill = d.lastKill;
+  if(d.endedAt) patch.endedAt = d.endedAt;
+  return { patch };
+}
+async function partyAct(move){
+  const b = state.battle; if(!b || b.mode!=="party" || b.busy) return;
+  if(b.d.turn !== state.uid){ toast("It's not your turn."); return; }
+  b.busy = true;
+  try{
+    const res = await runTransaction(db, async tx=>{
+      const r = partyRef(b.code), s = await tx.get(r); if(!s.exists()) return { err:"gone" };
+      const cur = s.data(); if(cur.status!=="active" || cur.turn!==state.uid) return { err:"turn", msg:"It's not your turn." };
+      const out = partyApplyAction(cur, state.uid, move); if(!out.err) tx.update(r, out.patch); return out;
+    });
+    if(res?.err && res.msg) toast(res.msg);
+  }catch(err){ console.error(err); toast(friendlyFirebaseError(err)); }
+  finally{ b.busy = false; }
+}
+
+/* ---------- the battle screen ---------- */
+function openBossBattle(d){
+  state.battle = { mode:"party", code:d.code, d, busy:false, eats:0, eatTarget:null, over:false, log:[], reopenCompass:false };
+  document.querySelectorAll(".modal-backdrop.active").forEach(x=>x.classList.remove("active"));
+  openModal("battleModal"); setPvpRxVisible(false);
+  renderPartyBattle(d);
+}
+function renderPartyBattle(d){
+  const b = state.battle; if(!b || b.mode!=="party") return; b.d = d;
+  const me = d.members[state.uid], e = d.enemy, myTurn = d.status==="active" && d.turn===state.uid && me.alive;
+  if(d.turn!==state.uid) b.eats = 0;
+  partyEl("battleEnemyName").textContent = `${e.name} Lv.${e.level}`;
+  partyEl("battleEnemySprite").textContent = e.sprite || "🐉";
+  partyEl("battleEnemyHPBar").style.width = (100*Math.max(0,d.ehp)/e.hp)+"%";
+  partyEl("battleEnemyHPNum").textContent = `${Math.max(0,d.ehp)}/${e.hp}`;
+  partyEl("battlePlayerName").textContent = me.name;
+  partyEl("battlePlayerHPBar").style.width = (100*Math.max(0,me.hp)/me.hpMax)+"%";
+  partyEl("battlePlayerHPNum").textContent = `${Math.max(0,me.hp)}/${me.hpMax}`;
+  partyEl("battleStaminaLabel").textContent = `Mana ${me.mana}/${me.manaMax}${me.fx?.focus?" · 🎯 Focused (next hit x2)":""}${me.fx?.guard?" · 🛡️ Guarding":""} · Wave ${d.stage+1}/6 · Round ${d.round||1}`;
+  partyEl("battleRageLabel").textContent = `${me.rage}/${me.rageMax}`;
+  const it = INTENTS[d.intent] || INTENTS.normal, tgt = d.members[d.target];
+  partyEl("battleIntent").innerHTML = d.status==="active" ? `${it.icon} <b>${it.label}</b>${it.atk||d.intent==="mana" ? ` → <b>${escapeHTML(tgt?.name||"?")}</b>` : ""} — ${escapeHTML(it.tip)}` : "";
+  let strip = partyEl("partyStrip");
+  if(!strip){ strip = document.createElement("div"); strip.id = "partyStrip"; strip.className = "party-strip"; document.querySelector("#battleModal .battle-arena").after(strip); }
+  strip.style.display = "";
+  strip.innerHTML = d.order.map(u=>{ const m = d.members[u], pct = Math.max(0, Math.min(100, 100*m.hp/m.hpMax));
+    return `<div class="party-chip${d.turn===u?" turn":""}${m.alive?"":" down"}${u===state.uid?" me":""}"><b>${d.turn===u?"▶ ":""}${m.alive?"":"💀 "}${escapeHTML(m.name)}</b><span class="bar bar-hp"><span class="bar-fill" style="width:${pct}%"></span></span><small>${Math.max(0,m.hp)}/${m.hpMax}</small></div>`; }).join("") +
+    `<div class="party-chip enemy${d.turn==="enemy"?" turn":""}"><b>${e.sprite||"🐉"} Enemy</b></div>`;
+  const logEl = partyEl("battleLog"); logEl.innerHTML = (d.log||[]).slice(-30).map(m=>`<div>${escapeHTML(m)}</div>`).join(""); logEl.scrollTop = logEl.scrollHeight;
+  if(partyEl("eatModal").classList.contains("active")) renderEatModal();
+  const box = partyEl("battleActions"); box.innerHTML = "";
+  if(d.status!=="active") return;
+  const add = (label, tip, fn, disabled, cls="btn-pink")=>{ const el = document.createElement("button"); el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip; el.disabled = !!disabled; el.addEventListener("click", fn); box.appendChild(el); };
+  if(me.alive){
+    knownAttacks(state.profile).forEach(s=>{ const cd = (me.cd||{})[s.id]||0; add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>partyAct(s.id), !myTurn || cd>0); });
+    add(me.last==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of a hit aimed at you this round and gain 2 Rage. Every other turn only.", ()=>partyAct("guard"), !myTurn || me.last==="guard", "btn-blue");
+    add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>partyAct("focus"), !myTurn, "btn-blue");
+    add("Pass", "Do nothing this turn.", ()=>partyAct("skip"), !myTurn, "btn-blue");
+    const left = Math.max(0, BOSS_EAT_MAX-(b.eats||0));
+    add(left>0 ? "🍖 Eat (teammate)" : "🍖 Eat (used)", `Feed ONE teammate ONE food per turn. Free action — does not end your turn.`, openEatModal, !myTurn || left<=0, "btn-green");
+    if(!myTurn){ const w = document.createElement("span"); w.textContent = `Waiting for ${d.turn==="enemy" ? "the enemy" : (d.members[d.turn]?.name||"…")}…`; box.appendChild(w); }
+    add("Leave", "Leave the fight. You forfeit the rewards.", ()=> dgConfirm({ title:"Leave the boss fight?", yes:"Leave (forfeit rewards)", html:"<p>Your party fights on without you and you won't receive any chests.</p>", onYes:partyLeave }), false, "btn-yellow");
+  } else {
+    const w = document.createElement("span"); w.textContent = "💀 You have fallen — you'll still get your chests if the party wins."; box.appendChild(w);
+    add("Hide fight", "Close this screen. You can come back from the Boss tab.", ()=>{ partyHidden = true; closeModal("eatModal"); closeModal("battleModal"); state.battle = null; renderBossPanel(); }, false, "btn-yellow");
+  }
+}
+async function partyLeave(){
+  const b = state.battle, code = partyCode; if(!b || !code) return;
+  try{
+    await runTransaction(db, async tx=>{
+      const r = partyRef(code), s = await tx.get(r); if(!s.exists()) return;
+      const d = JSON.parse(JSON.stringify(s.data())), m = d.members[state.uid]; if(!m || d.status!=="active") return;
+      const lines = [`${m.name} left the fight.`]; m.alive = false; m.left = true;
+      if(d.turn===state.uid) partyAdvance(d, state.uid, lines); else if(!partyAlive(d).length) partyLose(d, lines);
+      tx.update(r, { members:d.members, enemy:d.enemy, ehp:d.ehp, intent:d.intent, target:d.target ?? null, turn:d.turn ?? null, turnStart:d.turnStart||Date.now(), round:d.round||1,
+        status:d.status, log:[...(s.data().log||[]), ...lines].slice(-60), ...(d.endedAt?{endedAt:d.endedAt}:{}) });
+    });
+  }catch(err){ console.error(err); }
+  const mm = partyData?.members?.[state.uid];
+  if(mm) await updateDoc(doc(db,"players",state.uid), { hp:Math.max(1,mm.hp), mana:mm.mana, rage:mm.rage }).catch(()=>{});
+  closeModal("eatModal"); closeModal("battleModal"); state.battle = null; partyCleanup(); toast("You left the boss fight."); renderBossPanel();
+}
+async function finalizeParty(d){
+  if(partyFinalized.has(d.code)) return; partyFinalized.add(d.code);
+  const me = d.members[state.uid], won = d.status==="won", host = d.hostUid===state.uid, code = d.code;
+  if(state.battle?.mode==="party") renderPartyBattle(d);
+  await new Promise(r=> setTimeout(r, 1800));
+  closeModal("eatModal"); closeModal("battleModal"); state.battle = null; partyCleanup();
+  if(host) setTimeout(()=> deleteDoc(partyRef(code)).catch(()=>{}), 60000);
+  const hp = me.alive ? Math.max(1, me.hp) : Math.max(1, Math.round(me.hpMax*0.25));      // fallen players wake at 25% HP
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp, mana:me.mana, rage:me.rage, ...(won && !me.left ? { bossCleared:d.cycle } : {}) }));
+  if(won && !me.left){
+    const k = d.lastKill; if(k){ await grantMoney(k.money); await grantXP(k.xp); }
+    toast("🏆 The party defeated the boss!"); await openBossChests();     // every member rolls and opens their OWN 3 chests
+  } else if(won){ toast("The party won, but you left the fight — no chests."); }
+  else { toast("💀 The whole party fell… nobody gets the reward. You wake up at 25% HP."); openModal("compassModal"); }
+  renderBossPanel();
+}
+/* after a reload: jump straight back into a fight that is still running */
+async function resumeBossParty(){
+  const snap = await getDocs(query(collection(db,"bossParties"), where("memberUids","array-contains",state.uid))).catch(()=>null);
+  if(!snap) return;
+  const live = snap.docs.find(s=>{ const d = s.data(); return d.status==="active" && d.members?.[state.uid]?.alive && Date.now()-(d.turnStart||0) < 30*60000; });
+  if(live) watchParty(live.id);
+}
+
 setInterval(()=>{ if(document.getElementById("bt-pve")?.classList.contains("active")) updatePveGrid(); }, 1000);
 setInterval(()=>{ if(document.getElementById("bt-boss")?.classList.contains("active") && document.getElementById("compassModal").classList.contains("active")) renderBossPanel(); }, 1000);
 
@@ -4932,6 +5311,13 @@ let eatSel = null, eatBusy = false;
 function eatContext(){
   const b = state.battle, p = state.profile; if(!b || !p) return null;
   const eatsLeft = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
+  if(b.mode==="party" && b.d){
+    const d = b.d, me = d.members[state.uid], tgt = b.eatTarget && d.members[b.eatTarget], tOk = !!(tgt && tgt.alive);
+    const left = Math.max(0, BOSS_EAT_MAX - (b.eats||0)), myTurn = d.status==="active" && d.turn===state.uid && !!me?.alive;
+    return { partyEat:true, maxEats:BOSS_EAT_MAX, targetName: tOk ? tgt.name : null, hp: tOk?tgt.hp:0, hpMax: tOk?tgt.hpMax:1, mana: tOk?tgt.mana:0, manaMax: tOk?(tgt.manaMax||1):1,
+      canEat: myTurn && left>0 && tOk, eatsLeft:left,
+      why: !myTurn ? "You can only feed a teammate on your turn." : left<=0 ? "You can only use 1 food per turn." : "Pick a teammate first." };
+  }
   if(b.mode==="pve") return { hp:b.php, hpMax:p.hpMax, mana:b.mana, manaMax:p.manaMax, canEat:!b.over && eatsLeft>0, eatsLeft, why: eatsLeft>0 ? "" : `You can only eat ${MAX_EATS_PER_TURN} items per turn.` };
   if(b.mode==="duel" && b.d){
     const d = b.d, me = b.iAmHost?"host":"guest";
@@ -4956,6 +5342,17 @@ function renderEatModal(){
     document.getElementById("eatNum"+k).textContent = `${Math.max(0,Math.round(v))}/${max}`;
   };
   setEat("HP", ctx.hp, ctx.hpMax); setEat("MANA", ctx.mana, ctx.manaMax);
+  { const tr = document.getElementById("eatTargets");
+    if(tr){
+      if(!ctx.partyEat) tr.style.display = "none";
+      else {
+        const d = state.battle.d, cands = d.order.filter(u=> d.members[u].alive && (BOSS_ALLOW_SELF_EAT || u!==state.uid));
+        tr.style.display = "";
+        tr.innerHTML = `<p class="doodle-sub" style="margin:0 0 4px">Who do you want to feed? (one teammate, one food)</p>` + (cands.length ? cands.map(u=>{ const m = d.members[u];
+          return `<button class="doodle-btn btn-sm ${state.battle.eatTarget===u?"btn-green":"btn-blue"}" data-eattgt="${u}">${escapeHTML(m.name)} · ${Math.max(0,m.hp)}/${m.hpMax} HP</button>`; }).join(" ") : `<small>No teammate is left standing to feed.</small>`);
+        tr.querySelectorAll("[data-eattgt]").forEach(bt=> bt.addEventListener("click", ()=>{ state.battle.eatTarget = bt.dataset.eattgt; renderEatModal(); }));
+      }
+    } }
   const foods = eatableFoods();
   if(eatSel && !foods.some(e=>e.item.id===eatSel)) eatSel = null;
   const grid = document.getElementById("eatGrid"); grid.innerHTML = "";
@@ -4972,7 +5369,7 @@ function renderEatModal(){
     ? `<b>${escapeHTML(sel.name)}</b> <i>(${sel.rarity})</i><br>${escapeHTML(sel.desc||"")}<br><b>${escapeHTML(itemEffectText(sel))}</b>` + (!ctx.canEat && ctx.why ? `<br><small>${ctx.why}</small>` : "")
     : "Select a food to read about it.";
   btn.disabled = !sel || !ctx.canEat;
-  btn.textContent = `Eat (${ctx.eatsLeft}/${MAX_EATS_PER_TURN} left this turn)`;
+  btn.textContent = ctx.partyEat ? `Feed ${ctx.targetName||"teammate"} (${ctx.eatsLeft}/${ctx.maxEats} left this turn)` : `Eat (${ctx.eatsLeft}/${MAX_EATS_PER_TURN} left this turn)`;
 }
 document.getElementById("btnEatNow").addEventListener("click", eatSelected);
 async function eatSelected(){
@@ -4984,6 +5381,24 @@ async function eatSelected(){
   eatBusy = true;
   try{
     const b = state.battle;
+    if(b.mode==="party"){
+      const tUid = b.eatTarget, heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0, manaGain = item.stats.mana ? Math.min(item.stats.mana, ctx.manaMax-ctx.mana) : 0;
+      if(heal<=0 && manaGain<=0){ toast(`${ctx.targetName} is already full — save it for later.`); return; }
+      const gains = [heal>0?`+${heal} HP`:"", manaGain>0?`+${manaGain} mana`:""].filter(Boolean).join(", ");
+      const removed = await changeInvQty(item.id, -1);          // inventory first: no free heals if the item isn't really there
+      if(removed===null) return;
+      const res = await runTransaction(db, async tx=>{
+        const r = partyRef(b.code), s = await tx.get(r); if(!s.exists()) return "gone";
+        const cur = s.data(), t = cur.members[tUid];
+        if(cur.status!=="active" || cur.turn!==state.uid || !t || !t.alive) return "bad";
+        tx.update(r, { [`members.${tUid}.hp`]: Math.min(t.hpMax, t.hp+heal), [`members.${tUid}.mana`]: Math.min(t.manaMax, t.mana+manaGain),
+          log:[...(cur.log||[]), `${state.profile.username} feeds ${t.name} ${item.name} (${gains}).`].slice(-60) });
+        return "ok";
+      }).catch(err=>{ console.error(err); return "bad"; });
+      if(res!=="ok"){ await addItemToInv(item.id, 1); toast("Couldn't feed them — you keep your food."); return; }   // refund
+      b.eats = (b.eats||0) + 1;
+      return;
+    }
     const heal = item.stats.heal ? Math.min(rollHeal(item), ctx.hpMax-ctx.hp) : 0;
     const manaGain = item.stats.mana ? Math.min(item.stats.mana, ctx.manaMax-ctx.mana) : 0;
     if(heal<=0 && manaGain<=0){ toast("You're already full — save it for later."); return; }
@@ -5050,25 +5465,33 @@ async function startDuelRoom(){
     status:"waiting", winner:null, createdAt: Date.now(), log:[]
   }));
   if(ok===null) return;
-  document.getElementById("roomStatus").textContent = `Room code: ${code} — waiting for opponent…`;
+  setRoomStatus(`Room code: ${code} — waiting for opponent…`);
   watchDuelRoom(code);
 }
+const setRoomStatus = t=>{ const el = document.getElementById("roomStatus"); if(el) el.textContent = t; };   // the duel panel isn't always on screen (e.g. an invited player)
 async function joinDuelRoom(code){
   if(!/^\d{5}$/.test(code)){ toast("Enter a valid 5-digit code."); return; }
+  if(state.battle){ toast("Finish your current fight first."); return; }
   const rref = doc(db,"duelRooms",code);
   try{
-    const snap = await getDoc(rref);
-    if(!snap.exists() || snap.data().status!=="waiting"){ toast("Room not found or full."); return; }
-    // Joining immediately flips the room to "active" — there is no separate
-    // "host clicks start" step, both sides connect live at the same moment.
-    await updateDoc(rref, {
-      guestUid: state.uid, guestName: state.profile.username,
-      ...duelSide("guest", state.profile),
-      status:"active", turn: Math.random()<0.5 ? state.uid : snap.data().hostUid
+    // Claim the room in a transaction so two people can never both join it.
+    // Joining immediately flips the room to "active" — both sides connect live at the same moment.
+    const res = await runTransaction(db, async tx=>{
+      const snap = await tx.get(rref);
+      if(!snap.exists() || snap.data().status!=="waiting" || snap.data().guestUid) return "gone";
+      if(snap.data().hostUid===state.uid) return "self";
+      tx.update(rref, {
+        guestUid: state.uid, guestName: state.profile.username,
+        ...duelSide("guest", state.profile),
+        status:"active", turn: Math.random()<0.5 ? state.uid : snap.data().hostUid
+      });
+      return "ok";
     });
-    document.getElementById("roomStatus").textContent = "Duel starting…";
-    watchDuelRoom(code);
-  }catch(err){ toast(friendlyFirebaseError(err)); }
+    if(res==="self"){ toast("That's your own room."); return; }
+    if(res!=="ok"){ toast("Room not found or full."); return; }
+    setRoomStatus("Duel starting…");
+    watchDuelRoom(code);          // the snapshot opens the duel on this side; the host's watcher opens it on theirs
+  }catch(err){ console.error(err); toast(friendlyFirebaseError(err)); }
 }
 // Both sides re-copy their own live stats the moment the duel opens (only
 // before anyone has acted), so time spent waiting in a room/queue — eating,
