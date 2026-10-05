@@ -100,7 +100,7 @@ function startDayNight({ getTheme=()=>"dynamic", onNightChange=()=>{} }={}){
    pine silhouettes and their reflections. Both live in one SVG; CSS cross-fades them with --night.
    ========================================================================= */
 function buildScene(){
-  const stage = document.getElementById("gameStage"); if(!stage || document.getElementById("sceneBg")) return;
+  const stage = document.getElementById("screen-game"); if(!stage || document.getElementById("sceneBg")) return;   // full-screen layer: same box as the paper background, so no margins
   let seed = 11; const rnd = ()=> (seed = (seed*16807) % 2147483647) / 2147483647;
   const j = (v,a=2)=> (v + (rnd()-.5)*2*a).toFixed(1);
   const pts = arr=> arr.map(([x,y])=> j(x)+","+j(y)).join(" ");
@@ -150,7 +150,8 @@ function buildScene(){
     </defs>
     <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>`;
   const el = document.createElement("div"); el.id = "sceneBg"; el.className = "scene-bg"; el.setAttribute("aria-hidden","true"); el.innerHTML = svg;
-  stage.prepend(el);
+  const paper = document.getElementById("regionBg");
+  if(paper) paper.after(el); else stage.prepend(el);
 }
 buildScene();
 
