@@ -7,9 +7,7 @@ export const DG_TRACK = "rpg_dungeon.mp3";
 export const DG_COOLDOWN_MS = 24*60*60*1000;      // the door re-opens 24h after you leave
 export const DG_LOCKED_TABS = ["map","jobs","shop","farm","duel"];
 export const DG_SKIP_PRICE = 100;
-/* Cash per kill follows the same tiers as the open world (bosses pay triple). */
-export const DG_MONEY = { easy:[1,15], medium:[5,40], hard:[10,75] };
-const rndRange = ([lo,hi], rnd)=> lo + Math.floor(rnd()*(hi-lo+1));
+export const DG_REWARD_MULT = 2;                  // every dungeon monster (normal, wave, boss) pays 2x its default XP and money
 export const isCheckpoint = f => f % 5 === 0;     // 0, 5, 10, 15 ... (0 is the entrance)
 
 const pickWeighted = (w, rnd)=>{
@@ -17,13 +15,18 @@ const pickWeighted = (w, rnd)=>{
   for(const k of keys){ t -= w[k]; if(t<=0) return k; }
   return keys[keys.length-1];
 };
-/* Wave rooms are rare: only ONE floor in every block of 5 (never the checkpoint) is allowed to roll a wave,
-   and which floor that is changes from block to block (but is the same for everyone).
-   Every other room type is equally likely on every floor — depth only makes enemies and loot better. */
-export const waveFloor = block => 5*block + 1 + (Math.imul(block+1, 2654435761)>>>0)%4;   // one of 5b+1 .. 5b+4
-export const canWave = f => f>0 && f%5!==0 && f===waveFloor(Math.floor(f/5));
+/* Odds of each room type on floor f. Easy rooms fade out, hard rooms grow with depth. */
 export function eventWeights(f){
-  return { nothing:1, chest:1, shop:1, doors:1, battle:1, waves: canWave(f) ? 1 : 0, boss:1 };
+  const t = Math.min(1, f/40);
+  return {
+    nothing: 2 + 10*(1-t),
+    chest:   20 - 6*t,
+    shop:    7,
+    doors:   12 - 4*t,
+    battle:  32 + 16*t,          // monsters show up far more often than before
+    waves:   f<3 ? 0 : 12 + 14*t,
+    boss:    f<4 ? 0 : 4 + 10*t
+  };
 }
 export const rollEventType = (f, rnd=Math.random)=> pickWeighted(eventWeights(f), rnd);
 
@@ -42,7 +45,7 @@ const SPRITES = { Skeleton:"💀","Cave Bat":"🦇",Wraith:"👻","Giant Spider"
 export function buildMonster(f, kind, playerLevel, rnd=Math.random){
   const lvl = Math.max(1, Math.round((playerLevel||1)*0.7 + f*1.4));
   const creep = 1 + f*0.03;
-  const hpM = kind==="boss" ? 3 : kind==="wave" ? 0.7 : 1, atkM = kind==="boss" ? 0.6 : kind==="wave" ? 0.85 : 1;
+  const hpM = kind==="boss" ? 6 : kind==="wave" ? 0.7 : 1, atkM = kind==="boss" ? 0.6 : kind==="wave" ? 0.85 : 1;
   const rewM = kind==="boss" ? 4 : 1;
   const names = kind==="boss" ? BOSS_NAMES : NORMAL_NAMES, name = names[Math.floor(rnd()*names.length)];
   const difficulty = kind==="boss" ? "hard" : kind==="wave" ? "easy" : (f<10 ? "easy" : f<25 ? "medium" : "hard");
@@ -50,7 +53,7 @@ export function buildMonster(f, kind, playerLevel, rnd=Math.random){
     id:"dg_"+name.toLowerCase().replace(/\W+/g,""), name, region:"dungeon", difficulty, level:lvl, element:"earth",
     sprite: kind==="boss" ? "👁️" : (SPRITES[name]||"💀"),
     hp: Math.round((20+lvl*8)*creep*hpM), attack: Math.max(1, Math.round((3+lvl*1.5)*creep*atkM)),
-    xpReward: Math.round((6+lvl*0.8)*rewM), moneyReward: Math.round(rndRange(DG_MONEY[difficulty], rnd)*(kind==="boss" ? 3 : 1)), dropChance:0
+    xpReward: Math.round((6+lvl*0.8)*rewM*DG_REWARD_MULT), moneyReward: Math.round((8+lvl*1.2+f)*rewM*DG_REWARD_MULT), dropChance:0
   };
 }
 export const waveSize = (f, rnd=Math.random)=> 2 + Math.floor(rnd()*3) + Math.floor(f/15);   // 2-4, +1 per 15 floors

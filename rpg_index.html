@@ -196,7 +196,7 @@
     <div class="footer-right doodle-panel">
       <div class="stat-row" title="Speed: +1 Mana regenerated per turn for each point"><span>SPD</span><b id="statSPEED">0</b></div>
       <div class="stat-row"><span>STR</span><b id="statSTRENGTH">0</b></div>
-      <div class="stat-row" title="Charm: you take 1 less damage from enemies and players for each point"><span>CHR</span><b id="statCHARM">0</b></div>
+      <div class="stat-row" title="Charm: you block 5 damage from enemies and players for each point"><span>CHR</span><b id="statCHARM">0</b></div>
       <div class="stat-row" title="Smarts: +1 attack damage, but -1 max Rage for each point"><span>SMT</span><b id="statSMARTS">0</b></div>
     </div>
   </footer>
@@ -485,6 +485,7 @@
 
     <div class="ctab-page" id="ctab-craft">
       <p class="doodle-sub">Choose a recipe, then press CRAFT. Gather more goods to discover more recipes. <span id="recipeCount"></span></p>
+      <div class="craft-search"><input id="craftSearch" type="search" placeholder="🔎 Search any item — shows every recipe that makes it or uses it" autocomplete="off"><button class="doodle-btn btn-sm btn-yellow" id="craftSearchClear" title="Clear search">✕</button></div>
       <div class="craft-tabs" id="craftTabs"></div>
       <div class="recipe-list" id="recipeList"></div>
       <div class="recipe-detail doodle-panel" id="recipeDetail">Pick a recipe above.</div>

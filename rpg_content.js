@@ -231,21 +231,21 @@ export function registerItems(I){
 
 /* ---------- job modes: green = normal, yellow = risky, red = extreme ---------- */
 export const MODES = {
-  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 80% reward / 20% hazard, 1 durability, 1 mineral. Fish: easy fish. Bugs: easy bugs (10s)." },
-  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 20% hazard. Fish: medium fish. Bugs: medium bugs (15s)." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 20% hazard. Fish: hard fish. Bugs: hard bugs (20s)." }
+  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 90% reward / 10% hazard, 1 durability, 1 mineral. Fish: easy fish (7s). Bugs: easy bugs (10s)." },
+  yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 10% hazard. Fish: medium fish (10s). Bugs: medium bugs (10s)." },
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 10% hazard. Fish: hard fish (15s). Bugs: hard bugs (10s)." }
 };
 export const FORAGE_RULES = {
   green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
   yellow: { chance:.75, qty:[1,2], cooldown:5*60*1000 },
   red:    { chance:.90, qty:[1,3], cooldown:30*60*1000 }
 };
-// Every mode: always exactly 1 mineral (double:0) and the SAME 20% hazard chance.
+// Every mode: always exactly 1 mineral (double:0) and the SAME 10% hazard chance (disasters).
 // Higher modes only cost more durability and shift the gem rarity odds (see RARITY_W).
 export const MINE_RULES = {
-  green:  { pos:.80, neg:.20, wear:1, double:0, cash:[20,100] },
-  yellow: { pos:.80, neg:.20, wear:2, double:0, cash:[50,220] },
-  red:    { pos:.80, neg:.20, wear:3, double:0, cash:[100,450] }
+  green:  { pos:.90, neg:.10, wear:1, double:0, cash:[20,100] },
+  yellow: { pos:.90, neg:.10, wear:2, double:0, cash:[50,220] },
+  red:    { pos:.90, neg:.10, wear:3, double:0, cash:[100,450] }
 };
 export const MINE_CASH_SHARE = 0.08;     // share of "good" swings that turn up cash instead of a mineral
 export const FISH_RULES = {
@@ -254,9 +254,9 @@ export const FISH_RULES = {
   // Difficulty shift: old medium -> easy, old hard -> medium, and a brand-new chaotic hard.
   // Optional extras (defaults keep the old behaviour): dashMul = dart speed multiplier, dashLen = [min,max] dart ticks,
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
-  green:  { tier:"easy",   bar:72, time:10000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
-  yellow: { tier:"medium", bar:72, time:15000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
-  red:    { tier:"hard",   bar:72, time:20000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
+  green:  { tier:"easy",   bar:72, time:7000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
+  yellow: { tier:"medium", bar:72, time:10000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
+  red:    { tier:"hard",   bar:72, time:15000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
@@ -308,6 +308,7 @@ export function rollPool(pool, luck=0){
 /* ---------- crafted gear stats: forged pieces are always better than any shop/drop piece of the same rarity ----------
    Each ore sets a main stat and a paired second stat: helmet+chestplate lean on the main stat, leggings+boots on the pair.
    Crafted armor beats the best regular armor of its rarity on both the stat line and max HP. */
+const CRAFT_ARMOR_HP_MULT = 2, CRAFT_WEAPON_DMG_MULT = 2;   // ONLY crafted (gear_*) pieces — shop weapons/armor (wpn_*/arm_*) are unchanged
 const STAT_PAIR = { SPEED:"CHARM", STRENGTH:"SPEED", CHARM:"SMARTS", SMARTS:"STRENGTH" };
 /* Metal progression (weakest -> strongest):
      tin -> copper -> lead -> iron -> silver -> platinum -> steel -> gold -> titanium -> mithril -> adamantite
@@ -333,12 +334,12 @@ export function craftedArmorStats(slot, rar, stat, variant=0, key){
   const [r, t] = gearPower(key, rar), c = CRAFT_SLOT[slot], [smin,smax,hmin,hmax] = ARMOR_RANGES[r];
   const main = Math.max(1, Math.round(lerpR([smin,smax], t)*c.pm)), other = STAT_PAIR[stat];
   const [p, q] = c.pri===0 ? [stat, other] : [other, stat];
-  return { hp: lerpR([hmin,hmax], t + c.sh), [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
+  return { hp: lerpR([hmin,hmax], t + c.sh) * CRAFT_ARMOR_HP_MULT, [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
 }
 const WEAPON_SHIFT = [0, -.06, .06, 0, .04, -.04];   // sword, dagger, axe, spear, mace, bow
 export const craftedWeaponAttack = (rar, i=0, key)=>{
   const [r, t] = gearPower(key, rar);
-  return lerpR(WEAPON_DAMAGE[r], t + WEAPON_SHIFT[i%6]);
+  return lerpR(WEAPON_DAMAGE[r], t + WEAPON_SHIFT[i%6]) * CRAFT_WEAPON_DMG_MULT;
 };
 export function gearStatText(st){
   const bits = [];

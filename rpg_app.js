@@ -15,7 +15,16 @@ import {
   increment, serverTimestamp, collectionGroup, getAggregateFromServer, sum, count
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
-import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill } from "./rpg_skilltree.js";
+import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
+const describeSkill = n=> describeSkillBase(n).replace(/(costs?\s+)(\d+)(\s+mana)/gi, (_,a,x,c)=> a+spellMana(+x)+c);
+/* ---- tuning knobs for this update ---- */
+const SPELL_MANA_MULT = 1.5, spellMana = n=> Math.ceil(n*SPELL_MANA_MULT);   // every spell costs 1.5x mana
+const CHARM_BLOCK = 5;                                                         // each point of CHARM blocks 5 damage
+const PVP_DMG_DIV = 10;                                                        // player-vs-player duels: damage is 10x lower
+const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA_PCT = 0.5;   // rage per move; skipping also refills 50% of max mana
+const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 5;                              // $ per 1 use: 20, 25, 30, 35, ... per tool tier
+const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
+const DG_SHOP_PRICE_MULT = 0.5;
 import { gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
 
 /* =========================================================================
@@ -548,6 +557,7 @@ const TOOL_LADDER = [   // [id suffix, name, uses, shop price, rarity, material 
   ["6",  "Diamond",   220, 3600, "legendary", "gem_diamond_cut"],
   ["_ad","Adamantite",300, 4900, "legendary", "ing_adamantite"]
 ];
+TOOL_LADDER.forEach((t,i)=>{ t[3] = t[2]*(TOOL_PRICE_START + TOOL_PRICE_STEP*i); });   // price = uses x ($20, $25, $30, $35 ...) — wooden pick: 3 x $20 = $60
 const jobToolId = (kind, suffix)=> "tool_"+kind+suffix;
 const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fishingrod2:10, tool_pickaxe3:25, tool_fishingrod3:25 };
 [["tool_pickaxe2","Sturdy Pickaxe",150,"uncommon",10],["tool_pickaxe3","Iron Pickaxe",400,"rare",25],
@@ -601,7 +611,8 @@ const CATALOG = registerItems(ITEM_BY_ID);
 // Hoes till 1 tile per use, watering cans water 1 tile per use. 5 durability tiers each.
 const FARM_TOOL_TIERS = [["Wooden",10,60,"common"],["Sturdy",30,160,"uncommon"],["Iron",80,420,"rare"],["Gold",200,1100,"epic"],["Diamond",500,2800,"legendary"]];
 const FARM_TOOLS = [];
-[["hoe","Hoe","Tills 1 tile per use."],["can","Watering Can","Waters 1 tile per use."]].forEach(([k,nm,d])=> FARM_TOOL_TIERS.forEach(([pre,uses,price,rar],i)=>{
+[["hoe","Hoe","Tills 1 tile per use."],["can","Watering Can","Waters 1 tile per use."]].forEach(([k,nm,d])=> FARM_TOOL_TIERS.forEach(([pre,uses,price0,rar],i)=>{
+  const price = uses*(TOOL_PRICE_START + TOOL_PRICE_STEP*i);
   const id = i===0 ? `tool_${k}` : `tool_${k}${i+1}`;
   TOOL_USES[id] = uses;
   const it = { id, name:`${pre} ${nm}`, type:"tool", rarity:rar, price, sellPrice:Math.round(price/3), desc:`${d} Breaks after ${uses} uses.`, stats:{} };
@@ -653,7 +664,7 @@ const BACKPACK_ITEMS = [1,2,3,4,5].map(t=>{
 ITEM_BY_ID.rebirth_scroll = { id:"rebirth_scroll", name:"Rebirth", type:"rebirth", rarity:"legendary", price:5000, sellPrice:0,
   desc:"A swirl of ash and light. Use it to refund ALL your skill tree points and reset the tree back to the top.", stats:{} };
 const invCap = p=> BACKPACK_SLOTS[Math.min(5, Math.max(0, (p&&p.backpackTier)||0))];
-const invUsed = inv=> (inv||[]).filter(e=>e.qty>0).length;
+const invUsed = inv=> (inv||[]).reduce((n,e)=> e.qty>0 ? n + (ITEM_BY_ID[e.itemId]?.type==="tool" ? e.qty : 1) : n, 0);   // tools never stack: each one takes its own slot
 const AUCTION_MS = 7*24*60*60*1000;   // auction listings last 7 days
 
 /* ---------- procedural enemy bank: 4 regions x 3 difficulties x 10 = 120 ---------- */
@@ -1343,7 +1354,8 @@ document.querySelectorAll("[data-jtab]").forEach(btn=>{
 
 function invExpanded(){
   const p = state.profile; if(!p) return [];
-  return (p.inventory||[]).map(entry => ({ ...entry, item: ITEM_BY_ID[entry.itemId] })).filter(e=>e.item);
+  return (p.inventory||[]).map(entry => ({ ...entry, item: ITEM_BY_ID[entry.itemId] })).filter(e=>e.item)
+    .flatMap(e=> e.item.type==="tool" && e.qty>1 ? Array.from({ length:e.qty }, ()=>({ ...e, qty:1 })) : [e]);   // stacked tools spread out: 1 tool per slot
 }
 function renderInventory(){
   dgRenderLootNote();
@@ -1490,6 +1502,14 @@ async function applyInvChanges({remove=[], add=[], strict=false, onDropped=null}
       }
       const cap = invCap(data);
       for(const {itemId, qty} of add){
+        if(ITEM_BY_ID[itemId]?.type==="tool"){                       // tools never stack: every single tool needs its own free slot
+          for(let k=0;k<qty;k++){
+            if(invUsed(inv) >= cap){ if(strict) throw new Error("inv-full"); dropped.push({ itemId, qty:qty-k }); break; }
+            const j = inv.findIndex(e=>e.itemId===itemId);
+            if(j>=0) inv[j].qty = Math.max(0,inv[j].qty) + 1; else inv.push({ itemId, qty:1 });
+          }
+          continue;
+        }
         const idx = inv.findIndex(e=>e.itemId===itemId);
         if(idx>=0 && inv[idx].qty>0){ inv[idx].qty += qty; continue; }
         if(invUsed(inv) >= cap){ if(strict) throw new Error("inv-full"); dropped.push({ itemId, qty }); continue; }
@@ -2874,8 +2894,8 @@ let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); r
 /* bug catching: time to catch, bug speed (px/s), turns per second, chance a turn becomes a dash, and how fast the bar drains when you slip off (x the fill rate) */
 const BUG_RULES = {
   green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5 },
-  yellow: { tier:"medium", time:15000, speed:140, turn:2.0, dash:.20, drop:.6 },
-  red:    { tier:"hard",   time:25000, speed:150, turn:2.2, dash:.20, drop:.5 }
+  yellow: { tier:"medium", time:10000, speed:140, turn:2.0, dash:.20, drop:.6 },
+  red:    { tier:"hard",   time:10000, speed:150, turn:2.2, dash:.20, drop:.5 }
 };
 const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
@@ -4235,7 +4255,7 @@ function renderMySlots(){
       cell.innerHTML = `<div>${item.name}</div><span class="qty-badge">x${listing.qty}</span><button class="doodle-btn btn-sm" style="margin-top:4px">Cancel</button>`;
       cell.querySelector("button").addEventListener("click", async (ev)=>{
         ev.stopPropagation();
-        if(!hasItem(item.id) && invUsed(state.profile.inventory) >= invCap(state.profile)){ toast("Your inventory is full — free a slot before cancelling."); return; }
+        if((!hasItem(item.id) || item.type==="tool") && invUsed(state.profile.inventory) >= invCap(state.profile)){ toast("Your inventory is full — free a slot before cancelling."); return; }
         const ok = await withErrorToast(()=> deleteDoc(doc(db,"auction",d.id)));
         if(ok===null) return;
         await applyInvChanges({ add:[{itemId:item.id, qty:listing.qty}], strict:true });
@@ -4474,18 +4494,29 @@ function renderCraftInv(){
     const b = document.createElement("button");
     b.className = "craft-tab" + (tab===t.id?" active":"");
     b.textContent = `${t.label} (${n})`;
-    b.addEventListener("click", ()=>{ state.craftTab = t.id; renderCraftInv(); });
+    b.addEventListener("click", ()=>{ state.craftTab = t.id; state.craftQuery = ""; const si = document.getElementById("craftSearch"); if(si) si.value = ""; renderCraftInv(); });
     tabsEl.appendChild(b);
   });
-  const unlocked = allUnlocked.filter(r=> tab==="all" || craftCat(ITEM_BY_ID[r.out])===tab);
-  unlocked.sort((a,b)=> canCraft(b)-canCraft(a));
+  const q = (state.craftQuery||"").trim().toLowerCase(), searching = q.length>0;
+  tabsEl.style.opacity = searching ? ".45" : "";
+  let unlocked, hit = new Set();
+  if(searching){      // search ANY item in the game: every recipe that uses it OR gives it (discovered or not)
+    hit = new Set(Object.values(ITEM_BY_ID).filter(i=> i.name && i.name.toLowerCase().includes(q)).map(i=>i.id));
+    unlocked = RECIPES.filter(r=> ITEM_BY_ID[r.out] && (hit.has(r.out) || r.ing.some(([id])=>hit.has(id))));
+    unlocked.sort((a,b)=> canCraft(b)-canCraft(a) || hit.has(b.out)-hit.has(a.out));
+    document.getElementById("recipeCount").textContent = `${unlocked.length} recipe${unlocked.length===1?"":"s"} match "${state.craftQuery.trim()}"`;
+  } else {
+    unlocked = allUnlocked.filter(r=> tab==="all" || craftCat(ITEM_BY_ID[r.out])===tab);
+    unlocked.sort((a,b)=> canCraft(b)-canCraft(a));
+  }
   const list = document.getElementById("recipeList"); list.innerHTML = "";
-  if(!unlocked.length) list.innerHTML = "<div class=\"recipe-empty\">Nothing discovered here yet — gather more materials!</div>";
+  if(!unlocked.length) list.innerHTML = searching ? "<div class=\"recipe-empty\">No recipe makes or uses an item with that name.</div>" : "<div class=\"recipe-empty\">Nothing discovered here yet — gather more materials!</div>";
   unlocked.forEach(r=>{
     const it = ITEM_BY_ID[r.out], ok = canCraft(r);
     const el = document.createElement("div");
     el.className = `recipe-banner rarity-${it.rarity}` + (ok?" can":"") + (state.selRecipe===r.id?" sel":"");
-    el.innerHTML = `<b>${it.name}</b><span>${r.ing.map(([id,q])=>`${q}x ${ITEM_BY_ID[id].name}`).join(" + ")}</span>`;
+    const tag = searching ? ` <small>${hit.has(r.out) ? "⬅ makes it" : "➡ uses it"}${r.ing.every(([id])=> disc.has(id)) ? "" : " · 🔒 undiscovered"}</small>` : "";
+    el.innerHTML = `<b>${it.name}${tag}</b><span>${r.ing.map(([id,q2])=>`${q2}x ${ITEM_BY_ID[id].name}`).join(" + ")}</span>`;
     el.addEventListener("click", ()=>{ state.selRecipe=r.id; renderCraftInv(); });
     list.appendChild(el);
   });
@@ -4497,6 +4528,8 @@ function renderCraftInv(){
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
 }
+document.getElementById("craftSearch").addEventListener("input", e=>{ state.craftQuery = e.target.value; renderCraftInv(); });
+document.getElementById("craftSearchClear").addEventListener("click", ()=>{ state.craftQuery = ""; document.getElementById("craftSearch").value = ""; renderCraftInv(); });
 document.getElementById("btnCraft").addEventListener("click", async ()=>{
   const r = RECIPES.find(x=>x.id===state.selRecipe); if(!r) return;
   if(!canCraft(r)){ toast("You're missing ingredients."); return; }
@@ -4537,20 +4570,20 @@ const ATTACK_SKILLS = [
     dmgMult:()=>1, desc:"A standard strike. Always available." },
   { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
     dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
-  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:10,
-    dmgMult:()=>1.35, desc:"Unlocked at Lv.10. Costs 10 mana. Extra damage that cuts through a brace." },
-  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:20,
-    dmgMult:()=>3, desc:"Unlocked at Lv.30. Costs 20 mana. Devastating hit." },
+  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:spellMana(10),
+    dmgMult:()=>1.35, desc:`Unlocked at Lv.10. Costs ${spellMana(10)} mana. Extra damage that cuts through a brace.` },
+  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:spellMana(20),
+    dmgMult:()=>3, desc:`Unlocked at Lv.30. Costs ${spellMana(20)} mana. Devastating hit.` },
 ];
 const spellRoll = ([lo,hi])=> lo + Math.floor(Math.random()*(hi-lo+1));
 function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || treeAttacks(state.profile).find(s=>s.id===id) || ATTACK_SKILLS[0]; }
 /* Skill-tree attacks (Firebolt, Cyclone, ...) join the normal attack list once bought. */
 function treeAttacks(p){
   return ownedSkills(p).filter(isSpellNode).map(n=>{
-    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:n.mana, hpCost:0, flatDmg:0, dmgMult:()=>1, cooldown:0 };
-    if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${n.mana} mana. Deals +${n.val} damage compared with a basic attack.`; }
-    else if(n.kind==="L"){ s.healHp = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana. A basic attack that also heals you for ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves.`; }
-    else { s.healMana = [n.lo,n.hi]; s.hpCost = n.hpCost||0; s.cooldown = n.cd; s.desc = `Costs ${n.mana} mana and ${s.hpCost} HP. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
+    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:spellMana(n.mana), hpCost:0, flatDmg:0, dmgMult:()=>1, cooldown:0 };
+    if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${spellMana(n.mana)} mana. Deals +${n.val} damage compared with a basic attack.`; }
+    else if(n.kind==="L"){ s.healHp = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${spellMana(n.mana)} mana. A basic attack that also heals you for ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves.`; }
+    else { s.healMana = [n.lo,n.hi]; s.hpCost = n.hpCost||0; s.cooldown = n.cd; s.desc = `Costs ${spellMana(n.mana)} mana and ${s.hpCost} HP. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
     return s;
   });
 }
@@ -4673,8 +4706,8 @@ function renderPve(){
     const cd = (b.cd||{})[s.id]||0;
     add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>pveAct(s.id), cd>0);
   });
-  add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the damage this turn and gain 2 Rage. Can only be used every other turn.", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
-  add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>pveAct("focus"), false, "btn-blue");
+  add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the damage this turn and gain 2 Rage. Can only be used every other turn. (Attacks give +1 Rage.)", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
+  add("Focus", "Skip attacking. Your next attack deals double damage. Gain 2 Rage.", ()=>pveAct("focus"), false, "btn-blue");
   const eatsLeftNow = Math.max(0, MAX_EATS_PER_TURN - (b.eats||0));
   add(eatsLeftNow>0 ? "🍖 Eat" : "🍖 Eat (max 3)", `Open your food bag and pick what to eat. Free action — does NOT end your turn. Max ${MAX_EATS_PER_TURN} items per turn.`, openEatModal, eatsLeftNow<=0, "btn-green");
   if(!b.dg || b.dg.gauntlet) add("Flee", b.dg ? "Abandon the boss gauntlet — you start again from the first enemy." : "Escape safely — you lose nothing.", pveFlee, false, "btn-yellow");   // no fleeing from the dungeon
@@ -4697,14 +4730,14 @@ async function pveAct(move){
   b.lastMove = move;
   const brace = intent==="guard";
   let guard=false, counter=false;
-  if(move==="guard"){ guard=true; b.rage=Math.min(p.rageMax,b.rage+2); battleLogPush("You raise your guard."); }
+  if(move==="guard"){ guard=true; b.rage=Math.min(p.rageMax,b.rage+RAGE_SHIELD); battleLogPush("You raise your guard."); }
   else if(move==="counter"){ counter=true; battleLogPush("You ready a counter…"); }
-  else if(move==="focus"){ b.focus=true; battleLogPush("You focus, gathering strength."); }
+  else if(move==="focus"){ b.focus=true; b.rage=Math.min(p.rageMax,b.rage+RAGE_FOCUS); battleLogPush("You focus, gathering strength."); }
   else {
     const s = attackSkillById(move);
     if(s.needsFullRage) b.rage = 0;
     if(s.manaCost) b.mana -= s.manaCost;
-    else if(s.id==="basic") b.rage = Math.min(p.rageMax, b.rage+1);
+    b.rage = Math.min(p.rageMax, b.rage+RAGE_ATTACK);                 // every attack (spells included) = +1 rage
     if(s.hpCost){ b.php -= s.hpCost; battleLogPush(`${s.name} costs you ${s.hpCost} HP.`); }
     let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
     if(brace && s.id!=="precision") d*=0.4;
@@ -4733,7 +4766,7 @@ async function pveAct(move){
     } else {
       let d = enemyHitBase(m, b)*mult*rnd();
       if(guard) d*=guardTakenMult(); if(counter) d*=1.3;
-      d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0));       // every point of CHARM = 1 less damage taken (min 1)
+      d = Math.max(1, Math.max(1, Math.round(d)) - (p.stats?.CHARM||0)*CHARM_BLOCK);       // every point of CHARM = 5 less damage taken (min 1)
       b.php -= d; b.rage=Math.min(p.rageMax,b.rage+2);
       battleLogPush(`${m.name} uses ${INTENTS[intent].label}: ${d} damage${guard?" (guarded)":""}.`);
     }
@@ -4920,6 +4953,7 @@ const BOSS_WAVE_HP_MULT = 5;           // every enemy before the boss: 5x the HP
 const BOSS_HP_MULT = 20;               // the boss: 20x the HP of the strongest player
 const BOSS_EAT_SELF = 3, BOSS_EAT_FRIEND = 1;   // boss fights: per turn you may eat 0-3 foods yourself AND/OR give a friend 0-1 food
 const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
+const BOSS_DMG_MULT = 1.2;             // boss fights hit 1.2x harder than before
 const BOSS_BASE_DMG_DIV = 4;           // every enemy's base damage = strongest player's max HP / 4 (Attack = x1, Weak x0.6, Strong x1.9)
 let partyUnsub = null, partyCode = null, partyData = null, partyTimer = null, partyStarting = false, partyHidden = false, partyBusyStall = false;
 const partyFinalized = new Set(), partyUi = { sel:new Set() };
@@ -4938,7 +4972,7 @@ function renderBossPanel(){
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
   else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
-  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4. In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4 (×1.2 in boss fights). In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
   box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   partyEl("btnBossGo")?.addEventListener("click", ()=>{
@@ -5150,8 +5184,8 @@ function partyEnemyTurn(d, lines){
     lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on the whole party!`);
     team.forEach(u=>{
       const t = d.members[u];
-      let dmg = e.attack*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
-      dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0));
+      let dmg = e.attack*BOSS_DMG_MULT*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
+      dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0)*CHARM_BLOCK);
       t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
       lines.push(`  ${t.name} takes ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
       if(t.hp<=0){ t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
@@ -5188,9 +5222,9 @@ function partyApplyAction(cur, uid, move){
   if(move==="guard" && m.last==="guard") return { err:"cd", msg:"Guard is on cooldown." };
   if((m.cd[move]||0)>0) return { err:"cd", msg:`That spell is on cooldown (${m.cd[move]} more moves).` };
   const brace = d.intent==="guard";
-  if(move==="guard"){ m.fx.guard = true; m.rage = Math.min(m.rageMax, m.rage+2); lines.push(`${m.name} raises their guard.`); }
-  else if(move==="focus"){ m.fx.focus = true; lines.push(`${m.name} focuses their strength.`); }
-  else if(move==="skip") lines.push(`${m.name} passes.`);
+  if(move==="guard"){ m.fx.guard = true; m.rage = Math.min(m.rageMax, m.rage+RAGE_SHIELD); lines.push(`${m.name} raises their guard.`); }
+  else if(move==="focus"){ m.fx.focus = true; m.rage = Math.min(m.rageMax, m.rage+RAGE_FOCUS); lines.push(`${m.name} focuses their strength.`); }
+  else if(move==="skip"){ const g = Math.min(Math.ceil(m.manaMax*SKIP_MANA_PCT), Math.max(0,m.manaMax-m.mana)); m.mana += g; m.rage = Math.min(m.rageMax, m.rage+RAGE_SKIP); lines.push(`${m.name} passes, recovering ${g} mana and gaining ${RAGE_SKIP} rage.`); }
   else if(move==="idle") lines.push(`${m.name} hesitates too long and loses their turn.`);
   else {
     const s = attackSkillById(move);
@@ -5198,7 +5232,8 @@ function partyApplyAction(cur, uid, move){
     if(s.manaCost && m.mana<s.manaCost) return { err:"res", msg:"Not enough Mana." };
     if(s.hpCost && m.hp<=s.hpCost) return { err:"res", msg:`Not enough HP — ${s.name} costs ${s.hpCost} HP.` };
     if(s.needsFullRage) m.rage = 0;
-    if(s.manaCost) m.mana -= s.manaCost; else if(s.id==="basic") m.rage = Math.min(m.rageMax, m.rage+1);
+    if(s.manaCost) m.mana -= s.manaCost;
+    m.rage = Math.min(m.rageMax, m.rage+RAGE_ATTACK);
     if(s.hpCost){ m.hp -= s.hpCost; lines.push(`${m.name} pays ${s.hpCost} HP.`); }
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(m.fx.focus?2:1); m.fx.focus = false;
     if(brace && s.id!=="precision") dmg *= 0.4;
@@ -5270,8 +5305,8 @@ function renderPartyBattle(d){
   if(me.alive){
     knownAttacks(state.profile).forEach(s=>{ const cd = (me.cd||{})[s.id]||0; add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>partyAct(s.id), !myTurn || cd>0); });
     add(me.last==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the enemy's next attack on you and gain 2 Rage. Every other turn only.", ()=>partyAct("guard"), !myTurn || me.last==="guard", "btn-blue");
-    add("Focus", "Skip attacking. Your next attack deals double damage.", ()=>partyAct("focus"), !myTurn, "btn-blue");
-    add("Pass", "Do nothing this turn.", ()=>partyAct("skip"), !myTurn, "btn-blue");
+    add("Focus", "Skip attacking. Your next attack deals double damage. Gain 2 Rage.", ()=>partyAct("focus"), !myTurn, "btn-blue");
+    add("Pass", `Skip your turn: recover ${Math.round(SKIP_MANA_PCT*100)}% of your max Mana and gain ${RAGE_SKIP} Rage.`, ()=>partyAct("skip"), !myTurn, "btn-blue");
     const sl = Math.max(0, BOSS_EAT_SELF-(b.eatsSelf||0)), fl = Math.max(0, BOSS_EAT_FRIEND-(b.eatsFriend||0));
     add(sl+fl>0 ? `🍖 Eat (you ${sl}/${BOSS_EAT_SELF} · friend ${fl}/${BOSS_EAT_FRIEND})` : "🍖 Eat (used up)", `Eat up to ${BOSS_EAT_SELF} foods yourself and give a friend up to ${BOSS_EAT_FRIEND} per turn. Free action — does not end your turn.`, openEatModal, !myTurn || sl+fl<=0, "btn-green");
     if(!myTurn){ const w = document.createElement("span"); w.textContent = `Waiting for ${d.turn==="enemy" ? "the enemy" : (d.members[d.turn]?.name||"…")}…`; box.appendChild(w); }
@@ -5593,10 +5628,10 @@ function openDuelBattle(code, d){
 }
 /* Mana/Rage income, granted to a player the moment the turn comes back to them
    (so it's applied when their opponent finishes acting):
-     Mana:  +1 every turn, +2 more if their last move was Guard, +5 more if it was Skip
-     Rage:  +1 for an attack, +2 for a Power Strike or Guard */
-function turnMana(last){ return 1 + (last==="guard" ? 2 : last==="skip" ? 5 : 0); }
-function turnRage(last){ return last==="guard" || last==="power" ? 2 : (last && (ATTACK_SKILLS.some(s=>s.id===last) || String(last).startsWith("tree_"))) ? 1 : 0; }
+     Mana:  +1 every turn, +2 more if their last move was Guard, +50% of max Mana if it was Skip
+     Rage:  +1 for any attack, +2 for Guard or Focus, +3 for Skip */
+function turnMana(last, manaMax=0){ return 1 + (last==="guard" ? 2 : last==="skip" ? Math.ceil(manaMax*SKIP_MANA_PCT) : 0); }
+function turnRage(last){ return last==="guard" ? RAGE_SHIELD : last==="focus" ? RAGE_FOCUS : last==="skip" ? RAGE_SKIP : (last && (ATTACK_SKILLS.some(s=>s.id===last) || String(last).startsWith("tree_"))) ? RAGE_ATTACK : 0; }
 function renderDuelBattle(d){
   const b = state.battle;
   b.d = d;                                   // latest room data (used by the Eat overlay)
@@ -5681,7 +5716,8 @@ async function duelActInner(d, move){
     if(s.hpCost){ myHp -= s.hpCost; lines.push(`${myName} pays ${s.hpCost} HP.`); }
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= guardTakenMult();
-    dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0));    // their CHARM trims 1 damage per point (min 1)
+    dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0)*CHARM_BLOCK);    // their CHARM blocks 5 damage per point (min 1)
+    dmg = Math.max(1, Math.round(dmg/PVP_DMG_DIV));                                   // player-vs-player ONLY: damage is 10x lower (430 -> 43)
     opHp -= dmg;
     lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);
     if(s.healHp){ const h = Math.min(spellRoll(s.healHp), (d[me+"HpMax"]||myHp)-myHp); if(h>0){ myHp += h; lines.push(`${myName} heals ${h} HP.`); } }
@@ -5698,7 +5734,7 @@ async function duelActInner(d, move){
     // The turn is going back to the opponent: pay out THEIR income for what they did last turn.
     const opLast = d[op+"Last"];
     const opMana = d[op+"Mana"] ?? 0, opManaMax = d[op+"ManaMax"] ?? opMana, opRage = d[op+"Rage"] ?? 0, opRageMax = d[op+"RageMax"] ?? opRage;
-    const newMana = Math.min(opManaMax, opMana + turnMana(opLast) + (d[op+"Speed"]||0)), newRage = Math.min(opRageMax, opRage + turnRage(opLast));
+    const newMana = Math.min(opManaMax, opMana + turnMana(opLast, opManaMax) + (d[op+"Speed"]||0)), newRage = Math.min(opRageMax, opRage + turnRage(opLast));
     patch[op+"Mana"] = newMana; patch[op+"Rage"] = newRage;
     const gm = newMana-opMana, gr = newRage-opRage;
     if(gm>0 || gr>0) lines.push(`${opName} recovers ${[gm>0?`${gm} mana`:"", gr>0?`${gr} rage`:""].filter(Boolean).join(" and ")}.`);
@@ -6270,17 +6306,20 @@ function dgRollChest(f){
   const it = dgItemOfRarity(all, rar);
   return it ? [{ itemId:it.id, qty:1 }] : [];
 }
-const dgPrice = it=> Math.max(15, Math.round((it.price || (it.sellPrice||5)*4) * 1.5));
+const dgPrice = it=> Math.max(10, Math.round((it.price || (it.sellPrice||5)*3) * DG_SHOP_PRICE_MULT));   // was x1.5 — now much cheaper
 function dgRollShop(f){
   const foods = Object.values(ITEM_BY_ID).filter(i=>i.type==="consumable" && ((i.stats?.heal||0)>0 || (i.stats?.mana||0)>0));
-  const food = dgItemOfRarity(foods, rollRarity(f));
-  const gearItem = dgItemOfRarity(dgGearPool(), rollRarity(f));
+  const t = Math.min(1, f/60), w = { rare:55-15*t, epic:33+7*t, legendary:12+8*t };    // vendor stock is mid-to-late game: rare, epic or legendary only
+  const shopRarity = ()=>{ let r = Math.random()*(w.rare+w.epic+w.legendary); for(const k of ["rare","epic","legendary"]){ r -= w[k]; if(r<=0) return k; } return "legendary"; };
+  const food = dgItemOfRarity(foods, shopRarity());
+  const gearItem = dgItemOfRarity(dgGearPool(), shopRarity());
   return { items:[food, gearItem].map(it=>({ itemId:it.id, price:dgPrice(it), sold:false })), skipSold:false };
 }
 
 /* ----- events ----- */
 function dgRollEvent(f){
   if(isCheckpoint(f)) return { type:"safe" };
+  if(Math.random() < DG_TRAP_CHANCE) return { type:"trap", sprung:false, note:"" };      // 10% of rooms are trapped
   const t = rollEventType(f), lvl = state.profile.level||1;
   if(t==="nothing") return { type:"nothing" };
   if(t==="chest")   return { type:"chest", opened:false, loot:[] };
@@ -6290,7 +6329,7 @@ function dgRollEvent(f){
   if(t==="waves")   return { type:"waves", done:false, ms:Array.from({length:waveSize(f)}, ()=>buildMonster(f,"wave",lvl)), idx:0 };
   return { type:"battle", done:false, ms:[buildMonster(f,"normal",lvl)], idx:0 };
 }
-const dgEvDone = ev=> ev.type==="start"||ev.type==="safe"||ev.type==="nothing"||ev.type==="shop" ? true : ev.type==="chest" ? ev.opened : ev.type==="doors" ? ev.pick>=0 : !!ev.done;
+const dgEvDone = ev=> ev.type==="start"||ev.type==="safe"||ev.type==="nothing"||ev.type==="shop"||ev.type==="trap" ? true : ev.type==="chest" ? ev.opened : ev.type==="doors" ? ev.pick>=0 : !!ev.done;
 
 async function dgSave(run){
   state.profile.dungeon = run; dgLastHtml = ""; updateDungeonUI();
@@ -6331,6 +6370,7 @@ function dgStageHTML(run){
     body = ev.pick<0 ? `<div>Three doors. Only one way forward each... but not all are kind.</div><div class="dg-doors">${[0,1,2].map(i=>`<button data-act="door" data-i="${i}">🚪</button>`).join("")}</div>`
       : `<div class="dg-doors">${[0,1,2].map(i=>`<button disabled>${i===ev.pick ? (ev.outcome==="safe"?"✅":ev.outcome==="spike"?"🩸":"💸") : "🚪"}</button>`).join("")}</div><div>${escapeHTML(ev.note)}</div>`;
   }
+  else if(ev.type==="trap"){ door = "🪤"; body = `<div><b>A trapped room!</b></div><div>${escapeHTML(ev.note || "The floor clicks beneath your feet…")}</div>`; }
   else {                                                                         // battle / boss / waves
     const m = ev.ms[Math.min(ev.idx, ev.ms.length-1)], tag = ev.type==="boss" ? "👁️ BOSS" : ev.type==="waves" ? `⚔️ WAVE ${Math.min(ev.idx+1,ev.ms.length)}/${ev.ms.length}` : "⚔️ BATTLE";
     body = ev.done ? `<div>The room falls silent. ${ev.type==="battle"?"It is dead.":ev.type==="boss"?"The boss is dead.":"All enemies are dead."}</div>`
@@ -6444,6 +6484,16 @@ async function dgAdvance(){
   const next = { floor:f, ev:dgRollEvent(f), loot:run.loot };
   if(f > (state.profile.dungeonRecord||0)){ state.profile.dungeonRecord = f; updateDoc(doc(db,"players",state.uid), { dungeonRecord:f }).catch(()=>{}); }
   await dgSave(next);
+  if(next.ev.type==="trap") await dgSpringTrap(next);
+}
+/* A trapped room springs the moment you walk in: HP -> 1, mana -> 1, and you lose 10% of your money. */
+async function dgSpringTrap(run){
+  const p = state.profile, loss = Math.floor((p.money||0)*0.10);
+  run.ev.sprung = true;
+  run.ev.note = `The floor gives way and a hidden trap fires! Your HP and mana crash to 1${loss>0 ? ` and you lose $${fmtMoney(loss)} (10% of your money)` : ""}.`;
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp:1, mana:Math.min(p.mana||0,1), money:Math.max(0,(p.money||0)-loss) }));
+  toast("🪤 Trapped room! HP and mana drop to 1 and you lose 10% of your money.", 6000);
+  await dgSave(run);
 }
 function dgStartFight(){
   const run = dgRun(), ev = run && run.ev; if(!ev || state.battle) return;

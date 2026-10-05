@@ -965,9 +965,9 @@ body.dungeon-mode #candleOverlay{display:block;}
    DAY / NIGHT  (driven by rpg_daynight.js: --night 0..1, body.theme-dark)
    ========================================================================= */
 #nightOverlay{position:fixed; inset:0; z-index:99980; pointer-events:none; display:none; --mx:50vw; --my:45vh; opacity:var(--night,0);
-  background:radial-gradient(circle calc(120px + 360px*var(--night,0)) at var(--mx) var(--my), rgba(0,0,0,0) 0%, rgba(4,6,18,.4) 55%, rgba(4,6,18,.93) 100%), rgba(4,6,18,.14);}
+  background:radial-gradient(circle calc(180px + 540px*var(--night,0)) at var(--mx) var(--my), rgba(0,0,0,0) 0%, rgba(4,6,18,.4) 55%, rgba(4,6,18,.93) 100%), rgba(4,6,18,.14);}
 #nightOverlay::after{content:""; position:absolute; inset:0; mix-blend-mode:screen;
-  background:radial-gradient(circle calc(140px + 380px*var(--night,0)) at var(--mx) var(--my), rgba(255,226,150,.30) 0%, rgba(255,200,110,.12) 45%, rgba(255,190,90,0) 75%);}
+  background:radial-gradient(circle calc(210px + 570px*var(--night,0)) at var(--mx) var(--my), rgba(255,226,150,.30) 0%, rgba(255,200,110,.12) 45%, rgba(255,190,90,0) 75%);}
 body.has-night:not(.dungeon-mode) #nightOverlay{display:block;}
 /* journal / compass / skill buttons sit above the dark and glow like little lanterns */
 body.has-night:not(.dungeon-mode) #btnJournal, body.has-night:not(.dungeon-mode) #btnCompass, body.has-night:not(.dungeon-mode) #btnSkills{
@@ -1069,3 +1069,8 @@ body.theme-dark .sk-node em, body.theme-dark .sk-rowlabel{color:var(--ink-soft);
 .party-chip{ min-width:96px; padding:4px 8px; border:2px solid var(--ink); border-radius:10px; background:#fff8; font-size:13px; display:flex; flex-direction:column; gap:2px; }
 .party-chip.me{ background:var(--yellow); } .party-chip.turn{ box-shadow:0 0 0 3px #e63946; } .party-chip.down{ opacity:.45; filter:grayscale(1); }
 .party-chip .bar{ height:8px; display:block; } .party-chip small{ font-size:11px; }
+
+/* crafting search */
+.craft-search{display:flex; gap:6px; margin:4px 4px 8px;}
+.craft-search input{flex:1; font:inherit; font-size:15px; padding:7px 12px; border:2.5px solid var(--ink); border-radius:999px; background:var(--dFBF6EC); color:var(--ink);}
+.recipe-banner small{font-weight:normal; opacity:.75;}
