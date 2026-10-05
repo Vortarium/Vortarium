@@ -306,15 +306,17 @@ function cosmeticStyle(gid, fid){
    DAILY QUOTA GUARD
    The browser can't see Google's real usage meter, so every client counts the Firestore reads / writes / deletes
    it makes (wrappers below shadow the SDK functions) and adds them to ONE shared counter doc, usage/{day}.
-   When any counter reaches 99% of its daily limit the doc is marked locked and EVERY client logs out and shows the
+   When any counter reaches 90% of its daily limit the doc is marked locked and EVERY client logs out and shows the
    "Servers are full" egg screen; new logins are refused too. The "day" rolls over at 3:00 AM Eastern = midnight Pacific,
    which is exactly when Firebase resets its free quota. Locked pages reload themselves at that moment.
-   Edit QUOTA to match your plan (these are the Spark / free-tier numbers) and keep the 49500 / 19800 numbers in
-   rpg_firestore.rules in step (they are 99% of the same limits).
+   Edit QUOTA to match your plan (these are the Spark / free-tier numbers) and keep the 45000 / 18000 numbers in
+   rpg_firestore.rules in step (they are 90% of the same limits).
    ========================================================================= */
-const QUOTA = { reads:50000, writes:20000, deletes:20000, lockAt:0.99 };
+const QUOTA = { reads:50000, writes:20000, deletes:20000, lockAt:0.9 };
 const FULL_MSG = "Servers are full, come back at 3 AM EST to keep playing";
 let serverFull = false;
+const MANUAL_MSG = "The servers were turned off by a moderator. Come back soon!";
+let serverManualOff = false;                                      // true when the stasis was a mod shut-off (not the 90% usage lock)
 const usagePending = { reads:0, writes:0, deletes:0 };
 let usageLast = { reads:0, writes:0, deletes:0 }, usageFlushing = false, usageLastFlush = 0;
 const usageNY = new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit" });
@@ -326,8 +328,8 @@ function msUntilReset(){
   return Math.max(1000, hi - Date.now());
 }
 // the closer we are to the limit, the more often clients report in (so a lock reaches everyone fast)
-const usageEvery = ()=> usagePct()>=0.9 ? 15000 : usagePct()>=0.75 ? 60000 : 300000;
-const usageBatch = ()=> usagePct()>=0.9 ? 15 : 150;
+const usageEvery = ()=> usagePct()>=0.8 ? 15000 : usagePct()>=0.6 ? 60000 : 300000;
+const usageBatch = ()=> usagePct()>=0.8 ? 15 : 150;
 function addUsage(kind, n=1){
   usagePending[kind] += n;
   if(!serverFull && !usageFlushing && usagePending.reads+usagePending.writes+usagePending.deletes >= usageBatch() && Date.now()-usageLastFlush > 10000) flushUsage().catch(()=>{});
@@ -395,21 +397,23 @@ setInterval(()=>{ if(!serverFull && Date.now()-usageLastFlush >= usageEvery()) f
 async function refreshUsageStatus(){
   if(serverFull) return true;
   try{
-    const s = await _getDoc(doc(db,"usage",usageDayKey())); usagePending.reads += 1;
+    const [s, sd] = await Promise.all([ _getDoc(doc(db,"usage",usageDayKey())), _getDoc(doc(db,"System","shutdown")).catch(()=>null) ]); usagePending.reads += 2;
+    if(sd && sd.exists() && sd.data().off){ enterServerFull(MANUAL_MSG, true); return true; }     // a mod switched the servers off
     if(s.exists()){ const d = s.data(); usageLast = { reads:d.reads||0, writes:d.writes||0, deletes:d.deletes||0 }; if(d.locked) enterServerFull(); }
   }catch(e){ quotaErr(e); }
   return serverFull;
 }
-function enterServerFull(){
-  if(serverFull) return; serverFull = true;
+function enterServerFull(text=FULL_MSG, manual=false){
+  if(serverFull) return; serverFull = true; serverManualOff = manual;
   try{ cleanupSubs(); }catch{}
   try{ resetSessionUI(); }catch{}
   try{ signOut(auth).catch(()=>{}); }catch{}
   document.querySelectorAll(".modal-backdrop.active").forEach(m=> m.classList.remove("active"));
   document.body.classList.remove("dungeon-mode");
-  const msg = document.querySelector("#screen-loading .doodle-h2"); if(msg) msg.textContent = FULL_MSG;
+  const msg = document.querySelector("#screen-loading .doodle-h2"); if(msg) msg.textContent = text;
+  const retry = document.getElementById("btnServerRetry"); if(retry) retry.style.display = manual ? "" : "none";
   showScreen("screen-loading");
-  setTimeout(()=> location.reload(), msUntilReset() + 5000);
+  if(!manual) setTimeout(()=> location.reload(), msUntilReset() + 5000);       // usage lock lifts itself at 3 AM ET; a mod shut-off waits for a mod
 }
 let usageGate = Promise.resolve(false);
 
@@ -1198,6 +1202,7 @@ async function loadPlayerAndRoute(user){
   }
   const p = psnap.data();
   if(p.banned){ await signOut(auth).catch(()=>{}); showScreen("screen-title"); toast(BANNED_MSG, 8000); return; }
+  if((p.kickUntil||0) > Date.now() && p.username!==ADMIN_USERNAME){ await signOut(auth).catch(()=>{}); showScreen("screen-title"); toast(`You were kicked. Your account is frozen for ${Math.ceil((p.kickUntil-Date.now())/1000)}s more.`, 7000); return; }
   state.username = p.username;
   if(!p.archetype || !p.klass){
     showScreen("screen-archetype");
@@ -1413,12 +1418,15 @@ function cleanupSubs(){
 
 function enterGame(){
   showScreen("screen-game");
+  afterEnterGame();
   let firstSnapshot = true;
   const unsub = onSnapshot(doc(db,"players",state.uid), (snap)=>{
     if(!snap.exists()) return;
     const prevRegion = state.profile?.region;
     state.profile = snap.data();
     if(state.profile.banned){ forceBanLogout(); return; }   // an admin just banned you: logged out right now
+    if((state.profile.kickUntil||0) > Date.now() && !isAdminUI()){ forceKickLogout(state.profile.kickUntil); return; }   // a mod just kicked you
+    { const adm = isAdminUI(), so = document.getElementById("btnServerOff"); if(so) so.style.display = adm ? "" : "none"; if(adm) markModDevice(); }
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
     if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); if(typeof refreshBestiary==="function") refreshBestiary(); }
@@ -2040,6 +2048,9 @@ function openProfileBook(uid, data, rank, cat){
   if(!isSelf && isAdminUI()){
     banBtn.onclick = ()=> banUser(uid, data.username);
   }
+  const kickBtn = document.getElementById("btnKickUser");
+  kickBtn.style.display = (!isSelf && isAdminUI()) ? "" : "none";
+  if(!isSelf && isAdminUI()) kickBtn.onclick = ()=> kickUser(uid, data.username);
   // mod-only mute box
   const muteBox = document.getElementById("muteBox");
   muteBox.style.display = (!isSelf && isAdminUI()) ? "" : "none";
@@ -6448,7 +6459,7 @@ setInterval(()=>{
   if(document.getElementById("jtab-dailies").classList.contains("active")) tickDailyClock();
   const d = dayIndex();
   if(d!==seenEtDay){                       // midnight ET passed: dailies + every region's shop roll over
-    seenEtDay = d; updateDailyDot(); renderDailies();
+    seenEtDay = d; updateDailyDot(); renderDailies(); bankSettle();
     if(document.getElementById("compassModal").classList.contains("active")) renderShop();
     toast("🌅 It's a new day — fresh shop stock and a new daily reward!");
   }
@@ -6786,3 +6797,198 @@ async function refreshTitleCounts(){
 setInterval(refreshTitleCounts, 30000); setTimeout(refreshTitleCounts, 1200);
 setupDragonAnim();
 setTimeout(()=>{ usageGate.then(()=>{ if(serverFull) return; showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }); }, 900);
+
+
+/* =========================================================================
+   BANK
+   Deposit / withdraw with +/- buttons that build up an amount. players/{uid}.bank holds the balance, .bankDay the
+   last ET day it was settled. Every new ET day the bank first rolls a 1% robbery chance (robbers take 80-95% of the
+   balance); if it isn't robbed it earns 1% interest. Missed days (you were offline) are settled when you next log in
+   or open the bank (capped at 60 days). Dying never touches the bank - only your wallet money is ever at risk.
+   ========================================================================= */
+const BANK = { rate:0.01, robChance:0.01, robMin:0.80, robMax:0.95, maxCatchup:60, steps:[1,10,100,1000,10000], labels:["1","10","100","1K","10K"] };
+let bankMode = "deposit", bankPending = 0, bankBusy = false;
+const bankOf = d=> Math.max(0, Number(d && d.bank) || 0);
+function bankApplyDays(d){
+  const today = dayIndex(), out = { bank:bankOf(d), bankDay:today, gained:0, lost:0, robberies:0 };
+  if(d.bankDay===undefined || d.bankDay===null) return out;                 // never used the bank: nothing to settle
+  let bank = out.bank, n = Math.min(Math.max(0, today - d.bankDay), BANK.maxCatchup);
+  for(; n>0 && bank>0.005; n--){
+    if(Math.random() < BANK.robChance){ const l = bank*(BANK.robMin + Math.random()*(BANK.robMax-BANK.robMin)); bank -= l; out.lost += l; out.robberies++; }
+    else { const g = bank*BANK.rate; bank += g; out.gained += g; }
+  }
+  out.bank = Math.round(bank*100)/100; return out;
+}
+function bankAnnounce(r){
+  if(r.robberies) toast(`\ud83e\uddb9 Robbers broke into the bank! You lost $${fmtMoney(r.lost)}.`, 9000);
+  if(r.gained >= 1) toast(`\ud83c\udfe6 Your bank earned $${fmtMoney(r.gained)} in interest.`, 5000, "toast-money");
+}
+async function bankSettle(){
+  const p = state.profile; if(!p || bankBusy || bankOf(p) <= 0 || p.bankDay === dayIndex()) return;
+  bankBusy = true; let res = null;
+  try{
+    await runTransaction(db, async tx=>{
+      const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, r = bankApplyDays(d);
+      if(d.bankDay === r.bankDay) { res = null; return; }
+      tx.update(ref, { bank:r.bank, bankDay:r.bankDay }); res = r;
+    });
+  }catch(e){ console.error("bank settle:", e); }
+  finally{ bankBusy = false; }
+  if(res){ state.profile.bank = res.bank; state.profile.bankDay = res.bankDay; bankAnnounce(res); renderBank(); }
+}
+function renderBank(){
+  const p = state.profile; if(!p) return;
+  const dep = bankMode==="deposit", max = dep ? Math.floor(p.money||0) : Math.floor(bankOf(p));
+  bankPending = Math.min(Math.max(0, bankPending), max);
+  document.getElementById("bankTotal").textContent = fmtMoney(Math.floor(bankOf(p)));
+  document.getElementById("bankWallet").textContent = fmtMoney(p.money||0);
+  document.getElementById("bankPending").textContent = fmtMoney(bankPending);
+  document.getElementById("bankModeLabel").textContent = dep ? "Deposit" : "Withdraw";
+  document.getElementById("bankTabDep").classList.toggle("on", dep); document.getElementById("bankTabWd").classList.toggle("on", !dep);
+  const go = document.getElementById("bankGo"); go.textContent = dep ? "Deposit" : "Withdraw"; go.className = "doodle-btn " + (dep ? "btn-green" : "btn-blue"); go.disabled = bankPending <= 0;
+}
+async function bankTransact(){
+  const amt = Math.floor(bankPending); if(amt <= 0 || bankBusy || !state.profile) return;
+  bankBusy = true; let res = null, err = null;
+  try{
+    await runTransaction(db, async tx=>{
+      const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, r = bankApplyDays(d);
+      let bank = r.bank, money = d.money||0;
+      if(bankMode==="deposit"){ if(amt > money) throw new Error("bank-short-wallet"); money -= amt; bank += amt; }
+      else { if(amt > Math.floor(bank)) throw new Error("bank-short-bank"); money += amt; bank -= amt; }
+      bank = Math.round(bank*100)/100;
+      tx.update(ref, { money, bank, bankDay:r.bankDay }); res = { ...r, bank, money };
+    });
+  }catch(e){ err = e; }
+  finally{ bankBusy = false; }
+  if(err){ toast(err.message==="bank-short-wallet" ? "You don't have that much money on you." : err.message==="bank-short-bank" ? "The bank doesn't hold that much." : friendlyFirebaseError(err)); renderBank(); return; }
+  if(!res) return;
+  state.profile.money = res.money; state.profile.bank = res.bank; state.profile.bankDay = res.bankDay;
+  bankPending = 0; playSfx("buy"); bankAnnounce(res); renderBank(); renderHUD();
+  toast(bankMode==="deposit" ? `\ud83c\udfe6 Deposited $${fmtMoney(amt)}.` : `\ud83d\udcb5 Withdrew $${fmtMoney(amt)}.`, 3000, "toast-money");
+}
+(function initBank(){
+  const mk = (id, sign)=>{ const box = document.getElementById(id); BANK.steps.forEach((s,i)=>{ const b = document.createElement("button"); b.className = "doodle-btn " + (sign<0 ? "btn-pink" : "btn-yellow"); b.textContent = (sign<0 ? "-" : "+") + BANK.labels[i]; b.onclick = ()=>{ bankPending += sign*s; renderBank(); }; box.appendChild(b); }); };
+  mk("bankMinus", -1); mk("bankPlus", 1);
+  const setMode = m=>{ bankMode = m; bankPending = 0; renderBank(); };
+  document.getElementById("bankTabDep").onclick = ()=> setMode("deposit");
+  document.getElementById("bankTabWd").onclick = ()=> setMode("withdraw");
+  document.getElementById("bankMax").onclick = ()=>{ bankPending = bankMode==="deposit" ? Math.floor(state.profile?.money||0) : Math.floor(bankOf(state.profile)); renderBank(); };
+  document.getElementById("bankClear").onclick = ()=>{ bankPending = 0; renderBank(); };
+  document.getElementById("bankGo").onclick = bankTransact;
+  document.getElementById("btnBank").addEventListener("click", ()=>{
+    if(!state.profile) return;
+    if(state.battle){ toast("Finish your battle first."); return; }
+    bankMode = "deposit"; bankPending = 0; renderBank(); openModal("bankModal"); bankSettle();
+  });
+})();
+
+/* =========================================================================
+   MOD TOOLS: kick + manual server shut-off
+   ========================================================================= */
+let kickBusy = false;
+async function forceKickLogout(until){
+  if(kickBusy) return; kickBusy = true;
+  stopPresence(); stopOnlineBeat();
+  await signOut(auth).catch(()=>{});
+  toast(`\ud83d\udc62 A moderator kicked you. You can log back in in ${Math.max(1, Math.ceil((until-Date.now())/1000))}s.`, 10000);
+  setTimeout(()=>{ kickBusy = false; }, 2500);
+}
+async function kickUser(uid, username){
+  if(!isAdminUI()) return;
+  if(!confirm(`Kick ${username}? If they are online they are logged out right now and their account is frozen for 30 seconds.`)) return;
+  try{
+    const s = await getDoc(doc(db,"players",uid));
+    if(!s.exists()){ toast("Player not found."); return; }
+    if(!isOnline(s.data())){ toast(`${username} isn't online right now.`); return; }
+    const now = Date.now();
+    await updateDoc(doc(db,"players",uid), { kickedAt:now, kickUntil:now+30000, onlineAt:0 });
+    toast(`\ud83d\udc62 ${username} was kicked. Their account is frozen for 30 seconds.`, 5000);
+  }catch(e){ toast(friendlyFirebaseError(e)); }
+}
+
+/* Manual shut-off. System/shutdown {off} is the switch. Turning OFF is two steps: (1) a random 10-digit code is saved at
+   System/shutdown/codes/{code} {date, used:false} - it is never shown in the game; (2) the mod opens Firestore, copies it,
+   pastes it here and presses Enter. Codes only work on the ET day they were made and only once.
+   Turning back ON needs the mod login only. */
+const SV = { stage:"off1", busy:false, tempAuth:false };
+const $id = id=> document.getElementById(id);
+const etToday = ()=> ET_DATE.format(new Date());
+function svRandomCode(){ const a = new Uint32Array(2); crypto.getRandomValues(a); return (((BigInt(a[0])<<32n) | BigInt(a[1])) % 10000000000n).toString().padStart(10,"0"); }
+function markModDevice(){ try{ localStorage.setItem("dgn_mod","1"); }catch(_){} document.body.classList.add("mod-device"); }
+try{ if(localStorage.getItem("dgn_mod")==="1") document.body.classList.add("mod-device"); }catch(_){}
+setInterval(()=>{ const t = $id("screen-title").classList.contains("active"), l = serverFull && $id("screen-loading").classList.contains("active"); document.body.classList.toggle("sv-visible", t || l); }, 500);
+
+function afterEnterGame(){
+  // everyone in the game hears about a manual shut-off instantly (one cheap listener; it only fires when the switch changes)
+  state.unsubs.push(onSnapshot(doc(db,"System","shutdown"), snap=>{ if(snap.exists() && snap.data().off) enterServerFull(MANUAL_MSG, true); }, ()=>{}));
+  setTimeout(()=> bankSettle(), 2500);
+}
+function svRender(){
+  const go = $id("svGo"); $id("svCodeWrap").style.display = SV.stage==="off2" ? "" : "none";
+  if(SV.stage==="off1"){
+    $id("svTitle").textContent = "Turn off servers?";
+    $id("svBody").innerHTML = "<p>This logs <b>everyone</b> out (you too) and puts the game into stasis. Nothing reads or writes Firebase until a mod turns the servers back on.</p><p>Step 1 of 2: continuing creates a one-time verification code in Firebase.</p>";
+    go.textContent = "Continue"; go.className = "doodle-btn btn-danger";
+  } else if(SV.stage==="off2"){
+    $id("svTitle").textContent = "Step 2 of 2: verify";
+    $id("svBody").innerHTML = "<p>A new 10-digit code was saved in <b>Firestore &rarr; System &rarr; shutdown &rarr; codes</b>. Open it in the Firebase console, copy the code, paste it below and press Enter.</p>";
+    go.textContent = "Shut down servers"; go.className = "doodle-btn btn-danger";
+  } else {
+    $id("svTitle").textContent = "Servers are OFF";
+    $id("svBody").innerHTML = "<p>Players can't log in right now. Turning the servers back on lets everyone join again.</p>" + (serverFull && !serverManualOff ? "<p><b>Note:</b> today's 90% usage lock is also active and clears itself at 3 AM ET.</p>" : "");
+    go.textContent = "Turn servers back on"; go.className = "doodle-btn btn-green";
+  }
+}
+async function openServerModal(){
+  $id("svError").textContent = ""; $id("svCode").value = ""; $id("svPass").value = "";
+  const mod = !!(auth.currentUser && (isAdminUI() || SV.tempAuth));
+  $id("svLogin").style.display = mod ? "none" : "";
+  if(!mod && !$id("svUser").value) $id("svUser").value = ADMIN_USERNAME;
+  let off = serverManualOff;
+  try{ const s = await _getDoc(doc(db,"System","shutdown")); off = !!(s.exists() && s.data().off); }catch(_){}
+  SV.stage = off ? "on" : "off1"; svRender(); openModal("serverModal");
+}
+function svAbort(){ if(SV.tempAuth){ SV.tempAuth = false; signOut(auth).catch(()=>{}); } authFlowBusy = false; $id("svLogin").style.display = ""; }
+async function svGoClick(){
+  if(SV.busy) return; SV.busy = true; const err = $id("svError"); err.textContent = ""; $id("svGo").disabled = true;
+  try{
+    if(!(auth.currentUser && (isAdminUI() || SV.tempAuth))){            // not signed in as the mod yet: sign in here
+      const u = $id("svUser").value.trim(), pw = $id("svPass").value;
+      if(u.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) throw new Error("Only the mod account can use this.");
+      authFlowBusy = true;
+      try{ await signInWithEmailAndPassword(auth, usernameToEmail(u), pw); }
+      catch(e){ authFlowBusy = false; throw new Error(friendlyFirebaseError(e)); }
+      SV.tempAuth = true; $id("svLogin").style.display = "none"; $id("svPass").value = "";
+    }
+    const sysRef = doc(db,"System","shutdown");
+    if(SV.stage==="off1"){
+      const code = svRandomCode();
+      await _setDoc(doc(db,"System","shutdown","codes",code), { code, date:etToday(), used:false, createdAt:Date.now() });
+      SV.stage = "off2"; svRender();
+    } else if(SV.stage==="off2"){
+      const val = $id("svCode").value.trim();
+      if(!/^\d{10}$/.test(val)) throw new Error("Paste the exact 10-digit code from Firebase.");
+      const ref = doc(db,"System","shutdown","codes",val), s = await _getDoc(ref);
+      if(!s.exists() || s.data().used || s.data().date !== etToday()) throw new Error("That isn't a valid, unused code from today.");
+      await _updateDoc(ref, { used:true, usedAt:Date.now() });
+      await _setDoc(sysRef, { off:true, by:ADMIN_USERNAME, at:Date.now() }, { merge:true });
+      SV.tempAuth = false; authFlowBusy = false; closeModal("serverModal");
+      toast("\ud83d\udd34 Servers are off.", 4000);
+      enterServerFull(MANUAL_MSG, true);                                // logs everyone (incl. this mod) out into stasis
+    } else {
+      await _setDoc(sysRef, { off:false, by:ADMIN_USERNAME, at:Date.now() }, { merge:true });
+      serverManualOff = false; toast("\ud83d\udfe2 Servers are back on.", 4000);
+      closeModal("serverModal"); svAbort();
+      setTimeout(()=> location.reload(), 700);
+    }
+  }catch(e){ err.textContent = e.message || String(e); }
+  finally{ SV.busy = false; $id("svGo").disabled = false; }
+}
+$id("svGo").addEventListener("click", svGoClick);
+$id("svCancel").addEventListener("click", ()=> closeModal("serverModal"));
+["svCode","svUser","svPass"].forEach(id=> $id(id).addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); svGoClick(); } }));
+new MutationObserver(()=>{ if(!$id("serverModal").classList.contains("active") && SV.tempAuth) svAbort(); }).observe($id("serverModal"), { attributes:true, attributeFilter:["class"] });
+$id("btnServerOff").addEventListener("click", openServerModal);
+$id("btnServerMgmt").addEventListener("click", openServerModal);
+$id("btnServerRetry").addEventListener("click", ()=> location.reload());

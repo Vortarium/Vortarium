@@ -57,7 +57,7 @@ service cloud.firestore {
       // A player can never edit their own ban / mute flags — only the admin can.
       // The admin also uses this to strip a banned user out of everyone's friends list.
       allow update: if isAdmin()
-        || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['banned','mutedUntil']));
+        || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['banned','mutedUntil','kickUntil','kickedAt']));
       allow delete: if isOwner(uid) || isAdmin(); // player-initiated or admin ban deletion
 
       match /quests/{questId} {
@@ -205,7 +205,7 @@ service cloud.firestore {
 
     // Daily quota guard. usage/{YYYY-MM-DD} (day rolls at 3 AM Eastern) is a shared counter every signed-in client adds
     // its read/write/delete counts to. Anyone may read it (so a locked server blocks logins). "locked" can only be switched
-    // on once a counter is at 99% of the daily limit (50,000 reads -> 49500, 20,000 writes/deletes -> 19800 -
+    // on once a counter is at 90% of the daily limit (50,000 reads -> 45000, 20,000 writes/deletes -> 18000 -
     // keep these in step with QUOTA in rpg_app.js).
     match /usage/{day} {
       allow read: if true;
@@ -220,8 +220,19 @@ service cloud.firestore {
         && request.resource.data.deletes >= resource.data.deletes && request.resource.data.deletes - resource.data.deletes <= 5000
         && (request.resource.data.get('locked', false) == resource.data.get('locked', false)
             || (request.resource.data.get('locked', false) == true
-                && (request.resource.data.reads >= 49500 || request.resource.data.writes >= 19800 || request.resource.data.deletes >= 19800)));
+                && (request.resource.data.reads >= 45000 || request.resource.data.writes >= 18000 || request.resource.data.deletes >= 18000)));
       allow delete: if false;
+    }
+
+    // Manual server shut-off. System/shutdown {off:boolean} is readable by everyone (so the title screen knows),
+    // writable only by the mod. System/shutdown/codes/{code} holds the one-time 10-digit verification codes
+    // (fields: code, date, used, createdAt) - mod-only, never readable by players.
+    match /System/shutdown {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /System/shutdown/codes/{code} {
+      allow read, write: if isAdmin();
     }
 
     match /queue/{uid} {

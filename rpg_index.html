@@ -30,6 +30,7 @@
   <div class="loading-doodle">
     <div class="egg" id="loadingEgg"></div>
     <p class="doodle-h2">hatching Dragoneer&hellip;</p>
+    <button class="doodle-btn btn-blue" id="btnServerRetry" style="display:none">Check again</button>
   </div>
 </section>
 
@@ -130,6 +131,7 @@
         <button class="doodle-btn" data-mm="btnSkills">&#11088; Skill Tree</button>
         <button class="doodle-btn" data-mm="btnCompass">&#129517; Compass</button>
         <button class="doodle-btn dg-out-only" data-mm="btnDungeon">&#128367;&#65039; Dungeon</button>
+        <button class="doodle-btn dg-out-only" data-mm="btnBank">&#127974; Bank</button>
         <button class="doodle-btn dg-in-only" data-mm="btnDungeonExit">&#10060; Exit Dungeon</button>
         <button class="doodle-btn" data-mm="btnSettings">&#9881; Settings</button>
       </div>
@@ -190,6 +192,7 @@
       <button class="icon-btn circle-btn compass-btn star-btn" id="btnSkills" title="Skill Tree">&#11088;<span class="star-badge" id="starBadge" style="display:none">0</span></button>
       <button class="icon-btn circle-btn compass-btn" id="btnCompass" title="Compass">&#129517;</button>
       <button class="icon-btn circle-btn compass-btn dungeon-btn dg-out-only" id="btnDungeon" title="Dungeon">&#128367;&#65039;</button>
+      <button class="icon-btn circle-btn compass-btn dg-out-only" id="btnBank" title="Bank">&#127974;</button>
       <button class="icon-btn circle-btn compass-btn dg-exit-btn dg-in-only" id="btnDungeonExit" title="Exit the dungeon">&#10060;</button>
     </div>
 
@@ -297,9 +300,56 @@
       <button class="doodle-btn btn-sm" id="btnUnmuteUser" style="display:none">Unmute</button>
       <p class="mute-status" id="muteStatus"></p>
     </div>
+    <button class="doodle-btn btn-danger" id="btnKickUser" style="display:none">Kick</button>
     <button class="doodle-btn btn-danger" id="btnBanUser" style="display:none">Ban User</button>
   </div>
 </div>
+
+
+<!-- ================= BANK MODAL ================= -->
+<div id="bankModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel bank-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2">&#127974; Bank</h2>
+    <div class="bank-total">In the bank: $<b id="bankTotal">0</b></div>
+    <div class="bank-sub">In your wallet: $<span id="bankWallet">0</span> &middot; earns 1% interest per day</div>
+    <div class="bank-tabs">
+      <button class="doodle-btn btn-green on" id="bankTabDep">Deposit</button>
+      <button class="doodle-btn btn-blue" id="bankTabWd">Withdraw</button>
+    </div>
+    <div class="bank-grid" id="bankMinus"></div>
+    <div class="bank-pending"><span id="bankModeLabel">Deposit</span>: $<b id="bankPending">0</b></div>
+    <div class="bank-grid" id="bankPlus"></div>
+    <div class="bank-actions">
+      <button class="doodle-btn btn-yellow" id="bankMax">Max</button>
+      <button class="doodle-btn" id="bankClear">Clear</button>
+      <button class="doodle-btn btn-green" id="bankGo">Deposit</button>
+    </div>
+    <p class="bank-note">Dying never touches your bank. But every new day there is a small (1%) chance robbers hit it and take 80-95% of what is inside.</p>
+  </div>
+</div>
+
+<!-- ================= SERVER MANAGEMENT MODAL (mods) ================= -->
+<div id="serverModal" class="modal-backdrop">
+  <div class="modal-card doodle-panel sv-card">
+    <button class="doodle-x" data-close-modal>&times;</button>
+    <h2 class="doodle-h2" id="svTitle">Servers</h2>
+    <div id="svBody" class="dg-modal-body"></div>
+    <div id="svLogin" style="display:none">
+      <input type="text" id="svUser" placeholder="Mod username" autocomplete="off">
+      <input type="password" id="svPass" placeholder="Password" autocomplete="off">
+    </div>
+    <div id="svCodeWrap" style="display:none">
+      <input type="text" id="svCode" placeholder="Paste the 10-digit code, press Enter" inputmode="numeric" maxlength="10" autocomplete="off">
+    </div>
+    <p class="doodle-error" id="svError"></p>
+    <div class="dg-modal-btns">
+      <button class="doodle-btn btn-yellow" id="svCancel">Cancel</button>
+      <button class="doodle-btn btn-danger" id="svGo">Continue</button>
+    </div>
+  </div>
+</div>
+<button class="doodle-btn btn-danger btn-sm server-mgmt-btn" id="btnServerMgmt">&#128308; Server controls</button>
 
 <!-- ================= DUNGEON CONFIRM MODAL ================= -->
 <div id="dgModal" class="modal-backdrop">
@@ -608,6 +658,7 @@
     <label class="doodle-check"><input type="checkbox" id="privateSocial"> Make my friends &amp; followers private</label>
     <label class="doodle-check"><input type="checkbox" id="privateProfile"> Private profile (only friends can view it)</label>
     <button class="doodle-btn btn-pink btn-block" id="btnLogout">Log Out</button>
+    <button class="doodle-btn btn-danger btn-block" id="btnServerOff" style="display:none">Turn off servers</button>
 
     <hr class="danger-hr">
     <h3 class="doodle-h2 danger-heading">Danger Zone</h3>
