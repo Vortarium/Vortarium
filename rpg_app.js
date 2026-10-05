@@ -10,9 +10,9 @@ import {
   deleteUser, EmailAuthProvider, reauthenticateWithCredential
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
-  initializeFirestore, doc, setDoc, getDoc, getDocs, updateDoc, onSnapshot, collection,
-  addDoc, query, where, orderBy, limit, runTransaction, deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp, collectionGroup, getAggregateFromServer, sum, count
+  initializeFirestore, doc, setDoc as _setDoc, getDoc as _getDoc, getDocs as _getDocs, updateDoc as _updateDoc, onSnapshot as _onSnapshot, collection,
+  addDoc as _addDoc, query, where, orderBy, limit, runTransaction as _runTransaction, deleteDoc as _deleteDoc, arrayUnion, arrayRemove,
+  increment, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
@@ -302,6 +302,117 @@ function cosmeticStyle(gid, fid){
 }
 
 
+/* =========================================================================
+   DAILY QUOTA GUARD
+   The browser can't see Google's real usage meter, so every client counts the Firestore reads / writes / deletes
+   it makes (wrappers below shadow the SDK functions) and adds them to ONE shared counter doc, usage/{day}.
+   When any counter reaches 99% of its daily limit the doc is marked locked and EVERY client logs out and shows the
+   "Servers are full" egg screen; new logins are refused too. The "day" rolls over at 3:00 AM Eastern = midnight Pacific,
+   which is exactly when Firebase resets its free quota. Locked pages reload themselves at that moment.
+   Edit QUOTA to match your plan (these are the Spark / free-tier numbers) and keep the 49500 / 19800 numbers in
+   rpg_firestore.rules in step (they are 99% of the same limits).
+   ========================================================================= */
+const QUOTA = { reads:50000, writes:20000, deletes:20000, lockAt:0.99 };
+const FULL_MSG = "Servers are full, come back at 3 AM EST to keep playing";
+let serverFull = false;
+const usagePending = { reads:0, writes:0, deletes:0 };
+let usageLast = { reads:0, writes:0, deletes:0 }, usageFlushing = false, usageLastFlush = 0;
+const usageNY = new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit" });
+const usageDayKey = (t=Date.now())=> usageNY.format(new Date(t - 3*3600e3));            // 3:00 AM Eastern starts a new day
+const usagePct = ()=> Math.max(usageLast.reads/QUOTA.reads, usageLast.writes/QUOTA.writes, usageLast.deletes/QUOTA.deletes);
+function msUntilReset(){
+  const k0 = usageDayKey(); let lo = Date.now(), hi = lo + 26*3600e3;
+  while(hi-lo > 1000){ const mid = (lo+hi)/2; if(usageDayKey(mid)===k0) lo = mid; else hi = mid; }
+  return Math.max(1000, hi - Date.now());
+}
+// the closer we are to the limit, the more often clients report in (so a lock reaches everyone fast)
+const usageEvery = ()=> usagePct()>=0.9 ? 15000 : usagePct()>=0.75 ? 60000 : 300000;
+const usageBatch = ()=> usagePct()>=0.9 ? 15 : 150;
+function addUsage(kind, n=1){
+  usagePending[kind] += n;
+  if(!serverFull && !usageFlushing && usagePending.reads+usagePending.writes+usagePending.deletes >= usageBatch() && Date.now()-usageLastFlush > 10000) flushUsage().catch(()=>{});
+}
+const frozen = ()=> new Promise(()=>{});                       // once the servers are "full" every game call just stops
+const quotaErr = e=>{ if(e && e.code==="resource-exhausted" && /quota/i.test(e.message||"")) enterServerFull(); };
+const getDoc  = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _getDoc(...a); addUsage("reads",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const getDocs = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _getDocs(...a); addUsage("reads", Math.max(1, r.size)); return r; }catch(e){ quotaErr(e); throw e; } };
+const getAggregateFromServer = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _getAggregateFromServer(...a); addUsage("reads",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const setDoc    = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _setDoc(...a); addUsage("writes",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const updateDoc = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _updateDoc(...a); addUsage("writes",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const addDoc    = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _addDoc(...a); addUsage("writes",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const deleteDoc = async (...a)=>{ if(serverFull) return frozen(); try{ const r = await _deleteDoc(...a); addUsage("deletes",1); return r; }catch(e){ quotaErr(e); throw e; } };
+const runTransaction = async (dbx, fn, opts)=>{
+  if(serverFull) return frozen();
+  try{
+    return await _runTransaction(dbx, tx=>{
+      const w = {
+        get: async r=>{ const s = await tx.get(r); addUsage("reads",1); return s; },
+        set: (...x)=>{ tx.set(...x); addUsage("writes",1); return w; },
+        update: (...x)=>{ tx.update(...x); addUsage("writes",1); return w; },
+        delete: (...x)=>{ tx.delete(...x); addUsage("deletes",1); return w; }
+      };
+      return fn(w);
+    }, opts);
+  }catch(e){ quotaErr(e); throw e; }
+};
+const onSnapshot = (...a)=>{
+  if(serverFull) return ()=>{};
+  const nextW = fn=> s=>{ try{ const m = s.metadata; if(!(m && (m.hasPendingWrites || m.fromCache))) addUsage("reads", Math.max(1, s.docChanges ? s.docChanges().length : 1)); }catch{} return fn(s); };
+  const errW  = fn=> e=>{ quotaErr(e); return fn && fn(e); };
+  const oi = a.findIndex(x=> x && typeof x==="object" && typeof x.next==="function");
+  if(oi>=0) a[oi] = { ...a[oi], next:nextW(a[oi].next), error:errW(a[oi].error) };
+  else { const fi = a.findIndex(x=> typeof x==="function"); if(fi>=0){ a[fi] = nextW(a[fi]); if(typeof a[fi+1]==="function") a[fi+1] = errW(a[fi+1]); else a.splice(fi+1, 0, errW(null)); } }
+  return _onSnapshot(...a);
+};
+
+/* Report this client's counts to the shared counter and read the totals back. Locks everyone out at 99%. */
+async function flushUsage(){
+  if(usageFlushing || serverFull || !auth.currentUser) return;
+  usageFlushing = true; usageLastFlush = Date.now();
+  const cap = x=> Math.min(x, 4000), take = { reads:cap(usagePending.reads), writes:cap(usagePending.writes), deletes:cap(usagePending.deletes) };
+  usagePending.reads -= take.reads; usagePending.writes -= take.writes; usagePending.deletes -= take.deletes;
+  const key = usageDayKey(), ref = doc(db,"usage",key); let wrote = false;
+  try{
+    if(take.reads+take.writes+take.deletes > 0){
+      await _setDoc(ref, { day:key, reads:increment(take.reads+1), writes:increment(take.writes+1), deletes:increment(take.deletes) }, { merge:true });   // +1/+1 = this report's own write and the read below
+      wrote = true;
+    }
+    const snap = await _getDoc(ref); if(!wrote) usagePending.reads += 1;
+    const d = snap.exists() ? snap.data() : {};
+    usageLast = { reads:d.reads||0, writes:d.writes||0, deletes:d.deletes||0 };
+    if(d.locked || usagePct() >= QUOTA.lockAt){
+      if(!d.locked) await _setDoc(ref, { locked:true }, { merge:true }).catch(()=>{});
+      enterServerFull();
+    }
+  }catch(e){
+    quotaErr(e);
+    if(!wrote){ usagePending.reads += take.reads; usagePending.writes += take.writes; usagePending.deletes += take.deletes; }
+  }finally{ usageFlushing = false; }
+}
+setInterval(()=>{ if(!serverFull && Date.now()-usageLastFlush >= usageEvery()) flushUsage().catch(()=>{}); }, 5000);
+
+/* Anyone (even logged out) can read today's counter doc, so a locked server stops logins before they start. */
+async function refreshUsageStatus(){
+  if(serverFull) return true;
+  try{
+    const s = await _getDoc(doc(db,"usage",usageDayKey())); usagePending.reads += 1;
+    if(s.exists()){ const d = s.data(); usageLast = { reads:d.reads||0, writes:d.writes||0, deletes:d.deletes||0 }; if(d.locked) enterServerFull(); }
+  }catch(e){ quotaErr(e); }
+  return serverFull;
+}
+function enterServerFull(){
+  if(serverFull) return; serverFull = true;
+  try{ cleanupSubs(); }catch{}
+  try{ resetSessionUI(); }catch{}
+  try{ signOut(auth).catch(()=>{}); }catch{}
+  document.querySelectorAll(".modal-backdrop.active").forEach(m=> m.classList.remove("active"));
+  document.body.classList.remove("dungeon-mode");
+  const msg = document.querySelector("#screen-loading .doodle-h2"); if(msg) msg.textContent = FULL_MSG;
+  showScreen("screen-loading");
+  setTimeout(()=> location.reload(), msUntilReset() + 5000);
+}
+let usageGate = Promise.resolve(false);
+
 const firebaseConfig = {
   apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
   authDomain: "game1-65ce0.firebaseapp.com",
@@ -314,6 +425,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+usageGate = refreshUsageStatus();                                  // is the server already full today?
 setPersistence(auth, browserSessionPersistence).catch(()=>{});   // session persistence: closing the tab logs you out (a refresh keeps you in)
 
 /* Phones/tablets (Android, iPhone, iPad incl. iPadOS that reports as a Mac) get a compact layout via body.is-mobile. */
@@ -929,6 +1041,7 @@ function toast(msg, ms=3500, cls="", onClick=null){
    SCREEN NAV
    ========================================================================= */
 function showScreen(id){
+  if(serverFull) id = "screen-loading";                       // servers full: nothing but the egg screen can ever show
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
@@ -1061,6 +1174,8 @@ async function forceBanLogout(){
   setTimeout(()=>{ banKicked = false; }, 2500);
 }
 async function loadPlayerAndRoute(user){
+  await usageGate;
+  if(serverFull){ if(user) signOut(auth).catch(()=>{}); return; }
   cleanupSubs();
   if(!user){ resetSessionUI(); showScreen("screen-title"); playMusic("rpg_title.mp3"); return; }
   state.uid = user.uid;
@@ -1093,6 +1208,7 @@ async function loadPlayerAndRoute(user){
 
 document.getElementById("authForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
+  if(await refreshUsageStatus()) return;                      // servers full: no logins or signups
   const uname = document.getElementById("authUsername").value.trim();
   const pass = document.getElementById("authPassword").value;
   const errEl = document.getElementById("authError");
@@ -6660,6 +6776,7 @@ document.getElementById("dungeonStage").addEventListener("click", async (e)=>{
 const dayTick = startDayNight({ getTheme:()=>state.settings.theme, onNightChange:()=>{ if(wantedTrack) playMusic(wantedTrack); } });   // at 8pm / 8am all soundtracks swap to their night / day versions
 /* title screen: total accounts + players online right now */
 async function refreshTitleCounts(){
+  if(serverFull) return;
   const box = document.getElementById("titleCounts"); if(!box || !document.getElementById("screen-title").classList.contains("active")) return;
   try{
     const [t, o] = await Promise.all([ getAggregateFromServer(collection(db,"players"), { n:count() }), getAggregateFromServer(query(collection(db,"players"), where("onlineAt",">",Date.now()-ONLINE_FRESH_MS)), { n:count() }) ]);
@@ -6668,4 +6785,4 @@ async function refreshTitleCounts(){
 }
 setInterval(refreshTitleCounts, 30000); setTimeout(refreshTitleCounts, 1200);
 setupDragonAnim();
-setTimeout(()=>{ showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }, 900);
+setTimeout(()=>{ usageGate.then(()=>{ if(serverFull) return; showScreen("screen-title"); document.getElementById("screen-loading").classList.remove("active"); }); }, 900);

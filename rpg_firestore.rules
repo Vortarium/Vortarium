@@ -202,6 +202,28 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (isOwner(resource.data.hostUid) || isAdmin());
     }
 
+
+    // Daily quota guard. usage/{YYYY-MM-DD} (day rolls at 3 AM Eastern) is a shared counter every signed-in client adds
+    // its read/write/delete counts to. Anyone may read it (so a locked server blocks logins). "locked" can only be switched
+    // on once a counter is at 99% of the daily limit (50,000 reads -> 49500, 20,000 writes/deletes -> 19800 -
+    // keep these in step with QUOTA in rpg_app.js).
+    match /usage/{day} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['day','reads','writes','deletes','locked'])
+        && request.resource.data.reads <= 5000 && request.resource.data.writes <= 5000 && request.resource.data.deletes <= 5000
+        && request.resource.data.get('locked', false) == false;
+      allow update: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['day','reads','writes','deletes','locked'])
+        && request.resource.data.reads >= resource.data.reads && request.resource.data.reads - resource.data.reads <= 5000
+        && request.resource.data.writes >= resource.data.writes && request.resource.data.writes - resource.data.writes <= 5000
+        && request.resource.data.deletes >= resource.data.deletes && request.resource.data.deletes - resource.data.deletes <= 5000
+        && (request.resource.data.get('locked', false) == resource.data.get('locked', false)
+            || (request.resource.data.get('locked', false) == true
+                && (request.resource.data.reads >= 49500 || request.resource.data.writes >= 19800 || request.resource.data.deletes >= 19800)));
+      allow delete: if false;
+    }
+
     match /queue/{uid} {
       allow read: if isSignedIn();
       allow write: if isOwner(uid) || (isAdmin() && request.method == 'delete');
