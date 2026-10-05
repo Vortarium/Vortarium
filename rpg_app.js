@@ -16,16 +16,23 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
+/* Stat nodes (+SPEED / +STRENGTH / +CHARM / +SMARTS) scale with their row: +3 on the first rows up to +10 on the last.
+   baseVal keeps the old value so migrateSkillStats() can top up accounts that already bought a node. */
+const SKILL_STAT_MIN = 3, SKILL_STAT_MAX = 10, SKILL_STAT_VER = 2;
+{ const all = Array.isArray(SKILL_NODES) ? SKILL_NODES : Object.values(SKILL_NODES).flat(), maxRow = {};
+  all.forEach(n=>{ const k = n.el||n.tree||"x"; maxRow[k] = Math.max(maxRow[k]||1, n.row); });
+  all.forEach(n=>{ if(n.kind!=="S") return; const k = n.el||n.tree||"x", top = Math.max(1, maxRow[k]-1);
+    n.baseVal = n.val; n.val = Math.round(SKILL_STAT_MIN + (n.row-1)/top*(SKILL_STAT_MAX-SKILL_STAT_MIN)); }); }
 const describeSkill = n=> describeSkillBase(n).replace(/(costs?\s+)(\d+)(\s+mana)/gi, (_,a,x,c)=> a+spellMana(+x)+c);
 /* ---- tuning knobs for this update ---- */
 const SPELL_MANA_MULT = 1.5, spellMana = n=> Math.ceil(n*SPELL_MANA_MULT);   // every spell costs 1.5x mana
 const CHARM_BLOCK = 5;                                                         // each point of CHARM blocks 5 damage
-const PVP_DMG_DIV = 10;                                                        // player-vs-player duels: damage is 10x lower
+const PVP_DMG_DIV = 3;                                                         // player-vs-player duels: damage is 3x lower
 const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA_PCT = 0.5;   // rage per move; skipping also refills 50% of max mana
 const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 5;                              // $ per 1 use: 20, 25, 30, 35, ... per tool tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
 const DG_SHOP_PRICE_MULT = 0.5;
-import { gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
+import { luckMult, gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
 
 /* =========================================================================
    DRAGONEER — rpg_daynight.js
@@ -86,6 +93,67 @@ function startDayNight({ getTheme=()=>"dynamic", onNightChange=()=>{} }={}){
   return tick;
 }
 
+
+/* =========================================================================
+   SCENERY behind the dragon, drawn with sketchy lines + polygons (double-stroked, jittered, like pen on paper).
+   DAY: blue sky, sunburst, puffy clouds, green meadow.  NIGHT: starry sky + Milky Way over a still lake with
+   pine silhouettes and their reflections. Both live in one SVG; CSS cross-fades them with --night.
+   ========================================================================= */
+function buildScene(){
+  const stage = document.getElementById("gameStage"); if(!stage || document.getElementById("sceneBg")) return;
+  let seed = 11; const rnd = ()=> (seed = (seed*16807) % 2147483647) / 2147483647;
+  const j = (v,a=2)=> (v + (rnd()-.5)*2*a).toFixed(1);
+  const pts = arr=> arr.map(([x,y])=> j(x)+","+j(y)).join(" ");
+  const poly = (arr, fill, stroke, sw=2.5)=>
+    `<polygon points="${pts(arr)}" fill="${fill}" stroke="none"/>` + (stroke
+      ? `<polygon points="${pts(arr)}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" opacity=".9"/>`
+      + `<polygon points="${pts(arr)}" fill="none" stroke="${stroke}" stroke-width="${(sw*.5).toFixed(1)}" stroke-linejoin="round" opacity=".45"/>` : "");
+  const line = (x1,y1,x2,y2,stroke,sw=2,op=1)=> `<line x1="${j(x1,1.5)}" y1="${j(y1,1.5)}" x2="${j(x2,1.5)}" y2="${j(y2,1.5)}" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" opacity="${op}"/>`;
+  const W = 800, H = 600;
+
+  /* ---------- DAY ---------- */
+  const HZ = 380; let day = `<rect width="${W}" height="${H}" fill="url(#scSkyDay)"/>`;
+  for(let i=0;i<14;i++){ const a = i/14*Math.PI*2 + .2, r1 = 90, r2 = 150 + rnd()*170; day += line(560+Math.cos(a)*r1, 120+Math.sin(a)*r1, 560+Math.cos(a)*r2, 120+Math.sin(a)*r2, "#ffffff", 2.5, .75); }
+  const sun = []; for(let i=0;i<32;i++){ const a = i/32*Math.PI*2, r = i%2 ? 46 : 80; sun.push([560+Math.cos(a)*r, 120+Math.sin(a)*r]); }
+  day += poly(sun, "#fff3a6", "#e0a800", 2.5) + `<circle cx="560" cy="120" r="32" fill="#fffde7" stroke="#e0a800" stroke-width="2.5"/>`;
+  const cloud = (cx,cy,s)=>{ const p = []; for(let i=0;i<=10;i++){ const a = Math.PI + i/10*Math.PI, r = (i%2 ? 30 : 44)*s; p.push([cx+Math.cos(a)*r*1.5, cy+Math.sin(a)*r*.8]); } p.push([cx+68*s, cy+14*s], [cx-68*s, cy+14*s]); return poly(p, "#ffffff", "#3b6ea5", 2.5); };
+  day += cloud(120,110,1) + cloud(300,210,.8) + cloud(90,290,.9) + cloud(690,300,.7) + cloud(430,70,.6);
+  const field = [[0,HZ]]; for(let x=50;x<=W;x+=50) field.push([x, HZ - 4 + Math.sin(x/90)*6]); field.push([W,H],[0,H]);
+  day += poly(field, "#6fcf3f", "#2f7d1c", 3);
+  day += poly([[300,HZ+2],[380,HZ+2],[330,H],[120,H]], "rgba(255,255,255,.14)") + poly([[520,HZ+2],[600,HZ+2],[760,H],[560,H]], "rgba(20,90,10,.14)");
+  const greens = ["#2f8f1c","#8be04a","#c7f27a","#3fae27"];
+  for(let i=0;i<170;i++){ const y = HZ+12+rnd()*(H-HZ-14), x = rnd()*W, len = 6 + (y-HZ)/9, lean = (rnd()-.5)*8; day += line(x, y, x+lean, y-len, greens[Math.floor(rnd()*4)], 2, .85); }
+
+  /* ---------- NIGHT ---------- */
+  const NH = 350; let night = `<rect width="${W}" height="${H}" fill="url(#scSkyNight)"/>`;
+  night += poly([[290,0],[390,0],[650,NH],[540,NH]], "rgba(200,170,255,.17)") + poly([[330,0],[370,0],[600,NH],[560,NH]], "rgba(255,225,255,.13)");
+  const starList = [];
+  for(let i=0;i<150;i++){
+    const x = rnd()*W, y = rnd()*(NH-10), inBand = Math.abs(x - (330 + y*.72)) < 70, r = (inBand ? .7 : .5) + rnd()*1.3; starList.push([x,y]);
+    if(i%11===0){ const s = 3 + rnd()*3; night += poly([[x,y-s],[x+s*.3,y-s*.3],[x+s,y],[x+s*.3,y+s*.3],[x,y+s],[x-s*.3,y+s*.3],[x-s,y],[x-s*.3,y-s*.3]], "#ffffff", "#cfd6ff", 1); }
+    else night += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#ffffff" opacity="${(.5+rnd()*.5).toFixed(2)}"/>`;
+  }
+  const pine = (x,base,h)=>{ let t = poly([[x-h*.03,base],[x+h*.03,base],[x+h*.03,base-h*.14],[x-h*.03,base-h*.14]], "#05061a"); for(let i=0;i<4;i++){ const yb = base-h*.1-i*h*.22, yt = yb-h*.4, w = h*.2*(1-i*.2); t += poly([[x-w,yb],[x,yt],[x+w,yb]], "#05061a", "#2c3170", 1.4); } return t; };
+  let trees = ""; for(let x=-10;x<340;x+=16+rnd()*8) trees += pine(x, NH, 40+rnd()*45);
+  for(let x=470;x<830;x+=15+rnd()*8) trees += pine(x, NH, 50 + (x-470)/360*110 + rnd()*30);
+  night += trees + poly([[0,NH-2],[W,NH-2],[W,NH+12],[0,NH+12]], "#14132b", "#2c3170", 1.5);
+  night += poly([[0,NH+12],[W,NH+12],[W,H],[0,H]], "url(#scLake)", "#2c3170", 2);
+  night += `<g transform="translate(0,${(NH+12)*2}) scale(1,-1)" opacity=".5">${trees}</g>`;
+  starList.slice(0,70).forEach(([x,y])=>{ const ry = NH+12 + (NH-y)*.55; if(ry < H) night += line(x-2-rnd()*3, ry, x+2+rnd()*3, ry, "#cfd6ff", 1.6, .35+rnd()*.4); });
+  for(let i=0;i<14;i++){ const y = NH+30+rnd()*(H-NH-40), x = rnd()*W; night += line(x, y, x+30+rnd()*70, y, "#7f89d8", 1.4, .25); }
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="scSkyDay" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f86d8"/><stop offset=".6" stop-color="#8fd0ff"/><stop offset="1" stop-color="#d6f0ff"/></linearGradient>
+      <linearGradient id="scSkyNight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0c2a"/><stop offset=".6" stop-color="#232a6e"/><stop offset="1" stop-color="#4b4f9e"/></linearGradient>
+      <linearGradient id="scLake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2060"/><stop offset=".5" stop-color="#0b0d2e"/><stop offset="1" stop-color="#04040f"/></linearGradient>
+    </defs>
+    <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>`;
+  const el = document.createElement("div"); el.id = "sceneBg"; el.className = "scene-bg"; el.setAttribute("aria-hidden","true"); el.innerHTML = svg;
+  stage.prepend(el);
+}
+buildScene();
+
 /* =========================================================================
    Bestiary odds. Fish (and forage) have a habit from their id: a peak hour and an active window.
    FISH: every species has its OWN independent chance per catch (they can add up to far more than 100%),
@@ -132,7 +200,7 @@ const oddsByHour = (pool, id)=>{ const e = pool.find(x=>x.id===id); return Array
 const bugPctById = (id, rarity, hour)=> fishPct(bugHabit(id, rarity), hour);
 const bugOddsByHour = id=>{ const it = ITEM_BY_ID[id]; return Array.from({length:24}, (_,h)=> it ? bugPctById(id, it.rarity, h+0.5) : 0); };
 function rollBug(pool, hour, luck=0){      // same independent per-species roll as fish, using each bug's own time-of-day habit
-  const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+  const mult = luckMult(luck);
   const order = [...pool].sort(()=> Math.random()-0.5);
   for(const e of order) if(Math.random()*100 < Math.min(100, bugPctById(e.id, e.rarity, hour)*(mult[e.rarity]||1))) return e.id;
   const w = pool.map(e=> bugPctById(e.id, e.rarity, hour)+0.01), tot = w.reduce((a,b)=>a+b,0);
@@ -141,7 +209,7 @@ function rollBug(pool, hour, luck=0){      // same independent per-species roll 
 }
 /* roll a catch: go through the species in random order, each passing its own independent roll; luck boosts the rarer ones */
 function rollFish(pool, hour, luck=0){
-  const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+  const mult = luckMult(luck);
   const order = [...pool].sort(()=> Math.random()-0.5);
   for(const e of order) if(Math.random()*100 < Math.min(100, fishPctById(e.id, e.rarity, hour)*(mult[e.rarity]||1))) return e.id;
   const w = pool.map(e=> fishPctById(e.id, e.rarity, hour)+0.01), tot = w.reduce((a,b)=>a+b,0);      // nothing passed: weighted fallback so every catch lands something
@@ -1254,7 +1322,7 @@ function enterGame(){
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
-      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); resumeBossParty(); startQuestListener(); migrateSkillTree(); startManaRegen(); startOnlineBeat();
+      const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); resumeBossParty(); startQuestListener(); migrateSkillTree().then(migrateSkillStats).catch(()=>{}); startManaRegen(); startOnlineBeat();
     }
     firstSnapshot = false;
   }, (err)=> toast(friendlyFirebaseError(err)));
@@ -2294,6 +2362,20 @@ function renderSkillDetail(){
     btn.addEventListener("click", ()=> buySkill(n)); d.appendChild(btn);
   }
 }
+async function migrateSkillStats(){
+  const p = state.profile; if(!p || (p.skillStatVer||1) >= SKILL_STAT_VER) return;
+  await withErrorToast(()=> runTransaction(db, async tx=>{
+    const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {};
+    if((d.skillStatVer||1) >= SKILL_STAT_VER) return true;
+    const u = { skillStatVer: SKILL_STAT_VER };
+    const nodes = ownedSkills(d).filter(n=> n.kind==="S" && n.baseVal!=null && n.val!==n.baseVal);
+    if(nodes.length){
+      const st = { ...(d.stats||{}) }; nodes.forEach(n=>{ st[n.stat] = (st[n.stat]||0) + (n.val-n.baseVal); }); u.stats = st;
+      if(nodes.some(n=>n.stat==="SMARTS")){ u.rageMax = rageMaxFor(d.level, d.archetype, st.SMARTS); u.rage = Math.min(d.rage||0, u.rageMax); }
+    }
+    tx.update(ref, u); return true;
+  }));
+}
 async function buySkill(n){
   await withErrorToast(async ()=>{
     const ref = doc(db,"players",state.uid);
@@ -2891,11 +2973,11 @@ function toolUsesLeft(kind){
 
 /* --- job modes: 🟢 green (normal) / 🟡 yellow (risky) / 🔴 red (extreme). Client-side choice, remembered on this device. --- */
 let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); return MODES[m] ? m : "green"; }catch{ return "green"; } })();
-/* bug catching: time to catch, bug speed (px/s), turns per second, chance a turn becomes a dash, and how fast the bar drains when you slip off (x the fill rate) */
+/* bug catching: time to catch, bug speed (px/s), turns per second, chance a turn becomes a dash, how fast the bar drains when you slip off (x the fill rate), and grab = how much of the bug counts as "on it" (bigger = more forgiving) */
 const BUG_RULES = {
-  green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5 },
-  yellow: { tier:"medium", time:10000, speed:140, turn:2.0, dash:.20, drop:.6 },
-  red:    { tier:"hard",   time:10000, speed:150, turn:2.2, dash:.20, drop:.5 }
+  green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5,  grab:.5 },
+  yellow: { tier:"medium", time:10000, speed:105, turn:1.5, dash:.12, drop:.4,  grab:.8 },
+  red:    { tier:"hard",   time:15000, speed:115, turn:1.7, dash:.12, drop:.35, grab:.8 }
 };
 const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
@@ -3149,7 +3231,7 @@ async function doBugAction(){
     const d = Math.hypot(bx,by);
     if(d > reach){ bx *= reach/d; by *= reach/d; ang = Math.atan2(-by,-bx) + (Math.random()-.5)*1.4; }
     // --- catching ---
-    const onBug = Math.hypot(sx-bx, sy-by) <= STUB_R + BUG_R*0.5;
+    const onBug = Math.hypot(sx-bx, sy-by) <= STUB_R + BUG_R*(rule.grab||0.5);
     progress += (onBug ? 100/3 : -(100/3)*rule.drop)*dt;            // 3 seconds of hovering fills the bar; slipping off drains it
     progress = Math.max(0, Math.min(100, progress));
     stubEl.classList.toggle("on", onBug);
@@ -3197,7 +3279,7 @@ function renderBestiary(){
   document.querySelectorAll("[data-besub]").forEach(b=> b.classList.toggle("active", b.dataset.besub===beKind));
   const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, bugMode = beKind==="bug", list = bugMode ? beBugList() : beFishList();
   const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
-  clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}`;
+  clock.textContent = `${per.icon} ${per.label} · ${String(hh%12||12)}:${String(mm).padStart(2,"0")} ${hh<12?"AM":"PM"}` + ` · ${list.filter(x=>(finds[x.id]||0)>0).length}/${list.length} ${bugMode?"bugs":"fish"} found`;
   grid.innerHTML = list.map(f=>{
     const caught = (finds[f.id]||0) > 0;
     const act = activity(f.bug ? bugHabit(f.id, f.item.rarity) : fishHabit(f.id, f.item.rarity), h);
@@ -3392,9 +3474,12 @@ function probeDmUnread(uids){
   uids.forEach(async uid=>{
     const k = state.uid+":"+uid; if(dmProbed.has(k)) return; dmProbed.add(k);
     try{
-      const sn = await getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,uid),"messages"), orderBy("ts","desc"), limit(5)));
-      const m = sn.docs.map(d=>d.data()).find(x=>x.uid!==state.uid && !x.system);
+      const sn = await getDocs(query(collection(db,"privateChats",pmThreadId(state.uid,uid),"messages"), orderBy("ts","desc"), limit(30)));
+      const rows = sn.docs.map(d=>d.data());
+      const m = rows.find(x=>x.uid!==state.uid && !x.system);
       if(m) dmLatest[uid] = Math.max(dmLatest[uid]||0, m.ts);
+      const mine = rows.find(x=>x.uid===state.uid && !x.system);          // when YOU last wrote to them (for the contact order)
+      if(mine){ dmSentSet(uid, mine.ts); sortPMContacts(); }
     }catch(e){ console.error(e); }
     updateUnreadDots();
   });
@@ -3656,6 +3741,16 @@ document.querySelectorAll("[data-chatsub]").forEach(btn=>{
   });
 });
 function pmThreadId(a,b){ return [a,b].sort().join("_"); }
+/* Private-chat contact order: the person you messaged most recently is first, the one you messaged longest ago (or never) is last. */
+const dmSentKey = ()=> "dragoneer_dmsent_"+state.uid;
+function dmSentMap(){ try{ return JSON.parse(localStorage.getItem(dmSentKey())||"{}"); }catch{ return {}; } }
+function dmSentSet(uid, ts){ const m = dmSentMap(); if((m[uid]||0) >= ts) return; m[uid] = ts; try{ localStorage.setItem(dmSentKey(), JSON.stringify(m)); }catch{} }
+function sortPMContacts(){
+  const list = document.getElementById("pmContacts"); if(!list) return;
+  const m = dmSentMap(), lis = [...list.querySelectorAll("li[data-uid]")], idx = new Map(lis.map((li,i)=>[li,i]));
+  lis.sort((x,y)=> (m[y.dataset.uid]||0)-(m[x.dataset.uid]||0) || idx.get(x)-idx.get(y));
+  lis.forEach(li=> list.appendChild(li));
+}
 function openPrivateChatWith(uid, username){
   state.currentChatPartner = { uid, username };
   // Immediately make sure this person's PM subsection shows up in the
@@ -3694,7 +3789,7 @@ async function renderPMContacts(friendUids){
     }catch(err){ console.error(err); }
   }
   if(token !== renderPMContacts._t) return;       // a newer render superseded this one
-  list.replaceChildren(...items);
+  list.replaceChildren(...items); sortPMContacts();
   probeDmUnread(allUids); updateUnreadDots();
 }
 /* live online dot for the person you're chatting with (header + under their messages) */
@@ -3831,6 +3926,7 @@ document.getElementById("privateChatForm").addEventListener("submit", async (e)=
   const replyTo = takeReply("private");
   const ok = await withErrorToast(()=> addDoc(collection(db,"privateChats",threadId,"messages"), { uid:state.uid, username:state.profile.username, text, ts:Date.now(), ...cosmeticFields(), ...(replyTo?{replyTo}:{}) }));
   if(ok===null){ input.value = raw; if(replyTo){ pendingReply.private = replyTo; renderReplyPreview("private"); } return; }
+  dmSentSet(state.currentChatPartner.uid, Date.now()); sortPMContacts();      // they jump to the top of your DM list
   // Ping the recipient's inbox so they get a popup if that chat isn't open
   // (the recipient's client shows the toast, then deletes this ping).
   addDoc(collection(db,"players",state.currentChatPartner.uid,"inbox"), {
@@ -5717,7 +5813,7 @@ async function duelActInner(d, move){
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= guardTakenMult();
     dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0)*CHARM_BLOCK);    // their CHARM blocks 5 damage per point (min 1)
-    dmg = Math.max(1, Math.round(dmg/PVP_DMG_DIV));                                   // player-vs-player ONLY: damage is 10x lower (430 -> 43)
+    dmg = Math.max(1, Math.round(dmg/PVP_DMG_DIV));                                   // player-vs-player ONLY: damage is 3x lower (430 -> 143)
     opHp -= dmg;
     lines.push(`${myName} uses ${s.name}: ${dmg} damage${opFx.guard?" (guarded)":""}.`);
     if(s.healHp){ const h = Math.min(spellRoll(s.healHp), (d[me+"HpMax"]||myHp)-myHp); if(h>0){ myHp += h; lines.push(`${myName} heals ${h} HP.`); } }

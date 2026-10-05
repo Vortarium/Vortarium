@@ -233,7 +233,7 @@ export function registerItems(I){
 export const MODES = {
   green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 90% reward / 10% hazard, 1 durability, 1 mineral. Fish: easy fish (7s). Bugs: easy bugs (10s)." },
   yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 10% hazard. Fish: medium fish (10s). Bugs: medium bugs (10s)." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 10% hazard. Fish: hard fish (15s). Bugs: hard bugs (10s)." }
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 10% hazard. Fish: hard fish (15s). Bugs: hard bugs (15s)." }
 };
 export const FORAGE_RULES = {
   green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
@@ -290,10 +290,15 @@ export function buildPool(items, weights, seed){
   }
   return raw.map(e=>({ ...e, p:e.p/total })).sort((a,b)=> b.p-a.p);
 }
-/* luck (0.1 = +10% luck): rare items weigh x(1+luck), epics x(1+2*luck), legendaries x(1+3*luck), then odds are re-normalised. */
+/* LUCK: flattens the odds so the rarest things stop being so rare.
+   At luck L (0.1 / 0.2 / 0.4): commons x1/(1+L), uncommon x1, rare x(1+3L), epic x(1+6L), legendary x(1+10L).
+   e.g. a +40% potion = commons x0.71, rare x2.2, epic x3.4, legendary x5. Used by forage, mining, fishing and bugs. */
+export function luckMult(luck=0){
+  return { common:1/(1+luck), uncommon:1, rare:1+3*luck, epic:1+6*luck, legendary:1+10*luck };
+}
 export function rollPool(pool, luck=0){
   if(luck > 0){
-    const mult = { rare:1+luck, epic:1+2*luck, legendary:1+3*luck };
+    const mult = luckMult(luck);
     const w = pool.map(e=> e.p*(mult[e.rarity]||1)), tot = w.reduce((a,b)=>a+b,0);
     let t = Math.random()*tot;
     for(let i=0;i<pool.length;i++){ t -= w[i]; if(t<=0) return pool[i].id; }
