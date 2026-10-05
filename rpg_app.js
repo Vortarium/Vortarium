@@ -306,11 +306,11 @@ function cosmeticStyle(gid, fid){
    DAILY QUOTA GUARD
    The browser can't see Google's real usage meter, so every client counts the Firestore reads / writes / deletes
    it makes (wrappers below shadow the SDK functions) and adds them to ONE shared counter doc, usage/{day}.
-   When any counter reaches 90% of its daily limit the doc is marked locked and EVERY client logs out and shows the
+   When the READS counter reaches 90% of its daily limit (45,000 of 50,000) the doc is marked locked and EVERY client logs out and shows the
    "Servers are full" egg screen; new logins are refused too. The "day" rolls over at 3:00 AM Eastern = midnight Pacific,
    which is exactly when Firebase resets its free quota. Locked pages reload themselves at that moment.
-   Edit QUOTA to match your plan (these are the Spark / free-tier numbers) and keep the 45000 / 18000 numbers in
-   rpg_firestore.rules in step (they are 90% of the same limits).
+   Edit QUOTA to match your plan (these are the Spark / free-tier numbers) and keep the 45000 reads number in
+   rpg_firestore.rules in step (it is 90% of the same limit). Writes and deletes are still counted but never lock.
    ========================================================================= */
 const QUOTA = { reads:50000, writes:20000, deletes:20000, lockAt:0.9 };
 const FULL_MSG = "Servers are full, come back at 3 AM EST to keep playing";
@@ -321,7 +321,7 @@ const usagePending = { reads:0, writes:0, deletes:0 };
 let usageLast = { reads:0, writes:0, deletes:0 }, usageFlushing = false, usageLastFlush = 0;
 const usageNY = new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit" });
 const usageDayKey = (t=Date.now())=> usageNY.format(new Date(t - 3*3600e3));            // 3:00 AM Eastern starts a new day
-const usagePct = ()=> Math.max(usageLast.reads/QUOTA.reads, usageLast.writes/QUOTA.writes, usageLast.deletes/QUOTA.deletes);
+const usagePct = ()=> usageLast.reads/QUOTA.reads;                // reads are the ONLY lock indicator: 45,000 / 50,000 = 90%
 function msUntilReset(){
   const k0 = usageDayKey(); let lo = Date.now(), hi = lo + 26*3600e3;
   while(hi-lo > 1000){ const mid = (lo+hi)/2; if(usageDayKey(mid)===k0) lo = mid; else hi = mid; }
