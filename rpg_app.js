@@ -99,6 +99,162 @@ function startDayNight({ getTheme=()=>"dynamic", onNightChange=()=>{} }={}){
    DAY: blue sky, sunburst, puffy clouds, green meadow.  NIGHT: starry sky + Milky Way over a still lake with
    pine silhouettes and their reflections. Both live in one SVG; CSS cross-fades them with --night.
    ========================================================================= */
+/* Region scenes: ocean (reef) / mountains / volcano, each with a day and a night version (night = aurora peaks, moonlit sea, erupting lava) */
+function regionSceneSvgs(){
+  let seed = 31; const rnd = ()=> (seed = (seed*16807) % 2147483647) / 2147483647;
+  const W = 1280, H = 720, HZ = 400;
+  const f = n=> (+n).toFixed(1);
+  const P = pts=> pts.map(p=> f(p[0])+","+f(p[1])).join(" ");
+  const ln = (x1,y1,x2,y2,c,w,o=1)=> `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${c}" stroke-width="${w}" stroke-linecap="round" opacity="${o}"/>`;
+  const circ = (x,y,r,fill,o=1)=> `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="${fill}" opacity="${o}"/>`;
+  const stops = s=> s.map(([o,c,a])=>`<stop offset="${o}" stop-color="${c}"${a!==undefined?` stop-opacity="${a}"`:""}/>`).join("");
+  const lg = (id,s,y1=0,y2=1,abs=false)=> `<linearGradient id="${id}" x1="0" y1="${y1}" x2="0" y2="${y2}"${abs?' gradientUnits="userSpaceOnUse"':""}>${stops(s)}</linearGradient>`;
+  const rg = (id,s)=> `<radialGradient id="${id}">${stops(s)}</radialGradient>`;
+  const blur = (id,d)=> `<filter id="${id}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${d}"/></filter>`;
+  const starsSvg = (n,y0,y1,col="#ffffff")=>{ let o=""; for(let i=0;i<n;i++){ const x=rnd()*W, y=y0+rnd()*(y1-y0), r=.5+rnd()*1.4*(rnd()<.1?1.8:1); o+=circ(x,y,r,col,.35+rnd()*.65); if(rnd()<.06) o+=ln(x-4,y,x+4,y,col,.8,.7)+ln(x,y-4,x,y+4,col,.8,.7); } return o; };
+  const wave = (x,k)=> Math.sin(x*.011+k)*.5 + Math.sin(x*.027+k*2.3)*.3 + Math.sin(x*.061+k*3.7)*.2;
+
+  /* heightfield mountains: peaks = [x, topY, slopeLeft, slopeRight]; every column is the highest of all cones, so peaks always join their bases */
+  const mount = (peaks, base, rough, k)=>{ const pts=[]; for(let x=-20;x<=W+20;x+=8){ let y=base; for(const [px,py,sl,sr] of peaks){ const d=x-px, yy=py+Math.abs(d)*(d<0?sl:sr); if(yy<y) y=yy; }
+      y += wave(x,k)*rough*.8 + (Math.sin(x*.19+k)+Math.sin(x*.43+k*2))*rough*.2 + (rnd()-.5)*rough*.9; pts.push([x, Math.min(y,base+4)]); } return pts; };
+  const peakIdx = pts=>{ const r=[]; for(let i=3;i<pts.length-3;i++){ if(pts[i][1]<pts[i-1][1]&&pts[i][1]<=pts[i+1][1]&&pts[i][1]<pts[i-3][1]&&pts[i][1]<pts[i+3][1]) r.push(i); } return r; };
+  let uid = 0;
+  const layer = (pts, o)=>{ const id = "scL"+(uid++), top = Math.min(...pts.map(p=>p[1])), base = Math.max(...pts.map(p=>p[1]));
+    const d = `M-20,${H+20} L${pts.map(p=>f(p[0])+","+f(p[1])).join(" L")} L${W+20},${H+20} Z`;
+    defs += lg(id+"r", [[0,o.rockTop],[1,o.rockBot]], top, H, true) + lg(id+"s", [[0,o.snow,1],[.55,o.snow,.9],[1,o.snow,0]], top, top+(o.snowDepth||150), true);
+    let s = `<path d="${d}" fill="url(#${id}r)"/>`;
+    const yAt = x=>{ const i = Math.max(0,Math.min(pts.length-1,Math.round((x+20)/8))); return pts[i][1]; };
+    let wedges="", spurs="";
+    peakIdx(pts).forEach(i=>{ const [px,py]=pts[i]; if(base-py<40) return; let j=i; while(j<pts.length-1 && pts[j+1][1]>=pts[j][1]) j++; if(j-i>=3){ const [vx,vy]=pts[j], sd=o.shade||70;
+        wedges += `<polygon points="${P([...pts.slice(i,j+1),[vx-10,vy+sd],[px+(vx-px)*.22,py+(vy-py)*.5+sd*.6]])}" fill="${o.shadeCol}" opacity="${o.shadeOp||.5}"/>`; }
+      for(let g=0; g<7; g++){ const side = g%2?1:-1, gx = px+side*(4+rnd()*60), gy = yAt(gx)+3, len = 40+rnd()*(o.spur||120); let q=[[gx,gy]]; for(let k=1;k<=5;k++) q.push([gx+side*k*(2+rnd()*4)+(rnd()-.5)*2, gy+len*k/5]);
+        spurs += `<polyline points="${P(q)}" fill="none" stroke="${side<0?o.snow:o.shadeCol}" stroke-width="${f(1.6+rnd()*2.4)}" stroke-linecap="round" opacity="${side<0?.32:.3}"/>`; } });
+    s += `<g filter="url(#b4)">${wedges}</g><g filter="url(#b2)">${spurs}</g>`;
+    s += `<path d="${d}" fill="url(#${id}s)" filter="url(#scRag)"/>`;
+    const line1 = pts.map(p=>f(p[0])+","+f(p[1])).join(" ");
+    s += `<polyline points="${line1}" fill="none" stroke="${o.pen}" stroke-width="2.2" stroke-linejoin="round" opacity=".55"/><polyline points="${pts.map(p=>f(p[0]+(rnd()-.5)*3)+","+f(p[1]+(rnd()-.5)*3+2)).join(" ")}" fill="none" stroke="${o.pen}" stroke-width="1" opacity=".3"/>`;
+    return s; };
+  const haze = (y,h,col,op)=> `<rect x="-20" y="${y}" width="${W+40}" height="${h}" fill="url(#scHz${col})" opacity="${op}"/>`;
+  let defs = blur("b2",2)+blur("b4",4)+blur("b8",8)+blur("b14",14)+blur("b26",26)+blur("b40",40)
+    + `<filter id="scRag" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".018 .05" numOctaves="3" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="46" xChannelSelector="R" yChannelSelector="G"/></filter>`
+    + lg("scHzW",[[0,"#ffffff",0],[.5,"#f3f9ff",.9],[1,"#ffffff",0]]) + lg("scHzN",[[0,"#6c86c8",0],[.5,"#7d9bd8",.55],[1,"#6c86c8",0]]);
+
+  /* ============================== MOUNTAINS ============================== */
+  let mD = `<rect width="${W}" height="${H}" fill="url(#mSkyD)"/>`;
+  defs += lg("mSkyD",[[0,"#3f86d6"],[.45,"#8cc0ee"],[.78,"#d5e9f8"],[1,"#eef6fc"]]);
+  for(let i=0;i<7;i++){ const y=40+i*38+rnd()*20; mD += `<ellipse cx="${f(200+rnd()*900)}" cy="${f(y)}" rx="${f(180+rnd()*300)}" ry="${f(4+rnd()*8)}" fill="#ffffff" opacity="${(.25+rnd()*.3).toFixed(2)}" filter="url(#b8)"/>`; }
+  const mFar  = mount([[70,300,1.5,1.3],[210,262,1.4,1.5],[360,300,1.4,1.4],[520,270,1.3,1.5],[690,300,1.5,1.4],[850,255,1.4,1.5],[1010,300,1.4,1.3],[1170,268,1.5,1.4]], 410, 16, 1);
+  const mMid  = mount([[40,360,1.4,1.4],[240,285,1.3,1.5],[420,345,1.5,1.4],[620,300,1.3,1.6],[790,350,1.5,1.4],[960,290,1.4,1.5],[1150,345,1.4,1.4],[1260,300,1.5,1.4]], 480, 18, 2);
+  const mMain = mount([[400,130,1.0,1.35],[180,310,1.35,1.2],[560,250,1.1,1.5],[760,330,1.5,1.3],[960,270,1.2,1.5],[1180,330,1.4,1.4]], 575, 22, 3);
+  const mNear = mount([[200,470,1.5,1.4],[520,440,1.3,1.6],[780,500,1.5,1.4],[1060,430,1.3,1.5],[1250,490,1.5,1.4]], 665, 22, 4);
+  mD += layer(mFar,  {rockTop:"#b7cfea",rockBot:"#d3e3f4",snow:"#ffffff",snowDepth:110,shadeCol:"#9db9de",shadeOp:.55,pen:"#7c9cc8",shade:40,spur:80});
+  mD += haze(350,120,"W",.7);
+  mD += layer(mMid,  {rockTop:"#86a9d9",rockBot:"#b4cdea",snow:"#ffffff",snowDepth:140,shadeCol:"#557eb8",shadeOp:.55,pen:"#4a72ab",shade:55,spur:100});
+  mD += haze(430,130,"W",.7);
+  mD += layer(mMain, {rockTop:"#4f7fbf",rockBot:"#8fb2de",snow:"#ffffff",snowDepth:230,shadeCol:"#264f8f",shadeOp:.6,pen:"#27497f",shade:70,spur:150});
+  mD += haze(540,110,"W",.65);
+  mD += layer(mNear, {rockTop:"#2d5a9a",rockBot:"#5683bb",snow:"#eaf4ff",snowDepth:100,shadeCol:"#16386f",shadeOp:.55,pen:"#142d58",shade:55,spur:90});
+  mD += haze(610,130,"W",.6);
+
+  let mN = `<rect width="${W}" height="${H}" fill="url(#mSkyN)"/>`;
+  defs += lg("mSkyN",[[0,"#030720"],[.45,"#07204f"],[1,"#0e3a73"]]) + lg("aurG",[[0,"#2a7bff",0],[.45,"#2fd2ff",.55],[1,"#37ffc8",.95]]);
+  mN += starsSvg(220,0,380);
+  // aurora: broad fan of light behind the peaks + sharper striated curtains
+  const fan = (cx,spread,col,op,bl)=>{ let o=""; for(let i=-6;i<=6;i++){ const bx=cx+i*22, tx=cx+i*spread, w=26+rnd()*30; o+=`<polygon points="${P([[bx-8,430],[bx+8,430],[tx+w,-40],[tx-w,-40]])}" fill="url(#aurG)" opacity="${(op*(.4+rnd()*.6)).toFixed(2)}"/>`; } return `<g filter="url(#${bl})">${o}</g>`; };
+  mN += fan(520,95,"#37ffc8",.9,"b26") + fan(640,70,"#37ffc8",.9,"b14");
+  let cur=""; for(let c=0;c<3;c++){ const x0=[80,560,880][c], len=[520,460,400][c], k=c*2.1; for(let x=0;x<len;x+=9){ const xx=x0+x, top=40+c*30+Math.sin(x*.012+k)*70+(rnd()*20), bot=300+Math.sin(x*.01+k*1.4)*50-c*10;
+      cur += `<rect x="${f(xx)}" y="${f(top)}" width="${f(10+rnd()*6)}" height="${f(bot-top)}" fill="url(#aurG)" opacity="${(.25+rnd()*.5).toFixed(2)}"/>`; } }
+  mN += `<g filter="url(#b4)">${cur}</g>`;
+  mN += `<ellipse cx="560" cy="300" rx="320" ry="80" fill="#35ffd0" opacity=".25" filter="url(#b26)"/>`;
+  const nFar  = mount([[110,330,1.4,1.3],[290,295,1.4,1.4],[470,325,1.3,1.4],[900,300,1.4,1.4],[1060,280,1.4,1.3],[1230,320,1.4,1.4]], 450, 16, 5);
+  const nMain = mount([[650,225,1.0,1.1],[430,310,1.25,1.2],[870,290,1.2,1.3],[240,345,1.3,1.3],[1090,345,1.3,1.3],[560,300,1.3,1.4]], 575, 22, 6);
+  mN += layer(nFar,  {rockTop:"#27447f",rockBot:"#2f5391",snow:"#a7c6f2",snowDepth:130,shadeCol:"#10224d",shadeOp:.55,pen:"#0b1a40",shade:45,spur:90});
+  mN += haze(380,130,"N",.5);
+  mN += layer(nMain, {rockTop:"#3b5a98",rockBot:"#1d3466",snow:"#e3f1ff",snowDepth:230,shadeCol:"#0b1844",shadeOp:.6,pen:"#08123a",shade:70,spur:150});
+  mN += haze(500,110,"N",.45);
+  const nGr = mount([[1180,430,1,1],[960,520,1.2,1],[80,560,1,1],[360,560,1,1]], 700, 26, 7);
+  mN += layer(nGr, {rockTop:"#202636",rockBot:"#0a0d16",snow:"#b9cfee",snowDepth:55,shadeCol:"#05070d",shadeOp:.6,pen:"#03050a",shade:60});
+
+  /* ============================== OCEAN ============================== */
+  const grad3 = (id,st)=> `<radialGradient id="${id}" cx=".5" cy=".5" r=".56" fx=".66" fy=".26">${stops(st)}</radialGradient>`;
+  defs += grad3("gPink",[[0,"#fff3e8"],[.4,"#f1cfe0"],[.8,"#c0b2d8"],[1,"#9a97c8"]]) + grad3("gWhite",[[0,"#ffffff"],[.5,"#eef2fc"],[.85,"#c6d3ee"],[1,"#a6b8e0"]])
+        + grad3("gSmokeD",[[0,"#ffb877"],[.26,"#c97d66"],[.62,"#6e4b54"],[1,"#3a2d36"]]) + grad3("gAshD",[[0,"#9a7a80"],[.5,"#5a4650"],[1,"#2f2630"]])
+        + grad3("gSmokeN",[[0,"#fff2a6"],[.24,"#ffb232"],[.6,"#e6601a"],[1,"#a02e0a"]]) + grad3("gAshN",[[0,"#ff9a3a"],[.5,"#c8421a"],[1,"#6a1c0a"]]);
+  const lobes = (L,grad,bl="b2")=> `<g filter="url(#${bl})">${L.sort((a,b)=>(a[1]-a[2])-(b[1]-b[2])).map(([x,y,r])=>circ(x,y,r,`url(#${grad})`)).join("")}</g>`;
+  const cumulus = (cx,base,w,h,grad)=>{ const L=[], n=Math.round(w/4.5);
+    for(let i=0;i<n;i++){ const u=(rnd()-.5)*2, prof=h*Math.pow(1-u*u,.7), r=Math.max(12,prof*.2*(.5+rnd()*.9)); L.push([cx+u*w/2, base-r-rnd()*Math.max(0,prof-2*r)*(.35+.65*rnd()), r]); }
+    for(let i=0;i<Math.round(n/3);i++){ const u=(rnd()-.5)*1.5, prof=h*Math.pow(1-u*u,.7), r=prof*.17*(.7+rnd()*.5)+10; L.push([cx+u*w/2, base-prof+r*.8, r]); }
+    return lobes(L,grad,"b8") + `<ellipse cx="${f(cx)}" cy="${f(base-h*.06)}" rx="${f(w*.46)}" ry="${f(h*.14)}" fill="#6f78b0" opacity=".28" filter="url(#b14)"/>`; };
+  const seaLines = (y0,y1,n,cols,op)=>{ let o=""; for(let i=0;i<n;i++){ const t=Math.pow(rnd(),.8), y=y0+t*(y1-y0), x=rnd()*W, l=14+t*130+rnd()*40; o+=ln(x,y,x+l,y+(rnd()-.5)*2,cols[Math.floor(rnd()*cols.length)],.8+t*2.4,op*(.4+rnd()*.6)); } return o; };
+  let oD = `<rect width="${W}" height="${H}" fill="url(#oSkyD)"/>`;
+  defs += lg("oSkyD",[[0,"#4a82bf"],[.5,"#8aa9cf"],[.85,"#e3c4cf"],[1,"#f2d3d3"]]) + lg("oSeaD",[[0,"#6d94b4"],[.25,"#3f6f96"],[1,"#112f4a"]]);
+  oD += `<ellipse cx="640" cy="${HZ-10}" rx="640" ry="90" fill="#ffd9c8" opacity=".6" filter="url(#b26)"/>`;
+  oD += cumulus(150,392,300,130,"gPink") + cumulus(1120,388,380,170,"gPink") + cumulus(930,380,170,90,"gWhite") + cumulus(590,394,640,270,"gPink") + cumulus(760,300,150,70,"gWhite");
+  for(let i=0;i<5;i++){ const y=50+i*50+rnd()*20; oD += `<ellipse cx="${f(200+rnd()*900)}" cy="${f(y)}" rx="${f(150+rnd()*250)}" ry="${f(4+rnd()*6)}" fill="#ffffff" opacity="${(.12+rnd()*.15).toFixed(2)}" filter="url(#b8)"/>`; }
+  oD += `<rect x="-20" y="${HZ}" width="${W+40}" height="${H-HZ+20}" fill="url(#oSeaD)"/>` + `<rect x="-20" y="${HZ-2}" width="${W+40}" height="5" fill="#f2d2d2" opacity=".85" filter="url(#b2)"/>`;
+  for(let i=0;i<90;i++){ const t=Math.pow(rnd(),.8), y=HZ+6+t*(H-HZ-10), w=(12+t*100)*(.5+rnd()*.7), x=600+(rnd()-.5)*(80+t*260); oD += ln(x-w/2,y,x+w/2,y,"#ffd9cf",1+t*2.2,.35+rnd()*.5); }
+  oD += seaLines(HZ+6,H,200,["#cfe3f2","#9cc0da"],.5) + seaLines(HZ+110,H,90,["#0d2a42","#1a4262"],.55);
+
+  let oN = `<rect width="${W}" height="${H}" fill="url(#oSkyN)"/>`;
+  defs += lg("oSkyN",[[0,"#020617"],[.4,"#071a4a"],[.9,"#14449a"],[1,"#1b55b0"]]) + lg("oSeaN",[[0,"#143f8f"],[.3,"#0b2a68"],[1,"#041238"]]) + rg("moonG",[[0,"#ffffff",1],[.25,"#dfeaff",.55],[1,"#3b6cd6",0]]);
+  oN += starsSvg(70,0,300);
+  const MX = 820, MY = 250;
+  for(let i=0;i<11;i++){ const y=20+rnd()*340, x=rnd()*W, rx=140+rnd()*320; oN += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(rx)}" ry="${f(6+rnd()*14)}" fill="${i%3?"#6f98e6":"#3a63b8"}" opacity="${(.12+rnd()*.28).toFixed(2)}" transform="rotate(${f(-8+rnd()*14)} ${f(x)} ${f(y)})" filter="url(#b8)"/>`; }
+  for(let i=0;i<7;i++){ const x=300+rnd()*700, y=60+rnd()*160; oN += `<path d="M${f(x-200)},${f(y+30)} C${f(x-90)},${f(y-20)} ${f(x+60)},${f(y+10)} ${f(x+220)},${f(y-26)}" fill="none" stroke="#9cc0ff" stroke-width="${f(3+rnd()*6)}" opacity="${(.14+rnd()*.2).toFixed(2)}" stroke-linecap="round" filter="url(#b4)"/>`; }
+  oN += `<circle cx="${MX}" cy="${MY}" r="150" fill="url(#moonG)" opacity=".85"/>` + `<circle cx="${MX}" cy="${MY}" r="30" fill="#f7fbff"/>` + `<circle cx="${MX}" cy="${MY}" r="30" fill="none" stroke="#bcd0f4" stroke-width="2" opacity=".7"/>`;
+  oN += `<rect x="-20" y="${HZ}" width="${W+40}" height="${H-HZ+20}" fill="url(#oSeaN)"/>` + `<rect x="-20" y="${HZ-3}" width="${W+40}" height="6" fill="#2a63c0" opacity=".7" filter="url(#b2)"/>`;
+  oN += `<ellipse cx="${MX}" cy="${HZ+40}" rx="60" ry="30" fill="#bcd6ff" opacity=".4" filter="url(#b14)"/>`;
+  for(let i=0;i<150;i++){ const t=Math.pow(rnd(),.7), y=HZ+6+t*(H-HZ-10), w=(14+t*120)*(.4+rnd()*.8), x=MX+(rnd()-.5)*(30+t*150)*(1-Math.abs(rnd()-.5)*.6); oN += ln(x-w/2,y,x+w/2,y,"#e8f1ff",1+t*2.6,.35+rnd()*.55); }
+  oN += seaLines(HZ+8,H,170,["#2c5cb0","#3c78d4","#1a3f8c"],.55);
+
+  /* ============================== VOLCANO ============================== */
+  const CX = 640, CY = 300, BY = 640, HWL = 720, HWR = 740, K = .17;
+  const prof = r=> (BY-CY)*Math.pow(Math.min(1,r/(r<0?HWL:HWR)),.74);
+  const coneY = x=>{ const d=x-CX, a=Math.abs(d), e=Math.max(0,a-46); return CY + (BY-CY)*Math.pow(Math.min(1,e/(d<0?HWL:HWR)),.74) + (a<46 ? Math.pow(a/46,2)*5-3*Math.cos(d*.3) : 0); };
+  const conePts = []; for(let x=-20;x<=W+20;x+=8) conePts.push([x, coneY(x) + wave(x,9)*5 + (Math.sin(x*.21)+Math.sin(x*.47))*1.6 + (rnd()-.5)*3]);
+  const coneD = `M-20,${H+20} L${conePts.map(p=>f(p[0])+","+f(p[1])).join(" L")} L${W+20},${H+20} Z`;
+  // a stream runs down the face of the cone at angle th around it: x spreads sideways, front-facing streams sit lower on screen
+  const flow = (th,rEnd,ph,wob)=>{ const q=[]; for(let k=0;k<=18;k++){ const t=k/18, r=50*0+ (rEnd*Math.pow(t,.95)), a=th+Math.sin(t*8+ph)*wob, x=CX+r*Math.sin(a)*(1+.0), y=CY+(BY-CY)*Math.pow(Math.min(1,Math.max(0,r-46)/HWR),.74)+r*Math.cos(a)*K+Math.sin(t*5+ph)*1.5; q.push([x,y]); } return q; };
+  const lava = (n,glow)=>{ let wide="", core="", sparks=""; for(let i=0;i<n;i++){ const th=(rnd()-.5)*2.7, rEnd=(120+rnd()*560)*(1-Math.abs(th)/3.6), q=flow(th,rEnd,rnd()*6,.05+rnd()*.07);
+      const run = (qq,wd)=>{ const d=P(qq), dash=rnd()<.4?` stroke-dasharray="${f(26+rnd()*50)} ${f(5+rnd()*12)}"`:"";
+        wide += `<polyline points="${d}" fill="none" stroke="${glow?"#ff4a10":"#e0431a"}" stroke-width="${f(wd*2.6)}" stroke-linecap="round" stroke-linejoin="round" opacity=".5"${dash}/>`;
+        core += `<polyline points="${d}" fill="none" stroke="#ff9d26" stroke-width="${f(wd*1.2)}" stroke-linecap="round" stroke-linejoin="round" opacity=".95"${dash}/><polyline points="${d}" fill="none" stroke="#fff0a0" stroke-width="${f(Math.max(.8,wd*.45))}" stroke-linecap="round" opacity=".9"${dash}/>`; };
+      run(q,1.4+rnd()*1.8);
+      if(rnd()<.6){ const m=6+Math.floor(rnd()*5), br=flow(th+(rnd()-.5)*.5,rEnd*(.6+rnd()*.4),rnd()*6,.1).slice(m); run(br,1+rnd()); }
+      for(let s2=0;s2<5;s2++){ const p=q[2+Math.floor(rnd()*(q.length-3))]; sparks+=circ(p[0]+(rnd()-.5)*14,p[1]+(rnd()-.5)*10,.8+rnd()*1.2,"#ffc24a",.8); } }
+    return `<g filter="url(#b4)">${wide}</g>${core}${sparks}`; };
+  const facets = (dark,light)=>{ let o=""; for(let i=0;i<22;i++){ const th=(rnd()-.5)*2.9, q=flow(th,200+rnd()*620,rnd()*6,.04); o+=`<polyline points="${P(q)}" fill="none" stroke="${th<0&&light?light:dark}" stroke-width="${f(3+rnd()*7)}" stroke-linecap="round" opacity="${th<0&&light?.22:.4}"/>`; } return `<g filter="url(#b2)">${o}</g>`; };
+  const plume = (gLow,gHigh,rise)=>{ const L=[]; for(let i=0;i<70;i++){ const t=i/69, y=CY-14-t*rise+(rnd()-.5)*30, x=CX+Math.sin(t*3.1)*34*t+t*t*270+(rnd()-.5)*(40+t*70), r=(22+t*60)*(.7+rnd()*.6); L.push([x,y,r,t]); }
+    return lobes(L.filter(l=>l[3]<.5).map(l=>l.slice(0,3)),gLow,"b8") + lobes(L.filter(l=>l[3]>=.5).map(l=>l.slice(0,3)),gHigh,"b8"); };
+  const treeSet = (y0,n,cols,pen)=>{ let o=""; for(let i=0;i<n;i++){ const x=rnd()*W, y=y0+rnd()*(H-y0)*.85, h=18+rnd()*34, c=cols[Math.floor(rnd()*cols.length)]; o += `<rect x="${f(x-1.5)}" y="${f(y-3)}" width="3" height="6" fill="#2a1b12"/><polygon points="${P([[x-h*.36,y],[x,y-h],[x+h*.36,y]])}" fill="${c}" stroke="${pen}" stroke-width="1" opacity=".96"/><polygon points="${P([[x-h*.28,y-h*.35],[x,y-h*1.12],[x+h*.28,y-h*.35]])}" fill="${c}" stroke="${pen}" stroke-width="1" opacity=".96"/>`; } return o; };
+  const hillPts = (base,amp,k)=>{ const p=[]; for(let x=-20;x<=W+20;x+=16) p.push([x, base+wave(x,k)*amp+(rnd()-.5)*5]); return p; };
+  const hillPath = p=> `M-20,${H+20} L${p.map(q=>f(q[0])+","+f(q[1])).join(" L")} L${W+20},${H+20} Z`;
+  const crater = (rx,glowCol,inner)=> `<ellipse cx="${CX}" cy="${CY+1}" rx="${rx}" ry="${f(rx*.2)}" fill="#1a0c0a" stroke="#0b0504" stroke-width="2"/><ellipse cx="${CX}" cy="${CY+2}" rx="${f(rx*.78)}" ry="${f(rx*.14)}" fill="${glowCol}" filter="url(#b2)"/><ellipse cx="${CX}" cy="${CY+1}" rx="${f(rx*.4)}" ry="${f(rx*.07)}" fill="${inner}"/>`;
+  const h1 = hillPts(570,24,1), h2 = hillPts(640,20,2);
+
+  let vD = `<rect width="${W}" height="${H}" fill="url(#vSkyD)"/>`;
+  defs += lg("vSkyD",[[0,"#52648c"],[.5,"#9199ba"],[.82,"#d3aea9"],[1,"#e6bfa8"]]) + lg("vConeD",[[0,"#6a6064"],[.45,"#322a2c"],[1,"#171213"]],CY,BY,true) + rg("vGlowD",[[0,"#ffe08a",.95],[.3,"#ff8a2a",.6],[1,"#ff4a10",0]])
+        + lg("vHillD",[[0,"#4a8f52"],[1,"#2a6034"]],540,H,true) + lg("vHillD2",[[0,"#2f6c3a"],[1,"#194a26"]],620,H,true);
+  vD += starsSvg(16,0,110,"#e8eaff") + `<ellipse cx="${CX}" cy="${CY-30}" rx="300" ry="170" fill="url(#vGlowD)" opacity=".7" filter="url(#b14)"/>`;
+  vD += plume("gSmokeD","gAshD",215);
+  vD += `<path d="${coneD}" fill="url(#vConeD)"/>` + facets("#0d0809","#8a7e82") + crater(52,"#ff9a2a","#fff0a0");
+  vD += `<polyline points="${P(conePts)}" fill="none" stroke="#150e0e" stroke-width="2.6" opacity=".75"/><polyline points="${P(conePts.map(p=>[p[0]+(rnd()-.5)*3,p[1]+3+(rnd()-.5)*3]))}" fill="none" stroke="#150e0e" stroke-width="1" opacity=".35"/>` + lava(26,false);
+  vD += `<path d="${hillPath(h1)}" fill="url(#vHillD)" stroke="#1d4426" stroke-width="2.4"/>` + treeSet(565,70,["#2d6a3a","#3b8247","#255a31"],"#143a1e") + `<path d="${hillPath(h2)}" fill="url(#vHillD2)" stroke="#143a1e" stroke-width="2.4"/>` + treeSet(635,60,["#1f4f2b","#2a6636","#18401f"],"#0f2d17");
+
+  let vN = `<rect width="${W}" height="${H}" fill="url(#vSkyN)"/>`;
+  defs += lg("vSkyN",[[0,"#240804"],[.35,"#5a1507"],[.7,"#a02c08"],[1,"#d4500e"]]) + lg("vConeN",[[0,"#2a100b"],[.5,"#0f0605"],[1,"#050202"]],CY,BY,true) + rg("vGlowN",[[0,"#fff3a0",1],[.22,"#ffb52a",.9],[.55,"#ff5a10",.55],[1,"#c4300a",0]]);
+  vN += `<ellipse cx="${CX+40}" cy="${CY-90}" rx="620" ry="340" fill="url(#vGlowN)" opacity=".85" filter="url(#b26)"/>`;
+  vN += plume("gSmokeN","gAshN",230);
+  vN += `<ellipse cx="${CX+10}" cy="${CY-30}" rx="150" ry="100" fill="url(#vGlowN)" filter="url(#b8)"/>` + `<ellipse cx="${CX}" cy="${CY-8}" rx="56" ry="34" fill="#fff6b8" filter="url(#b4)"/>`;
+  for(let i=0;i<60;i++){ const a=-1.25-rnd()*.55+(rnd()-.5)*.6, v=50+rnd()*190, x=CX+(rnd()-.5)*40, y=CY-4; vN += `<path d="M${f(x)},${f(y)} q${f(Math.cos(a)*v*.7)},${f(Math.sin(a)*v)} ${f(Math.cos(a)*v*1.4+(rnd()-.5)*40)},${f(Math.sin(a)*v*.3+v*.8)}" fill="none" stroke="#ffb02e" stroke-width="1.1" opacity="${(.35+rnd()*.5).toFixed(2)}" stroke-linecap="round"/>`; }
+  vN += `<path d="${coneD}" fill="url(#vConeN)"/>` + facets("#000000","#6a2412") + crater(58,"#ffb42e","#fff6b8");
+  vN += `<polyline points="${P(conePts)}" fill="none" stroke="#ff7a2a" stroke-width="1.8" opacity=".55"/>` + lava(40,true);
+  vN += `<path d="${hillPath(h1)}" fill="#140504" stroke="#6a200c" stroke-width="2"/>` + treeSet(565,50,["#0b0403","#120605"],"#3a0f06") + `<path d="${hillPath(h2)}" fill="#080202" stroke="#3a0f06" stroke-width="2"/>`;
+
+  const mk = (id,d,n)=> `<svg data-rg="${id}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><g class="scene-day">${d}</g><g class="scene-night">${n}</g></svg>`;
+  return { defs, svgs: mk("reef",oD,oN) + mk("mountains",mD,mN) + mk("volcano",vD,vN) };
+}
+
 function buildScene(){
   const stage = document.getElementById("screen-game"); if(!stage || document.getElementById("sceneBg")) return;   // full-screen layer: same box as the paper background, so no margins
   let seed = 11; const rnd = ()=> (seed = (seed*16807) % 2147483647) / 2147483647;
@@ -143,70 +299,13 @@ function buildScene(){
   for(let i=0;i<14;i++){ const y = NH+30+rnd()*(H-NH-40), x = rnd()*W; night += line(x, y, x+30+rnd()*70, y, "#7f89d8", 1.4, .25); }
 
 
-  /* ---------- REGION SCENES (ocean / mountains / volcano): sketched from the reference photos, each with a day and a night version ---------- */
-  const puff = (cx,cy,s,fill,stroke,tint)=>{ const p=[]; for(let i=0;i<=14;i++){ const a=Math.PI+i/14*Math.PI, r=(i%2?34:48)*s; p.push([cx+Math.cos(a)*r*1.6, cy+Math.sin(a)*r*.85]); } p.push([cx+84*s,cy+16*s],[cx-84*s,cy+16*s]);
-    let o = poly(p, fill, stroke, 2.2); if(tint) o += poly([[cx+10*s,cy-30*s],[cx+55*s,cy-26*s],[cx+78*s,cy+2*s],[cx+20*s,cy-4*s]], tint); return o; };
-  const ridge = (base,amp,step,fill,stroke,snow,seedOff=0)=>{ const p=[[-20,H+10],[-20,base]], tips=[]; for(let x=-20;x<=W+30;x+=step){ const y = base - amp*(.25+.75*rnd()) - (Math.sin(x/130+seedOff)+1)*amp*.25; p.push([x,y]); tips.push([x,y]); } p.push([W+30,H+10]);
-    let o = poly(p, fill, stroke, 2.2);
-    if(snow) tips.forEach(([x,y],i)=>{ if(y < base-amp*.55) o += poly([[x-18,y+26],[x,y],[x+16,y+24],[x+6,y+16],[x-2,y+28]], snow, "#9fb8d6", 1.4) + line(x-4,y+8,x-14,y+30,"#9fb8d6",1.4,.6); });
-    return o; };
-  const mist = (y,h,op)=> poly([[0,y],[W*.3,y-h*.4],[W*.6,y+h*.2],[W,y-h*.3],[W,y+h],[0,y+h]], `rgba(235,246,255,${op})`);
-  const waveLines = (y0,y1,n,col,op)=>{ let o=""; for(let i=0;i<n;i++){ const y=y0+rnd()*(y1-y0), x=rnd()*W, l=30+(y-y0)/(y1-y0)*90+rnd()*40; o+=line(x,y,x+l,y+(rnd()-.5)*3,col,1.4+(y-y0)/(y1-y0)*1.4,op); } return o; };
-  const starsAt = (n,maxY)=>{ let o=""; for(let i=0;i<n;i++) o+=`<circle cx="${(rnd()*W).toFixed(1)}" cy="${(rnd()*maxY).toFixed(1)}" r="${(.5+rnd()*1.3).toFixed(1)}" fill="#fff" opacity="${(.4+rnd()*.6).toFixed(2)}"/>`; return o; };
-  const moon = (x,y,r)=> `<circle cx="${x}" cy="${y}" r="${r*2.2}" fill="rgba(210,225,255,.12)"/>` + poly(Array.from({length:18},(_,i)=>[x+Math.cos(i/18*6.283)*r, y+Math.sin(i/18*6.283)*r]), "#f4f1d8", "#cfd0b0", 2);
-
-  // ---- OCEAN (reef): towering sunset cumulus over open sea ----
-  const OZ = 330;
-  let reefDay = `<rect width="${W}" height="${H}" fill="url(#scOceanSky)"/>`;
-  reefDay += puff(210,230,1.7,"#f3e6ee","#6b7fb3","rgba(255,205,185,.65)") + puff(520,180,2.1,"#f7ebf0","#6b7fb3","rgba(255,200,180,.7)") + puff(650,260,1.2,"#e9dcec","#6b7fb3","rgba(255,205,190,.55)") + puff(90,300,1,"#d9cde8","#6b7fb3") + puff(730,110,.7,"#d3d8ee","#6b7fb3");
-  reefDay += poly([[0,OZ-6],[W,OZ-8],[W,OZ+8],[0,OZ+8]], "rgba(255,200,190,.55)");
-  reefDay += poly([[0,OZ],[W,OZ],[W,H],[0,H]], "url(#scOcean)", "#2c5879", 2.5);
-  reefDay += poly([[300,OZ+30],[520,OZ+30],[600,OZ+120],[220,OZ+120]], "rgba(255,210,200,.20)") + waveLines(OZ+8,H,46,"#cfe4f2",.55) + waveLines(OZ+120,H,24,"#16384f",.5);
-  let reefNight = `<rect width="${W}" height="${H}" fill="url(#scOceanSkyN)"/>` + starsAt(70,OZ-20) + moon(600,90,30);
-  reefNight += puff(220,235,1.7,"#2d3562","#5b6aa8","rgba(120,130,200,.35)") + puff(520,190,2,"#323a6a","#5b6aa8","rgba(140,140,210,.35)") + puff(90,305,1,"#262c55","#5b6aa8");
-  reefNight += poly([[0,OZ],[W,OZ],[W,H],[0,H]], "url(#scOceanN)", "#1a2c52", 2.5);
-  for(let i=0;i<14;i++){ const y=OZ+12+i*i*1.3+rnd()*6, w=18+i*i*1.6; reefNight += line(600-w/2+(rnd()-.5)*10,y,600+w/2,y,"#e9e6c4",1.6+i*.12,.5-i*.02); }
-  reefNight += waveLines(OZ+8,H,40,"#5f77b3",.4);
-
-  // ---- MOUNTAINS: layered hazy snow peaks ----
-  let mtDay = `<rect width="${W}" height="${H}" fill="url(#scMtSky)"/>`;
-  mtDay += puff(120,70,.6,"#ffffff","#8fb3dc") + puff(560,48,.5,"#ffffff","#8fb3dc");
-  mtDay += ridge(300,90,46,"#dbe8f6","#a8c2e0","#ffffff",1) + mist(290,60,.55) + ridge(340,120,52,"#b7cfea","#86a8d3","#ffffff",2) + mist(340,70,.5)
-        + poly([[40,420],[170,150],[230,120],[300,200],[420,430]], "#9bb9de","#5e86bd",2.5) + poly([[170,150],[230,120],[300,200],[250,215],[215,175]], "#ffffff","#8fb0d6",1.6)
-        + ridge(430,150,60,"#6f97cb","#3f6aa6","#ffffff",3) + mist(450,80,.5) + ridge(540,150,70,"#3f6fae","#2a4f86","#e9f2fc",4) + mist(560,60,.45);
-  let mtNight = `<rect width="${W}" height="${H}" fill="url(#scMtSkyN)"/>` + starsAt(110,300) + moon(520,90,26);
-  mtNight += ridge(300,90,46,"#2c3a73","#4a5c9c","#aebcea",1) + mist(290,60,.14) + ridge(340,120,52,"#243061","#4a5c9c","#aebcea",2)
-        + poly([[40,420],[170,150],[230,120],[300,200],[420,430]], "#222c5c","#4a5c9c",2.5) + poly([[170,150],[230,120],[300,200],[250,215],[215,175]], "#aebcea","#7686c6",1.6)
-        + ridge(430,150,60,"#1b2450","#3b4a8a","#8c9bd8",3) + mist(450,80,.12) + ridge(540,150,70,"#121a3d","#2a3670","#6f7fc0",4);
-
-  // ---- VOLCANO: erupting cone, lava streams, ash plume, green hills ----
-  const lavaStreams = (glow)=>{ let o=""; for(let i=0;i<22;i++){ const sx=430+(rnd()-.5)*34, sy=292; let x=sx,y=sy, pts=[[x,y]]; const dir=(rnd()-.35)*1.7; for(let k=0;k<9;k++){ x+=dir*(14+rnd()*14)+(rnd()-.5)*10; y+=18+rnd()*18; pts.push([x,y]); if(y>H-110) break; }
-      const d = pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
-      o += `<polyline points="${d}" fill="none" stroke="${glow?"#ff5a1f":"#e8431a"}" stroke-width="${(3+rnd()*2.5).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><polyline points="${d}" fill="none" stroke="#ffd34a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>`; } return o; };
-  const cone = [[110,H-100],[300,H-250],[395,285],[425,276],[470,282],[560,330],[800,H-110],[800,H-100]];
-  const plume = (cols,glow)=>{ let o=""; [[440,250,34],[455,200,42],[430,150,50],[470,100,56],[440,50,64],[480,8,70]].forEach(([x,y,r],i)=>{ const p=[]; for(let k=0;k<12;k++){ const a=k/12*6.283, rr=r*(k%2?.8:1.1); p.push([x+Math.cos(a)*rr, y+Math.sin(a)*rr*.8]); } o += poly(p, cols[i%cols.length], glow?"#3a0f14":"#4d2024", 2.2); }); return o; };
-  const hills = (c1,c2,st)=> poly([[0,H-130],[60,H-165],[150,H-150],[240,H-190],[300,H-140],[300,H],[0,H]], c1, st, 2.5) + poly([[560,H-120],[650,H-170],[720,H-150],[800,H-185],[800,H],[560,H]], c2, st, 2.5) + poly([[0,H-70],[200,H-85],[420,H-60],[620,H-80],[800,H-65],[800,H],[0,H]], c1, st, 2.5);
-  let vDay = `<rect width="${W}" height="${H}" fill="url(#scVSky)"/>` + puff(130,120,1.3,"#f0e6ee","#7a86b0") + puff(660,90,1,"#e6dcea","#7a86b0");
-  vDay += plume(["#c97b72","#a65a58","#8a4448"],false) + poly(cone,"#4a4748","#25201f",3) + poly([[395,285],[425,276],[470,282],[430,300]],"#ff7a2a","#d63a10",1.5) + lavaStreams(false) + hills("#2f6b3a","#2a5f35","#16361d");
-  for(let i=0;i<40;i++) vDay += line(rnd()*W,H-170+rnd()*160,rnd()*W+8,H-180+rnd()*160,"#4d9a52",2,.5);
-  let vNight = `<rect width="${W}" height="${H}" fill="url(#scVSkyN)"/>` + starsAt(80,300);
-  vNight += poly([[250,300],[640,300],[760,H],[130,H]],"rgba(255,80,30,.14)") + plume(["#7a2a2e","#5a1c26","#3a1420"],true) + poly(cone,"#241a1c","#0d0809",3) + poly([[395,285],[425,276],[470,282],[430,300]],"#ffb02a","#ff5a1f",1.5) + lavaStreams(true) + hills("#10281a","#0e2216","#050d08");
-  for(let i=0;i<30;i++) vNight += `<circle cx="${(380+rnd()*130).toFixed(1)}" cy="${(40+rnd()*240).toFixed(1)}" r="${(1+rnd()*2).toFixed(1)}" fill="#ffb347" opacity="${(.5+rnd()*.5).toFixed(2)}"/>`;
-
-  const mkSvg = (id,defs,d,n)=> `<svg data-rg="${id}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs><g class="scene-day">${d}</g><g class="scene-night">${n}</g></svg>`;
-  const lg = (id,stops)=> `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o,c])=>`<stop offset="${o}" stop-color="${c}"/>`).join("")}</linearGradient>`;
-  const regionSvgs =
-    mkSvg("reef", lg("scOceanSky",[[0,"#6b9fc9"],[.55,"#a9c6e0"],[.9,"#e8c9d2"]])+lg("scOcean",[[0,"#5f87a6"],[.4,"#2f5f82"],[1,"#12304a"]])+lg("scOceanSkyN",[[0,"#070a22"],[.7,"#1c2858"],[1,"#4a4a80"]])+lg("scOceanN",[[0,"#26356a"],[1,"#050a1c"]]), reefDay, reefNight) +
-    mkSvg("mountains", lg("scMtSky",[[0,"#5f9ee0"],[.6,"#a9cdf0"],[1,"#e4f1fb"]])+lg("scMtSkyN",[[0,"#060822"],[.7,"#1a2257"],[1,"#3c4a8a"]]), mtDay, mtNight) +
-    mkSvg("volcano", lg("scVSky",[[0,"#5d6f9e"],[.6,"#8f97b8"],[1,"#c4b3c0"]])+lg("scVSkyN",[[0,"#05061a"],[.7,"#1a1630"],[1,"#4a1f2a"]]), vDay, vNight);
-
   const svg = `<svg data-rg="forest" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="scSkyDay" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f86d8"/><stop offset=".6" stop-color="#8fd0ff"/><stop offset="1" stop-color="#d6f0ff"/></linearGradient>
       <linearGradient id="scSkyNight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0c2a"/><stop offset=".6" stop-color="#232a6e"/><stop offset="1" stop-color="#4b4f9e"/></linearGradient>
       <linearGradient id="scLake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2060"/><stop offset=".5" stop-color="#0b0d2e"/><stop offset="1" stop-color="#04040f"/></linearGradient>
     </defs>
-    <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>` + regionSvgs;
+    <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>` + (()=>{ const r = regionSceneSvgs(); return `<svg class="sc-defs" width="0" height="0" aria-hidden="true"><defs>${r.defs}</defs></svg>` + r.svgs; })();
   const el = document.createElement("div"); el.id = "sceneBg"; el.dataset.region = "forest"; el.className = "scene-bg"; el.setAttribute("aria-hidden","true"); el.innerHTML = svg;
   const paper = document.getElementById("regionBg");
   if(paper) paper.after(el); else stage.prepend(el);
