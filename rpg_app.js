@@ -142,14 +142,72 @@ function buildScene(){
   starList.slice(0,70).forEach(([x,y])=>{ const ry = NH+12 + (NH-y)*.55; if(ry < H) night += line(x-2-rnd()*3, ry, x+2+rnd()*3, ry, "#cfd6ff", 1.6, .35+rnd()*.4); });
   for(let i=0;i<14;i++){ const y = NH+30+rnd()*(H-NH-40), x = rnd()*W; night += line(x, y, x+30+rnd()*70, y, "#7f89d8", 1.4, .25); }
 
-  const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+
+  /* ---------- REGION SCENES (ocean / mountains / volcano): sketched from the reference photos, each with a day and a night version ---------- */
+  const puff = (cx,cy,s,fill,stroke,tint)=>{ const p=[]; for(let i=0;i<=14;i++){ const a=Math.PI+i/14*Math.PI, r=(i%2?34:48)*s; p.push([cx+Math.cos(a)*r*1.6, cy+Math.sin(a)*r*.85]); } p.push([cx+84*s,cy+16*s],[cx-84*s,cy+16*s]);
+    let o = poly(p, fill, stroke, 2.2); if(tint) o += poly([[cx+10*s,cy-30*s],[cx+55*s,cy-26*s],[cx+78*s,cy+2*s],[cx+20*s,cy-4*s]], tint); return o; };
+  const ridge = (base,amp,step,fill,stroke,snow,seedOff=0)=>{ const p=[[-20,H+10],[-20,base]], tips=[]; for(let x=-20;x<=W+30;x+=step){ const y = base - amp*(.25+.75*rnd()) - (Math.sin(x/130+seedOff)+1)*amp*.25; p.push([x,y]); tips.push([x,y]); } p.push([W+30,H+10]);
+    let o = poly(p, fill, stroke, 2.2);
+    if(snow) tips.forEach(([x,y],i)=>{ if(y < base-amp*.55) o += poly([[x-18,y+26],[x,y],[x+16,y+24],[x+6,y+16],[x-2,y+28]], snow, "#9fb8d6", 1.4) + line(x-4,y+8,x-14,y+30,"#9fb8d6",1.4,.6); });
+    return o; };
+  const mist = (y,h,op)=> poly([[0,y],[W*.3,y-h*.4],[W*.6,y+h*.2],[W,y-h*.3],[W,y+h],[0,y+h]], `rgba(235,246,255,${op})`);
+  const waveLines = (y0,y1,n,col,op)=>{ let o=""; for(let i=0;i<n;i++){ const y=y0+rnd()*(y1-y0), x=rnd()*W, l=30+(y-y0)/(y1-y0)*90+rnd()*40; o+=line(x,y,x+l,y+(rnd()-.5)*3,col,1.4+(y-y0)/(y1-y0)*1.4,op); } return o; };
+  const starsAt = (n,maxY)=>{ let o=""; for(let i=0;i<n;i++) o+=`<circle cx="${(rnd()*W).toFixed(1)}" cy="${(rnd()*maxY).toFixed(1)}" r="${(.5+rnd()*1.3).toFixed(1)}" fill="#fff" opacity="${(.4+rnd()*.6).toFixed(2)}"/>`; return o; };
+  const moon = (x,y,r)=> `<circle cx="${x}" cy="${y}" r="${r*2.2}" fill="rgba(210,225,255,.12)"/>` + poly(Array.from({length:18},(_,i)=>[x+Math.cos(i/18*6.283)*r, y+Math.sin(i/18*6.283)*r]), "#f4f1d8", "#cfd0b0", 2);
+
+  // ---- OCEAN (reef): towering sunset cumulus over open sea ----
+  const OZ = 330;
+  let reefDay = `<rect width="${W}" height="${H}" fill="url(#scOceanSky)"/>`;
+  reefDay += puff(210,230,1.7,"#f3e6ee","#6b7fb3","rgba(255,205,185,.65)") + puff(520,180,2.1,"#f7ebf0","#6b7fb3","rgba(255,200,180,.7)") + puff(650,260,1.2,"#e9dcec","#6b7fb3","rgba(255,205,190,.55)") + puff(90,300,1,"#d9cde8","#6b7fb3") + puff(730,110,.7,"#d3d8ee","#6b7fb3");
+  reefDay += poly([[0,OZ-6],[W,OZ-8],[W,OZ+8],[0,OZ+8]], "rgba(255,200,190,.55)");
+  reefDay += poly([[0,OZ],[W,OZ],[W,H],[0,H]], "url(#scOcean)", "#2c5879", 2.5);
+  reefDay += poly([[300,OZ+30],[520,OZ+30],[600,OZ+120],[220,OZ+120]], "rgba(255,210,200,.20)") + waveLines(OZ+8,H,46,"#cfe4f2",.55) + waveLines(OZ+120,H,24,"#16384f",.5);
+  let reefNight = `<rect width="${W}" height="${H}" fill="url(#scOceanSkyN)"/>` + starsAt(70,OZ-20) + moon(600,90,30);
+  reefNight += puff(220,235,1.7,"#2d3562","#5b6aa8","rgba(120,130,200,.35)") + puff(520,190,2,"#323a6a","#5b6aa8","rgba(140,140,210,.35)") + puff(90,305,1,"#262c55","#5b6aa8");
+  reefNight += poly([[0,OZ],[W,OZ],[W,H],[0,H]], "url(#scOceanN)", "#1a2c52", 2.5);
+  for(let i=0;i<14;i++){ const y=OZ+12+i*i*1.3+rnd()*6, w=18+i*i*1.6; reefNight += line(600-w/2+(rnd()-.5)*10,y,600+w/2,y,"#e9e6c4",1.6+i*.12,.5-i*.02); }
+  reefNight += waveLines(OZ+8,H,40,"#5f77b3",.4);
+
+  // ---- MOUNTAINS: layered hazy snow peaks ----
+  let mtDay = `<rect width="${W}" height="${H}" fill="url(#scMtSky)"/>`;
+  mtDay += puff(120,70,.6,"#ffffff","#8fb3dc") + puff(560,48,.5,"#ffffff","#8fb3dc");
+  mtDay += ridge(300,90,46,"#dbe8f6","#a8c2e0","#ffffff",1) + mist(290,60,.55) + ridge(340,120,52,"#b7cfea","#86a8d3","#ffffff",2) + mist(340,70,.5)
+        + poly([[40,420],[170,150],[230,120],[300,200],[420,430]], "#9bb9de","#5e86bd",2.5) + poly([[170,150],[230,120],[300,200],[250,215],[215,175]], "#ffffff","#8fb0d6",1.6)
+        + ridge(430,150,60,"#6f97cb","#3f6aa6","#ffffff",3) + mist(450,80,.5) + ridge(540,150,70,"#3f6fae","#2a4f86","#e9f2fc",4) + mist(560,60,.45);
+  let mtNight = `<rect width="${W}" height="${H}" fill="url(#scMtSkyN)"/>` + starsAt(110,300) + moon(520,90,26);
+  mtNight += ridge(300,90,46,"#2c3a73","#4a5c9c","#aebcea",1) + mist(290,60,.14) + ridge(340,120,52,"#243061","#4a5c9c","#aebcea",2)
+        + poly([[40,420],[170,150],[230,120],[300,200],[420,430]], "#222c5c","#4a5c9c",2.5) + poly([[170,150],[230,120],[300,200],[250,215],[215,175]], "#aebcea","#7686c6",1.6)
+        + ridge(430,150,60,"#1b2450","#3b4a8a","#8c9bd8",3) + mist(450,80,.12) + ridge(540,150,70,"#121a3d","#2a3670","#6f7fc0",4);
+
+  // ---- VOLCANO: erupting cone, lava streams, ash plume, green hills ----
+  const lavaStreams = (glow)=>{ let o=""; for(let i=0;i<22;i++){ const sx=430+(rnd()-.5)*34, sy=292; let x=sx,y=sy, pts=[[x,y]]; const dir=(rnd()-.35)*1.7; for(let k=0;k<9;k++){ x+=dir*(14+rnd()*14)+(rnd()-.5)*10; y+=18+rnd()*18; pts.push([x,y]); if(y>H-110) break; }
+      const d = pts.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ");
+      o += `<polyline points="${d}" fill="none" stroke="${glow?"#ff5a1f":"#e8431a"}" stroke-width="${(3+rnd()*2.5).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><polyline points="${d}" fill="none" stroke="#ffd34a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>`; } return o; };
+  const cone = [[110,H-100],[300,H-250],[395,285],[425,276],[470,282],[560,330],[800,H-110],[800,H-100]];
+  const plume = (cols,glow)=>{ let o=""; [[440,250,34],[455,200,42],[430,150,50],[470,100,56],[440,50,64],[480,8,70]].forEach(([x,y,r],i)=>{ const p=[]; for(let k=0;k<12;k++){ const a=k/12*6.283, rr=r*(k%2?.8:1.1); p.push([x+Math.cos(a)*rr, y+Math.sin(a)*rr*.8]); } o += poly(p, cols[i%cols.length], glow?"#3a0f14":"#4d2024", 2.2); }); return o; };
+  const hills = (c1,c2,st)=> poly([[0,H-130],[60,H-165],[150,H-150],[240,H-190],[300,H-140],[300,H],[0,H]], c1, st, 2.5) + poly([[560,H-120],[650,H-170],[720,H-150],[800,H-185],[800,H],[560,H]], c2, st, 2.5) + poly([[0,H-70],[200,H-85],[420,H-60],[620,H-80],[800,H-65],[800,H],[0,H]], c1, st, 2.5);
+  let vDay = `<rect width="${W}" height="${H}" fill="url(#scVSky)"/>` + puff(130,120,1.3,"#f0e6ee","#7a86b0") + puff(660,90,1,"#e6dcea","#7a86b0");
+  vDay += plume(["#c97b72","#a65a58","#8a4448"],false) + poly(cone,"#4a4748","#25201f",3) + poly([[395,285],[425,276],[470,282],[430,300]],"#ff7a2a","#d63a10",1.5) + lavaStreams(false) + hills("#2f6b3a","#2a5f35","#16361d");
+  for(let i=0;i<40;i++) vDay += line(rnd()*W,H-170+rnd()*160,rnd()*W+8,H-180+rnd()*160,"#4d9a52",2,.5);
+  let vNight = `<rect width="${W}" height="${H}" fill="url(#scVSkyN)"/>` + starsAt(80,300);
+  vNight += poly([[250,300],[640,300],[760,H],[130,H]],"rgba(255,80,30,.14)") + plume(["#7a2a2e","#5a1c26","#3a1420"],true) + poly(cone,"#241a1c","#0d0809",3) + poly([[395,285],[425,276],[470,282],[430,300]],"#ffb02a","#ff5a1f",1.5) + lavaStreams(true) + hills("#10281a","#0e2216","#050d08");
+  for(let i=0;i<30;i++) vNight += `<circle cx="${(380+rnd()*130).toFixed(1)}" cy="${(40+rnd()*240).toFixed(1)}" r="${(1+rnd()*2).toFixed(1)}" fill="#ffb347" opacity="${(.5+rnd()*.5).toFixed(2)}"/>`;
+
+  const mkSvg = (id,defs,d,n)=> `<svg data-rg="${id}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs><g class="scene-day">${d}</g><g class="scene-night">${n}</g></svg>`;
+  const lg = (id,stops)=> `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">${stops.map(([o,c])=>`<stop offset="${o}" stop-color="${c}"/>`).join("")}</linearGradient>`;
+  const regionSvgs =
+    mkSvg("reef", lg("scOceanSky",[[0,"#6b9fc9"],[.55,"#a9c6e0"],[.9,"#e8c9d2"]])+lg("scOcean",[[0,"#5f87a6"],[.4,"#2f5f82"],[1,"#12304a"]])+lg("scOceanSkyN",[[0,"#070a22"],[.7,"#1c2858"],[1,"#4a4a80"]])+lg("scOceanN",[[0,"#26356a"],[1,"#050a1c"]]), reefDay, reefNight) +
+    mkSvg("mountains", lg("scMtSky",[[0,"#5f9ee0"],[.6,"#a9cdf0"],[1,"#e4f1fb"]])+lg("scMtSkyN",[[0,"#060822"],[.7,"#1a2257"],[1,"#3c4a8a"]]), mtDay, mtNight) +
+    mkSvg("volcano", lg("scVSky",[[0,"#5d6f9e"],[.6,"#8f97b8"],[1,"#c4b3c0"]])+lg("scVSkyN",[[0,"#05061a"],[.7,"#1a1630"],[1,"#4a1f2a"]]), vDay, vNight);
+
+  const svg = `<svg data-rg="forest" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="scSkyDay" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f86d8"/><stop offset=".6" stop-color="#8fd0ff"/><stop offset="1" stop-color="#d6f0ff"/></linearGradient>
       <linearGradient id="scSkyNight" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0c2a"/><stop offset=".6" stop-color="#232a6e"/><stop offset="1" stop-color="#4b4f9e"/></linearGradient>
       <linearGradient id="scLake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2060"/><stop offset=".5" stop-color="#0b0d2e"/><stop offset="1" stop-color="#04040f"/></linearGradient>
     </defs>
-    <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>`;
-  const el = document.createElement("div"); el.id = "sceneBg"; el.className = "scene-bg"; el.setAttribute("aria-hidden","true"); el.innerHTML = svg;
+    <g class="scene-day">${day}</g><g class="scene-night">${night}</g></svg>` + regionSvgs;
+  const el = document.createElement("div"); el.id = "sceneBg"; el.dataset.region = "forest"; el.className = "scene-bg"; el.setAttribute("aria-hidden","true"); el.innerHTML = svg;
   const paper = document.getElementById("regionBg");
   if(paper) paper.after(el); else stage.prepend(el);
 }
@@ -1470,6 +1528,7 @@ function renderHUD(){
   document.getElementById("hudRegion").textContent = REGIONS[p.region].name;
 
   document.getElementById("regionBg").className = "paper-bg " + REGIONS[p.region].css;
+  { const sb = document.getElementById("sceneBg"); if(sb) sb.dataset.region = p.region; }
 
   setBar("HP", p.hp, p.hpMax);
   setBar("MANA", p.mana, p.manaMax);

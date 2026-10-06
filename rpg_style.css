@@ -1082,6 +1082,8 @@ body.theme-dark .sk-node em, body.theme-dark .sk-rowlabel{color:var(--ink-soft);
    ========================================================================= */
 #screen-game{isolation:isolate;}   /* own stacking context: the z-index:-1 scenery can never fall behind the screen's own (dark-theme) background */
 .scene-bg{position:fixed; top:0; left:0; width:100vw; height:100vh; height:100dvh; z-index:-1; pointer-events:none; overflow:hidden;}   /* pinned to the real screen, not the padded game box */   /* covers the whole game screen, header and footer included */
+.scene-bg svg[data-rg]{display:none;}
+.scene-bg[data-region="forest"] svg[data-rg="forest"], .scene-bg[data-region="reef"] svg[data-rg="reef"], .scene-bg[data-region="mountains"] svg[data-rg="mountains"], .scene-bg[data-region="volcano"] svg[data-rg="volcano"]{display:block;}
 .scene-bg svg{position:absolute; top:0; left:0; width:100%; height:100%; display:block;}
 .scene-bg .scene-day{opacity:calc(1 - var(--night, 0));}
 .scene-bg .scene-night{opacity:var(--night, 0);}

@@ -231,9 +231,9 @@ export function registerItems(I){
 
 /* ---------- job modes: green = normal, yellow = risky, red = extreme ---------- */
 export const MODES = {
-  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 90% reward / 10% hazard, 1 durability, 1 mineral. Fish: easy fish (7s). Bugs: easy bugs (10s)." },
+  green:  { label:"Green",  emoji:"🟢", blurb:"Normal. Forage: 50% chance of 1 item (30s cooldown). Mine: 90% reward / 10% hazard, 1 durability, 1 mineral. Fish: easy fish (10s). Bugs: easy bugs (10s)." },
   yellow: { label:"Yellow", emoji:"🟡", blurb:"Risky. Forage: 75% for 1–2 items, better rare odds (5 min cooldown). Mine: 2 durability, better gems, same 10% hazard. Fish: medium fish (10s). Bugs: medium bugs (10s)." },
-  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 10% hazard. Fish: hard fish (15s). Bugs: hard bugs (15s)." }
+  red:    { label:"Red",    emoji:"🔴", blurb:"Extreme. Forage: 90% for 1–3 items, best rare odds (30 min cooldown). Mine: 3 durability, best gems, same 10% hazard. Fish: hard fish (10s). Bugs: hard bugs (15s)." }
 };
 export const FORAGE_RULES = {
   green:  { chance:.50, qty:[1,1], cooldown:30*1000 },
@@ -254,9 +254,9 @@ export const FISH_RULES = {
   // Difficulty shift: old medium -> easy, old hard -> medium, and a brand-new chaotic hard.
   // Optional extras (defaults keep the old behaviour): dashMul = dart speed multiplier, dashLen = [min,max] dart ticks,
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
-  green:  { tier:"easy",   bar:72, time:7000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
+  green:  { tier:"easy",   bar:72, time:10000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
   yellow: { tier:"medium", bar:72, time:10000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
-  red:    { tier:"hard",   bar:72, time:15000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
+  red:    { tier:"hard",   bar:72, time:10000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
