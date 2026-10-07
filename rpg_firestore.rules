@@ -106,8 +106,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && notMuted() && request.resource.data.uid == request.auth.uid;
       // A user may delete their own message; the admin may delete anyone's.
-      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin());
+      // ...and any signed-in player may clear a message older than 60s (the 30-message cleanup deletes other people's old messages)
+      allow delete: if isSignedIn() && (isOwner(resource.data.uid) || isAdmin() || resource.data.ts < request.time.toMillis() - 60000);
       allow update: if false;
+      allow write: if isAdmin();   // server-switch sync
     }
 
     match /privateChats/{threadId}/messages/{msgId} {
@@ -122,7 +124,7 @@ service cloud.firestore {
       // Sender may delete their own message; the admin may delete anyone's in ANY
       // thread (needed to wipe a banned user's private messages).
       allow delete: if isSignedIn() &&
-        ((threadId.split('_').hasAny([request.auth.uid]) && isOwner(resource.data.uid)) || isAdmin());
+        ((threadId.split('_').hasAny([request.auth.uid]) && (isOwner(resource.data.uid) || resource.data.ts < request.time.toMillis() - 60000)) || isAdmin());   // participants may also clear old messages (30-message cleanup)
       allow update: if false;
       allow write: if isAdmin();   // server-switch sync
     }

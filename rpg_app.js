@@ -3921,12 +3921,22 @@ function wireChatRowInteractions(log){
     });
   });
 }
+/* Chats keep only the newest 30 messages (global chat and every private thread). The listeners already hold the newest
+   few messages, so cleanup costs no extra reads: whoever wrote the NEWEST message deletes everything older than the 30th
+   (one client per message, so nobody double-deletes). An old backlog drains 10 at a time as people chat. */
+const CHAT_KEEP = 30;
+function pruneChat(snap){
+  if(snap.size <= CHAT_KEEP || snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+  if(snap.docs[0].data().uid !== state.uid) return;
+  snap.docs.slice(CHAT_KEEP).forEach(d=> deleteDoc(d.ref).catch(()=>{}));
+}
 function subscribeGlobalChat(){
-  const q = query(collection(db,"globalChat"), orderBy("ts","desc"), limit(50));
+  const q = query(collection(db,"globalChat"), orderBy("ts","desc"), limit(CHAT_KEEP+10));
   const unsub = onSnapshot(q, (snap)=>{
     const log = document.getElementById("chatLogGlobal");
     const rows = [];
-    snap.forEach(d=>rows.unshift({id:d.id, ...d.data()}));
+    snap.docs.slice(0,CHAT_KEEP).forEach(d=>rows.unshift({id:d.id, ...d.data()}));
+    pruneChat(snap);
     renderChatLog(log, rows, "global", "globalChat");
   }, (err)=> toast(friendlyFirebaseError(err)));
   state.unsubs.push(unsub);
@@ -4153,11 +4163,12 @@ function subscribePrivateThread(){
   watchPartnerDoc(state.currentChatPartner.uid); renderPartnerOnline();
   watchPartnerPresence(threadId);
   syncPresence(true);
-  const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","desc"), limit(100));
+  const q = query(collection(db,"privateChats",threadId,"messages"), orderBy("ts","desc"), limit(CHAT_KEEP+10));
   pmUnsub = onSnapshot(q, snap=>{
     const log = document.getElementById("chatLogPrivate");
     const rows = [];
-    snap.forEach(d=>rows.unshift({id:d.id, ...d.data()}));
+    snap.docs.slice(0,CHAT_KEEP).forEach(d=>rows.unshift({id:d.id, ...d.data()}));
+    pruneChat(snap);
     renderChatLog(log, rows, "pm_"+threadId, `privateChats/${threadId}/messages`);
   }, (err)=> toast(friendlyFirebaseError(err)));
 }
@@ -7238,12 +7249,13 @@ function syncHandles(n){
   const a = initializeApp(SERVERS[n], `dgn-sync-${n}-${Date.now()}`);
   return { n, app:a, auth:getAuth(a), db:initializeFirestore(a, { experimentalAutoDetectLongPolling:true }) };
 }
-/* what gets mirrored. Ephemeral stuff (reactions, duels, boss parties, queue, presence, global chat, usage counters) is skipped. */
+/* what gets mirrored. Ephemeral stuff (reactions, duels, boss parties, queue, presence, usage counters) is skipped; global chat copies its latest 50. */
 const SYNC_SETS = [
   { label:"usernames", q:d=> collection(d,"usernames") }, { label:"players", q:d=> collection(d,"players") },
   { label:"auction",   q:d=> collection(d,"auction") },   { label:"world boss", q:d=> collection(d,"boss") },
   { label:"inboxes",   q:d=> collectionGroup(d,"inbox") },{ label:"quests", q:d=> collectionGroup(d,"quests") },
-  { label:"farms",     q:d=> collectionGroup(d,"farm") }, { label:"private messages", q:d=> collectionGroup(d,"messages") }
+  { label:"farms",     q:d=> collectionGroup(d,"farm") }, { label:"private messages", q:d=> collectionGroup(d,"messages") },
+  { label:"global chat", q:d=> query(collection(d,"globalChat"), orderBy("ts","desc"), limit(50)) }   // the game only ever shows the latest 50
 ];
 async function mirrorOne(S, D, set, say){
   const grab = async h=>{ const m = new Map(); (await _getDocs(set.q(h.db))).forEach(d=> m.set(d.ref.path, d.data())); return m; };
