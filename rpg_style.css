@@ -588,6 +588,8 @@ body{
 
 /* ---------- eat overlay (sits above the battle modal) ---------- */
 #eatModal{ z-index:60; }
+/* confirm dialogs (Leave boss fight, etc.) must paint IN FRONT of the battle / eat screens, or they can't be clicked */
+#dgModal{ z-index:75; }
 .eat-card{ width:520px; }
 .eat-bars{ display:flex; flex-direction:column; gap:6px; margin:6px 0 12px; }
 .eat-grid{ grid-template-rows:none; grid-auto-rows:minmax(70px,auto); min-height:0; max-height:250px; overflow-y:auto; margin-bottom:10px; }

@@ -193,7 +193,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (isOwner(resource.data.hostUid) || isAdmin());
     }
 
-    // Boss parties (2-4 players). Created by the host; only players listed in memberUids
+    // Boss parties (2-6 players). Created by the host; only players listed in memberUids
     // (host + invited friends, narrowed to the real party when the fight starts) may update it.
     match /bossParties/{code} {
       allow read: if isSignedIn();

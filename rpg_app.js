@@ -1794,6 +1794,8 @@ function selectInvItem(entry){
     html:"<p>This <b>consumes the Rebirth</b>, refunds <b>all</b> your skill tree points and resets the tree to the top. Max HP / Mana from skill nodes is removed too.</p>", onYes:()=> resetSkillTree({ consumeItem:true }) }));
   const sellBtn = document.getElementById("btnSell");
   if(sellBtn) sellBtn.addEventListener("click", async ()=>{
+    if(invBusy) return;                                  // one sale at a time — spam clicks are ignored
+    sellBtn.disabled = true;
     await sellItem(entry.item);
     afterInvChangeRefreshDetail(entry.item.id);
   });
@@ -1947,19 +1949,19 @@ async function fillFromOverflow(){
   if(!overflow.length) closeModal("overflowModal");
 }
 async function ovSell(itemId, all){
-  if(ovBusy) return;
+  if(ovBusy || invBusy) return;
   const e = (state.profile.inventory||[]).find(x=>x.itemId===itemId && x.qty>0), item = ITEM_BY_ID[itemId];
   if(!e || !item) return;
-  ovBusy = true;
+  ovBusy = true; invBusy = true;
   try{
     const qty = all ? e.qty : 1;
-    const ok = await applyInvChanges({ remove:[{ itemId, qty }] });
+    const ok = await applyInvChanges({ remove:[{ itemId, qty }] }, fresh=>({ money: Math.max(0,(fresh.money||0)+item.sellPrice*qty) }));   // remove + pay in one transaction
     if(ok!==null){
-      await grantMoney(item.sellPrice*qty); playSfx("sell");
+      playSfx("sell");
       toast(`Sold ${qty>1?qty+"x ":""}${item.name} for $${fmtMoney(item.sellPrice*qty)}`);
       await fillFromOverflow();
     }
-  } finally { ovBusy = false; renderOverflow(); }
+  } finally { ovBusy = false; invBusy = false; renderOverflow(); }
 }
 function closeOverflow(){
   const n = overflow.reduce((s,o)=>s+o.qty,0);
@@ -1981,11 +1983,20 @@ async function changeInvQty(itemId, delta){
 async function addItemToInv(itemId, qty=1){
   return applyInvChanges({ add:[{itemId, qty}] });
 }
+/* One lock for every inventory sell / use. The item removal AND the payout happen in ONE transaction that
+   re-reads the server's inventory, so you can only ever sell/use as many as you really own, no matter how fast
+   the button is hammered. */
+let invBusy = false;
 async function sellItem(item){
-  await changeInvQty(item.id, -1);
-  await grantMoney(item.sellPrice);
-  playSfx("sell");
-  toast(`Sold ${item.name} for $${fmtMoney(item.sellPrice)}`);
+  if(invBusy) return false; invBusy = true;
+  try{
+    const price = item.sellPrice||0;
+    const ok = await applyInvChanges({ remove:[{ itemId:item.id, qty:1 }] }, fresh=>({ money: Math.max(0,(fresh.money||0)+price) }));
+    if(ok===null) return false;                          // nothing was removed -> nothing is paid
+    playSfx("sell");
+    toast(`Sold ${item.name} for $${fmtMoney(price)}`);
+    return true;
+  } finally { invBusy = false; }
 }
 async function equipItem(item){
   const slot = item.type==="armor" ? item.armorSlot : item.type; // weapon/helmet/chestplate/leggings/boots/trinket
@@ -2077,6 +2088,12 @@ function renderEquipSlots(){
 /* Luck potions: profile.luckPct (0.1 / 0.2 / 0.4) until profile.luckUntil (ms). */
 function activeLuck(){ const p = state.profile; return p && (p.luckUntil||0) > Date.now() ? (p.luckPct||0) : 0; }
 async function useConsumable(item){
+  if(invBusy) return;                                    // spam-safe: ignore clicks while a use/sell is in flight
+  if(!(state.profile.inventory||[]).some(e=>e.itemId===item.id && e.qty>0)){ afterInvChangeRefreshDetail(item.id); return; }
+  invBusy = true;
+  try{ await useConsumableInner(item); } finally { invBusy = false; }
+}
+async function useConsumableInner(item){
   if(item.stats.luck && activeLuck() > item.stats.luck){ toast("A stronger luck potion is still working."); return; }
   // Everything — the qty check, the qty decrement, AND the hp/mana gain —
   // happens inside ONE transaction now (via applyInvChanges' extraFields),
@@ -5324,18 +5341,20 @@ async function openBossChests(){
   openModal("chestModal"); playSfx("levelup");
 }
 /* =========================================================================
-   MULTIPLAYER BOSS FIGHT — a party of 2-4 (you + 1-3 invited friends).
+   MULTIPLAYER BOSS FIGHT — a party of 2-6 (you + 1-5 invited friends).
    Everything lives on one Firestore doc, bossParties/{code}; every member's client watches it.
-   Turn order: YOU -> FRIEND1 -> FRIEND2 -> FRIEND3 -> ENEMY -> loop (fallen players are skipped).
+   Turn order: YOU -> FRIEND1 -> ... -> FRIEND5 -> ENEMY -> loop (fallen players are skipped).
    The LAST living player of a round resolves the enemy's turn in the very same write, so the
    fight never depends on one specific player staying online.
    ========================================================================= */
 const BOSS_INVITE_MS = 30000;          // friends have 30 seconds to accept
+const BOSS_MAX_FRIENDS = 5;            // party = you + 1-5 friends = 2-6 players
 const BOSS_WAVE_HP_MULT = 5;           // every enemy before the boss: 5x the HP of the strongest player (highest max HP)
 const BOSS_HP_MULT = 20;               // the boss: 20x the HP of the strongest player
 const BOSS_EAT_SELF = 3, BOSS_EAT_FRIEND = 1;   // boss fights: per turn you may eat 0-3 foods yourself AND/OR give a friend 0-1 food
 const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
 const BOSS_DMG_MULT = 1.2;             // boss fights hit 1.2x harder than before
+const BOSS_RUSH_DMG_MULT = 1.3;        // every enemy AND the boss in a boss rush deal a further 1.3x damage (stacks with BOSS_DMG_MULT)
 const BOSS_BASE_DMG_DIV = 4;           // every enemy's base damage = strongest player's max HP / 4 (Attack = x1, Weak x0.6, Strong x1.9)
 let partyUnsub = null, partyCode = null, partyData = null, partyTimer = null, partyStarting = false, partyHidden = false, partyBusyStall = false;
 const partyFinalized = new Set(), partyUi = { sel:new Set() };
@@ -5354,7 +5373,7 @@ function renderBossPanel(){
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
   else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
-  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–3 friends</b> (2–4 players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → friend 3 → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4 (×1.2 in boss fights). In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them; if everyone falls there is no reward. Win and <b>every party member gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–${BOSS_MAX_FRIENDS} friends</b> (2–${BOSS_MAX_FRIENDS+1} players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → … → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4 (×${(BOSS_DMG_MULT*BOSS_RUSH_DMG_MULT).toFixed(2)} in boss fights). In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them (and they get no rewards); if everyone falls there is no reward. Win and <b>every party member still standing gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
   box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   partyEl("btnBossGo")?.addEventListener("click", ()=>{
@@ -5379,13 +5398,13 @@ async function renderPartyPicker(){
   const rows = snaps.filter(s=>s&&s.exists()).map(s=>({ uid:s.id, ...s.data() }));
   const draw = ()=>{
     const n = partyUi.sel.size;
-    body.innerHTML = `<p class="doodle-sub" style="margin-top:0">Pick <b>1–3 friends</b> to invite (you + ${n||"1–3"} = ${n?n+1:"2–4"} players). They get 30 seconds to accept.</p>
+    body.innerHTML = `<p class="doodle-sub" style="margin-top:0">Pick <b>1–${BOSS_MAX_FRIENDS} friends</b> to invite (you + ${n||"1–"+BOSS_MAX_FRIENDS} = ${n?n+1:"2–"+(BOSS_MAX_FRIENDS+1)} players). They get 30 seconds to accept — the fight starts with whoever said yes.</p>
       <div class="party-pick">${rows.map(r=>{ const done = r.bossCleared===cyc, on = partyUi.sel.has(r.uid);
         return `<button class="doodle-btn btn-sm ${on?"btn-green":"btn-blue"}" data-pp="${r.uid}" ${done?"disabled":""}>${on?"✔ ":""}${onlineDot(r)} ${escapeHTML(r.username)} (Lv.${r.level||1})${done?" — already cleared":""}</button>`; }).join(" ")}</div>
       <p><button class="doodle-btn btn-lg btn-danger" id="btnSendBossInvites" ${n<1?"disabled":""}>Send invites${n?` (${n})`:""}</button></p>`;
     body.querySelectorAll("[data-pp]").forEach(b=> b.addEventListener("click", ()=>{
       const u = b.dataset.pp;
-      if(partyUi.sel.has(u)) partyUi.sel.delete(u); else if(partyUi.sel.size<3) partyUi.sel.add(u); else toast("A party is at most 4 players — you can invite up to 3 friends.");
+      if(partyUi.sel.has(u)) partyUi.sel.delete(u); else if(partyUi.sel.size<BOSS_MAX_FRIENDS) partyUi.sel.add(u); else toast(`A party is at most ${BOSS_MAX_FRIENDS+1} players — you can invite up to ${BOSS_MAX_FRIENDS} friends.`);
       draw();
     }));
     partyEl("btnSendBossInvites")?.addEventListener("click", ()=> sendBossInvites(rows));
@@ -5393,18 +5412,27 @@ async function renderPartyPicker(){
   draw();
 }
 async function sendBossInvites(rows){
-  const picks = [...partyUi.sel]; if(picks.length<1 || picks.length>3 || partyCode) return;
+  const picks = [...partyUi.sel]; if(picks.length<1 || picks.length>BOSS_MAX_FRIENDS || partyCode) return;
   const p = state.profile, code = bossCode(), now = Date.now(), invites = {};
   picks.forEach(u=> invites[u] = { name: rows.find(r=>r.uid===u)?.username || "Player", state:"pending" });
   const ok = await withErrorToast(async ()=>{
     await setDoc(partyRef(code), { hostUid:state.uid, hostName:p.username, cycle:bossCycle(), status:"inviting", createdAt:now, inviteEnds:now+BOSS_INVITE_MS,
       memberUids:[state.uid, ...picks], order:[state.uid], invites, members:{ [state.uid]: partyMember(p) },
       region:p.region, plvl:p.level, bossLvl:p.level + ri(30,50), stage:0, log:[] });
-    await Promise.all(picks.map(u=> addDoc(collection(db,"players",u,"inbox"), { type:"boss_invite", fromUid:state.uid, fromUsername:p.username, code, ts:Date.now() })));
+    // one friend's invite failing must never cancel the party for everyone else
+    const sent = await Promise.allSettled(picks.map(u=> addDoc(collection(db,"players",u,"inbox"), { type:"boss_invite", fromUid:state.uid, fromUsername:p.username, code, ts:Date.now() })));
+    const failed = picks.filter((u,i)=> sent[i].status!=="fulfilled");
+    if(failed.length===picks.length) throw new Error("Couldn't deliver any invites. Please try again.");
+    if(failed.length){
+      const upd = {}; failed.forEach(u=>{ upd[`invites.${u}.state`] = "declined"; });
+      await updateDoc(partyRef(code), upd).catch(()=>{});
+      toast(`Couldn't reach ${failed.length} friend${failed.length>1?"s":""} — the fight will start with whoever accepts.`);
+    }
   });
   if(ok===null){ deleteDoc(partyRef(code)).catch(()=>{}); return; }
   toast(`🐉 Invites sent — your friends have 30 seconds to accept.`);
   watchParty(code);
+  setTimeout(()=>{ if(partyCode===code && partyData?.status==="inviting") startBossParty(); }, BOSS_INVITE_MS+300);   // timers in background tabs are throttled; this makes the start happen on time
 }
 function handleBossInvite(n, ref, first){
   const age = Date.now() - (n.ts||0);
@@ -5449,12 +5477,13 @@ async function startBossParty(){
   try{
     await runTransaction(db, async tx=>{
       const r = partyRef(code), s = await tx.get(r); if(!s.exists() || s.data().status!=="inviting") return;
-      const d = s.data(), acc = d.memberUids.filter(u=> u!==d.hostUid && d.invites[u]?.state==="accepted");
+      const d = s.data(), acc = d.memberUids.filter(u=> u!==d.hostUid && d.invites[u]?.state==="accepted" && d.members?.[u]);   // only friends who accepted; everyone else is simply left out
       if(!acc.length){ tx.update(r, { status:"cancelled", endedAt:Date.now() }); return; }
       const order = [d.hostUid, ...acc], hps = order.map(u=> d.members[u].hpMax);
       const base = { ...d, order, strongHp:Math.max(...hps), avgHp:Math.max(1, Math.round(hps.reduce((a,b)=>a+b,0)/hps.length)) };
       const enemy = buildPartyEnemy(0, base);
-      tx.update(r, { status:"active", memberUids:order, order, strongHp:base.strongHp, avgHp:base.avgHp, stage:0, enemy, ehp:enemy.hp,
+      const dropped = {}; d.memberUids.forEach(u=>{ if(u!==d.hostUid && !acc.includes(u) && d.invites[u]?.state==="pending") dropped[`invites.${u}.state`] = "timeout"; });
+      tx.update(r, { ...dropped, status:"active", memberUids:order, order, strongHp:base.strongHp, avgHp:base.avgHp, stage:0, enemy, ehp:enemy.hp,
         intent:"wait", target:order[0], turn:order[0], turnStart:Date.now(), round:1,
         log:[`A party of ${order.length} steps forward — ${enemy.name} (Lv.${enemy.level}) appears! Turn order: ${order.map(u=>d.members[u].name).join(" → ")} → Enemy.`] });
     });
@@ -5514,7 +5543,7 @@ function partyTick(){
   if(d.status==="inviting"){
     if(d.hostUid===state.uid && (now >= d.inviteEnds || !Object.values(d.invites||{}).some(i=>i.state==="pending"))) startBossParty();
     renderPartyLobby(d);
-    if(d.hostUid!==state.uid && now > d.inviteEnds + 15000){ partyCleanup(); closeModal("bossPartyModal"); toast("The boss party never started."); }
+    if(d.hostUid!==state.uid && now > d.inviteEnds + 45000){ partyCleanup(); closeModal("bossPartyModal"); toast("The boss party never started."); }
   } else if(d.status==="active" && d.turn && now - (d.turnStart||now) > BOSS_TURN_STALL_MS && d.turn!==state.uid && d.members[state.uid]?.alive && !partyBusyStall){
     const alive = partyAlive(d), i = alive.indexOf(d.turn), rescuer = alive[(i+1)%alive.length];     // the next living player skips an idle player's turn
     if(rescuer===state.uid){ partyBusyStall = true; partyForceSkip(d.turn).finally(()=>{ partyBusyStall = false; }); }
@@ -5566,7 +5595,7 @@ function partyEnemyTurn(d, lines){
     lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on the whole party!`);
     team.forEach(u=>{
       const t = d.members[u];
-      let dmg = e.attack*BOSS_DMG_MULT*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
+      let dmg = e.attack*BOSS_DMG_MULT*BOSS_RUSH_DMG_MULT*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
       dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0)*CHARM_BLOCK);
       t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
       lines.push(`  ${t.name} takes ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
@@ -5694,7 +5723,7 @@ function renderPartyBattle(d){
     if(!myTurn){ const w = document.createElement("span"); w.textContent = `Waiting for ${d.turn==="enemy" ? "the enemy" : (d.members[d.turn]?.name||"…")}…`; box.appendChild(w); }
     add("Leave", "Leave the fight. You forfeit the rewards.", ()=> dgConfirm({ title:"Leave the boss fight?", yes:"Leave (forfeit rewards)", html:"<p>Your party fights on without you and you won't receive any chests.</p>", onYes:partyLeave }), false, "btn-yellow");
   } else {
-    const w = document.createElement("span"); w.textContent = "💀 You have fallen — you'll still get your chests if the party wins."; box.appendChild(w);
+    const w = document.createElement("span"); w.textContent = "💀 You have fallen — fallen players get no rewards, even if the party wins."; box.appendChild(w);
     add("Hide fight", "Close this screen. You can come back from the Boss tab.", ()=>{ partyHidden = true; closeModal("eatModal"); closeModal("battleModal"); state.battle = null; renderBossPanel(); }, false, "btn-yellow");
   }
 }
@@ -5722,11 +5751,11 @@ async function finalizeParty(d){
   closeModal("eatModal"); closeModal("battleModal"); state.battle = null; partyCleanup();
   if(host) setTimeout(()=> deleteDoc(partyRef(code)).catch(()=>{}), 60000);
   const hp = me.alive ? Math.max(1, me.hp) : Math.max(1, Math.round(me.hpMax*0.25));      // fallen players wake at 25% HP
-  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp, mana:me.mana, rage:me.rage, ...(won && !me.left ? { bossCleared:d.cycle } : {}) }));
-  if(won && !me.left){
+  await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp, mana:me.mana, rage:me.rage, ...(won && me.alive && !me.left ? { bossCleared:d.cycle } : {}) }));
+  if(won && me.alive && !me.left){
     const k = d.lastKill; if(k){ await grantMoney(k.money); await grantXP(k.xp); }
     toast("🏆 The party defeated the boss!"); await openBossChests();     // every member rolls and opens their OWN 3 chests
-  } else if(won){ toast("The party won, but you left the fight — no chests."); }
+  } else if(won){ toast(me.left ? "The party won, but you left the fight — no chests." : "The party won, but you had fallen — no chests or rewards."); }
   else { toast("💀 The whole party fell… nobody gets the reward. You wake up at 25% HP."); openModal("compassModal"); }
   renderBossPanel();
 }
