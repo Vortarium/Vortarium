@@ -81,7 +81,7 @@ const MINERAL_NEW = [
   ["gem_amethyst","Amethyst","rare",48,"A violet crystal cluster."],
   ["gem_topaz","Topaz","rare",52,"A sparkling golden-orange gem."],
   ["gem_jade","Jade","rare",50,"A smooth green stone prized for luck."],
-  ["ore_platinum","Platinum Ore","epic",105,"Dense, silvery-white precious ore."],
+  ["ore_platinum","Platinum Ore","rare",105,"Dense, silvery-white precious ore."],
   ["gem_opal","Opal","epic",115,"Shifts through every color of the rainbow."],
   ["ore_mithril","Mythril Ore","epic",125,"Faintly glowing ore, light as a feather."],
   ["ore_adamantite","Adamantite Ore","legendary",340,"Nearly unbreakable ore. Your pickaxe winces."]
@@ -371,7 +371,7 @@ export function addExpansionRecipes(add, I, ctx){
 
   // ---- smelting + alloys ----
   [["tin","Tin","ore_tin","common"],["lead","Lead","ore_lead","common"],["zinc","Zinc","ore_zinc","uncommon"],
-   ["titanium","Titanium","ore_titanium","rare"],["platinum","Platinum","ore_platinum","epic"],
+   ["titanium","Titanium","ore_titanium","rare"],["platinum","Platinum","ore_platinum","rare"],
    ["mithril","Mythril","ore_mithril","epic"],["adamantite","Adamantite","ore_adamantite","legendary"]]
    .forEach(([k,n,ore,r])=> add("ing_"+k, n+" Ingot", "material", r, { desc:`Smelted ${n.toLowerCase()}, ready for the forge.` }, [[ore,2],["ore_coal",1]]));
   add("ing_brass","Brass Ingot","material","uncommon",{desc:"A golden alloy of copper and zinc."},[["ing_copper",2],["ing_zinc",1]]);
@@ -401,7 +401,7 @@ export function addExpansionRecipes(add, I, ctx){
     ["Onyx","gem_onyx_cut","uncommon","SPEED"],["Peridot","gem_peridot_cut","uncommon","SMARTS"],
     ["Titanium","ing_titanium","rare","STRENGTH"],["Amethyst","gem_amethyst_cut","rare","SMARTS"],
     ["Topaz","gem_topaz_cut","rare","CHARM"],["Jade","gem_jade_cut","rare","SPEED"],["Electrum","ing_electrum","rare","CHARM"],
-    ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","epic","CHARM"],
+    ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","rare","CHARM"],
     ["Opal","gem_opal_cut","epic","SMARTS"],["Mythril","ing_mithril","epic","SPEED"],
     ["Adamantite","ing_adamantite","legendary","STRENGTH"],["Starmetal","ing_starmetal","legendary","SPEED"],
     ["Lead","ing_lead","common","STRENGTH"],["Zinc","ing_zinc","uncommon","SPEED"]      // every smeltable ore now has its own set

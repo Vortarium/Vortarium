@@ -34,6 +34,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.uid == request.auth.uid; // account deletion frees the name
       allow update: if false;
+      allow write: if isAdmin();   // server-switch sync copies usernames across
     }
 
     // Players: public read (leaderboards/profiles), self-only write.
@@ -51,7 +52,7 @@ service cloud.firestore {
     // exactly which operations that applies to.
     match /players/{uid} {
       allow read: if true;
-      allow create: if isOwner(uid);
+      allow create: if isOwner(uid) || isAdmin();   // admin create = server-switch sync
       // Admin may also update another player's doc — used only for banning
       // (setting banned:true and scrubbing displayName to banneduser_#####).
       // A player can never edit their own ban / mute flags — only the admin can.
@@ -61,14 +62,14 @@ service cloud.firestore {
       allow delete: if isOwner(uid) || isAdmin(); // player-initiated or admin ban deletion
 
       match /quests/{questId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       // farm plots (players/{uid}/farm/plots) — private to the owner
       match /farm/{docId} {
-        allow read, write: if isOwner(uid);
+        allow read, write: if isOwner(uid) || isAdmin();
       }
       match /inbox/{notifId} {
-        allow update: if isOwner(uid);
+        allow update: if isOwner(uid) || isAdmin();
         // The admin may read/delete inbox entries only so a ban can clear the
         // banned user's pending friend requests out of other players' inboxes.
         allow read, delete: if isOwner(uid) || isAdmin();
@@ -84,6 +85,7 @@ service cloud.firestore {
     // World boss: one shared doc. Anyone signed in may create it at full HP,
     // only lower its hp (at most 100000 per write), or reset it once it is 0.
     match /boss/{id} {
+      allow write: if isAdmin();   // server-switch sync
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.hp == 1000000000 && request.resource.data.hpMax == 1000000000;
       allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hp']) && (
@@ -122,6 +124,7 @@ service cloud.firestore {
       allow delete: if isSignedIn() &&
         ((threadId.split('_').hasAny([request.auth.uid]) && isOwner(resource.data.uid)) || isAdmin());
       allow update: if false;
+      allow write: if isAdmin();   // server-switch sync
     }
 
     // Admin-only collection-group read of every "messages" collection. The ban
@@ -134,6 +137,10 @@ service cloud.firestore {
     match /{path=**}/messages/{msgId} {
       allow read: if isAdmin();
     }
+    // same idea for the server-switch sync (admin-only collection-group reads)
+    match /{path=**}/inbox/{id} { allow read: if isAdmin(); }
+    match /{path=**}/quests/{id} { allow read: if isAdmin(); }
+    match /{path=**}/farm/{id} { allow read: if isAdmin(); }
 
     // Live "typing" / "watching" status for a DM thread. Each participant owns
     // exactly one doc (named after their uid) and may only write their own;
@@ -152,6 +159,7 @@ service cloud.firestore {
     // that gap completely.
     match /auction/{listingId} {
       allow read: if isSignedIn();
+      allow write: if isAdmin();   // server-switch sync
       allow create: if isSignedIn() && notMuted()
         && request.resource.data.sellerUid == request.auth.uid
         && request.resource.data.status == "active";
@@ -227,6 +235,11 @@ service cloud.firestore {
     // Manual server shut-off. System/shutdown {off:boolean} is readable by everyone (so the title screen knows),
     // writable only by the mod. System/shutdown/codes/{code} holds the one-time 10-digit verification codes
     // (fields: code, date, used, createdAt) - mod-only, never readable by players.
+    // Which Firebase project is live: {server:1|2, switching:bool, rev, from, to}. Same doc on BOTH projects.
+    match /System/activeServer {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     match /System/shutdown {
       allow read: if true;
       allow write: if isAdmin();

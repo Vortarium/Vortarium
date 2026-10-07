@@ -12,7 +12,7 @@ import {
 import {
   initializeFirestore, doc, setDoc as _setDoc, getDoc as _getDoc, getDocs as _getDocs, updateDoc as _updateDoc, onSnapshot as _onSnapshot, collection,
   addDoc as _addDoc, query, where, orderBy, limit, runTransaction as _runTransaction, deleteDoc as _deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count
+  increment, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
@@ -574,18 +574,46 @@ function enterServerFull(text=FULL_MSG, manual=false){
 }
 let usageGate = Promise.resolve(false);
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o",
-  authDomain: "game1-65ce0.firebaseapp.com",
-  projectId: "game1-65ce0",
-  storageBucket: "game1-65ce0.firebasestorage.app",
-  messagingSenderId: "655445406483",
-  appId: "1:655445406483:web:9264de939328cb553b20e6",
-  measurementId: "G-YXYBS4VGXJ"
+/* =========================================================================
+   TWO FIREBASE PROJECTS. Only ONE is live at a time; the other sits in stasis (no listeners, no heartbeats).
+   System/activeServer {server:1|2, switching:bool, rev:ms, from, to} lives on BOTH projects; every page load reads both
+   (2 tiny reads), trusts the newest `rev`, and boots on that server. A mod flips it from "Server controls" (see
+   performServerSwitch below). Setup steps for the 2nd project: SERVER_SETUP.md.
+   ========================================================================= */
+const SERVERS = {
+  1: { apiKey:"AIzaSyAGgBTS_rLY1OFdNmEzPkeRx6ipaW-MP_o", authDomain:"game1-65ce0.firebaseapp.com", projectId:"game1-65ce0",
+       storageBucket:"game1-65ce0.firebasestorage.app", messagingSenderId:"655445406483", appId:"1:655445406483:web:9264de939328cb553b20e6", measurementId:"G-YXYBS4VGXJ" },
+  2: { apiKey:"AIzaSyAY43fiWiDqr-aGP8Sstdsr_ECLURLaOmo", authDomain:"rpg2-97e90.firebaseapp.com", projectId:"rpg2-97e90",
+       storageBucket:"rpg2-97e90.firebasestorage.app", messagingSenderId:"175251389892", appId:"1:175251389892:web:e57ca658bb9582a2a1f891", measurementId:"G-L05P2R60B2" }
 };
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+const ALLOW_SIGNUP_ON_SERVER_2 = false;   // new accounts only on server 1: accounts made on 2 wouldn't exist on 1's Auth after switching back
+const HATCH_MIN_MS = 8000, HATCH_STALE_MS = 15*60*1000;
+const sleep = ms=> new Promise(r=> setTimeout(r, ms));
+const SERVER_HANDLES = {};
+function serverHandles(n){
+  if(!SERVER_HANDLES[n]){
+    const a = initializeApp(SERVERS[n], "dgn-server-"+n);
+    SERVER_HANDLES[n] = { n, app:a, auth:getAuth(a), db:initializeFirestore(a, { experimentalAutoDetectLongPolling:true }) };
+  }
+  return SERVER_HANDLES[n];
+}
+const flagRef = h=> doc(h.db,"System","activeServer");
+async function readFlag(n){
+  try{ const s = await Promise.race([ _getDoc(flagRef(serverHandles(n))), new Promise((_,rej)=> setTimeout(()=> rej(new Error("timeout")), 4000)) ]); return s.exists() ? s.data() : {}; }
+  catch(_){ return null; }                                          // server unreachable / out of quota
+}
+async function resolveActiveServer(){
+  const [f1, f2] = await Promise.all([ readFlag(1), readFlag(2) ]);
+  const c = [[1,f1],[2,f2]].filter(([,f])=> f && +f.server);
+  if(!c.length) return { server:1, switching:false };               // no flag anywhere yet -> server 1
+  c.sort((x,y)=> (y[1].rev||0)-(x[1].rev||0));
+  const f = c[0][1], stale = f.switching && Date.now()-(f.rev||0) > HATCH_STALE_MS;   // a crashed switch never locks the game forever
+  return { server:+f.server, switching: !!f.switching && !stale, to:f.to, rev:f.rev };
+}
+const BOOT = await resolveActiveServer();
+const ACTIVE_SERVER = BOOT.server;
+const app = serverHandles(ACTIVE_SERVER).app, auth = serverHandles(ACTIVE_SERVER).auth, db = serverHandles(ACTIVE_SERVER).db;
+let hatching = false, SWITCH_RUNNING = false;
 usageGate = refreshUsageStatus();                                  // is the server already full today?
 setPersistence(auth, browserSessionPersistence).catch(()=>{});   // session persistence: closing the tab logs you out (a refresh keeps you in)
 
@@ -892,7 +920,7 @@ const TOOL_LADDER = [   // [id suffix, name, uses, shop price, rarity, material 
   ["3",  "Iron",      25,  400,  "rare",      "ing_steel"],
   ["_st","Steel",     36,  580,  "rare",      "ing_steel"],
   ["4",  "Gold",      50,  820,  "rare",      "ing_gold"],
-  ["_pt","Platinum",  72,  1150, "epic",      "ing_platinum"],
+  ["_pt","Platinum",  72,  1150, "rare",      "ing_platinum"],
   ["_ti","Titanium",  95,  1550, "epic",      "ing_titanium"],
   ["5",  "Emerald",   125, 2050, "epic",      "gem_emerald_cut"],
   ["_my","Mythril",   165, 2700, "epic",      "ing_mithril"],
@@ -1384,6 +1412,7 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
       if(problem){ errEl.textContent = problem; return; }
       if(pass.length < 6){ errEl.textContent="Password is too short — use at least 6 characters."; return; }
 
+      if(ACTIVE_SERVER!==1 && !ALLOW_SIGNUP_ON_SERVER_2){ errEl.textContent = "New accounts can't be created while the backup server is running. Try again once the main server is back."; return; }
       // reserve the username first so two people can't grab the same one
       let takenSnap;
       try{
@@ -1429,7 +1458,10 @@ document.getElementById("authForm").addEventListener("submit", async (e)=>{
       let cred;
       try{
         cred = await signInWithEmailAndPassword(auth, usernameToEmail(uname), pass);
-      }catch(err){ errEl.textContent = friendlyFirebaseError(err); return; }
+      }catch(err){
+        errEl.textContent = friendlyFirebaseError(err) + (ACTIVE_SERVER!==1 && /user-not-found|invalid-credential/.test(err?.code||"") ? " (We're on the backup server — an account made very recently may not have been copied over yet.)" : "");
+        return;
+      }
       closeModal("authModal");
       await loadPlayerAndRoute(cred.user);
     }
@@ -7109,6 +7141,8 @@ setInterval(()=>{ const t = $id("screen-title").classList.contains("active"), l 
 function afterEnterGame(){
   // everyone in the game hears about a manual shut-off instantly (one cheap listener; it only fires when the switch changes)
   state.unsubs.push(onSnapshot(doc(db,"System","shutdown"), snap=>{ if(snap.exists() && snap.data().off) enterServerFull(MANUAL_MSG, true); }, ()=>{}));
+  // a mod is switching servers (or already did): everyone is logged out and parked on the hatching screen
+  state.unsubs.push(onSnapshot(flagRef({ db }), snap=>{ const d = snap.data(); if(d && (d.switching || (+d.server && +d.server !== ACTIVE_SERVER))) enterHatch(); }, ()=>{}));
   setTimeout(()=> bankSettle(), 2500);
 }
 function svRender(){
@@ -7128,6 +7162,7 @@ function svRender(){
   }
 }
 async function openServerModal(){
+  svSwitchRender();
   $id("svError").textContent = ""; $id("svCode").value = ""; $id("svPass").value = "";
   const mod = !!(auth.currentUser && (isAdminUI() || SV.tempAuth));
   $id("svLogin").style.display = mod ? "none" : "";
@@ -7173,6 +7208,105 @@ async function svGoClick(){
   finally{ SV.busy = false; $id("svGo").disabled = false; }
 }
 $id("svGo").addEventListener("click", svGoClick);
+
+/* =========================================================================
+   SERVER SWITCH (mod only). Flow:
+   1. mod signs in to BOTH projects on throw-away app instances (so logging this tab out doesn't stop the job)
+   2. System/activeServer {switching:true} on the live server -> every client logs out and shows the hatching screen
+   3. wait HATCH_MIN_MS so in-flight saves land, then mirror the live server's data into the standby (copy + delete extras)
+   4. verify document counts match for every collection
+   5. write {server:to, switching:false} on BOTH servers -> everyone's hatching screen reloads onto the new server
+   Any failure rolls the flag back to the old server so nobody is stuck. Standby ends up an exact copy of the live one,
+   so 1->2 and 2->1 use the very same routine.
+   ========================================================================= */
+function enterHatch(msg="🥚 Hatching the new server… you'll be back in a few seconds."){
+  if(hatching || SWITCH_RUNNING) return; hatching = true;
+  if(!serverFull) enterServerFull(msg, true);
+  else { document.querySelectorAll(".modal-backdrop.active").forEach(m=> m.classList.remove("active")); showScreen("screen-loading"); }
+  const t = document.querySelector("#screen-loading .doodle-h2"); if(t) t.textContent = msg;
+  const retry = document.getElementById("btnServerRetry"); if(retry) retry.style.display = "none";
+  const poll = async ()=>{ const r = await resolveActiveServer().catch(()=>null); if(r && !r.switching){ location.reload(); return; } setTimeout(poll, 3000); };
+  setTimeout(poll, HATCH_MIN_MS/2);
+}
+if(BOOT.switching) setTimeout(()=> enterHatch(), 0);          // opened the page in the middle of a switch
+
+function freezeGameForSwitch(){
+  serverFull = true;                                           // stops every game read/write wrapper (heartbeats, usage reports…)
+  try{ cleanupSubs(); }catch{} try{ resetSessionUI(); }catch{} try{ signOut(auth).catch(()=>{}); }catch{}
+}
+function syncHandles(n){
+  const a = initializeApp(SERVERS[n], `dgn-sync-${n}-${Date.now()}`);
+  return { n, app:a, auth:getAuth(a), db:initializeFirestore(a, { experimentalAutoDetectLongPolling:true }) };
+}
+/* what gets mirrored. Ephemeral stuff (reactions, duels, boss parties, queue, presence, global chat, usage counters) is skipped. */
+const SYNC_SETS = [
+  { label:"usernames", q:d=> collection(d,"usernames") }, { label:"players", q:d=> collection(d,"players") },
+  { label:"auction",   q:d=> collection(d,"auction") },   { label:"world boss", q:d=> collection(d,"boss") },
+  { label:"inboxes",   q:d=> collectionGroup(d,"inbox") },{ label:"quests", q:d=> collectionGroup(d,"quests") },
+  { label:"farms",     q:d=> collectionGroup(d,"farm") }, { label:"private messages", q:d=> collectionGroup(d,"messages") }
+];
+async function mirrorOne(S, D, set, say){
+  const grab = async h=>{ const m = new Map(); (await _getDocs(set.q(h.db))).forEach(d=> m.set(d.ref.path, d.data())); return m; };
+  const [src, dst] = await Promise.all([ grab(S), grab(D) ]);
+  if(src.size===0 && dst.size>0 && (set.label==="players" || set.label==="usernames")) throw new Error(`Refusing to wipe the other server: the live server returned 0 ${set.label}.`);
+  const ops = []; src.forEach((data,path)=> ops.push({ path, data }));
+  let removed = 0; dst.forEach((_,path)=>{ if(!src.has(path)){ ops.push({ path, del:true }); removed++; } });
+  for(let i=0;i<ops.length;i+=400){
+    const b = writeBatch(D.db);
+    ops.slice(i,i+400).forEach(o=> o.del ? b.delete(doc(D.db,o.path)) : b.set(doc(D.db,o.path), o.data));
+    await b.commit(); say(`Copying ${set.label}… ${Math.min(i+400,ops.length)}/${ops.length}`);
+  }
+  return { label:set.label, copied:src.size, removed };
+}
+async function countOf(h, set){ return (await _getAggregateFromServer(set.q(h.db), { n:count() })).data().n; }
+
+async function performServerSwitch(pw, say){
+  const from = ACTIVE_SERVER, to = from===1 ? 2 : 1, email = usernameToEmail(ADMIN_USERNAME), S = syncHandles(from), D = syncHandles(to);
+  say("Signing in to both servers…");
+  try{ await signInWithEmailAndPassword(S.auth, email, pw); }catch(e){ throw new Error(`Server ${from}: ${friendlyFirebaseError(e)}`); }
+  try{ await signInWithEmailAndPassword(D.auth, email, pw); }catch(e){ throw new Error(`Server ${to}: ${friendlyFirebaseError(e)} — is the mod account copied to server ${to}? (SERVER_SETUP.md)`); }
+  const dv = await _getDoc(doc(D.db,"usernames",ADMIN_USERNAME.toLowerCase())).catch(()=>null);
+  if(!dv || !dv.exists() || dv.data().uid !== D.auth.currentUser.uid) throw new Error(`Server ${to} needs a usernames/${ADMIN_USERNAME.toLowerCase()} document holding the mod's uid first (SERVER_SETUP.md, step 4).`);
+  const base = { from, to, by:ADMIN_USERNAME };
+  SWITCH_RUNNING = true; freezeGameForSwitch();
+  try{
+    const rev = Date.now();
+    await _setDoc(flagRef(S), { server:from, switching:true, ...base, rev });                   // everyone logs out now
+    await _setDoc(flagRef(D), { server:from, switching:true, ...base, rev }).catch(()=>{});
+    for(let s=Math.ceil(HATCH_MIN_MS/1000); s>0; s--){ say(`🥚 Everyone is logged out. Hatching… letting last saves land (${s}s)`); await sleep(1000); }
+    const done = [];
+    for(const set of SYNC_SETS) done.push(await mirrorOne(S, D, set, say));
+    say("Checking that every collection matches…");
+    for(const set of SYNC_SETS){
+      const [x, y] = await Promise.all([ countOf(S,set), countOf(D,set) ]);
+      if(x!==y) throw new Error(`Verification failed for ${set.label}: server ${from} has ${x}, server ${to} has ${y}.`);
+    }
+    const fin = { server:to, switching:false, ...base, rev:Date.now(), syncedAt:Date.now() };
+    await _setDoc(flagRef(D), fin); await _setDoc(flagRef(S), fin).catch(()=>{});
+    say(`✅ Server ${to} is live (${done.map(d=>`${d.copied} ${d.label}`).join(", ")}). Reloading…`);
+    setTimeout(()=> location.reload(), 3000);
+  }catch(err){
+    const back = { server:from, switching:false, ...base, rev:Date.now(), failed:true };       // roll back: nobody stays stuck
+    await _setDoc(flagRef(S), back).catch(()=>{}); await _setDoc(flagRef(D), back).catch(()=>{});
+    throw err;
+  }finally{ SWITCH_RUNNING = false; }
+}
+function svSwitchRender(){
+  const other = ACTIVE_SERVER===1 ? 2 : 1;
+  $id("svActive").innerHTML = `Live server: <b>${ACTIVE_SERVER}</b> &middot; standby: ${other}`;
+  $id("svSwitchBtn").textContent = `Switch to server ${other}`;
+}
+$id("svSwitchBtn").addEventListener("click", async ()=>{
+  if(SV.busy || SWITCH_RUNNING) return;
+  const pw = $id("svSwPass").value, other = ACTIVE_SERVER===1 ? 2 : 1, st = $id("svSwStatus"), err = $id("svError"); err.textContent = "";
+  if(!pw){ err.textContent = "Enter the mod password (used to sign in to both servers)."; return; }
+  if(!confirm(`Switch to server ${other}?\n\nEveryone is logged out, all data is copied from server ${ACTIVE_SERVER} to server ${other}, then the game reopens on server ${other}. Takes roughly 10 seconds or more depending on player count.`)) return;
+  SV.busy = true; $id("svSwitchBtn").disabled = true;
+  try{ await performServerSwitch(pw, t=>{ st.textContent = t; }); }
+  catch(e){ err.textContent = (e.message || String(e)) + " — nothing was switched. Reloading in a few seconds."; st.textContent = ""; setTimeout(()=> location.reload(), 6000); }
+  finally{ SV.busy = false; $id("svSwitchBtn").disabled = false; $id("svSwPass").value = ""; }
+});
+
 $id("svCancel").addEventListener("click", ()=> closeModal("serverModal"));
 ["svCode","svUser","svPass"].forEach(id=> $id(id).addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); svGoClick(); } }));
 new MutationObserver(()=>{ if(!$id("serverModal").classList.contains("active") && SV.tempAuth) svAbort(); }).observe($id("serverModal"), { attributes:true, attributeFilter:["class"] });
