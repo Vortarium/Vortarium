@@ -602,16 +602,23 @@ async function readFlag(n){
   try{ const s = await Promise.race([ _getDoc(flagRef(serverHandles(n))), new Promise((_,rej)=> setTimeout(()=> rej(new Error("timeout")), 4000)) ]); return s.exists() ? s.data() : {}; }
   catch(_){ return null; }                                          // server unreachable / out of quota
 }
+/* Only ONE server is ever asked. The last-known live server is cached in localStorage; at boot we read just THAT server's
+   flag (1 read). A mod switch writes the new flag to both projects, so one read is enough to learn about a switch. The
+   other project is only touched if the cached one can't be reached - and its Firebase app is never even created otherwise,
+   so the standby server sees zero traffic. */
+const SERVER_CACHE_KEY = "dgn_active_server";
+const cachedServer = ()=>{ try{ return +localStorage.getItem(SERVER_CACHE_KEY)===2 ? 2 : 1; }catch(_){ return 1; } };
+const rememberServer = n=>{ try{ localStorage.setItem(SERVER_CACHE_KEY, String(n)); }catch(_){} };
 async function resolveActiveServer(){
-  const [f1, f2] = await Promise.all([ readFlag(1), readFlag(2) ]);
-  const c = [[1,f1],[2,f2]].filter(([,f])=> f && +f.server);
-  if(!c.length) return { server:1, switching:false };               // no flag anywhere yet -> server 1
-  c.sort((x,y)=> (y[1].rev||0)-(x[1].rev||0));
-  const f = c[0][1], stale = f.switching && Date.now()-(f.rev||0) > HATCH_STALE_MS;   // a crashed switch never locks the game forever
+  const first = cachedServer(), second = first===1 ? 2 : 1, usable = f=> f && +f.server;
+  let f = await readFlag(first);
+  if(f===null){ const g = await readFlag(second); if(usable(g)) f = g; }       // cached server unreachable / out of quota: only then ask the other
+  if(!usable(f)) return { server:first, switching:false };                      // no flag yet -> stay where we were
+  const stale = f.switching && Date.now()-(f.rev||0) > HATCH_STALE_MS;           // a crashed switch never locks the game forever
   return { server:+f.server, switching: !!f.switching && !stale, to:f.to, rev:f.rev };
 }
 const BOOT = await resolveActiveServer();
-const ACTIVE_SERVER = BOOT.server;
+const ACTIVE_SERVER = BOOT.server; rememberServer(ACTIVE_SERVER);
 const app = serverHandles(ACTIVE_SERVER).app, auth = serverHandles(ACTIVE_SERVER).auth, db = serverHandles(ACTIVE_SERVER).db;
 let hatching = false, SWITCH_RUNNING = false;
 usageGate = refreshUsageStatus();                                  // is the server already full today?
@@ -1770,6 +1777,7 @@ document.getElementById("invNext").addEventListener("click", ()=>{ state.invPage
 // damage for weapons, stat/HP changes for armor, +/- stat buffs for trinkets, uses for tools.
 function itemEffectText(item){
   const st = item.stats || {};
+  if(item.undying) return "Saves you from one killing blow, then breaks (refills HP, Mana and Rage)";
   if(item.type==="consumable"){
     const bits = [];
     if(st.heal) bits.push(`Restores ${healText(st)} HP`);
@@ -2853,6 +2861,7 @@ function shopStock(){
     if(rnd() < 0.07) items[0] = ITEM_BY_ID.rebirth_scroll;
     // Luck potions: rarely replace the middle slot (tier 3 is the rarest)
     for(let t=3;t>=1;t--){ if(rnd() < LUCK_SHOP_ODDS[t]){ items[2] = ITEM_BY_ID["potion_luck_"+t]; break; } }
+    if(rnd() < 0.04 && ITEM_BY_ID.trinket_undying) items[3] = ITEM_BY_ID.trinket_undying;     // very rarely: the Trinket of Undying
     stock[region] = items;
   });
   shopStockCache = { day, stock };
@@ -3788,6 +3797,7 @@ function markRead(log, key){ localStorage.setItem(lrKey(key), String(Date.now())
    A dot sits on the Compass button, the Chat tab, the Global / Private sub-tabs and next to every DM contact
    with messages you haven't read. A chat counts as read the moment you reach the bottom of it. */
 let unreadOwner = null, globalLatest = 0;
+let inboxNew = false, inboxSeenOwner = null, inboxVisible = []; const inboxSeen = new Set();   // inbox rows you haven't looked at yet
 const dmLatest = {};                         // partner uid -> timestamp of the newest message FROM them
 const dmProbed = new Set();
 const lrGet = k=> +localStorage.getItem(lrKey(k)) || 0;
@@ -3795,13 +3805,14 @@ function updateUnreadDots(){
   if(!state.uid) return;
   if(unreadOwner !== state.uid){ unreadOwner = state.uid; globalLatest = 0; dmProbed.clear(); Object.keys(dmLatest).forEach(k=> delete dmLatest[k]); }
   const dms = Object.keys(dmLatest).filter(u=> dmLatest[u] > lrGet("pm_"+pmThreadId(state.uid,u)));
-  const g = globalLatest > lrGet("global"), any = g || dms.length>0;
+  const g = globalLatest > lrGet("global"), any = g || dms.length>0 || inboxNew;
   const set = (el,on)=>{ if(el) el.classList.toggle("has-unread", !!on); };
   set(document.getElementById("btnCompass"), any);
   set(document.querySelector('[data-mm="btnCompass"]'), any);
   set(document.querySelector('[data-ctab="chat"]'), any);
   set(document.querySelector('[data-chatsub="global"]'), g);
   set(document.querySelector('[data-chatsub="private"]'), dms.length>0);
+  set(document.querySelector('[data-chatsub="inbox"]'), inboxNew);
   document.querySelectorAll("#pmContacts li[data-uid]").forEach(li=> li.classList.toggle("has-unread", dms.includes(li.dataset.uid)));
 }
 // Backfill: pings are consumed after one session, so look at each thread once to learn what's waiting.
@@ -4030,19 +4041,7 @@ async function runChatCommand(raw){
       const price = pa.value;
       const entry = invExpanded().find(e=> e.item.name.toLowerCase() === itemName.toLowerCase() || e.item.name.toLowerCase().replace(/\s+/g,"") === itemName.toLowerCase());
       if(!entry || entry.qty<1){ toast(`You don't have a ${itemName}.`); return; }
-      try{
-        const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
-        const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
-        if(activeCount >= 10){ toast("You can only have 10 auction slots."); return; }
-      }catch(err){ toast(friendlyFirebaseError(err)); return; }
-      const ok = await applyInvChanges({ remove:[{itemId:entry.item.id, qty:1}] });
-      if(ok===null) return;
-      const posted = await withErrorToast(()=> addDoc(collection(db,"auction"), {
-        sellerUid: state.uid, sellerName: state.profile.username, itemId: entry.item.id, qty:1, pricePer: price,
-        status:"active", postedAt: Date.now(), expiresAt: Date.now() + AUCTION_MS
-      }));
-      if(posted===null){ await addItemToInv(entry.item.id, 1); return; }
-      toast(`Posted 1 ${entry.item.name} to the auction for $${fmtMoney(price)}.`);
+      if(await postAuctionListing(entry.item.id, 1, price)) toast(`Posted 1 ${entry.item.name} to the auction for $${fmtMoney(price)}.`);
       return;
     }
     document.querySelector('[data-ctab="auction"]')?.click();
@@ -4448,9 +4447,21 @@ function subscribeInbox(){
       list.appendChild(li);
     });
     if(list.children.length===0) list.innerHTML="<li>Inbox is empty.</li>";
+    // red dot on the Inbox tab (and the Chat tab / compass) whenever a notification you haven't looked at is waiting
+    if(inboxSeenOwner !== state.uid){ inboxSeenOwner = state.uid; inboxSeen.clear(); }
+    inboxVisible = snap.docs.filter(d=> !["new_message","dm_seen","duel_challenge","boss_invite"].includes(d.data().type)).map(d=>d.id);
+    inboxNew = inboxVisible.some(id=> !inboxSeen.has(id));
+    inboxMarkSeenIfViewing(); updateUnreadDots();
   }, (err)=> toast(friendlyFirebaseError(err)));
   state.unsubs.push(unsub);
 }
+
+function inboxMarkSeenIfViewing(){
+  const viewing = document.getElementById("chatsub-inbox")?.classList.contains("active") && document.getElementById("ctab-chat")?.classList.contains("active") && document.getElementById("compassModal")?.classList.contains("active");
+  if(viewing && inboxNew){ inboxVisible.forEach(id=> inboxSeen.add(id)); inboxNew = false; updateUnreadDots(); }
+}
+document.querySelectorAll("[data-chatsub],[data-ctab]").forEach(b=> b.addEventListener("click", ()=> setTimeout(inboxMarkSeenIfViewing, 80)));
+setInterval(inboxMarkSeenIfViewing, 1500);
 
 /* =========================================================================
    AUCTION HOUSE
@@ -4486,7 +4497,8 @@ function drawAuctionPage(){
     const { id, listing, item } = row;
     cell.className = "inv-cell rarity-"+item.rarity + (auctionSelectedId===id ? " selected" : "");
     cell.dataset.listingId = id;
-    cell.innerHTML = `<div>${escapeHTML(item.name)}</div><span class="qty-badge">x${listing.qty}</span><div style="font-size:11px">$${fmtMoney(listing.pricePer)} ea</div>`;
+    cell.innerHTML = `<div>${escapeHTML(item.name)}</div><span class="qty-badge">x${listing.qty}</span><div class="auc-eff">${escapeHTML(auctionEffect(item))}</div><div style="font-size:11px">$${fmtMoney(listing.pricePer)} ea</div>`;
+    cell.title = auctionEffect(item);
     // Hover OR click shows the details/buy panel — buying itself always needs the
     // separate confirm button below, so a stray click can't buy anything.
     cell.addEventListener("mouseenter", ()=> showAuctionDetail(id));
@@ -4543,6 +4555,9 @@ function showAuctionDetail(id){
   document.getElementById("aucDetailName").textContent = `${item.name} (${item.rarity}) x${listing.qty}`;
   document.getElementById("aucDetailMeta").textContent =
     `Posted by ${listing.sellerName} — $${fmtMoney(listing.pricePer)} each, $${fmtMoney(listing.pricePer*listing.qty)} total`;
+  { let dEl = document.getElementById("aucDetailDesc");
+    if(!dEl){ dEl = document.createElement("p"); dEl.id = "aucDetailDesc"; document.getElementById("aucDetailMeta").after(dEl); }
+    dEl.innerHTML = auctionInfoHTML(item); }
   const buyBtn = document.getElementById("aucDetailBuyBtn");
   const isOwnListing = listing.sellerUid === state.uid;
   buyBtn.style.display = isOwnListing ? "none" : "";
@@ -4655,55 +4670,117 @@ function updatePostTotal(){
 }
 document.getElementById("postQty").addEventListener("input", updatePostTotal);
 document.getElementById("postPrice").addEventListener("input", updatePostTotal);
+/* ---------- posting / cancelling: duplicate-proof ----------
+   The old dupe: clicking Post (or Cancel) many times fast started several runs before the first one finished, each trusting the
+   same stale inventory / listing. Now: one post at a time (lock), a short gap between posts, the item is taken from the SERVER
+   inventory in a transaction before the listing exists, an audit trims anything over the slot cap, and cancelling is ONE
+   transaction that deletes the listing and returns the item together (a second cancel finds nothing and gives nothing). */
+const AUC_MAX_SLOTS = 12, AUC_POST_GAP_MS = 1500;
+let aucPostBusy = false, aucLastPostAt = 0;
+const aucCancelBusy = new Set();
+const auctionEffect = item=>{ try{ return itemEffectText(item) || ""; }catch(_){ return ""; } };
+const auctionInfoHTML = item=> `<b>${escapeHTML(auctionEffect(item))}</b>` + (item.desc ? `<br><i>${escapeHTML(item.desc)}</i>` : "");
+const myActiveListings = async ()=> (await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)))).docs.filter(d=> d.data().status==="active");
+async function postAuctionListing(itemId, qty, price){
+  if(isMuted()){ muteBlockedToast("list items on the auction"); return false; }
+  const item = ITEM_BY_ID[itemId];
+  if(!item || !Number.isInteger(qty) || qty<1){ toast("Quantity must be a whole number."); return false; }
+  if(aucPostBusy) return false;                                                            // a post is already in flight: ignore the extra click
+  if(Date.now() - aucLastPostAt < AUC_POST_GAP_MS){ toast("Easy there — wait a second before posting again."); return false; }
+  aucPostBusy = true; aucLastPostAt = Date.now();
+  try{
+    const have = invExpanded().filter(e=>e.itemId===itemId).reduce((a,e)=>a+e.qty,0);
+    if(have < qty){ toast("You don't have that many."); return false; }
+    let mine; try{ mine = await myActiveListings(); }catch(err){ toast(friendlyFirebaseError(err)); return false; }
+    if(mine.length >= AUC_MAX_SLOTS){ toast(`You can only have ${AUC_MAX_SLOTS} auction slots.`); return false; }
+    const removed = await applyInvChanges({ remove:[{ itemId, qty }] });                   // server-side check: refuses if the real inventory is short
+    if(removed===null) return false;
+    const posted = await withErrorToast(()=> addDoc(collection(db,"auction"), {
+      sellerUid: state.uid, sellerName: state.profile.username, itemId, qty, pricePer: price,
+      status:"active", postedAt: Date.now(), expiresAt: Date.now() + AUCTION_MS
+    }));
+    if(posted===null){ await addItemToInv(itemId, qty); return false; }                    // listing failed: give the item back
+    try{                                                                                   // audit: never more than the slot cap, ever
+      const act = (await myActiveListings()).sort((a,b)=> (a.data().postedAt||0)-(b.data().postedAt||0));
+      for(const extra of act.slice(AUC_MAX_SLOTS)) await cancelAuctionListing(extra.id, true);
+    }catch(_){}
+    return true;
+  } finally { aucLastPostAt = Date.now(); aucPostBusy = false; }
+}
+async function cancelAuctionListing(listingId, quiet=false){
+  if(aucCancelBusy.has(listingId)) return false; aucCancelBusy.add(listingId);
+  let res = null, err = null;
+  try{
+    res = await runTransaction(db, async tx=>{
+      const lref = doc(db,"auction",listingId), pref = doc(db,"players",state.uid);
+      const lsnap = await tx.get(lref), psnap = await tx.get(pref);
+      if(!lsnap.exists() || lsnap.data().status !== "active") throw new Error("gone");
+      const L = lsnap.data(); if(L.sellerUid !== state.uid) throw new Error("notyours");
+      const d = psnap.data() || {}, inv = (d.inventory||[]).map(e=>({...e})), cap = invCap(d), isTool = ITEM_BY_ID[L.itemId]?.type==="tool";
+      if(isTool){ for(let k=0;k<L.qty;k++){ if(invUsed(inv) >= cap) throw new Error("full"); const j = inv.findIndex(e=>e.itemId===L.itemId); if(j>=0) inv[j].qty = Math.max(0,inv[j].qty)+1; else inv.push({ itemId:L.itemId, qty:1 }); } }
+      else { const idx = inv.findIndex(e=>e.itemId===L.itemId);
+        if(idx>=0 && inv[idx].qty>0) inv[idx].qty += L.qty;
+        else { if(invUsed(inv) >= cap) throw new Error("full"); if(idx>=0) inv[idx].qty = L.qty; else inv.push({ itemId:L.itemId, qty:L.qty }); } }
+      tx.delete(lref); tx.update(pref, { inventory: inv });                                // listing gone + item back, atomically
+      return { itemId:L.itemId, qty:L.qty };
+    });
+  }catch(e){ err = e; }
+  finally{ aucCancelBusy.delete(listingId); }
+  if(!res){
+    if(!quiet){ toast(err?.message==="gone" ? "That listing is already gone." : err?.message==="full" ? "Your inventory is full — free a slot before cancelling." : friendlyFirebaseError(err)); }
+    return false;
+  }
+  if(!quiet) toast(`${ITEM_BY_ID[res.itemId]?.name||"Item"} x${res.qty} returned to your inventory.`);
+  return true;
+}
 document.getElementById("btnPostAuction").addEventListener("click", async ()=>{
-  if(isMuted()){ muteBlockedToast("list items on the auction"); return; }
+  const btn = document.getElementById("btnPostAuction"); if(btn.disabled) return;
   const itemId = document.getElementById("postItemSelect").value;
   const qty = Number(document.getElementById("postQty").value);
   const pa = parseAmount(document.getElementById("postPrice").value);
   if(pa.err){ toast(pa.err); return; }
-  const price = pa.value;
   if(!itemId || !Number.isInteger(qty) || qty<1){ toast("Quantity must be a whole number."); return; }
-  try{
-    const mySnap = await getDocs(query(collection(db,"auction"), where("sellerUid","==",state.uid)));
-    const activeCount = mySnap.docs.filter(d=>d.data().status==="active").length;
-    if(activeCount >= 10){ toast("You can only have 10 auction slots."); return; }
-  }catch(err){ toast(friendlyFirebaseError(err)); return; }
-  const entry = invExpanded().find(e=>e.itemId===itemId);
-  if(!entry || entry.qty < qty){ toast("You don't have that many."); return; }
-  await changeInvQty(itemId, -qty);
-  const ok = await withErrorToast(()=> addDoc(collection(db,"auction"), {
-    sellerUid: state.uid, sellerName: state.profile.username, itemId, qty, pricePer: price,
-    status:"active", postedAt: Date.now(), expiresAt: Date.now() + AUCTION_MS
-  }));
-  if(ok===null){ await addItemToInv(itemId, qty); return; } // roll back on failure
-  playSfx("send");
-  toast("Posted to auction house!");
-  populatePostForm();
+  btn.disabled = true; setTimeout(()=>{ btn.disabled = false; }, AUC_POST_GAP_MS);         // tiny anti-spam delay
+  if(await postAuctionListing(itemId, qty, pa.value)){ playSfx("send"); toast("Posted to auction house!"); populatePostForm(); }
 });
-let mySlotsUnsub = null;
+let mySlotsUnsub = null, myListings = [], mySlotSel = null;
+function drawMySlots(){
+  const grid = document.getElementById("myAuctionSlots"); if(!grid) return;
+  grid.innerHTML = "";
+  for(let i=0;i<AUC_MAX_SLOTS;i++){                                                          // always 12 slots on one page; empty ones show as empty
+    const row = myListings[i], cell = document.createElement("div");
+    if(!row){ cell.className = "inv-cell auc-empty"; cell.innerHTML = `<div style="opacity:.4">Empty slot</div>`; grid.appendChild(cell); continue; }
+    const { id, listing, item } = row;
+    cell.className = "inv-cell rarity-"+item.rarity + (mySlotSel===id ? " selected" : "");
+    cell.title = auctionEffect(item);
+    cell.innerHTML = `<div>${escapeHTML(item.name)}</div><span class="qty-badge">x${listing.qty}</span><div class="auc-eff">${escapeHTML(auctionEffect(item))}</div><div style="font-size:11px">$${fmtMoney(listing.pricePer)} ea</div>`;
+    cell.addEventListener("click", ()=>{ mySlotSel = id; drawMySlots(); });
+    grid.appendChild(cell);
+  }
+  const lab = document.getElementById("mySlotsLabel"); if(lab) lab.textContent = `Slots used: ${myListings.length}/${AUC_MAX_SLOTS}`;
+  const panel = document.getElementById("myAucDetail"), cur = myListings.find(r=>r.id===mySlotSel);
+  if(!panel) return;
+  if(!cur){ panel.style.display = "none"; return; }
+  panel.style.display = "";
+  document.getElementById("myAucName").textContent = `${cur.item.name} (${cur.item.rarity}) x${cur.listing.qty}`;
+  document.getElementById("myAucDesc").innerHTML = auctionInfoHTML(cur.item);
+  const left = cur.listing.expiresAt - Date.now();
+  document.getElementById("myAucMeta").textContent = `$${fmtMoney(cur.listing.pricePer)} each, $${fmtMoney(cur.listing.pricePer*cur.listing.qty)} total · ${left>0 ? "Expires in "+fmtAuctionLeft(left) : "Expired — take it back"}`;
+  const btn = document.getElementById("myAucCancelBtn");
+  btn.onclick = async ()=>{ btn.disabled = true; const ok = await cancelAuctionListing(cur.id); btn.disabled = false; if(ok) mySlotSel = null; };
+}
 function renderMySlots(){
   if(mySlotsUnsub) return; // already live
   const q = query(collection(db,"auction"), where("sellerUid","==",state.uid));
   mySlotsUnsub = onSnapshot(q, snap=>{
-    const grid = document.getElementById("myAuctionSlots");
-    grid.innerHTML="";
+    myListings = [];
     snap.forEach(d=>{
-      const listing = d.data();
-      if(listing.status !== "active") return;
-      const item = ITEM_BY_ID[listing.itemId];
-      if(!item) return;
-      const cell = document.createElement("div");
-      cell.className="inv-cell rarity-"+item.rarity;
-      cell.innerHTML = `<div>${item.name}</div><span class="qty-badge">x${listing.qty}</span><button class="doodle-btn btn-sm" style="margin-top:4px">Cancel</button>`;
-      cell.querySelector("button").addEventListener("click", async (ev)=>{
-        ev.stopPropagation();
-        if((!hasItem(item.id) || item.type==="tool") && invUsed(state.profile.inventory) >= invCap(state.profile)){ toast("Your inventory is full — free a slot before cancelling."); return; }
-        const ok = await withErrorToast(()=> deleteDoc(doc(db,"auction",d.id)));
-        if(ok===null) return;
-        await applyInvChanges({ add:[{itemId:item.id, qty:listing.qty}], strict:true });
-      });
-      grid.appendChild(cell);
+      const listing = d.data(); if(listing.status !== "active") return;
+      const item = ITEM_BY_ID[listing.itemId]; if(!item) return;
+      myListings.push({ id:d.id, listing, item });
     });
+    myListings.sort((a,b)=> (a.listing.postedAt||0)-(b.listing.postedAt||0));
+    drawMySlots();
   }, err=> toast(friendlyFirebaseError(err)));
   state.unsubs.push(()=>{ if(mySlotsUnsub){ mySlotsUnsub(); mySlotsUnsub = null; } });
 }
@@ -4793,6 +4870,10 @@ const RECIPES = [];
     add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
   // content expansion: smelting, gems, 18 more gear tiers, cooking, teas, potions (~400 recipes)
   addExpansionRecipes(add, I, { RARITY_MULT, armorStats, cat:CATALOG });
+  // Trinket of Undying: no stats. If a hit would kill you while it's equipped it breaks and saves you (full HP, Mana and Rage).
+  add("trinket_undying","Trinket of Undying","trinket","legendary",{ price:7500, sellPrice:2000, undying:true, stats:{},
+    desc:"No stats. If you would die in a fight while wearing it, it shatters and pulls you back: HP, Mana and Rage refill to max and the fight goes on." },
+    [["ing_adamantite",1],["gem_ruby_cut",1]]);
 })();
 /* ---------- economy: every item sells for ~10% less ----------
    Runs once, after every item (job items, crops, tools, ~400 crafted recipes) is registered.
@@ -5044,6 +5125,24 @@ function startManaRegen(){
   }, 60000);
 }
 function stopManaRegen(){ if(manaRegenInterval){ clearInterval(manaRegenInterval); manaRegenInterval=null; } }
+/* Trinket of Undying: equipped + a killing blow = it breaks, you are restored to full HP / Mana / Rage, and the fight continues. */
+const hasUndying = ()=> state.profile?.equipped?.trinket === "trinket_undying";
+async function consumeUndying(){
+  await withErrorToast(()=> runTransaction(db, async tx=>{
+    const pref = doc(db,"players",state.uid), snap = await tx.get(pref), d = snap.data()||{};
+    if(d.equipped?.trinket !== "trinket_undying") return;
+    const newEq = { ...(d.equipped||{}), trinket:null };
+    tx.update(pref, { "equipped.trinket":null, ...gearSyncFields(d, newEq) });
+  }));
+}
+async function popUndying(b){
+  if(b.undyingUsed || !hasUndying()) return false;
+  b.undyingUsed = true; const p = state.profile;
+  b.php = p.hpMax; b.mana = p.manaMax; b.rage = p.rageMax;
+  battleLogPush("🪽 Your Trinket of Undying shatters — you are pulled back from death with full HP, Mana and Rage!");
+  toast("🪽 The Trinket of Undying saved your life and broke!", 5000);
+  await consumeUndying(); return true;
+}
 function battleLogPush(msg){
   state.battle.log.push(msg);
   const el = document.getElementById("battleLog");
@@ -5085,17 +5184,18 @@ async function applyDeathPenalty(extraFields={}){
 const MAX_EATS_PER_TURN = 3;   // food items you may eat in one turn, PvE and duels alike
 const INTENTS = {
   wait:  { icon:"👀", label:"Sizing you up", tip:"It hesitates — enemies can never attack on their first turn." },
-  weak:  { icon:"🗡️", label:"Weak Attack",   tip:"A light jab, about 0.6x damage.", mult:0.6, atk:true },
-  normal:{ icon:"⚔️", label:"Attack",        tip:"A normal hit.", mult:1, atk:true },
-  strong:{ icon:"💥", label:"Strong Attack", tip:"A powerful blow, about 1.9x damage — Guard or Counter it!", mult:1.9, atk:true },
-  heal:  { icon:"💚", label:"Recover",       tip:"It heals about 8% of its max HP and does not attack." },
-  guard: { icon:"🛡️", label:"Guard",         tip:"Takes 60% less damage this turn — set up a Focus, or use Precision." },
-  mana:  { icon:"🔮", label:"Mana Drain",    tip:"Drains about 25% of your mana and heals it. Counter whiffs on this." },
-  stun:  { icon:"💫", label:"Stunned",       tip:"It skips its turn — hit it hard!" }
+  weak:  { icon:"🗡️", label:"Weak Attack",   tip:"A light jab, about 50% of its base damage.", mult:0.5, atk:true },
+  normal:{ icon:"⚔️", label:"Attack",        tip:"A normal hit, about 100% of its base damage.", mult:1, atk:true },
+  strong:{ icon:"💥", label:"Strong Attack", tip:"A powerful blow, about 200% of its base damage — Guard or Counter it!", mult:2, atk:true },
+  heal:  { icon:"💚", label:"Heal",          tip:"It heals 10% of its max HP and does not attack." },
+  mana:  { icon:"🔮", label:"Mana Drain",    tip:"Drains ALL your mana down to 0 and lands a weak attack.", mult:0.5, atk:true },
+  guard: { icon:"🛡️", label:"Guard",         tip:"Blocks 60-90% of ANY damage you deal this turn — spells included. Build a Focus or wait it out." },
+  stun:  { icon:"💫", label:"Stunned",       tip:"It skips its turn — hit it hard!" },
+  block: { icon:"🚫", label:"Mana Block",    tip:"Seals ALL mana moves this turn (use a non-mana move) while it hits you with a normal attack.", mult:1, atk:true }
 };
 /* every move has a 1-turn cooldown: an enemy never picks the same move twice in a row */
-const INTENT_WEIGHTS = { easy:{weak:4,normal:4,strong:1,heal:2,guard:2,mana:1}, medium:{weak:2,normal:4,strong:3,heal:2,guard:2,mana:2}, hard:{weak:1,normal:3,strong:4,heal:2,guard:2,mana:2} };
-const BOSS_WEIGHTS = { weak:8, normal:26, strong:18, heal:22, guard:16, mana:10 };
+const INTENT_WEIGHTS = { easy:{weak:4,normal:4,strong:1,heal:2,guard:2,mana:1,block:1,stun:1}, medium:{weak:2,normal:4,strong:3,heal:2,guard:2,mana:2,block:2,stun:1}, hard:{weak:1,normal:3,strong:4,heal:2,guard:2,mana:2,block:2,stun:1} };
+const BOSS_WEIGHTS = { weak:8, normal:24, strong:18, heal:16, guard:14, mana:9, block:9, stun:3 };
 const guardTakenMult = ()=> 1 - (0.6 + Math.random()*0.3);   // Guard blocks a random 60-90% of the hit
 const REGION_SPRITE = { forest:"🐺", mountains:"🦅", volcano:"🐲", reef:"🦀" };
 function rollIntent(w, prev, b){
@@ -5146,7 +5246,8 @@ function renderPve(){
   };
   knownAttacks(p).forEach(s=>{
     const cd = (b.cd||{})[s.id]||0;
-    add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>pveAct(s.id), cd>0);
+    const blockedMana = b.actual==="block" && s.manaCost>0;
+    add(cd>0 ? `${s.name} (${cd})` : blockedMana ? `${s.name} 🚫` : s.name, s.desc, ()=>pveAct(s.id), cd>0 || blockedMana);
   });
   add(b.lastMove==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the damage this turn and gain 2 Rage. Can only be used every other turn. (Attacks give +1 Rage.)", ()=>pveAct("guard"), b.lastMove==="guard", "btn-blue");
   add("Focus", "Skip attacking. Your next attack deals double damage. Gain 2 Rage.", ()=>pveAct("focus"), false, "btn-blue");
@@ -5163,6 +5264,7 @@ async function pveAct(move){
   // Other moves are never greyed out; ones you can't afford just tell you why (and don't use your turn).
   const sk = [...ATTACK_SKILLS, ...treeAttacks(p)].find(x=>x.id===move);
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
+  if(sk && sk.manaCost && intent==="block"){ toast("🚫 The enemy has blocked your mana this turn — use a non-mana move."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
   if(sk && sk.hpCost && b.php <= sk.hpCost){ toast(`Not enough HP — ${sk.name} costs ${sk.hpCost} HP.`); b.busy=false; return; }
   if(sk && sk.cooldown && ((b.cd||{})[sk.id]||0)>0){ toast(`${sk.name} is on cooldown (${b.cd[sk.id]} more moves).`); b.busy=false; return; }
@@ -5182,10 +5284,10 @@ async function pveAct(move){
     b.rage = Math.min(p.rageMax, b.rage+RAGE_ATTACK);                 // every attack (spells included) = +1 rage
     if(s.hpCost){ b.php -= s.hpCost; battleLogPush(`${s.name} costs you ${s.hpCost} HP.`); }
     let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
-    if(brace && s.id!=="precision") d*=0.4;
+    if(brace) d*=guardTakenMult();                                       // enemy Guard: blocks 60-90% of ANY damage (spells too)
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
     if(m.boss && b.ehp>0 && d >= m.hp*0.10 && Math.random()<0.5){ intent = b.actual = b.shown = "stun"; battleLogPush(`${m.name} is staggered by the blow!`); }   // big hits can stun a boss
-    battleLogPush(`You use ${s.name}: ${d} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
+    battleLogPush(`You use ${s.name}: ${d} damage${brace?" (blocked by its guard!)":""}.`);
     if(s.healHp){ const h = Math.min(spellRoll(s.healHp), p.hpMax-b.php); if(h>0){ b.php += h; battleLogPush(`${s.name} heals you for ${h} HP.`); } }
     if(s.healMana){ const g = Math.min(spellRoll(s.healMana), p.manaMax-b.mana); if(g>0){ b.mana += g; battleLogPush(`${s.name} restores ${g} mana.`); } }
   }
@@ -5193,14 +5295,11 @@ async function pveAct(move){
   // enemy turn
   if(intent==="wait") battleLogPush(`${m.name} sizes you up and holds back.`);
   else if(intent==="stun") battleLogPush(`${m.name} is stunned and skips its turn!`);
-  else if(intent==="heal"){ const h = Math.round(m.hp*(m.boss?0.05:0.08)); b.ehp = Math.min(m.hp, b.ehp+h); battleLogPush(`${m.name} recovers ${h} HP.`); }
-  else if(intent==="guard") battleLogPush(`${m.name} braces itself.`);
-  else if(intent==="mana"){
-    if(counter) battleLogPush(`${m.name} tries to drain your mana, but your counter whiffs past it.`);
-    const take = Math.min(b.mana, Math.max(1, Math.round(b.mana*0.25))); b.mana -= take; const h = take*2; b.ehp = Math.min(m.hp, b.ehp+h);
-    battleLogPush(`${m.name} drains ${take} of your mana and heals ${h}.`);
-  }
+  else if(intent==="heal"){ const h = Math.round(m.hp*0.10); b.ehp = Math.min(m.hp, b.ehp+h); battleLogPush(`${m.name} heals ${h} HP.`); }
+  else if(intent==="guard") battleLogPush(`${m.name} stands guarded.`);
   else {
+    if(intent==="mana"){ const took = b.mana; b.mana = 0; battleLogPush(took>0 ? `${m.name} drains ALL ${took} of your mana!` : `${m.name} tries to drain your mana, but you have none.`); }
+    if(intent==="block") battleLogPush(`${m.name} seals your mana!`);
     const mult = INTENTS[intent]?.mult || 1;
     if(counter && INTENTS[intent]?.atk){
       const back = Math.max(1,Math.round(playerAttackPower()*1.5*rnd())); b.ehp-=back;
@@ -5214,7 +5313,7 @@ async function pveAct(move){
     }
   }
   if(b.ehp<=0) return pveEnd(true);
-  if(b.php<=0) return pveEnd(false);
+  if(b.php<=0 && !(await popUndying(b))) return pveEnd(false);
   b.eats = 0;                                        // new turn: eating is available again
   { const sp = p.stats?.SPEED||0;                    // every point of SPEED = +1 mana regenerated per turn
     if(sp>0 && b.mana<p.manaMax){ const g = Math.min(sp, p.manaMax-b.mana); b.mana += g; battleLogPush(`Your speed restores ${g} mana.`); } }
@@ -5358,23 +5457,29 @@ const BOSS_ROSTER = [ ["Ignarok the Cinder Tyrant","🐲","fire"], ["Thalassa th
 const bossCycle = ()=> Math.floor(Date.now()/BOSS_MS);
 const bossIn = ()=> (bossCycle()+1)*BOSS_MS - Date.now();
 const bossDef = c=> { const [name,sprite,element] = BOSS_ROSTER[((c*5+3)%BOSS_ROSTER.length+BOSS_ROSTER.length)%BOSS_ROSTER.length]; return { name, sprite, element }; };
-/* ---- boss chests: 3 chests, each worth roughly $700-$1,700 when sold (so ~$2K-$5K for the kill) ---- */
+/* ---- boss chests: 3 chests. Each: 50% $1-$5K, 25% each of: 1-10 cut gems/bars, epic+ weapon, epic+ armor, epic+ trinket, epic+ cooked food. Never empty. ---- */
 const pickFrom = l=> l[Math.floor(Math.random()*l.length)];
 const rareOrBetter = i=> ["rare","epic","legendary"].includes(i.rarity);
 function rollChest(){
-  const V = 700 + Math.random()*1000, sp = i=> i.sellPrice||0;
-  const all = Object.values(ITEM_BY_ID), kinds = [["money",20],["gear",26],["ingot",20],["gem",20],["tool",14]];
-  let r = Math.random()*100, kind = "money"; for(const [k,w] of kinds){ r -= w; if(r<=0){ kind = k; break; } }
-  const stack = list=>{ const c = list.filter(i=> sp(i)>0 && sp(i)<=V && sp(i)>=V/12); if(!c.length) return null; const it = pickFrom(c);
-    return { itemId:it.id, qty:Math.max(1, Math.min(12, Math.round(V*(0.75+Math.random()*0.25)/sp(it)))) }; };
-  const single = list=>{ const w = it=> it.rarity==="legendary" ? 1 : it.rarity==="epic" ? 3 : 6; const bag = list.flatMap(i=> Array(w(i)).fill(i)); return bag.length ? { itemId:pickFrom(bag).id, qty:1 } : null; };
-  let pick = null;
-  if(kind==="gear")  pick = single(CATALOG.gearAll.map(id=>ITEM_BY_ID[id]).filter(rareOrBetter));
-  if(kind==="tool")  pick = single(all.filter(i=> i.type==="tool" && /^tool_(pickaxe|fishingrod|net)/.test(i.id) && rareOrBetter(i)));
-  if(kind==="ingot") pick = stack(all.filter(i=> i.id.startsWith("ing_") && i.rarity!=="common"));
-  if(kind==="gem")   pick = stack(all.filter(i=> /^gem_.*_cut$/.test(i.id) || (i.id.startsWith("gem_") && rareOrBetter(i))));
-  const items = pick ? [pick] : [], val = pick ? sp(ITEM_BY_ID[pick.itemId])*pick.qty : 0;
-  return { items, money: Math.max(0, Math.round((V-val)/10)*10) };
+  const all = Object.values(ITEM_BY_ID), top = i=> i.rarity==="epic" || i.rarity==="legendary";
+  const wt = i=> i.rarity==="legendary" ? 1 : 3;
+  const pool = (test, fallback)=>{ let l = all.filter(i=> test(i) && top(i) && !i.stats?.curse); if(!l.length && fallback) l = all.filter(i=> test(i) && fallback(i) && !i.stats?.curse); return l; };
+  const one = l=> { const bag = l.flatMap(i=> Array(wt(i)).fill(i)); return bag.length ? pickFrom(bag) : null; };
+  const pools = {
+    gems:    all.filter(i=> (i.id.startsWith("ing_") || /^gem_.*_cut$/.test(i.id)) && i.type==="material"),          // crafted / cut gemstones and bars
+    weapon:  pool(i=> i.type==="weapon", rareOrBetter),
+    armor:   pool(i=> i.type==="armor", rareOrBetter),
+    trinket: pool(i=> i.type==="trinket", rareOrBetter),
+    food:    pool(i=> i.type==="consumable" && /^(cooked_|dish_|roast_)/.test(i.id), rareOrBetter)                       // cooked food
+  };
+  const hit = { money: Math.random()<0.5, gems: Math.random()<0.25, weapon: Math.random()<0.25, armor: Math.random()<0.25, trinket: Math.random()<0.25, food: Math.random()<0.25 };
+  if(!Object.values(hit).some(Boolean)){ const keys = Object.keys(hit); hit[pickFrom(keys)] = true; }               // never an empty chest: at least 1 reward is guaranteed
+  const items = []; let money = 0;
+  if(hit.money) money = ri(1, 5000);
+  if(hit.gems && pools.gems.length) items.push({ itemId:pickFrom(pools.gems).id, qty:ri(1,10) });
+  ["weapon","armor","trinket","food"].forEach(k=>{ if(hit[k]){ const it = one(pools[k]); if(it) items.push({ itemId:it.id, qty:1 }); } });
+  if(!items.length && !money) money = ri(1, 5000);                                                                   // (only if a pool was empty) still never empty
+  return { items, money };
 }
 async function openBossChests(){
   const chests = [rollChest(), rollChest(), rollChest()];
@@ -5393,11 +5498,18 @@ async function openBossChests(){
 const BOSS_INVITE_MS = 30000;          // friends have 30 seconds to accept
 const BOSS_MAX_FRIENDS = 5;            // party = you + 1-5 friends = 2-6 players
 const BOSS_WAVE_HP_MULT = 5;           // every enemy before the boss: 5x the HP of the strongest player (highest max HP)
-const BOSS_HP_MULT = 20;               // the boss: 20x the HP of the strongest player
+const BOSS_HP_MULT = 30;               // the boss: 20x the HP of the strongest player
 const BOSS_EAT_SELF = 3, BOSS_EAT_FRIEND = 1;   // boss fights: per turn you may eat 0-3 foods yourself AND/OR give a friend 0-1 food
 const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
-const BOSS_DMG_MULT = 1.2;             // boss fights hit 1.2x harder than before
-const BOSS_RUSH_DMG_MULT = 1.3;        // every enemy AND the boss in a boss rush deal a further 1.3x damage (stacks with BOSS_DMG_MULT)
+const BOSS_DMG_MULT = 1;             // boss fights hit 1.2x harder than before
+const BOSS_RUSH_DMG_MULT = 1;        // every enemy AND the boss in a boss rush deal a further 1.3x damage (stacks with BOSS_DMG_MULT)
+/* Boss-fight enemies (5 waves, then the boss), all scaled off the TOP player in the party:
+   hp = hpMult x top player's max HP, attack = dmgMult x top player's minimum damage (weak = half of it, strong = double),
+   xp = xpPct of the XP needed to level up for the HIGHEST-level player (same for everyone). Bosses never drop money. */
+const BOSS_STAGES = [
+  { hp:2,  dmg:0.5,  xp:[0.10,0.10] }, { hp:4,  dmg:0.75, xp:[0.20,0.20] }, { hp:6,  dmg:1,   xp:[0.40,0.40] },
+  { hp:9,  dmg:1.2,  xp:[0.65,0.65] }, { hp:13, dmg:1.4,  xp:[0.85,0.85] }, { hp:30, dmg:1.5, xp:[1,3] }
+];
 const BOSS_BASE_DMG_DIV = 4;           // every enemy's base damage = strongest player's max HP / 4 (Attack = x1, Weak x0.6, Strong x1.9)
 let partyUnsub = null, partyCode = null, partyData = null, partyTimer = null, partyStarting = false, partyHidden = false, partyBusyStall = false;
 const partyFinalized = new Set(), partyUi = { sel:new Set() };
@@ -5405,9 +5517,13 @@ const partyRef = code=> doc(db,"bossParties",code);
 const partyEl = id=> document.getElementById(id);
 const partyAlive = d=> d.order.filter(u=> d.members[u]?.alive);
 const bossCode = ()=> String(Math.floor(100000+Math.random()*900000));
+const partyUndyingDone = new Set();
+function partyConsumeUndying(d, me){ if(me?.undyingUsed && !partyUndyingDone.has(d.code)){ partyUndyingDone.add(d.code); consumeUndying(); } }
 function partyMember(s){
   return { name:s.username, hp:s.hp, hpMax:s.hpMax, mana:s.mana||0, manaMax:s.manaMax||0, rage:s.rage||0, rageMax:s.rageMax||0,
-    charm:s.stats?.CHARM||0, speed:s.stats?.SPEED||0, alive:true, left:false, fx:{}, last:null, cd:{}, paid:-1 };
+    charm:s.stats?.CHARM||0, speed:s.stats?.SPEED||0, alive:true, left:false, fx:{}, last:null, cd:{}, paid:-1,
+    dmgMin:Math.max(1, Math.round(playerAttackPower()*0.9)), lvl:s.level||1, xpMax:s.xpMax||100,       // boss stats scale off the top player's damage and level
+    undying: s.equipped?.trinket==="trinket_undying", undyingUsed:false };
 }
 function renderBossPanel(){
   const box = partyEl("bossPanel"); if(!box || !state.profile) return;
@@ -5416,7 +5532,7 @@ function renderBossPanel(){
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
   else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
-  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–${BOSS_MAX_FRIENDS} friends</b> (2–${BOSS_MAX_FRIENDS+1} players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies (Easy → Deadly), then the boss. Turns go <b>you → friend 1 → friend 2 → … → enemy</b>, and repeat. Enemies have <b>${BOSS_WAVE_HP_MULT}×</b> the HP of your strongest player and the boss has <b>${BOSS_HP_MULT}×</b>; every enemy hits the <b>whole team</b> for a base of your strongest player's HP ÷ 4 (×${(BOSS_DMG_MULT*BOSS_RUSH_DMG_MULT).toFixed(2)} in boss fights). In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them (and they get no rewards); if everyone falls there is no reward. Win and <b>every party member still standing gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–${BOSS_MAX_FRIENDS} friends</b> (2–${BOSS_MAX_FRIENDS+1} players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies, then the boss. Turns go <b>you → friend 1 → friend 2 → … → enemy</b>, and repeat. Every enemy scales off your party's <b>top player</b>: HP is 2×, 4×, 6×, 9×, 13× their max HP and the boss is <b>30×</b>; they hit the <b>whole team</b> for 0.5×, 0.75×, 1×, 1.2×, 1.4× and 1.5× the top player's minimum damage (weak attacks do half of that, strong ones double). Enemies pay <b>XP only</b> (no money): 10%, 20%, 40%, 65%, 85% of the XP needed to level up, and 100–300% for the boss. In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them (and they get no rewards); if everyone falls there is no reward. Win and <b>every party member still standing gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
   box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   partyEl("btnBossGo")?.addEventListener("click", ()=>{
@@ -5523,10 +5639,11 @@ async function startBossParty(){
       const d = s.data(), acc = d.memberUids.filter(u=> u!==d.hostUid && d.invites[u]?.state==="accepted" && d.members?.[u]);   // only friends who accepted; everyone else is simply left out
       if(!acc.length){ tx.update(r, { status:"cancelled", endedAt:Date.now() }); return; }
       const order = [d.hostUid, ...acc], hps = order.map(u=> d.members[u].hpMax);
-      const base = { ...d, order, strongHp:Math.max(...hps), avgHp:Math.max(1, Math.round(hps.reduce((a,b)=>a+b,0)/hps.length)) };
+      const topLvl = order.map(u=> d.members[u]).sort((x,y)=> (y.lvl||1)-(x.lvl||1) || (y.xpMax||0)-(x.xpMax||0))[0];
+      const base = { ...d, order, strongHp:Math.max(...hps), strongDmg:Math.max(1, ...order.map(u=> d.members[u].dmgMin||1)), topXpMax:topLvl?.xpMax||100, avgHp:Math.max(1, Math.round(hps.reduce((a,b)=>a+b,0)/hps.length)) };
       const enemy = buildPartyEnemy(0, base);
       const dropped = {}; d.memberUids.forEach(u=>{ if(u!==d.hostUid && !acc.includes(u) && d.invites[u]?.state==="pending") dropped[`invites.${u}.state`] = "timeout"; });
-      tx.update(r, { ...dropped, status:"active", memberUids:order, order, strongHp:base.strongHp, avgHp:base.avgHp, stage:0, enemy, ehp:enemy.hp,
+      tx.update(r, { ...dropped, status:"active", memberUids:order, order, strongHp:base.strongHp, strongDmg:base.strongDmg, topXpMax:base.topXpMax, avgHp:base.avgHp, stage:0, enemy, ehp:enemy.hp,
         intent:"wait", target:order[0], turn:order[0], turnStart:Date.now(), round:1,
         log:[`A party of ${order.length} steps forward — ${enemy.name} (Lv.${enemy.level}) appears! Turn order: ${order.map(u=>d.members[u].name).join(" → ")} → Enemy.`] });
     });
@@ -5566,7 +5683,7 @@ function onPartySnap(d){
   if(!me){ partyCleanup(); closeModal("bossPartyModal"); return; }
   if(d.status==="won" || d.status==="lost"){ finalizeParty(d); return; }
   if(d.status==="active"){
-    partyPayWave(d, me);
+    partyPayWave(d, me); partyConsumeUndying(d, me);
     if(state.battle?.mode==="party") renderPartyBattle(d);
     else if(!state.battle && !partyHidden) openBossBattle(d);
     renderBossPanel();
@@ -5577,8 +5694,8 @@ async function partyPayWave(d, me){
   const k = d.lastKill; if(!k || k.boss || !me.alive || (me.paid ?? -1) >= k.stage) return;
   me.paid = k.stage;      // local guard so the next snapshot can't pay again before the write lands
   await updateDoc(partyRef(d.code), { [`members.${state.uid}.paid`]: k.stage }).catch(()=>{});
-  await grantMoney(k.money); await grantXP(k.xp);
-  toast(`⚔️ ${k.name} defeated! +$${fmtMoney(k.money)}, +${k.xp} XP`);
+  await grantXP(k.xp);
+  toast(`⚔️ ${k.name} defeated! +${k.xp} XP`);
 }
 function partyTick(){
   const d = partyData; if(!d || !partyCode) return;
@@ -5602,19 +5719,18 @@ async function partyForceSkip(uid){
 
 /* ---------- enemies ---------- */
 function buildPartyEnemy(stage, d){
+  const S = BOSS_STAGES[Math.min(stage, BOSS_STAGES.length-1)];
+  const hp = Math.round(d.strongHp*S.hp), attack = Math.max(1, Math.round((d.strongDmg || Math.round(d.strongHp/BOSS_BASE_DMG_DIV))*S.dmg));
+  const pct = S.xp[0] + Math.random()*(S.xp[1]-S.xp[0]), xpReward = Math.max(1, Math.round((d.topXpMax||100)*pct));
   if(stage >= BOSS_WAVES.length){
     const bd = bossDef(d.cycle);
-    return { name:bd.name, sprite:bd.sprite, element:bd.element, boss:true, level:d.bossLvl, difficulty:"hard",
-      hp:Math.round(d.strongHp*BOSS_HP_MULT), attack:Math.max(1, Math.round(d.strongHp/BOSS_BASE_DMG_DIV)),
-      xpReward:Math.round(150+d.plvl*10), moneyReward:Math.round(300+d.plvl*30) };
+    return { name:bd.name, sprite:bd.sprite, element:bd.element, boss:true, level:d.bossLvl, difficulty:"hard", hp, attack, xpReward, moneyReward:0 };
   }
   const tier = TIER_BY_ID[BOSS_WAVES[stage]];
   let pool = ENEMY_BANK.filter(e=> e.region===d.region && e.difficulty===tier.diff); if(!pool.length) pool = ENEMY_BANK.filter(e=> e.difficulty===tier.diff);
   const slot = pool.length ? pool[Math.floor(Math.random()*pool.length)] : null;
   return { name:slot?.name || "Wild Beast", sprite:REGION_SPRITE[slot?.region || d.region] || "🐉", element:(slot && REGIONS[slot.region]?.element) || "earth", boss:false,
-    level:Math.max(1, d.plvl + ri(tier.lv[0], tier.lv[1])), difficulty:tier.diff,
-    hp:Math.round(d.strongHp*BOSS_WAVE_HP_MULT), attack:Math.max(1, Math.round(d.strongHp/BOSS_BASE_DMG_DIV)),
-    xpReward:ri(...tier.xp), moneyReward:ri(...tier.money) };
+    level:Math.max(1, d.plvl + ri(tier.lv[0], tier.lv[1])), difficulty:tier.diff, hp, attack, xpReward, moneyReward:0 };
 }
 
 /* ---------- the rules (pure: works on a copy of the doc and returns the patch to write) ---------- */
@@ -5628,21 +5744,22 @@ function partyEnemyTurn(d, lines){
   const e = d.enemy, intent = d.intent, rnd = ()=>0.9+Math.random()*0.2, team = partyAlive(d);
   if(intent==="wait") lines.push(`${e.name} sizes the party up and holds back.`);
   else if(intent==="stun") lines.push(`${e.name} is stunned and skips its turn!`);
-  else if(intent==="heal"){ const h = Math.round(e.hp*(e.boss?0.05:0.08)); d.ehp = Math.min(e.hp, d.ehp+h); lines.push(`${e.name} recovers ${h} HP.`); }
-  else if(intent==="guard") lines.push(`${e.name} braces itself.`);
-  else if(intent==="mana"){
-    let healed = 0;
-    team.forEach(u=>{ const t = d.members[u], take = Math.min(t.mana, Math.max(1, Math.round(t.mana*0.25))); if(take<=0) return; t.mana -= take; healed += take*2; lines.push(`${e.name} drains ${take} of ${t.name}'s mana.`); });
-    if(healed){ d.ehp = Math.min(e.hp, d.ehp+healed); lines.push(`${e.name} heals ${healed} HP from the drain.`); }
-  } else {
+  else if(intent==="heal"){ const h = Math.round(e.hp*0.10); d.ehp = Math.min(e.hp, d.ehp+h); lines.push(`${e.name} heals ${h} HP.`); }
+  else if(intent==="guard") lines.push(`${e.name} stands guarded.`);
+  else {
+    if(intent==="mana") team.forEach(u=>{ const t = d.members[u]; if(t.mana>0){ lines.push(`${e.name} drains ALL ${t.mana} of ${t.name}'s mana!`); t.mana = 0; } });
+    if(intent==="block") lines.push(`${e.name} seals the party's mana!`);
     lines.push(`${e.name} uses ${INTENTS[intent]?.label||"Attack"} on the whole party!`);
     team.forEach(u=>{
       const t = d.members[u];
-      let dmg = e.attack*BOSS_DMG_MULT*BOSS_RUSH_DMG_MULT*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
+      let dmg = e.attack*(INTENTS[intent]?.mult||1)*rnd(); if(t.fx?.guard) dmg *= guardTakenMult();
       dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (t.charm||0)*CHARM_BLOCK);
       t.hp -= dmg; t.rage = Math.min(t.rageMax, (t.rage||0)+2);
       lines.push(`  ${t.name} takes ${dmg} damage${t.fx?.guard?" (guarded)":""}.`);
-      if(t.hp<=0){ t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
+      if(t.hp<=0){
+        if(t.undying && !t.undyingUsed){ t.undyingUsed = true; t.undying = false; t.hp = t.hpMax; t.mana = t.manaMax; t.rage = t.rageMax; lines.push(`🪽 ${t.name}'s Trinket of Undying shatters — back from death with full HP, Mana and Rage!`); }
+        else { t.hp = 0; t.alive = false; lines.push(`💀 ${t.name} has fallen!`); }
+      }
     });
   }
   d.order.forEach(u=>{ if(d.members[u].fx) d.members[u].fx.guard = false; });
@@ -5682,6 +5799,7 @@ function partyApplyAction(cur, uid, move){
   else if(move==="idle") lines.push(`${m.name} hesitates too long and loses their turn.`);
   else {
     const s = attackSkillById(move);
+    if(s.manaCost && d.intent==="block") return { err:"res", msg:"🚫 The enemy has blocked mana this turn — use a non-mana move." };
     if(s.needsFullRage && m.rage<m.rageMax) return { err:"res", msg:"Not enough Rage." };
     if(s.manaCost && m.mana<s.manaCost) return { err:"res", msg:"Not enough Mana." };
     if(s.hpCost && m.hp<=s.hpCost) return { err:"res", msg:`Not enough HP — ${s.name} costs ${s.hpCost} HP.` };
@@ -5690,9 +5808,9 @@ function partyApplyAction(cur, uid, move){
     m.rage = Math.min(m.rageMax, m.rage+RAGE_ATTACK);
     if(s.hpCost){ m.hp -= s.hpCost; lines.push(`${m.name} pays ${s.hpCost} HP.`); }
     let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(m.fx.focus?2:1); m.fx.focus = false;
-    if(brace && s.id!=="precision") dmg *= 0.4;
+    if(brace) dmg *= guardTakenMult();                                       // enemy Guard: blocks 60-90% of ANY damage
     dmg = Math.max(1, Math.round(dmg)); d.ehp -= dmg;
-    lines.push(`${m.name} uses ${s.name}: ${dmg} damage${brace&&s.id!=="precision"?" (braced!)":""}.`);
+    lines.push(`${m.name} uses ${s.name}: ${dmg} damage${brace?" (blocked by its guard!)":""}.`);
     if(e.boss && d.ehp>0 && dmg >= e.hp*0.10 && Math.random()<0.5){ d.intent = "stun"; lines.push(`${e.name} is staggered by the blow!`); }
     if(s.healHp){ const h = Math.min(spellRoll(s.healHp), m.hpMax-m.hp); if(h>0){ m.hp += h; lines.push(`${s.name} heals ${m.name} for ${h} HP.`); } }
     if(s.healMana){ const g = Math.min(spellRoll(s.healMana), m.manaMax-m.mana); if(g>0){ m.mana += g; lines.push(`${s.name} restores ${g} mana.`); } }
@@ -5757,7 +5875,7 @@ function renderPartyBattle(d){
   if(d.status!=="active") return;
   const add = (label, tip, fn, disabled, cls="btn-pink")=>{ const el = document.createElement("button"); el.className = `doodle-btn btn-sm ${cls}`; el.textContent = label; el.title = tip; el.disabled = !!disabled; el.addEventListener("click", fn); box.appendChild(el); };
   if(me.alive){
-    knownAttacks(state.profile).forEach(s=>{ const cd = (me.cd||{})[s.id]||0; add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>partyAct(s.id), !myTurn || cd>0); });
+    knownAttacks(state.profile).forEach(s=>{ const cd = (me.cd||{})[s.id]||0; add(cd>0 ? `${s.name} (${cd})` : s.name, s.desc, ()=>partyAct(s.id), !myTurn || cd>0 || (d.intent==="block" && s.manaCost>0)); });
     add(me.last==="guard" ? "Guard (cooldown)" : "Guard", "Block 60-90% of the enemy's next attack on you and gain 2 Rage. Every other turn only.", ()=>partyAct("guard"), !myTurn || me.last==="guard", "btn-blue");
     add("Focus", "Skip attacking. Your next attack deals double damage. Gain 2 Rage.", ()=>partyAct("focus"), !myTurn, "btn-blue");
     add("Pass", `Skip your turn: recover ${Math.round(SKIP_MANA_PCT*100)}% of your max Mana and gain ${RAGE_SKIP} Rage.`, ()=>partyAct("skip"), !myTurn, "btn-blue");
@@ -5789,6 +5907,7 @@ async function partyLeave(){
 async function finalizeParty(d){
   if(partyFinalized.has(d.code)) return; partyFinalized.add(d.code);
   const me = d.members[state.uid], won = d.status==="won", host = d.hostUid===state.uid, code = d.code;
+  partyConsumeUndying(d, me);
   if(state.battle?.mode==="party") renderPartyBattle(d);
   await new Promise(r=> setTimeout(r, 1800));
   closeModal("eatModal"); closeModal("battleModal"); state.battle = null; partyCleanup();
@@ -5796,7 +5915,7 @@ async function finalizeParty(d){
   const hp = me.alive ? Math.max(1, me.hp) : Math.max(1, Math.round(me.hpMax*0.25));      // fallen players wake at 25% HP
   await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { hp, mana:me.mana, rage:me.rage, ...(won && me.alive && !me.left ? { bossCleared:d.cycle } : {}) }));
   if(won && me.alive && !me.left){
-    const k = d.lastKill; if(k){ await grantMoney(k.money); await grantXP(k.xp); }
+    const k = d.lastKill; if(k){ if(k.money>0) await grantMoney(k.money); await grantXP(k.xp); }
     toast("🏆 The party defeated the boss!"); await openBossChests();     // every member rolls and opens their OWN 3 chests
   } else if(won){ toast(me.left ? "The party won, but you left the fight — no chests." : "The party won, but you had fallen — no chests or rewards."); }
   else { toast("💀 The whole party fell… nobody gets the reward. You wake up at 25% HP."); openModal("compassModal"); }

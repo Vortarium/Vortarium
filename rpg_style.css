@@ -1107,3 +1107,7 @@ body.dungeon-mode .scene-bg{display:none;}
 body.mod-device.sv-visible .server-mgmt-btn{display:inline-flex;}
 .sv-card{width:min(480px,94vw);} .sv-card input{font:inherit; font-size:18px; padding:7px 12px; border:2.5px solid var(--ink); border-radius:12px; background:var(--dFBF6EC); color:var(--ink); width:100%; box-sizing:border-box; margin:4px 0;}
 #svCodeWrap, #svLogin{margin:6px 0;}
+
+/* auction: effect line + empty slots */
+.auc-eff{font-size:10px; opacity:.85; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.inv-cell.auc-empty{border-style:dashed; opacity:.7;}

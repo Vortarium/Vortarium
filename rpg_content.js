@@ -444,7 +444,8 @@ export function addExpansionRecipes(add, I, ctx){
 
   // ---- potions: healing / mana / restoration, 5 tiers each ----
   const T = ["Minor","Lesser","Greater","Superior","Supreme"];
-  const heal = [[8,30],[25,65],[55,110],[100,160],[150,200]], mana = [[5,12],[10,25],[20,45],[35,80],[60,120]], rest = [[6,24],[20,50],[45,90],[85,140],[130,190]], restMana = [[3,8],[6,15],[12,28],[20,45],[35,70]];
+  const x5 = a=> a.map(r=> r.map(v=> v*5));      // healing potions restore 5x the HP in every tier
+  const heal = x5([[8,30],[25,65],[55,110],[100,160],[150,200]]), mana = [[5,12],[10,25],[20,45],[35,80],[60,120]], rest = x5([[6,24],[20,50],[45,90],[85,140],[130,190]]), restMana = [[3,8],[6,15],[12,28],[20,45],[35,70]];
   const healIng = [[["forage_herb",2],["forage_berry",1]],[["forage_chamomile",2],["forage_herb",2]],[["forage_ginseng",1],["forage_chamomile",2],["forage_royaljelly",1]],[["forage_dragonroot",1],["forage_ginseng",2],["gem_ruby_cut",1]],[["forage_heartwood",1],["forage_dragonroot",1],["gem_diamond_cut",1]]];
   const manaIng = [[["forage_mint",2],["forage_blueberry",1]],[["forage_mint",2],["forage_lavender",2]],[["forage_moonpetal",2],["gem_sapphire_cut",1]],[["forage_starcap",1],["forage_moonpetal",2],["gem_amethyst_cut",1]],[["forage_worldtreedew",1],["forage_starcap",1],["gem_opal_cut",1]]];
   T.forEach((t,i)=>{
