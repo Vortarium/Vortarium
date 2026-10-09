@@ -1111,3 +1111,28 @@ body.mod-device.sv-visible .server-mgmt-btn{display:inline-flex;}
 /* auction: effect line + empty slots */
 .auc-eff{font-size:10px; opacity:.85; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .inv-cell.auc-empty{border-style:dashed; opacity:.7;}
+
+
+/* =========================================================================
+   WORLD MAP (rpg_map.js): aged parchment map, 8 travel nodes
+   ========================================================================= */
+.worldmap-frame{ filter:drop-shadow(3px 5px 5px rgba(60,35,10,.45)); }
+.worldmap{ position:relative; width:100%; aspect-ratio:3/2; background:#e3cf9f; }
+.worldmap canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+.wm-route{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.wm-route line{ stroke:#7a1f12; stroke-width:2.5; stroke-dasharray:7 6; vector-effect:non-scaling-stroke; }
+.wm-ship{ position:absolute; transform:translate(-50%,-50%); font-size:26px; pointer-events:none; filter:drop-shadow(1px 2px 1px rgba(0,0,0,.5)); animation:wmBob 1.6s ease-in-out infinite; }
+@keyframes wmBob{ 0%,100%{ margin-top:-2px } 50%{ margin-top:3px } }
+.wm-node{ position:absolute; transform:translate(-50%,-50%); background:none; border:0; padding:0; cursor:pointer; display:flex; flex-direction:column; align-items:center; font-family:inherit; }
+.wm-pin{ width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:19px; line-height:1;
+  background:#f3e3b8; border:3px solid #4a2c12; box-shadow:0 2px 0 rgba(0,0,0,.35); }
+.wm-node.village .wm-pin{ border-radius:8px; }
+.wm-node.unknown .wm-pin{ background:#e8d3a2; color:#a3281a; font-weight:900; font-size:22px; }
+.wm-node.here .wm-pin{ background:#ffd84a; box-shadow:0 0 0 4px rgba(255,216,74,.55), 0 2px 0 rgba(0,0,0,.35); }
+.wm-node.sel .wm-pin{ outline:3px dashed #a3281a; outline-offset:3px; }
+.wm-label{ margin-top:2px; font-size:13px; font-weight:700; color:#3b220c; background:rgba(243,227,184,.82); border-radius:6px; padding:0 5px; white-space:nowrap; }
+.map-info{ margin-top:12px; font-size:17px; }
+.map-info hr{ border:0; border-top:2px dashed rgba(0,0,0,.25); margin:8px 0; }
+.tab-btn.map-locked{ opacity:.55; cursor:not-allowed; text-decoration:line-through wavy; }
+.is-mobile .wm-label{ display:none; } .is-mobile .wm-node.sel .wm-label, .is-mobile .wm-node.here .wm-label{ display:block; }
+.is-mobile .wm-pin{ width:28px; height:28px; font-size:15px; }

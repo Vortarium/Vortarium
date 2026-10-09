@@ -1283,7 +1283,7 @@ function defaultPlayerDoc(username, archetype, klass){
   return {
     username, archetype: archetype||null, klass: klass||null, level:1, money:0, backpackTier:0,
     stats, ...bars,
-    region:"forest",
+    ...freshMapFields(),   // node, region, exploredNodes, mapVisits, travel — everyone starts with only the Grasslands unlocked
     inventory: [{ itemId:"tool_pickaxe2", qty:1 }, { itemId:"tool_fishingrod2", qty:1 }, { itemId:"tool_net2", qty:1 }], // {itemId, qty} — new players start with a Sturdy Pickaxe + Sturdy Fishing Rod and $0
     equipped: { weapon:null, helmet:null, chestplate:null, leggings:null, boots:null, trinket:null },
     kills:0, deaths:0, killstreak:0, monstersKilled:0,
@@ -1642,6 +1642,7 @@ function enterGame(){
       { const rm = rageMaxFor(state.profile.level, state.profile.archetype, state.profile.stats?.SMARTS);   // bring existing accounts onto the level-based Rage cap
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
+      if(state.profile.mapVer !== MAP_VERSION) updateDoc(doc(db,"players",state.uid), freshMapFields()).catch(()=>{});   // map update: every account restarts with only the Grasslands unlocked
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
       const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); resumeBossParty(); startQuestListener(); migrateSkillTree().then(migrateSkillStats).catch(()=>{}); startManaRegen(); startOnlineBeat();
     }
@@ -1663,7 +1664,7 @@ function renderHUD(){
   document.getElementById("hudClass").textContent = CLASSES[p.klass].name;
   document.getElementById("hudMoney").textContent = fmtMoney(p.money);
   updateMuteUI();
-  document.getElementById("hudRegion").textContent = REGIONS[p.region].name;
+  document.getElementById("hudRegion").textContent = hudPlaceText(p);
 
   document.getElementById("regionBg").className = "paper-bg " + REGIONS[p.region].css;
   { const sb = document.getElementById("sceneBg"); if(sb) sb.dataset.region = p.region; }
@@ -2784,6 +2785,7 @@ document.getElementById("btnCompass").addEventListener("click", ()=>{
 document.querySelectorAll("[data-ctab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     if(dgActive() && DG_LOCKED_TABS.includes(btn.dataset.ctab)){ toast("🖍️ The dungeon has scribbled over this part of your compass."); return; }
+    if(!dgActive() && (btn.dataset.ctab==="shop" || btn.dataset.ctab==="jobs")){ const why = mapTabBlockMsg(btn.dataset.ctab); if(why){ toast(why); return; } }
     document.querySelectorAll("[data-ctab]").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     document.querySelectorAll(".ctab-page").forEach(p=>p.classList.remove("active"));
@@ -2793,27 +2795,375 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
   });
 });
 
-/* --- map --- */
-/* --- map: now doubles as fast-travel — clicking a region teleports you
-   into that quadrant instead of just flipping a cosmetic field, since your
-   region is normally whatever quadrant your live x/y position is in. --- */
-function renderRegionGrid(){
-  const grid = document.getElementById("regionGrid");
-  grid.innerHTML="";
-  Object.entries(REGIONS).forEach(([key,r])=>{
-    const card = document.createElement("div");
-    card.className = `region-card ${r.css}-c` + (state.profile.region===key? " current":"");
-    card.innerHTML = `<div style="font-size:30px">${{forest:"🌲",mountains:"⛰️",volcano:"🌋",reef:"🪸"}[key]}</div><div>${r.name}</div>`;
-    card.addEventListener("click", async ()=>{
-      if(dgActive()){ toast("🕯️ There is no map down here."); return; }
-      if(state.profile.region===key) return;
-      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { region:key }));
-      renderRegionGrid(); renderShop();
-      toast(`Traveled to ${r.name}`);
-    });
-    grid.appendChild(card);
-  });
+/* =========================================================================
+   WORLD MAP — the 8 travel nodes, travel-time rules, and the hand-drawn parchment
+   map renderer (pure vector: no image file).
+   ========================================================================= */
+const MAP_VERSION = 1;                    // bump to reset everyone's map progress again
+const START_NODE = "grasslands";
+const TRAVEL_MIN_H = 8, TRAVEL_MAX_H = 36;
+
+/* x / y = position on the map image in %.  region = which REGIONS entry (music, enemies, shop stock, background) the node uses.
+   type: "village" = daily shop, no jobs.  "scenic" = jobs, no daily shop. */
+const MAP_NODES = {
+  grasslands: { id:"grasslands", name:"Grasslands",       type:"scenic",  region:"forest",    x:49,   y:53, icon:"🌾" },
+  woods:      { id:"woods",      name:"Whispering Woods", type:"village", region:"forest",    x:70,   y:52, icon:"🌲" },
+  frostholm:  { id:"frostholm",  name:"Frostholm",        type:"village", region:"mountains", x:54,   y:11, icon:"🏘️" },
+  snowcap:    { id:"snowcap",    name:"Snowcap Summit",   type:"scenic",  region:"mountains", x:49,   y:84, icon:"🏔️" },
+  ember:      { id:"ember",      name:"Ember Hold",       type:"village", region:"volcano",   x:32,   y:48, icon:"🏘️" },
+  cinder:     { id:"cinder",     name:"Cinder Crater",    type:"scenic",  region:"volcano",   x:91,   y:55, icon:"🌋" },
+  driftwood:  { id:"driftwood",  name:"Driftwood Bay",    type:"village", region:"reef",      x:63,   y:71, icon:"🏘️" },
+  pearl:      { id:"pearl",      name:"Pearl Cove",       type:"scenic",  region:"reef",      x:8,    y:28, icon:"🐚" }
+};
+const NODE_LIST = Object.values(MAP_NODES);
+const nodeById = id => MAP_NODES[id] || MAP_NODES[START_NODE];
+
+const NODE_RULE_TEXT = {
+  village: "🏘️ Village — the daily shop is open · no jobs",
+  scenic:  "🌄 Scenic spot — jobs are open · no daily shop"
+};
+
+/* Travel time is fixed per route (A→B is always the same), 8h for the closest pair up to 36h for the farthest.
+   Map is 3:2, so x is stretched by 1.5 to measure real distance. */
+function travelMs(a, b){
+  const A = nodeById(a), B = nodeById(b);
+  const d = Math.hypot((A.x-B.x)/100*1.5, (A.y-B.y)/100);          // ~0.2 (neighbours) … ~1.3 (opposite corners)
+  const t = Math.max(0, Math.min(1, (d-0.2)/1.08));
+  return Math.round(TRAVEL_MIN_H + (TRAVEL_MAX_H-TRAVEL_MIN_H)*t) * 3600*1000;
 }
+const fmtTravel = ms=>{
+  const s = Math.max(0, Math.ceil(ms/1000)), h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = s%60;
+  return h>0 ? `${h}h ${m}m` : m>0 ? `${m}m ${sec}s` : `${sec}s`;
+};
+
+/* What can this player do right now?  (travel blocks both shop and jobs) */
+function mapAccess(p, now=Date.now()){
+  const traveling = !!(p && p.travel && now < p.travel.arrive);
+  const n = nodeById(p && p.node);
+  return { traveling, node:n, shop: !traveling && n.type==="village", jobs: !traveling && n.type==="scenic" };
+}
+
+/* migration + new-player fields */
+const freshMapFields = ()=>({ mapVer:MAP_VERSION, node:START_NODE, region:MAP_NODES[START_NODE].region, exploredNodes:[START_NODE], mapVisits:{ [START_NODE]:1 }, travel:null });
+
+/* ---------- jagged "torn paper" outline (percent polygon for clip-path) ---------- */
+function tornEdgePolygon(seed=7, steps=70){
+  let s = seed; const rnd = ()=>{ s = (s*16807)%2147483647; return s/2147483647; };
+  const pts = [], jag = ()=> rnd()*1.6 + (rnd()<.12 ? rnd()*2.4 : 0);
+  for(let i=0;i<=steps;i++) pts.push(`${(i/steps*100).toFixed(2)}% ${jag().toFixed(2)}%`);
+  for(let i=1;i<=steps*0.66;i++) pts.push(`${(100-jag()*0.7).toFixed(2)}% ${(i/(steps*0.66)*100).toFixed(2)}%`);
+  for(let i=steps;i>=0;i--) pts.push(`${(i/steps*100).toFixed(2)}% ${(100-jag()).toFixed(2)}%`);
+  for(let i=Math.floor(steps*0.66);i>=1;i--) pts.push(`${(jag()*0.7).toFixed(2)}% ${(i/(steps*0.66)*100).toFixed(2)}%`);
+  return `polygon(${pts.join(",")})`;
+}
+
+/* ---------- renderer: the whole world is drawn from coordinates — coastlines, mountains, trees, volcanoes — no image file ---------- */
+const MAPW = 720, MAPH = 480, MAPS = MAPW/1344;                      // shapes below are written in 1344x896 "map units" and scaled down
+const mhash = (x,y,s=0)=>{ let h = (x*374761393 + y*668265263 + s*982451653)|0; h = (h^(h>>>13))*1274126177|0; return ((h^(h>>>16))>>>0)/4294967295; };
+const vnoise = (x,y,s)=>{                                // smooth value noise
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x-xi, yf = y-yi, u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  const a = mhash(xi,yi,s), b = mhash(xi+1,yi,s), c = mhash(xi,yi+1,s), d = mhash(xi+1,yi+1,s);
+  return a+(b-a)*u + (c-a)*v + (a-b-c+d)*u*v;
+};
+const mkRnd = seed=>{ let s = seed; return ()=>{ s = (s*16807)%2147483647; return s/2147483647; }; };
+
+/* terrain classes: 0 sea/paper, 1 shallows & beaches, 2 forest/plains, 3 mountains/snow, 4 volcanic/desert */
+const PALETTE = [ [255,255,255], [74,168,232], [108,172,72], [186,160,232], [226,82,52] ];
+const REGION_CLASS = { forest:2, mountains:3, volcano:4, reef:1 };
+/* how far the colour has bled out from a node: grows with every visit */
+const revealRadius = visits => 0.085 + 0.035*Math.min(Math.max(visits,1)-1, 5);   // fraction of the map width
+
+/* base = what the island is made of; zones paint other terrain on top of it (clipped to the coast) */
+const LAND = [
+  { base:2, pts:[[470,250],[520,190],[600,180],[660,215],[740,205],[850,195],[910,170],[960,230],[1000,300],[1060,330],[1075,380],[1030,450],[1000,520],[960,590],[900,560],[860,620],[810,600],[760,520],[700,540],[640,560],[580,600],[520,630],[470,590],[430,550],[350,520],[300,460],[290,430],[340,360],[400,320],[440,300]],
+    zones:[ { cls:4, pts:[[300,440],[325,350],[400,318],[465,330],[545,390],[555,470],[505,525],[450,585],[380,525],[315,490]] },
+            { cls:3, pts:[[555,275],[640,212],[720,210],[800,238],[895,268],[905,305],[825,385],[760,405],[708,352],[640,305]] } ] },
+  { base:2, pts:[[50,150],[100,70],[200,40],[330,50],[420,90],[430,140],[380,200],[310,260],[285,360],[240,385],[190,325],[120,262],[60,200]],
+    zones:[ { cls:3, pts:[[40,165],[100,85],[220,55],[345,58],[430,95],[415,135],[335,165],[255,205],[170,215],[95,195]] } ] },
+  { base:3, pts:[[580,60],[640,20],[760,10],[860,30],[880,70],[820,110],[760,140],[700,130],[640,110]], zones:[] },
+  { base:2, pts:[[940,55],[1060,22],[1200,30],[1290,90],[1312,170],[1282,250],[1200,282],[1100,270],[1050,222],[1000,140]],
+    zones:[ { cls:3, pts:[[1010,70],[1100,30],[1230,45],[1290,95],[1290,150],[1200,175],[1110,170],[1040,130]] } ] },
+  { base:4, pts:[[1100,545],[1160,425],[1222,372],[1290,392],[1322,452],[1302,560],[1262,642],[1212,662],[1162,612]], zones:[] },
+  { base:4, pts:[[30,562],[60,492],[120,472],[172,522],[162,612],[92,632],[40,610]], zones:[] },
+  { base:4, pts:[[190,542],[232,560],[302,642],[322,682],[262,682],[202,612]], zones:[] },
+  { base:4, pts:[[332,592],[352,572],[362,612],[332,632]], zones:[] },
+  { base:4, pts:[[40,312],[92,322],[97,362],[60,377]], zones:[] },
+  { base:4, pts:[[116,362],[152,382],[162,412],[132,417]], zones:[] },
+  { base:2, pts:[[420,762],[520,692],[600,602],[680,592],[740,652],[800,702],[880,722],[900,782],[860,812],[760,832],[600,832],[480,812]],
+    zones:[ { cls:3, pts:[[420,772],[520,742],[620,720],[720,740],[800,780],[880,795],[900,840],[760,846],[600,846],[440,830]] } ] },
+  { base:2, pts:[[900,612],[940,662],[905,702],[880,660]], zones:[] },
+  { base:2, pts:[[1082,612],[1150,622],[1160,662],[1100,658]], zones:[] },
+  { base:2, pts:[[1130,722],[1160,742],[1150,782],[1120,760]], zones:[] },
+  { base:2, pts:[[960,640],[1000,650],[990,720],[965,690]], zones:[] }
+];
+const VOLCANOES = [ [490,412,46],[480,482,26],[95,592,38],[1272,432,40],[1228,456,26],[1195,540,34],[250,610,18],[1215,600,20] ];   // x, y, half-width
+const RIVERS = [ [[640,300],[662,340],[640,382],[672,432],[660,482]], [[905,335],[942,382],[930,432],[962,472]], [[252,205],[272,252],[262,305]], [[1152,205],[1172,232],[1130,262]], [[702,702],[742,742],[802,772]] ];
+
+/* closed (or open) Catmull-Rom spline with a coherent rough-coast wobble; returns dense [x,y] points in canvas pixels */
+function smooth(pts, { sub=7, jit=2.4, seed=1, closed=true }={}){
+  const P = pts.map(([x,y])=>[x*MAPS,y*MAPS]), n = P.length, out = [];
+  const at = i=> closed ? P[(i+n)%n] : P[Math.max(0,Math.min(n-1,i))], last = closed ? n : n-1;
+  for(let i=0;i<last;i++){
+    const p0 = at(i-1), p1 = at(i), p2 = at(i+1), p3 = at(i+2);
+    for(let k=0;k<sub;k++){
+      const t = k/sub, t2 = t*t, t3 = t2*t;
+      let x = 0.5*((2*p1[0]) + (-p0[0]+p2[0])*t + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*t2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*t3);
+      let y = 0.5*((2*p1[1]) + (-p0[1]+p2[1])*t + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*t2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*t3);
+      x += (vnoise(x/7,y/7,seed)-.5)*2*jit + (vnoise(x/3,y/3,seed+5)-.5)*jit*.7; y += (vnoise(x/7,y/7,seed+1)-.5)*2*jit + (vnoise(x/3,y/3,seed+6)-.5)*jit*.7;
+      out.push([x,y]);
+    }
+  }
+  if(!closed) out.push(at(n-1));
+  return out;
+}
+const tracePath = (ctx, pts, close=true)=>{ ctx.beginPath(); pts.forEach(([x,y],i)=> i ? ctx.lineTo(x,y) : ctx.moveTo(x,y)); if(close) ctx.closePath(); };
+const centroid = pts=>{ let x=0,y=0; pts.forEach(p=>{x+=p[0];y+=p[1];}); return [x/pts.length, y/pts.length]; };
+
+let _geo = null;                                          // built once: class grid + ink drawing
+function buildGeo(){
+  if(_geo) return _geo;
+  const land = LAND.map((l,i)=>({ ...l, d:smooth(l.pts,{seed:i*3+1}), z:l.zones.map((z,j)=>({ cls:z.cls, d:smooth(z.pts,{seed:i*7+j+40, jit:3.2}) })) }));
+
+  // 1) coloured reference: sea ring, land, zones -> class grid
+  const ref = document.createElement("canvas"); ref.width = MAPW; ref.height = MAPH;
+  const rc = ref.getContext("2d", { willReadFrequently:true }), col = c=> `rgb(${PALETTE[c].join(",")})`;
+  rc.fillStyle = col(0); rc.fillRect(0,0,MAPW,MAPH); rc.lineJoin = "round"; rc.lineCap = "round";
+  land.forEach(l=>{ tracePath(rc,l.d); rc.strokeStyle = col(1); rc.lineWidth = 15; rc.stroke(); });
+  land.forEach(l=>{
+    tracePath(rc,l.d); rc.fillStyle = col(l.base); rc.fill();
+    rc.save(); tracePath(rc,l.d); rc.clip();
+    l.z.forEach(z=>{ tracePath(rc,z.d); rc.fillStyle = col(z.cls); rc.fill(); });
+    rc.restore();
+    tracePath(rc,l.d); rc.strokeStyle = col(1); rc.lineWidth = 4; rc.stroke();             // a thin beach just inside the coast
+  });
+  const px = rc.getImageData(0,0,MAPW,MAPH).data, cls = new Uint8Array(MAPW*MAPH);
+  for(let i=0;i<MAPW*MAPH;i++){
+    const r = px[i*4], g = px[i*4+1], b = px[i*4+2]; let best = 0, bd = 1e9;
+    for(let c=0;c<5;c++){ const p = PALETTE[c], d = (r-p[0])**2 + (g-p[1])**2 + (b-p[2])**2; if(d<bd){ bd = d; best = c; } }
+    cls[i] = best;
+  }
+  const C = (x,y)=> (x<0||y<0||x>=MAPW||y>=MAPH) ? 0 : cls[(y|0)*MAPW + (x|0)];
+
+  // 2) ink: coastlines, ripples, glyphs, rivers, compass, border
+  const ink = document.createElement("canvas"); ink.width = MAPW; ink.height = MAPH;
+  const c = ink.getContext("2d"), INK = "rgba(52,32,14,.92)"; c.lineCap = "round"; c.lineJoin = "round"; c.strokeStyle = INK; c.fillStyle = INK;
+  const rnd = mkRnd(97);
+  // sea ripples
+  for(let y=14;y<MAPH-14;y+=17) for(let x=14;x<MAPW-14;x+=22){
+    const px0 = x+(rnd()-.5)*16, py0 = y+(rnd()-.5)*10;
+    if(C(px0,py0)!==0 || C(px0-14,py0)!==0 || C(px0+14,py0)!==0 || C(px0,py0-9)!==0 || C(px0,py0+9)!==0 || rnd()<.55) continue;
+    c.lineWidth = .8; c.beginPath(); c.moveTo(px0-6,py0); c.quadraticCurveTo(px0-3,py0-3,px0,py0); c.quadraticCurveTo(px0+3,py0+3,px0+6,py0); c.stroke();
+  }
+  // coastlines: heavy line + a dashed echo line out at sea
+  land.forEach(l=>{
+    const [cx,cy] = centroid(l.d), echo = l.d.map(([x,y])=>[cx+(x-cx)*1.04+(vnoise(x/5,y/5,8)-.5)*3, cy+(y-cy)*1.04+(vnoise(x/5,y/5,9)-.5)*3]);
+    c.save(); c.setLineDash([5,4]); c.lineWidth = .8; c.globalAlpha = .65; tracePath(c,echo); c.stroke(); c.restore();
+    c.lineWidth = 1.7; tracePath(c,l.d); c.stroke();
+  });
+  // rivers
+  c.lineWidth = .9; RIVERS.forEach((r,i)=>{ const d = smooth(r,{closed:false, sub:6, jit:1.6, seed:60+i}); tracePath(c,d,false); c.stroke(); });
+  // volcanoes (cone, crater, lava streaks)
+  VOLCANOES.forEach(([vx,vy,w])=>{
+    const x = vx*MAPS, y = vy*MAPS, ww = w*MAPS, h = ww*1.1; c.lineWidth = 1.3;
+    c.beginPath(); c.moveTo(x-ww,y); c.lineTo(x-ww*.28,y-h); c.lineTo(x+ww*.28,y-h); c.lineTo(x+ww,y); c.stroke();
+    c.beginPath(); c.ellipse(x,y-h,ww*.28,ww*.09,0,0,Math.PI*2); c.stroke();
+    c.lineWidth = .8; for(let k=-2;k<=2;k++){ c.beginPath(); c.moveTo(x+k*ww*.1,y-h+ww*.1); c.lineTo(x+k*ww*.42,y-ww*.05); c.stroke(); }
+    c.beginPath(); c.moveTo(x-ww*.28,y-h); c.quadraticCurveTo(x-ww*.4,y-h-ww*.25,x-ww*.1,y-h-ww*.32); c.moveTo(x+ww*.05,y-h-ww*.3); c.quadraticCurveTo(x+ww*.3,y-h-ww*.5,x+ww*.25,y-h-ww*.2); c.stroke();   // smoke curls
+  });
+  // terrain glyphs, back-to-front
+  const dots = []; for(let y=10;y<MAPH-8;y+=9) for(let x=10;x<MAPW-8;x+=10) dots.push([x+(rnd()-.5)*8, y+(rnd()-.5)*7]);
+  dots.sort((a,b)=>a[1]-b[1]);
+  const nearVolc = (x,y)=> VOLCANOES.some(([vx,vy,w])=> Math.abs(x-vx*MAPS) < w*MAPS*1.15 && y < vy*MAPS+4 && y > vy*MAPS-w*MAPS*1.9);
+  const nearNode = (x,y)=> NODE_LIST.some(n=> Math.hypot(x-n.x/100*MAPW, y-n.y/100*MAPH) < 13);
+  for(const [x,y] of dots){
+    const k = C(x,y); if(k===1 || k===0 || nearNode(x,y)) continue;
+    if(k===3){                                            // mountain: broad peak, shaded flank, snowcap, little foothill
+      if(rnd()<.42 || C(x-9,y)!==3 || C(x+9,y)!==3) continue;
+      const s = 7+rnd()*4; c.lineWidth = 1.1; c.beginPath(); c.moveTo(x-s*1.2,y); c.lineTo(x-s*.15,y-s*1.05); c.lineTo(x+s*.35,y-s*.7); c.lineTo(x+s*.75,y-s*.95); c.lineTo(x+s*1.5,y); c.stroke();
+      c.lineWidth = .7; c.beginPath(); c.moveTo(x-s*.15,y-s*1.05); c.lineTo(x+s*.05,y-s*.45); c.lineTo(x-s*.1,y-s*.1); c.moveTo(x+s*.05,y-s*.45); c.lineTo(x+s*.3,y-s*.15); c.moveTo(x+s*.75,y-s*.95); c.lineTo(x+s*.8,y-s*.45); c.lineTo(x+s*1.05,y-s*.2);
+      c.moveTo(x-s*.55,y-s*.62); c.lineTo(x-s*.35,y-s*.5); c.lineTo(x-s*.15,y-s*.72); c.stroke();
+    } else if(k===4){                                     // dunes / rocky ground
+      if(nearVolc(x,y) || rnd()<.55) continue;
+      const s = 3+rnd()*2.5; c.lineWidth = .8; c.beginPath(); c.moveTo(x-s,y); c.quadraticCurveTo(x,y-s*.9,x+s,y); c.stroke();
+      if(rnd()<.35){ c.beginPath(); c.moveTo(x-s*.5,y+3); c.lineTo(x+s*.5,y+3); c.stroke(); }
+    } else if(k===2){
+      const dense = vnoise(x/50,y/50,4) > .5;
+      if(dense){                                          // forest: little pines
+        if(rnd()<.22 || C(x-4,y)!==2 || C(x+4,y)!==2 || C(x,y+5)!==2) continue;
+        const s = 3.4+rnd()*1.8; c.lineWidth = .8; c.beginPath(); c.moveTo(x,y-s*1.8); c.lineTo(x-s*.8,y-s*.4); c.lineTo(x+s*.8,y-s*.4); c.closePath(); c.moveTo(x,y-s); c.lineTo(x-s,y+s*.4); c.lineTo(x+s,y+s*.4); c.closePath(); c.moveTo(x,y+s*.4); c.lineTo(x,y+s*1.1); c.stroke();
+      } else if(rnd()<.16){                               // plains: grass tufts
+        c.lineWidth = .7; c.beginPath(); c.moveTo(x-2.5,y); c.lineTo(x,y-3); c.lineTo(x+2.5,y); c.moveTo(x,y-3); c.lineTo(x,y+.5); c.stroke();
+      }
+    }
+  }
+  // a couple of ships at sea
+  [[1050,790],[190,730],[760,140]].forEach(([sx,sy])=>{
+    const x = sx*MAPS, y = sy*MAPS; if(C(x,y)!==0 || C(x+16,y)!==0 || C(x-16,y)!==0) return;
+    c.lineWidth = 1; c.beginPath(); c.moveTo(x-8,y); c.quadraticCurveTo(x,y+6,x+8,y); c.closePath(); c.stroke();
+    c.beginPath(); c.moveTo(x,y); c.lineTo(x,y-14); c.moveTo(x,y-13); c.lineTo(x+7,y-3); c.lineTo(x,y-3); c.stroke();
+  });
+  // compass rose
+  { const x = 62, y = MAPH-58, r = 24; c.lineWidth = 1.1;
+    c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.stroke(); c.beginPath(); c.arc(x,y,r*.62,0,Math.PI*2); c.stroke();
+    for(let k=0;k<8;k++){ const a = k*Math.PI/4 - Math.PI/2, len = k%2 ? r*.8 : r*1.35, wd = k%2 ? .14 : .2;
+      c.beginPath(); c.moveTo(x+Math.cos(a-wd*2)*r*.2, y+Math.sin(a-wd*2)*r*.2); c.lineTo(x+Math.cos(a)*len, y+Math.sin(a)*len); c.lineTo(x+Math.cos(a+wd*2)*r*.2, y+Math.sin(a+wd*2)*r*.2); c.closePath(); if(k%2===0 && k%4===0) c.fill(); else c.stroke(); }
+    c.font = "bold 12px Georgia, serif"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText("N",x,y-r*1.35-9); c.fillText("S",x,y+r*1.35+9); c.fillText("E",x+r*1.35+9,y); c.fillText("W",x-r*1.35-9,y); }
+  // title + border
+  c.font = "italic 15px Georgia, serif"; c.textAlign = "center"; c.fillText("~ The Known World ~", MAPW-118, MAPH-26);
+  c.lineWidth = 2; c.strokeRect(9,9,MAPW-18,MAPH-18); c.lineWidth = .8; c.strokeRect(14,14,MAPW-28,MAPH-28);
+  _geo = { cls, ink, land };
+  return _geo;
+}
+
+async function drawWorldMap(canvas, explored, visits){
+  canvas.width = MAPW; canvas.height = MAPH;
+  const ctx = canvas.getContext("2d"), { cls, ink } = buildGeo();
+  const out = ctx.createImageData(MAPW,MAPH), od = out.data;
+  const nodes = (explored||[]).map(id=>MAP_NODES[id]).filter(Boolean).map(n=>({
+    cx:n.x/100*MAPW, cy:n.y/100*MAPH, r:revealRadius((visits||{})[n.id]||1)*MAPW, cls:REGION_CLASS[n.region], seed:n.x*3+n.y
+  }));
+  const CREAM = [238,222,184], BASE_T = [1.0, 0.94, 0.86, 0.86, 0.86];     // unexplored: pale sea, slightly darker coast, sepia land
+
+  for(let y=0;y<MAPH;y++) for(let x=0;x<MAPW;x++){
+    const i = (y*MAPW+x)*4, k = cls[y*MAPW+x], t = BASE_T[k];
+    let R = CREAM[0]*t, G = CREAM[1]*t*0.98, B = CREAM[2]*t*0.93;
+
+    let a = 0;
+    if(k>0) for(const n of nodes){
+      if(k!==1 && k!==n.cls) continue;                               // each node paints the sea around it plus its own kind of land
+      const dx = x-n.cx, dy = (y-n.cy)*1.15, d = Math.sqrt(dx*dx+dy*dy);
+      const wob = 0.72 + 0.56*vnoise(x/38, y/38, n.seed) + 0.18*(vnoise(x/11, y/11, n.seed+9)-0.5);   // ragged edge, like wet paint
+      const q = d/(n.r*wob); if(q>=1) continue;
+      const v = q<0.55 ? 1 : 1-(q-0.55)/0.45; if(v>a) a = v;
+    }
+    if(a>0){
+      const P = PALETTE[k], pool = 1 - Math.abs(a-0.5)*2, wash = 0.8 + 0.12*vnoise(x/6,y/6,3), tex = 0.9 + 0.2*vnoise(x/14,y/14,k+30);
+      const f = (1-0.16*pool)*tex, cr = (P[0]*wash + CREAM[0]*(1-wash))*f, cg = (P[1]*wash + CREAM[1]*(1-wash))*f, cb = (P[2]*wash + CREAM[2]*(1-wash))*f;
+      R = R*(1-a) + cr*a; G = G*(1-a) + cg*a; B = B*(1-a) + cb*a;
+    }
+    // aged paper: coffee stains, fibre grain, burnt edges
+    const stain = vnoise(x/70,y/70,21)*0.5 + vnoise(x/22,y/22,5)*0.25, grain = (mhash(x,y,2)-0.5)*14;
+    const ex = Math.min(x, MAPW-1-x)/MAPW, ey = Math.min(y, MAPH-1-y)/MAPH, edge = Math.min(1, Math.min(ex*5.5, ey*8.5)), burn = Math.pow(1-edge, 1.6);
+    const m = 1 - 0.16*stain - 0.62*burn;
+    od[i]   = Math.max(0, Math.min(255, R*m + grain));
+    od[i+1] = Math.max(0, Math.min(255, G*m*0.97 + grain));
+    od[i+2] = Math.max(0, Math.min(255, B*m*0.9 + grain));
+    od[i+3] = 255;
+  }
+  ctx.putImageData(out,0,0);
+  ctx.drawImage(ink,0,0);                                            // the ink drawing sits on top of the paint
+}
+
+/* --- map: 8 nodes on an aged world map ---
+   Villages = daily shop (no jobs). Scenic spots = jobs (no daily shop). Unexplored nodes take 8-36h of travel (fixed per route,
+   no turning back); already-explored nodes are free fast travel. Arriving switches your region automatically. --- */
+let mapSel = null, mapDrawKey = "";
+const hudPlaceText = p=>{
+  const a = mapAccess(p);
+  return a.traveling ? `🚢 → ${nodeById(p.travel.to).name} (${fmtTravel(p.travel.arrive-Date.now())})` : nodeById(p.node).name;
+};
+function mapExplored(p=state.profile){ return Array.isArray(p.exploredNodes) && p.exploredNodes.length ? p.exploredNodes : ["grasslands"]; }
+function renderRegionGrid(){
+  const p = state.profile, host = document.getElementById("regionGrid"); if(!p || !host) return;
+  if(!host.firstChild){
+    host.innerHTML = `<div class="worldmap-frame"><div class="worldmap" id="worldMap"><canvas id="worldMapCanvas"></canvas>
+      <svg class="wm-route" viewBox="0 0 100 100" preserveAspectRatio="none"><line id="wmRoute" x1="0" y1="0" x2="0" y2="0" style="display:none"/></svg>
+      <div id="worldMapNodes"></div><div id="wmShip" class="wm-ship" style="display:none">🚢</div></div></div><div id="mapInfo" class="doodle-panel map-info"></div>`;
+    document.getElementById("worldMap").style.clipPath = tornEdgePolygon(11);
+  }
+  const explored = mapExplored(p), a = mapAccess(p), visits = p.mapVisits || {};
+  // repaint the watercolor only when exploration changed
+  const key = explored.join(",") + "|" + JSON.stringify(visits);
+  if(key !== mapDrawKey){ mapDrawKey = key; drawWorldMap(document.getElementById("worldMapCanvas"), explored, visits); }
+  const layer = document.getElementById("worldMapNodes"); layer.innerHTML = "";
+  NODE_LIST.forEach(n=>{
+    const known = explored.includes(n.id), here = !a.traveling && p.node===n.id;
+    const b = document.createElement("button");
+    b.className = "wm-node " + n.type + (known ? " known" : " unknown") + (here ? " here" : "") + (mapSel===n.id ? " sel" : "");
+    b.style.left = n.x+"%"; b.style.top = n.y+"%"; b.title = n.name;
+    b.innerHTML = `<span class="wm-pin">${known ? n.icon : "✖"}</span><span class="wm-label">${n.name}</span>`;
+    b.addEventListener("click", ()=>{ mapSel = n.id; renderRegionGrid(); });
+    layer.appendChild(b);
+  });
+  renderMapInfo(); tickMapShip();
+}
+function renderMapInfo(){
+  const p = state.profile, box = document.getElementById("mapInfo"); if(!p || !box) return;
+  const a = mapAccess(p), explored = mapExplored(p);
+  const cur = a.traveling ? `🚢 Sailing to <b>${nodeById(p.travel.to).name}</b> — arriving in <b id="mapEta">${fmtTravel(p.travel.arrive-Date.now())}</b>. No shop and no jobs until you arrive.`
+                          : `📍 You are in <b>${a.node.name}</b> (${REGIONS[a.node.region].name}).<br><small>${NODE_RULE_TEXT[a.node.type]}</small>`;
+  let sel = "";
+  const n = mapSel && MAP_NODES[mapSel];
+  if(n && !(n.id===p.node && !a.traveling)){
+    const known = explored.includes(n.id);
+    sel = `<hr><b>${n.icon} ${n.name}</b> — ${REGIONS[n.region].name}<br><small>${NODE_RULE_TEXT[n.type]}</small><br>`;
+    if(a.traveling) sel += `<small>You can't plan another trip while you are at sea.</small>`;
+    else if(known) sel += `<small>Already explored — instant fast travel.</small><br><button class="doodle-btn btn-green" id="btnMapGo">Fast travel</button>`;
+    else sel += `<small>Unexplored — about <b>${fmtTravel(travelMs(p.node, n.id))}</b> of travel. Once you set sail there's no turning back.</small><br><button class="doodle-btn btn-yellow" id="btnMapGo">Set sail</button>`;
+  }
+  box.innerHTML = cur + sel;
+  document.getElementById("btnMapGo")?.addEventListener("click", ()=> startTravel(mapSel));
+}
+function tickMapShip(){
+  const p = state.profile, ship = document.getElementById("wmShip"), line = document.getElementById("wmRoute"); if(!p || !ship) return;
+  const a = mapAccess(p);
+  if(!a.traveling){ ship.style.display = "none"; line.style.display = "none"; return; }
+  const A = nodeById(p.travel.from), B = nodeById(p.travel.to), t = Math.max(0, Math.min(1, (Date.now()-p.travel.start)/(p.travel.arrive-p.travel.start)));
+  line.setAttribute("x1",A.x); line.setAttribute("y1",A.y); line.setAttribute("x2",B.x); line.setAttribute("y2",B.y); line.style.display = "";
+  ship.style.display = ""; ship.style.left = (A.x+(B.x-A.x)*t)+"%"; ship.style.top = (A.y+(B.y-A.y)*t)+"%";
+  const eta = document.getElementById("mapEta"); if(eta) eta.textContent = fmtTravel(p.travel.arrive-Date.now());
+}
+async function startTravel(id){
+  const p = state.profile, n = MAP_NODES[id]; if(!p || !n) return;
+  if(dgActive()){ toast("🕯️ There is no map down here."); return; }
+  if(state.battle){ toast("Finish your battle first."); return; }
+  if(mapAccess(p).traveling){ toast("🚢 You are already at sea."); return; }
+  if(id===p.node) return;
+  const visits = { ...(p.mapVisits||{}) };
+  if(mapExplored(p).includes(id)){                                   // fast travel: instant
+    visits[id] = (visits[id]||1)+1;
+    await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { node:id, region:n.region, mapVisits:visits }));
+    toast(`🧭 Fast traveled to ${n.name}`); renderRegionGrid(); renderShop(); applyMapLocks(); return;
+  }
+  const ms = travelMs(p.node, id);
+  dgConfirm({ title:`🚢 Sail to ${n.name}?`, yes:"Set sail", danger:false,
+    html:`<p>The trip takes <b>${fmtTravel(ms)}</b> and <b>can't be cancelled</b>. While you travel you can't use the daily shop or your jobs.</p><p>When you arrive you'll be notified and your region switches automatically. Once explored, you can fast travel back for free.</p>`,
+    onYes: async ()=>{
+      const now = Date.now();
+      await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { travel:{ from:p.node, to:id, start:now, arrive:now+ms } }));
+      toast(`🚢 You set sail for ${n.name}.`); mapSel = null; renderRegionGrid(); applyMapLocks();
+    } });
+}
+let arriving = false;
+async function checkArrival(){
+  const p = state.profile; if(!p || !p.travel || arriving || Date.now() < p.travel.arrive) return;
+  arriving = true;
+  try{
+    const n = nodeById(p.travel.to), explored = [...new Set([...mapExplored(p), n.id])], visits = { ...(p.mapVisits||{}) }; visits[n.id] = (visits[n.id]||0)+1;
+    await updateDoc(doc(db,"players",state.uid), { node:n.id, region:n.region, exploredNodes:explored, mapVisits:visits, travel:null });
+    toast(`🧭 You arrived at ${n.name}! ${NODE_RULE_TEXT[n.type]}`, 12000, "toast-money");
+    mapSel = null; if(document.getElementById("compassModal").classList.contains("active")){ renderRegionGrid(); renderShop(); }
+  }catch(e){ console.warn("arrival failed", e); } finally { arriving = false; applyMapLocks(); }
+}
+/* shop / jobs tabs lock depending on where you are */
+function applyMapLocks(){
+  const p = state.profile; if(!p) return;
+  const a = mapAccess(p);
+  document.querySelectorAll('[data-ctab="shop"]').forEach(b=> b.classList.toggle("map-locked", !a.shop));
+  document.querySelectorAll('[data-ctab="jobs"]').forEach(b=> b.classList.toggle("map-locked", !a.jobs));
+  const act = document.querySelector("[data-ctab].active");
+  if(act && !dgActive() && ((act.dataset.ctab==="shop" && !a.shop) || (act.dataset.ctab==="jobs" && !a.jobs))) document.querySelector('[data-ctab="map"]').click();
+  if(!dgActive()){ const h = document.getElementById("hudRegion"); if(h) h.textContent = hudPlaceText(p); }
+}
+function mapTabBlockMsg(tab){
+  const a = mapAccess(state.profile);
+  if(a.traveling) return "🚢 You're at sea — no shop or jobs until you arrive.";
+  if(tab==="shop" && !a.shop) return "🌄 There's no daily shop at a scenic spot — travel to a village to shop.";
+  if(tab==="jobs" && !a.jobs) return "🏘️ Villages have no work — travel to a scenic spot to use your jobs.";
+  return "";
+}
+setInterval(()=>{ if(!state.profile) return; checkArrival(); applyMapLocks(); if(document.getElementById("compassModal").classList.contains("active")) tickMapShip(); }, 1000);
 
 /* --- shop ---
    Each regional shop stocks 6 items that rotate every day (seeded by the date +
@@ -3320,8 +3670,8 @@ let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); r
 /* bug catching: time to catch, bug speed (px/s), turns per second, chance a turn becomes a dash, how fast the bar drains when you slip off (x the fill rate), and grab = how much of the bug counts as "on it" (bigger = more forgiving) */
 const BUG_RULES = {
   green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5,  grab:.5 },
-  yellow: { tier:"medium", time:10000, speed:105, turn:1.5, dash:.12, drop:.4,  grab:.8 },
-  red:    { tier:"hard",   time:15000, speed:115, turn:1.7, dash:.12, drop:.35, grab:.8 }
+  yellow: { tier:"medium", time:10000, speed:118, turn:1.7, dash:.15, drop:.46, grab:.68 },
+  red:    { tier:"hard",   time:15000, speed:155, turn:2.3, dash:.22, drop:.6,  grab:.45 }
 };
 const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
@@ -5532,8 +5882,8 @@ function renderBossPanel(){
   if(cleared) body = `<p><b>✅ You defeated this boss!</b> A new one arrives in ${fmtDur(bossIn())}.</p>`;
   else if(pd && pd.status==="active" && pd.members?.[state.uid]) body = `<p>Your party is in battle — wave ${Math.min(pd.stage+1,6)}/6.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Return to the fight</button>`;
   else if(pd && pd.status==="inviting") body = `<p>Your party lobby is open.</p><button class="doodle-btn btn-lg btn-blue" id="btnBossGo">Open party menu</button>`;
-  else body = `<p>Boss fights are <b>team fights</b>: you need <b>1–${BOSS_MAX_FRIENDS} friends</b> (2–${BOSS_MAX_FRIENDS+1} players in total). Press Start, invite them, and if they accept within 30 seconds the party is pulled into a private battle: 5 enemies, then the boss. Turns go <b>you → friend 1 → friend 2 → … → enemy</b>, and repeat. Every enemy scales off your party's <b>top player</b>: HP is 2×, 4×, 6×, 9×, 13× their max HP and the boss is <b>30×</b>; they hit the <b>whole team</b> for 0.5×, 0.75×, 1×, 1.2×, 1.4× and 1.5× the top player's minimum damage (weak attacks do half of that, strong ones double). Enemies pay <b>XP only</b> (no money): 10%, 20%, 40%, 65%, 85% of the XP needed to level up, and 100–300% for the boss. In boss fights Eat lets you heal <b>yourself 0–3 times</b> and <b>a friend 0–1 times</b> per turn. If a player falls the fight goes on without them (and they get no rewards); if everyone falls there is no reward. Win and <b>every party member still standing gets their own 3 chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
-  box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element} · ${BOSS_HP_MULT}× your strongest player's HP · slams, regenerates, guards, and sometimes gets stunned</small></div></div>
+  else body = `<p>A party of <b>2–${BOSS_MAX_FRIENDS+1}</b> players can take down <b>5 enemies</b> before fighting the boss, with a chance to win <b>3 very good loot chests</b>.</p><button class="doodle-btn btn-lg btn-danger" id="btnBossGo">Start</button>`;
+  box.innerHTML = `<div class="boss-head"><span class="boss-sprite">${d.sprite}</span><div><h3 class="doodle-h3" style="margin:0">${escapeHTML(d.name)}</h3><small>${ELEMENTS[d.element]?.name||d.element}</small></div></div>
     <p class="doodle-sub">Next boss in <b>${fmtDur(bossIn())}</b></p>${body}`;
   partyEl("btnBossGo")?.addEventListener("click", ()=>{
     if(pd && pd.status==="active" && pd.members?.[state.uid]){ partyHidden = false; if(!state.battle) openBossBattle(pd); }
