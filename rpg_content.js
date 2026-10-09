@@ -328,7 +328,13 @@ export const GEAR_TIER = {
   platinum:["rare",.2], quartz:["rare",.05], sapphire:["rare",.2], amethyst:["rare",.3], steel:["rare",.35],
   topaz:["rare",.45], electrum:["rare",.55], jade:["rare",.6], gold:["rare",.85],
   titanium:["epic",.3], opal:["epic",.35], ruby:["epic",.4], emerald:["epic",.5], darksteel:["epic",.55], mithril:["epic",.75],
-  adamantite:["legendary",.5], diamond:["legendary",.65], starmetal:["legendary",1]
+  adamantite:["legendary",.5], diamond:["legendary",.65], starmetal:["legendary",1],
+  // forest-crafted sets (rpg_content.js, FORAGE CRAFTING)
+  wooden:["common",.15], wicker:["common",.35], thatch:["common",.55], mossweave:["common",.8],
+  birchbark:["uncommon",.1], resin:["uncommon",.25], oakwood:["uncommon",.45], pinewood:["uncommon",.65], blossom:["uncommon",.85],
+  silverleaf:["rare",.1], frostweave:["rare",.25], sunpetal:["rare",.4], amberwood:["rare",.55], moonsilk:["rare",.75],
+  mistwillow:["epic",.2], emberwood:["epic",.45], dragonroot:["epic",.65], glowcap:["epic",.9],
+  heartwood:["legendary",.4], worldtree:["legendary",.8]
 };
 const gearPower = (key, rar)=> GEAR_TIER[String(key||"").toLowerCase()] || [rar, .5];
 export const gearRarity = (key, rar)=> gearPower(key, rar)[0];
@@ -463,4 +469,224 @@ export function addExpansionRecipes(add, I, ctx){
    .forEach(([n,pct,min,rr,price,sell,ing],i)=>
      add(`potion_luck_${i+1}`, `Luck Potion ${n}`, "consumable", rr, { healFinal:[0,0], stats:{ luck:pct, luckMs:min*60000 }, price, sellPrice:sell,
        desc:`Drink for +${Math.round(pct*100)}% luck for ${min} minutes: better odds on rare finds while foraging, mining and fishing.` }, ing));
+}
+
+
+/* =========================================================================
+   FORAGE CRAFTING — every foragable now has a use.
+   Raw forage -> processed materials (lumber, cordage, wreaths, dyes, syrups, planks, silks ...)
+   -> better materials made from those -> gear sets, foods, tonics and more.
+   Written as data + a few generator loops; ingredients are "name:qty" tokens:
+     twigs:4      -> forage_twigs      m.lumber:2 -> mat_lumber      tea_mint / ore_coal / gem_x -> used as-is
+   ========================================================================= */
+const WOOD_TIERS = [   // [Tier name, material id, rarity (fallback), stat]  — rarity / power come from GEAR_TIER
+  ["Wooden","mat_lumber","common","SPEED"],["Wicker","mat_wicker","common","CHARM"],["Thatch","mat_thatch","common","STRENGTH"],["Mossweave","mat_mossweave","common","SMARTS"],
+  ["Birchbark","mat_bark_plate","uncommon","SPEED"],["Resin","mat_resin_plate","uncommon","STRENGTH"],["Oakwood","mat_oak_plank","uncommon","STRENGTH"],
+  ["Pinewood","mat_pine_beam","uncommon","SMARTS"],["Blossom","mat_petalweave","uncommon","CHARM"],
+  ["Silverleaf","mat_silverleaf_mesh","rare","SMARTS"],["Frostweave","mat_frostweave","rare","SMARTS"],["Sunpetal","mat_sunweave","rare","CHARM"],
+  ["Amberwood","mat_amber_plank","rare","STRENGTH"],["Moonsilk","mat_moonsilk","rare","SPEED"],
+  ["Mistwillow","mat_mist_plank","epic","SMARTS"],["Emberwood","mat_ember_plank","epic","STRENGTH"],["Dragonroot","mat_dragon_fiber","epic","SPEED"],["Glowcap","mat_glow_weave","epic","CHARM"],
+  ["Heartwood","mat_heartwood_plank","legendary","STRENGTH"],["Worldtree","mat_worldtree_weave","legendary","SMARTS"]
+];
+
+// [slug, name, rarity, ingredients, description, consumable?]   (slug -> id "mat_"+slug)
+const FORAGE_MATS = [
+  // ---- woodwork & fibre (commons) ----
+  ["lumber","Rough Lumber","common","twigs:4 pinecone:1","Twigs and cones lashed and trimmed into usable timber."],
+  ["kindling","Kindling Bundle","common","twigs:3 pinecone:2","Dry, resinous and ready to catch."],
+  ["charcoal","Twig Charcoal","common","twigs:6","Slow-burned twigs. Burns hot and clean."],
+  ["cordage","Plant Cordage","common","cattail:3 moss:1","Twisted reed fibre. Holds more than you would think."],
+  ["thatch","Thatch Bundle","common","cattail:4 clover:2","Tightly bound reed thatch."],
+  ["wicker","Wicker Weave","common","cattail:2 twigs:3","Springy woven panels."],
+  ["mossweave","Moss Weave","common","moss:4 cattail:2 clover:1","A cool, damp mat of felted moss."],
+  ["moss_padding","Moss Padding","common","moss:3 clover:2","Soft stuffing for anything that needs cushioning."],
+  ["reed_mat","Reed Mat","common","cattail:5 twigs:1","A flat woven mat."],
+  ["strong_twine","Strong Twine","common","m.cordage:2 cattail:1","Cordage twisted again. Nearly rope."],
+  ["fern_fiber","Fern Fiber","common","fiddlehead:4 cattail:1","Stringy and strong once dried."],
+  ["pressed_greens","Pressed Greens","common","fiddlehead:2 sorrel:2 moss:1","Flattened, dried leaves."],
+  ["acorn_meal","Acorn Meal","common","acorn:4","Ground acorns. Needs a good rinse."],
+  ["nut_flour","Nut Flour","common","hazelnut:3 chestnut:2","Fine, nutty flour."],
+  ["chestnut_flour","Chestnut Flour","common","chestnut:4","Sweet, pale flour."],
+  ["nut_butter","Nut Butter","common","hazelnut:4 acorn:1","Thick and rich."],
+  ["dried_berries","Dried Berry Mix","common","blackberry:2 blueberry:2 raspberry:2","Chewy, concentrated sweetness."],
+  ["berry_pulp","Berry Pulp","common","blackberry:3 raspberry:2","Mashed and sweet."],
+  ["apple_mash","Apple Mash","common","apple:4","Soft, sweet apple purée."],
+  ["wild_seasoning","Wild Seasoning","common","wildgarlic:2 wildonion:2 sorrel:1","A pungent pinch that improves anything."],
+  ["garlic_paste","Garlic Paste","common","wildgarlic:4 wildonion:1","Eye-wateringly strong."],
+  ["herb_bundle","Herb Bundle","common","herb:3 sorrel:1","Tied and hung to dry."],
+  ["mushroom_powder","Mushroom Powder","common","mushroom:4","Dried and ground. Pure umami."],
+  ["dye_red","Red Berry Dye","common","raspberry:3 blackberry:1","A bright crimson dye."],
+  ["dye_blue","Blue Berry Dye","common","blueberry:4","A deep blue dye."],
+  ["dye_violet","Violet Dye","common","blackberry:3 blueberry:1","A rich purple dye."],
+  ["dye_yellow","Dandelion Dye","common","dandelion:4","A sunny yellow dye."],
+  ["dye_green","Green Leaf Dye","common","sorrel:3 moss:2","A fresh green dye."],
+  ["dandelion_wreath","Dandelion Wreath","common","dandelion:4 clover:2 cattail:1","A cheerful flower crown."],
+  ["clover_chain","Clover Chain","common","clover:5 dandelion:1","A long, braided daisy chain, but clover."],
+  // ---- uncommon: bark, resin, flowers, honey ----
+  ["bark_sheets","Birch Bark Sheets","uncommon","birchbark:3 moss:1","Pale, paper-thin sheets."],
+  ["bark_plate","Bark Plating","uncommon","birchbark:4 m.lumber:1 pineresin:1","Layered bark pressed hard with resin."],
+  ["resin_glue","Pine Glue","uncommon","pineresin:2 pinecone:2","Sticks to everything, including you."],
+  ["tar_pitch","Tar Pitch","uncommon","pineresin:3 twigs:3","Waterproof black pitch."],
+  ["resin_plate","Hardened Resin","uncommon","pineresin:4 birchbark:1 m.charcoal:1","Resin baked to the hardness of horn."],
+  ["torch","Resin Torch","uncommon","twigs:2 pineresin:1 m.cordage:1","Burns for hours, smells like Christmas."],
+  ["oak_plank","Oakwood Plank","uncommon","m.lumber:2 acorn:3 hazelnut:2","Dense, dark planking."],
+  ["pine_beam","Pine Beam","uncommon","m.lumber:2 pineresin:2 pinecone:2","A straight, springy beam."],
+  ["seasoned_planks","Seasoned Planks","uncommon","m.lumber:3 m.resin_glue:1","Dried, sealed and ready for the workshop."],
+  ["sturdy_rope","Sturdy Rope","uncommon","m.strong_twine:3 m.resin_glue:1","Pitch-sealed rope that will not rot."],
+  ["bouquet","Wildflower Bouquet","uncommon","dandelion:2 lavender:2 chamomile:1","Sweet-smelling and cheerful."],
+  ["potpourri","Potpourri","uncommon","lavender:2 mint:2 sage:1","A bowlful of dried scent."],
+  ["flower_wreath","Blossom Wreath","uncommon","m.dandelion_wreath:1 lavender:2 chamomile:2","A fragrant crown of real flowers."],
+  ["petalweave","Petalweave","uncommon","lavender:3 chamomile:3 m.cordage:1","Pressed petals woven into a light cloth."],
+  ["herbal_blend","Herbal Blend","uncommon","mint:2 sage:2 chamomile:1","A calming dried mix."],
+  ["smudge","Sage Smudge Bundle","uncommon","sage:3 lavender:1 m.cordage:1","Burned to clear the air."],
+  ["incense","Forest Incense","uncommon","pineresin:2 sage:1 lavender:1","Smoke that smells like a clearing."],
+  ["perfume","Lavender Perfume","uncommon","lavender:4 honeycomb:1","Light and lasting."],
+  ["honey_syrup","Honey Syrup","uncommon","honeycomb:2 crabapple:1","Thin, golden and tart."],
+  ["elder_syrup","Elderberry Syrup","uncommon","elderberry:3 honeycomb:1","Dark, sweet and medicinal."],
+  ["fruit_leather","Fruit Leather","uncommon","m.dried_berries:2 wildplum:1","Chewy fruit sheets."],
+  ["mushroom_stock","Mushroom Stock","uncommon","chanterelle:2 morel:2 m.wild_seasoning:1","A deep, savory broth."],
+  ["spore_dust","Fungal Spore Dust","uncommon","chanterelle:2 morel:1 mushroom:2","Faintly glittering powder. Do not sneeze."],
+  ["dried_mushrooms","Dried Mushroom Mix","uncommon","chanterelle:2 morel:2","Wrinkled and fragrant."],
+  ["poultice","Herbal Poultice","uncommon","m.herb_bundle:2 chamomile:1 moss:2","A cool, green wrap."],
+  // ---- rare ----
+  ["silverleaf_mesh","Silverleaf Mesh","rare","silverleaf:3 m.cordage:2 m.resin_glue:1","Metallic leaves woven into flexible plates."],
+  ["frostweave","Frostweave","rare","frostbloom:3 m.petalweave:1 m.moss_padding:1","Cloth that never quite thaws."],
+  ["sunweave","Sunpetal Weave","rare","sunblossom:3 m.petalweave:1 chamomile:1","Warm to wear even in snow."],
+  ["amber_plank","Amberwood Plank","rare","ambersap:3 m.oak_plank:2 m.resin_glue:1","Timber soaked through with glowing sap."],
+  ["moonsilk","Moonsilk","rare","moonpetal:3 silverleaf:1 m.petalweave:1","A pale cloth that glows after dark."],
+  ["ginseng_extract","Ginseng Extract","rare","ginseng:2 m.honey_syrup:1","Bitter, potent and bright."],
+  ["saffron_oil","Saffron Oil","rare","saffron:2 lavender:2","Golden and costly."],
+  ["lucky_charm","Lucky Clover Charm","rare","fourleafclover:1 m.clover_chain:1 m.cordage:1","A real four-leaf clover, braided into something wearable."],
+  ["frost_essence","Frost Essence","rare","frostbloom:2 mint:2","Chilled to the bone."],
+  ["sun_essence","Sun Essence","rare","sunblossom:2 honeycomb:1","Captured warmth in a bottle."],
+  ["moon_essence","Moon Essence","rare","moonpetal:2 lavender:2","Dreamy, silvery liquid."],
+  ["porcini_extract","Porcini Extract","rare","porcini:2 m.mushroom_stock:1","Intensely meaty."],
+  ["truffle_oil","Truffle Oil","rare","truffle:1 m.mushroom_powder:2","A drop transforms a dish."],
+  ["royal_nectar","Royal Nectar","rare","royaljelly:1 m.honey_syrup:2","Thick, golden and unreasonably restorative.",true],
+  // ---- epic ----
+  ["mist_plank","Mistwillow Plank","epic","mistwillow:2 m.pine_beam:2 m.resin_glue:1","Foggy, fine-grained timber that never dries out."],
+  ["ember_plank","Emberwood Plank","epic","emberlotus:2 m.amber_plank:1 m.charcoal:3","Smoldering wood that does not burn."],
+  ["dragon_fiber","Dragonroot Fiber","epic","dragonroot:2 m.silverleaf_mesh:1 m.cordage:2","Scaly, tough fibres that hum when pulled."],
+  ["glow_weave","Glowcap Weave","epic","glowshroom:2 m.moonsilk:1 m.spore_dust:1","A cloth that pulses softly."],
+  ["starcap_dust","Starcap Dust","epic","starcap:2 m.spore_dust:2","Pinpoints of light in a pouch."],
+  ["starweave","Starweave Cloth","epic","starcap:1 m.moonsilk:2 m.frostweave:1","Woven night sky."],
+  ["ember_oil","Ember Oil","epic","emberlotus:1 m.saffron_oil:1","Warm, glowing oil."],
+  ["dragon_brew","Dragon's Brew","epic","dragonroot:1 m.ginseng_extract:1 m.royal_nectar:1","Burns going down, heals coming up.",true],
+  // ---- legendary ----
+  ["heartwood_plank","Heartwood Plank","legendary","heartwood:1 m.mist_plank:2 m.amber_plank:1","Timber that is still, faintly, alive."],
+  ["worldtree_weave","Worldtree Weave","legendary","worldtreedew:1 m.glow_weave:1 m.moonsilk:2","Cloth that drinks the light."],
+  ["worldtree_elixir","World Tree Elixir","legendary","worldtreedew:1 m.royal_nectar:1 m.dragon_brew:1","A single sip fills you to the brim.",true]
+];
+
+export function addForageCraftRecipes(add, I){
+  const R5 = R, rar = id=> (I[id] && I[id].rarity) || "common";
+  const maxRar = (a,b)=> R5[Math.max(R5.indexOf(a),R5.indexOf(b))];
+  const ref = t=>{ const [k,q] = t.split(":"); const id = k.startsWith("m.") ? "mat_"+k.slice(2) : /^(tea_|ore_|gem_|rock_|mat_|ing_|food_)/.test(k) ? k : "forage_"+k; return [id, +q]; };
+  const ings = s=> s.split(" ").map(ref);
+  const val = ing=> ing.reduce((s,[id,q])=> s + ((I[id] && I[id].sellPrice) || 3)*q, 0);
+  const short = id=> (I[id] ? I[id].name : id).replace(/^Wild |^Healing |^Forest |^Cut |^Polished |^Dry /,"");
+  const sellItem = (ing, mult)=>{ const s = Math.max(2, Math.round(val(ing)*mult)); return { sellPrice:s, price:s*3 }; };
+
+  // 1) processed materials (made from several foragables, worth far more than the pile they came from)
+  FORAGE_MATS.forEach(([slug, name, r, ing, desc, food])=>{
+    const list = ings(ing);
+    add("mat_"+slug, name, food ? "consumable" : "material", r, { desc, ...sellItem(list, food ? 1.4 : 2.1) }, list);
+  });
+
+  // 2) wooden / woven / petal gear sets: 6 weapons, 4 armor, ring and amulet per tier, bound with cordage
+  const weapons = ["Sword","Dagger","Axe","Spear","Mace","Bow"], armors = [["Helm","helmet",3],["Chestplate","chestplate",5],["Leggings","leggings",4],["Boots","boots",3]];
+  WOOD_TIERS.forEach(([t,mat,r0,stat])=>{
+    const k = t.toLowerCase(), rr = gearRarity(k, r0), lc = k;
+    weapons.forEach((w,i)=> add(`gear_${k}_${w.toLowerCase()}`, `${t} ${w}`, "weapon", rr,
+      gearExtra({ attack:craftedWeaponAttack(rr,i,k) }, `A ${lc} ${w.toLowerCase()}, crafted from forest materials.`), [[mat,2+(i%2)],["mat_cordage",1]]));
+    armors.forEach(([a,slot,q])=> add(`gear_${k}_${a.toLowerCase()}`, `${t} ${a}`, "armor", rr,
+      { armorSlot:slot, ...gearExtra(craftedArmorStats(slot,rr,stat,0,k), `Light but sturdy ${lc} protection for your ${slot}.`) }, [[mat,q],["mat_cordage",1]]));
+    add(`gear_${k}_ring`, `${t} Ring`, "trinket", rr, gearExtra(craftedTrinketStats("ring",rr,stat,k), `A ${lc} ring that sharpens your ${stat.toLowerCase()}.`), [[mat,1],["mat_cordage",1]]);
+    add(`gear_${k}_amulet`, `${t} Amulet`, "trinket", rr, gearExtra(craftedTrinketStats("amulet",rr,stat,k), `A ${lc} amulet that greatly boosts ${stat.toLowerCase()}.`), [[mat,2],["forage_herb",2]]);
+  });
+
+  // 3) cooking & brewing with the new materials
+  const edibleF = FORAGE_NEW.filter(r=>r[2]==="consumable" && r[0]!=="worldtreedew").map(r=>"forage_"+r[0]).concat(["forage_berry","forage_mushroom","forage_herb","forage_apple","forage_truffle","forage_goldapple"]);
+  edibleF.forEach(f=> add("food_seasoned_"+f.slice(7), "Seasoned "+short(f), "consumable", rar(f), { desc:`${short(f)} rubbed with wild seasoning and roasted until it sizzles.` }, [[f,2],["mat_wild_seasoning",1]]));
+  const sweets = ["blackberry","blueberry","raspberry","elderberry","wildplum","crabapple","apple","chestnut"];
+  sweets.forEach(s=>{ const f = "forage_"+s; add("food_honeyed_"+s, "Honeyed "+short(f), "consumable", rar(f), { desc:`${short(f)} candied in honey syrup.` }, [[f,2],["mat_honey_syrup",1]]); });
+  sweets.slice(0,6).forEach(s=>{ const f = "forage_"+s; add("food_cordial_"+s, short(f)+" Brew", "consumable", rar(f), { desc:`${short(f)} steeped in syrup and left to ferment a little.` }, [[f,3],["mat_elder_syrup",1]]); });
+  [["tea_lavender","Lavender"],["tea_chamomile","Chamomile"],["tea_mint","Mint"],["tea_sage","Sage"],["tea_dandelion","Dandelion"],["tea_clover","Clover"],["tea_moonpetal","Moonpetal"],["tea_frostbloom","Frostbloom"],
+   ["tea_sunblossom","Sunblossom"],["tea_silverleaf","Silverleaf"],["tea_saffron","Saffron"],["tea_emberlotus","Ember Lotus"],["tea_mistwillow","Mistwillow"],["tea_dragonroot","Dragonroot"]]
+    .forEach(([t,n])=> add("food_honeytea_"+t.slice(4), `Honeyed ${n} Tea`, "consumable", rar(t), { desc:`${n} tea sweetened with honey syrup.` }, [[t,1],["mat_honey_syrup",1]]));
+  const herbs = ["herb","mint","sage","chamomile","lavender","ginseng","saffron","moonpetal","frostbloom","sunblossom","silverleaf","dragonroot","emberlotus","mistwillow","sorrel","dandelion","clover","fourleafclover","heartwood","royaljelly"];
+  herbs.forEach(h=>{ const f = "forage_"+h; add("tonic_"+h, short(f)+" Tonic", "consumable", rar(f), { desc:`${short(f)} distilled into a healing tonic.` }, [[f,2],["mat_herbal_blend",1]]); });
+  ["mushroom","chanterelle","morel","porcini","starcap","glowshroom","truffle"].forEach(m=>{ const f = "forage_"+m;
+    add("food_stuffed_"+m, `Stuffed ${short(f)}`, "consumable", rar(f), { desc:`${short(f)} packed with garlic and nut butter, then baked.` }, [[f,2],["mat_garlic_paste",1],["mat_nut_butter",1]]);
+    add("food_soup_"+m, `${short(f)} Soup`, "consumable", rar(f), { desc:`A bowl of rich ${short(f).toLowerCase()} broth.` }, [[f,1],["mat_mushroom_stock",1]]); });
+  [["wildgarlic","Garlic"],["wildonion","Onion"],["sorrel","Sorrel"],["fiddlehead","Fiddlehead"],["chestnut","Chestnut"],["hazelnut","Hazelnut"],["blackberry","Blackberry"],["raspberry","Raspberry"]]
+    .forEach(([s,n])=>{ const f = "forage_"+s; add("food_pickled_"+s, `Pickled ${n}s`.replace("ss","s").replace("Sorrels","Sorrel"), "consumable", rar(f), { desc:`${n}, brined with seasoning and left to sharpen.` }, [[f,3],["mat_wild_seasoning",1]]); });
+  const flours = [["nut","Nut"],["chestnut","Chestnut"],["acorn","Acorn"]].map(([s,n])=>[ s==="acorn" ? "mat_acorn_meal" : `mat_${s}_flour`, n ]);
+  const fills = [["mat_berry_pulp","Berry"],["mat_honey_syrup","Honey"],["mat_elder_syrup","Elderberry"],["mat_apple_mash","Apple"],["mat_fruit_leather","Fruit"]];
+  flours.forEach(([fl,fn])=> fills.forEach(([fi,fin],j)=> add(`food_bake_${fl.slice(4)}_${fi.slice(4)}`, `${fn} ${fin} ${["Loaf","Tart","Cake","Pie","Pastry"][j]}`, "consumable", maxRar(rar(fl),rar(fi)), { desc:`${fn.toLowerCase()}-based baking with ${fin.toLowerCase()} filling.` }, [[fl,2],[fi,1]])));
+  add("food_trail_mix","Trail Mix","consumable","uncommon",{ desc:"Berries, nuts and a drizzle of honey." },[["mat_dried_berries",1],["mat_nut_butter",1],["mat_honey_syrup",1]]);
+  add("food_forager_feast","Forager's Feast","consumable","rare",{ desc:"A whole table of woodland cooking in one plate." },[["mat_mushroom_stock",1],["mat_fruit_leather",1],["mat_nut_flour",2],["mat_truffle_oil",1]]);
+  add("mat_bandage","Herbal Bandage","consumable","uncommon",{ desc:"Cordage and herbs, wrapped tight.", ...sellItem(ings("m.cordage:2 m.herb_bundle:1 chamomile:1"),1.4) },ings("m.cordage:2 m.herb_bundle:1 chamomile:1"));
+  add("mat_salve","Soothing Salve","consumable","uncommon",{ desc:"Cooling and sweet-smelling.", ...sellItem(ings("chamomile:2 honeycomb:1 lavender:1"),1.4) },ings("chamomile:2 honeycomb:1 lavender:1"));
+
+  // 4) dyed fibres and scented candles (more uses for every dye and every flower)
+  const dyes = [["red","Red"],["blue","Blue"],["violet","Violet"],["yellow","Yellow"],["green","Green"]];
+  [["cordage","Cordage"],["wicker","Wicker"],["thatch","Thatch"],["reed_mat","Reed Mat"]].forEach(([b,bn])=> dyes.forEach(([d,dn])=>{
+    const list = [[`mat_${b}`,2],[`mat_dye_${d}`,1]]; add(`mat_dyed_${b}_${d}`, `${dn} ${bn}`, "material", rar(`mat_${b}`), { desc:`${bn} dyed ${dn.toLowerCase()}.`, ...sellItem(list,2.2) }, list); }));
+  ["lavender","chamomile","mint","sage","moonpetal","sunblossom","frostbloom","saffron","emberlotus"].forEach(s=>{
+    const f = "forage_"+s, list = [[f,2],["mat_resin_glue",1],["mat_cordage",1]];
+    add("mat_candle_"+s, `${short(f)} Candle`, "material", rar(f), { desc:`A slow-burning candle scented with ${short(f).toLowerCase()}.`, ...sellItem(list,2.1) }, list); });
+
+  // 5) charms and talismans: the "dead-end" luxury materials become trinkets
+  [["circlet","Blossom Circlet","m.flower_wreath:1 m.petalweave:1","blossom","uncommon","CHARM","ring"],
+   ["dandelion_crown","Dandelion Crown","m.dandelion_wreath:2 m.cordage:1","wicker","common","CHARM","ring"],
+   ["clover_amulet","Lucky Clover Amulet","m.lucky_charm:1 m.silverleaf_mesh:1","silverleaf","rare","CHARM","amulet"],
+   ["frost_pendant","Frost Pendant","m.frost_essence:1 m.frostweave:1","frostweave","rare","SMARTS","amulet"],
+   ["sun_pendant","Sun Pendant","m.sun_essence:1 m.sunweave:1","sunpetal","rare","CHARM","amulet"],
+   ["moon_pendant","Moon Pendant","m.moon_essence:1 m.moonsilk:1","moonsilk","rare","SPEED","amulet"],
+   ["star_pendant","Star Pendant","m.starweave:1 m.starcap_dust:1","glowcap","epic","CHARM","amulet"],
+   ["ember_band","Ember Band","m.ember_oil:1 m.ember_plank:1","emberwood","epic","STRENGTH","ring"],
+   ["sage_talisman","Sage Talisman","m.smudge:2 m.bark_plate:1","birchbark","uncommon","SMARTS","ring"],
+   ["incense_charm","Forest Incense Charm","m.incense:2 m.resin_plate:1","resin","uncommon","STRENGTH","amulet"],
+   ["porcini_charm","Porcini Charm","m.porcini_extract:1 m.amber_plank:1","amberwood","rare","STRENGTH","ring"],
+   ["perfume_locket","Perfume Locket","m.perfume:2 m.petalweave:1","blossom","uncommon","CHARM","amulet"]]
+   .forEach(([slug,name,ing,key,r0,stat,kind])=>{ const rr = gearRarity(key,r0), list = ings(ing);
+     add("gear_"+slug, name, "trinket", rr, gearExtra(craftedTrinketStats(kind,rr,stat,key), `A handmade ${kind} woven from forest materials, boosting ${stat.toLowerCase()}.`), list); });
+
+  // 6) more dishes and brews
+  [["hunters_stew","Hunter's Stew","uncommon","m.mushroom_stock:1 wildonion:2 chestnut:2","Thick, hot and filling."],
+   ["berry_compote","Berry Compote","common","m.berry_pulp:2 m.honey_syrup:1","Warm fruit and syrup."],
+   ["nut_crusted_morels","Nut-Crusted Morels","uncommon","morel:2 m.nut_flour:1","Crispy outside, tender inside."],
+   ["garlic_mushrooms","Garlic Mushrooms","common","mushroom:2 m.garlic_paste:1","Sizzled in garlic."],
+   ["herb_crust_loaf","Herb Crust Loaf","common","m.nut_flour:2 m.herb_bundle:1","A savory loaf."],
+   ["chanterelle_pie","Chanterelle Pie","uncommon","chanterelle:2 m.chestnut_flour:2 m.wild_seasoning:1","Golden and flaky."],
+   ["porcini_risotto","Porcini Risotto","rare","porcini:2 m.mushroom_stock:1 m.truffle_oil:1","Creamy and unforgettable."],
+   ["saffron_pastry","Saffron Pastry","rare","saffron:1 m.nut_flour:2 m.honey_syrup:1","Gold-threaded and sweet."],
+   ["jelly_toast","Royal Jelly Toast","rare","royaljelly:1 m.nut_flour:1 m.elder_syrup:1","Fit for a queen bee."],
+   ["starcap_stew","Starcap Stew","epic","starcap:2 m.mushroom_stock:2 m.truffle_oil:1","Glitters faintly in the bowl."],
+   ["glowshroom_skewer","Glowshroom Skewer","epic","glowshroom:2 m.spore_dust:1 m.wild_seasoning:1","Glows in the dark, tastes like toasted chestnuts."],
+   ["dragon_chili","Dragonroot Chili","epic","dragonroot:1 m.garlic_paste:2 m.mushroom_stock:1","Hot enough to warm your boots."],
+   ["worldtree_feast","World Tree Feast","legendary","worldtreedew:1 food_forager_feast:1","A banquet that tastes like spring."],
+   ["trail_bar","Trail Bar","common","m.dried_berries:1 m.nut_butter:1","Sticky, chewy fuel."],
+   ["wild_salad","Wild Salad","common","sorrel:2 fiddlehead:2 m.wild_seasoning:1","Fresh and sharp."],
+   ["frost_brew","Frost Brew","rare","m.frost_essence:1 m.honey_syrup:1","Icy cold, honey sweet."],
+   ["sun_brew","Sun Brew","rare","m.sun_essence:1 m.honey_syrup:1","Tastes like July."],
+   ["moon_brew","Moon Brew","rare","m.moon_essence:1 m.honey_syrup:1","Soft, silvery and calming."],
+   ["ember_brew","Ember Brew","epic","m.ember_oil:1 m.elder_syrup:1","Warm all the way down."],
+   ["starlight_draught","Starlight Draught","epic","m.starcap_dust:1 m.moon_essence:1","A glittering draught."],
+   ["green_wrap","Green Poultice Wrap","uncommon","m.pressed_greens:2 m.poultice:1","Cooling wrap for scrapes."]]
+   .forEach(([slug,name,r,ing,desc])=>{ const list = ings(ing); add("food_"+slug, name, "consumable", r, { desc }, list); });
+
+  // 7) workshop goods (fire starters, ladders, paper) built from the processed materials
+  [["fire_starter","Fire Starter Kit","common","m.kindling:2 m.tar_pitch:1","Strike once and it roars."],
+   ["reinforced_planks","Reinforced Planks","uncommon","m.seasoned_planks:2 m.tar_pitch:1","Pitch-soaked and braced."],
+   ["rope_ladder","Rope Ladder","uncommon","m.sturdy_rope:2 m.seasoned_planks:2","Climb anything."],
+   ["torch_bundle","Torch Bundle","uncommon","m.torch:3 m.cordage:1","Light for a long night."],
+   ["bark_paper","Bark Paper","uncommon","m.bark_sheets:3 m.resin_glue:1","Smooth enough to write on."],
+   ["fern_rope","Fern Rope","common","m.fern_fiber:3 m.resin_glue:1","Rough but reliable."],
+   ["basket","Woven Basket","common","m.wicker:3 m.cordage:1","Holds a surprising amount."],
+   ["thatch_roofing","Thatch Roofing","common","m.thatch:3 m.tar_pitch:1","Keeps the rain out."],
+   ["moss_cushion","Moss Cushion","common","m.moss_padding:2 m.reed_mat:1","A comfy seat."],
+   ["herb_garden_kit","Herb Garden Kit","uncommon","m.herb_bundle:2 m.basket:1 m.moss_padding:1","Everything for a window planter."]]
+   .forEach(([slug,name,r,ing,desc])=>{ const list = ings(ing); add("mat_"+slug, name, "material", r, { desc, ...sellItem(list,2.1) }, list); });
 }

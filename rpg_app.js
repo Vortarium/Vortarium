@@ -32,7 +32,7 @@ const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA
 const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 5;                              // $ per 1 use: 20, 25, 30, 35, ... per tool tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
 const DG_SHOP_PRICE_MULT = 0.5;
-import { luckMult, gearRarity, registerItems, addExpansionRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
+import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
 
 /* =========================================================================
    DRAGONEER — rpg_daynight.js
@@ -1733,7 +1733,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -2471,7 +2471,7 @@ const questOfferCache = {};
    locally — so the Quests tab draws instantly instead of waiting on three database reads. */
 let questDocs = {}, questUnsub = null;
 const questBusy = {}, questNotified = new Set();
-let questSeeded = false;
+let questSeeded = false, questLoaded = false, questFailed = false;   // questLoaded: first server answer has arrived (before that we must not draw offers over quests you already accepted)
 const inQuestMenu = ()=> !!document.getElementById("journalModal")?.classList.contains("active") && !!document.getElementById("jtab-quests")?.classList.contains("active");
 /* A sidequest finished while you're NOT looking at the Sidequests tab -> one clickable notification per quest. */
 function checkQuestsDone(){
@@ -2490,18 +2490,24 @@ function checkQuestsDone(){
 }
 function startQuestListener(){
   if(questUnsub) questUnsub();
+  questFailed = false;
   questUnsub = onSnapshot(collection(db,"players",state.uid,"quests"), snap=>{
     const next = {}; snap.forEach(d=>{ next[d.id] = d.data(); });
-    questDocs = next;
+    questDocs = next; questLoaded = true; questFailed = false;
     if(!questSeeded){ questSeeded = true; Object.entries(next).forEach(([slot,q])=>{ if(q && !q.rewardClaimed && questProgress(q,state.profile) >= q.target) questNotified.add(slot+":"+q.acceptedAt); }); }   // already done before login: no pop-up
     checkQuestsDone();
     if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests();
-  }, err=> console.error(err));
-  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; questSeeded = false; questNotified.clear(); });
+  }, err=>{ console.error(err); questFailed = true; if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests(); });
+  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; questSeeded = false; questLoaded = false; questFailed = false; questNotified.clear(); });
 }
 function renderQuests(){
   const list = document.getElementById("questList"); if(!list) return;
   const p = state.profile; if(!p) return;
+  if(!questLoaded){        // never show fresh offers until we know which quests you already accepted
+    if(!questUnsub) startQuestListener();
+    list.innerHTML = questFailed ? `<li class="quest-row">⚠️ Couldn't load your sidequests — close and reopen the journal to retry.</li>` : `<li class="quest-row">⏳ Loading your sidequests…</li>`;
+    return;
+  }
   const slots = QUEST_TIERS.map((tier,i)=>{
     const slotKey = `slot${i+1}`;
     let quest = questDocs[slotKey] || null;
@@ -2796,7 +2802,7 @@ document.querySelectorAll("[data-ctab]").forEach(btn=>{
 });
 
 /* =========================================================================
-   WORLD MAP — the 8 travel nodes, travel-time rules, and the hand-drawn parchment
+   WORLD MAP — the 12 travel nodes, travel-time rules, and the hand-drawn parchment
    map renderer (pure vector: no image file).
    ========================================================================= */
 const MAP_VERSION = 1;                    // bump to reset everyone's map progress again
@@ -2813,7 +2819,12 @@ const MAP_NODES = {
   ember:      { id:"ember",      name:"Ember Hold",       type:"village", region:"volcano",   x:32,   y:48, icon:"🏘️" },
   cinder:     { id:"cinder",     name:"Cinder Crater",    type:"scenic",  region:"volcano",   x:91,   y:55, icon:"🌋" },
   driftwood:  { id:"driftwood",  name:"Driftwood Bay",    type:"village", region:"reef",      x:63,   y:71, icon:"🏘️" },
-  pearl:      { id:"pearl",      name:"Pearl Cove",       type:"scenic",  region:"reef",      x:8,    y:28, icon:"🐚" }
+  pearl:      { id:"pearl",      name:"Pearl Cove",       type:"scenic",  region:"reef",      x:8,    y:28, icon:"🐚" },
+  // extra work spots (all scenic: jobs, no shop)
+  hailstone:  { id:"hailstone",  name:"Hailstone Ridge",  type:"scenic",  region:"mountains", x:17,   y:17, icon:"⛰️" },   // mountains on the upper-left island, NE of Pearl Cove
+  northshore: { id:"northshore", name:"Northshore Strand",type:"scenic",  region:"reef",      x:58,   y:23.5, icon:"🏖️" }, // beach on the north coast of the main island, south of Frostholm
+  smolder:    { id:"smolder",    name:"Smolder Isle",     type:"scenic",  region:"volcano",   x:8.5,  y:60, icon:"🔥" },   // volcanic island west of the main island
+  glade:      { id:"glade",      name:"Mistral Glade",    type:"scenic",  region:"forest",    x:86,   y:27, icon:"🌳" }    // forest on the southern half of the upper-right island
 };
 const NODE_LIST = Object.values(MAP_NODES);
 const nodeById = id => MAP_NODES[id] || MAP_NODES[START_NODE];
@@ -3055,7 +3066,7 @@ async function drawWorldMap(canvas, explored, visits){
   ctx.drawImage(ink,0,0);                                            // the ink drawing sits on top of the paint
 }
 
-/* --- map: 8 nodes on an aged world map ---
+/* --- map: 12 nodes on an aged world map ---
    Villages = daily shop (no jobs). Scenic spots = jobs (no daily shop). Unexplored nodes take 8-36h of travel (fixed per route,
    no turning back); already-explored nodes are free fast travel. Arriving switches your region automatically. --- */
 let mapSel = null, mapDrawKey = "";
@@ -5220,6 +5231,7 @@ const RECIPES = [];
     add("elixir_"+g, "Elixir of "+I[g].name.replace(/^Polished |^Cut /,""), "consumable", I[g].rarity, { stats:{heal:HEAL_BY_RARITY[I[g].rarity]}, desc:"A shimmering gem elixir." }, [[g,1],["forage_herb",1]]));
   // content expansion: smelting, gems, 18 more gear tiers, cooking, teas, potions (~400 recipes)
   addExpansionRecipes(add, I, { RARITY_MULT, armorStats, cat:CATALOG });
+  addForageCraftRecipes(add, I);   // processed forage materials, forest gear sets, foods and tonics
   // Trinket of Undying: no stats. If a hit would kill you while it's equipped it breaks and saves you (full HP, Mana and Rage).
   add("trinket_undying","Trinket of Undying","trinket","legendary",{ price:7500, sellPrice:2000, undying:true, stats:{},
     desc:"No stats. If you would die in a fight while wearing it, it shatters and pulls you back: HP, Mana and Rage refill to max and the fight goes on." },
