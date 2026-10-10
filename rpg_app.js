@@ -1740,7 +1740,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -3290,7 +3290,7 @@ function renderRegionGrid(){
     const b = document.createElement("button");
     b.className = "wm-node " + n.type + (known ? " known" : " unknown") + (here ? " here" : "") + (mapSel===n.id ? " sel" : "") + (n.type==="event" && !evOpen ? " closed" : "");
     b.style.left = n.x+"%"; b.style.top = n.y+"%"; b.title = n.name;
-    const pin = n.type==="event" ? (evOpen ? evOpen.icon : "🔒") : (known ? n.icon : "✖");
+    const pin = n.type==="event" ? "" : (known ? n.icon : "✖");
     b.innerHTML = `<span class="wm-pin">${pin}</span><span class="wm-label">${n.type==="event" ? (evOpen ? evOpen.name : "Event Stage (closed)") : n.name}</span>`;
     b.addEventListener("click", ()=>{ mapSel = n.id; renderRegionGrid(); });
     layer.appendChild(b);

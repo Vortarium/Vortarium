@@ -1142,8 +1142,8 @@ body.mod-device.sv-visible .server-mgmt-btn{display:inline-flex;}
 /* =========================================================================
    HOLIDAY EVENTS (body[data-event]) — recolours buttons / tabs / pills and adds garland + corner decorations
    ========================================================================= */
-body[data-event="halloween"]{--pink:#FFC48A;--pink-d:#F59A3B;--blue:#D7C3F5;--blue-d:#A883E0;--green:#C9E0A8;--green-d:#8DBB5A;--yellow:#FFB347;--yellow-d:#F08A1C;--purple:#C9A3F0;--purple-d:#9460D6;--ev:#ff8a1f;}
-body.theme-dark[data-event="halloween"]{--pink:#7A3E12;--pink-d:#B8601C;--blue:#3A2A5A;--blue-d:#6544A0;--green:#34502A;--green-d:#5E8A3E;--yellow:#7A4A0A;--yellow-d:#C77A12;--purple:#4A2E78;--purple-d:#7E4FC0;}
+body[data-event="halloween"]{--pink:#FFC48A;--pink-d:#F59A3B;--blue:#D7C3F5;--blue-d:#A883E0;--green:#DCC8F5;--green-d:#B48CEB;--yellow:#FFB347;--yellow-d:#F08A1C;--purple:#C9A3F0;--purple-d:#9460D6;--ev:#ff8a1f;--ev2:#8a4fd6;}
+body.theme-dark[data-event="halloween"]{--pink:#7A3E12;--pink-d:#B8601C;--blue:#3A2A5A;--blue-d:#6544A0;--green:#4A3070;--green-d:#7A52B8;--yellow:#7A4A0A;--yellow-d:#C77A12;--purple:#4A2E78;--purple-d:#7E4FC0;}
 body[data-event="christmas"]{--pink:#FFB3B8;--pink-d:#E0545E;--blue:#CFE6F7;--blue-d:#8CBFE0;--green:#BFE8C4;--green-d:#4FAE63;--yellow:#FFE8A3;--yellow-d:#E8B93A;--purple:#E2D2F2;--purple-d:#B79AD8;--ev:#d9323f;}
 body.theme-dark[data-event="christmas"]{--pink:#7A2A33;--pink-d:#B8434E;--blue:#24465F;--blue-d:#3F7399;--green:#1E5A33;--green-d:#2F8A4C;--yellow:#6B5316;--yellow-d:#B8962E;--purple:#43365E;--purple-d:#6D58A0;}
 body[data-event="valentines"]{--pink:#FFC1D9;--pink-d:#FF7FAF;--blue:#F5D2EC;--blue-d:#E89BD0;--green:#FFD6E6;--green-d:#F7A1C0;--yellow:#FFE0E8;--yellow-d:#FFB0C8;--purple:#F0C6F5;--purple-d:#D78CE6;--ev:#ff5c9a;}
@@ -1163,18 +1163,19 @@ body[data-event] .tab-btn.active{ background:var(--ev); color:#fff; }
 body[data-event] .doodle-btn{ border-color:var(--ev); }
 body[data-event] .doodle-panel{ border-color:var(--ev); }
 #eventDeco{ position:fixed; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
-#eventDeco .ev-garland{ position:absolute; top:-6px; left:0; right:0; display:flex; justify-content:space-around; font-size:24px; filter:drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+#eventDeco .ev-garland{ position:absolute; top:-6px; left:0; right:0; display:flex; justify-content:space-around; font-size:20px; filter:drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
 #eventDeco .ev-garland span{ display:inline-block; transform-origin:top center; animation:evSway 2.6s ease-in-out infinite; }
 @keyframes evSway{ 0%,100%{ transform:rotate(-7deg) } 50%{ transform:rotate(7deg) } }
-#eventDeco .ev-corner{ position:absolute; bottom:-6px; font-size:64px; opacity:.85; filter:drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
+#eventDeco .ev-corner{ position:absolute; bottom:2px; font-size:30px; opacity:.55; }
 #eventDeco .ev-l{ left:6px; } #eventDeco .ev-r{ right:6px; }
-.is-mobile #eventDeco .ev-corner{ font-size:40px; }
-.modal-backdrop{ z-index:60; }
-/* Event Stage: a triangle marker (villages are rounded squares, scenic spots are circles) */
-.wm-node.event .wm-pin{ border:0; border-radius:0; width:50px; height:46px; line-height:1; background:#4a2c12; clip-path:polygon(50% 0,100% 100%,0 100%); box-shadow:none; position:relative; isolation:isolate; align-items:flex-end; justify-content:center; padding-bottom:7px; }
-.wm-node.event .wm-pin::before{ content:""; position:absolute; inset:3px 4px 2px 4px; clip-path:polygon(50% 5%,96% 100%,4% 100%); background:#ffd84a; z-index:-1; }
-.wm-node.event .wm-pin > *{ position:relative; z-index:1; }
-.wm-node.event .wm-pin{ font-size:15px; }
+.is-mobile #eventDeco .ev-corner{ font-size:22px; }
+/* Event Stage: a plain drawn triangle (villages are rounded squares, scenic spots are circles). No emoji, no animation. */
+.wm-node.event .wm-pin{ border:0; border-radius:0; width:44px; height:40px; background:#4a2c12; clip-path:polygon(50% 0,100% 100%,0 100%); box-shadow:none; position:relative; isolation:isolate; font-size:0; }
+.wm-node.event .wm-pin::before{ content:""; position:absolute; inset:0; clip-path:polygon(50% 17%,86% 91%,14% 91%); background:#ffd84a; }
+.wm-node.event.here .wm-pin::before{ background:#ff9a2a; }
 .wm-node.event.closed{ opacity:.55; filter:grayscale(.8); }
-.wm-node.event:not(.closed) .wm-pin{ animation:evPulse 1.4s ease-in-out infinite; }
-@keyframes evPulse{ 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.18) } }
+body[data-event="halloween"] .game-header{ box-shadow:0 0 0 3px var(--ev), 0 0 0 6px var(--ev2), 4px 5px 0 rgba(74,63,53,.2); }
+body[data-event="halloween"] .region-pill{ background:var(--ev2); }
+body[data-event="halloween"] .tab-btn:nth-child(even){ border-color:var(--ev2); }
+body[data-event="halloween"] .tab-btn.active{ background:linear-gradient(135deg,var(--ev),var(--ev2)); }
+body[data-event="halloween"] .doodle-panel{ border-color:var(--ev2); }
