@@ -12,7 +12,7 @@ import {
 import {
   initializeFirestore, doc, setDoc as _setDoc, getDoc as _getDoc, getDocs as _getDocs, updateDoc as _updateDoc, onSnapshot as _onSnapshot, collection,
   addDoc as _addDoc, query, where, orderBy, limit, runTransaction as _runTransaction, deleteDoc as _deleteDoc, arrayUnion, arrayRemove,
-  increment, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count, writeBatch
+  increment, deleteField, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
@@ -32,7 +32,7 @@ const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA
 const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 5;                              // $ per 1 use: 20, 25, 30, 35, ... per tool tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
 const DG_SHOP_PRICE_MULT = 0.5;
-import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra } from "./rpg_content.js";
+import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems } from "./rpg_content.js";
 
 /* =========================================================================
    DRAGONEER — rpg_daynight.js
@@ -68,9 +68,13 @@ function periodOf(h=hourNow()){
 
 /* "rpg_earth.mp3" -> "rpg_earth_night.mp3" while it's night (title/dungeon tracks stay as they are). */
 function trackFor(src, night=isNight()){
-  if(!night || !/^rpg_(earth|air|fire|water)\.mp3$/.test(src)) return src;
-  return src.replace(/\.mp3$/, "_night.mp3");
+  if(night && /^rpg_(earth|air|fire|water)\.mp3$/.test(src)) src = src.replace(/\.mp3$/, "_night.mp3");
+  if(isDecemberET() && !/^(rpg_dec_|rpg_event_)/.test(src)) src = src.replace(/^rpg_/, "rpg_dec_");      // Christmas month: every track becomes rpg_dec_<name>.mp3 (event soundtracks are always rpg_event_#.mp3)
+  return src;
 }
+let _etMdFmt = null;
+function etMD(ts=Date.now()){ _etMdFmt ||= new Intl.DateTimeFormat("en-CA", { timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit" }); const p = _etMdFmt.format(new Date(ts)).split("-").map(Number); return [p[1], p[2]]; }
+function isDecemberET(){ return etMD()[0] === 12; }
 
 /* Theme setting: "dynamic" (default) | "light" | "dark" */
 const THEMES = ["dynamic","light","dark"];
@@ -983,6 +987,8 @@ const BUG_CATALOG = { easy:[], medium:[], hard:[] };
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
 // Content expansion: 50 forageables, 30 minerals, 90 fish (see rpg_content.js)
 const CATALOG = registerItems(ITEM_BY_ID);
+const EV_ITEMS = registerEventItems(ITEM_BY_ID);   // holiday forage / fish / bugs / shop items (see EVENTS in rpg_content.js)
+Object.assign(BUG_EMOJI, EV_ITEMS.bugEmoji);
 
 /* ---------- farming + backpack items ---------- */
 // Hoes till 1 tile per use, watering cans water 1 tile per use. 5 durability tiers each.
@@ -1218,6 +1224,7 @@ function playMusic(src){
   el.volume = 0.5;
   el.setAttribute('data-track', src);
   el.src = src;
+  el.onerror = ()=>{ if(src.startsWith("rpg_dec_")){ const plain = "rpg_" + src.slice(8); el.onerror = null; el.setAttribute("data-track", plain); el.src = plain; el.play().catch(()=>{}); } };   // no festive version of this track yet: use the normal one
   el.play().catch(()=>{});
 }
 
@@ -1625,7 +1632,7 @@ function enterGame(){
     { const adm = isAdminUI(), so = document.getElementById("btnServerOff"); if(so) so.style.display = adm ? "" : "none"; if(adm) markModDevice(); }
     renderHUD();
     refreshDmReceipt(); syncNotifBoxes();
-    if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); if(typeof refreshBestiary==="function") refreshBestiary(); }
+    if(document.getElementById("journalModal").classList.contains("active")){ renderInventory(); renderDailies(); if(typeof refreshBestiary==="function") refreshBestiary(); if(typeof inQuestMenu==="function" && inQuestMenu()) renderQuests(); }
     if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
     if(typeof checkQuestsDone==="function") checkQuestsDone();
     if(document.getElementById("overflowModal").classList.contains("active")) renderOverflow();
@@ -1634,7 +1641,7 @@ function enterGame(){
     // time the region field itself changes, not just on manual travel.
     if(firstSnapshot || state.profile.region !== prevRegion){
       const r = REGIONS[state.profile.region] || REGIONS.forest;
-      playMusic(dgActive() ? DG_TRACK : r.track);
+      playMusic(dgActive() ? DG_TRACK : regionTrackNow());
     }
     if(document.querySelectorAll(".rx-extra").length !== ownedReactions(cosOwned()).length) renderReactionBar();
     if(document.getElementById("customizeModal").classList.contains("active")) renderCustomize();
@@ -1667,7 +1674,7 @@ function renderHUD(){
   document.getElementById("hudRegion").textContent = hudPlaceText(p);
 
   document.getElementById("regionBg").className = "paper-bg " + REGIONS[p.region].css;
-  { const sb = document.getElementById("sceneBg"); if(sb) sb.dataset.region = p.region; }
+  syncEventScene();
 
   setBar("HP", p.hp, p.hpMax);
   setBar("MANA", p.mana, p.manaMax);
@@ -2388,9 +2395,10 @@ async function banUser(uid, username){
    the slot's refill (accepting locks the slot for exactly that window).
    ========================================================================= */
 const QUEST_TIERS = ["I","II","III"];
-const QUEST_TIER_PERIOD_MS = { I:12*3600*1000, II:24*3600*1000, III:3*24*3600*1000 };
+const QUEST_TIER_PERIOD_MS = { I:12*3600*1000, II:24*3600*1000, III:3*24*3600*1000 };   // an unaccepted offer rerolls after this long
 const QUEST_ACCEPT_WINDOW_MS = 24*3600*1000;
 const QUEST_REWARD = { I:50, II:75, III:125 };           // flat cash per tier
+const QUEST_TIER_ODDS = [["I",.5],["II",.33],["III",.17]];   // every offer rolls its OWN tier, kind and amount
 // lifetime counters on the player doc that quests count off (progress = counter now - counter at accept)
 const QUEST_COUNTER = { mine:"miningXp", fish:"fishingXp", forage:"foragingXp", shop:"shopBought",
                         craft:"craftCount", plant:"plantCount", harvest:"harvestCount", dragon:"dragonClicks" };
@@ -2431,25 +2439,6 @@ function buildQuest(kind, tier, rnd){
     }
   }
 }
-/* Each tier walks its own shuffled "deck" of the 8 quest kinds (one card per rotation period),
-   so a kind never repeats until the whole deck has been used, and never twice in a row
-   across a deck boundary. */
-function questDeck(tier, cycle){
-  const rnd = seededRand(cycle*7919 + tier.charCodeAt(0)*17 + tier.length*131 + 12345); rnd(); rnd();
-  const d = QUEST_KINDS.map((_,i)=>i);
-  for(let i=d.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
-  if(cycle>0 && d[0]===questDeck(tier,cycle-1)[QUEST_KINDS.length-1]) [d[0],d[1]]=[d[1],d[0]];
-  return d;
-}
-/* `taken` = kinds already in use by an accepted quest or an earlier tier's offer, so the three
-   slots are always three different kinds of quest. */
-function offeredQuestFor(tier, taken=new Set()){
-  const len = QUEST_KINDS.length, period = Math.floor(Date.now()/QUEST_TIER_PERIOD_MS[tier]);
-  let k = questDeck(tier, Math.floor(period/len))[period%len];
-  for(let i=0;i<len && taken.has(QUEST_KINDS[k]); i++) k = (k+1)%len;
-  const rnd = seededRand(period*104729 + tier.charCodeAt(0)*7919 + k*31 + 7); rnd(); rnd();
-  return buildQuest(QUEST_KINDS[k], tier, rnd);
-}
 function questProgress(quest, p){
   if(quest.type==="gather") return Math.max(0, (p.inventory||[]).find(e=>e.itemId===quest.itemId)?.qty - quest.baseline || 0);   // legacy
   if(quest.type==="money") return Math.max(0, p.money - quest.baseline);                                                       // legacy
@@ -2466,17 +2455,48 @@ function questBaseline(quest, p){
   if(QUEST_COUNTER[quest.type]) return p[QUEST_COUNTER[quest.type]]||0;
   return 0;
 }
-const questOfferCache = {};
-/* Active quests live in memory, kept fresh by a listener that starts at login, and the offers are computed
-   locally — so the Quests tab draws instantly instead of waiting on three database reads. */
-let questDocs = {}, questUnsub = null;
+/* Quests live ON THE PLAYER PROFILE (no separate database reads, so the tab draws instantly):
+     p.quests.slot1..3      = quests you accepted (24h to finish)
+     p.questOffers.slot1..3 = the three offers rolled for YOU. Each is a random kind + amount + tier, rolled on your own
+                              device the first time you look (or after its timer runs out) and then saved to your profile. */
+const SLOTS = ["slot1","slot2","slot3"];
+const questsNow = ()=> state.profile?.quests || {};
+const questOffersNow = ()=> state.profile?.questOffers || {};
 const questBusy = {}, questNotified = new Set();
-let questSeeded = false, questLoaded = false, questFailed = false;   // questLoaded: first server answer has arrived (before that we must not draw offers over quests you already accepted)
+let questSeeded = false, questRolling = false;
 const inQuestMenu = ()=> !!document.getElementById("journalModal")?.classList.contains("active") && !!document.getElementById("jtab-quests")?.classList.contains("active");
+function rollQuestOffer(takenKinds){
+  let r = Math.random(), tier = "I"; for(const [t,w] of QUEST_TIER_ODDS){ r -= w; if(r<=0){ tier = t; break; } tier = t; }
+  const kinds = QUEST_KINDS.filter(k=>!takenKinds.has(k)), kind = kinds[Math.floor(Math.random()*kinds.length)] || QUEST_KINDS[0];
+  return { ...buildQuest(kind, tier, Math.random), offeredAt:Date.now() };
+}
+/* Fill any empty / timed-out offer slots with fresh random rolls; returns true if something changed (then it is saved once). */
+function ensureQuestOffers(){
+  const p = state.profile; if(!p) return false;
+  const live = questsNow(), offers = { ...questOffersNow() }, taken = new Set();
+  SLOTS.forEach(s=>{ const q = live[s]; if(q && Date.now() < q.deadlineAt) taken.add(questKindOf(q)); });
+  SLOTS.forEach(s=>{ const o = offers[s]; if(o && Date.now() < o.offeredAt + QUEST_TIER_PERIOD_MS[o.tier] && !(live[s] && Date.now() < live[s].deadlineAt)) taken.add(questKindOf(o)); });
+  let changed = false;
+  SLOTS.forEach(s=>{
+    const q = live[s], busy = q && Date.now() < q.deadlineAt, o = offers[s];
+    if(busy){ if(o){ delete offers[s]; changed = true; } return; }
+    if(o && Date.now() < o.offeredAt + QUEST_TIER_PERIOD_MS[o.tier]) return;
+    const fresh = rollQuestOffer(taken); taken.add(questKindOf(fresh)); offers[s] = fresh; changed = true;
+  });
+  if(changed){ state.profile.questOffers = offers; }                 // show it right away; the save below makes it permanent
+  return changed;
+}
+async function saveQuestOffers(){
+  if(questRolling) return; questRolling = true;
+  try{ await updateDoc(doc(db,"players",state.uid), { questOffers: state.profile.questOffers || {} }); }catch(e){ console.warn("quest offers not saved", e); }
+  finally { questRolling = false; }
+}
 /* A sidequest finished while you're NOT looking at the Sidequests tab -> one clickable notification per quest. */
 function checkQuestsDone(){
-  const p = state.profile; if(!p || !questSeeded) return;
-  Object.entries(questDocs).forEach(([slot,q])=>{
+  const p = state.profile; if(!p) return;
+  const live = questsNow();
+  if(!questSeeded){ questSeeded = true; Object.entries(live).forEach(([slot,q])=>{ if(q && !q.rewardClaimed && questProgress(q,p) >= q.target) questNotified.add(slot+":"+q.acceptedAt); }); return; }   // already done before login: no pop-up
+  Object.entries(live).forEach(([slot,q])=>{
     if(!q || q.rewardClaimed || Date.now() >= q.deadlineAt) return;
     const key = slot+":"+q.acceptedAt;
     if(questNotified.has(key) || questProgress(q,p) < q.target) return;
@@ -2488,54 +2508,28 @@ function checkQuestsDone(){
     });
   });
 }
-function startQuestListener(){
-  if(questUnsub) questUnsub();
-  questFailed = false;
-  questUnsub = onSnapshot(collection(db,"players",state.uid,"quests"), snap=>{
-    const next = {}; snap.forEach(d=>{ next[d.id] = d.data(); });
-    questDocs = next; questLoaded = true; questFailed = false;
-    if(!questSeeded){ questSeeded = true; Object.entries(next).forEach(([slot,q])=>{ if(q && !q.rewardClaimed && questProgress(q,state.profile) >= q.target) questNotified.add(slot+":"+q.acceptedAt); }); }   // already done before login: no pop-up
-    checkQuestsDone();
-    if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests();
-  }, err=>{ console.error(err); questFailed = true; if(document.getElementById("journalModal")?.classList.contains("active")) renderQuests(); });
-  state.unsubs.push(()=>{ if(questUnsub){ questUnsub(); questUnsub = null; } questDocs = {}; questSeeded = false; questLoaded = false; questFailed = false; questNotified.clear(); });
-}
+function startQuestListener(){ questSeeded = false; questNotified.clear(); state.unsubs.push(()=>{ questSeeded = false; questNotified.clear(); }); checkQuestsDone(); }   // kept for the login flow: quests now ride along with the profile
 function renderQuests(){
   const list = document.getElementById("questList"); if(!list) return;
   const p = state.profile; if(!p) return;
-  if(!questLoaded){        // never show fresh offers until we know which quests you already accepted
-    if(!questUnsub) startQuestListener();
-    list.innerHTML = questFailed ? `<li class="quest-row">⚠️ Couldn't load your sidequests — close and reopen the journal to retry.</li>` : `<li class="quest-row">⏳ Loading your sidequests…</li>`;
-    return;
-  }
-  const slots = QUEST_TIERS.map((tier,i)=>{
-    const slotKey = `slot${i+1}`;
-    let quest = questDocs[slotKey] || null;
-    if(quest && Date.now() >= quest.deadlineAt) quest = null;      // 24h window is up — the slot is free (acceptQuest overwrites it)
-    return { slotKey, quest, tier };
-  });
-  const taken = new Set(slots.filter(s=>s.quest).map(s=>questKindOf(s.quest)));
-  const rows = slots.map(s=>{
-    if(s.quest) return renderActiveSlotRow(s.slotKey, s.quest, p);
-    const q = offeredQuestFor(s.tier, taken);
-    taken.add(questKindOf(q)); questOfferCache[s.slotKey] = q;
-    return renderEmptySlotRow(s.slotKey, q);
-  });
-  list.innerHTML = rows.join("");
-  list.querySelectorAll("[data-quest-accept]").forEach(btn=>{
-    btn.addEventListener("click", ()=> acceptQuest(btn.dataset.questAccept, btn.dataset.questTier));
-  });
-  list.querySelectorAll("[data-quest-claim]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{ btn.disabled = true; claimQuest(btn.dataset.questClaim); });
-  });
+  try{
+    if(ensureQuestOffers()) saveQuestOffers();
+    const live = questsNow(), offers = questOffersNow();
+    list.innerHTML = SLOTS.map(slot=>{
+      const q = live[slot];
+      if(q && Date.now() < q.deadlineAt) return renderActiveSlotRow(slot, q, p);
+      const o = offers[slot]; return o ? renderEmptySlotRow(slot, o) : "";
+    }).join("") || `<li class="quest-row">No sidequests right now — check back soon.</li>`;
+    list.querySelectorAll("[data-quest-accept]").forEach(btn=> btn.addEventListener("click", ()=> acceptQuest(btn.dataset.questAccept)));
+    list.querySelectorAll("[data-quest-claim]").forEach(btn=> btn.addEventListener("click", ()=>{ btn.disabled = true; claimQuest(btn.dataset.questClaim); }));
+  }catch(err){ console.error(err); list.innerHTML = `<li class="quest-row">⚠️ Couldn't draw your sidequests (${escapeHTML(String(err.message||err))}).</li>`; }
 }
 function renderEmptySlotRow(slotKey, q){
-  const tier = q.tier, period = QUEST_TIER_PERIOD_MS[tier];
-  const hrsLeft = Math.max(1, Math.round((period - Date.now() % period)/3600000));
+  const left = Math.max(0, q.offeredAt + QUEST_TIER_PERIOD_MS[q.tier] - Date.now()), hrsLeft = Math.max(1, Math.round(left/3600000));
   return `<li class="quest-row">
-    <div><b>Tier ${tier}:</b> ${escapeHTML(q.label)}</div>
-    <div style="font-size:12px">Rerolls in ~${hrsLeft}h if not accepted &middot; Reward: ${q.moneyReward?`$${fmtMoney(q.moneyReward)}`:""}${q.itemRewardId?` + ${q.itemRewardQty}x ${ITEM_BY_ID[q.itemRewardId].name}`:""}</div>
-    <button class="doodle-btn btn-sm btn-green" data-quest-accept="${slotKey}" data-quest-tier="${tier}">Accept (24h)</button>
+    <div><b>Tier ${q.tier}:</b> ${escapeHTML(q.label)}</div>
+    <div style="font-size:12px">Rerolls in ~${hrsLeft}h if not accepted &middot; Reward: $${fmtMoney(q.moneyReward)}</div>
+    <button class="doodle-btn btn-sm btn-green" data-quest-accept="${slotKey}">Accept (24h)</button>
   </li>`;
 }
 function renderActiveSlotRow(slotKey, quest, p){
@@ -2553,25 +2547,26 @@ function renderActiveSlotRow(slotKey, quest, p){
         : `<div style="font-size:12px">In progress…</div>`}
   </li>`;
 }
-/* Accepting is one transaction: it refuses if the slot still holds a live quest, so a stale tab or a double click
+/* Accepting is one transaction on your profile: it refuses if the slot still holds a live quest, so a stale tab or a double click
    can never overwrite a finished quest with a fresh one (which would let it be claimed twice). */
-async function acceptQuest(slotKey, tier){
+async function acceptQuest(slotKey){
   if(questBusy[slotKey]) return; questBusy[slotKey] = true;
   try{
-    const cached = questOfferCache[slotKey];
-    const offered = (cached && cached.tier===tier) ? cached : offeredQuestFor(tier);   // exactly what the player was shown
-    const ref = doc(db,"players",state.uid,"quests",slotKey), pref = doc(db,"players",state.uid);
+    const offered = questOffersNow()[slotKey]; if(!offered) return;
+    const pref = doc(db,"players",state.uid);
     let quest = null;
     const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
-      const cur = await tx.get(ref), cd = cur.exists() ? cur.data() : null;
-      if(cd && Date.now() < cd.deadlineAt) throw new Error("That slot already has a quest.");
-      const pd = (await tx.get(pref)).data() || {};
-      quest = { ...offered, baseline: questBaseline(offered, pd), acceptedAt: Date.now(), deadlineAt: Date.now() + QUEST_ACCEPT_WINDOW_MS, rewardClaimed:false };
-      tx.set(ref, quest);
+      const pd = (await tx.get(pref)).data() || {}, cur = (pd.quests||{})[slotKey];
+      if(cur && Date.now() < cur.deadlineAt) throw new Error("That slot already has a quest.");
+      const { offeredAt, ...rest } = offered;
+      quest = { ...rest, baseline: questBaseline(offered, pd), acceptedAt: Date.now(), deadlineAt: Date.now() + QUEST_ACCEPT_WINDOW_MS, rewardClaimed:false };
+      tx.update(pref, { ["quests."+slotKey]: quest, ["questOffers."+slotKey]: deleteField() });
       return true;
     }));
     if(!ok) return;
-    questDocs[slotKey] = quest; renderQuests();
+    state.profile.quests = { ...questsNow(), [slotKey]: quest };
+    const o = { ...questOffersNow() }; delete o[slotKey]; state.profile.questOffers = o;
+    renderQuests();
     playSfx("send"); toast(`Accepted: ${offered.label}`);
   } finally { questBusy[slotKey] = false; }
 }
@@ -2581,22 +2576,19 @@ async function acceptQuest(slotKey, tier){
 async function claimQuest(slotKey){
   if(questBusy["claim"+slotKey]) return; questBusy["claim"+slotKey] = true;
   try{
-    const qref = doc(db,"players",state.uid,"quests",slotKey), pref = doc(db,"players",state.uid);
+    const pref = doc(db,"players",state.uid);
     let quest = null;
     const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
-      const qs = await tx.get(qref); if(!qs.exists()) throw new Error("That quest is gone.");
-      const q = qs.data();
+      const pd = (await tx.get(pref)).data() || {}, q = (pd.quests||{})[slotKey];
+      if(!q) throw new Error("That quest is gone.");
       if(q.rewardClaimed) throw new Error("You already claimed that reward.");
       if(Date.now() >= q.deadlineAt) throw new Error("That quest has expired.");
-      const pd = (await tx.get(pref)).data() || {};
       if(questProgress(q, pd) < q.target) throw new Error("That quest isn't finished yet.");
-      tx.update(qref, { rewardClaimed:true, claimedAt:Date.now() });
-      if(q.moneyReward) tx.update(pref, { money: Math.max(0, (pd.money||0) + q.moneyReward) });
+      tx.update(pref, { ["quests."+slotKey+".rewardClaimed"]:true, ["quests."+slotKey+".claimedAt"]:Date.now(), money: Math.max(0, (pd.money||0) + (q.moneyReward||0)) });
       quest = q; return true;
     }));
     if(!ok){ renderQuests(); return; }
-    questDocs[slotKey] = { ...quest, rewardClaimed:true };
-    if(quest.itemRewardId) await addItemToInv(quest.itemRewardId, quest.itemRewardQty||1);   // legacy quests only
+    state.profile.quests = { ...questsNow(), [slotKey]: { ...quest, rewardClaimed:true } };
     toast(`Quest reward claimed!${quest.moneyReward?` +$${fmtMoney(quest.moneyReward)}`:""}`);
     renderQuests();
   } finally { questBusy["claim"+slotKey] = false; }
@@ -2824,6 +2816,7 @@ const MAP_NODES = {
   hailstone:  { id:"hailstone",  name:"Hailstone Ridge",  type:"scenic",  region:"mountains", x:17,   y:17, icon:"⛰️" },   // mountains on the upper-left island, NE of Pearl Cove
   northshore: { id:"northshore", name:"Northshore Strand",type:"scenic",  region:"reef",      x:58,   y:23.5, icon:"🏖️" }, // beach on the north coast of the main island, south of Frostholm
   smolder:    { id:"smolder",    name:"Smolder Isle",     type:"scenic",  region:"volcano",   x:8.5,  y:60, icon:"🔥" },   // volcanic island west of the main island
+  eventstage: { id:"eventstage", name:"Event Stage", type:"event", region:"forest", paint:"volcano", x:19.4, y:71, icon:"🎪" },   // opens ONLY during the 7 holiday events: shop AND jobs, holiday forage/fish/bugs
   glade:      { id:"glade",      name:"Mistral Glade",    type:"scenic",  region:"forest",    x:86,   y:27, icon:"🌳" }    // forest on the southern half of the upper-right island
 };
 const NODE_LIST = Object.values(MAP_NODES);
@@ -2831,7 +2824,8 @@ const nodeById = id => MAP_NODES[id] || MAP_NODES[START_NODE];
 
 const NODE_RULE_TEXT = {
   village: "🏘️ Village — the daily shop is open · no jobs",
-  scenic:  "🌄 Scenic spot — jobs are open · no daily shop"
+  scenic:  "🌄 Scenic spot — jobs are open · no daily shop",
+  event:   "🎪 Event Stage — shop AND jobs, with holiday-only items (only open during holiday events)"
 };
 
 /* Travel time is fixed per route (A→B is always the same), 8h for the closest pair up to 36h for the farthest.
@@ -2851,7 +2845,8 @@ const fmtTravel = ms=>{
 function mapAccess(p, now=Date.now()){
   const traveling = !!(p && p.travel && now < p.travel.arrive);
   const n = nodeById(p && p.node);
-  return { traveling, node:n, shop: !traveling && n.type==="village", jobs: !traveling && n.type==="scenic" };
+  const open = n.type==="event" ? !!eventAt() : true;       // the Event Stage is shut when no holiday is on
+  return { traveling, node:n, shop: !traveling && open && (n.type==="village" || n.type==="event"), jobs: !traveling && open && (n.type==="scenic" || n.type==="event") };
 }
 
 /* migration + new-player fields */
@@ -3032,7 +3027,7 @@ async function drawWorldMap(canvas, explored, visits){
   const ctx = canvas.getContext("2d"), { cls, ink } = buildGeo();
   const out = ctx.createImageData(MAPW,MAPH), od = out.data;
   const nodes = (explored||[]).map(id=>MAP_NODES[id]).filter(Boolean).map(n=>({
-    cx:n.x/100*MAPW, cy:n.y/100*MAPH, r:revealRadius((visits||{})[n.id]||1)*MAPW, cls:REGION_CLASS[n.region], seed:n.x*3+n.y
+    cx:n.x/100*MAPW, cy:n.y/100*MAPH, r:revealRadius((visits||{})[n.id]||1)*MAPW, cls:REGION_CLASS[n.paint||n.region], seed:n.x*3+n.y
   }));
   const CREAM = [238,222,184], BASE_T = [1.0, 0.94, 0.86, 0.86, 0.86];     // unexplored: pale sea, slightly darker coast, sepia land
 
@@ -3066,6 +3061,208 @@ async function drawWorldMap(canvas, explored, visits){
   ctx.drawImage(ink,0,0);                                            // the ink drawing sits on top of the paint
 }
 
+/* =========================================================================
+   EVENT SCENES — one drawn background per holiday, based on the seven reference photos.
+   Pure SVG strings (800x600, scaled with "slice"), no image files. Seeded so they look the same every time.
+   ========================================================================= */
+const evRnd = seed=>{ let s = seed; return ()=> (s = (s*16807) % 2147483647) / 2147483647; };
+const f1 = n=> (+n).toFixed(1);
+const evPick = (r,arr)=> arr[Math.floor(r()*arr.length)];
+/* a firework burst: curved rays with bright tips and a hot core */
+function evBurst(r, cx, cy, rad, n, colors, { w=2.2, min=.7, glow="url(#fxGlow)", dash=false }={}){
+  let s = `<circle cx="${cx}" cy="${cy}" r="${f1(rad*.42)}" fill="${glow}" opacity=".9"/>`;
+  for(let i=0;i<n;i++){
+    const a = i/n*Math.PI*2 + (r()-.5)*.07, l = rad*(min+(1-min)*r()), x0 = cx+Math.cos(a)*rad*.07, y0 = cy+Math.sin(a)*rad*.07;
+    const x1 = cx+Math.cos(a)*l, y1 = cy+Math.sin(a)*l, bend = (r()-.5)*l*.22, qx = (x0+x1)/2 - Math.sin(a)*bend, qy = (y0+y1)/2 + Math.cos(a)*bend, c = evPick(r,colors);
+    s += `<path d="M${f1(x0)},${f1(y0)} Q${f1(qx)},${f1(qy)} ${f1(x1)},${f1(y1)}" fill="none" stroke="${c}" stroke-width="${f1(w*(.55+r()*.9))}" stroke-linecap="round" opacity="${f1(.65+r()*.35)}"${dash&&i%2?` stroke-dasharray="${f1(l*.18)} ${f1(l*.08)}"`:""}/>`
+       + `<circle cx="${f1(x1)}" cy="${f1(y1)}" r="${f1(1+r()*1.6)}" fill="#fff" opacity=".9"/>`;
+  }
+  return s;
+}
+const FX_DEFS = `<radialGradient id="fxGlow"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".35" stop-color="#ffe9b0" stop-opacity=".75"/><stop offset="1" stop-color="#ff9a4a" stop-opacity="0"/></radialGradient>`;
+const BLUR = (id,sd)=> `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${sd}"/></filter>`;
+const LG = (id,stops,x2=0,y2=1)=> `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}">${stops.map(([o,c])=>`<stop offset="${o}" stop-color="${c}"/>`).join("")}</linearGradient>`;
+const RG = (id,stops)=> `<radialGradient id="${id}">${stops.map(([o,c,a=1])=>`<stop offset="${o}" stop-color="${c}" stop-opacity="${a}"/>`).join("")}</radialGradient>`;
+
+function sceneNewYear(){          // reference 5: big magenta / red-orange / green bursts through purple smoke
+  const r = evRnd(5); let s = `<defs>${FX_DEFS}${BLUR("nyB",16)}${LG("nyS",[[0,"#12061f"],[.55,"#3a0b3d"],[1,"#6a1236"]])}</defs><rect width="800" height="600" fill="url(#nyS)"/>`;
+  for(let i=0;i<9;i++) s += `<ellipse cx="${f1(r()*800)}" cy="${f1(150+r()*400)}" rx="${f1(70+r()*90)}" ry="${f1(30+r()*40)}" fill="${i%2?"#ff6f8a":"#a03ad0"}" opacity=".2" filter="url(#nyB)"/>`;
+  [[395,330,0,0],[395,590,395,300]].forEach(([x1,y1,x2,y2],i)=>{ if(i) s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#e8d0ff" stroke-width="6" opacity=".35" filter="url(#nyB)"/><line x1="${x1+10}" y1="${y1}" x2="${x2+10}" y2="${y2+20}" stroke="#fff" stroke-width="2.5" opacity=".6"/>`; });
+  s += evBurst(r,420,150,175,110,["#ff8a4a","#ffb27a","#ff5a3a","#ffd2a0"],{w:2.4}) + evBurst(r,95,330,150,95,["#ff4fd8","#ff8af0","#c03ad0","#ffd0f5"],{w:2.2}) + evBurst(r,650,330,115,46,["#42ffa0","#b6ffda","#2adc86"],{w:2.6,dash:true,min:.55})
+     + evBurst(r,790,150,150,80,["#d04aff","#ff8af0","#4affc0"],{w:2.2}) + evBurst(r,290,495,58,36,["#ff63c8","#ffd0f5"],{w:1.6}) + evBurst(r,520,520,52,34,["#ffd27a","#fff"],{w:1.4});
+  for(let i=0;i<70;i++) s += `<circle cx="${f1(r()*800)}" cy="${f1(r()*600)}" r="${f1(.6+r()*1.8)}" fill="#fff" opacity="${f1(.3+r()*.6)}"/>`;
+  return s;
+}
+function sceneFireworks(){        // reference 1: blue-white bursts over a night skyline and water
+  const r = evRnd(17); let s = `<defs>${FX_DEFS}${BLUR("fwB",10)}${LG("fwS",[[0,"#070a24"],[.6,"#1b1850"],[1,"#3b2b72"]])}${LG("fwW",[[0,"#1a1a4a"],[1,"#050618"]])}</defs><rect width="800" height="600" fill="url(#fwS)"/>`;
+  s += evBurst(r,230,165,200,130,["#ffffff","#bcd6ff","#7aa8ff","#ff8a8a"],{w:2}) + evBurst(r,620,195,155,100,["#ffffff","#a9c4ff","#ff7b7b","#6f95ff"],{w:2});
+  const base = 440; s += `<rect x="0" y="${base}" width="800" height="160" fill="url(#fwW)"/>`;
+  for(let i=0;i<70;i++){ const x = r()*800, w = 14+r()*40; s += `<line x1="${f1(x)}" y1="${base+4+r()*130}" x2="${f1(x+w)}" y2="${base+4+r()*130}" stroke="${evPick(r,["#ff6a6a","#6a8aff","#ffd98a","#ffffff"])}" stroke-width="1.6" opacity="${f1(.15+r()*.3)}"/>`; }
+  let x = -10; while(x<810){ const w = 28+r()*42, h = 60+r()*140, tall = Math.abs(x-520)<30; s += `<rect x="${f1(x)}" y="${f1(base-h)}" width="${f1(w)}" height="${h}" fill="#0b0d2b"/>`;
+    for(let wy=base-h+8; wy<base-6; wy+=11) for(let wx=x+4; wx<x+w-6; wx+=9) if(r()<.5) s += `<rect x="${f1(wx)}" y="${f1(wy)}" width="4" height="5" fill="${r()<.8?"#ffd98a":"#8ec8ff"}" opacity=".85"/>`; x += w+r()*4; }
+  s += `<polygon points="505,${base} 505,${base-210} 520,${base-225} 520,${base-262} 524,${base-262} 524,${base-225} 539,${base-210} 539,${base}" fill="#12143a"/><rect x="520" y="${base-300}" width="4" height="40" fill="#fff"/><rect x="518" y="${base-262}" width="8" height="10" fill="#ff4a5a"/><rect x="516" y="${base-245}" width="12" height="10" fill="#6a8aff"/><circle cx="522" cy="${base-300}" r="6" fill="#ff4a5a"/>`;
+  for(let i=0;i<14;i++) s += `<circle cx="${f1(r()*800)}" cy="${f1(base-4)}" r="${f1(2+r()*3)}" fill="#fff" opacity=".7"/>`;
+  s += `<rect x="150" y="${base+60}" width="60" height="8" fill="#050618"/><rect x="590" y="${base+85}" width="76" height="9" fill="#050618"/>`;
+  return s;
+}
+function sceneValentines(){       // reference 2: a bed of pink and red roses seen from above
+  const r = evRnd(23); const pal = [["#f7b3cc","#e8789f","#c2457a","#8c1f55"],["#f29ac0","#d4558f","#a52a66","#6d1241"],["#e08aa8","#b83d72","#8f1d52","#5f0f38"],["#ff9db0","#f06a86","#c93658","#8a1634"],["#f4b8d8","#d97aae","#b04682","#7a2058"]];
+  let s = `<defs>${LG("vlS",[[0,"#5a0f3a"],[1,"#a3185a"]])}</defs><rect width="800" height="600" fill="url(#vlS)"/>`;
+  const rose = (cx,cy,rad,p)=>{ let t = `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(rad)}" fill="${p[1]}" stroke="${p[3]}" stroke-width="1.4"/>`;
+    for(let k=0;k<5;k++) t += `<circle cx="${f1(cx+(r()-.5)*rad*.12)}" cy="${f1(cy+(r()-.5)*rad*.12)}" r="${f1(rad*(.9-k*.17))}" fill="${p[k%2?2:0]}" stroke="${p[3]}" stroke-width="1" opacity=".92"/>`;
+    let d = ""; for(let a=0; a<3.4*Math.PI*2; a+=.18){ const rr = rad*.78*(1-a/(3.6*Math.PI*2)), px = cx+Math.cos(a)*rr, py = cy+Math.sin(a)*rr; d += (d?"L":"M")+f1(px)+","+f1(py); }
+    return t + `<path d="${d}" fill="none" stroke="${p[3]}" stroke-width="1.5" opacity=".6"/><ellipse cx="${f1(cx-rad*.3)}" cy="${f1(cy-rad*.35)}" rx="${f1(rad*.25)}" ry="${f1(rad*.12)}" fill="#fff" opacity=".22"/>`; };
+  for(let row=0; row<6; row++) for(let c=0; c<8; c++){ const cx = (c+.5)*100 + (row%2?50:0) - 40 + (r()-.5)*28, cy = row*105 + 20 + (r()-.5)*24, rad = 48+r()*30;
+    s += rose(cx,cy,rad,evPick(r,pal)); if(r()<.35) s += `<ellipse cx="${f1(cx+rad*.8)}" cy="${f1(cy+rad*.7)}" rx="14" ry="7" fill="#4aa14a" transform="rotate(${f1(r()*180)} ${f1(cx+rad*.8)} ${f1(cy+rad*.7)})"/>`; }
+  for(let i=0;i<7;i++){ const bx = r()*800, by = r()*600; s += `<circle cx="${f1(bx)}" cy="${f1(by)}" r="${f1(16+r()*10)}" fill="#f7b3cc" stroke="#8c1f55" stroke-width="1.4"/><circle cx="${f1(bx)}" cy="${f1(by)}" r="7" fill="#e8789f"/><path d="M${f1(bx-14)},${f1(by+14)} q14,18 28,0" fill="#6bbf5a" stroke="#2f7d2a"/>`; }
+  return s;
+}
+function sceneStPatricks(){       // reference 3: a thick carpet of bright green clovers
+  const r = evRnd(31); let s = `<defs>${RG("clB",[[0,"#0b6a22"],[1,"#03140a"]])}</defs><rect width="800" height="600" fill="url(#clB)"/>`;
+  const heart = "M0,0 C-12,-8 -30,-24 -16,-38 C-8,-46 0,-38 0,-30 C0,-38 8,-46 16,-38 C30,-24 12,-8 0,0Z";
+  const clover = (x,y,sc,rot,fill,hi)=> { let g = `<g transform="translate(${f1(x)},${f1(y)}) rotate(${f1(rot)}) scale(${f1(sc)})">`;
+    for(let k=0;k<3;k++) g += `<g transform="rotate(${k*120})"><path d="${heart}" fill="${fill}" stroke="rgba(255,255,255,.35)" stroke-width="1"/><path d="${heart}" fill="${hi}" opacity=".28" transform="scale(.7) translate(0,-4)"/><line x1="0" y1="-3" x2="0" y2="-31" stroke="rgba(255,255,255,.4)" stroke-width="1"/><line x1="0" y1="-12" x2="-9" y2="-26" stroke="rgba(255,255,255,.2)"/><line x1="0" y1="-12" x2="9" y2="-26" stroke="rgba(255,255,255,.2)"/></g>`;
+    return g + `<circle r="1.6" fill="#7a8a2a"/></g>`; };
+  const dark = ["#0e7a2a","#0b5f26","#127f3a"], mid = ["#1fa83c","#17922f","#27b34a"], bright = ["#3fdc3a","#5ff04a","#32c84a","#7ef23a"];
+  const all = []; for(let i=0;i<150;i++){ const d = r(); all.push({ x:r()*860-30, y:r()*660-30, sc:.45+d*1.5, rot:r()*360, c: d<.35?evPick(r,dark):d<.7?evPick(r,mid):evPick(r,bright) }); }
+  all.sort((a,b)=>a.sc-b.sc).forEach(c=> s += clover(c.x,c.y,c.sc,c.rot,c.c,"#d9ff9a"));
+  s += clover(610,200,2.2,12,"#9cf23a","#f5ffb0");
+  for(let i=0;i<24;i++) s += `<circle cx="${f1(r()*800)}" cy="${f1(r()*600)}" r="${f1(1.5+r()*2)}" fill="#fff" opacity=".6"/>`;
+  return s;
+}
+function sceneEaster(){           // reference 4: a bunny in a wicker basket, bright eggs on sunlit grass
+  const r = evRnd(41); let s = `<defs>${BLUR("esB",18)}${LG("esS",[[0,"#e4f2a8"],[.5,"#a8dc78"],[1,"#7cc24a"]])}${LG("esG",[[0,"#6fc23a"],[1,"#1f6a16"]])}</defs><rect width="800" height="600" fill="url(#esS)"/>`;
+  for(let i=0;i<9;i++) s += `<circle cx="${f1(380+r()*420)}" cy="${f1(r()*260)}" r="${f1(22+r()*50)}" fill="#fffbd0" opacity="${f1(.18+r()*.25)}" filter="url(#esB)"/>`;
+  s += `<rect x="0" y="300" width="800" height="300" fill="url(#esG)"/>`;
+  for(let i=0;i<340;i++){ const y = 305+r()*295, x = r()*800, len = 8+(y-300)/10, lean = (r()-.5)*10; s += `<line x1="${f1(x)}" y1="${f1(y)}" x2="${f1(x+lean)}" y2="${f1(y-len)}" stroke="${evPick(r,["#2f8f1c","#58c23a","#8be04a","#3a9a24"])}" stroke-width="2" stroke-linecap="round" opacity=".85"/>`; }
+  s += `<ellipse cx="170" cy="365" rx="105" ry="68" fill="#b4b0b8"/><circle cx="235" cy="300" r="52" fill="#bdb9c2"/>`   // bunny body + head
+     + `<ellipse cx="205" cy="212" rx="17" ry="56" fill="#a9a5b0" transform="rotate(-10 205 212)"/><ellipse cx="205" cy="214" rx="8" ry="40" fill="#f0b4c0" transform="rotate(-10 205 214)"/>`
+     + `<ellipse cx="255" cy="222" rx="16" ry="50" fill="#b3afba" transform="rotate(14 255 222)"/><path d="M228,255 Q250,285 262,330 Q236,300 218,262Z" fill="#fff" opacity=".9"/>`
+     + `<circle cx="262" cy="298" r="8" fill="#15151c"/><circle cx="265" cy="295" r="2.6" fill="#fff"/><ellipse cx="284" cy="318" rx="6" ry="4.5" fill="#f2a6b4"/>`;
+  s += `<polygon points="10,345 330,345 298,540 42,540" fill="#d9953a"/>`;                                       // basket front covers the bunny's lower half
+  for(let y=360;y<540;y+=15) s += `<line x1="${f1(14+(y-345)*.16)}" y1="${y}" x2="${f1(326-(y-345)*.16)}" y2="${y}" stroke="#a8681e" stroke-width="3" opacity=".85"/>`;
+  for(let x=40;x<320;x+=22) s += `<line x1="${x}" y1="350" x2="${f1(x+(x<170?4:-4))}" y2="536" stroke="#f0b868" stroke-width="2" opacity=".5"/>`;
+  s += `<path d="M10,345 Q170,372 330,345" fill="none" stroke="#c47d2a" stroke-width="16" stroke-linecap="round"/><path d="M60,345 C60,120 290,120 290,345" fill="none" stroke="#c47d2a" stroke-width="15"/><path d="M66,330 C70,150 270,140 282,330" fill="none" stroke="#f0b868" stroke-width="3" opacity=".7"/>`;
+  [[520,470,62,82,18,"#ff5a6e"],[650,425,52,70,-14,"#7ad0ff"],[612,530,60,76,6,"#52d6b8"],[728,500,56,72,-24,"#c8a6f2"],[565,392,48,64,20,"#ffd84a"],[430,545,46,60,-8,"#ff9ac8"],[705,590,58,70,12,"#7ad0ff"]].forEach(([x,y,rx,ry,rot,c])=>{
+    s += `<g transform="rotate(${rot} ${x} ${y})"><ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${c}"/><ellipse cx="${x}" cy="${y-ry*.1}" rx="${rx}" ry="${ry*.16}" fill="#fff" opacity=".25"/><ellipse cx="${x-rx*.35}" cy="${y-ry*.45}" rx="${rx*.18}" ry="${ry*.3}" fill="#fff" opacity=".55"/></g>`; });
+  return s;
+}
+function sceneHalloween(){        // reference 6: a glowing jack-o'-lantern in a dark forest with drifting embers
+  const r = evRnd(53); let s = `<defs>${BLUR("hwB",14)}${BLUR("hwS",3)}${LG("hwS0",[[0,"#04080b"],[1,"#12262a"]])}${RG("hwGl",[[0,"#ffb12a",.75],[.5,"#ff6a10",.3],[1,"#ff6a10",0]])}${RG("hwP",[[0,"#f0861f"],[.6,"#b4480e"],[1,"#5a1f06"]])}</defs><rect width="800" height="600" fill="url(#hwS0)"/>`;
+  for(let i=0;i<22;i++) s += `<circle cx="${f1(r()*800)}" cy="${f1(r()*300)}" r="${f1(10+r()*22)}" fill="#8ab6c8" opacity="${f1(.05+r()*.1)}" filter="url(#hwB)"/>`;
+  for(let i=0;i<11;i++){ const x = i*80+r()*40, w = 18+r()*34; s += `<rect x="${f1(x)}" y="0" width="${f1(w)}" height="540" fill="#081012" opacity="${f1(.55+r()*.4)}" filter="url(#hwS)"/>`; }
+  s += `<ellipse cx="400" cy="470" rx="520" ry="60" fill="#5a7078" opacity=".16" filter="url(#hwB)"/><path d="M0,470 Q400,440 800,470 L800,600 L0,600Z" fill="#120b07"/><ellipse cx="400" cy="480" rx="330" ry="90" fill="url(#hwGl)"/>`;
+  for(let i=0;i<90;i++){ const x = r()*800, y = 470+r()*130; s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(5+r()*7)}" ry="${f1(2+r()*3)}" fill="${evPick(r,["#b8561a","#8a3a12","#d9822a","#5a2a0e"])}" opacity=".8" transform="rotate(${f1(r()*180)} ${f1(x)} ${f1(y)})"/>`; }
+  s += `<ellipse cx="400" cy="395" rx="190" ry="140" fill="url(#hwGl)" opacity=".6"/><ellipse cx="400" cy="400" rx="150" ry="120" fill="url(#hwP)"/>`;
+  [-85,-45,0,45,85].forEach(dx=> s += `<path d="M${400+dx*.5},282 Q${400+dx*1.45},400 ${400+dx*.5},518" fill="none" stroke="#3a1304" stroke-width="3" opacity=".6"/>`);
+  s += `<path d="M392,285 Q388,255 400,238 Q412,226 420,240 Q410,250 412,285Z" fill="#4a2f12" stroke="#2a1a08" stroke-width="2"/>`;
+  const eyeL = "340,372 372,330 392,382", eyeR = "408,382 428,330 462,372", nose = "388,398 400,380 412,398", mouth = "330,412 352,440 372,420 392,448 412,424 434,448 452,420 474,440 470,408 440,426 400,404 360,426";
+  s += `<g filter="url(#hwS)" opacity=".9"><polygon points="${eyeL}" fill="#ffc83a"/><polygon points="${eyeR}" fill="#ffc83a"/><polygon points="${nose}" fill="#ffc83a"/><polygon points="${mouth}" fill="#ffc83a"/></g><polygon points="${eyeL}" fill="#ffe27a"/><polygon points="${eyeR}" fill="#ffe27a"/><polygon points="${nose}" fill="#ffe27a"/><polygon points="${mouth}" fill="#fff0a0"/>`;
+  for(let i=0;i<110;i++){ const x = r()*800, y = r()*600; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(.8+r()*2.4)}" fill="${r()<.8?"#ffb347":"#ffe08a"}" opacity="${f1(.3+r()*.7)}"/>`; }
+  return s;
+}
+function sceneChristmas(){        // reference 7: a cosy room — decorated tree, presents, fireplace, wreath, stockings
+  const r = evRnd(67); let s = `<defs>${BLUR("xmB",16)}${BLUR("xmS",2)}${RG("xmFire",[[0,"#ffd27a",.9],[.5,"#ff8a2a",.45],[1,"#ff6a10",0]])}${LG("xmT",[[0,"#1c7a38"],[1,"#0a4a1f"]])}</defs><rect width="800" height="600" fill="#6b3f1e"/>`;
+  for(let x=0;x<800;x+=44) s += `<rect x="${x}" y="0" width="3" height="510" fill="#4a2a12" opacity=".7"/><rect x="${x+8}" y="0" width="${f1(4+r()*8)}" height="510" fill="#8a5428" opacity=".35"/>`;
+  s += `<rect x="725" y="110" width="95" height="310" fill="#0c1634"/><line x1="772" y1="110" x2="772" y2="420" stroke="#d8d0c0" stroke-width="5"/><line x1="725" y1="265" x2="820" y2="265" stroke="#d8d0c0" stroke-width="5"/><rect x="725" y="110" width="95" height="310" fill="none" stroke="#d8d0c0" stroke-width="7"/>`;
+  for(let i=0;i<24;i++) s += `<circle cx="${f1(730+r()*85)}" cy="${f1(116+r()*300)}" r="${f1(1+r()*1.6)}" fill="#fff" opacity=".8"/>`;
+  s += `<path d="M0,505 L800,505 L800,600 L0,600Z" fill="#9a6532"/>`; for(let y=520;y<600;y+=22) s += `<line x1="0" y1="${y}" x2="800" y2="${y}" stroke="#6a4020" stroke-width="2" opacity=".8"/>`;
+  // fireplace
+  s += `<rect x="70" y="215" width="270" height="290" fill="#a8543a"/>`;
+  for(let row=0; row<12; row++) for(let c=0;c<7;c++){ const x = 70+c*40-(row%2?20:0), y = 232+row*22.5; s += `<rect x="${Math.max(70,x)}" y="${y}" width="${Math.min(40,x+40-70, 340-x)}" height="19" fill="${evPick(r,["#b8603e","#a04c30","#c06a46"])}" stroke="#6a2a18" stroke-width="1.5"/>`; }
+  s += `<rect x="135" y="335" width="140" height="170" fill="#150a06"/><ellipse cx="205" cy="470" rx="170" ry="60" fill="url(#xmFire)"/><rect x="150" y="480" width="110" height="16" rx="7" fill="#4a2a10"/><rect x="165" y="470" width="90" height="14" rx="6" fill="#5a3416"/>`
+     + `<path d="M170,470 Q180,420 192,405 Q196,430 210,395 Q222,430 232,410 Q248,440 244,470Z" fill="#ff8a1f"/><path d="M185,470 Q196,438 206,425 Q214,445 226,430 Q236,452 232,470Z" fill="#ffd84a"/>`
+     + `<rect x="55" y="198" width="300" height="24" fill="#5a331a"/>`;
+  // wreath, candles, stockings
+  s += `<circle cx="205" cy="110" r="46" fill="none" stroke="#1f7a34" stroke-width="26"/>`; for(let i=0;i<20;i++){ const a = i/20*Math.PI*2; s += `<circle cx="${f1(205+Math.cos(a)*46)}" cy="${f1(110+Math.sin(a)*46)}" r="${i%3?4:5}" fill="${i%3?"#ff3a3a":"#e8c43a"}"/>`; }
+  s += `<path d="M190,160 Q205,140 220,160 Q205,170 190,160Z" fill="#d82a2a"/>`;
+  [[110,"#d82a2a"],[300,"#2a8a3a"]].forEach(([x,c])=> s += `<path d="M${x-14},222 L${x+14},222 L${x+14},290 Q${x+14},320 ${x-10},322 Q${x-34},322 ${x-34},300 Q${x-14},300 ${x-14},282Z" fill="${c}"/><rect x="${x-18}" y="216" width="36" height="16" rx="6" fill="#f4f0e6"/>`);
+  [[205,"#f4e8c8"],[228,"#f4e8c8"],[252,"#f4e8c8"]].forEach(([x,c],i)=> s += `<rect x="${x-4}" y="${160+i*4}" width="8" height="${38-i*4}" fill="${c}"/><ellipse cx="${x}" cy="${154+i*4}" rx="4" ry="8" fill="#ffd84a" filter="url(#xmS)"/>`);
+  // tree
+  s += `<rect x="588" y="470" width="26" height="40" fill="#4a2a12"/>`;
+  [[60,170,560],[130,230,520],[200,290,470],[280,350,420],[360,420,370]].forEach(([top,hw,base],i)=> s += `<polygon points="${600},${top} ${600-hw},${base} ${600+hw},${base}" fill="url(#xmT)" stroke="#07351a" stroke-width="2" transform="translate(0,${i*0})"/>`);
+  for(let i=0;i<64;i++){ const y = 110+r()*390, hw = 20+ (y-60)*.62; const x = 600+(r()-.5)*2*hw*.85; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(2.2)}" fill="${evPick(r,["#ffe27a","#ffe27a","#fff","#ff9a3a"])}" opacity=".95" filter="url(#xmS)"/>`; }
+  for(let i=0;i<34;i++){ const y = 120+r()*380, hw = 16+(y-60)*.6, x = 600+(r()-.5)*2*hw*.78, rad = 8+r()*5; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(rad)}" fill="#d62a2a"/><circle cx="${f1(x-rad*.3)}" cy="${f1(y-rad*.35)}" r="${f1(rad*.28)}" fill="#fff" opacity=".7"/>`; }
+  s += `<polygon points="600,18 607,44 634,44 612,60 620,86 600,70 580,86 588,60 566,44 593,44" fill="#ffd84a" filter="url(#xmS)"/><polygon points="600,18 607,44 634,44 612,60 620,86 600,70 580,86 588,60 566,44 593,44" fill="#ffe680"/>`;
+  // presents
+  [[360,470,70,50,"#c62a2a","#e8c43a"],[430,480,56,42,"#2a7ac6","#f4f0e6"],[480,500,64,52,"#e8c43a","#c62a2a"],[640,490,70,48,"#2a9a4a","#f4f0e6"],[700,500,66,60,"#c62a2a","#e8c43a"],[760,515,60,46,"#7a3ac6","#e8c43a"],[300,520,60,46,"#e8c43a","#2a7ac6"]].forEach(([x,y,w,h,c,rb])=>{
+    s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${c}"/><rect x="${x+w/2-5}" y="${y}" width="10" height="${h}" fill="${rb}"/><rect x="${x}" y="${y+h/2-5}" width="${w}" height="10" fill="${rb}"/><path d="M${x+w/2},${y} q-18,-16 -22,0 q10,6 22,0 q12,6 22,0 q-4,-16 -22,0Z" fill="${rb}"/>`; });
+  return s;
+}
+const EVENT_SCENES = { newyear:sceneNewYear, fireworks:sceneFireworks, valentines:sceneValentines, stpatricks:sceneStPatricks, easter:sceneEaster, halloween:sceneHalloween, christmas:sceneChristmas };
+function eventSceneSvg(key){ const fn = EVENT_SCENES[key]; return fn ? `<svg data-rg="ev_${key}" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">${fn()}</svg>` : ""; }
+
+
+/* =========================================================================
+   SEASONAL EVENTS — calendar, Event Stage content, theme + decorations, music
+   ========================================================================= */
+const evInRange = (m,d,[fm,fd],[tm,td])=>{ const x = m*100+d, a = fm*100+fd, b = tm*100+td; return a<=b ? (x>=a && x<=b) : (x>=a || x<=b); };
+function eventAt(ts=Date.now()){ const [m,d] = etMD(ts); return EVENTS.find(e=> evInRange(m,d,e.from,e.to)) || null; }     // overlaps (Dec 31) go to the lower number: New Year wins
+function nextEvent(){ const now = Date.now(); for(let k=1;k<=400;k++){ const ev = eventAt(now+k*86400000); if(ev && eventAt(now+(k-1)*86400000)!==ev) return { ev, days:k }; } return null; }
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const evRange = ev=> `${MONTHS[ev.from[0]-1]} ${ev.from[1]} – ${MONTHS[ev.to[0]-1]} ${ev.to[1]}`;
+const atEventNode = (p=state.profile)=> !!p && !mapAccess(p).traveling && p.node==="eventstage";
+const eventHere = ()=> atEventNode() ? eventAt() : null;                       // the event you are standing in the middle of, or null
+const evTrack = ev=> `rpg_event_${ev.n}.mp3`;
+function regionTrackNow(){
+  const p = state.profile; if(!p) return "rpg_earth.mp3";
+  const ev = eventHere(); if(ev) return evTrack(ev);
+  return (REGIONS[p.region] || REGIONS.forest).track;
+}
+/* holiday forage / fish / bug pools (built on first use, same rarity weights as the normal ones) */
+const EVENT_POOLS = {};
+function eventPools(key){
+  if(EVENT_POOLS[key]) return EVENT_POOLS[key];
+  const it = ids=> ids.map(id=>ITEM_BY_ID[id]), src = EV_ITEMS.byKey[key], out = { forage:{}, fish:{}, bug:{} };
+  Object.keys(MODES).forEach(m=>{
+    out.forage[m] = buildPool(it(src.forage), RARITY_W.forage[m], "evf"+key+m);
+    out.fish[m]   = buildPool(it(src.fish),   RARITY_W.fish[m],   "evh"+key+m);
+    out.bug[m]    = buildPool(it(src.bug),    RARITY_W.fish[m],   "evb"+key+m);
+  });
+  return EVENT_POOLS[key] = out;
+}
+function jobPool(kind, m){ const ev = eventHere(); return ev ? eventPools(ev.key)[kind][m] : POOLS[kind][m]; }
+/* Event shop: SHOP_SIZE items from the holiday bank, rotating every day (12am ET) */
+let eventStockCache = { day:-1, key:"", items:[] };
+function eventShopStock(ev){
+  const day = dayIndex(); if(eventStockCache.day===day && eventStockCache.key===ev.key) return eventStockCache.items;
+  const rnd = seededRand(day*7919 + ev.n*104729 + 77); rnd(); rnd(); rnd();
+  const ids = [...EV_ITEMS.byKey[ev.key].shop]; for(let i=ids.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [ids[i],ids[j]] = [ids[j],ids[i]]; }
+  eventStockCache = { day, key:ev.key, items:ids.slice(0,SHOP_SIZE).map(id=>ITEM_BY_ID[id]) };
+  return eventStockCache.items;
+}
+/* theme + decorations: while ANY holiday event is on, the whole game wears it (all light/dark themes) */
+let evThemeKey = null;
+function syncEventTheme(){
+  const ev = eventAt(), key = ev ? ev.key : "";
+  if(key === evThemeKey) return; evThemeKey = key;
+  document.body.dataset.event = key;
+  let deco = document.getElementById("eventDeco");
+  if(!ev){ deco?.remove(); return; }
+  if(!deco){ deco = document.createElement("div"); deco.id = "eventDeco"; deco.setAttribute("aria-hidden","true"); document.body.appendChild(deco); }
+  const gar = Array.from({length:18}, (_,i)=> `<span style="animation-delay:${(i%6)*.25}s">${ev.deco[i%ev.deco.length]}</span>`).join("");
+  deco.innerHTML = `<div class="ev-garland">${gar}</div><div class="ev-corner ev-l">${ev.corner[0]}</div><div class="ev-corner ev-r">${ev.corner[1]}</div>`;
+}
+/* the drawn background + music follow where you are */
+let evSceneRegion = "", evMusicKey = "";
+function syncEventScene(){
+  const p = state.profile, sb = document.getElementById("sceneBg"); if(!p || !sb) return;
+  const ev = dgActive() ? null : eventHere(), want = ev ? "ev_"+ev.key : p.region;
+  if(ev && !sb.querySelector(`svg[data-rg="ev_${ev.key}"]`)) sb.insertAdjacentHTML("beforeend", eventSceneSvg(ev.key));
+  if(sb.dataset.region !== want) sb.dataset.region = want;
+  const track = dgActive() ? DG_TRACK : regionTrackNow();
+  if(track !== evMusicKey){ evMusicKey = track; playMusic(track); }
+}
+let evKicking = false;
+async function eventClosedCheck(){      // you were on the Event Stage when the holiday ended: the stage closes and you are sent back to the Grasslands
+  const p = state.profile; if(!p || evKicking || !atEventNode(p) || eventAt()) return;
+  evKicking = true;
+  try{ const h = MAP_NODES[START_NODE]; await updateDoc(doc(db,"players",state.uid), { node:h.id, region:h.region }); toast("🎪 The festival is over — the Event Stage has closed. You head back to the Grasslands."); }
+  catch(e){ console.warn(e); } finally { evKicking = false; }
+}
+syncEventTheme(); setInterval(syncEventTheme, 5000);
+setInterval(()=>{ if(state.profile){ syncEventScene(); eventClosedCheck(); } }, 1000);
+
 /* --- map: 12 nodes on an aged world map ---
    Villages = daily shop (no jobs). Scenic spots = jobs (no daily shop). Unexplored nodes take 8-36h of travel (fixed per route,
    no turning back); already-explored nodes are free fast travel. Arriving switches your region automatically. --- */
@@ -3089,11 +3286,12 @@ function renderRegionGrid(){
   if(key !== mapDrawKey){ mapDrawKey = key; drawWorldMap(document.getElementById("worldMapCanvas"), explored, visits); }
   const layer = document.getElementById("worldMapNodes"); layer.innerHTML = "";
   NODE_LIST.forEach(n=>{
-    const known = explored.includes(n.id), here = !a.traveling && p.node===n.id;
+    const known = explored.includes(n.id), here = !a.traveling && p.node===n.id, evOpen = n.type==="event" ? eventAt() : null;
     const b = document.createElement("button");
-    b.className = "wm-node " + n.type + (known ? " known" : " unknown") + (here ? " here" : "") + (mapSel===n.id ? " sel" : "");
+    b.className = "wm-node " + n.type + (known ? " known" : " unknown") + (here ? " here" : "") + (mapSel===n.id ? " sel" : "") + (n.type==="event" && !evOpen ? " closed" : "");
     b.style.left = n.x+"%"; b.style.top = n.y+"%"; b.title = n.name;
-    b.innerHTML = `<span class="wm-pin">${known ? n.icon : "✖"}</span><span class="wm-label">${n.name}</span>`;
+    const pin = n.type==="event" ? (evOpen ? evOpen.icon : "🔒") : (known ? n.icon : "✖");
+    b.innerHTML = `<span class="wm-pin">${pin}</span><span class="wm-label">${n.type==="event" ? (evOpen ? evOpen.name : "Event Stage (closed)") : n.name}</span>`;
     b.addEventListener("click", ()=>{ mapSel = n.id; renderRegionGrid(); });
     layer.appendChild(b);
   });
@@ -3107,9 +3305,11 @@ function renderMapInfo(){
   let sel = "";
   const n = mapSel && MAP_NODES[mapSel];
   if(n && !(n.id===p.node && !a.traveling)){
-    const known = explored.includes(n.id);
-    sel = `<hr><b>${n.icon} ${n.name}</b> — ${REGIONS[n.region].name}<br><small>${NODE_RULE_TEXT[n.type]}</small><br>`;
-    if(a.traveling) sel += `<small>You can't plan another trip while you are at sea.</small>`;
+    const known = explored.includes(n.id), evNow = n.type==="event" ? eventAt() : null;
+    sel = `<hr><b>${n.icon} ${n.name}</b>${n.type==="event" ? "" : " — "+REGIONS[n.region].name}<br><small>${NODE_RULE_TEXT[n.type]}</small><br>`;
+    if(n.type==="event" && !evNow){ const nx = nextEvent(); sel += `<small>🔒 Closed right now.${nx ? ` Next up: <b>${nx.ev.icon} ${nx.ev.name}</b> (${evRange(nx.ev)}), in ${nx.days} day${nx.days===1?"":"s"}.` : ""}</small>`; }
+    else if(n.type==="event") sel += `<small>${evNow.icon} <b>${evNow.name}</b> is on until ${MONTHS[evNow.to[0]-1]} ${evNow.to[1]}!</small><br>` + (a.traveling ? "" : known ? `<button class="doodle-btn btn-green" id="btnMapGo">Fast travel</button>` : `<small>Unexplored — about <b>${fmtTravel(travelMs(p.node, n.id))}</b> of travel. Once you set sail there's no turning back.</small><br><button class="doodle-btn btn-yellow" id="btnMapGo">Set sail</button>`);
+    else if(a.traveling) sel += `<small>You can't plan another trip while you are at sea.</small>`;
     else if(known) sel += `<small>Already explored — instant fast travel.</small><br><button class="doodle-btn btn-green" id="btnMapGo">Fast travel</button>`;
     else sel += `<small>Unexplored — about <b>${fmtTravel(travelMs(p.node, n.id))}</b> of travel. Once you set sail there's no turning back.</small><br><button class="doodle-btn btn-yellow" id="btnMapGo">Set sail</button>`;
   }
@@ -3131,6 +3331,10 @@ async function startTravel(id){
   if(state.battle){ toast("Finish your battle first."); return; }
   if(mapAccess(p).traveling){ toast("🚢 You are already at sea."); return; }
   if(id===p.node) return;
+  if(n.type==="event"){                                               // the stage only exists while a holiday is running
+    if(!eventAt()){ toast("🎪 The Event Stage is closed — it only opens during holiday events."); return; }
+    if(!mapExplored(p).includes(id) && !eventAt(Date.now()+travelMs(p.node,id))){ toast("🎪 The festival would be over before you arrived."); return; }
+  }
   const visits = { ...(p.mapVisits||{}) };
   if(mapExplored(p).includes(id)){                                   // fast travel: instant
     visits[id] = (visits[id]||1)+1;
@@ -3151,9 +3355,14 @@ async function checkArrival(){
   const p = state.profile; if(!p || !p.travel || arriving || Date.now() < p.travel.arrive) return;
   arriving = true;
   try{
-    const n = nodeById(p.travel.to), explored = [...new Set([...mapExplored(p), n.id])], visits = { ...(p.mapVisits||{}) }; visits[n.id] = (visits[n.id]||0)+1;
+    let n = nodeById(p.travel.to);
+    if(n.type==="event" && !eventAt()){                                  // the festival ended while you were at sea: you turn back
+      const back = nodeById(p.travel.from); await updateDoc(doc(db,"players",state.uid), { node:back.id, region:back.region, travel:null });
+      toast(`🎪 The festival ended before you arrived — you sailed back to ${back.name}.`, 10000); return;
+    }
+    const explored = [...new Set([...mapExplored(p), n.id])], visits = { ...(p.mapVisits||{}) }; visits[n.id] = (visits[n.id]||0)+1;
     await updateDoc(doc(db,"players",state.uid), { node:n.id, region:n.region, exploredNodes:explored, mapVisits:visits, travel:null });
-    toast(`🧭 You arrived at ${n.name}! ${NODE_RULE_TEXT[n.type]}`, 12000, "toast-money");
+    toast(`🧭 You arrived at ${n.name}! ${NODE_RULE_TEXT[n.type]}`, 12000, "toast-money"); syncEventScene();
     mapSel = null; if(document.getElementById("compassModal").classList.contains("active")){ renderRegionGrid(); renderShop(); }
   }catch(e){ console.warn("arrival failed", e); } finally { arriving = false; applyMapLocks(); }
 }
@@ -3170,6 +3379,7 @@ function applyMapLocks(){
 function mapTabBlockMsg(tab){
   const a = mapAccess(state.profile);
   if(a.traveling) return "🚢 You're at sea — no shop or jobs until you arrive.";
+  if(a.node.type==="event" && !eventAt()) return "🎪 The Event Stage is closed.";
   if(tab==="shop" && !a.shop) return "🌄 There's no daily shop at a scenic spot — travel to a village to shop.";
   if(tab==="jobs" && !a.jobs) return "🏘️ Villages have no work — travel to a scenic spot to use your jobs.";
   return "";
@@ -3228,7 +3438,7 @@ function shopStock(){
   shopStockCache = { day, stock };
   return stock;
 }
-function shopItemsForRegion(){ return shopStock()[state.profile.region] || []; }
+function shopItemsForRegion(){ const ev = eventHere(); return ev ? eventShopStock(ev) : (shopStock()[state.profile.region] || []); }
 let shopSel = null, shopTab = "market", shopCat = "gradient", shopPage = 0;
 const SHOP_PER_PAGE = 12;                                           // 3 rows x 4 columns per page
 /* Tools tab: the full pickaxe + fishing-rod ladder, then the 5 tiers of hoes and watering cans */
@@ -3271,7 +3481,7 @@ function renderShopDetail(){
 }
 function renderShop(){
   const label = document.getElementById("shopRegionLabel");
-  label.textContent = shopTab==="market" ? `${REGIONS[state.profile.region].name} Market — ${SHOP_SIZE} items, new stock every day at 12am ET`
+  label.textContent = shopTab==="market" ? (eventHere() ? `${eventHere().icon} ${eventHere().name} Market — ${SHOP_SIZE} holiday items, new stock every day at 12am ET` : `${REGIONS[state.profile.region].name} Market — ${SHOP_SIZE} items, new stock every day at 12am ET`)
     : shopTab==="tools" ? "Tools — pickaxes, fishing rods, bug nets & farming tools, every tier" : "Cosmetics — permanent once bought. 🔄 items rotate daily at 12am ET (same in every region)";
   document.querySelectorAll("[data-shoptab]").forEach(b=> b.classList.toggle("active", b.dataset.shoptab===shopTab));
   const catRow = document.getElementById("shopCatRow"); catRow.style.display = shopTab==="cosmetics" ? "" : "none";
@@ -3748,7 +3958,7 @@ async function doForageAction(){
   if(Math.random() >= Math.min(0.98, rule.chance*(1+activeLuck()))){ jobLog("Nothing this time."); return; }
   const n = rule.qty[0] + Math.floor(Math.random()*(rule.qty[1]-rule.qty[0]+1));
   const got = {};
-  for(let i=0;i<n;i++){ const id = rollPool(poolAt(POOLS.forage[m], null, hourNow()), activeLuck()); got[id] = (got[id]||0)+1; }
+  for(let i=0;i<n;i++){ const id = rollPool(poolAt(jobPool("forage",m), null, hourNow()), activeLuck()); got[id] = (got[id]||0)+1; }
   await applyInvChanges({ add:Object.entries(got).map(([itemId,qty])=>({itemId,qty})) },
     Object.fromEntries(Object.entries(got).map(([id,q])=>["finds."+id, increment(q)])));
   jobLog(`You foraged ${Object.entries(got).map(([id,q])=>pluralize(id,q)).join(" and ")}!`);
@@ -3881,7 +4091,7 @@ async function endFishing(success, m=jobMode, timedOut=false){
   reopenCompassIf(fishReopenCompass); fishReopenCompass = false;
   updateDoc(doc(db,"players",state.uid), { lastFishTs: Date.now() }).catch(()=>{});   // the 5s rest starts when the fight ends
   if(success){
-    const pick = rollFish(POOLS.fish[m], hourNow(), activeLuck());   // each fish has its own time-of-day chance
+    const pick = rollFish(jobPool("fish",m), hourNow(), activeLuck());   // each fish has its own time-of-day chance
     await addItemToInv(pick, 1);
     await withErrorToast(()=> updateDoc(doc(db,"players",state.uid), { fishingXp: (state.profile.fishingXp||0)+1, ["finds."+pick]: increment(1) }));
     jobLog(`Caught a ${ITEM_BY_ID[pick].name}! (${ITEM_BY_ID[pick].rarity})`);
@@ -3913,7 +4123,7 @@ async function doBugAction(){
         stubEl = document.getElementById("bugStub"), fillEl = document.getElementById("bugProgressFill"), timerEl = document.getElementById("bugTimer");
   overlay.classList.add("show");
   toast(`${MODES[m].emoji} A ${rule.tier} bug is buzzing around!`);
-  const picked = rollBug(POOLS.bug[m], hourNow(), activeLuck());       // decided up front so the bug you chase is the bug you get
+  const picked = rollBug(jobPool("bug",m), hourNow(), activeLuck());       // decided up front so the bug you chase is the bug you get
   bugEl.textContent = BUG_EMOJI[picked];
   const R = arena.clientWidth/2 || 140, BUG_R = 14, STUB_R = 24, reach = R-BUG_R, startedAt = Date.now();
   let bx = (Math.random()-.5)*R, by = (Math.random()-.5)*R, ang = Math.random()*Math.PI*2, spd = rule.speed, dashT = 0, sx = 0, sy = 0, progress = 0, last = performance.now();
@@ -5814,11 +6024,21 @@ function handleDuelInvite(n, ref, first){
 
 /* ---- BOSS FIGHTS: a new boss every 12h. Beat a wave of 5 (Easy → Deadly), then the boss. ---- */
 const BOSS_MS = 12*3600*1000, BOSS_WAVES = ["easy","skilled","moderate","hard","deadly"];
-const BOSS_ROSTER = [ ["Ignarok the Cinder Tyrant","🐲","fire"], ["Thalassa the Drowned Queen","🐙","water"], ["Gorgoth Stonemaw","🗿","earth"], ["Zephyrion Stormwing","🦅","air"],
-  ["Nyxaris the Hollow King","👁️","earth"], ["Magmaw the Molten","🌋","fire"], ["Leviathan Prime","🐋","water"], ["Aerion the Skybreaker","🌪️","air"] ];
+const BOSS_ROSTER = [   // 50 bosses, every name and emoji unique. Cycle order is a fixed shuffle (step 17 is coprime with 50) so nothing repeats for 50 bosses (25 days).
+  ["Ignarok the Cinder Tyrant","🐲","fire"],["Thalassa the Drowned Queen","🐙","water"],["Gorgoth Stonemaw","🗿","earth"],["Zephyrion Stormwing","🦅","air"],["Nyxaris the Hollow King","👁️","earth"],
+  ["Magmaw the Molten","🌋","fire"],["Leviathan Prime","🐋","water"],["Aerion the Skybreaker","🌪️","air"],["Venomira the Fang Queen","🐍","earth"],["Cryofang the Frozen Wolf","🐺","water"],
+  ["Scorchtail the Ember Drake","🦎","fire"],["Moldrath the Rot Colossus","🍄","earth"],["Skarn the Iron Golem","🤖","earth"],["Sylphara the Gale Witch","🧙","air"],["Arachne the Blightmother","🕷️","earth"],
+  ["Vorrus the Kraken Lord","🦑","water"],["Pyrrhus the Burning Phoenix","🔥","fire"],["Glacius the Ice Warden","❄️","water"],["Thornback the Briar King","🌵","earth"],["Raijin the Stormcaller","⚡","air"],
+  ["Boneclaw the Undying","💀","earth"],["The Abyssal Maw","🦈","water"],["Dreadwing the Bat Lord","🦇","air"],["Obsidian Behemoth","🦏","earth"],["Marrow the Tidecaller","🐚","water"],
+  ["Moros the Wraithlord","👻","air"],["Mantikor the Scorpion King","🦂","earth"],["Solaris the Blazing Sun","☀️","fire"],["Lunaris the Night Stalker","🌙","air"],["Gatorath the Swamp Tyrant","🐊","water"],
+  ["Grimhorn the Minotaur","🐂","earth"],["Tuskarn the Frost Mammoth","🦣","water"],["Malgor the Imp Lord","😈","fire"],["Vaelith the Crystal Spider","💎","earth"],["Altaros the Gryphon Lord","🦁","air"],
+  ["Toadmaw the Bog King","🐸","water"],["The Ashen Reaper","🪦","earth"],["Gnarlroot the Elder Treant","🌳","earth"],["Sirenessa the Deep Singer","🧜","water"],["Vulcanis the Forge Titan","⚒️","fire"],
+  ["Hexara the Cursed Doll","🪆","earth"],["Tikkus the Clockwork Overlord","⚙️","earth"],["Mosquitar the Plaguebearer","🦟","air"],["Sandrakk the Dune Wyrm","🪱","earth"],["Reefclaw the Crab Monarch","🦀","water"],
+  ["Astraeus the Starfall Colossus","⭐","air"],["Brannoch the Smoldering Warlord","🧌","fire"],["Nihilus the Voidwalker","🕳️","air"],["Ignivora the Cinder Moth","🦋","fire"],["Tempestra the Thunder Roc","🦜","air"],
+  ["Cragjaw the Cave Troll","🪨","earth"] ];
 const bossCycle = ()=> Math.floor(Date.now()/BOSS_MS);
 const bossIn = ()=> (bossCycle()+1)*BOSS_MS - Date.now();
-const bossDef = c=> { const [name,sprite,element] = BOSS_ROSTER[((c*5+3)%BOSS_ROSTER.length+BOSS_ROSTER.length)%BOSS_ROSTER.length]; return { name, sprite, element }; };
+const bossDef = c=> { const n = BOSS_ROSTER.length, [name,sprite,element] = BOSS_ROSTER[((c*17+3)%n+n)%n]; return { name, sprite, element }; };
 /* ---- boss chests: 3 chests. Each: 50% $1-$5K, 25% each of: 1-10 cut gems/bars, epic+ weapon, epic+ armor, epic+ trinket, epic+ cooked food. Never empty. ---- */
 const pickFrom = l=> l[Math.floor(Math.random()*l.length)];
 const rareOrBetter = i=> ["rare","epic","legendary"].includes(i.rarity);
@@ -7405,7 +7625,7 @@ async function dgLeave(reason, manaLeft=null){
   }));
   state.profile.dungeon = null; dgLastHtml = "";
   document.body.classList.remove("dungeon-mode");
-  playMusic((REGIONS[state.profile.region]||REGIONS.forest).track);
+  playMusic(regionTrackNow());
   renderHUD();
   toast(reason==="safe" ? "🕯️ You left the dungeon safely. The door seals for 24 hours."
     : reason==="death" ? `💀 You died on floor ${run.floor}. You lost your dungeon loot and $${fmtMoney(lostMoney)}.`

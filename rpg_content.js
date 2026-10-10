@@ -690,3 +690,102 @@ export function addForageCraftRecipes(add, I){
    ["herb_garden_kit","Herb Garden Kit","uncommon","m.herb_bundle:2 m.basket:1 m.moss_padding:1","Everything for a window planter."]]
    .forEach(([slug,name,r,ing,desc])=>{ const list = ings(ing); add("mat_"+slug, name, "material", r, { desc, ...sellItem(list,2.1) }, list); });
 }
+
+
+/* =========================================================================
+   SEASONAL EVENTS — 7 holidays. The Event Stage on the map only opens while one is running.
+   Each event has its own foraged treats, spooky/festive fish, bugs and a rotating shop bank.
+   n = the number in its soundtrack file rpg_event_<n>.mp3 (New Year -> Christmas, in calendar order).
+   Dates are US Eastern, inclusive. If two overlap (Dec 31) the lower n wins the Event Stage.
+   Shop bank tuples: [kind, name, rarity, extra...]
+     food / potion : [kind,name,rarity]           trinket: [kind,name,rarity,STAT,"ring"|"amulet"]
+     weapon        : [kind,name,rarity,styleIdx]  armor  : [kind,name,rarity,slot,STAT]
+   ========================================================================= */
+export const EVENTS = [
+  { key:"newyear", n:1, name:"New Year's Celebration", icon:"🎆", from:[12,31], to:[1,2], deco:["🎆","🎉","🥂","✨","🎊","🕛"], corner:["🎆","🥂"],
+    forage:[["Midnight Grapes","common"],["Lucky Lentils","common"],["Sparkler Reeds","common"],["Glitter Berries","uncommon"],["Confetti Blossom","uncommon"],["Golden Clementine","rare"],["Midnight Truffle","epic"],["Phoenix Feather Bloom","legendary"]],
+    fish:[["Confetti Guppy","common"],["Streamer Tetra","uncommon"],["Sparkler Betta","uncommon"],["Champagne Goby","rare"],["Midnight Koi","epic"],["Aurora Arowana","legendary"]],
+    bugs:[["Confetti Ladybug","common","🐞"],["Glitter Moth","common","🦋"],["Confetti Firefly","uncommon","🪲"],["Party Beetle","rare","🪲"],["Countdown Cicada","epic","🦗"],["Golden Midnight Scarab","legendary","🪲"]],
+    shop:[["food","Midnight Toast Cake","uncommon"],["food","Black-Eyed Pea Stew","common"],["potion","Sparkling Cider Brew","rare"],["food","Glitter Cupcake","common"],["food","Confetti Cookies","uncommon"],["food","Lucky Noodle Bowl","rare"],
+          ["trinket","Party Hat Pin","uncommon","CHARM","ring"],["trinket","Noisemaker Charm","rare","SPEED","amulet"],["trinket","Lucky Coin Ring","epic","CHARM","ring"],
+          ["weapon","Sparkler Wand","uncommon",0],["weapon","Confetti Cannon","rare",5],["weapon","Midnight Blade","epic",0],
+          ["armor","Sequin Top Hat","rare","helmet","CHARM"],["armor","Countdown Chestcoat","epic","chestplate","SPEED"]] },
+  { key:"valentines", n:2, name:"Valentine's Day", icon:"💘", from:[2,7], to:[2,15], deco:["💘","🌹","💕","💌","🍫","💖"], corner:["🌹","💘"],
+    forage:[["Rose Petals","common"],["Cherry Chocolates","common"],["Strawberry Hearts","common"],["Love Lavender","uncommon"],["Honey Kisses","uncommon"],["Sweetheart Truffle","rare"],["Cupid's Cherry","epic"],["Eternal Rose","legendary"]],
+    fish:[["Heartfin Guppy","common"],["Blushing Barb","uncommon"],["Rosy Loach","uncommon"],["Lovebird Angelfish","rare"],["Cupid Ray","epic"],["Sweetheart Seahorse King","legendary"]],
+    bugs:[["Valentine Ladybug","common","🐞"],["Rose Beetle","common","🪲"],["Lovebug","uncommon","🪰"],["Heartwing Butterfly","rare","🦋"],["Cupid Moth","epic","🦋"],["Golden Heart Scarab","legendary","🪲"]],
+    shop:[["food","Chocolate Roses","uncommon"],["food","Strawberry Tart","common"],["food","Heart Cookies","common"],["potion","Love Potion Draught","rare"],["food","Candlelight Dinner","epic"],["food","Honeyed Truffles","rare"],
+          ["trinket","Heart Locket","uncommon","CHARM","amulet"],["trinket","Rose Ring","rare","CHARM","ring"],["trinket","Cupid's Charm","epic","SPEED","amulet"],
+          ["weapon","Cupid's Bow","rare",5],["weapon","Thorned Rapier","uncommon",1],["weapon","Heartbreaker Blade","epic",0],
+          ["armor","Rose Crown","rare","helmet","CHARM"],["armor","Velvet Cloak","epic","chestplate","SMARTS"]] },
+  { key:"stpatricks", n:3, name:"St. Patrick's Day", icon:"☘️", from:[3,10], to:[3,18], deco:["☘️","🍀","🌈","💰","🎩","🪙"], corner:["☘️","🍀"],
+    forage:[["Shamrock Sprigs","common"],["Soda Bread Crumbs","common"],["Mint Clover","common"],["Pot-of-Gold Plum","uncommon"],["Leprechaun's Leek","uncommon"],["Emerald Apple","rare"],["Rainbow Truffle","epic"],["Four-Leaf Crown","legendary"]],
+    fish:[["Lucky Minnow","common"],["Clover Carp","uncommon"],["Emerald Trout","uncommon"],["Gold Coin Bass","rare"],["Rainbow Salmon","epic"],["Leprechaun Pike","legendary"]],
+    bugs:[["Clover Ladybug","common","🐞"],["Green Beetle","common","🪲"],["Shamrock Hopper","uncommon","🦗"],["Emerald Moth","rare","🦋"],["Rainbow Dragonfly","epic","🪰"],["Pot-of-Gold Scarab","legendary","🪲"]],
+    shop:[["food","Irish Stew","uncommon"],["food","Shamrock Shake","common"],["food","Soda Bread","common"],["food","Lucky Cereal Bowl","uncommon"],["potion","Leprechaun's Brew","rare"],["food","Gold Coin Chocolates","rare"],
+          ["trinket","Clover Ring","uncommon","CHARM","ring"],["trinket","Shamrock Amulet","rare","CHARM","amulet"],["trinket","Pot of Gold Pendant","epic","SMARTS","amulet"],
+          ["weapon","Blarney Staff","uncommon",0],["weapon","Shillelagh","uncommon",4],["weapon","Rainbow Bow","rare",5],
+          ["armor","Green Top Hat","rare","helmet","CHARM"],["armor","Emerald Waistcoat","epic","chestplate","STRENGTH"]] },
+  { key:"easter", n:4, name:"Easter Celebration", icon:"🐰", from:[3,25], to:[4,5], deco:["🐰","🥚","🌷","🐣","🌸","🧺"], corner:["🐰","🥚"],
+    forage:[["Jellybeans","common"],["Chocolate Egg","common"],["Marshmallow Chick","common"],["Carrot Cake Crumbs","uncommon"],["Honey Ham Slice","uncommon"],["Sugar Crystal Egg","rare"],["Golden Basket Truffle","epic"],["Eternal Spring Lily","legendary"]],
+    fish:[["Egg-Spotted Minnow","common"],["Pastel Perch","uncommon"],["Bunny-Eared Catfish","uncommon"],["Painted Koi","rare"],["Spring Salmon","epic"],["Great Easter Sturgeon","legendary"]],
+    bugs:[["Spring Ladybug","common","🐞"],["Basket Beetle","common","🪲"],["Pastel Butterfly","uncommon","🦋"],["Egg Hunter Wasp","rare","🐝"],["Bunny Moth","epic","🦋"],["Golden Egg Scarab","legendary","🪲"]],
+    shop:[["food","Carrot Cake","uncommon"],["food","Hot Cross Bun","common"],["food","Chocolate Bunny","common"],["potion","Spring Tonic","rare"],["food","Deviled Egg Platter","uncommon"],["food","Honey-Glazed Ham","rare"],
+          ["trinket","Painted Egg Charm","uncommon","CHARM","amulet"],["trinket","Bunny Foot Ring","rare","SPEED","ring"],["trinket","Golden Egg Pendant","epic","SMARTS","amulet"],
+          ["weapon","Carrot Lance","uncommon",3],["weapon","Egg Hunter's Sling","rare",5],["weapon","Basket Mace","epic",4],
+          ["armor","Bunny Ear Cap","rare","helmet","SPEED"],["armor","Spring Vest","epic","chestplate","CHARM"]] },
+  { key:"fireworks", n:5, name:"Fireworks Day", icon:"🎇", from:[7,1], to:[7,5], deco:["🎇","🧨","🌟","🎆","🍉","🎈"], corner:["🎇","🧨"],
+    forage:[["Patriot Berries","common"],["Fire-Roasted Corn","common"],["Sparkler Reed Bundle","common"],["Watermelon Slice","uncommon"],["Blue Raspberry Ice","uncommon"],["Cherry Bomb","rare"],["Rocket Pop","epic"],["Grand Finale Pepper","legendary"]],
+    fish:[["Firecracker Minnow","common"],["Red-White Rockfish","uncommon"],["Starburst Bluegill","uncommon"],["Roman Candle Eel","rare"],["Skyrocket Marlin","epic"],["Fireworks Whale Shark","legendary"]],
+    bugs:[["Firecracker Beetle","common","🪲"],["Stars-and-Stripes Moth","common","🦋"],["Sparkler Firefly","uncommon","🪲"],["Rocket Wasp","rare","🐝"],["Grand Finale Cicada","epic","🦗"],["Liberty Scarab","legendary","🪲"]],
+    shop:[["food","Grilled Corn on the Cob","common"],["food","Barbecue Ribs","uncommon"],["food","Apple Pie Slice","uncommon"],["food","Red-White-Blue Popsicle","common"],["potion","Fireworks Fizz Brew","rare"],["food","Backyard Burger Platter","rare"],
+          ["trinket","Sparkler Ring","uncommon","SPEED","ring"],["trinket","Star Spangled Amulet","rare","STRENGTH","amulet"],["trinket","Liberty Pendant","epic","CHARM","amulet"],
+          ["weapon","Roman Candle Staff","uncommon",0],["weapon","Rocket Launcher Bow","rare",5],["weapon","Finale Warhammer","epic",4],
+          ["armor","Star Spangled Helm","rare","helmet","STRENGTH"],["armor","Stripes Chestguard","epic","chestplate","STRENGTH"]] },
+  { key:"halloween", n:6, name:"Halloween Festival", icon:"🎃", from:[10,10], to:[11,1], deco:["🎃","🕸️","🦇","👻","🍬","🕷️","🌙"], corner:["🎃","🕸️"],
+    forage:[["Candy Corn","common"],["Popcorn Ball","common"],["Peanut Butter Cup","common"],["Caramel Apple","uncommon"],["Gummy Worms","uncommon"],["Chocolate Skull","rare"],["Cursed Fudge","epic"],["Golden Pumpkin Truffle","legendary"]],
+    fish:[["Mutant Minnow","common"],["Two-Headed Bass","uncommon"],["Skeleton Trout","uncommon"],["Zombie Catfish","rare"],["Banshee Eel","epic"],["Ghost Whale Calf","legendary"]],
+    bugs:[["Pumpkin Beetle","common","🪲"],["Cobweb Moth","common","🦋"],["Witch Wasp","uncommon","🐝"],["Skull Moth","rare","🦋"],["Vampire Beetle","epic","🪲"],["Headless Horsefly","legendary","🪰"]],
+    shop:[["food","Candy Apple","common"],["food","Pumpkin Pie Slice","uncommon"],["food","Ghost Pepper Stew","rare"],["food","Skeleton Cookies","common"],["food","Spider Cupcake","uncommon"],["food","Mummy Dogs","uncommon"],["food","Bat Wing Wrap","rare"],["food","Eyeball Jelly","common"],["food","Caramel Corn Bucket","common"],["food","Vampire Velvet Cake","epic"],
+          ["potion","Witch's Brew","rare"],["potion","Shadow Elixir","epic"],["potion","Haunted Tonic","uncommon"],["potion","Moonlit Draught","rare"],
+          ["trinket","Black Cat Charm","uncommon","SPEED","amulet"],["trinket","Pumpkin Ring","uncommon","STRENGTH","ring"],["trinket","Bat Wing Amulet","rare","SPEED","amulet"],["trinket","Ghostly Locket","rare","SMARTS","amulet"],["trinket","Vampire Fang Pendant","epic","STRENGTH","amulet"],["trinket","Witch's Hat Pin","uncommon","SMARTS","ring"],
+          ["weapon","Bone Club","common",3],["weapon","Spider Fang Dagger","uncommon",1],["weapon","Jack-o'-Lantern Mace","rare",4],["weapon","Witch's Broomstick","epic",3],["weapon","Reaper's Scythe","legendary",2],
+          ["armor","Pumpkin Helm","uncommon","helmet","STRENGTH"],["armor","Cobweb Chestplate","rare","chestplate","SPEED"],["armor","Ghostly Leggings","rare","leggings","SMARTS"],["armor","Bat Wing Boots","epic","boots","SPEED"],["armor","Witch's Cloak","epic","chestplate","SMARTS"]] },
+  { key:"christmas", n:7, name:"Christmas Festival", icon:"🎄", from:[12,1], to:[12,31], deco:["🎄","⛄","🎁","🔔","❄️","⭐","🦌"], corner:["🎄","🎁"],
+    forage:[["Candy Cane Shards","common"],["Gingerbread Crumbs","common"],["Holly Berries","common"],["Cinnamon Stick","uncommon"],["Peppermint Bark","uncommon"],["Sugar Plum","rare"],["Frosted Yule Truffle","epic"],["Star of the North Blossom","legendary"]],
+    fish:[["Snowflake Minnow","common"],["Ornament Perch","uncommon"],["Candy Stripe Bass","uncommon"],["Silver Bell Trout","rare"],["Frostbitten Salmon","epic"],["Reindeer Ray","legendary"]],
+    bugs:[["Holly Ladybug","common","🐞"],["Snow Beetle","common","🪲"],["Tinsel Moth","uncommon","🦋"],["Jingle Bell Wasp","rare","🐝"],["Yule Cicada","epic","🦗"],["Golden Star Scarab","legendary","🪲"]],
+    shop:[["food","Gingerbread Man","common"],["food","Yule Log Cake","uncommon"],["food","Christmas Pudding","rare"],["food","Roast Turkey Dinner","epic"],["food","Candy Cane Cookies","common"],["potion","Hot Cocoa Brew","rare"],
+          ["trinket","Jingle Bell Ring","uncommon","SPEED","ring"],["trinket","Snowflake Amulet","rare","SMARTS","amulet"],["trinket","Northern Star Pendant","epic","CHARM","amulet"],
+          ["weapon","Candy Cane Cutlass","uncommon",0],["weapon","Icicle Spear","rare",3],["weapon","Nutcracker Mace","epic",4],
+          ["armor","Santa Hat","rare","helmet","CHARM"],["armor","Reindeer Hide Coat","epic","chestplate","STRENGTH"]] }
+];
+
+/* Registers every event item in I (ITEM_BY_ID). Returns { byKey:{ key:{ forage:[ids], fish:[ids], bug:[ids], shop:[ids] } }, bugEmoji:{id:emoji} }. */
+export function registerEventItems(I){
+  const RB = { common:20, uncommon:60, rare:180, epic:480, legendary:1200 };                 // price scale by rarity
+  const KM = { food:.6, potion:.9, trinket:1.2, weapon:1.5, armor:1.4 };                      // ...and by kind
+  const FORAGE_SELL = { common:[2,5], uncommon:[8,13], rare:[28,42], epic:[72,90], legendary:[190,210] };
+  const BUG_SELL_R = { common:[3,9], uncommon:[10,20], rare:[28,50], epic:[70,120], legendary:[160,280] };
+  const byKey = {}, bugEmoji = {};
+  const spread = (r, tbl, i)=>{ const [lo,hi] = tbl[r]; return Math.round(lo + (hi-lo)*((i*37%10)/9)); };
+  EVENTS.forEach(ev=>{
+    const out = byKey[ev.key] = { forage:[], fish:[], bug:[], shop:[] };
+    ev.forage.forEach(([name,r],i)=>{ const id = `ev_${ev.key}_forage_${slug(name)}`;
+      I[id] = { id, name, type:"consumable", rarity:r, sellPrice:spread(r,FORAGE_SELL,i), desc:`${ev.icon} ${ev.name}: a treat found only at the Event Stage.`, stats:{}, event:ev.key }; out.forage.push(id); });
+    ev.fish.forEach(([name,r],i)=>{ const id = `ev_${ev.key}_fish_${slug(name)}`;
+      I[id] = { id, name, type:"consumable", rarity:r, sellPrice:Math.round(FISH_BASE_SELL[r]*1.4*(0.9+(i%5)*0.05)), desc:`${ev.icon} ${ev.name}: a strange catch from the Event Stage waters.`, stats:{}, event:ev.key }; out.fish.push(id); });
+    ev.bugs.forEach(([name,r,emoji],i)=>{ const id = `ev_${ev.key}_bug_${slug(name)}`;
+      I[id] = { id, name, type:"material", rarity:r, sellPrice:spread(r,BUG_SELL_R,i), desc:`${ev.icon} ${ev.name}: an odd-looking bug. Sell it or craft with it.`, stats:{}, event:ev.key }; bugEmoji[id] = emoji; out.bug.push(id); });
+    ev.shop.forEach((t,i)=>{
+      const [kind,name,r] = t, id = `ev_${ev.key}_shop_${slug(name)}`, price = Math.round(RB[r]*KM[kind]), base = { id, name, rarity:r, price, sellPrice:Math.max(1,Math.round(price*0.3)), event:ev.key };
+      if(kind==="food") I[id] = { ...base, type:"consumable", desc:`${ev.icon} ${ev.name} treat. Heals well.`, stats:{} };
+      else if(kind==="potion") I[id] = { ...base, type:"consumable", desc:`${ev.icon} ${ev.name} drink. Heals a random amount.`, stats:{} };
+      else if(kind==="trinket"){ const [,, , stat, form] = t; I[id] = { ...base, type:"trinket", ...gearExtra(craftedTrinketStats(form, r, stat), `${ev.icon} A ${ev.name} ${form} that boosts ${stat.toLowerCase()}.`) }; }
+      else if(kind==="weapon") I[id] = { ...base, type:"weapon", ...gearExtra({ attack:craftedWeaponAttack(r, t[3]) }, `${ev.icon} A ${ev.name} weapon.`) };
+      else { const [,, , slot, stat] = t; I[id] = { ...base, type:"armor", armorSlot:slot, ...gearExtra(craftedArmorStats(slot, r, stat, 0), `${ev.icon} ${ev.name} armor for your ${slot}.`) }; }
+      out.shop.push(id);
+    });
+  });
+  return { byKey, bugEmoji };
+}

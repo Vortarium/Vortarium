@@ -1086,6 +1086,7 @@ body.theme-dark .sk-node em, body.theme-dark .sk-rowlabel{color:var(--ink-soft);
 .scene-bg{position:fixed; top:0; left:0; width:100vw; height:100vh; height:100dvh; z-index:-1; pointer-events:none; overflow:hidden;}   /* pinned to the real screen, not the padded game box */   /* covers the whole game screen, header and footer included */
 .scene-bg svg[data-rg]{display:none;}
 .scene-bg[data-region="forest"] svg[data-rg="forest"], .scene-bg[data-region="reef"] svg[data-rg="reef"], .scene-bg[data-region="mountains"] svg[data-rg="mountains"], .scene-bg[data-region="volcano"] svg[data-rg="volcano"]{display:block;}
+.scene-bg[data-region="ev_newyear"] svg[data-rg="ev_newyear"], .scene-bg[data-region="ev_valentines"] svg[data-rg="ev_valentines"], .scene-bg[data-region="ev_stpatricks"] svg[data-rg="ev_stpatricks"], .scene-bg[data-region="ev_easter"] svg[data-rg="ev_easter"], .scene-bg[data-region="ev_fireworks"] svg[data-rg="ev_fireworks"], .scene-bg[data-region="ev_halloween"] svg[data-rg="ev_halloween"], .scene-bg[data-region="ev_christmas"] svg[data-rg="ev_christmas"]{display:block;}
 .scene-bg svg.sc-defs{width:0; height:0; position:absolute; display:block;}
 .scene-bg svg{position:absolute; top:0; left:0; width:100%; height:100%; display:block;}
 .scene-bg .scene-day{opacity:calc(1 - var(--night, 0));}
@@ -1136,3 +1137,44 @@ body.mod-device.sv-visible .server-mgmt-btn{display:inline-flex;}
 .tab-btn.map-locked{ opacity:.55; cursor:not-allowed; text-decoration:line-through wavy; }
 .is-mobile .wm-label{ display:none; } .is-mobile .wm-node.sel .wm-label, .is-mobile .wm-node.here .wm-label{ display:block; }
 .is-mobile .wm-pin{ width:28px; height:28px; font-size:15px; }
+
+
+/* =========================================================================
+   HOLIDAY EVENTS (body[data-event]) — recolours buttons / tabs / pills and adds garland + corner decorations
+   ========================================================================= */
+body[data-event="halloween"]{--pink:#FFC48A;--pink-d:#F59A3B;--blue:#D7C3F5;--blue-d:#A883E0;--green:#C9E0A8;--green-d:#8DBB5A;--yellow:#FFB347;--yellow-d:#F08A1C;--purple:#C9A3F0;--purple-d:#9460D6;--ev:#ff8a1f;}
+body.theme-dark[data-event="halloween"]{--pink:#7A3E12;--pink-d:#B8601C;--blue:#3A2A5A;--blue-d:#6544A0;--green:#34502A;--green-d:#5E8A3E;--yellow:#7A4A0A;--yellow-d:#C77A12;--purple:#4A2E78;--purple-d:#7E4FC0;}
+body[data-event="christmas"]{--pink:#FFB3B8;--pink-d:#E0545E;--blue:#CFE6F7;--blue-d:#8CBFE0;--green:#BFE8C4;--green-d:#4FAE63;--yellow:#FFE8A3;--yellow-d:#E8B93A;--purple:#E2D2F2;--purple-d:#B79AD8;--ev:#d9323f;}
+body.theme-dark[data-event="christmas"]{--pink:#7A2A33;--pink-d:#B8434E;--blue:#24465F;--blue-d:#3F7399;--green:#1E5A33;--green-d:#2F8A4C;--yellow:#6B5316;--yellow-d:#B8962E;--purple:#43365E;--purple-d:#6D58A0;}
+body[data-event="valentines"]{--pink:#FFC1D9;--pink-d:#FF7FAF;--blue:#F5D2EC;--blue-d:#E89BD0;--green:#FFD6E6;--green-d:#F7A1C0;--yellow:#FFE0E8;--yellow-d:#FFB0C8;--purple:#F0C6F5;--purple-d:#D78CE6;--ev:#ff5c9a;}
+body.theme-dark[data-event="valentines"]{--pink:#7A2A4E;--pink-d:#C2487F;--blue:#5E2A58;--blue-d:#9A4A92;--green:#6E2F47;--green-d:#B24E78;--yellow:#7A3A4A;--yellow-d:#C96A82;--purple:#5B2A6B;--purple-d:#9446B0;}
+body[data-event="stpatricks"]{--pink:#E3F5C9;--pink-d:#B7DD7A;--blue:#CDEFD9;--blue-d:#7FCF9F;--green:#BDEFAA;--green-d:#58C24A;--yellow:#FFF0A0;--yellow-d:#EBC93A;--purple:#D4F0C0;--purple-d:#A0CF6A;--ev:#2fa84a;}
+body.theme-dark[data-event="stpatricks"]{--pink:#3E5A20;--pink-d:#6E9A32;--blue:#1F5A40;--blue-d:#33906A;--green:#1F5A22;--green-d:#3AA042;--yellow:#6B6014;--yellow-d:#B8A52A;--purple:#355A2A;--purple-d:#5E9A44;}
+body[data-event="easter"]{--pink:#FFD3EC;--pink-d:#F59BD0;--blue:#C9E8FF;--blue-d:#87C4F5;--green:#D5F5C9;--green-d:#9BDC8A;--yellow:#FFF3B0;--yellow-d:#F7D868;--purple:#E4D3FB;--purple-d:#C0A0F0;--ev:#f59bd0;}
+body.theme-dark[data-event="easter"]{--pink:#6E3A5E;--pink-d:#AA5A92;--blue:#2D4F70;--blue-d:#4E82B5;--green:#2F5A33;--green-d:#4E8F52;--yellow:#6B5A22;--yellow-d:#B09A36;--purple:#4A3A6E;--purple-d:#7A62B0;}
+body[data-event="fireworks"]{--pink:#FFB8C0;--pink-d:#F0606F;--blue:#BFD9FF;--blue-d:#5A92E8;--green:#D6E4FF;--green-d:#8DB3F0;--yellow:#FFF2BF;--yellow-d:#F0C94A;--purple:#D9D2FF;--purple-d:#8F82E8;--ev:#3a66d0;}
+body.theme-dark[data-event="fireworks"]{--pink:#7A2A3A;--pink-d:#C0404E;--blue:#22406E;--blue-d:#3A66B0;--green:#2A3E70;--green-d:#4A66A8;--yellow:#6B5A1E;--yellow-d:#B09530;--purple:#3B3470;--purple-d:#6458B8;}
+body[data-event="newyear"]{--pink:#FFD6E8;--pink-d:#F59BC8;--blue:#CFE0FF;--blue-d:#8FB0F0;--green:#FFF0B8;--green-d:#E6C34A;--yellow:#FFE48A;--yellow-d:#F0B820;--purple:#E2CCFF;--purple-d:#B38AF0;--ev:#e6b020;}
+body.theme-dark[data-event="newyear"]{--pink:#6E2A5A;--pink-d:#AA4A92;--blue:#243A6E;--blue-d:#3F62B0;--green:#6B5A16;--green-d:#B09A28;--yellow:#7A5E0C;--yellow-d:#D0A010;--purple:#44286E;--purple-d:#7A48B8;}
+body[data-event] .game-header{ box-shadow:0 0 0 3px var(--ev), 4px 5px 0 rgba(74,63,53,.2); }
+body[data-event] .region-pill{ background:var(--ev); color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.4); }
+body[data-event] .tab-btn{ border-color:var(--ev); }
+body[data-event] .tab-btn.active{ background:var(--ev); color:#fff; }
+body[data-event] .doodle-btn{ border-color:var(--ev); }
+body[data-event] .doodle-panel{ border-color:var(--ev); }
+#eventDeco{ position:fixed; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
+#eventDeco .ev-garland{ position:absolute; top:-6px; left:0; right:0; display:flex; justify-content:space-around; font-size:24px; filter:drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+#eventDeco .ev-garland span{ display:inline-block; transform-origin:top center; animation:evSway 2.6s ease-in-out infinite; }
+@keyframes evSway{ 0%,100%{ transform:rotate(-7deg) } 50%{ transform:rotate(7deg) } }
+#eventDeco .ev-corner{ position:absolute; bottom:-6px; font-size:64px; opacity:.85; filter:drop-shadow(0 3px 3px rgba(0,0,0,.4)); }
+#eventDeco .ev-l{ left:6px; } #eventDeco .ev-r{ right:6px; }
+.is-mobile #eventDeco .ev-corner{ font-size:40px; }
+.modal-backdrop{ z-index:60; }
+/* Event Stage: a triangle marker (villages are rounded squares, scenic spots are circles) */
+.wm-node.event .wm-pin{ border:0; border-radius:0; width:50px; height:46px; line-height:1; background:#4a2c12; clip-path:polygon(50% 0,100% 100%,0 100%); box-shadow:none; position:relative; isolation:isolate; align-items:flex-end; justify-content:center; padding-bottom:7px; }
+.wm-node.event .wm-pin::before{ content:""; position:absolute; inset:3px 4px 2px 4px; clip-path:polygon(50% 5%,96% 100%,4% 100%); background:#ffd84a; z-index:-1; }
+.wm-node.event .wm-pin > *{ position:relative; z-index:1; }
+.wm-node.event .wm-pin{ font-size:15px; }
+.wm-node.event.closed{ opacity:.55; filter:grayscale(.8); }
+.wm-node.event:not(.closed) .wm-pin{ animation:evPulse 1.4s ease-in-out infinite; }
+@keyframes evPulse{ 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.18) } }
