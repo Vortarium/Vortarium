@@ -6,17 +6,28 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <title>Vortarium Productions</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+        :root {
+            --ink: #f5f5f7;
+            --ink-dim: rgba(245,245,247,0.62);
+            --ink-faint: rgba(245,245,247,0.4);
+            --glass: rgba(24,24,28,0.55);
+            --glass-strong: rgba(24,24,28,0.78);
+            --line: rgba(255,255,255,0.12);
+            --radius-lg: 28px;
+            --radius-md: 18px;
+            --radius-pill: 999px;
+            --page-pad: clamp(16px, 4vw, 40px);
         }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { background: #0b0b0e; scroll-behavior: smooth; }
+
         /* ── Custom scrollbar ── */
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); border-radius: 10px; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); }
         ::-webkit-scrollbar-thumb {
             background: rgba(255,255,255,0.25);
             border-radius: 10px;
@@ -31,13 +42,27 @@
         * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) rgba(0,0,0,0.4); }
 
         body {
-            font-family: 'Quicksand', sans-serif;
-            color: #fff;
-            background: url('cafe.gif') no-repeat center center fixed;
-            background-size: cover;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--ink);
             overflow-x: hidden;
             min-height: 100vh;
+            position: relative;
+            -webkit-font-smoothing: antialiased;
         }
+
+        /* ── Background (bg.jpg) with a soft dark wash for readability ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                linear-gradient(rgba(8,8,12,0.45), rgba(8,8,12,0.78)),
+                url('bg.jpg') center / cover no-repeat;
+        }
+
+        button { font-family: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
         /* ── Curtain transition ── */
         #curtain {
@@ -51,8 +76,6 @@
             justify-content: center;
             gap: 28px;
         }
-
-        /* Top and bottom curtain panels */
         .curtain-panel {
             position: absolute;
             left: 0;
@@ -63,18 +86,13 @@
         }
         .curtain-panel.top    { top: 0;   transform: translateY(-100%); }
         .curtain-panel.bottom { bottom: 0; transform: translateY(100%); }
-
-        /* Closed state — panels slide in */
         #curtain.closing .curtain-panel.top    { transform: translateY(0); }
         #curtain.closing .curtain-panel.bottom { transform: translateY(0); }
         #curtain.closed  .curtain-panel.top    { transform: translateY(0); }
         #curtain.closed  .curtain-panel.bottom { transform: translateY(0); }
-
-        /* Opening state — panels slide back out */
         #curtain.opening .curtain-panel.top    { transform: translateY(-100%); }
         #curtain.opening .curtain-panel.bottom { transform: translateY(100%); }
 
-        /* Spinner — only visible when curtain is closed */
         #curtain-spinner {
             position: relative;
             z-index: 1;
@@ -84,7 +102,6 @@
             transition: opacity 0.25s;
         }
         #curtain.closed #curtain-spinner { opacity: 1; }
-
         #curtain-spinner::before {
             content: '';
             display: block;
@@ -100,143 +117,312 @@
         /* ── Top bar (playtime + search) ── */
         header {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 14px 24px;
+            top: 0; left: 0; right: 0;
+            padding: 12px var(--page-pad);
             z-index: 100;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            background: rgba(0,0,0,0.35);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            background: rgba(14,14,18,0.55);
+            backdrop-filter: saturate(180%) blur(24px);
+            -webkit-backdrop-filter: saturate(180%) blur(24px);
+            border-bottom: 1px solid var(--line);
         }
         .playtime {
-            background: rgba(0,0,0,0.5);
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(255,255,255,0.2);
+            padding: 9px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--ink-dim);
+            background: rgba(255,255,255,0.08);
             white-space: nowrap;
             flex-shrink: 0;
+            font-variant-numeric: tabular-nums;
         }
+        .playtime span { color: var(--ink); }
 
-        /* Search bar */
-        #search-wrap {
-            flex: 1;
-            max-width: 420px;
-            position: relative;
-        }
+        #search-wrap { flex: 1; max-width: 380px; position: relative; }
         #search-wrap svg {
             position: absolute;
-            left: 14px;
-            top: 50%;
+            left: 14px; top: 50%;
             transform: translateY(-50%);
-            opacity: 0.45;
+            opacity: 0.5;
             pointer-events: none;
         }
         #game-search {
             width: 100%;
-            padding: 10px 16px 10px 42px;
-            border-radius: 25px;
-            border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(0,0,0,0.5);
-            color: #fff;
-            font-family: 'Quicksand', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
+            padding: 10px 16px 10px 40px;
+            border-radius: var(--radius-pill);
+            border: 1px solid transparent;
+            background: rgba(255,255,255,0.1);
+            color: var(--ink);
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 500;
             outline: none;
-            backdrop-filter: blur(8px);
-            transition: border-color 0.2s, background 0.2s;
+            transition: background 0.2s, border-color 0.2s;
         }
-        #game-search::placeholder { color: rgba(255,255,255,0.35); }
+        #game-search::placeholder { color: var(--ink-faint); }
         #game-search:focus {
-            border-color: rgba(255,255,255,0.5);
-            background: rgba(0,0,0,0.65);
+            background: rgba(255,255,255,0.16);
+            border-color: rgba(255,255,255,0.4);
         }
 
-        /* "No results" message */
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 104px var(--page-pad) 8px;
+        }
+        .main-logo {
+            width: 340px;
+            max-width: 70%;
+            filter: drop-shadow(0 6px 24px rgba(0,0,0,0.55));
+        }
+        .creator-desc {
+            font-size: 0.95rem;
+            line-height: 1.65;
+            font-weight: 500;
+            color: var(--ink-dim);
+            max-width: 560px;
+            margin: 18px auto 0;
+        }
+
+        /* ── Layout ── */
+        main {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 24px var(--page-pad) 120px;
+        }
+        section { margin-top: 56px; }
+        section:first-child { margin-top: 24px; }
+        .section-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .section-head h2 {
+            font-size: clamp(1.4rem, 2.4vw, 1.75rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .section-head .count { font-size: 0.9rem; color: var(--ink-faint); font-weight: 500; }
+
+        /* ── Trending banner ── */
+        .trending {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 32px;
+            width: 100%;
+            min-height: 360px;
+            padding: clamp(24px, 5vw, 56px);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            text-align: left;
+            cursor: pointer;
+            background: #111;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+        }
+        .trending-bg {
+            position: absolute;
+            inset: -40px;
+            width: calc(100% + 80px);
+            height: calc(100% + 80px);
+            object-fit: cover;
+            filter: blur(46px) saturate(140%) brightness(0.7);
+            transform: scale(1.1);
+        }
+        .trending::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(8,8,12,0.78) 0%, rgba(8,8,12,0.35) 60%, rgba(8,8,12,0.1) 100%);
+        }
+        .trending-copy { position: relative; z-index: 1; max-width: 520px; }
+        .trending-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 14px;
+            border-radius: var(--radius-pill);
+            background: rgba(255,255,255,0.14);
+            backdrop-filter: blur(12px);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .trending h2 {
+            font-size: clamp(2.4rem, 6vw, 4.2rem);
+            font-weight: 800;
+            letter-spacing: -0.035em;
+            line-height: 1.02;
+            margin: 18px 0 12px;
+            text-transform: capitalize;
+        }
+        .trending p {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            color: rgba(245,245,247,0.8);
+            font-weight: 500;
+        }
+        .play-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 28px;
+            padding: 14px 30px;
+            border: 0;
+            border-radius: var(--radius-pill);
+            background: #fff;
+            color: #111;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .play-btn:hover { background: #e8e8ed; transform: scale(1.03); }
+        .trending-art {
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+            width: clamp(180px, 24vw, 280px);
+            aspect-ratio: 1;
+            object-fit: cover;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+        }
+
+        /* ── Game cards ── */
+        .grid { display: grid; gap: 20px; }
+        .grid.popular { grid-template-columns: 1fr; gap: 14px; }
+        .grid.all     { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+
+        .game-card {
+            display: block;
+            width: 100%;
+            padding: 0;
+            border: 0;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+        }
+        .thumb-wrap {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--line);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s;
+        }
+        .game-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .game-card:hover .thumb-wrap {
+            transform: translateY(-5px);
+            box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+        }
+        .game-title {
+            margin-top: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .game-date { margin-top: 2px; font-size: 0.85rem; color: var(--ink-dim); font-weight: 500; letter-spacing: 0.02em; }
+
+
+        /* ── Popular: long thin ranked banners ── */
+        .rank-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 22px;
+            width: 100%;
+            height: 108px;
+            padding: 0 clamp(18px, 3vw, 32px);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #111;
+            color: var(--ink);
+            text-align: left;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s;
+        }
+        .rank-row:hover { transform: translateY(-3px); box-shadow: 0 18px 44px rgba(0,0,0,0.5); }
+        .rank-bg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+            filter: brightness(0.72) saturate(115%);
+            transition: filter 0.3s;
+        }
+        .rank-row:hover .rank-bg { filter: brightness(0.9) saturate(120%); }
+        .rank-row::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(8,8,12,0.85) 0%, rgba(8,8,12,0.45) 45%, rgba(8,8,12,0.05) 100%);
+        }
+        .rank-num {
+            position: relative;
+            z-index: 1;
+            min-width: 40px;
+            font-size: 2.6rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            font-variant-numeric: tabular-nums;
+        }
+        .rank-info { position: relative; z-index: 1; min-width: 0; flex: 1; }
+        .rank-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rank-info .game-date { color: rgba(245,245,247,0.75); }
+        .rank-play {
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+            width: 42px; height: 42px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.16);
+            backdrop-filter: blur(10px);
+            transition: background 0.2s, color 0.2s;
+        }
+        .rank-row:hover .rank-play { background: #fff; color: #111; }
+
         #no-results {
             display: none;
             text-align: center;
             padding: 60px 20px;
-            font-size: 1.2rem;
-            color: rgba(255,255,255,0.5);
+            font-size: 1.1rem;
+            color: var(--ink-dim);
         }
 
-        /* Main Branding */
-        .hero { text-align: center; padding: 80px 20px 40px; }
-        .main-logo {
-            width: 600px;
-            max-width: 90%;
-            margin-bottom: 20px;
-            filter: drop-shadow(0 0 15px rgba(0,0,0,0.8));
-        }
-        .creator-desc {
-            font-size: 1.3rem;
-            color: #f7e1d7;
-            max-width: 800px;
-            margin: 0 auto;
-            line-height: 1.6;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
-            background: rgba(0,0,0,0.4);
-            padding: 20px;
-            border-radius: 20px;
-        }
-
-        /* Grid */
-        .container { max-width: 1100px; margin: 40px auto 100px; padding: 20px; }
-        .game-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 40px;
-            justify-items: center;
-        }
-        .game-card {
-            width: 320px;
-            cursor: pointer;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            text-align: center;
-        }
-        .game-card:hover { transform: scale(1.08); }
-        .game-thumb {
-            width: 320px;
-            height: 320px;
-            object-fit: cover;
-            border-radius: 20px;
-            border: 4px solid rgba(255,255,255,0.15);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-            margin-bottom: 15px;
-        }
-        .game-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #fff;
-            text-shadow: 2px 2px 4px rgba(0,0,0,1);
-        }
-
-        /* Fullscreen game overlay */
-        #game-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: #000;
-            z-index: 9999;
-        }
+        /* ── Fullscreen game overlay ── */
+        #game-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 9999; }
         #game-iframe { width: 100%; height: 100%; border: none; }
-
-        /* Back button — 2× size, full opacity */
         #back-logo {
             position: absolute;
-            top: 130px;
-            left: 30px;
-            width: 160px;
-            height: auto;
-            opacity: 1;
+            top: 130px; left: 30px;
+            width: 160px; height: auto;
             cursor: pointer;
             z-index: 10001;
             transition: transform 0.2s;
@@ -246,17 +432,34 @@
 
         #mute-btn {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: rgba(0,0,0,0.7);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 50px;
+            bottom: 24px; right: 24px;
+            background: var(--glass-strong);
+            border: 1px solid var(--line);
+            color: var(--ink);
+            padding: 11px 18px;
+            border-radius: var(--radius-pill);
             cursor: pointer;
             z-index: 100;
-            font-weight: bold;
-            backdrop-filter: blur(5px);
+            font-size: 0.9rem;
+            font-weight: 600;
+            backdrop-filter: blur(16px);
+            transition: background 0.2s;
+        }
+        #mute-btn:hover { background: rgba(50,50,56,0.85); }
+
+        /* ── Responsive ── */
+        @media (max-width: 700px) {
+            .trending { flex-direction: column-reverse; align-items: flex-start; min-height: 0; }
+            .trending-art { width: 140px; }
+            .rank-row { height: 84px; gap: 14px; }
+            .rank-num { font-size: 2rem; min-width: 28px; }
+            .rank-name { font-size: 1.05rem; }
+            .rank-play { display: none; }
+            .grid.all { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+            .playtime { font-size: 0.8rem; padding: 8px 12px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; scroll-behavior: auto !important; }
         }
     </style>
 </head>
@@ -274,27 +477,42 @@
     <header>
         <div class="playtime">Playtime: <span id="playtime-display">0m 0s</span></div>
         <div id="search-wrap">
-            <!-- magnifier icon -->
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
             </svg>
-            <input id="game-search" type="text" placeholder="Search games…" autocomplete="off" spellcheck="false">
+            <input id="game-search" type="text" placeholder="Search projects" autocomplete="off" spellcheck="false" aria-label="Search projects">
         </div>
     </header>
 
     <div class="hero">
         <img src="v.png" alt="Vortarium Productions" class="main-logo">
         <p class="creator-desc">
-            Hey it's me Logan, the creator of all the games, have fun playing them! <br>
-            If you want to return back to the home page just click the logo in the top left corner. <br>
-             Also games at the top are most recently made or updated, so have fun!
+            Hey it's me Logan, the creator of all the projects, have fun playing them!<br>
+            To get back to this page from a project, click the logo in the top left corner.
+            Projects at the top are the most recently made or updated.
         </p>
     </div>
 
-    <div class="container">
-        <div class="game-grid" id="game-grid"></div>
-        <div id="no-results">No games match "<span id="no-results-term"></span>"</div>
-    </div>
+    <main>
+        <!-- Trending banner (filled in by script) -->
+        <section id="trending-section" aria-label="Trending game"></section>
+
+        <!-- Popular projects -->
+        <section id="popular-section">
+            <div class="section-head"><h2>Popular</h2></div>
+            <div class="grid popular" id="popular-grid"></div>
+        </section>
+
+        <!-- All other projects -->
+        <section id="all-section">
+            <div class="section-head">
+                <h2 id="all-title">All projects</h2>
+                <span class="count" id="all-count"></span>
+            </div>
+            <div class="grid all" id="game-grid"></div>
+            <div id="no-results">No projects match "<span id="no-results-term"></span>"</div>
+        </section>
+    </main>
 
     <button id="mute-btn" onclick="toggleMute()">🔊 Mute Music</button>
 
@@ -324,62 +542,188 @@
         }, 1000);
         updateTimerDisplay();
 
-        // ── Game list ─────────────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOMEPAGE SETTINGS — edit these to change how the page looks
+        // ══════════════════════════════════════════════════════════════════════
+
+        // 1) TRENDING BANNER — the big banner at the top.
+        //    Put the `prefix` of any project below. Set to null to hide the banner.
+        const TRENDING = 'rpg';
+
+        // 2) POPULAR LEADERBOARD — the projects ranked 1–5 right under the banner, in this order.
+        //    Use the `prefix` of each game. Add or remove as you like.
+        const POPULAR = ['rpg', 'aetherium', 'breakout', 'ragebait', 'mini pet'];
+
+        // 3) Should popular projects ALSO show up again in the "All projects" list?
+        const SHOW_POPULAR_IN_ALL = false;
+
+        // ── Project list ──────────────────────────────────────────────────────
+        // The "All projects" list is sorted automatically by release date, newest
+        // first. Projects released in the same month stay in the order listed here.
+        //   prefix → filename prefix  (e.g. 'mygame' loads 'mygame_index.html')
+        //   name   → display name on the card
+        //   img    → thumbnail filename in the root folder
+        //   date   → release date as 'MON YEAR' (e.g. 'SEP 2026')
+        //   blurb  → (optional) one-line description, shown on the trending banner
         const games = [
-            // ── Games (each loads its own _index.html in the fullscreen overlay) ──
-            { prefix: 'rpg',         name: 'dragoneer',       img: 'rpg.png'     },
-            { prefix: 'aetherium',         name: 'AETHERIUM',       img: 'aetherium.png'     },
-            { prefix: 'graphwar',         name: 'GRAPH WAR',       img: 'graphwar.png'     },
-            { prefix: 'helen',         name: 'Helen Keller Sim',       img: 'helen.png'     },
-            { prefix: 'breakout',         name: 'Breakout',       img: 'breakout.png'     },
-            { prefix: 'zen',         name: 'ZenWords',       img: 'zen.png'     },
-            { prefix: 'windows',         name: 'Windows 12',       img: 'windows.png'     },
-            { prefix: 'merge',           name: 'Cosmic Merge',     img: 'merge.png'     },
-            { prefix: 'spotify',         name: 'Spotify',          img: 'spotify.png'     },
-            { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png'     },
-            { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png'        },
-            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png'       },
-            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png'        },
-            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png'          },
-            { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png'        },
-            { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png'        },
-            { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png'        },
-            { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png'           },
-            { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png'       },
-            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png'  },
-            { prefix: 'home',            name: 'Home',             img: 'home.png'             },
-            { prefix: 'void run',        name: 'Void Run',         img: 'void-run.png'         },
-            { prefix: 'the eye',         name: 'The Eye',          img: 'the-eye.png'          },
-            { prefix: 'ragebait',        name: 'Ragebait',         img: 'ragebait.png'         },
-            { prefix: 'mini pet',        name: 'Mini Pet',         img: 'mini-pet.png'         },
-            { prefix: 'steringos',       name: 'SterlingOS',       img: 'steringos.png'        },
-            { prefix: 'vortalk',         name: 'Vortalk',          img: 'vortalk.png'          },
-            { prefix: 'fishtopia',       name: 'Fishtopia',        img: 'fishtopia.png'        },
-            { prefix: 'nivorian empire', name: 'Nivorian Empire',  img: 'nivorian-empire.png'  },
-            { prefix: 'vplace',          name: 'V-Place',          img: 'vplace.png'           },
-            { prefix: 'pixel mice sim',  name: 'Pixel Mice Sim',   img: 'pixel-mice-sim.png'   },
-            { prefix: 'vortarius',       name: 'Vortarius',        img: 'vortarius.png'        },
-            { prefix: 'beat',            name: 'Beat',             img: 'beat.png'             },
-            { prefix: 'canvas',          name: 'Canvas',           img: 'canvas.png'           },
-            { prefix: 'level up',        name: 'Level Up',         img: 'level-up.png'         },
-            { prefix: 'black hole',      name: 'Black Hole',       img: 'black-hole.png'       },
-            // ── TO ADD A NEW GAME: copy a line above and fill in the three fields ──
-            // prefix → filename prefix  (e.g. 'mygame' loads 'mygame_index.html')
-            // name   → display name on the card
-            // img    → thumbnail filename in the root folder
+            { prefix: 'rpg',             name: 'dragoneer',        img: 'rpg.png',              date: 'SEP 2026',
+              blurb: 'Explore, fight and team up with friends to gather resources and become the strongest.' },
+            { prefix: 'aetherium',       name: 'AETHERIUM',        img: 'aetherium.png',        date: 'AUG 2026' },
+            { prefix: 'graphwar',        name: 'GRAPH WAR',        img: 'graphwar.png',         date: 'AUG 2026' },
+            { prefix: 'helen',           name: 'Helen Keller Sim', img: 'helen.png',            date: 'AUG 2026' },
+            { prefix: 'breakout',        name: 'Breakout',         img: 'breakout.png',         date: 'AUG 2026' },
+            { prefix: 'zen',             name: 'ZenWords',         img: 'zen.png',              date: 'MAY 2026' },
+            { prefix: 'windows',         name: 'Windows 12',       img: 'windows.png',          date: 'MAY 2026' },
+            { prefix: 'merge',           name: 'Cosmic Merge',     img: 'merge.png',            date: 'MAY 2026' },
+            { prefix: 'spotify',         name: 'Spotify',          img: 'spotify.png',          date: 'MAY 2026' },
+            { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png',     date: 'MAY 2026' },
+            { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png',        date: 'MAY 2026' },
+            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026' },
+            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026' },
+            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026' },
+            { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026' },
+            { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026' },
+            { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026' },
+            { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png',           date: 'APR 2026' },
+            { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png',       date: 'APR 2026' },
+            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png',  date: 'APR 2026' },
+            { prefix: 'home',            name: 'Home',             img: 'home.png',             date: 'APR 2026' },
+            { prefix: 'void run',        name: 'Void Run',         img: 'void-run.png',         date: 'APR 2026' },
+            { prefix: 'the eye',         name: 'The Eye',          img: 'the-eye.png',          date: 'APR 2026' },
+            { prefix: 'ragebait',        name: 'Ragebait',         img: 'ragebait.png',         date: 'APR 2026' },
+            { prefix: 'mini pet',        name: 'Mini Pet',         img: 'mini-pet.png',         date: 'APR 2026' },
+            { prefix: 'steringos',       name: 'SterlingOS',       img: 'steringos.png',        date: 'APR 2025' },
+            { prefix: 'vortalk',         name: 'Vortalk',          img: 'vortalk.png',          date: 'JUL 2024' },
+            { prefix: 'vplace',          name: 'V-Place',          img: 'vplace.png',           date: 'JUN 2024' },
+            { prefix: 'nivorian empire', name: 'Nivorian Empire',  img: 'nivorian-empire.png',  date: 'JUN 2024' },
+            { prefix: 'pixel mice sim',  name: 'Pixel Mice Sim',   img: 'pixel-mice-sim.png',   date: 'JUN 2024' },
+            { prefix: 'vortarius',       name: 'Vortarius',        img: 'vortarius.png',        date: 'JUN 2024' },
+            { prefix: 'beat',            name: 'Beat',             img: 'beat.png',             date: 'MAY 2024' },
+            { prefix: 'canvas',          name: 'Canvas',           img: 'canvas.png',           date: 'MAY 2024' },
+            { prefix: 'level up',        name: 'Level Up',         img: 'level-up.png',         date: 'APR 2024' },
+            { prefix: 'fishtopia',       name: 'Fishtopia',        img: 'fishtopia.png',        date: 'FEB 2024' },
+            { prefix: 'black hole',      name: 'Black Hole',       img: 'black-hole.png',       date: 'NOV 2023' },
+            // ── TO ADD A NEW PROJECT: copy a line above and fill in the fields ──
         ];
 
-        const grid = document.getElementById('game-grid');
-        games.forEach(game => {
-            const card = document.createElement('div');
-            card.className = 'game-card';
-            card.onclick = () => launchGame(game.prefix);
-            card.innerHTML = `
-                <img src="${game.img}" class="game-thumb" alt="${game.name}" onerror="this.style.background='rgba(255,255,255,0.05)'">
-                <div class="game-title">${game.name}</div>
-            `;
-            grid.appendChild(card);
+        // ── Rendering ─────────────────────────────────────────────────────────
+        const MONTHS = { JAN:0, FEB:1, MAR:2, APR:3, MAY:4, JUN:5, JUL:6, AUG:7, SEP:8, OCT:9, NOV:10, DEC:11 };
+        function dateValue(g) {
+            const [m, y] = (g.date || '').toUpperCase().split(' ');
+            return (parseInt(y) || 0) * 12 + (MONTHS[m] || 0);
+        }
+        // Newest first; ties keep the order they were listed in
+        const sortedGames = games
+            .map((g, i) => [g, i])
+            .sort((a, b) => dateValue(b[0]) - dateValue(a[0]) || a[1] - b[1])
+            .map(x => x[0]);
+
+        const byPrefix = Object.fromEntries(games.map(g => [g.prefix, g]));
+        const trendingGame = TRENDING ? byPrefix[TRENDING] : null;
+        const popularGames = POPULAR.map(p => byPrefix[p]).filter(Boolean);
+        const popularSet   = new Set(popularGames.map(g => g.prefix));
+
+        const trendingSection = document.getElementById('trending-section');
+        const popularSection  = document.getElementById('popular-section');
+        const popularGrid     = document.getElementById('popular-grid');
+        const grid            = document.getElementById('game-grid');
+        const allTitle        = document.getElementById('all-title');
+        const allCount        = document.getElementById('all-count');
+        const searchInput     = document.getElementById('game-search');
+        const noResults       = document.getElementById('no-results');
+        const noResultsTerm   = document.getElementById('no-results-term');
+
+        function cardHTML(game) {
+            return `
+                <button class="game-card" data-prefix="${game.prefix}">
+                    <div class="thumb-wrap">
+                        <img src="${game.img}" class="game-thumb" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+                    </div>
+                    <div class="game-title">${game.name}</div>
+                    <div class="game-date">${game.date || ''}</div>
+                </button>`;
+        }
+
+        function rankRowHTML(game, rank) {
+            return `
+                <button class="rank-row" data-prefix="${game.prefix}">
+                    <img class="rank-bg" src="${game.img}" alt="" onerror="this.style.visibility='hidden'">
+                    <span class="rank-num">${rank}</span>
+                    <div class="rank-info">
+                        <div class="rank-name">${game.name}</div>
+                        <div class="game-date">${game.date || ''}</div>
+                    </div>
+                    <span class="rank-play">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
+                    </span>
+                </button>`;
+        }
+
+        // Trending banner
+        if (trendingGame) {
+            trendingSection.innerHTML = `
+                <div class="trending" role="button" tabindex="0" data-prefix="${trendingGame.prefix}">
+                    <img class="trending-bg" src="${trendingGame.img}" alt="">
+                    <div class="trending-copy">
+                        <span class="trending-badge">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2s1 4-2 7c-2 2-4 3.5-4 7a7 7 0 0 0 14 0c0-3-1.5-5-3-6.5 0 2-1 3-2 3 1-4-1-7-3-10.5z"/></svg>
+                            Trending now
+                        </span>
+                        <h2>${trendingGame.name}</h2>
+                        <p>${trendingGame.blurb || 'Jump in and see what is new.'}</p>
+                        <button class="play-btn" tabindex="-1">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
+                            Play now
+                        </button>
+                    </div>
+                    <img class="trending-art" src="${trendingGame.img}" alt="${trendingGame.name}" onerror="this.style.visibility='hidden'">
+                </div>`;
+        } else {
+            trendingSection.remove();
+        }
+
+        // Popular leaderboard (ranked 1–5)
+        popularGrid.innerHTML = popularGames.map((g, i) => rankRowHTML(g, i + 1)).join('');
+        if (!popularGames.length) popularSection.remove();
+
+        // Main render — handles browsing and search
+        function render() {
+            const query    = searchInput.value.trim().toLowerCase();
+            const browsing = !query;
+
+            // Banner + popular leaderboard only show when not searching
+            if (trendingGame) trendingSection.style.display = browsing ? '' : 'none';
+            if (popularGames.length) popularSection.style.display = browsing ? '' : 'none';
+
+            let list = sortedGames;
+            if (browsing && !SHOW_POPULAR_IN_ALL) list = list.filter(g => !popularSet.has(g.prefix));
+            if (query) list = list.filter(g => g.name.toLowerCase().includes(query));
+
+            grid.innerHTML = list.map(g => cardHTML(g)).join('');
+            allTitle.textContent = browsing ? 'All projects' : 'Results';
+            allCount.textContent = list.length + (list.length === 1 ? ' project' : ' projects');
+
+            if (list.length === 0 && query) {
+                noResultsTerm.textContent = searchInput.value.trim();
+                noResults.style.display = 'block';
+            } else {
+                noResults.style.display = 'none';
+            }
+        }
+
+        // Click / keyboard launch (works for every card and the banner)
+        document.addEventListener('click', e => {
+            const el = e.target.closest('[data-prefix]');
+            if (el) launchGame(el.dataset.prefix);
         });
+        document.addEventListener('keydown', e => {
+            if (e.key !== 'Enter') return;
+            const el = e.target.closest('.trending[data-prefix]');
+            if (el) launchGame(el.dataset.prefix);
+        });
+
+        searchInput.addEventListener('input', render);
+        render();
 
         // ── Audio ─────────────────────────────────────────────────────────────
         const overlay = document.getElementById('game-overlay');
@@ -400,7 +744,6 @@
             }
         }
 
-        // Fade helpers — duration in ms
         function fadeOut(audio, duration) {
             return new Promise(resolve => {
                 if (audio.paused) { resolve(); return; }
@@ -413,7 +756,7 @@
                     if (audio.volume <= 0) {
                         clearInterval(id);
                         audio.pause();
-                        audio.volume = start; // restore for next play
+                        audio.volume = start;
                         resolve();
                     }
                 }, stepMs);
@@ -437,29 +780,21 @@
         // ── Curtain transition ────────────────────────────────────────────────
         const curtain = document.getElementById('curtain');
 
-        // Returns a promise that resolves after the curtain fully closes (panels meet)
-        // then holds for `holdMs`, then opens again.
-        // `onMidpoint` is called while the curtain is fully closed (load the content here).
         function runCurtain(onMidpoint, holdMs = 1400) {
             return new Promise(resolve => {
-                // 1. Close curtain
                 curtain.style.pointerEvents = 'all';
                 curtain.classList.remove('opening');
                 curtain.classList.add('closing');
 
-                // After close animation (0.6s) → show spinner, run midpoint callback
                 setTimeout(() => {
                     curtain.classList.remove('closing');
                     curtain.classList.add('closed');
                     onMidpoint();
 
-                    // 2. Hold with spinner for holdMs
                     setTimeout(() => {
-                        // 3. Open curtain
                         curtain.classList.remove('closed');
                         curtain.classList.add('opening');
 
-                        // After open animation (0.6s) → done
                         setTimeout(() => {
                             curtain.classList.remove('opening');
                             curtain.style.pointerEvents = 'none';
@@ -472,56 +807,25 @@
 
         // ── Launch game ───────────────────────────────────────────────────────
         function launchGame(prefix) {
-            // Fade out cafe music over 600ms while curtain closes
             fadeOut(music, 600);
-            // Hide page scrollbar while inside a game
             setScrollbarVisible(false);
 
             runCurtain(() => {
-                // Midpoint: swap content while screen is hidden
                 iframe.src = prefix + '_index.html';
                 overlay.style.display = 'block';
-            }, 1400).then(() => {
-                // Curtain fully open — game is now visible, music stays silent
-            });
+            }, 1400);
         }
 
         // ── Close game / return to hub ────────────────────────────────────────
         function closeGame() {
             runCurtain(() => {
-                // Midpoint: tear down game
                 overlay.style.display = 'none';
                 iframe.src = '';
             }, 1400).then(() => {
-                // Curtain open — restore scrollbar and fade cafe music back in
                 setScrollbarVisible(true);
                 if (!music.muted) fadeIn(music, 800);
             });
         }
-        // ── Search filtering ──────────────────────────────────────────────────
-        const searchInput   = document.getElementById('game-search');
-        const noResults     = document.getElementById('no-results');
-        const noResultsTerm = document.getElementById('no-results-term');
-
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.trim().toLowerCase();
-            const cards = grid.querySelectorAll('.game-card');
-            let visible = 0;
-
-            cards.forEach(card => {
-                const title = card.querySelector('.game-title').textContent.toLowerCase();
-                const match = !query || title.includes(query);
-                card.style.display = match ? '' : 'none';
-                if (match) visible++;
-            });
-
-            if (visible === 0 && query) {
-                noResultsTerm.textContent = searchInput.value.trim();
-                noResults.style.display = 'block';
-            } else {
-                noResults.style.display = 'none';
-            }
-        });
 
         // ── Hide scrollbar while inside a game ───────────────────────────────
         function setScrollbarVisible(visible) {
