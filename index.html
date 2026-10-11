@@ -476,7 +476,47 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .game-date { margin-top: 2px; font-size: 0.85rem; color: var(--ink-dim); font-weight: 500; letter-spacing: 0.02em; }
+        .game-date { display: flex; align-items: center; gap: 7px; margin-top: 2px; font-size: 0.85rem; color: var(--ink-dim); font-weight: 500; letter-spacing: 0.02em; }
+
+        /* little red ! badge with hover warning */
+        .warn {
+            position: relative;
+            flex-shrink: 0;
+            width: 16px;
+            height: 16px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: #e5384a;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: help;
+            outline-offset: 2px;
+        }
+        .warn-tip {
+            position: absolute;
+            left: -2px;
+            top: calc(100% + 8px);
+            width: 190px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            background: rgba(20,12,14,0.92);
+            border: 1px solid rgba(255,90,100,0.35);
+            color: #ff6b78;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1.4;
+            letter-spacing: 0;
+            text-align: left;
+            opacity: 0;
+            transform: translateY(-4px);
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.2s ease;
+            z-index: 20;
+        }
+        .warn:hover .warn-tip, .warn:focus .warn-tip, .warn:focus-visible .warn-tip { opacity: 1; transform: none; }
 
 
         /* ── Popular: long thin ranked banners ── */
@@ -827,6 +867,7 @@
         //   img    → thumbnail filename in the root folder
         //   date   → release date as 'MON YEAR' (e.g. 'SEP 2026')
         //   blurb  → (optional) one-line description, shown on the trending banner
+        //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
             { prefix: 'rpg',             name: 'dragoneer',        img: 'rpg.png',              date: 'SEP 2026',
               blurb: 'Explore, fight and team up with friends to gather resources and become the strongest.' },
@@ -837,19 +878,19 @@
             { prefix: 'zen',             name: 'ZenWords',         img: 'zen.png',              date: 'MAY 2026' },
             { prefix: 'windows',         name: 'Windows 12',       img: 'windows.png',          date: 'MAY 2026' },
             { prefix: 'merge',           name: 'Cosmic Merge',     img: 'merge.png',            date: 'MAY 2026' },
-            { prefix: 'spotify',         name: 'Spotify',          img: 'spotify.png',          date: 'MAY 2026' },
+            { prefix: 'spotify',         name: 'Spotify',          img: 'spotify.png',          date: 'MAY 2026', warn: true },
             { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png',     date: 'MAY 2026' },
             { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png',        date: 'MAY 2026' },
-            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026' },
-            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026' },
-            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026' },
-            { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026' },
+            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026', warn: true },
+            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026', warn: true },
+            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026', warn: true },
+            { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026', warn: true },
             { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026' },
-            { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026' },
+            { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026', warn: true },
             { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png',           date: 'APR 2026' },
             { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png',       date: 'APR 2026' },
-            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png',  date: 'APR 2026' },
-            { prefix: 'home',            name: 'Home',             img: 'home.png',             date: 'APR 2026' },
+            { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png',  date: 'APR 2026', warn: true },
+            { prefix: 'home',            name: 'Home',             img: 'home.png',             date: 'APR 2026', warn: true },
             { prefix: 'void run',        name: 'Void Run',         img: 'void-run.png',         date: 'APR 2026' },
             { prefix: 'the eye',         name: 'The Eye',          img: 'the-eye.png',          date: 'APR 2026' },
             { prefix: 'ragebait',        name: 'Ragebait',         img: 'ragebait.png',         date: 'APR 2026' },
@@ -895,6 +936,13 @@
         const noResults       = document.getElementById('no-results');
         const noResultsTerm   = document.getElementById('no-results-term');
 
+        const WARN_TEXT = 'This game is very unfinished and low quality compared to the others';
+        function warnHTML(game) {
+            return game.warn
+                ? `<span class="warn" tabindex="0" role="img" aria-label="${WARN_TEXT}">!<span class="warn-tip">${WARN_TEXT}</span></span>`
+                : '';
+        }
+
         function cardHTML(game) {
             return `
                 <button class="game-card" data-prefix="${game.prefix}">
@@ -902,7 +950,7 @@
                         <img src="${game.img}" class="game-thumb" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
                     </div>
                     <div class="game-title">${game.name}</div>
-                    <div class="game-date">${game.date || ''}</div>
+                    <div class="game-date">${game.date || ''}${warnHTML(game)}</div>
                 </button>`;
         }
 
@@ -913,7 +961,7 @@
                     <span class="rank-num">${rank}</span>
                     <div class="rank-info">
                         <div class="rank-name">${game.name}</div>
-                        <div class="game-date">${game.date || ''}</div>
+                        <div class="game-date">${game.date || ''}${warnHTML(game)}</div>
                     </div>
                     <span class="rank-play">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
@@ -975,6 +1023,7 @@
 
         // Click / keyboard launch (works for every card and the banner)
         document.addEventListener('click', e => {
+            if (e.target.closest('.warn')) return;   // tapping the ! just shows the warning
             const el = e.target.closest('[data-prefix]');
             if (el) launchGame(el.dataset.prefix);
         });
