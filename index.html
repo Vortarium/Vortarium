@@ -175,8 +175,8 @@
             padding: 104px var(--page-pad) 8px;
         }
         .main-logo {
-            width: 340px;
-            max-width: 70%;
+            width: 680px;
+            max-width: 92%;
             filter: drop-shadow(0 6px 24px rgba(0,0,0,0.55));
         }
         .creator-desc {
@@ -210,19 +210,22 @@
         }
         .section-head .count { font-size: 0.9rem; color: var(--ink-faint); font-weight: 500; }
 
-        /* ── Trending banner ── */
+        /* ── Trending banner: the whole widget is the thumbnail ── */
+        @property --angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
         .trending {
             position: relative;
+            isolation: isolate;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 32px;
             width: 100%;
-            min-height: 360px;
+            min-height: 380px;
             padding: clamp(24px, 5vw, 56px);
-            border: 1px solid var(--line);
+            border: 0;
             border-radius: var(--radius-lg);
-            overflow: hidden;
             text-align: left;
             cursor: pointer;
             background: #111;
@@ -230,30 +233,33 @@
         }
         .trending-bg {
             position: absolute;
-            inset: -40px;
-            width: calc(100% + 80px);
-            height: calc(100% + 80px);
+            inset: 0;
+            width: 100%;
+            height: 100%;
             object-fit: cover;
-            filter: blur(46px) saturate(140%) brightness(0.7);
-            transform: scale(1.1);
+            border-radius: inherit;
+            z-index: 0;
         }
-        .trending::after {
-            content: '';
+        /* light scrim so the text stays readable on any image */
+        .trending-scrim {
             position: absolute;
             inset: 0;
-            background: linear-gradient(90deg, rgba(8,8,12,0.78) 0%, rgba(8,8,12,0.35) 60%, rgba(8,8,12,0.1) 100%);
+            border-radius: inherit;
+            z-index: 1;
+            background: linear-gradient(90deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0) 100%);
         }
-        .trending-copy { position: relative; z-index: 1; max-width: 520px; }
+        .trending-copy { position: relative; z-index: 2; max-width: 520px; text-shadow: 0 2px 18px rgba(0,0,0,0.45); }
         .trending-badge {
             display: inline-flex;
             align-items: center;
             gap: 7px;
             padding: 7px 14px;
             border-radius: var(--radius-pill);
-            background: rgba(255,255,255,0.14);
+            background: rgba(255,255,255,0.16);
             backdrop-filter: blur(12px);
             font-size: 0.85rem;
             font-weight: 600;
+            text-shadow: none;
         }
         .trending h2 {
             font-size: clamp(2.4rem, 6vw, 4.2rem);
@@ -266,7 +272,7 @@
         .trending p {
             font-size: 1.1rem;
             line-height: 1.5;
-            color: rgba(245,245,247,0.8);
+            color: rgba(255,255,255,0.9);
             font-weight: 500;
         }
         .play-btn {
@@ -281,26 +287,61 @@
             color: #111;
             font-size: 1rem;
             font-weight: 700;
+            text-shadow: none;
             cursor: pointer;
             transition: transform 0.2s ease, background 0.2s ease;
         }
-        .play-btn:hover { background: #e8e8ed; transform: scale(1.03); }
-        .trending-art {
-            position: relative;
-            z-index: 1;
-            flex-shrink: 0;
-            width: clamp(180px, 24vw, 280px);
-            aspect-ratio: 1;
-            object-fit: cover;
-            border-radius: var(--radius-lg);
-            border: 1px solid rgba(255,255,255,0.2);
-            box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+        .trending:hover .play-btn { background: #e8e8ed; transform: scale(1.04); }
+
+        /* Hover: a white light races clockwise around the edge, and the banner trembles */
+        .trending::before,
+        .trending::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: calc(var(--radius-lg) + 3px);
+            padding: 3px;
+            background: conic-gradient(from var(--angle),
+                rgba(255,255,255,0.12) 0deg,
+                rgba(255,255,255,0.12) 190deg,
+                rgba(255,255,255,0.55) 290deg,
+                #fff 352deg,
+                rgba(255,255,255,0.12) 360deg);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 3;
+        }
+        .trending::after {
+            inset: -8px;
+            padding: 8px;
+            border-radius: calc(var(--radius-lg) + 8px);
+            filter: blur(14px);
+            z-index: 0;
+        }
+        .trending:hover::before,
+        .trending:focus-visible::before { opacity: 1; animation: orbit 2.4s linear infinite; }
+        .trending:hover::after,
+        .trending:focus-visible::after  { opacity: 0.9; animation: orbit 2.4s linear infinite; }
+        .trending:hover { animation: tremble 0.14s linear infinite; }
+        @keyframes orbit { to { --angle: 360deg; } }
+        @keyframes tremble {
+            0%   { transform: translate(0, 0) rotate(0deg); }
+            20%  { transform: translate(-1px, 0.6px) rotate(-0.08deg); }
+            40%  { transform: translate(0.8px, -0.8px) rotate(0.06deg); }
+            60%  { transform: translate(-0.6px, -0.4px) rotate(0.08deg); }
+            80%  { transform: translate(0.8px, 0.6px) rotate(-0.06deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
         }
 
         /* ── Game cards ── */
         .grid { display: grid; gap: 20px; }
         .grid.popular { grid-template-columns: 1fr; gap: 14px; }
-        .grid.all     { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+        .grid.all     { grid-template-columns: repeat(4, 1fr); }
 
         .game-card {
             display: block;
@@ -430,27 +471,86 @@
         }
         #back-logo:hover { transform: scale(1.08); }
 
+        /* ── Music options (bottom-right drop-up) ── */
+        #music-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 100; }
         #mute-btn {
-            position: fixed;
-            bottom: 24px; right: 24px;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
             background: var(--glass-strong);
             border: 1px solid var(--line);
             color: var(--ink);
-            padding: 11px 18px;
+            padding: 11px 16px 11px 18px;
             border-radius: var(--radius-pill);
             cursor: pointer;
-            z-index: 100;
             font-size: 0.9rem;
             font-weight: 600;
             backdrop-filter: blur(16px);
             transition: background 0.2s;
         }
-        #mute-btn:hover { background: rgba(50,50,56,0.85); }
+        #mute-btn:hover, #mute-btn[aria-expanded="true"] { background: rgba(50,50,56,0.88); }
+        #mute-btn .chev { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+        #mute-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+        #music-menu {
+            position: absolute;
+            right: 0;
+            bottom: calc(100% + 10px);
+            min-width: 220px;
+            padding: 6px;
+            border-radius: 20px;
+            background: rgba(28,28,33,0.82);
+            border: 1px solid var(--line);
+            backdrop-filter: saturate(180%) blur(24px);
+            -webkit-backdrop-filter: saturate(180%) blur(24px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transform-origin: bottom right;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(12px) scale(0.94);
+            transition: opacity 0.2s ease, transform 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.15), visibility 0s linear 0.32s;
+        }
+        #music-menu.open {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0) scale(1);
+            transition-delay: 0s;
+        }
+        .music-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 11px 14px;
+            border: 0;
+            border-radius: 14px;
+            background: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: background 0.15s, opacity 0.25s ease, transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+        }
+        #music-menu.open .music-item { opacity: 1; transform: none; }
+        #music-menu.open .music-item:nth-child(1) { transition-delay: 0.04s; }
+        #music-menu.open .music-item:nth-child(2) { transition-delay: 0.08s; }
+        #music-menu.open .music-item:nth-child(3) { transition-delay: 0.12s; }
+        .music-item:hover { background: rgba(255,255,255,0.12); transition-delay: 0s; }
+        .music-item svg { flex-shrink: 0; }
+        #music-menu .icon-muted { display: none; }
+        #music-menu.is-muted .icon-sound { display: none; }
+        #music-menu.is-muted .icon-muted { display: block; }
 
         /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .grid.all { grid-template-columns: repeat(3, 1fr); }
+        }
         @media (max-width: 700px) {
-            .trending { flex-direction: column-reverse; align-items: flex-start; min-height: 0; }
-            .trending-art { width: 140px; }
+            .trending { min-height: 320px; align-items: flex-end; }
             .rank-row { height: 84px; gap: 14px; }
             .rank-num { font-size: 2rem; min-width: 28px; }
             .rank-name { font-size: 1.05rem; }
@@ -460,12 +560,13 @@
         }
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; scroll-behavior: auto !important; }
+            .trending, .trending::before, .trending::after { animation: none !important; }
         }
     </style>
 </head>
 <body>
 
-    <audio id="cafe-music" src="cafe.mp3" loop></audio>
+    <audio id="cafe-music" preload="auto"></audio>
 
     <!-- Curtain transition overlay -->
     <div id="curtain">
@@ -514,7 +615,28 @@
         </section>
     </main>
 
-    <button id="mute-btn" onclick="toggleMute()">🔊 Mute Music</button>
+    <div id="music-wrap">
+        <div id="music-menu" role="menu" aria-hidden="true">
+            <button class="music-item" role="menuitem" id="music-mute-item" onclick="toggleMute()">
+                <svg class="icon-sound" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+                <svg class="icon-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+                <span id="music-mute-label">Mute track</span>
+            </button>
+            <button class="music-item" role="menuitem" onclick="nextTrack()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                <span>Next track</span>
+            </button>
+            <button class="music-item" role="menuitem" onclick="shuffleTrack()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                <span>Shuffle song</span>
+            </button>
+        </div>
+        <button id="mute-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="music-menu" onclick="toggleMusicMenu()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Music Options
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
+        </button>
+    </div>
 
     <div id="game-overlay">
         <img src="v.png" id="back-logo" onclick="closeGame()">
@@ -549,6 +671,10 @@
         // 1) TRENDING BANNER — the big banner at the top.
         //    Put the `prefix` of any project below. Set to null to hide the banner.
         const TRENDING = 'rpg';
+
+        //    Which part of the thumbnail stays in view on the wide banner
+        //    (e.g. 'center', 'top', 'bottom', 'center 30%').
+        const TRENDING_FOCUS = 'center';
 
         // 2) POPULAR LEADERBOARD — the projects ranked 1–5 right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
@@ -662,8 +788,9 @@
         // Trending banner
         if (trendingGame) {
             trendingSection.innerHTML = `
-                <div class="trending" role="button" tabindex="0" data-prefix="${trendingGame.prefix}">
-                    <img class="trending-bg" src="${trendingGame.img}" alt="">
+                <div class="trending" role="button" tabindex="0" aria-label="Play ${trendingGame.name}" data-prefix="${trendingGame.prefix}">
+                    <img class="trending-bg" src="${trendingGame.img}" alt="" style="object-position:${TRENDING_FOCUS}" onerror="this.style.visibility='hidden'">
+                    <div class="trending-scrim"></div>
                     <div class="trending-copy">
                         <span class="trending-badge">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2s1 4-2 7c-2 2-4 3.5-4 7a7 7 0 0 0 14 0c0-3-1.5-5-3-6.5 0 2-1 3-2 3 1-4-1-7-3-10.5z"/></svg>
@@ -676,7 +803,6 @@
                             Play now
                         </button>
                     </div>
-                    <img class="trending-art" src="${trendingGame.img}" alt="${trendingGame.name}" onerror="this.style.visibility='hidden'">
                 </div>`;
         } else {
             trendingSection.remove();
@@ -729,20 +855,67 @@
         const overlay = document.getElementById('game-overlay');
         const iframe  = document.getElementById('game-iframe');
         const music   = document.getElementById('cafe-music');
-        const muteBtn = document.getElementById('mute-btn');
+        const muteBtn   = document.getElementById('mute-btn');
+        const musicMenu = document.getElementById('music-menu');
+        const muteLabel = document.getElementById('music-mute-label');
 
-        // Music only starts when returning to the hub (via closeGame → fadeIn).
+        // ── Music tracks ──────────────────────────────────────────────────────
+        // Add or remove mp3 filenames here (files go in the root folder).
+        // A random one is picked on load and whenever a track ends.
+        const TRACKS = ['cafe.mp3', 'cafe1.mp3', 'cafe2.mp3', 'chill.mp3', 'chill1.mp3'];
+        let trackIndex = Math.floor(Math.random() * TRACKS.length);
+        let trackErrors = 0;
+        music.src = TRACKS[trackIndex];
+
+        // Music only starts when returning to the hub (via closeGame → fadeIn)
+        // or when you press Next track / Shuffle song / Unmute.
         // It never autoplays on initial page load.
+
+        function loadTrack(i) {
+            trackIndex = i;
+            music.src = TRACKS[i];
+            if (!music.muted && overlay.style.display !== 'block') {
+                music.volume = 1;
+                music.play().catch(() => {});
+            }
+        }
+        function nextTrack()    { loadTrack((trackIndex + 1) % TRACKS.length); }
+        function shuffleTrack() {
+            let i = 0;
+            if (TRACKS.length > 1) {
+                do { i = Math.floor(Math.random() * TRACKS.length); } while (i === trackIndex);
+            }
+            loadTrack(i);
+        }
+        music.addEventListener('ended', shuffleTrack);
+        music.addEventListener('playing', () => { trackErrors = 0; });
+        // If a file is missing, skip to another track instead of going silent
+        music.addEventListener('error', () => {
+            if (++trackErrors < TRACKS.length) nextTrack();
+        });
 
         function toggleMute() {
             music.muted = !music.muted;
-            muteBtn.innerText = music.muted ? '🔇 Unmute' : '🔊 Mute Music';
+            musicMenu.classList.toggle('is-muted', music.muted);
+            muteLabel.textContent = music.muted ? 'Unmute track' : 'Mute track';
             if (!music.muted && overlay.style.display !== 'block') {
                 music.play().catch(() => {});
             } else {
                 music.pause();
             }
         }
+
+        // ── Music options menu (drop-up) ──────────────────────────────────────
+        function setMusicMenu(open) {
+            musicMenu.classList.toggle('open', open);
+            muteBtn.setAttribute('aria-expanded', open);
+            musicMenu.setAttribute('aria-hidden', !open);
+        }
+        function toggleMusicMenu() { setMusicMenu(!musicMenu.classList.contains('open')); }
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#music-wrap')) setMusicMenu(false);
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') setMusicMenu(false); });
 
         function fadeOut(audio, duration) {
             return new Promise(resolve => {
