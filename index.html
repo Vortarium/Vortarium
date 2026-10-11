@@ -179,14 +179,111 @@
             max-width: 92%;
             filter: drop-shadow(0 6px 24px rgba(0,0,0,0.55));
         }
-        .creator-desc {
+
+        /* ── About button + glass dialog ── */
+        .about-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            margin-top: 22px;
+            padding: 12px 24px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-pill);
+            background: var(--glass);
+            backdrop-filter: saturate(180%) blur(18px);
+            -webkit-backdrop-filter: saturate(180%) blur(18px);
             font-size: 0.95rem;
-            line-height: 1.65;
-            font-weight: 500;
-            color: var(--ink-dim);
-            max-width: 560px;
-            margin: 18px auto 0;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
         }
+        .about-btn:hover { background: var(--glass-strong); transform: scale(1.03); }
+
+        html.modal-open, html.modal-open body { overflow: hidden; }
+
+        #about-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: rgba(6,6,10,0.5);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0s linear 0.3s;
+        }
+        #about-modal.open { opacity: 1; visibility: visible; transition-delay: 0s; }
+
+        .about-panel {
+            position: relative;
+            width: 100%;
+            max-width: 660px;
+            max-height: min(82vh, 760px);
+            display: flex;
+            flex-direction: column;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(30,30,36,0.62);
+            backdrop-filter: saturate(190%) blur(34px);
+            -webkit-backdrop-filter: saturate(190%) blur(34px);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12);
+            transform: translateY(18px) scale(0.96);
+            transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+        }
+        #about-modal.open .about-panel { transform: none; }
+
+        .about-top {
+            flex-shrink: 0;
+            padding: 26px 76px 14px 32px;
+        }
+        .about-top h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.03em; }
+        .about-close {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            width: 38px;
+            height: 38px;
+            display: grid;
+            place-items: center;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            cursor: pointer;
+            transition: background 0.2s, transform 0.25s;
+        }
+        .about-close:hover { background: rgba(255,255,255,0.24); transform: rotate(90deg); }
+
+        .about-body {
+            overflow-y: auto;
+            padding: 6px 32px 34px;
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.35) transparent;
+        }
+        .about-body::-webkit-scrollbar { width: 8px; }
+        .about-body::-webkit-scrollbar-track { background: transparent; margin: 14px 0; }
+        .about-body::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+            border: 0;
+        }
+        .about-body::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.55); }
+        .about-body h3 {
+            margin: 28px 0 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+        .about-body .lead { margin-top: 10px; font-size: 1.15rem; font-weight: 600; line-height: 1.5; color: var(--ink); }
+        .about-body p { font-size: 0.98rem; line-height: 1.7; color: var(--ink-dim); margin-top: 10px; }
+        .about-body ul { margin-top: 10px; padding-left: 20px; color: var(--ink-dim); font-size: 0.98rem; line-height: 1.7; }
+        .about-body li + li { margin-top: 6px; }
+        .about-body a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+        .about-body a:hover { text-decoration-thickness: 2px; }
 
         /* ── Layout ── */
         main {
@@ -587,11 +684,10 @@
 
     <div class="hero">
         <img src="v.png" alt="Vortarium Productions" class="main-logo">
-        <p class="creator-desc">
-            Hey it's me Logan, the creator of all the projects, have fun playing them!<br>
-            To get back to this page from a project, click the logo in the top left corner.
-            Projects at the top are the most recently made or updated.
-        </p>
+        <button class="about-btn" id="about-btn" onclick="openAbout()" aria-haspopup="dialog">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="0.6" fill="currentColor"/></svg>
+            About the site
+        </button>
     </div>
 
     <main>
@@ -614,6 +710,43 @@
             <div id="no-results">No projects match "<span id="no-results-term"></span>"</div>
         </section>
     </main>
+
+    <!-- About the site dialog -->
+    <div id="about-modal" aria-hidden="true">
+        <div class="about-panel" role="dialog" aria-modal="true" aria-labelledby="about-title">
+            <div class="about-top"><h2 id="about-title">About the site</h2></div>
+            <button class="about-close" id="about-close" onclick="closeAbout()" aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+            </button>
+            <div class="about-body">
+                <p class="lead">Hey, it's me, Logan, the creator of all these projects. Have fun playing them!</p>
+
+                <h3>Getting around</h3>
+                <ul>
+                    <li>To get back to this page from a project, click the logo in the top left corner.</li>
+                    <li>Projects at the top of the list are the most recently made or updated.</li>
+                    <li>Your total playtime is shown in the upper left corner. It's saved in your browser's local storage.</li>
+                    <li>Music Options in the bottom right corner lets you mute, skip or shuffle the music. I've only added around 5 songs so far, which hopefully spices things up a bit.</li>
+                </ul>
+
+                <h3>Being upfront</h3>
+                <p>Some of the thumbnails were generated with AI to look more captivating. And to clear up any confusion: yes, these projects are vibe coded. My only intent is to entertain others, even if I don't have the natural skills to do it the traditional way.</p>
+                <p>Over 300 hours went into making and putting everything together.</p>
+
+                <h3>How it started</h3>
+                <p>Back in around 8th grade, I made an old game site to push back on my school's rules about playing games during school hours. I wanted to make everyone feel happier, but the school shut it down within a few weeks.</p>
+                <p>I wanted to find an original way to express my creativity without breaking any rules by posting games from unblocked sites. That's around when AI started coming around. I used the early ChatGPT models to make some simple games in just a few hours, and people really seemed to enjoy them.</p>
+                <p>Even though I didn't write the code by hand, I still have to guide the AI to turn my ideas into reality, and that takes a lot of time. It's not as much as real coders who dedicate months to a single project, and I have a lot of respect for that. My purpose isn't to put real developers down. It's to get a positive reaction from the people who play and test my projects, whether for fun or for competition.</p>
+                <p>As the models got better, so did the projects, and as the years went by they got bigger and bigger.</p>
+
+                <h3>Where it began</h3>
+                <p>Want to see where it all started? Play my old middle school projects <a href="https://sites.google.com/view/java-cafe-cps/java-lobby?authuser=0" target="_blank" rel="noopener noreferrer">here</a>. Every project on this site was made in high school, though a few of the bigger middle school ones carried over.</p>
+
+                <h3>What's next</h3>
+                <p>I plan to keep making better and better projects with the sole purpose of making others happy. And who knows, maybe I'll eventually get into real coding to make the highest quality games and projects.</p>
+            </div>
+        </div>
+    </div>
 
     <div id="music-wrap">
         <div id="music-menu" role="menu" aria-hidden="true">
@@ -850,6 +983,31 @@
 
         searchInput.addEventListener('input', render);
         render();
+
+        // ── About dialog ──────────────────────────────────────────────────────
+        const aboutModal = document.getElementById('about-modal');
+        const aboutBtn   = document.getElementById('about-btn');
+        const aboutClose = document.getElementById('about-close');
+        const aboutBody  = aboutModal.querySelector('.about-body');
+
+        function openAbout() {
+            aboutBody.scrollTop = 0;
+            aboutModal.classList.add('open');
+            aboutModal.setAttribute('aria-hidden', 'false');
+            document.documentElement.classList.add('modal-open');
+            setTimeout(() => aboutClose.focus(), 50);
+        }
+        function closeAbout() {
+            aboutModal.classList.remove('open');
+            aboutModal.setAttribute('aria-hidden', 'true');
+            document.documentElement.classList.remove('modal-open');
+            aboutBtn.focus();
+        }
+        // click on the dimmed backdrop closes it; Esc closes it too
+        aboutModal.addEventListener('click', e => { if (e.target === aboutModal) closeAbout(); });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && aboutModal.classList.contains('open')) closeAbout();
+        });
 
         // ── Audio ─────────────────────────────────────────────────────────────
         const overlay = document.getElementById('game-overlay');
