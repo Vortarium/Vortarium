@@ -175,6 +175,8 @@
             padding: 104px var(--page-pad) 8px;
         }
         .main-logo {
+            display: block;
+            margin: 0 auto;
             width: 680px;
             max-width: 92%;
             filter: drop-shadow(0 6px 24px rgba(0,0,0,0.55));
@@ -182,10 +184,11 @@
 
         /* ── About button + glass dialog ── */
         .about-btn {
-            display: inline-flex;
+            display: flex;
             align-items: center;
             gap: 9px;
-            margin-top: 22px;
+            width: fit-content;
+            margin: 22px auto 0;
             padding: 12px 24px;
             border: 1px solid var(--line);
             border-radius: var(--radius-pill);
@@ -1017,6 +1020,10 @@
         const musicMenu = document.getElementById('music-menu');
         const muteLabel = document.getElementById('music-mute-label');
 
+        // true from the moment a project is launched until its curtain finishes opening
+        // back on the hub. Music never plays while this is true.
+        let inGame = false;
+
         // ── Music tracks ──────────────────────────────────────────────────────
         // Add or remove mp3 filenames here (files go in the root folder).
         // A random one is picked on load and whenever a track ends.
@@ -1025,14 +1032,14 @@
         let trackErrors = 0;
         music.src = TRACKS[trackIndex];
 
-        // Music only starts when returning to the hub (via closeGame → fadeIn)
-        // or when you press Next track / Shuffle song / Unmute.
-        // It never autoplays on initial page load.
+        // Music plays on the hub only. It tries to start as soon as the page loads;
+        // if the browser blocks that, it starts on the first click / key press / tap.
+        // It fades out when a project opens and fades back in when you return.
 
         function loadTrack(i) {
             trackIndex = i;
             music.src = TRACKS[i];
-            if (!music.muted && overlay.style.display !== 'block') {
+            if (!music.muted && !inGame) {
                 music.volume = 1;
                 music.play().catch(() => {});
             }
@@ -1056,7 +1063,7 @@
             music.muted = !music.muted;
             musicMenu.classList.toggle('is-muted', music.muted);
             muteLabel.textContent = music.muted ? 'Unmute track' : 'Mute track';
-            if (!music.muted && overlay.style.display !== 'block') {
+            if (!music.muted && !inGame) {
                 music.play().catch(() => {});
             } else {
                 music.pause();
@@ -1075,38 +1082,66 @@
         });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') setMusicMenu(false); });
 
+        // One fade at a time — starting a new fade cancels the previous one
+        let fadeTimer = null;
+
         function fadeOut(audio, duration) {
+            clearInterval(fadeTimer);
             return new Promise(resolve => {
-                if (audio.paused) { resolve(); return; }
-                const start   = audio.volume;
+                if (audio.paused) { audio.volume = 1; resolve(); return; }
                 const steps   = 30;
                 const stepMs  = duration / steps;
-                const stepVol = start / steps;
-                const id = setInterval(() => {
+                const stepVol = audio.volume / steps;
+                fadeTimer = setInterval(() => {
                     audio.volume = Math.max(0, audio.volume - stepVol);
                     if (audio.volume <= 0) {
-                        clearInterval(id);
+                        clearInterval(fadeTimer);
                         audio.pause();
-                        audio.volume = start;
+                        audio.volume = 1;   // restore for next play
                         resolve();
                     }
                 }, stepMs);
             });
         }
 
+        // Starts (or resumes) the music and ramps it up from silence.
+        // Does nothing while muted or inside a project. If the browser blocks
+        // playback, it waits for the first user gesture and tries again.
         function fadeIn(audio, duration) {
-            if (audio.muted) return;
+            if (audio.muted || inGame) return;
+            clearInterval(fadeTimer);
             audio.volume = 0;
-            audio.play().catch(() => {});
-            const target  = 1;
-            const steps   = 30;
-            const stepMs  = duration / steps;
-            const stepVol = target / steps;
-            const id = setInterval(() => {
-                audio.volume = Math.min(target, audio.volume + stepVol);
-                if (audio.volume >= target) clearInterval(id);
-            }, stepMs);
+            audio.play().then(() => {
+                if (inGame) { audio.pause(); audio.volume = 1; return; }   // a game opened meanwhile
+                const steps   = 30;
+                const stepMs  = duration / steps;
+                const stepVol = 1 / steps;
+                fadeTimer = setInterval(() => {
+                    audio.volume = Math.min(1, audio.volume + stepVol);
+                    if (audio.volume >= 1) clearInterval(fadeTimer);
+                }, stepMs);
+            }).catch(() => {
+                audio.volume = 1;
+                armGestureStart();
+            });
         }
+
+        // Autoplay was blocked → start on the first click, tap or key press
+        let gestureArmed = false;
+        function armGestureStart() {
+            if (gestureArmed) return;
+            gestureArmed = true;
+            const events = ['pointerdown', 'keydown', 'touchstart'];
+            const go = () => {
+                events.forEach(ev => document.removeEventListener(ev, go, true));
+                gestureArmed = false;
+                fadeIn(music, 1200);
+            };
+            events.forEach(ev => document.addEventListener(ev, go, true));
+        }
+
+        // Try to start right away when the page loads
+        fadeIn(music, 1500);
 
         // ── Curtain transition ────────────────────────────────────────────────
         const curtain = document.getElementById('curtain');
@@ -1138,6 +1173,7 @@
 
         // ── Launch game ───────────────────────────────────────────────────────
         function launchGame(prefix) {
+            inGame = true;
             fadeOut(music, 600);
             setScrollbarVisible(false);
 
@@ -1154,7 +1190,8 @@
                 iframe.src = '';
             }, 1400).then(() => {
                 setScrollbarVisible(true);
-                if (!music.muted) fadeIn(music, 800);
+                inGame = false;
+                fadeIn(music, 800);
             });
         }
 
