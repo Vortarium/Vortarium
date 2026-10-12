@@ -1071,7 +1071,7 @@ const forageIdsFor = region => (FORAGE_REGIONS[region] || []).map(s=> "forage_"+
 const CATALOG = registerItems(ITEM_BY_ID);
 /* Fossils: a bone shows as "Unknown Fossil" until you have found it twice or donated it to the museum */
 function fossilKnown(id){ try{ const p = state.profile; return !!p && (((p.finds||{})[id]||0) >= 2 || !!(p.museum?.donated||{})[id]); }catch{ return false; } }
-registerFossils(ITEM_BY_ID, fossilKnown);
+try{ registerFossils(ITEM_BY_ID, fossilKnown); }catch(err){ console.error("fossil registration failed:", err); }
 const EV_ITEMS = registerEventItems(ITEM_BY_ID);   // holiday forage / fish / bugs / shop items (see EVENTS in rpg_content.js)
 Object.assign(BUG_EMOJI, EV_ITEMS.bugEmoji);
 
@@ -1829,7 +1829,12 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{
+  openModal("journalModal");                                   // open first, so the journal ALWAYS appears; each section then renders on its own
+  const safe = (fn)=>{ try{ fn(); }catch(err){ console.error("journal section failed:", err); } };
+  safe(()=>{ if(questFailed) startQuestListener(); });
+  safe(()=> renderInventory()); safe(()=> renderLeaderboard("money")); safe(()=> renderQuests()); safe(()=> renderDailies());
+});
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -5754,6 +5759,14 @@ Object.values(ITEM_BY_ID).forEach(it=>{
     let guard = 0; while(seen.has(sig(out)) && guard++ < 500) out.hp += 1;   // guarantee uniqueness
     seen.add(sig(out));
     it.stats = out;
+  });
+  /* Only CRAFTED gear (anything with a crafting recipe) carries stat buffs. Every other armor piece (shop, loot, daily)
+     keeps just a plain max-HP bonus, and every other trinket gives no stat bonuses. */
+  const craftedIds = new Set(RECIPES.map(r=>r.out));
+  Object.values(ITEM_BY_ID).forEach(it=>{
+    if(craftedIds.has(it.id) || it.undying) return;
+    if(it.type==="armor") it.stats = { hp: Math.max(1, (it.stats && it.stats.hp) || 1) };
+    else if(it.type==="trinket") it.stats = {};
   });
 })();
 
