@@ -14,7 +14,7 @@ import {
   addDoc as _addDoc, query, where, orderBy, limit, runTransaction as _runTransaction, deleteDoc as _deleteDoc, arrayUnion, arrayRemove,
   increment, deleteField, serverTimestamp, collectionGroup, getAggregateFromServer as _getAggregateFromServer, sum, count, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
-import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
+import { DG_TRACK, DG_COOLDOWN_MS, DG_LOCKED_TABS, DG_SKIP_PRICE, isCheckpoint, rollEventType, rollRarity, buildMonster, scaleMonster, waveSize, doorOutcome, doorPct, fmtCountdown } from "./rpg_dungeon.js";
 import { SKILL_TREES, SKILL_NODES, SKILL_BY_ID, SKILL_TREE_VERSION, LEGACY_SKILL_HM, isSpellNode, describeSkill as describeSkillBase } from "./rpg_skilltree.js";
 /* Stat nodes (+SPEED / +STRENGTH / +CHARM / +SMARTS) scale with their row: +3 on the first rows up to +10 on the last.
    baseVal keeps the old value so migrateSkillStats() can top up accounts that already bought a node. */
@@ -31,7 +31,9 @@ const PVP_DMG_DIV = 3;                                                         /
 const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA_PCT = 0.5;   // rage per move; skipping also refills 50% of max mana
 const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 0;                              // every tool costs a flat $20 per use, at every tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
-const DG_SHOP_PRICE_MULT = 0.5;
+const SHOP_PRICE_MULT = 2;                  // every shop price (market, tools, cosmetics, backpacks) costs 2x more
+const shopCost = x=> Math.round(x.price*SHOP_PRICE_MULT);
+const DG_SHOP_PRICE_MULT = 0.5*SHOP_PRICE_MULT;   // dungeon vendor: also 2x more
 import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems , FOSSIL_MINE_CHANCE, FOSSIL_BY_ID, registerFossils, rollFossil, MUSEUM_MILESTONES, forageIdsFor } from "./rpg_content.js";
 
 /* =========================================================================
@@ -3537,15 +3539,15 @@ function renderShopDetail(){
       : c.kind==="font" ? `<div class="cz-preview" style="font-family:${c.family}">The quick brown dragon jumps over the lazy knight</div>`
       : `<div class="cz-preview" style="font-size:40px">${c.emoji}</div>`;
     box.innerHTML = `<b>${escapeHTML(c.name)}</b> <i>(${c.kind==="gradient"?"profile gradient":c.kind==="font"?"font":"boss reaction"})</i><br>${preview}` +
-      (owned ? `<b>✅ Owned</b>${c.kind==="reaction"?" — it's on your reaction bar.":" — equip it from Customize on your own profile."}` : `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(c.price)})</button></div>`);
+      (owned ? `<b>✅ Owned</b>${c.kind==="reaction"?" — it's on your reaction bar.":" — equip it from Customize on your own profile."}` : `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(shopCost(c))})</button></div>`);
     document.getElementById("btnShopBuy")?.addEventListener("click", ()=> buyCosmetic(c));
     return;
   }
   const it = entry.it;
   box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
     (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(sellValue(it))}</small>`) +
-    `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button>` +
-    (it.type==="backpack"||it.type==="rebirth" ? "" : ` <button class="doodle-btn btn-green" id="btnShopBuy10">Buy 10 ($${fmtMoney(it.price*10)})</button>`) + `</div>`;
+    `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(shopCost(it))})</button>` +
+    (it.type==="backpack"||it.type==="rebirth" ? "" : ` <button class="doodle-btn btn-green" id="btnShopBuy10">Buy 10 ($${fmtMoney(shopCost(it)*10)})</button>`) + `</div>`;
   document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
   document.getElementById("btnShopBuy10")?.addEventListener("click", ()=> buyItem(it, 10));
 }
@@ -3565,8 +3567,8 @@ function renderShop(){
     if(e.kind==="cosmetic"){
       const c = e.c, owned = cosOwned().includes(c.id);
       cell.innerHTML = `<b style="${c.kind==="font"?`font-family:${c.family}`:""}">${c.kind==="reaction"?c.emoji+" ":""}${escapeHTML(c.name)}</b>` +
-        `<span>🔄 today only</span>` + (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(c.price)}</span>`;
-    } else cell.innerHTML = `<b>${escapeHTML(e.it.name)}</b><span>${e.it.rarity}</span><span>$${fmtMoney(e.it.price)}</span>`;
+        `<span>🔄 today only</span>` + (c.kind==="gradient" ? `<span class="cz-swatch" style="background:${c.css}"></span>` : "") + `<span>${owned ? "✅ Owned" : "$"+fmtMoney(shopCost(c))}</span>`;
+    } else cell.innerHTML = `<b>${escapeHTML(e.it.name)}</b><span>${e.it.rarity}</span><span>$${fmtMoney(shopCost(e.it))}</span>`;
     cell.addEventListener("click", ()=> selectShopItem(e.id));
     grid.appendChild(cell);
   });
@@ -3584,8 +3586,8 @@ async function buyCosmetic(c){
   const ok = await withErrorToast(()=> runTransaction(db, async tx=>{
     const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, have = d.cosmetics || [];
     if(have.includes(c.id)) throw new Error("cosmetic-owned");
-    if((d.money||0) < c.price) throw new Error("nomoney");
-    tx.update(ref, { money:(d.money||0)-c.price, cosmetics:[...have, c.id], shopBought:(d.shopBought||0)+1 });
+    if((d.money||0) < shopCost(c)) throw new Error("nomoney");
+    tx.update(ref, { money:(d.money||0)-shopCost(c), cosmetics:[...have, c.id], shopBought:(d.shopBought||0)+1 });
   }));
   if(ok!==null){ playSfx("buy"); toast(`🎨 Unlocked ${c.name}!`); renderShop(); renderReactionBar(); }
 }
@@ -3613,14 +3615,14 @@ async function buyBackpack(item){
     const ref = doc(db,"players",state.uid), d = (await tx.get(ref)).data() || {}, cur = d.backpackTier||0;
     if(t <= cur) throw new Error("backpack-owned");
     if(t !== cur+1) throw new Error("backpack-order:"+(cur+1));
-    if((d.money||0) < item.price) throw new Error("nomoney");
-    tx.update(ref, { money:(d.money||0)-item.price, backpackTier:t, shopBought:(d.shopBought||0)+1 });
+    if((d.money||0) < shopCost(item)) throw new Error("nomoney");
+    tx.update(ref, { money:(d.money||0)-shopCost(item), backpackTier:t, shopBought:(d.shopBought||0)+1 });
   }));
   if(ok!==null){ playSfx("buy"); toast(`🎒 Backpack upgraded! You now have ${BACKPACK_SLOTS[t]} inventory slots.`, 5000); renderShop(); }
 }
 async function buyItem(item, qty=1){
   if(item.type==="backpack") return buyBackpack(item);
-  const cost = item.price*qty;
+  const cost = shopCost(item)*qty;
   if(state.profile.money < cost){ toast("Not enough money!"); return; }
   // charge + add in ONE transaction; refused if there is no free slot
   const ok = await applyInvChanges({ add:[{itemId:item.id, qty}], strict:true }, d=>{
@@ -5839,13 +5841,13 @@ const ATTACK_SKILLS = [
   { id:"basic", name:"Attack", key:"1", unlockLevel:1,
     dmgMult:()=>1, desc:"A standard strike. Always available." },
   { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
-    dmgMult:()=>1, maxHpMult:3, desc:"Costs full Rage. Deals 3x your MAX HEALTH as damage." },
+    dmgMult:()=>1, maxHpMult:1.5, desc:"Costs full Rage. Deals 1.5x your MAX HEALTH as damage." },
   { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:30,
     dmgMult:()=>1.35, desc:`Unlocked at Lv.10. Costs 30 mana. Extra damage that cuts through a brace.` },
   { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:60,
     dmgMult:()=>3, desc:`Unlocked at Lv.30. Costs 60 mana. Devastating hit.` },
 ];
-/* Base damage of a move before focus/guard: Power Strike = 3x your max HP, everything else scales off attack power. */
+/* Base damage of a move before focus/guard: Power Strike = 1.5x your max HP, everything else scales off attack power. */
 const moveBaseDmg = (s, maxHp)=> s.maxHpMult ? maxHp*s.maxHpMult : playerAttackPower()*s.dmgMult() + (s.flatDmg||0);
 const hpCostOf = (s, maxHp)=> s.hpPct ? Math.max(1, Math.round(maxHp*s.hpPct/100)) : (s.hpCost||0);   // mana-restoring spells cost a % of max HP
 const spellRoll = ([lo,hi])=> lo + Math.floor(Math.random()*(hi-lo+1));
@@ -7658,9 +7660,9 @@ function dgRollEvent(f){
   if(t==="chest")   return { type:"chest", opened:false, loot:[] };
   if(t==="shop")    return { type:"shop", ...dgRollShop(f) };
   if(t==="doors")   return { type:"doors", pick:-1, outcome:"", note:"" };
-  if(t==="boss")    return { type:"boss", done:false, ms:[buildMonster(f,"boss",lvl)], idx:0 };
-  if(t==="waves")   return { type:"waves", done:false, ms:Array.from({length:waveSize(f)}, ()=>buildMonster(f,"wave",lvl)), idx:0 };
-  return { type:"battle", done:false, ms:[buildMonster(f,"normal",lvl)], idx:0 };
+  if(t==="boss")    return { type:"boss", done:false, ms:[buildMonster(f,"boss",lvl,state.profile.hpMax)], idx:0 };
+  if(t==="waves")   return { type:"waves", done:false, ms:Array.from({length:waveSize(f)}, ()=>buildMonster(f,"wave",lvl,state.profile.hpMax)), idx:0 };
+  return { type:"battle", done:false, ms:[buildMonster(f,"normal",lvl,state.profile.hpMax)], idx:0 };
 }
 const dgEvDone = ev=> ev.type==="start"||ev.type==="safe"||ev.type==="nothing"||ev.type==="shop"||ev.type==="trap" ? true : ev.type==="chest" ? ev.opened : ev.type==="doors" ? ev.pick>=0 : !!ev.done;
 
@@ -7830,7 +7832,7 @@ async function dgSpringTrap(run){
 }
 function dgStartFight(){
   const run = dgRun(), ev = run && run.ev; if(!ev || state.battle) return;
-  const m = ev.ms[ev.idx];
+  const m = scaleMonster(ev.ms[ev.idx], state.profile.hpMax);   // re-scaled from your CURRENT max HP so it always out-HPs you
   startPve("medium", { m, onWin: async ()=>{
     const r = dgRun(); if(!r) return;
     r.ev.idx++;

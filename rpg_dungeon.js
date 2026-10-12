@@ -7,8 +7,14 @@ export const DG_TRACK = "rpg_dungeon.mp3";
 export const DG_COOLDOWN_MS = 24*60*60*1000;      // the door re-opens 24h after you leave
 export const DG_LOCKED_TABS = ["map","jobs","shop","farm","duel"];
 export const DG_SKIP_PRICE = 100;
-export const DG_REWARD_MULT = 2;                  // every dungeon monster (normal, wave, boss) pays 2x its default XP and money
-export const DG_MONEY_MULT = 2;                   // on top of DG_REWARD_MULT: dungeon enemies pay 2x more MONEY (XP unchanged), so 4x default money in total
+export const DG_REWARD_MULT = 0.5;                // nerfed: dungeon monsters now pay only half of their default XP and money (they used to pay 2x)
+export const DG_MONEY_MULT = 1;                   // extra money multiplier on top of DG_REWARD_MULT (was 2): money is now 0.5x default in total
+/* Boss-rush style scaling: every dungeon enemy has MORE HP than you. hp = your max HP x (base roll + 1 per floor). */
+export const DG_HP_BASE  = { normal:[2,8], wave:[2,5], boss:[12,20] };   // base HP multiplier range of your max HP, rolled per monster
+export const DG_HP_PER_FLOOR = 1;                 // +1x your max HP for every floor deeper
+export const DG_DMG_BASE = { normal:1, wave:0.75, boss:1.5 };            // damage multiplier, same idea as the boss rush
+export const DG_DMG_PER_FLOOR = 0.03;             // +3% damage per floor
+export const DG_BASE_HIT_DIV = 4;                 // base hit = your max HP / 4 (same as the boss rush)
 export const isCheckpoint = f => f % 10 === 0;    // 0, 10, 20, 30 ... (0 is the entrance) — escape door every 10 floors
 
 const pickWeighted = (w, rnd)=>{
@@ -42,18 +48,23 @@ export const NORMAL_NAMES = ["Skeleton","Cave Bat","Wraith","Giant Spider","Ghou
 export const BOSS_NAMES   = ["Crypt Warden","Bone Tyrant","The Hollow King","Gloom Colossus","Candle Eater"];
 const SPRITES = { Skeleton:"💀","Cave Bat":"🦇",Wraith:"👻","Giant Spider":"🕷️",Ghoul:"🧟","Dire Rat":"🐀",Shade:"👤","Mimic Imp":"👹","Bone Hound":"🐕‍🦺","Crypt Slime":"🟢" };
 
-/* kind: "normal" | "boss" | "wave". Bosses: much more HP, lower damage. Wave units: a bit weaker. */
-export function buildMonster(f, kind, playerLevel, rnd=Math.random){
+/* Turns a monster's stored multipliers into real stats from the player's CURRENT max HP (never below max HP + 1). */
+export const monsterHp  = (hpX, playerHpMax)=> Math.max(Math.round(playerHpMax*hpX), playerHpMax+1);
+export const monsterAtk = (atkX, playerHpMax)=> Math.max(1, Math.round(playerHpMax/DG_BASE_HIT_DIV*atkX));
+export const scaleMonster = (m, playerHpMax)=> { const php = Math.max(1, playerHpMax||1); return { ...m, hp:monsterHp(m.hpX ?? 4, php), attack:monsterAtk(m.atkX ?? 1, php) }; };
+
+/* kind: "normal" | "boss" | "wave". HP and damage scale off the PLAYER's max HP (see DG_* constants above). */
+export function buildMonster(f, kind, playerLevel, playerHpMax=100, rnd=Math.random){
   const lvl = Math.max(1, Math.round((playerLevel||1)*0.7 + f*1.4));
-  const creep = 1 + f*0.03;
-  const hpM = kind==="boss" ? 6 : kind==="wave" ? 0.7 : 1, atkM = kind==="boss" ? 0.6 : kind==="wave" ? 0.85 : 1;
+  const [lo,hi] = DG_HP_BASE[kind] || DG_HP_BASE.normal;
+  const hpX = lo + rnd()*(hi-lo) + f*DG_HP_PER_FLOOR, atkX = (DG_DMG_BASE[kind] ?? 1) * (1 + f*DG_DMG_PER_FLOOR);
   const rewM = kind==="boss" ? 4 : 1;
   const names = kind==="boss" ? BOSS_NAMES : NORMAL_NAMES, name = names[Math.floor(rnd()*names.length)];
   const difficulty = kind==="boss" ? "hard" : kind==="wave" ? "easy" : (f<10 ? "easy" : f<25 ? "medium" : "hard");
   return {
     id:"dg_"+name.toLowerCase().replace(/\W+/g,""), name, region:"dungeon", difficulty, level:lvl, element:"earth",
     sprite: kind==="boss" ? "👁️" : (SPRITES[name]||"💀"),
-    hp: Math.round((20+lvl*8)*creep*hpM), attack: Math.max(1, Math.round((3+lvl*1.5)*creep*atkM)),
+    hpX, atkX, hp: monsterHp(hpX, playerHpMax), attack: monsterAtk(atkX, playerHpMax),
     xpReward: Math.round((6+lvl*0.8)*rewM*DG_REWARD_MULT), moneyReward: Math.round((8+lvl*1.2+f)*rewM*DG_REWARD_MULT*DG_MONEY_MULT), dropChance:0
   };
 }
