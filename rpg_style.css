@@ -1179,3 +1179,8 @@ body[data-event="halloween"] .region-pill{ background:var(--ev2); }
 body[data-event="halloween"] .tab-btn:nth-child(even){ border-color:var(--ev2); }
 body[data-event="halloween"] .tab-btn.active{ background:linear-gradient(135deg,var(--ev),var(--ev2)); }
 body[data-event="halloween"] .doodle-panel{ border-color:var(--ev2); }
+
+/* museum (bestiary tab) */
+.mu-ladder, .mu-bag{margin-top:10px; font-size:17px;} .mu-ms{opacity:.75; padding:1px 0;} .mu-ms.done{opacity:1; text-decoration:line-through; text-decoration-thickness:1px;}
+.mu-bagrow{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:2px 0;} .mu-bagrow small{color:var(--ink-soft);}
+.mu-donate{margin-top:6px;}

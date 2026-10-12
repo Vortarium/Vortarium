@@ -8,7 +8,8 @@ export const DG_COOLDOWN_MS = 24*60*60*1000;      // the door re-opens 24h after
 export const DG_LOCKED_TABS = ["map","jobs","shop","farm","duel"];
 export const DG_SKIP_PRICE = 100;
 export const DG_REWARD_MULT = 2;                  // every dungeon monster (normal, wave, boss) pays 2x its default XP and money
-export const isCheckpoint = f => f % 5 === 0;     // 0, 5, 10, 15 ... (0 is the entrance)
+export const DG_MONEY_MULT = 2;                   // on top of DG_REWARD_MULT: dungeon enemies pay 2x more MONEY (XP unchanged), so 4x default money in total
+export const isCheckpoint = f => f % 10 === 0;    // 0, 10, 20, 30 ... (0 is the entrance) — escape door every 10 floors
 
 const pickWeighted = (w, rnd)=>{
   const keys = Object.keys(w).filter(k=>w[k]>0); let t = keys.reduce((a,k)=>a+w[k],0)*rnd();
@@ -53,7 +54,7 @@ export function buildMonster(f, kind, playerLevel, rnd=Math.random){
     id:"dg_"+name.toLowerCase().replace(/\W+/g,""), name, region:"dungeon", difficulty, level:lvl, element:"earth",
     sprite: kind==="boss" ? "👁️" : (SPRITES[name]||"💀"),
     hp: Math.round((20+lvl*8)*creep*hpM), attack: Math.max(1, Math.round((3+lvl*1.5)*creep*atkM)),
-    xpReward: Math.round((6+lvl*0.8)*rewM*DG_REWARD_MULT), moneyReward: Math.round((8+lvl*1.2+f)*rewM*DG_REWARD_MULT), dropChance:0
+    xpReward: Math.round((6+lvl*0.8)*rewM*DG_REWARD_MULT), moneyReward: Math.round((8+lvl*1.2+f)*rewM*DG_REWARD_MULT*DG_MONEY_MULT), dropChance:0
   };
 }
 export const waveSize = (f, rnd=Math.random)=> 2 + Math.floor(rnd()*3) + Math.floor(f/15);   // 2-4, +1 per 15 floors

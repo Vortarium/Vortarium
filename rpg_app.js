@@ -25,14 +25,14 @@ const SKILL_STAT_MIN = 3, SKILL_STAT_MAX = 10, SKILL_STAT_VER = 2;
     n.baseVal = n.val; n.val = Math.round(SKILL_STAT_MIN + (n.row-1)/top*(SKILL_STAT_MAX-SKILL_STAT_MIN)); }); }
 const describeSkill = n=> describeSkillBase(n).replace(/(costs?\s+)(\d+)(\s+mana)/gi, (_,a,x,c)=> a+spellMana(+x)+c);
 /* ---- tuning knobs for this update ---- */
-const SPELL_MANA_MULT = 1.5, spellMana = n=> Math.ceil(n*SPELL_MANA_MULT);   // every spell costs 1.5x mana
+const SPELL_MANA_MULT = 1, spellMana = n=> Math.ceil(n*SPELL_MANA_MULT);   // spell mana costs are written straight into the skill tree / ATTACK_SKILLS
 const CHARM_BLOCK = 5;                                                         // each point of CHARM blocks 5 damage
 const PVP_DMG_DIV = 3;                                                         // player-vs-player duels: damage is 3x lower
 const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA_PCT = 0.5;   // rage per move; skipping also refills 50% of max mana
-const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 5;                              // $ per 1 use: 20, 25, 30, 35, ... per tool tier
+const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 0;                              // every tool costs a flat $20 per use, at every tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
 const DG_SHOP_PRICE_MULT = 0.5;
-import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems } from "./rpg_content.js";
+import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems , FOSSIL_MINE_CHANCE, FOSSIL_BY_ID, registerFossils, rollFossil, MUSEUM_MILESTONES, forageIdsFor } from "./rpg_content.js";
 
 /* =========================================================================
    DRAGONEER — rpg_daynight.js
@@ -931,14 +931,14 @@ const TOOL_LADDER = [   // [id suffix, name, uses, shop price, rarity, material 
   ["3",  "Iron",      25,  400,  "rare",      "ing_steel"],
   ["_st","Steel",     36,  580,  "rare",      "ing_steel"],
   ["4",  "Gold",      50,  820,  "rare",      "ing_gold"],
-  ["_pt","Platinum",  72,  1150, "rare",      "ing_platinum"],
+  ["_pt","Platinum",  72,  1150, "epic",      "ing_platinum"],
   ["_ti","Titanium",  95,  1550, "epic",      "ing_titanium"],
   ["5",  "Emerald",   125, 2050, "epic",      "gem_emerald_cut"],
   ["_my","Mythril",   165, 2700, "epic",      "ing_mithril"],
   ["6",  "Diamond",   220, 3600, "legendary", "gem_diamond_cut"],
   ["_ad","Adamantite",300, 4900, "legendary", "ing_adamantite"]
 ];
-TOOL_LADDER.forEach((t,i)=>{ t[3] = t[2]*(TOOL_PRICE_START + TOOL_PRICE_STEP*i); });   // price = uses x ($20, $25, $30, $35 ...) — wooden pick: 3 x $20 = $60
+TOOL_LADDER.forEach((t,i)=>{ t[3] = t[2]*(TOOL_PRICE_START + TOOL_PRICE_STEP*i); });   // price = uses x $20 — wooden pick: 3 x $20 = $60
 const jobToolId = (kind, suffix)=> "tool_"+kind+suffix;
 const TOOL_USES = { tool_pickaxe:3, tool_fishingrod:3, tool_pickaxe2:10, tool_fishingrod2:10, tool_pickaxe3:25, tool_fishingrod3:25 };
 [["tool_pickaxe2","Sturdy Pickaxe",150,"uncommon",10],["tool_pickaxe3","Iron Pickaxe",400,"rare",25],
@@ -962,13 +962,13 @@ TOOL_LADDER.forEach(([sf,nm,u,price,rar])=>{
   const id = jobToolId("net", sf); TOOL_USES[id] = u;
   JOB_ITEM_BANK.push({ id, name:`${nm} Net`, type:"tool", rarity:rar, price, sellPrice:Math.max(1,Math.round(price*0.3)), desc:`Needed to catch bugs. Breaks after ${u} uses.`, stats:{} });
 });
-/* 40 bugs: [name, emoji]. Rarity layout: 10 common, 10 uncommon, 9 rare, 6 epic, 5 legendary */
+/* 80 bugs: [name, emoji]. Rarity layout: 20 common, 20 uncommon, 18 rare, 12 epic, 10 legendary */
 const BUG_LIST = {
-  common:   [["Ladybug","🐞"],["Garden Ant","🐜"],["Housefly","🪰"],["Pill Bug","🐛"],["Field Cricket","🦗"],["Gnat","🪰"],["Earwig","🪲"],["Aphid","🐛"],["Mosquito","🦟"],["Silverfish","🪳"]],
-  uncommon: [["Honeybee","🐝"],["Grasshopper","🦗"],["Firefly","✨"],["Dragonfly","🪰"],["Stag Beetle","🪲"],["Cicada","🦗"],["Katydid","🦗"],["Ground Beetle","🪲"],["Water Strider","🦟"],["Mayfly","🪰"]],
-  rare:     [["Monarch Butterfly","🦋"],["Luna Moth","🦋"],["Praying Mantis","🦗"],["Rhinoceros Beetle","🪲"],["Jewel Wasp","🐝"],["Damselfly","🪰"],["Orchid Mantis","🦗"],["Tarantula Hawk","🐝"],["Velvet Ant","🐜"]],
-  epic:     [["Atlas Moth","🦋"],["Hercules Beetle","🪲"],["Goliath Beetle","🪲"],["Blue Morpho","🦋"],["Giant Stick Insect","🦗"],["Bullet Ant","🐜"]],
-  legendary:[["Golden Scarab","🪲"],["Phoenix Moth","🦋"],["Crystal Cicada","🦗"],["Queen Mantis","🦗"],["Sunfire Beetle","🪲"]]
+  common:   [["Ladybug","🐞"],["Garden Ant","🐜"],["Housefly","🪰"],["Pill Bug","🐛"],["Field Cricket","🦗"],["Gnat","🪰"],["Earwig","🪲"],["Aphid","🐛"],["Mosquito","🦟"],["Silverfish","🪳"],["Fruit Fly","🪰"],["Black Ant","🐜"],["Leafhopper","🦗"],["Springtail","🐛"],["Thrips","🪰"],["Weevil","🪲"],["Bark Louse","🐛"],["Dung Beetle","🪲"],["Plant Hopper","🦗"],["Sowbug","🐛"]],
+  uncommon: [["Honeybee","🐝"],["Grasshopper","🦗"],["Firefly","✨"],["Dragonfly","🪰"],["Stag Beetle","🪲"],["Cicada","🦗"],["Katydid","🦗"],["Ground Beetle","🪲"],["Water Strider","🦟"],["Mayfly","🪰"],["Bumblebee","🐝"],["Carpenter Bee","🐝"],["Click Beetle","🪲"],["Soldier Beetle","🪲"],["Lacewing","🦋"],["Assassin Bug","🪲"],["Shield Bug","🪲"],["Crane Fly","🦟"],["Hoverfly","🪰"],["Blister Beetle","🪲"]],
+  rare:     [["Monarch Butterfly","🦋"],["Luna Moth","🦋"],["Praying Mantis","🦗"],["Rhinoceros Beetle","🪲"],["Jewel Wasp","🐝"],["Damselfly","🪰"],["Orchid Mantis","🦗"],["Tarantula Hawk","🐝"],["Velvet Ant","🐜"],["Painted Lady","🦋"],["Swallowtail","🦋"],["Hawk Moth","🦋"],["Emperor Dragonfly","🪰"],["Leaf Insect","🦗"],["Flower Mantis","🦗"],["Cicada Killer","🐝"],["Tiger Beetle","🪲"],["Peacock Beetle","🪲"]],
+  epic:     [["Atlas Moth","🦋"],["Hercules Beetle","🪲"],["Goliath Beetle","🪲"],["Blue Morpho","🦋"],["Giant Stick Insect","🦗"],["Bullet Ant","🐜"],["Emperor Moth","🦋"],["Titan Beetle","🪲"],["Giant Weta","🦗"],["Rainbow Stag","🪲"],["Deaths Head Hawkmoth","🦋"],["Bombardier Beetle","🪲"]],
+  legendary:[["Golden Scarab","🪲"],["Phoenix Moth","🦋"],["Crystal Cicada","🦗"],["Queen Mantis","🦗"],["Sunfire Beetle","🪲"],["Aurora Butterfly","🦋"],["Moonlit Mantis","🦗"],["Emberwing Dragonfly","🪰"],["Dawn Cicada","🦗"],["Amber Scarab","🪲"]]
 };
 const BUG_SELL = { common:[3,9], uncommon:[10,20], rare:[28,50], epic:[70,120], legendary:[160,280] };
 const BUG_DEFS = [], BUG_EMOJI = {};
@@ -981,12 +981,15 @@ Object.entries(BUG_LIST).forEach(([rarity, arr])=> arr.forEach(([name,emoji])=>{
 // which net-modes each bug can appear in (green = easy, yellow = medium, red = hard) — same shape as the fish tiers
 const BUG_CATALOG = { easy:[], medium:[], hard:[] };
 { const by = r=> BUG_DEFS.filter(b=>b.rarity===r).map(b=>b.id);
-  BUG_CATALOG.easy   = [...by("common"), ...by("uncommon"), ...by("rare").slice(0,4), ...by("epic").slice(0,1)];
-  BUG_CATALOG.medium = [...by("common"), ...by("uncommon"), ...by("rare"), ...by("epic"), ...by("legendary").slice(0,2)];
+  BUG_CATALOG.easy   = [...by("common"), ...by("uncommon"), ...by("rare").slice(0,8), ...by("epic").slice(0,2)];
+  BUG_CATALOG.medium = [...by("common"), ...by("uncommon"), ...by("rare"), ...by("epic"), ...by("legendary").slice(0,4)];
   BUG_CATALOG.hard   = [...by("rare"), ...by("epic"), ...by("legendary")]; }
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
 // Content expansion: 50 forageables, 30 minerals, 90 fish (see rpg_content.js)
 const CATALOG = registerItems(ITEM_BY_ID);
+/* Fossils: a bone shows as "Unknown Fossil" until you have found it twice or donated it to the museum */
+function fossilKnown(id){ try{ const p = state.profile; return !!p && (((p.finds||{})[id]||0) >= 2 || !!(p.museum?.donated||{})[id]); }catch{ return false; } }
+registerFossils(ITEM_BY_ID, fossilKnown);
 const EV_ITEMS = registerEventItems(ITEM_BY_ID);   // holiday forage / fish / bugs / shop items (see EVENTS in rpg_content.js)
 Object.assign(BUG_EMOJI, EV_ITEMS.bugEmoji);
 
@@ -1649,7 +1652,11 @@ function enterGame(){
       { const rm = rageMaxFor(state.profile.level, state.profile.archetype, state.profile.stats?.SMARTS);   // bring existing accounts onto the level-based Rage cap
         if(state.profile.archetype && state.profile.rageMax !== rm) updateDoc(doc(db,"players",state.uid), { rageMax: rm, rage: Math.min(state.profile.rage||0, rm) }).catch(()=>{}); }
       { const gf = gearSyncFields(state.profile, state.profile.equipped); if(Object.keys(gf).length) updateDoc(doc(db,"players",state.uid), gf).catch(()=>{}); }
-      if(state.profile.mapVer !== MAP_VERSION) updateDoc(doc(db,"players",state.uid), freshMapFields()).catch(()=>{});   // map update: every account restarts with only the Grasslands unlocked
+      { const pp = state.profile, ex = Array.isArray(pp.exploredNodes) ? pp.exploredNodes : [], upd = {};
+        // Explored places are NEVER wiped. Only an account with no real map data at all gets the fresh start; a missing/old mapVer on an account that already explored is just re-stamped.
+        if(pp.mapVer !== MAP_VERSION){ if(ex.length <= 1 && !pp.node) Object.assign(upd, freshMapFields()); else upd.mapVer = MAP_VERSION; }
+        if(pp.username === ADMIN_USERNAME && !ex.includes("eventstage")) upd.exploredNodes = [...new Set([...(ex.length ? ex : [START_NODE]), "eventstage"])];   // Vortarium always has the Event Stage unlocked
+        if(Object.keys(upd).length) updateDoc(doc(db,"players",state.uid), upd).catch(()=>{}); }
       catchUpHpRegen(state.profile); // pick up hours missed while the game was closed
       const since = state.profile.lastSeen; updateDoc(doc(db,"players",state.uid), { lastSeen: Date.now() }).catch(()=>{}); state.recapPromise = showRecap(since); ensureChatSubscriptions(); initBoss(); resumeBossParty(); startQuestListener(); migrateSkillTree().then(migrateSkillStats).catch(()=>{}); startManaRegen(); startOnlineBeat();
     }
@@ -1740,7 +1747,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -1797,7 +1804,8 @@ function itemEffectText(item){
   if(item.type==="armor"){
     const bits = [];
     if(st.hp) bits.push(`${st.hp>=0?"+":""}${st.hp} max HP`);
-    Object.keys(st).filter(k=>!["hp","curse"].includes(k)).forEach(k=> bits.push(`${st[k]>=0?"+":""}${st[k]} ${k}`));
+    if(st.mana) bits.push(`+${st.mana} max Mana`);
+    Object.keys(st).filter(k=>!["hp","mana","curse"].includes(k)).forEach(k=> bits.push(`${st[k]>=0?"+":""}${st[k]} ${k}`));
     return `${item.armorSlot?item.armorSlot[0].toUpperCase()+item.armorSlot.slice(1)+": ":""}${bits.join(", ")||"No bonuses"}`;
   }
   if(item.type==="trinket"){
@@ -1829,7 +1837,7 @@ function selectInvItem(entry){
       ${entry.item.type==="consumable"? `<button class="doodle-btn btn-sm btn-green" id="btnUse">Use</button>`:""}
       ${entry.item.type==="rebirth"? `<button class="doodle-btn btn-sm btn-green" id="btnRebirth">Use</button>`:""}
       ${entry.item.type==="seed"? `<button class="doodle-btn btn-sm btn-green" id="btnPlantSeed">Plant 🌱</button>`:""}
-      ${entry.item.type==="rebirth" ? "" : `<button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${fmtMoney(entry.item.sellPrice)})</button>`}
+      ${entry.item.type==="rebirth" ? "" : `<button class="doodle-btn btn-sm btn-yellow" id="btnSell">Sell ($${fmtMoney(sellValue(entry.item))})</button>`}
     </div>`;
   const eq = document.getElementById("btnEquip");
   if(eq) eq.addEventListener("click", ()=> equipItem(entry.item));
@@ -1964,8 +1972,8 @@ function renderOverflow(){
   else {
     det.innerHTML = `<b>${escapeHTML(sel.item.name)}</b> <i>(${sel.item.rarity})</i> &middot; x${sel.qty}<br>
       <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="doodle-btn btn-sm btn-yellow" id="ovSell1">Sell 1 ($${fmtMoney(sel.item.sellPrice)})</button>
-        ${sel.qty>1 ? `<button class="doodle-btn btn-sm btn-yellow" id="ovSellAll">Sell all ($${fmtMoney(sel.item.sellPrice*sel.qty)})</button>` : ""}
+        <button class="doodle-btn btn-sm btn-yellow" id="ovSell1">Sell 1 ($${fmtMoney(sellValue(sel.item))})</button>
+        ${sel.qty>1 ? `<button class="doodle-btn btn-sm btn-yellow" id="ovSellAll">Sell all ($${fmtMoney(sellValue(sel.item)*sel.qty)})</button>` : ""}
       </div>`;
     document.getElementById("ovSell1").addEventListener("click", ()=> ovSell(sel.itemId, false));
     const all = document.getElementById("ovSellAll"); if(all) all.addEventListener("click", ()=> ovSell(sel.itemId, true));
@@ -2003,10 +2011,10 @@ async function ovSell(itemId, all){
   ovBusy = true; invBusy = true;
   try{
     const qty = all ? e.qty : 1;
-    const ok = await applyInvChanges({ remove:[{ itemId, qty }] }, fresh=>({ money: Math.max(0,(fresh.money||0)+item.sellPrice*qty) }));   // remove + pay in one transaction
+    const ok = await applyInvChanges({ remove:[{ itemId, qty }] }, fresh=>({ money: Math.max(0,(fresh.money||0)+sellValue(item)*qty) }));   // remove + pay in one transaction
     if(ok!==null){
       playSfx("sell");
-      toast(`Sold ${qty>1?qty+"x ":""}${item.name} for $${fmtMoney(item.sellPrice*qty)}`);
+      toast(`Sold ${qty>1?qty+"x ":""}${item.name} for $${fmtMoney(sellValue(item)*qty)}`);
       await fillFromOverflow();
     }
   } finally { ovBusy = false; invBusy = false; renderOverflow(); }
@@ -2034,11 +2042,18 @@ async function addItemToInv(itemId, qty=1){
 /* One lock for every inventory sell / use. The item removal AND the payout happen in ONE transaction that
    re-reads the server's inventory, so you can only ever sell/use as many as you really own, no matter how fast
    the button is hammered. */
+/* Tools lose resale value as they wear out: sell price = full price x (uses left / max uses), never below $1. */
+function sellValue(item){
+  const base = item.sellPrice||0, max = TOOL_USES[item.id];
+  if(!max || !state.profile) return base;
+  const left = Math.max(0, Math.min(max, (state.profile.toolUses||{})[item.id] ?? max));
+  return base>0 ? Math.max(1, Math.round(base*left/max)) : 0;
+}
 let invBusy = false;
 async function sellItem(item){
   if(invBusy) return false; invBusy = true;
   try{
-    const price = item.sellPrice||0;
+    const price = sellValue(item);
     const ok = await applyInvChanges({ remove:[{ itemId:item.id, qty:1 }] }, fresh=>({ money: Math.max(0,(fresh.money||0)+price) }));
     if(ok===null) return false;                          // nothing was removed -> nothing is paid
     playSfx("sell");
@@ -2090,26 +2105,27 @@ async function unequipItem(slot){
    currently baked in, so taking a piece off (or an item's stats changing
    later) always removes the right amount. */
 function gearBonus(equipped){
-  const out = { hp:0, stats:{ SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0 } };
+  const out = { hp:0, mana:0, stats:{ SPEED:0, STRENGTH:0, CHARM:0, SMARTS:0 } };
   [...ARMOR_SLOTS, "trinket"].forEach(slot=>{
     const it = equipped?.[slot] && ITEM_BY_ID[equipped[slot]]; if(!it) return;
     const st = it.stats||{}, sign = (slot==="trinket" && st.curse) ? -1 : 1;     // trinkets give their stats now (cursed ones take them away)
-    out.hp += st.hp||0;
+    out.hp += st.hp||0; out.mana += st.mana||0;
     SKILL_KEYS.forEach(k=> out.stats[k] += sign*(st[k]||0));
   });
   return out;
 }
 function gearSyncFields(data, equipped){
-  const want = gearBonus(equipped), had = data.gearApplied || { hp:0, stats:{} };
+  const want = gearBonus(equipped), had = data.gearApplied || { hp:0, mana:0, stats:{} };
   const stats = { ...(data.stats||{}) };
-  let changed = want.hp !== (had.hp||0);
+  let changed = want.hp !== (had.hp||0) || want.mana !== (had.mana||0);
   SKILL_KEYS.forEach(k=>{
     const delta = want.stats[k] - (had.stats?.[k]||0);
     if(delta){ stats[k] = (stats[k]||0) + delta; changed = true; }
   });
   if(!changed) return {};
   const hpMax = Math.max(1, (data.hpMax||1) + (want.hp - (had.hp||0)));
-  const out = { stats, hpMax, hp: Math.max(1, Math.min(hpMax, data.hp||1)), gearApplied: want };
+  const manaMax = Math.max(0, (data.manaMax||0) + (want.mana - (had.mana||0)));
+  const out = { stats, hpMax, hp: Math.max(1, Math.min(hpMax, data.hp||1)), manaMax, mana: Math.max(0, Math.min(manaMax, data.mana||0)), gearApplied: want };
   if(data.archetype && want.stats.SMARTS !== (had.stats?.SMARTS||0)){      // Smarts moved, so max Rage moves with it
     out.rageMax = rageMaxFor(data.level, data.archetype, stats.SMARTS);
     out.rage = Math.min(data.rage||0, out.rageMax);
@@ -2644,9 +2660,9 @@ function updateSkillUI(){
   if(skillOpen()) renderSkillTree();
 }
 function skillShort(n){
-  if(n.kind==="A") return `New attack · ${n.mana} mana`;
+  if(n.kind==="A") return `New attack · ${n.mana} mana · ${n.mult}x +${n.val}`;
   if(n.kind==="L") return `Heal ${n.lo}-${n.hi} HP · ${n.mana} mana · cd ${n.cd}`;
-  if(n.kind==="N") return `Restore ${n.lo}-${n.hi} mana · ${n.mana} mana · cd ${n.cd}`;
+  if(n.kind==="N") return `Restore ${n.lo}-${n.hi} mana · ${n.hpPct}% max HP · cd ${n.cd}`;
   return describeSkill(n).replace("Max ","");
 }
 function renderSkillTree(){
@@ -3221,7 +3237,39 @@ function eventPools(key){
   });
   return EVENT_POOLS[key] = out;
 }
-function jobPool(kind, m){ const ev = eventHere(); return ev ? eventPools(ev.key)[kind][m] : POOLS[kind][m]; }
+/* HABITATS: every fish and bug lives in 3 of the 8 scenic spots (spread evenly inside each rarity so every spot has every rarity). Only those spots can give it to you;
+   at the Event Stage you get that holiday's own fish and bugs instead. */
+let HAB = null;
+function habitats(){
+  if(HAB) return HAB; HAB = {};
+  const sc = NODE_LIST.filter(n=>n.type==="scenic").map(n=>n.id), N = sc.length;
+  const assign = ids=>{ const by = {}; ids.forEach(id=> (by[ITEM_BY_ID[id].rarity] ||= []).push(id)); Object.values(by).forEach(arr=> arr.forEach((id,r)=>{ HAB[id] = [0,1,2].map(j=> sc[(r*3+j)%N]); })); };
+  ["easy","medium","hard"].forEach(t=> assign(CATALOG.fish[t]));
+  assign(BUG_DEFS.map(b=>b.id));
+  return HAB;
+}
+const NODE_POOLS = {};
+function jobPool(kind, m){
+  const ev = eventHere(); if(ev) return eventPools(ev.key)[kind][m];
+  if(kind==="forage" && state.profile){                                  // foragables depend on the REGION of the node you stand in
+    const region = nodeById(state.profile.node).region, key = "forage"+m+region;
+    if(!NODE_POOLS[key]){
+      const ids = forageIdsFor(region).filter(id=> ITEM_BY_ID[id]);
+      NODE_POOLS[key] = ids.length ? buildPool(ids.map(id=>ITEM_BY_ID[id]), RARITY_W.forage[m], "forage"+m+region) : POOLS.forage[m];
+    }
+    return NODE_POOLS[key];
+  }
+  if((kind==="fish" || kind==="bug") && state.profile){
+    const node = state.profile.node, key = kind+m+node;
+    if(!NODE_POOLS[key]){
+      const tier = (kind==="fish" ? FISH_RULES : BUG_RULES)[m].tier, H = habitats();
+      const ids = (kind==="fish" ? CATALOG.fish[tier] : BUG_CATALOG[tier]).filter(id=> (H[id]||[]).includes(node));
+      NODE_POOLS[key] = ids.length ? buildPool(ids.map(id=>ITEM_BY_ID[id]), RARITY_W.fish[m], kind+m) : POOLS[kind][m];
+    }
+    return NODE_POOLS[key];
+  }
+  return POOLS[kind][m];
+}
 /* Event shop: SHOP_SIZE items from the holiday bank, rotating every day (12am ET) */
 let eventStockCache = { day:-1, key:"", items:[] };
 function eventShopStock(ev){
@@ -3267,6 +3315,23 @@ setInterval(()=>{ if(state.profile){ syncEventScene(); eventClosedCheck(); } }, 
    Villages = daily shop (no jobs). Scenic spots = jobs (no daily shop). Unexplored nodes take 8-36h of travel (fixed per route,
    no turning back); already-explored nodes are free fast travel. Arriving switches your region automatically. --- */
 let mapSel = null, mapDrawKey = "";
+/* Players per map spot (online / offline). Cached 60s so clicking around the map stays cheap: one count per spot + one read of the online players. */
+const popCache = { at:0, online:null, total:{} };
+async function nodePop(id){
+  const now = Date.now();
+  if(!popCache.online || now - popCache.at > 60000){
+    const snap = await getDocs(query(collection(db,"players"), where("onlineAt",">",now-ONLINE_FRESH_MS)));
+    const on = {}; snap.forEach(d=>{ const nd = d.data().node || START_NODE; on[nd] = (on[nd]||0)+1; });
+    popCache.online = on; popCache.at = now; popCache.total = {};
+  }
+  if(popCache.total[id]==null){
+    const r = await getAggregateFromServer(query(collection(db,"players"), where("node","==",id)), { n:count() });
+    popCache.total[id] = r.data().n;
+  }
+  const online = popCache.online[id]||0, total = Math.max(online, popCache.total[id]);
+  return { online, offline: total-online };
+}
+const popText = x=> `👥 <b>${x.online}</b> online · <b>${x.offline}</b> offline here`;
 const hudPlaceText = p=>{
   const a = mapAccess(p);
   return a.traveling ? `🚢 → ${nodeById(p.travel.to).name} (${fmtTravel(p.travel.arrive-Date.now())})` : nodeById(p.node).name;
@@ -3290,7 +3355,7 @@ function renderRegionGrid(){
     const b = document.createElement("button");
     b.className = "wm-node " + n.type + (known ? " known" : " unknown") + (here ? " here" : "") + (mapSel===n.id ? " sel" : "") + (n.type==="event" && !evOpen ? " closed" : "");
     b.style.left = n.x+"%"; b.style.top = n.y+"%"; b.title = n.name;
-    const pin = n.type==="event" ? "" : (known ? n.icon : "✖");
+    const pin = n.type==="event" ? (evOpen ? evOpen.icon : "🔒") : (known ? n.icon : "✖");
     b.innerHTML = `<span class="wm-pin">${pin}</span><span class="wm-label">${n.type==="event" ? (evOpen ? evOpen.name : "Event Stage (closed)") : n.name}</span>`;
     b.addEventListener("click", ()=>{ mapSel = n.id; renderRegionGrid(); });
     layer.appendChild(b);
@@ -3312,6 +3377,11 @@ function renderMapInfo(){
     else if(a.traveling) sel += `<small>You can't plan another trip while you are at sea.</small>`;
     else if(known) sel += `<small>Already explored — instant fast travel.</small><br><button class="doodle-btn btn-green" id="btnMapGo">Fast travel</button>`;
     else sel += `<small>Unexplored — about <b>${fmtTravel(travelMs(p.node, n.id))}</b> of travel. Once you set sail there's no turning back.</small><br><button class="doodle-btn btn-yellow" id="btnMapGo">Set sail</button>`;
+  }
+  if(mapSel && MAP_NODES[mapSel]){
+    const sid = mapSel, c = popCache.total[sid]!=null && popCache.online && Date.now()-popCache.at<=60000 ? popText({ online:popCache.online[sid]||0, offline:Math.max(popCache.online[sid]||0,popCache.total[sid])-(popCache.online[sid]||0) }) : "👥 counting players…";
+    sel += `<div class="map-pop"><small id="mapPop">${c}</small></div>`;
+    if(c.startsWith("👥 counting")) nodePop(sid).then(x=>{ const el = document.getElementById("mapPop"); if(el && mapSel===sid) el.innerHTML = popText(x); }).catch(()=>{ const el = document.getElementById("mapPop"); if(el && mapSel===sid) el.textContent = ""; });
   }
   box.innerHTML = cur + sel;
   document.getElementById("btnMapGo")?.addEventListener("click", ()=> startTravel(mapSel));
@@ -3473,7 +3543,7 @@ function renderShopDetail(){
   }
   const it = entry.it;
   box.innerHTML = `<b>${escapeHTML(it.name)}</b> <i>(${it.rarity})</i><br>${escapeHTML(it.desc||"")}<br><b>${escapeHTML(itemEffectText(it))}</b>` +
-    (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(it.sellPrice||0)}</small>`) +
+    (it.type==="backpack"||it.type==="rebirth" ? "" : `<br><small>Sells back for $${fmtMoney(sellValue(it))}</small>`) +
     `<div style="margin-top:8px"><button class="doodle-btn btn-green" id="btnShopBuy">Buy ($${fmtMoney(it.price)})</button>` +
     (it.type==="backpack"||it.type==="rebirth" ? "" : ` <button class="doodle-btn btn-green" id="btnShopBuy10">Buy 10 ($${fmtMoney(it.price*10)})</button>`) + `</div>`;
   document.getElementById("btnShopBuy").addEventListener("click", ()=> buyItem(it));
@@ -3573,7 +3643,7 @@ async function buyItem(item, qty=1){
    in it) is lost. Plot state is simulated lazily from timestamps, so it keeps
    progressing while you're away.
    ========================================================================= */
-const FARM_PLOTS = 9, TILL_MS = 3*24*3600*1000, WET_MS = 8*3600*1000, HOUR_MS = 3600*1000;
+const FARM_PLOTS = 9, TILL_MS = 3*24*3600*1000, WET_MS = 24*3600*1000, HOUR_MS = 3600*1000;
 const emptyPlot = ()=>({ tillUntil:0, wetUntil:0, plant:null, t:Date.now() });
 const farm = { plots:null, mode:"inspect", seed:null, sel:null, busy:false, loaded:false, built:false, seedSig:"" };
 const farmRef = ()=> doc(db,"players",state.uid,"farm","plots");
@@ -3798,7 +3868,7 @@ function farmDetailHTML(i, now){
   if(!p.tillUntil) L.push("Untilled ground. Use the 🪓 Hoe to till it (soil lasts 3 days, then crumbles unless you re-till).");
   else {
     L.push(`Soil is tilled — it crumbles in ${fmtDur(p.tillUntil-now)} (tilling again resets it to 3 days).`);
-    L.push(p.wetUntil > now ? `💧 Watered — dries out in ${fmtDur(p.wetUntil-now)}.` : "🏜️ Dry — water it (water lasts 8 hours).");
+    L.push(p.wetUntil > now ? `💧 Watered — dries out in ${fmtDur(p.wetUntil-now)}.` : "🏜️ Dry — water it (water lasts 24 hours).");
   }
   if(p.plant){
     const pl = p.plant, s = ITEM_BY_ID[pl.seedId];
@@ -3892,7 +3962,7 @@ let jobMode = (()=>{ try{ const m = localStorage.getItem("dragoneer_jobmode"); r
 const BUG_RULES = {
   green:  { tier:"easy",   time:10000, speed:80,  turn:1.2, dash:.10, drop:.5,  grab:.5 },
   yellow: { tier:"medium", time:10000, speed:118, turn:1.7, dash:.15, drop:.46, grab:.68 },
-  red:    { tier:"hard",   time:15000, speed:155, turn:2.3, dash:.22, drop:.6,  grab:.45 }
+  red:    { tier:"hard",   time:15000, speed:139.5, turn:2.3, dash:.22, drop:.6,  grab:.45 }
 };
 const POOLS = { forage:{}, mine:{}, fish:{}, bug:{} };
 Object.keys(MODES).forEach(m=>{
@@ -3948,6 +4018,7 @@ const JOB_COOLDOWN_MS = 5*1000;         // mining and fishing: 5s after each use
 const mineReadyIn = ()=> JOB_COOLDOWN_MS - (Date.now() - (state.profile?.lastMineTs||0));
 const fishReadyIn = ()=> JOB_COOLDOWN_MS - (Date.now() - (state.profile?.lastFishTs||0));
 function forageReadyIn(m=jobMode){ return FORAGE_RULES[m].cooldown - (Date.now() - (state.profile[forageTsKey(m)]||0)); }
+const FORAGE_SEED_SPOTS = ["grasslands","glade","northshore"], FORAGE_SEED_CHANCE = 0.05;   // fertile spots only; 5% per successful forage
 async function doForageAction(){
   const m = jobMode, rule = FORAGE_RULES[m];
   if(forageReadyIn(m) > 0) return;
@@ -3959,6 +4030,11 @@ async function doForageAction(){
   const n = rule.qty[0] + Math.floor(Math.random()*(rule.qty[1]-rule.qty[0]+1));
   const got = {};
   for(let i=0;i<n;i++){ const id = rollPool(poolAt(jobPool("forage",m), null, hourNow()), activeLuck()); got[id] = (got[id]||0)+1; }
+  if(FORAGE_SEED_SPOTS.includes(state.profile.node) && Math.random() < FORAGE_SEED_CHANCE){      // rare bonus: a seed turns up in the undergrowth
+    const w = { common:70, uncommon:22, rare:7, epic:1 }; let t = Math.random()*100, rar = "common";
+    for(const k of Object.keys(w)){ t -= w[k]; if(t<=0){ rar = k; break; } }
+    const pool = SEED_ITEMS.filter(x=> x.rarity===rar && !x.random); if(pool.length){ const sd = pool[Math.floor(Math.random()*pool.length)]; got[sd.id] = (got[sd.id]||0)+1; toast(`🌱 You found ${sd.name} in the undergrowth!`); }
+  }
   await applyInvChanges({ add:Object.entries(got).map(([itemId,qty])=>({itemId,qty})) },
     Object.fromEntries(Object.entries(got).map(([id,q])=>["finds."+id, increment(q)])));
   jobLog(`You foraged ${Object.entries(got).map(([id,q])=>pluralize(id,q)).join(" and ")}!`);
@@ -3989,6 +4065,13 @@ async function doMineAction(){
       await addItemToInv(id, 1);
       updates["finds."+id] = increment(1);           // feeds "obtain an item" sidequests
       msg = `Found ${pluralize(id, 1)}!`;
+    }
+    if(Math.random() < FOSSIL_MINE_CHANCE){                        // 2% bonus on every successful swing: a fossil bone
+      const fid = rollFossil(), had = (state.profile.finds||{})[fid] || 0;
+      await addItemToInv(fid, 1);
+      updates["finds."+fid] = increment(1);
+      const fname = (had>=1 || state.profile?.museum?.donated?.[fid]) ? "T-Rex " + FOSSIL_BY_ID[fid].name : "Unknown Fossil";
+      msg += ` 🦴 Plus ${fname === "Unknown Fossil" ? "an Unknown Fossil" : "a "+fname}!`;
     }
   } else {
     const total = MINE_NEG.reduce((s,n)=>s+n.w,0); let r = Math.random()*total, pick = MINE_NEG[0];
@@ -4182,15 +4265,23 @@ document.getElementById("btnCancelBug").addEventListener("click", ()=> endBug(fa
 const pctText = p=> { const v = p*100; return (v>=10 ? v.toFixed(1) : v>=1 ? v.toFixed(2) : v.toFixed(3)) + "%"; };
 const FISH_TIERS = [["easy","green","Green"],["medium","yellow","Yellow"],["hard","red","Red"]];
 let beSel = null, beKind = "fish";
-function beFishList(){ return FISH_TIERS.flatMap(([tier,mode])=> CATALOG.fish[tier].map(id=>({ id, tier, mode, item:ITEM_BY_ID[id] }))); }
+const bugEmo = id=> BUG_EMOJI[id] || EV_ITEMS.bugEmoji[id] || "🐛";
+const nodeLabel = id=> `${MAP_NODES[id].icon} ${MAP_NODES[id].name}`;
+const evWhere = ev=> `🎪 Event Stage — ${ev.icon} ${ev.name} (${evRange(ev)}), any difficulty`;
+const whereToCatch = f=> f.ev ? evWhere(f.ev) : (habitats()[f.id]||[]).map(nodeLabel).join(", ");
+function beFishList(){ return [ ...FISH_TIERS.flatMap(([tier,mode])=> CATALOG.fish[tier].map(id=>({ id, tier, mode, item:ITEM_BY_ID[id] }))),
+  ...EVENTS.flatMap(ev=> EV_ITEMS.byKey[ev.key].fish.map(id=>({ id, tier:"easy", mode:"green", item:ITEM_BY_ID[id], ev }))) ]; }   // holiday fish are listed all year
 function beBugList(){
   const seen = new Set(), out = [];
   FISH_TIERS.forEach(([tier,mode])=> BUG_CATALOG[tier].forEach(id=>{ if(!seen.has(id)){ seen.add(id); out.push({ id, tier, mode, item:ITEM_BY_ID[id], bug:true }); } }));
-  const order = RARITIES; return out.sort((x,y)=> order.indexOf(x.item.rarity)-order.indexOf(y.item.rarity));
+  const order = RARITIES; out.sort((x,y)=> order.indexOf(x.item.rarity)-order.indexOf(y.item.rarity));
+  EVENTS.forEach(ev=> EV_ITEMS.byKey[ev.key].bug.forEach(id=> out.push({ id, tier:"easy", mode:"green", item:ITEM_BY_ID[id], bug:true, ev })));   // holiday bugs are listed all year
+  return out;
 }
 function renderBestiary(){
   const grid = document.getElementById("beGrid"), det = document.getElementById("beDetail"), clock = document.getElementById("beClock");
   if(!grid || !state.profile) return;
+  if(beKind==="museum") return renderMuseum();
   document.querySelectorAll("[data-besub]").forEach(b=> b.classList.toggle("active", b.dataset.besub===beKind));
   const h = hourNow(), per = periodOf(h), finds = state.profile.finds || {}, bugMode = beKind==="bug", list = bugMode ? beBugList() : beFishList();
   const hh = Math.floor(h), mm = Math.floor((h-hh)*60);
@@ -4199,7 +4290,7 @@ function renderBestiary(){
     const caught = (finds[f.id]||0) > 0;
     const act = activity(f.bug ? bugHabit(f.id, f.item.rarity) : fishHabit(f.id, f.item.rarity), h);
     return `<button class="be-card rarity-${f.item.rarity}${beSel===f.id?" sel":""}${caught?"":" unseen"}" data-fish="${f.id}" title="${caught?escapeHTML(f.item.name):"???"}">
-      <span class="be-emo">${caught ? (f.bug ? BUG_EMOJI[f.id] : "🐟") : "❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
+      <span class="be-emo">${caught ? (f.bug ? bugEmo(f.id) : "🐟") : "❔"}</span><span class="be-name">${caught?escapeHTML(f.item.name):"???"}</span>
       <span class="be-bar"><i style="width:${Math.round(act*100)}%"></i></span></button>`;
   }).join("");
   grid.querySelectorAll("[data-fish]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.fish; renderBestiary(); }));
@@ -4211,10 +4302,11 @@ function renderBestiary(){
     const recipes = RECIPES.filter(r=> r.ing.some(([id])=>id===f.id)).length;
     const bodds = bugOddsByHour(f.id), bmax = bh.max || 1;
     const bbars = bodds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(3, Math.round(p/bmax*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${p.toFixed(1)}%"></span>`).join("");
-    det.innerHTML = `<h3 class="doodle-h3">${caught?BUG_EMOJI[f.id]+" "+escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
+    det.innerHTML = `<h3 class="doodle-h3">${caught?bugEmo(f.id)+" "+escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
       <p class="doodle-sub">${caught ? escapeHTML(it.desc||"") : "Catch one to reveal its entry."}</p>
       <div class="be-facts">
-        <div><b>Where</b> ${modes.map(([,mode])=>MODES[mode].emoji+" "+MODES[mode].label).join(", ")} bug catching</div>
+        <div><b>Where to catch</b> ${whereToCatch(f)}</div>
+        <div><b>Difficulty</b> ${f.ev ? "Any mode" : modes.map(([,mode])=>MODES[mode].emoji+" "+MODES[mode].label).join(", ")} bug catching</div>
         <div><b>Best time</b> ${bh.icon} ${bh.label} (${activeText(bh)}) · peak ${bh.max.toFixed(1)}%</div>
         <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
         <div><b>Used in</b> ${recipes} crafting recipe${recipes===1?"":"s"}</div>
@@ -4225,13 +4317,14 @@ function renderBestiary(){
       <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
     return;
   }
-  const hb = fishHabit(f.id, it.rarity), pool = POOLS.fish[f.mode];
+  const hb = fishHabit(f.id, it.rarity), pool = f.ev ? [{ id:f.id, rarity:it.rarity }] : POOLS.fish[f.mode];
   const odds = oddsByHour(pool, f.id), now = fishPct(hb, h)/100, max = hb.max || 1;
   const bars = odds.map((p,i)=> `<span class="be-hr${i===hh%24?" now":""}" style="height:${Math.max(3, Math.round(p/max*100))}%" title="${i%12||12}${i<12?"am":"pm"}: ${p.toFixed(1)}%"></span>`).join("");
   det.innerHTML = `<h3 class="doodle-h3">${caught?escapeHTML(it.name):"???"} <small class="rarity-${it.rarity}">${it.rarity}</small></h3>
     <p class="doodle-sub">${caught?escapeHTML(it.desc||""):"Catch one to reveal its entry."}</p>
     <div class="be-facts">
-      <div><b>Where</b> ${MODES[f.mode].emoji} ${MODES[f.mode].label} fishing</div>
+      <div><b>Where to catch</b> ${whereToCatch(f)}</div>
+      <div><b>Difficulty</b> ${f.ev ? "Any mode" : MODES[f.mode].emoji+" "+MODES[f.mode].label} fishing</div>
       <div><b>Best time</b> ${hb.icon} ${hb.label} (${activeText(hb)}) · peak ${hb.max.toFixed(1)}%</div>
       <div><b>Sells for</b> $${fmtMoney(it.sellPrice)}</div>
       <div><b>Caught</b> ${finds[f.id]||0}</div>
@@ -4239,6 +4332,88 @@ function renderBestiary(){
     </div>
     <div class="be-chart">${bars}</div>
     <div class="be-axis"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>`;
+}
+
+/* --- Museum (bestiary tab): the 30 bones of one T-rex. Donate each bone once; milestones pay rewards. --- */
+const museumDonated = ()=> state.profile?.museum?.donated || {};
+const museumCount = ()=> Object.keys(museumDonated()).length;
+const museumClaimed = ()=> state.profile?.museum?.claimed || {};
+function rollMuseumReward(ms){
+  const c = ms.c;
+  if(ms.kind==="money"){ const amt = dailyMoney(c) * 2; return { money:amt, add:[], label:`$${fmtMoney(amt)}` }; }
+  if(ms.kind==="mineral"){ const list = dailyMinerals(c); return { add:list, label:list.map(m=>`${m.qty}× ${ITEM_BY_ID[m.itemId].name}`).join(", ") }; }
+  if(ms.kind==="grand"){
+    const pool = Object.values(ITEM_BY_ID).filter(i=> (i.type==="weapon"||i.type==="armor") && i.rarity==="legendary"), g = pool.length ? pool[Math.floor(Math.random()*pool.length)].id : null;
+    const amt = dailyMoney(c) * 3;
+    return { money:amt, add: g ? [{ itemId:g, qty:1 }] : [], label:`${g ? ITEM_BY_ID[g].name+" (legendary) + " : ""}$${fmtMoney(amt)}` };
+  }
+  const id = ms.kind==="gear" ? rollDailyGear(c) : rollDailyTool(c);
+  return id ? { add:[{ itemId:id, qty:1 }], label:`${ITEM_BY_ID[id].name} (${ITEM_BY_ID[id].rarity})` } : { add:[], money:dailyMoney(c), label:`$${fmtMoney(dailyMoney(c))}` };
+}
+let museumBusy = false;
+async function donateFossil(id){
+  if(museumBusy || !state.profile || !FOSSIL_BY_ID[id]) return;
+  if(museumDonated()[id]){ toast("The museum already has that bone — you can sell this one."); return; }
+  if(!hasItem(id)){ toast("You don't have that fossil."); return; }
+  const before = museumCount(), after = before+1, ms = MUSEUM_MILESTONES.find(m=> m.n===after && !museumClaimed()[m.n]);
+  const rw = ms ? rollMuseumReward(ms) : null;
+  museumBusy = true;
+  try{
+    const ok = await applyInvChanges({ remove:[{ itemId:id, qty:1 }], add: rw ? rw.add : [], strict:true }, d=>{
+      const md = d.museum || {};
+      if((md.donated||{})[id]) throw new Error("museum-already");
+      if(Object.keys(md.donated||{}).length !== before) throw new Error("museum-changed");
+      const f = { ["museum.donated."+id]: true };
+      if(ms){ f["museum.claimed."+ms.n] = true; if(rw.money) f.money = (d.money||0)+rw.money; }
+      return f;
+    });
+    if(ok===null) return;
+    playSfx("buy");
+    toast(`🏛️ Donated the ${FOSSIL_BY_ID[id].name}! (${after}/30)`, 4500, "toast-money");
+    if(rw) setTimeout(()=> toast(`🎁 Museum reward for ${after} bone${after===1?"":"s"}: ${rw.label}`, 7000, "toast-money"), 600);
+    beSel = id;
+  } finally { museumBusy = false; renderMuseum(); if(typeof renderInventory==="function") renderInventory(); }
+}
+function renderMuseum(){
+  const grid = document.getElementById("beGrid"), det = document.getElementById("beDetail"), clock = document.getElementById("beClock");
+  document.querySelectorAll("[data-besub]").forEach(b=> b.classList.toggle("active", b.dataset.besub===beKind));
+  const don = museumDonated(), n = museumCount(), claimed = museumClaimed(), finds = state.profile.finds || {};
+  const next = MUSEUM_MILESTONES.find(m=> m.n>n);
+  clock.textContent = `🦖 T-Rex skeleton · ${n}/30 bones donated` + (next ? ` · next reward at ${next.n}` : " · complete!");
+  grid.innerHTML = Object.values(FOSSIL_BY_ID).map(f=>{
+    const donated = !!don[f.id], known = donated || (finds[f.id]||0) >= 2, held = hasItem(f.id);
+    return `<button class="be-card rarity-epic${beSel===f.id?" sel":""}${donated?"":" unseen"}" data-bone="${f.id}" title="${donated||known?escapeHTML("T-Rex "+f.name):"???"}">
+      <span class="be-emo">${donated ? f.emoji : held ? "📦" : "❔"}</span><span class="be-name">${donated||known ? escapeHTML(f.name) : "???"}</span>
+      <span class="be-bar"><i style="width:${donated?100:0}%"></i></span></button>`;
+  }).join("");
+  grid.querySelectorAll("[data-bone]").forEach(b=> b.addEventListener("click", ()=>{ beSel = b.dataset.bone; renderMuseum(); }));
+  const ladder = MUSEUM_MILESTONES.map(m=> `<div class="mu-ms${claimed[m.n]?" done":""}">${claimed[m.n]?"✅":m.icon} <b>${m.n}</b> bone${m.n===1?"":"s"} — ${escapeHTML(m.label)}</div>`).join("");
+  const bag = Object.values(FOSSIL_BY_ID).filter(f=> hasItem(f.id));
+  const f = FOSSIL_BY_ID[beSel];
+  let html = "";
+  if(f){
+    const donated = !!don[f.id], held = hasItem(f.id), known = donated || (finds[f.id]||0) >= 2;
+    if(donated){
+      html += `<h3 class="doodle-h3">${f.emoji} T-Rex ${escapeHTML(f.name)} <small class="rarity-epic">donated</small></h3><p class="doodle-sub">${escapeHTML(f.info)}</p>
+        <div class="be-facts"><div><b>Found</b> ${finds[f.id]||0} time${(finds[f.id]||0)===1?"":"s"}</div><div><b>Extra copies</b> ${held ? "You have one in your bag. It can only be sold." : "none in your bag"}</div></div>`;
+    } else {
+      html += `<h3 class="doodle-h3">${known ? "T-Rex "+escapeHTML(f.name) : "???"} <small class="rarity-epic">not donated</small></h3>
+        <p class="doodle-sub">Donate this bone to learn all about it.</p>`;
+      html += held ? `<button class="doodle-btn mu-donate" data-donate="${f.id}">🏛️ Donate to the museum</button>` : `<p class="doodle-sub">You don't have this fossil yet. Keep mining!</p>`;
+    }
+  } else {
+    html += `<p class="doodle-sub">Mine rocks for a 2% chance at a fossil bone. Donate each of the 30 bones once; extras can be sold.</p>`;
+  }
+  if(bag.length){
+    html += `<div class="mu-bag"><b>🎒 Fossils in your bag</b>` + bag.map(b=>{
+      const donated = !!don[b.id], nm = ITEM_BY_ID[b.id].name;
+      return `<div class="mu-bagrow"><span>${escapeHTML(nm)} ×${(state.profile.inventory||[]).find(e=>e.itemId===b.id)?.qty||0}</span>` +
+        (donated ? `<small>already donated, sell it</small>` : `<button class="doodle-btn mu-donate" data-donate="${b.id}">Donate</button>`) + `</div>`;
+    }).join("") + `</div>`;
+  }
+  html += `<div class="mu-ladder"><b>🎁 Donation rewards</b>${ladder}</div>`;
+  det.innerHTML = html;
+  det.querySelectorAll("[data-donate]").forEach(b=> b.addEventListener("click", ()=> donateFossil(b.dataset.donate)));
 }
 function refreshBestiary(){ if(document.getElementById("jtab-bestiary")?.classList.contains("active") && document.getElementById("journalModal").classList.contains("active")) renderBestiary(); }
 document.querySelectorAll("[data-besub]").forEach(b=> b.addEventListener("click", ()=>{ beKind = b.dataset.besub; beSel = null; renderBestiary(); }));
@@ -5445,7 +5620,7 @@ const RECIPES = [];
   // Trinket of Undying: no stats. If a hit would kill you while it's equipped it breaks and saves you (full HP, Mana and Rage).
   add("trinket_undying","Trinket of Undying","trinket","legendary",{ price:7500, sellPrice:2000, undying:true, stats:{},
     desc:"No stats. If you would die in a fight while wearing it, it shatters and pulls you back: HP, Mana and Rage refill to max and the fight goes on." },
-    [["ing_adamantite",1],["gem_ruby_cut",1]]);
+    [["gem_ruby_cut",2],["ing_gold",1]]);
 })();
 /* ---------- economy: every item sells for ~10% less ----------
    Runs once, after every item (job items, crops, tools, ~400 crafted recipes) is registered.
@@ -5619,7 +5794,7 @@ function renderCraftInv(){
   if(!sel){ det.textContent = "Pick a recipe above."; btn.disabled = true; return; }
   const it = ITEM_BY_ID[sel.out], st = it.stats||{};
   const eff = st.luck?itemEffectText(it): st.heal?`Heals ${healText(st)} HP`: st.attack?`+${st.attack} attack`: it.type==="armor"?itemEffectText(it): Object.keys(st).filter(k=>k!=="curse").map(k=>`+${st[k]} ${k}`).join(" ");
-  det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p><p><b>Sells for $${fmtMoney(it.sellPrice||0)}</b></p>` +
+  det.innerHTML = `<h3>${it.name} <small>(${it.rarity})</small></h3><p>${it.desc||""} ${eff}</p><p><b>Sells for $${fmtMoney(sellValue(it))}</b></p>` +
     sel.ing.map(([id,q])=>`<div class="${haveQty(id)>=q?"ok":"no"}">${ITEM_BY_ID[id].name}: ${haveQty(id)}/${q}</div>`).join("");
   btn.disabled = !canCraft(sel);
 }
@@ -5664,21 +5839,24 @@ const ATTACK_SKILLS = [
   { id:"basic", name:"Attack", key:"1", unlockLevel:1,
     dmgMult:()=>1, desc:"A standard strike. Always available." },
   { id:"power", name:"Power Strike", key:"2", unlockLevel:1, needsFullRage:true,
-    dmgMult:()=>2, desc:"Costs full Rage. Double damage." },
-  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:spellMana(10),
-    dmgMult:()=>1.35, desc:`Unlocked at Lv.10. Costs ${spellMana(10)} mana. Extra damage that cuts through a brace.` },
-  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:spellMana(20),
-    dmgMult:()=>3, desc:`Unlocked at Lv.30. Costs ${spellMana(20)} mana. Devastating hit.` },
+    dmgMult:()=>1, maxHpMult:3, desc:"Costs full Rage. Deals 3x your MAX HEALTH as damage." },
+  { id:"precision", name:"Precision Strike", key:"3", unlockLevel:10, manaCost:30,
+    dmgMult:()=>1.35, desc:`Unlocked at Lv.10. Costs 30 mana. Extra damage that cuts through a brace.` },
+  { id:"ultimate", name:"Ultimate Strike", key:"4", unlockLevel:30, manaCost:60,
+    dmgMult:()=>3, desc:`Unlocked at Lv.30. Costs 60 mana. Devastating hit.` },
 ];
+/* Base damage of a move before focus/guard: Power Strike = 3x your max HP, everything else scales off attack power. */
+const moveBaseDmg = (s, maxHp)=> s.maxHpMult ? maxHp*s.maxHpMult : playerAttackPower()*s.dmgMult() + (s.flatDmg||0);
+const hpCostOf = (s, maxHp)=> s.hpPct ? Math.max(1, Math.round(maxHp*s.hpPct/100)) : (s.hpCost||0);   // mana-restoring spells cost a % of max HP
 const spellRoll = ([lo,hi])=> lo + Math.floor(Math.random()*(hi-lo+1));
 function attackSkillById(id){ return ATTACK_SKILLS.find(s=>s.id===id) || treeAttacks(state.profile).find(s=>s.id===id) || ATTACK_SKILLS[0]; }
 /* Skill-tree attacks (Firebolt, Cyclone, ...) join the normal attack list once bought. */
 function treeAttacks(p){
   return ownedSkills(p).filter(isSpellNode).map(n=>{
-    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:spellMana(n.mana), hpCost:0, flatDmg:0, dmgMult:()=>1, cooldown:0 };
-    if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${spellMana(n.mana)} mana. Deals +${n.val} damage compared with a basic attack.`; }
+    const s = { id:"tree_"+n.id, name:n.name, unlockLevel:1, manaCost:spellMana(n.mana), hpCost:0, flatDmg:0, dmgMult:()=>n.mult||1, cooldown:0 };
+    if(n.kind==="A"){ s.flatDmg = n.val; s.desc = `Skill tree attack. Costs ${spellMana(n.mana)} mana. Deals ${n.mult}x your attack power +${n.val} damage.`; }
     else if(n.kind==="L"){ s.healHp = [n.lo,n.hi]; s.cooldown = n.cd; s.desc = `Costs ${spellMana(n.mana)} mana. A basic attack that also heals you for ${n.lo}-${n.hi} HP. Cooldown: ${n.cd} moves.`; }
-    else { s.healMana = [n.lo,n.hi]; s.hpCost = n.hpCost||0; s.cooldown = n.cd; s.desc = `Costs ${spellMana(n.mana)} mana and ${s.hpCost} HP. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
+    else { s.healMana = [n.lo,n.hi]; s.manaCost = 0; s.hpPct = n.hpPct||0; s.cooldown = n.cd; s.desc = `Costs no mana but ${s.hpPct}% of your max HP. A basic attack that also restores ${n.lo}-${n.hi} mana. Cooldown: ${n.cd} moves.`; }
     return s;
   });
 }
@@ -5807,7 +5985,7 @@ function renderPve(){
   document.getElementById("battlePlayerHPNum").textContent = `${Math.max(0,b.php)}/${p.hpMax}`;
   document.getElementById("battleStaminaLabel").textContent = `Mana ${b.mana}/${p.manaMax}${b.focus?" · 🎯 Focused (next hit x2)":""}`;
   document.getElementById("battleRageLabel").textContent = `${b.rage}/${p.rageMax}`;
-  { const ib = document.getElementById("battleIntent"); if(ib){ const it = INTENTS[b.shown] || INTENTS.normal; ib.innerHTML = b.over ? "" : `${it.icon} <b>${it.label}</b> — ${escapeHTML(it.tip)}`; } }
+  { const ib = document.getElementById("battleIntent"); if(ib){ const it = INTENTS[b.shown] || INTENTS.normal; ib.innerHTML = b.over ? "" : `${it.icon} <b>${it.label}</b>`; } }
   if(document.getElementById("eatModal").classList.contains("active")) renderEatModal();
   const box = document.getElementById("battleActions"); box.innerHTML = "";
   if(b.over) return;
@@ -5838,7 +6016,7 @@ async function pveAct(move){
   if(sk && sk.needsFullRage && b.rage<p.rageMax){ toast("Not enough Rage."); b.busy=false; return; }
   if(sk && sk.manaCost && intent==="block"){ toast("🚫 The enemy has blocked your mana this turn — use a non-mana move."); b.busy=false; return; }
   if(sk && sk.manaCost && b.mana<sk.manaCost){ toast("Not enough Mana."); b.busy=false; return; }
-  if(sk && sk.hpCost && b.php <= sk.hpCost){ toast(`Not enough HP — ${sk.name} costs ${sk.hpCost} HP.`); b.busy=false; return; }
+  if(sk && hpCostOf(sk,p.hpMax) && b.php <= hpCostOf(sk,p.hpMax)){ toast(`Not enough HP — ${sk.name} costs ${hpCostOf(sk,p.hpMax)} HP.`); b.busy=false; return; }
   if(sk && sk.cooldown && ((b.cd||{})[sk.id]||0)>0){ toast(`${sk.name} is on cooldown (${b.cd[sk.id]} more moves).`); b.busy=false; return; }
   b.cd = b.cd || {};                                                            // every move you make ticks the spell cooldowns down
   Object.keys(b.cd).forEach(k=>{ if(b.cd[k]>0) b.cd[k]--; });
@@ -5854,8 +6032,8 @@ async function pveAct(move){
     if(s.needsFullRage) b.rage = 0;
     if(s.manaCost) b.mana -= s.manaCost;
     b.rage = Math.min(p.rageMax, b.rage+RAGE_ATTACK);                 // every attack (spells included) = +1 rage
-    if(s.hpCost){ b.php -= s.hpCost; battleLogPush(`${s.name} costs you ${s.hpCost} HP.`); }
-    let d = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(b.focus?2:1);
+    { const hc = hpCostOf(s,p.hpMax); if(hc){ b.php -= hc; battleLogPush(`${s.name} costs you ${hc} HP.`); } }
+    let d = moveBaseDmg(s,p.hpMax)*(s.maxHpMult?1:rnd())*(b.focus?2:1);
     if(brace) d*=guardTakenMult();                                       // enemy Guard: blocks 60-90% of ANY damage (spells too)
     d = Math.max(1, Math.round(d)); b.focus = false; b.ehp -= d;
     if(m.boss && b.ehp>0 && d >= m.hp*0.10 && Math.random()<0.5){ intent = b.actual = b.shown = "stun"; battleLogPush(`${m.name} is staggered by the blow!`); }   // big hits can stun a boss
@@ -6084,7 +6262,7 @@ const BOSS_HP_MULT = 30;               // the boss: 20x the HP of the strongest 
 const BOSS_EAT_SELF = 3, BOSS_EAT_FRIEND = 1;   // boss fights: per turn you may eat 0-3 foods yourself AND/OR give a friend 0-1 food
 const BOSS_TURN_STALL_MS = 60000;      // an idle player loses their turn after 60s so the party is never stuck
 const BOSS_DMG_MULT = 1;             // boss fights hit 1.2x harder than before
-const BOSS_RUSH_DMG_MULT = 1;        // every enemy AND the boss in a boss rush deal a further 1.3x damage (stacks with BOSS_DMG_MULT)
+const BOSS_RUSH_DMG_MULT = 0.9;      // every enemy AND the boss in a boss rush deal 10% less damage (stacks with BOSS_DMG_MULT)
 /* Boss-fight enemies (5 waves, then the boss), all scaled off the TOP player in the party:
    hp = hpMult x top player's max HP, attack = dmgMult x top player's minimum damage (weak = half of it, strong = double),
    xp = xpPct of the XP needed to level up for the HIGHEST-level player (same for everyone). Bosses never drop money. */
@@ -6384,12 +6562,12 @@ function partyApplyAction(cur, uid, move){
     if(s.manaCost && d.intent==="block") return { err:"res", msg:"🚫 The enemy has blocked mana this turn — use a non-mana move." };
     if(s.needsFullRage && m.rage<m.rageMax) return { err:"res", msg:"Not enough Rage." };
     if(s.manaCost && m.mana<s.manaCost) return { err:"res", msg:"Not enough Mana." };
-    if(s.hpCost && m.hp<=s.hpCost) return { err:"res", msg:`Not enough HP — ${s.name} costs ${s.hpCost} HP.` };
+    if(hpCostOf(s,m.hpMax) && m.hp<=hpCostOf(s,m.hpMax)) return { err:"res", msg:`Not enough HP — ${s.name} costs ${hpCostOf(s,m.hpMax)} HP.` };
     if(s.needsFullRage) m.rage = 0;
     if(s.manaCost) m.mana -= s.manaCost;
     m.rage = Math.min(m.rageMax, m.rage+RAGE_ATTACK);
-    if(s.hpCost){ m.hp -= s.hpCost; lines.push(`${m.name} pays ${s.hpCost} HP.`); }
-    let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(m.fx.focus?2:1); m.fx.focus = false;
+    { const hc = hpCostOf(s,m.hpMax); if(hc){ m.hp -= hc; lines.push(`${m.name} pays ${hc} HP.`); } }
+    let dmg = moveBaseDmg(s,m.hpMax)*(s.maxHpMult?1:rnd())*(m.fx.focus?2:1); m.fx.focus = false;
     if(brace) dmg *= guardTakenMult();                                       // enemy Guard: blocks 60-90% of ANY damage
     dmg = Math.max(1, Math.round(dmg)); d.ehp -= dmg;
     lines.push(`${m.name} uses ${s.name}: ${dmg} damage${brace?" (blocked by its guard!)":""}.`);
@@ -6444,7 +6622,7 @@ function renderPartyBattle(d){
   partyEl("battleStaminaLabel").textContent = `Mana ${me.mana}/${me.manaMax}${me.fx?.focus?" · 🎯 Focused (next hit x2)":""}${me.fx?.guard?" · 🛡️ Guarding":""} · Wave ${d.stage+1}/6 · Round ${d.round||1}`;
   partyEl("battleRageLabel").textContent = `${me.rage}/${me.rageMax}`;
   const it = INTENTS[d.intent] || INTENTS.normal;
-  partyEl("battleIntent").innerHTML = d.status==="active" ? `${it.icon} <b>${it.label}</b>${it.atk||d.intent==="mana" ? ` → <b>the whole team</b>` : ""} — ${escapeHTML(it.tip)}` : "";
+  partyEl("battleIntent").innerHTML = d.status==="active" ? `${it.icon} <b>${it.label}</b>${it.atk||d.intent==="mana" ? ` → <b>the whole team</b>` : ""}` : "";
   let strip = partyEl("partyStrip");
   if(!strip){ strip = document.createElement("div"); strip.id = "partyStrip"; strip.className = "party-strip"; document.querySelector("#battleModal .battle-arena").after(strip); }
   strip.style.display = "";
@@ -6865,11 +7043,11 @@ async function duelActInner(d, move){
   else {
     const s = attackSkillById(move);
     if((s.needsFullRage && rage<rageMax) || (s.manaCost && mana<s.manaCost)){ toast("Not enough Rage/Mana."); return; }
-    if(s.hpCost && myHp <= s.hpCost){ toast(`Not enough HP — ${s.name} costs ${s.hpCost} HP.`); return; }
+    if(hpCostOf(s,p.hpMax) && myHp <= hpCostOf(s,p.hpMax)){ toast(`Not enough HP — ${s.name} costs ${hpCostOf(s,p.hpMax)} HP.`); return; }
     if(s.needsFullRage) rage = 0;
     if(s.manaCost) mana -= s.manaCost;
-    if(s.hpCost){ myHp -= s.hpCost; lines.push(`${myName} pays ${s.hpCost} HP.`); }
-    let dmg = (playerAttackPower()*s.dmgMult() + (s.flatDmg||0))*rnd()*(myFx.focus?2:1); myFx.focus = false;
+    { const hc = hpCostOf(s,p.hpMax); if(hc){ myHp -= hc; lines.push(`${myName} pays ${hc} HP.`); } }
+    let dmg = moveBaseDmg(s,p.hpMax)*(s.maxHpMult?1:rnd())*(myFx.focus?2:1); myFx.focus = false;
     if(opFx.guard) dmg *= guardTakenMult();
     dmg = Math.max(1, Math.max(1, Math.round(dmg)) - (d[op+"Charm"]||0)*CHARM_BLOCK);    // their CHARM blocks 5 damage per point (min 1)
     dmg = Math.max(1, Math.round(dmg/PVP_DMG_DIV));                                   // player-vs-player ONLY: damage is 3x lower (430 -> 143)
@@ -7584,7 +7762,7 @@ document.getElementById("btnDungeon").addEventListener("click", ()=>{
   if(left>0){ toast(`🔒 The dungeon door is sealed. It opens again in ${fmtCountdown(left)}.`); return; }
   dgConfirm({ title:"🕯️ Enter the Dungeon?", yes:"Descend",
     html:`<p><b>Death kicks you out</b> — you lose the items you found and your progress. The deeper you go, the harder it gets and the stronger the enemies.</p>
-          <p>You can only back out safely on <b>checkpoint floors</b> (5, 10, 15 …). Leaving anywhere else means dropping everything you found, losing 50% of your money and being left on 1 HP.</p>
+          <p>You can only back out safely on <b>checkpoint floors</b> (10, 20, 30 …). Leaving anywhere else means dropping everything you found, losing 50% of your money and being left on 1 HP.</p>
           <p>Your Compass will be tampered with: Jobs, Shop, Farm and Battle are locked while you are inside. Leaving locks the door for 24 hours.</p>`,
     onYes: async ()=>{
       ["compassModal","journalModal","skillModal"].forEach(closeModal);

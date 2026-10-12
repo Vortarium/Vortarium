@@ -81,7 +81,7 @@ const MINERAL_NEW = [
   ["gem_amethyst","Amethyst","rare",48,"A violet crystal cluster."],
   ["gem_topaz","Topaz","rare",52,"A sparkling golden-orange gem."],
   ["gem_jade","Jade","rare",50,"A smooth green stone prized for luck."],
-  ["ore_platinum","Platinum Ore","rare",105,"Dense, silvery-white precious ore."],
+  ["ore_platinum","Platinum Ore","epic",105,"Dense, silvery-white precious ore."],
   ["gem_opal","Opal","epic",115,"Shifts through every color of the rainbow."],
   ["ore_mithril","Mythril Ore","epic",125,"Faintly glowing ore, light as a feather."],
   ["ore_adamantite","Adamantite Ore","legendary",340,"Nearly unbreakable ore. Your pickaxe winces."]
@@ -96,11 +96,11 @@ export const MINERAL_SELL = {   // what each mineral actually sells for (common 
 const MINERAL_LEGACY = ["ore_copper","ore_iron","ore_coal","gem_quartz","ore_silver","ore_gold","gem_ruby","gem_sapphire","gem_emerald","gem_diamond"];
 const FORAGE_LEGACY = ["forage_berry","forage_mushroom","forage_herb","forage_apple","forage_truffle","forage_goldapple"];
 
-/* ---------- 90 fish: 30 per difficulty (green = easy, yellow = medium, red = hard) ---------- */
+/* ---------- 180 fish: 60 per difficulty (the second 30 of each tier repeat the first 30's rarity layout) (green = easy, yellow = medium, red = hard) ---------- */
 const FISH_NAMES = {
-  easy: ["Minnow","Bass","Trout","Sunfish","Perch","Bluegill","Carp","Catfish","Crappie","Roach","Chub","Dace","Bream","Tench","Goby","Shiner","Smelt","Sardine","Herring","Anchovy","Mackerel","Whitefish","Bullhead","Stickleback","Mudfish","Rudd","Gudgeon","Loach","Killifish","Grayling"],
-  medium: ["Swordfish","Salmon","Walleye","Pike","Muskie","Snapper","Grouper","Flounder","Halibut","Cod","Haddock","Barracuda","Pompano","Mahi-Mahi","Sturgeon","Arctic Char","Steelhead","Tarpon","Bonito","Wahoo","Amberjack","Sea Bass","Redfish","Dorado","Yellowtail","Lionfish","Pufferfish","Moonfish","Lantern Fish","Eel"],
-  hard: ["Golden Koi","Bluefin Tuna","Blue Marlin","Sailfish","Oarfish","Coelacanth","Anglerfish","Gulper Eel","Viperfish","Fangtooth","Hammerhead Shark","Tiger Shark","Great White","Whale Shark","Manta Ray","Ocean Sunfish","Arapaima","Goliath Tigerfish","Dragonfish","Ghost Carp","Crystal Trout","Rainbow Koi","Ember Eel","Frost Pike","Storm Marlin","Moon Koi","Void Angler","Phoenix Fish","Kraken Fry","Abyssal Leviathan"]
+  easy: ["Minnow","Bass","Trout","Sunfish","Perch","Bluegill","Carp","Catfish","Crappie","Roach","Chub","Dace","Bream","Tench","Goby","Shiner","Smelt","Sardine","Herring","Anchovy","Mackerel","Whitefish","Bullhead","Stickleback","Mudfish","Rudd","Gudgeon","Loach","Killifish","Grayling","Rock Bass","Pumpkinseed","Warmouth","Redbreast Sunfish","White Perch","Yellow Perch","Black Crappie","Fathead Minnow","Creek Chub","Golden Shiner","Bluntnose Minnow","Silver Carp","Channel Cat","Flathead Chub","Redfin Pickerel","Sauger","Mooneye","Quillback","Bitterling","Stone Loach","Pond Smelt","Silverside","Mullet","Pilchard","Sprat","Sand Dab","Blenny","Weatherfish","Zebra Danio","Rainbow Darter"],
+  medium: ["Swordfish","Salmon","Walleye","Pike","Muskie","Snapper","Grouper","Flounder","Halibut","Cod","Haddock","Barracuda","Pompano","Mahi-Mahi","Sturgeon","Arctic Char","Steelhead","Tarpon","Bonito","Wahoo","Amberjack","Sea Bass","Redfish","Dorado","Yellowtail","Lionfish","Pufferfish","Moonfish","Lantern Fish","Eel","Rainbow Trout","Brook Trout","Lake Trout","Chinook Salmon","Coho Salmon","Sockeye Salmon","Northern Pike","Largemouth Bass","Striped Bass","Red Snapper","Black Drum","Cobia","King Mackerel","Spanish Mackerel","Bluefish","Skipjack","Opah","Escolar","Hogfish","Triggerfish","Parrotfish","Bonefish","Permit","Snook","Tilefish","Rockfish","Lingcod","Sablefish","Monkfish","John Dory"],
+  hard: ["Golden Koi","Bluefin Tuna","Blue Marlin","Sailfish","Oarfish","Coelacanth","Anglerfish","Gulper Eel","Viperfish","Fangtooth","Hammerhead Shark","Tiger Shark","Great White","Whale Shark","Manta Ray","Ocean Sunfish","Arapaima","Goliath Tigerfish","Dragonfish","Ghost Carp","Crystal Trout","Rainbow Koi","Ember Eel","Frost Pike","Storm Marlin","Moon Koi","Void Angler","Phoenix Fish","Kraken Fry","Abyssal Leviathan","Giant Bluefin","Black Marlin","Striped Marlin","Megamouth Shark","Thresher Shark","Mako Shark","Goblin Shark","Greenland Shark","Basking Shark","Giant Grouper","Giant Trevally","Mekong Catfish","Alligator Gar","Beluga Sturgeon","Payara","Wels Catfish","Lungfish","Barreleye","Frilled Shark","Blobfish","Sawfish","Stingray King","Lava Eel","Glacier Pike","Thunder Marlin","Eclipse Koi","Star Angler","Tempest Leviathan","Deepsea Dragon","Shipwreck Gar"]
 };
 const FISH_LEGACY = { "Minnow":"fish_minnow","Bass":"fish_bass","Trout":"fish_trout","Swordfish":"fish_swordfish","Golden Koi":"fish_golden" };
 const FISH_RARITY_LAYOUT = {
@@ -217,7 +217,7 @@ export function registerItems(I){
     FISH_NAMES[tier].forEach((name,i)=>{
       const id = FISH_LEGACY[name] || "fish_"+slug(name);
       if(!I[id]){
-        const rarity = rars[i] || "common";
+        const rarity = rars[i % 30] || "common";   // 60 names per tier: i>=30 reuse the same layout
         I[id] = { id, name, type:"consumable", rarity, desc:FISH_BLURB[tier](name),
           sellPrice: Math.max(2, Math.round(FISH_BASE_SELL[rarity]*FISH_TIER_MULT[tier]*(0.9+(i%5)*0.05))), stats:{} };
       }
@@ -256,7 +256,7 @@ export const FISH_RULES = {
   // flip = chance/tick a dart reverses mid-way, longMove = chance a new target is a full-bar leap, wobble = hover shake.
   green:  { tier:"easy",   bar:72, time:10000, speed:1.7, jitter:.040, dash:.014, pause:6,  gain:1.4, loss:1.2 },
   yellow: { tier:"medium", bar:72, time:10000, speed:2.4, jitter:.060, dash:.030, pause:4,  gain:1.3, loss:1.4 },
-  red:    { tier:"hard",   bar:72, time:10000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
+  red:    { tier:"hard",   bar:79.2, time:10000, speed:3.4, jitter:.120, dash:.065, pause:2,  gain:1.2, loss:1.7,
             dashMul:4.2, dashLen:[5,11], flip:.12, longMove:.65, wobble:2.2 }
 };
 // rarity weights (they sum to the odds of each RARITY; each item inside a rarity gets a random-but-fixed share)
@@ -313,7 +313,8 @@ export function rollPool(pool, luck=0){
 /* ---------- crafted gear stats: forged pieces are always better than any shop/drop piece of the same rarity ----------
    Each ore sets a main stat and a paired second stat: helmet+chestplate lean on the main stat, leggings+boots on the pair.
    Crafted armor beats the best regular armor of its rarity on both the stat line and max HP. */
-const CRAFT_ARMOR_HP_MULT = 2, CRAFT_WEAPON_DMG_MULT = 2;   // ONLY crafted (gear_*) pieces — shop weapons/armor (wpn_*/arm_*) are unchanged
+const CRAFT_ARMOR_HP_MULT = { common:10, uncommon:7.5, rare:5, epic:5.2, legendary:4 }, CRAFT_WEAPON_DMG_MULT = 4;   // crafted armor HP scales up hardest on the LOW tiers (armor is slow to craft)
+const CRAFT_ARMOR_STAT_MULT = { common:4.5, uncommon:3.75, rare:2.4, epic:1.9, legendary:1.5 };   // ONLY crafted (gear_*) pieces — shop weapons/armor (wpn_*/arm_*) are unchanged
 const STAT_PAIR = { SPEED:"CHARM", STRENGTH:"SPEED", CHARM:"SMARTS", SMARTS:"STRENGTH" };
 /* Metal progression (weakest -> strongest):
      tin -> copper -> lead -> iron -> silver -> platinum -> steel -> gold -> titanium -> mithril -> adamantite
@@ -325,7 +326,7 @@ export const GEAR_TIER = {
   zinc:["uncommon",.05], pewter:["uncommon",.15], bronze:["uncommon",.3], brass:["uncommon",.4],
   garnet:["uncommon",.3], citrine:["uncommon",.4], onyx:["uncommon",.5], peridot:["uncommon",.6],
   iron:["uncommon",.8], silver:["uncommon",1],
-  platinum:["rare",.2], quartz:["rare",.05], sapphire:["rare",.2], amethyst:["rare",.3], steel:["rare",.35],
+  platinum:["epic",.25], quartz:["rare",.05], sapphire:["rare",.2], amethyst:["rare",.3], steel:["rare",.35],
   topaz:["rare",.45], electrum:["rare",.55], jade:["rare",.6], gold:["rare",.85],
   titanium:["epic",.3], opal:["epic",.35], ruby:["epic",.4], emerald:["epic",.5], darksteel:["epic",.55], mithril:["epic",.75],
   adamantite:["legendary",.5], diamond:["legendary",.65], starmetal:["legendary",1],
@@ -343,9 +344,11 @@ const lerpR = ([lo,hi], t)=> Math.round(lo + (hi-lo)*clamp01(t));
 const CRAFT_SLOT = { helmet:{pri:0,pm:1,sh:-.05}, chestplate:{pri:0,pm:1.15,sh:.1}, leggings:{pri:1,pm:1,sh:0}, boots:{pri:1,pm:.85,sh:-.1} };
 export function craftedArmorStats(slot, rar, stat, variant=0, key){
   const [r, t] = gearPower(key, rar), c = CRAFT_SLOT[slot], [smin,smax,hmin,hmax] = ARMOR_RANGES[r];
-  const main = Math.max(1, Math.round(lerpR([smin,smax], t)*c.pm)), other = STAT_PAIR[stat];
+  const main = Math.max(1, Math.round(lerpR([smin,smax], t)*c.pm*CRAFT_ARMOR_STAT_MULT[r])), other = STAT_PAIR[stat];
   const [p, q] = c.pri===0 ? [stat, other] : [other, stat];
-  return { hp: lerpR([hmin,hmax], t + c.sh) * CRAFT_ARMOR_HP_MULT, [p]: main, [q]: Math.max(1, Math.round(main*0.5)) };
+  const hp = Math.round(lerpR([hmin,hmax], t + c.sh) * CRAFT_ARMOR_HP_MULT[r]), third = STAT_PAIR[other] === stat ? STAT_PAIR[STAT_PAIR[other]] : STAT_PAIR[other];
+  // crafted armor: lots of HP, ~35% of that as max MANA, and three stat boosts (main, paired, and a small third)
+  return { hp, mana: Math.round(hp*0.35), [p]: main, [q]: Math.max(1, Math.round(main*0.5)), [third]: Math.max(1, Math.round(main*0.3)) };
 }
 const WEAPON_SHIFT = [0, -.06, .06, 0, .04, -.04];   // sword, dagger, axe, spear, mace, bow
 export const craftedWeaponAttack = (rar, i=0, key)=>{
@@ -356,6 +359,7 @@ export function gearStatText(st){
   const bits = [];
   if(st.attack) bits.push(`+${st.attack} attack`);
   if(st.hp) bits.push(`+${st.hp} max HP`);
+  if(st.mana) bits.push(`+${st.mana} max Mana`);
   ["STRENGTH","SPEED","CHARM","SMARTS"].forEach(k=>{ if(st[k]) bits.push(`${st[k]>0?"+":""}${st[k]} ${k}`); });
   return bits.join(", ");
 }
@@ -377,7 +381,7 @@ export function addExpansionRecipes(add, I, ctx){
 
   // ---- smelting + alloys ----
   [["tin","Tin","ore_tin","common"],["lead","Lead","ore_lead","common"],["zinc","Zinc","ore_zinc","uncommon"],
-   ["titanium","Titanium","ore_titanium","rare"],["platinum","Platinum","ore_platinum","rare"],
+   ["titanium","Titanium","ore_titanium","rare"],["platinum","Platinum","ore_platinum","epic"],
    ["mithril","Mythril","ore_mithril","epic"],["adamantite","Adamantite","ore_adamantite","legendary"]]
    .forEach(([k,n,ore,r])=> add("ing_"+k, n+" Ingot", "material", r, { desc:`Smelted ${n.toLowerCase()}, ready for the forge.` }, [[ore,2],["ore_coal",1]]));
   add("ing_brass","Brass Ingot","material","uncommon",{desc:"A golden alloy of copper and zinc."},[["ing_copper",2],["ing_zinc",1]]);
@@ -407,7 +411,7 @@ export function addExpansionRecipes(add, I, ctx){
     ["Onyx","gem_onyx_cut","uncommon","SPEED"],["Peridot","gem_peridot_cut","uncommon","SMARTS"],
     ["Titanium","ing_titanium","rare","STRENGTH"],["Amethyst","gem_amethyst_cut","rare","SMARTS"],
     ["Topaz","gem_topaz_cut","rare","CHARM"],["Jade","gem_jade_cut","rare","SPEED"],["Electrum","ing_electrum","rare","CHARM"],
-    ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","rare","CHARM"],
+    ["Darksteel","ing_darksteel","epic","STRENGTH"],["Platinum","ing_platinum","epic","CHARM"],
     ["Opal","gem_opal_cut","epic","SMARTS"],["Mythril","ing_mithril","epic","SPEED"],
     ["Adamantite","ing_adamantite","legendary","STRENGTH"],["Starmetal","ing_starmetal","legendary","SPEED"],
     ["Lead","ing_lead","common","STRENGTH"],["Zinc","ing_zinc","uncommon","SPEED"]      // every smeltable ore now has its own set
@@ -429,6 +433,10 @@ export function addExpansionRecipes(add, I, ctx){
   ["easy","medium","hard"].forEach(tier=> cat.fish[tier].forEach(f=>{
     if(legacyFish.has(f)) return;
     add("cooked_"+f, "Cooked "+nm(f), "consumable", rar(f), { desc:`${nm(f)} grilled over coal until the skin crackles. Heals well.` }, [[f,1],["ore_coal",1]]);
+  }));
+  EVENTS.forEach(ev=> ev.fish.forEach(([name])=>{      // every holiday fish can be cooked too (boosted healing, same as other cooked fish)
+    const f = `ev_${ev.key}_fish_${slug(name)}`; if(!I[f]) return;
+    add("cooked_"+f, "Cooked "+nm(f), "consumable", rar(f), { desc:`${ev.icon} ${nm(f)} grilled over coal. Heals well.` }, [[f,1],["ore_coal",1]]);
   }));
   const edibleNew = FORAGE_NEW.filter(r=>r[2]==="consumable").map(r=>"forage_"+r[0]);
   edibleNew.forEach(f=> add("roast_"+f, "Roasted "+short(f), "consumable", rar(f), { desc:`${short(f)} roasted over coal. Smoky and satisfying.` }, [[f,1],["ore_coal",1]]));
@@ -789,3 +797,87 @@ export function registerEventItems(I){
   });
   return { byKey, bugEmoji };
 }
+
+/* =========================================================================
+   FOSSILS + MUSEUM + REGION FORAGE: the 30 T-rex bones, museum milestones, region -> foragables map
+   ========================================================================= */
+export const FOSSIL_MINE_CHANCE = 0.02;          // per successful mining swing
+export const FOSSIL_UNKNOWN_NAME = "Unknown Fossil";
+export const FOSSIL_UNKNOWN_DESC = "A weathered fossil fragment. Find another like it, or donate it to the museum, to learn what it is.";
+
+// [slug, name, emoji, educational blurb]
+export const FOSSIL_DEFS = [
+  ["skull","Skull","🦖","Up to about 1.5 m long in the biggest adults. Hollow openings made it lighter, yet it was braced to take huge forces. T. rex lived roughly 68-66 million years ago in western North America."],
+  ["jaw","Lower Jaw","🦴","The lower jaw (mandible) was a strong beam of several fused bones. Studies of T. rex bite force give estimates of tens of thousands of newtons, among the strongest of any land animal known."],
+  ["tooth","Tooth","🦷","Roughly banana-sized, up to about 30 cm with the root. Unlike thin blades, they were thick and oval, built to crunch through bone. T. rex had around 58 teeth and replaced them throughout life."],
+  ["atlas","Atlas","🦴","The very first neck vertebra, holding the skull. It is named after the Greek Titan who held up the sky, which is why the same name is used in your own neck."],
+  ["cervical","Neck Vertebra","🦴","T. rex had 10 neck vertebrae forming a short S-shaped curve. The neck was thick and muscular, which helped it rip flesh and hold its heavy head."],
+  ["dorsal","Back Vertebra","🦴","The back (dorsal) section had 13 vertebrae. Hollow pockets inside many of them, probably linked to air sacs, kept the skeleton lighter."],
+  ["sacrum","Sacrum","🦴","Five vertebrae fused together to lock the spine to the hips. A solid link like this was needed to carry a body weighing several tonnes on two legs."],
+  ["caudal","Tail-Base Vertebra","🦴","The tail had about 40 vertebrae. Near the hips they were big and strong, holding powerful muscles that pulled the thigh backward."],
+  ["tailmid","Mid-Tail Vertebra","🦴","Farther back the vertebrae get small and slim. The tail was around half of the animal's length and worked as a counterweight to the front-heavy head."],
+  ["chevron","Chevron","🦴","V-shaped bones hanging beneath the tail vertebrae. They protected blood vessels and gave muscles extra places to attach."],
+  ["rib","Rib","🦴","T. rex had a deep, barrel-shaped chest. The long curved ribs protected the heart and lungs and made room for big breaths."],
+  ["gastralia","Gastralia","🦴","Often called belly ribs. These bones floated in the skin of the belly with no connection to the spine, supporting the gut and possibly helping breathing."],
+  ["furcula","Furcula","🦴","The wishbone. Tyrannosaurs had one, a clue that birds are descended from theropod dinosaurs. Sue, the famous Chicago T. rex, preserves one."],
+  ["scapula","Shoulder Blade","🦴","A long, flat blade (scapula) anchoring the tiny arm to the body. Even though the arms were small, the shoulder bones were sturdy."],
+  ["coracoid","Coracoid","🦴","A small plate at the front of the shoulder joint, fused with the shoulder blade in adults. The arm muscles pulled against it."],
+  ["humerus","Upper Arm","💪","The humerus was very short but thick. T. rex arms were only about a meter long yet heavily muscled, and scientists still debate what they were for."],
+  ["forearm","Forearm","🦴","Two tiny forearm bones (radius and ulna), shorter than your own hand span in places. The arm could not even reach its mouth."],
+  ["handclaw","Hand Claw","🦴","Each hand had only two functioning fingers, each ending in a claw. Early tyrannosaurs had three fingers, so evolution slowly shrank the hand."],
+  ["ilium","Hip (Ilium)","🦴","The largest of three hip bones, a huge blade that anchored the leg muscles. A T. rex could walk quite quickly, but a full sprint was probably out of reach for something so heavy."],
+  ["ischium","Ischium","🦴","The rear, backward-pointing hip bone. It helped carry the weight of the tail and gave the leg muscles a place to attach."],
+  ["pubis","Pubis","🦴","The forward hip bone, which ends in a large 'boot' shape. Muscles attached there, and the boot may have helped rest the body's weight on the ground."],
+  ["femur","Thigh Bone","🦴","The femur reached about 1.3 m in large adults. It was massive and straight, holding up most of the weight of the animal with every step."],
+  ["tibia","Shin Bone","🦴","The tibia was shorter than the thigh bone, which is typical of big, powerful tyrannosaurs. Small speedy theropods usually have long shins instead."],
+  ["fibula","Fibula","🦴","A thin splint of bone running alongside the shin. It mostly gave muscles somewhere to attach rather than carrying much weight."],
+  ["astragalus","Ankle Bone","🦴","The astragalus connected the shin to the foot. It formed a hinge, so the foot could only swing forward and back for steady walking."],
+  ["metatarsal","Foot Bone","🦴","The middle foot bone (metatarsal) was pinched at the top between its neighbors. This 'arctometatarsal' shape spreads the stress of a footfall and is a tyrannosaur trademark."],
+  ["toe","Toe Bone","🦴","T. rex walked on three big weight-bearing toes, like a giant bird. A short fourth toe stayed off the ground."],
+  ["footclaw","Foot Claw","🦴","The toe claws were blunt and thick, more like hooves than knives. They gripped the ground when it pushed off."],
+  ["postorbital","Eyebrow Bone","🦴","The postorbital forms the bump above and behind the eye socket. Both eyes faced forward, giving T. rex good depth perception, much like a hunting hawk."],
+  ["braincase","Braincase","🧠","The braincase had huge olfactory bulbs, the parts used for smell. T. rex probably could sniff out food from far away."]
+];
+
+// sell prices: 100-200 after the 10% sell cut (nominal price is /0.9, the same convention as minerals)
+export const fossilSell = i => Math.round((100 + (i*37 % 101)) / 0.9);
+export const fossilId = slug => "fossil_trex_" + slug;
+export const FOSSIL_IDS = FOSSIL_DEFS.map(d=> fossilId(d[0]));
+export const FOSSIL_BY_ID = Object.fromEntries(FOSSIL_DEFS.map((d,i)=>[fossilId(d[0]), { id:fossilId(d[0]), slug:d[0], name:d[1], emoji:d[2], info:d[3], idx:i }]));
+
+/* Registers the 30 bones in ITEM_BY_ID (I). isKnown(id) -> true once the bone has been found twice or donated;
+   until then it shows as "Unknown Fossil" (name and description are live getters). */
+export function registerFossils(I, isKnown){
+  FOSSIL_DEFS.forEach((d,i)=>{
+    const id = fossilId(d[0]), real = FOSSIL_BY_ID[id];
+    const it = { id, type:"material", rarity:"epic", sellPrice:fossilSell(i), stats:{}, fossil:true };
+    Object.defineProperty(it, "name", { enumerable:true, get:()=> isKnown(id) ? "T-Rex " + real.name : FOSSIL_UNKNOWN_NAME });
+    Object.defineProperty(it, "desc", { enumerable:true, get:()=> isKnown(id) ? "A T-rex fossil. Sell it, or donate it to the museum (one of each)." : FOSSIL_UNKNOWN_DESC });
+    I[id] = it;
+  });
+  return FOSSIL_IDS;
+}
+export const rollFossil = (rnd=Math.random)=> FOSSIL_IDS[Math.floor(rnd()*FOSSIL_IDS.length)];
+
+/* Museum: total donated bones -> reward. `c` is the reward tier (reuses the daily-reward helpers in the app). */
+export const MUSEUM_MILESTONES = [
+  { n:1,  kind:"money",   c:0, icon:"💰", label:"Starter cash" },
+  { n:2,  kind:"mineral", c:1, icon:"💎", label:"Minerals" },
+  { n:3,  kind:"gear",    c:1, icon:"⚔️", label:"Weapon / armor" },
+  { n:5,  kind:"tool",    c:2, icon:"🛠️", label:"Tool" },
+  { n:10, kind:"money",   c:3, icon:"💰", label:"Big cash" },
+  { n:15, kind:"gear",    c:3, icon:"⚔️", label:"Better weapon / armor" },
+  { n:20, kind:"mineral", c:4, icon:"💎", label:"Rare minerals" },
+  { n:25, kind:"tool",    c:5, icon:"🛠️", label:"Top-tier tool" },
+  { n:30, kind:"grand",   c:6, icon:"🏆", label:"Complete skeleton: legendary gear + a fortune" }
+];
+
+/* Foragables per region (a plant can grow in several regions). Every region has all five rarities. */
+export const FORAGE_REGIONS = {
+  forest: ["berry","mushroom","herb","apple","blackberry","hazelnut","acorn","dandelion","clover","wildgarlic","fiddlehead","chestnut","moss","raspberry","wildonion","birchbark","twigs",
+           "elderberry","honeycomb","chanterelle","morel","wildplum","chamomile","truffle","porcini","fourleafclover","royaljelly","starcap","mistwillow","heartwood","worldtreedew","goldapple","dragonroot"],
+  mountains: ["blueberry","hazelnut","pinecone","twigs","moss","wildonion","sorrel","mushroom","herb","wildgarlic","lavender","mint","sage","crabapple","birchbark","pineresin","ginseng","frostbloom","silverleaf","moonpetal","starcap","mistwillow","heartwood"],
+  volcano: ["twigs","acorn","chestnut","wildgarlic","dandelion","mushroom","wildonion","pinecone","herb","sage","pineresin","ambersap","honeycomb","morel","crabapple","sunblossom","saffron","truffle","emberlotus","dragonroot","glowshroom","goldapple"],
+  reef: ["cattail","sorrel","moss","fiddlehead","twigs","dandelion","clover","wildplum","mint","chamomile","herb","moonpetal","silverleaf","royaljelly","ambersap","fourleafclover","glowshroom","mistwillow","worldtreedew","blackberry"]
+};
+export const forageIdsFor = region => (FORAGE_REGIONS[region] || []).map(s=> "forage_"+s);
