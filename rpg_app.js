@@ -32,7 +32,7 @@ const RAGE_ATTACK = 1, RAGE_SHIELD = 2, RAGE_FOCUS = 2, RAGE_SKIP = 3, SKIP_MANA
 const TOOL_PRICE_START = 20, TOOL_PRICE_STEP = 0;                              // every tool costs a flat $20 per use, at every tier
 const DG_TRAP_CHANCE = 0.10;                                                   // dungeon: chance a room is trapped
 const DG_SHOP_PRICE_MULT = 0.5;
-import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems  } from "./rpg_content.js";
+import { luckMult, gearRarity, registerItems, addExpansionRecipes, addForageCraftRecipes, buildPool, rollPool, GEAR_SHOP_WEIGHT, MODES, FORAGE_RULES, MINE_RULES, MINE_CASH_SHARE, FISH_RULES, RARITY_W, MINE_NEG, craftedArmorStats, craftedTrinketStats, craftedWeaponAttack, gearExtra, EVENTS, registerEventItems , FOSSIL_MINE_CHANCE, FOSSIL_BY_ID, registerFossils, rollFossil, MUSEUM_MILESTONES, forageIdsFor } from "./rpg_content.js";
 
 /* =========================================================================
    DRAGONEER — rpg_daynight.js
@@ -985,93 +985,11 @@ const BUG_CATALOG = { easy:[], medium:[], hard:[] };
   BUG_CATALOG.medium = [...by("common"), ...by("uncommon"), ...by("rare"), ...by("epic"), ...by("legendary").slice(0,4)];
   BUG_CATALOG.hard   = [...by("rare"), ...by("epic"), ...by("legendary")]; }
 JOB_ITEM_BANK.forEach(i=> ITEM_BY_ID[i.id]=i);
-/* ---- Fossils / museum / region foragables: data (was a separate file, now lives here) ---- */
-const FOSSIL_MINE_CHANCE = 0.02;          // per successful mining swing
-const FOSSIL_UNKNOWN_NAME = "Unknown Fossil";
-const FOSSIL_UNKNOWN_DESC = "A weathered fossil fragment. Find another like it, or donate it to the museum, to learn what it is.";
-
-// [slug, name, emoji, educational blurb]
-const FOSSIL_DEFS = [
-  ["skull","Skull","🦖","Up to about 1.5 m long in the biggest adults. Hollow openings made it lighter, yet it was braced to take huge forces. T. rex lived roughly 68-66 million years ago in western North America."],
-  ["jaw","Lower Jaw","🦴","The lower jaw (mandible) was a strong beam of several fused bones. Studies of T. rex bite force give estimates of tens of thousands of newtons, among the strongest of any land animal known."],
-  ["tooth","Tooth","🦷","Roughly banana-sized, up to about 30 cm with the root. Unlike thin blades, they were thick and oval, built to crunch through bone. T. rex had around 58 teeth and replaced them throughout life."],
-  ["atlas","Atlas","🦴","The very first neck vertebra, holding the skull. It is named after the Greek Titan who held up the sky, which is why the same name is used in your own neck."],
-  ["cervical","Neck Vertebra","🦴","T. rex had 10 neck vertebrae forming a short S-shaped curve. The neck was thick and muscular, which helped it rip flesh and hold its heavy head."],
-  ["dorsal","Back Vertebra","🦴","The back (dorsal) section had 13 vertebrae. Hollow pockets inside many of them, probably linked to air sacs, kept the skeleton lighter."],
-  ["sacrum","Sacrum","🦴","Five vertebrae fused together to lock the spine to the hips. A solid link like this was needed to carry a body weighing several tonnes on two legs."],
-  ["caudal","Tail-Base Vertebra","🦴","The tail had about 40 vertebrae. Near the hips they were big and strong, holding powerful muscles that pulled the thigh backward."],
-  ["tailmid","Mid-Tail Vertebra","🦴","Farther back the vertebrae get small and slim. The tail was around half of the animal's length and worked as a counterweight to the front-heavy head."],
-  ["chevron","Chevron","🦴","V-shaped bones hanging beneath the tail vertebrae. They protected blood vessels and gave muscles extra places to attach."],
-  ["rib","Rib","🦴","T. rex had a deep, barrel-shaped chest. The long curved ribs protected the heart and lungs and made room for big breaths."],
-  ["gastralia","Gastralia","🦴","Often called belly ribs. These bones floated in the skin of the belly with no connection to the spine, supporting the gut and possibly helping breathing."],
-  ["furcula","Furcula","🦴","The wishbone. Tyrannosaurs had one, a clue that birds are descended from theropod dinosaurs. Sue, the famous Chicago T. rex, preserves one."],
-  ["scapula","Shoulder Blade","🦴","A long, flat blade (scapula) anchoring the tiny arm to the body. Even though the arms were small, the shoulder bones were sturdy."],
-  ["coracoid","Coracoid","🦴","A small plate at the front of the shoulder joint, fused with the shoulder blade in adults. The arm muscles pulled against it."],
-  ["humerus","Upper Arm","💪","The humerus was very short but thick. T. rex arms were only about a meter long yet heavily muscled, and scientists still debate what they were for."],
-  ["forearm","Forearm","🦴","Two tiny forearm bones (radius and ulna), shorter than your own hand span in places. The arm could not even reach its mouth."],
-  ["handclaw","Hand Claw","🦴","Each hand had only two functioning fingers, each ending in a claw. Early tyrannosaurs had three fingers, so evolution slowly shrank the hand."],
-  ["ilium","Hip (Ilium)","🦴","The largest of three hip bones, a huge blade that anchored the leg muscles. A T. rex could walk quite quickly, but a full sprint was probably out of reach for something so heavy."],
-  ["ischium","Ischium","🦴","The rear, backward-pointing hip bone. It helped carry the weight of the tail and gave the leg muscles a place to attach."],
-  ["pubis","Pubis","🦴","The forward hip bone, which ends in a large 'boot' shape. Muscles attached there, and the boot may have helped rest the body's weight on the ground."],
-  ["femur","Thigh Bone","🦴","The femur reached about 1.3 m in large adults. It was massive and straight, holding up most of the weight of the animal with every step."],
-  ["tibia","Shin Bone","🦴","The tibia was shorter than the thigh bone, which is typical of big, powerful tyrannosaurs. Small speedy theropods usually have long shins instead."],
-  ["fibula","Fibula","🦴","A thin splint of bone running alongside the shin. It mostly gave muscles somewhere to attach rather than carrying much weight."],
-  ["astragalus","Ankle Bone","🦴","The astragalus connected the shin to the foot. It formed a hinge, so the foot could only swing forward and back for steady walking."],
-  ["metatarsal","Foot Bone","🦴","The middle foot bone (metatarsal) was pinched at the top between its neighbors. This 'arctometatarsal' shape spreads the stress of a footfall and is a tyrannosaur trademark."],
-  ["toe","Toe Bone","🦴","T. rex walked on three big weight-bearing toes, like a giant bird. A short fourth toe stayed off the ground."],
-  ["footclaw","Foot Claw","🦴","The toe claws were blunt and thick, more like hooves than knives. They gripped the ground when it pushed off."],
-  ["postorbital","Eyebrow Bone","🦴","The postorbital forms the bump above and behind the eye socket. Both eyes faced forward, giving T. rex good depth perception, much like a hunting hawk."],
-  ["braincase","Braincase","🧠","The braincase had huge olfactory bulbs, the parts used for smell. T. rex probably could sniff out food from far away."]
-];
-
-// sell prices: 100-200 after the 10% sell cut (nominal price is /0.9, the same convention as minerals)
-const fossilSell = i => Math.round((100 + (i*37 % 101)) / 0.9);
-const fossilId = slug => "fossil_trex_" + slug;
-const FOSSIL_IDS = FOSSIL_DEFS.map(d=> fossilId(d[0]));
-const FOSSIL_BY_ID = Object.fromEntries(FOSSIL_DEFS.map((d,i)=>[fossilId(d[0]), { id:fossilId(d[0]), slug:d[0], name:d[1], emoji:d[2], info:d[3], idx:i }]));
-
-/* Registers the 30 bones in ITEM_BY_ID (I). isKnown(id) -> true once the bone has been found twice or donated;
-   until then it shows as "Unknown Fossil" (name and description are live getters). */
-function registerFossils(I, isKnown){
-  FOSSIL_DEFS.forEach((d,i)=>{
-    const id = fossilId(d[0]), real = FOSSIL_BY_ID[id];
-    const it = { id, type:"material", rarity:"epic", sellPrice:fossilSell(i), stats:{}, fossil:true };
-    Object.defineProperty(it, "name", { enumerable:true, get:()=> isKnown(id) ? "T-Rex " + real.name : FOSSIL_UNKNOWN_NAME });
-    Object.defineProperty(it, "desc", { enumerable:true, get:()=> isKnown(id) ? "A T-rex fossil. Sell it, or donate it to the museum (one of each)." : FOSSIL_UNKNOWN_DESC });
-    I[id] = it;
-  });
-  return FOSSIL_IDS;
-}
-const rollFossil = (rnd=Math.random)=> FOSSIL_IDS[Math.floor(rnd()*FOSSIL_IDS.length)];
-
-/* Museum: total donated bones -> reward. `c` is the reward tier (reuses the daily-reward helpers in the app). */
-const MUSEUM_MILESTONES = [
-  { n:1,  kind:"money",   c:0, icon:"💰", label:"Starter cash" },
-  { n:2,  kind:"mineral", c:1, icon:"💎", label:"Minerals" },
-  { n:3,  kind:"gear",    c:1, icon:"⚔️", label:"Weapon / armor" },
-  { n:5,  kind:"tool",    c:2, icon:"🛠️", label:"Tool" },
-  { n:10, kind:"money",   c:3, icon:"💰", label:"Big cash" },
-  { n:15, kind:"gear",    c:3, icon:"⚔️", label:"Better weapon / armor" },
-  { n:20, kind:"mineral", c:4, icon:"💎", label:"Rare minerals" },
-  { n:25, kind:"tool",    c:5, icon:"🛠️", label:"Top-tier tool" },
-  { n:30, kind:"grand",   c:6, icon:"🏆", label:"Complete skeleton: legendary gear + a fortune" }
-];
-
-/* Foragables per region (a plant can grow in several regions). Every region has all five rarities. */
-const FORAGE_REGIONS = {
-  forest: ["berry","mushroom","herb","apple","blackberry","hazelnut","acorn","dandelion","clover","wildgarlic","fiddlehead","chestnut","moss","raspberry","wildonion","birchbark","twigs",
-           "elderberry","honeycomb","chanterelle","morel","wildplum","chamomile","truffle","porcini","fourleafclover","royaljelly","starcap","mistwillow","heartwood","worldtreedew","goldapple","dragonroot"],
-  mountains: ["blueberry","hazelnut","pinecone","twigs","moss","wildonion","sorrel","mushroom","herb","wildgarlic","lavender","mint","sage","crabapple","birchbark","pineresin","ginseng","frostbloom","silverleaf","moonpetal","starcap","mistwillow","heartwood"],
-  volcano: ["twigs","acorn","chestnut","wildgarlic","dandelion","mushroom","wildonion","pinecone","herb","sage","pineresin","ambersap","honeycomb","morel","crabapple","sunblossom","saffron","truffle","emberlotus","dragonroot","glowshroom","goldapple"],
-  reef: ["cattail","sorrel","moss","fiddlehead","twigs","dandelion","clover","wildplum","mint","chamomile","herb","moonpetal","silverleaf","royaljelly","ambersap","fourleafclover","glowshroom","mistwillow","worldtreedew","blackberry"]
-};
-const forageIdsFor = region => (FORAGE_REGIONS[region] || []).map(s=> "forage_"+s);
-
 // Content expansion: 50 forageables, 30 minerals, 90 fish (see rpg_content.js)
 const CATALOG = registerItems(ITEM_BY_ID);
 /* Fossils: a bone shows as "Unknown Fossil" until you have found it twice or donated it to the museum */
 function fossilKnown(id){ try{ const p = state.profile; return !!p && (((p.finds||{})[id]||0) >= 2 || !!(p.museum?.donated||{})[id]); }catch{ return false; } }
-try{ registerFossils(ITEM_BY_ID, fossilKnown); }catch(err){ console.error("fossil registration failed:", err); }
+registerFossils(ITEM_BY_ID, fossilKnown);
 const EV_ITEMS = registerEventItems(ITEM_BY_ID);   // holiday forage / fish / bugs / shop items (see EVENTS in rpg_content.js)
 Object.assign(BUG_EMOJI, EV_ITEMS.bugEmoji);
 
@@ -1829,12 +1747,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{
-  openModal("journalModal");                                   // open first, so the journal ALWAYS appears; each section then renders on its own
-  const safe = (fn)=>{ try{ fn(); }catch(err){ console.error("journal section failed:", err); } };
-  safe(()=>{ if(questFailed) startQuestListener(); });
-  safe(()=> renderInventory()); safe(()=> renderLeaderboard("money")); safe(()=> renderQuests()); safe(()=> renderDailies());
-});
+document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
@@ -5759,14 +5672,6 @@ Object.values(ITEM_BY_ID).forEach(it=>{
     let guard = 0; while(seen.has(sig(out)) && guard++ < 500) out.hp += 1;   // guarantee uniqueness
     seen.add(sig(out));
     it.stats = out;
-  });
-  /* Only CRAFTED gear (anything with a crafting recipe) carries stat buffs. Every other armor piece (shop, loot, daily)
-     keeps just a plain max-HP bonus, and every other trinket gives no stat bonuses. */
-  const craftedIds = new Set(RECIPES.map(r=>r.out));
-  Object.values(ITEM_BY_ID).forEach(it=>{
-    if(craftedIds.has(it.id) || it.undying) return;
-    if(it.type==="armor") it.stats = { hp: Math.max(1, (it.stats && it.stats.hp) || 1) };
-    else if(it.type==="trinket") it.stats = {};
   });
 })();
 
