@@ -1747,7 +1747,7 @@ async function grantMoney(amount){
 /* =========================================================================
    INVENTORY / EQUIPMENT / JOURNAL
    ========================================================================= */
-document.getElementById("btnJournal").addEventListener("click", ()=>{ if(questFailed) startQuestListener(); openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
+document.getElementById("btnJournal").addEventListener("click", ()=>{ openModal("journalModal"); renderInventory(); renderLeaderboard("money"); renderQuests(); renderDailies(); });
 document.querySelectorAll("[data-jtab]").forEach(btn=>{
   btn.addEventListener("click", ()=>{
     document.querySelectorAll("[data-jtab]").forEach(b=>b.classList.remove("active"));
