@@ -66,6 +66,9 @@ const FAM=[
 ['Shield','SPELL','shield',{cost:[1,2,3,5],shield:1,heal:[0,1,0,1],back:[0,0,2,4]}],
 ['Vampirism','SPELL','vamp',{cost:[2,3,4,5],vamp:[2,4,6,8]}],
 ['Mana Break','SPELL','mbreak',{cost:1,mb:[1,2,3,4]}]];
+/* Shield / Crimson reduction / Vampirism only protect against the attack played in the SAME round. Set CARRY=true to let them wait for the next attack instead. */
+const CARRY=false;
+const NXT=CARRY?'the next':"this turn's";
 const CARDS=[];
 FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
 const nodes=d=>d.reduce((a,id)=>a+RAR[CARDS[id-1].r].node,0);
@@ -76,15 +79,15 @@ const backEl=()=>el('div','card back','<i></i>');
 const gem=t=>`<i class="gem ${t}"></i>`;
 function desc(c){const s=[];
  if(c.dmg)s.push(`deal ${c.dmg} damage`);
- if(c.shield)s.push('block the next attack'+(c.heal?` and restore ${c.heal} HP`:'')+(c.back?` and deal ${c.back} damage back`:''));
+ if(c.shield)s.push('block '+NXT+' attack'+(c.heal?` and restore ${c.heal} HP`:'')+(c.back?` and deal ${c.back} damage back`:''));
  else if(c.th)s.push(`restore ${c.big} HP if you have ${c.th} HP or less, otherwise ${c.small} HP`);
  else if(c.rn)s.push(`restore ${c.heal} HP now and ${c.rn[0]} HP at the start of ${c.rn[1]>1?'each of your next '+c.rn[1]+' turns':'your next turn'}`);
  else if(c.heal)s.push(c.dmg?`heal ${c.heal} HP`:`restore ${c.heal} HP`);
- if(c.red)s.push(`reduce the next incoming attack by ${c.red}`);
+ if(c.red)s.push(`reduce ${NXT} incoming attack by ${c.red}`);
  if(c.hpl)s.push(`lose ${c.hpl} HP`);
  if(c.mana)s.push(`restore ${c.mana} mana`+(c.nm?` now and ${c.nm} at the start of your next turn`:''));
  if(c.gold)s.push(`gain ${c.gold} golden heart${c.gold>1?'s':''}`);
- if(c.vamp)s.push(`convert up to ${c.vamp} damage from the next attack into healing`);
+ if(c.vamp)s.push(`convert up to ${c.vamp} damage from ${NXT} attack into healing`);
  if(c.mb)s.push(`remove ${c.mb} mana from your opponent`);
  const t=s.join(' and ');return t[0].toUpperCase()+t.slice(1)+'.'}
 function eff(c){const o=[];const add=(n,t,w)=>o.push(`<span class="chip">${n>0?'+':'-'}${Math.abs(n)}${gem(t)}${w?'<small>'+w+'</small>':''}</span>`);
@@ -277,7 +280,8 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};le
    else{if(S.red){const c=Math.min(S.red,d);d-=c;o.cut+=c;S.red=0}
     if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.conv=cv;S.vamp=0}
     const g=Math.min(S.gold,d);S.gold-=g;hpLoss=d-g;o.took=d}}}
- S.hp=Math.min(20,S.hp+heals);S.hp=Math.max(0,S.hp-selfLoss-hpLoss);   /* heals land first (capped at 20), then damage always lands */
+ S.hp=Math.min(20,S.hp+heals);S.hp=Math.max(0,S.hp-selfLoss-hpLoss);
+ if(!CARRY){S.shield=null;S.vamp=0;S.red=0}   /* heals land first (capped at 20), then damage always lands */
  return o}
 
 function doResolve(mc,oc,seq){if(!G||G.over)return;
