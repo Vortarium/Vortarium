@@ -121,14 +121,14 @@ const gate=f=>()=>{if(!ready24()){goTab('deck');return}f()};
 
 /* deck tab */
 let dSel=null;
-function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{d.push(id);while(nodes(d)>MAXN)d.shift()}
+function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{if(nodes(d)+RAR[CARDS[id-1].r].node>MAXN)return;d.push(id)}
  updateDoc(doc(db,'splendid_users',user.uid),{deck:U.deck}).catch(()=>{});renderDeck();updateLock()}
 function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
  FAM.forEach((f,fi)=>{
   if(fi%4===0){const h=el('div','sech','<i></i>'+f[1]+' CARDS<i></i>');h.style.setProperty('--sc',TL[f[1]]);g.append(h)}
   const row=el('div','fam');row.append(el('div','fl',f[0].toUpperCase()));
-  for(let r=0;r<4;r++){const c=CARDS[fi*4+r];const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':''));w.append(cardEl(c));
-   const t=el('button','tg');t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};row.append(w)}
+  for(let r=0;r<4;r++){const c=CARDS[fi*4+r];const lock=!U.deck.includes(c.id)&&nodes(U.deck)+RAR[c.r].node>MAXN;const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':'')+(lock?' lk':''));w.append(cardEl(c));
+   const t=el('button','tg');t.disabled=lock;t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};row.append(w)}
   g.append(row)});
  g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / ${MAXN}  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/MAXN*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
@@ -137,7 +137,7 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
  const big=cardEl(c,'big');p.append(big);
  p.append(el('h2','',c.name),el('b','',`<span style="color:${r.c}">${r.n.toUpperCase()}</span>`),
   el('div','',`<span class="chip">${r.node} NODE${r.node>1?'S':''}</span><span class="chip">${c.type}</span><span class="chip">${c.cost} ${gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
- const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':'ADD TO DECK');b.onclick=()=>toggle(c.id);p.append(b)}
+ const full=!on&&nodes(U.deck)+r.node>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
 /* stats tab */
 async function loadStats(f){$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));const bd=$('#board');bd.innerHTML='<p>Loading...</p>';
