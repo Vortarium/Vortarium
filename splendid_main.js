@@ -258,7 +258,7 @@ function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
 
 /* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
    Heals are applied first (capped at 20 hearts), then damage, so an attack that gets through can never be erased by a heal. */
-function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals=0,selfLoss=0,hpLoss=0;
+function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};let heals=0,selfLoss=0,hpLoss=0;
  if(m){
   if(m.dmg&&m.heal)heals+=m.heal;
   if(m.shield)S.shield={heal:m.heal||0,back:m.back||0};
@@ -275,7 +275,7 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals
   if(t.dmg){let d=t.dmg;o.dmgIn=d;
    if(S.shield){heals+=S.shield.heal;o.back=S.shield.back;S.shield=null;o.blk=1;d=0}
    else{if(S.red){const c=Math.min(S.red,d);d-=c;o.cut+=c;S.red=0}
-    if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.cut+=cv;S.vamp=0}
+    if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.conv=cv;S.vamp=0}
     const g=Math.min(S.gold,d);S.gold-=g;hpLoss=d-g;o.took=d}}}
  S.hp=Math.min(20,S.hp+heals);S.hp=Math.max(0,S.hp-selfLoss-hpLoss);   /* heals land first (capped at 20), then damage always lands */
  return o}
@@ -283,10 +283,10 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals
 function doResolve(mc,oc,seq){if(!G||G.over)return;
  G.pre={hp:G.S.hp,gold:G.S.gold,mana:G.S.mana};
  const o=applyRound(G.S,mc&&CARDS[mc-1],oc&&CARDS[oc-1]);
- G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut};syncMe();
+ G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut,conv:o.conv};syncMe();
  wr({['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
 
-const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut?` (${x.cut} PREVENTED)`:'');
+const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut||x.conv?' ('+[x.cut?x.cut+' PREVENTED':'',x.conv?x.conv+' CONVERTED TO HEARTS':''].filter(Boolean).join(', ')+')':'');
 function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
  const P=G.pre||G.S,mine='YOU: HEARTS '+P.hp+' > '+G.S.hp+'   MANA '+P.mana+' > '+G.S.mana+(P.gold!==G.S.gold?'   GOLD '+P.gold+' > '+G.S.gold:'');
  G.sum=[mine,sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:''].filter(Boolean).join('\n');
@@ -406,7 +406,7 @@ function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
   const bk=bc&&CARDS[bc-1],hk=hc&&CARDS[hc-1];
   const rb=applyRound(B.S,bk,hk);applyRound(B.O,hk,bk);if(rb.back)sideHit(B.O,rb.back);
   B.rd=seq;B.oppEnd=B.O.mana;
-  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut},['pub.bot']:botPub()})},3600)}
+  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv},['pub.bot']:botPub()})},3600)}
 
 function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back)sideHit(B.S,h.back);
  wr({['fin.bot']:r.seq,['pub.bot']:botPub()});if(B.S.hp<=0)endWrite(G.me,'hearts')}
