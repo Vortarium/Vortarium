@@ -189,9 +189,10 @@ const syncMe=()=>renderSide('me',G.S.hp,G.S.gold,G.S.mana);
 const setMsg=t=>$('#gmsg').textContent=t;
 const pubOf=()=>({hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
 const pub=()=>updateDoc(G.ref,{['pub.'+G.me]:pubOf()}).catch(()=>{});
-const myAct=()=>G&&G.r&&G.r.phase==='act'&&G.r.turn===G.me&&!G.locked&&!G.stuck&&!G.over;
-const myReact=()=>G&&G.r&&G.r.phase==='react'&&G.r.turn===G.opp&&!G.rcDone&&!G.over;
-const canPlay=c=>(myAct()&&c.cost<=G.S.mana)||(myReact()&&c.type==='SPELL'&&c.cost<=G.S.mana);
+/* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve' */
+const mover=r=>r.phase==='act'?r.turn:r.phase==='react'?(r.turn===G.me?G.opp:G.me):null;
+const myMove=()=>!!(G&&G.r&&!G.over&&mover(G.r)===G.me&&!G.locked);
+const canPlay=c=>myMove()&&!G.stuck&&c.cost<=G.S.mana;
 const heal=n=>G.S.hp=Math.min(20,G.S.hp+n);
 function hitMe(d){const S=G.S,g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))}
 function draw(){if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx('take')}}
@@ -207,36 +208,48 @@ function onRoom(r){
  if(r.status==='open')return;
  if(r.status==='done'){endGame(r);return}
  if(!G.init)initGame(r);
- const me=G.me,op=G.opp,o=r.pub&&r.pub[op];
- if(o){if(r.phase!=='act')G.clk.op=o.clock;renderSide('op',o.hp,o.gold,o.mana);$('#op-dn').textContent=o.deck;renderOpHand(o.hand)}
- if(r.phase==='act'&&G.a!==r.seq){G.a=r.seq;G.locked=false;G.rcDone=false;G.sel=null;G.stuck=false;G.last=Date.now();
-  $('#me-slot').innerHTML='';$('#op-slot').innerHTML='';setMsg(r.turn===me?'YOUR TURN':"OPPONENT'S TURN");renderFooter();checkStuck()}
- if(r.phase==='react'&&r.turn===op&&G.rc!==r.seq){G.rc=r.seq;G.rcDone=false;G.rcAt=Date.now();$('#op-slot').replaceChildren(backEl());renderFooter()}
+ const me=G.me,op=G.opp,o=r.pub&&r.pub[op],m=mover(r);
+ const pk=r.seq+r.phase;if(G.pk!==pk){G.pk=pk;G.opSeen=Date.now()}
+ if(o){if(o.clock!==G.opClk){G.opClk=o.clock;G.opSeen=Date.now()}
+  G.clk.op=m===op?Math.min(G.clk.op,o.clock):o.clock;
+  renderSide('op',o.hp,o.gold,o.mana);$('#op-dn').textContent=o.deck;renderOpHand(o.hand)}
+ /* new round: clear table, apply start-of-round mana and regen */
+ if(r.phase==='act'&&G.a!==r.seq){G.a=r.seq;$('#me-slot').innerHTML='';$('#op-slot').innerHTML='';startRound()}
+ if(r.phase==='react'&&r.turn===op&&G.rc!==r.seq){G.rc=r.seq;$('#op-slot').replaceChildren(backEl())}
+ const mk=r.seq+':'+r.phase;
+ if(m===me&&G.mk!==mk){G.mk=mk;G.locked=false;G.stuck=false;G.sel=null;G.last=Date.now();setMsg('YOUR TURN');renderFooter();checkStuck()}
+ else if(m===op&&G.mk!==mk){G.mk=mk;G.sel=null;setMsg("OPPONENT'S TURN");renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
- if(r.phase==='resolve'&&r.turn===op&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
-  /* cards stay face up for 5s (no clocks running) before the next turn */
-  const wait=Math.max(0,(G.shownAt||Date.now())+5000-Date.now());
-  setTimeout(()=>{if(G&&!G.over)startMyTurn(r)},wait)}}
+ /* first player starts the next round once both sides finished and cards were shown for 5s */
+ if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
+  const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+5000-Date.now());
+  setTimeout(()=>{if(G&&!G.over)updateDoc(G.ref,{seq:seq+1,phase:'act',c:{},res:{},fin:{}}).catch(()=>{})},wait)}}
 
-function checkStuck(){if(!G||G.over||G.stuck||!myAct())return;
+function startRound(){const S=G.S;S.mana=Math.min(5,S.mana+1+S.nm);S.nm=0;
+ S.dots=S.dots.filter(d=>{heal(d.a);d.t--;return d.t>0});syncMe();pub()}
+
+function checkStuck(){if(!G||G.over||G.stuck||!myMove())return;
  if(!G.hand.length||G.hand.every(id=>CARDS[id-1].cost>G.S.mana)){
   if(!G.deck.length){endWrite(G.opp,'out of moves');return}
   G.stuck=true;setMsg('NO PLAYABLE CARD - DISCARDING');renderFooter();
-  setTimeout(()=>{if(!G||G.over)return;G.stuck=false;if(G.hand.length)discard(Math.random()*G.hand.length|0);checkStuck();setMsg(G.stuck?'NO PLAYABLE CARD - DISCARDING':'YOUR TURN')},1000)}}
+  setTimeout(()=>{if(!G||G.over)return;G.stuck=false;if(!myMove())return;
+   if(G.hand.length)discard(Math.random()*G.hand.length|0);else{draw();pub()}
+   checkStuck();if(!G.stuck)setMsg('YOUR TURN');renderFooter()},1000)}}
 
 function discard(i){if(!G.hand[i])return;G.hand.splice(i,1);G.sel=null;draw();pub();renderFooter()}
 
-async function commit(i){const react=myReact(),id=G.hand[i],c=CARDS[id-1];
- if(!c||!(react?c.type==='SPELL'&&c.cost<=G.S.mana:myAct()&&c.cost<=G.S.mana))return;
- G.hand.splice(i,1);G.S.mana-=c.cost;G.sel=null;
- if(react)G.rcDone=true;else{G.locked=true;G.reactStart=Date.now();G.clk.me=G.clk.me}
- draw();$('#me-slot').replaceChildren(backEl());syncMe();renderFooter();setMsg(react?'':'WAITING FOR OPPONENT...');
- await updateDoc(G.ref,{['c.'+G.me]:id,phase:react?'resolve':'react',['pub.'+G.me]:pubOf()})}
-async function ready(){if(!myReact())return;G.rcDone=true;renderFooter();await updateDoc(G.ref,{['c.'+G.me]:0,phase:'resolve'})}
+async function commit(i){if(!myMove()||G.stuck)return;const id=G.hand[i],c=CARDS[id-1];
+ if(!c||c.cost>G.S.mana)return;
+ const second=G.r.phase==='react';
+ G.locked=true;G.hand.splice(i,1);G.S.mana-=c.cost;G.sel=null;
+ draw();$('#me-slot').replaceChildren(backEl());syncMe();renderFooter();setMsg(second?'':'WAITING FOR OPPONENT...');
+ try{await updateDoc(G.ref,{['c.'+G.me]:id,phase:second?'resolve':'react',['pub.'+G.me]:pubOf()})}catch(e){}}
 
 function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
  G.flipAt=Date.now()+3000;G.shownAt=0;
+ if(mc)$('#me-slot').replaceChildren(backEl());if(oc)$('#op-slot').replaceChildren(backEl());
+ setMsg('');
  /* both cards stay face down for 3s, then flip together */
  setTimeout(()=>{if(!G||G.over||G.rv!==seq)return;
   const put=(id,slot)=>{if(!id)return;const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
@@ -269,39 +282,32 @@ function finish(r){G.fin=r.seq;const b=r.res[G.opp].back;if(b){hitMe(b);syncMe()
  updateDoc(G.ref,{['fin.'+G.me]:r.seq,['pub.'+G.me]:pubOf()});
  if(G.S.hp<=0)endWrite(G.opp,'hearts')}
 
-async function startMyTurn(r){const S=G.S;S.mana=Math.min(5,S.mana+1);S.mana=Math.min(5,S.mana+S.nm);S.nm=0;
- S.dots=S.dots.filter(d=>{heal(d.a);d.t--;return d.t>0});syncMe();
- await updateDoc(G.ref,{turn:G.me,seq:r.seq+1,phase:'act',c:{},res:{},fin:{},['pub.'+G.me]:pubOf()})}
-
 /* footer */
 function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
  if(G.sel!=null&&G.hand[G.sel]){const i=G.sel,c=CARDS[G.hand[i]-1];
   const bk=el('button','lav','BACK');bk.onclick=()=>{G.sel=null;renderFooter()};
   const inf=el('div','inf',`<b style="color:${RAR[c.r].c}">${c.name} <em>${RAR[c.r].n.toUpperCase()}</em></b><div>${eff(c)}</div><small>${desc(c)}</small>`);
   const pl=el('button','green',`PLAY <span class="chip">${c.cost}${gem('b')}</span>`);pl.disabled=!canPlay(c);pl.onclick=()=>commit(i);
-  const ds=el('button','red','DISCARD');ds.disabled=!(myAct()&&G.deck.length);ds.onclick=()=>discard(i);
+  const ds=el('button','red','DISCARD');ds.disabled=!(myMove()&&!G.stuck&&G.deck.length);ds.onclick=()=>discard(i);
   f.append(bk,inf,pl,ds);return}
  const hd=el('div','hand');
  for(let i=0;i<3;i++){const id=G.hand[i];
-  if(id){const c=CARDS[id-1],e=cardEl(c);if((myAct()||myReact())&&!canPlay(c))e.classList.add('dim');e.onclick=()=>{G.sel=i;renderFooter()};hd.append(e)}
+  if(id){const c=CARDS[id-1],e=cardEl(c);if(myMove()&&!canPlay(c))e.classList.add('dim');e.onclick=()=>{G.sel=i;renderFooter()};hd.append(e)}
   else hd.append(el('div','slot ph'))}
  f.append(hd);
- if(myReact()){const rb=el('button','blue','READY');rb.onclick=ready;f.append(rb)}
  const pile=el('div','pile');pile.append(backEl(),el('b','',G.deck.length));f.append(pile)}
 
-/* timers */
+/* timers: only the player whose pick it is has a ticking clock; nothing ticks while cards are revealed */
 setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
- const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r;
- if(r.phase==='act'){const k=r.turn===G.me?'me':'op';G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time');
-  if(k==='me'&&now-(G.lastPub||0)>2000){G.lastPub=now;pub()}}
+ const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r,m=mover(r);
+ if(m){const k=m===G.me?'me':'op';G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time');
+  if(k==='me'&&now-(G.lastPub||0)>1500){G.lastPub=now;pub()}
+  if(k==='op'&&now-(G.opSeen||now)>30000)endWrite(G.me,'disconnect')}
  $('#me-clk b').textContent=fmt(G.clk.me);$('#op-clk b').textContent=fmt(G.clk.op);
- $('#me-clk').classList.toggle('act',r.phase==='act'&&r.turn===G.me);$('#op-clk').classList.toggle('act',r.phase==='act'&&r.turn===G.opp);
+ $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
   else if(G.shownAt)setMsg(`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+5000-now)/1000))}`)}
- if(r.phase==='react'){
-  if(r.turn===G.opp&&!G.rcDone){const left=10000-(now-G.rcAt);if(left<=0)ready();else setMsg(`OPPONENT IS READY - PLACE A SPELL OR PRESS READY (${Math.ceil(left/1000)})`)}
-  if(r.turn===G.me&&G.reactStart&&now-G.reactStart>25000)endWrite(G.me,'disconnect')}
 },250);
 
 /* forfeit */
