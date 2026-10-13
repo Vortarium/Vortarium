@@ -281,13 +281,15 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals
  return o}
 
 function doResolve(mc,oc,seq){if(!G||G.over)return;
+ G.pre={hp:G.S.hp,gold:G.S.gold,mana:G.S.mana};
  const o=applyRound(G.S,mc&&CARDS[mc-1],oc&&CARDS[oc-1]);
  G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut};syncMe();
  wr({['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
 
 const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut?` (${x.cut} PREVENTED)`:'');
 function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
- G.sum=[sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:''].filter(Boolean).join('\n');
+ const P=G.pre||G.S,mine='YOU: HEARTS '+P.hp+' > '+G.S.hp+'   MANA '+P.mana+' > '+G.S.mana+(P.gold!==G.S.gold?'   GOLD '+P.gold+' > '+G.S.gold:'');
+ G.sum=[mine,sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:''].filter(Boolean).join('\n');
  wr({['fin.'+G.me]:r.seq,['pub.'+G.me]:pubOf()});
  if(G.S.hp<=0)endWrite(G.opp,'hearts')}
 
