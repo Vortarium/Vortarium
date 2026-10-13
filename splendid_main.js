@@ -242,9 +242,9 @@ function onRoom(r){
  else if(m===op&&G.mk!==mk){G.mk=mk;G.sel=null;setMsg("OPPONENT'S TURN");renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
- /* first player starts the next round once both sides finished and cards were shown for 6s */
+ /* first player starts the next round once both sides finished and cards were shown for 4s */
  if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
-  const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+6000-Date.now());
+  const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
   setTimeout(()=>{if(G&&!G.over)wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
 
 function startRound(){const S=G.S;S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;
@@ -340,7 +340,7 @@ setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
-  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+6000-now)/1000))}`)}
+  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`)}
 },250);
 
 /* forfeit */
@@ -417,7 +417,7 @@ function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.sta
   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},BOT.think[0]+Math.random()*(BOT.think[1]-BOT.think[0]))}
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
  if(r.phase==='resolve'&&B.rd===r.seq&&B.fin!==r.seq&&r.res[hu]&&r.res[hu].seq===r.seq)botFinish(r);
- if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+6000-Date.now());
+ if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
   setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
