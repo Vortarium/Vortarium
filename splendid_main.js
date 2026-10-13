@@ -21,7 +21,7 @@ const closeModal=()=>$('#modal').classList.remove('on');
 (()=>{const b=$('#embers');for(let i=0;i<22;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'%';e.style.setProperty('--dx',(Math.random()*160-80)+'px');e.style.animationDuration=(7+Math.random()*9)+'s';e.style.animationDelay=(-Math.random()*14)+'s';const z=3+Math.random()*4;e.style.width=e.style.height=z+'px';b.append(e)}})();
 
 /* ---------- audio ---------- */
-const SFX={};['take','place','hit','break'].forEach(n=>{SFX[n]=new Audio(`splendid_${n}.mp3`);SFX[n].preload='auto'});
+const SFX={};['take','place','hit','break','regen'].forEach(n=>{SFX[n]=new Audio(`splendid_${n}.mp3`);SFX[n].preload='auto'});
 const sfx=n=>{try{const a=SFX[n].cloneNode();a.volume=.8;a.play().catch(()=>{})}catch(e){}};
 const music=new Audio('splendid_music.mp3');music.loop=true;music.volume=.4;
 const startMusic=()=>music.play().catch(()=>{});
@@ -179,10 +179,11 @@ $('#bJoin').onclick=gate(async()=>{modal(`<h2>SEARCHING</h2><div class="spin"></
 /* ---------- gems ---------- */
 function buildGems(){['op','me'].forEach(s=>{$('#'+s+'-gems').innerHTML=`<div class="hpbox"><div class="gd" id="${s}-gd"></div><div class="hp" id="${s}-hp"></div></div><div class="mn" id="${s}-mn"></div>`;
  const f=(id,n,c)=>{for(let i=0;i<n;i++){const g=el('i','gem '+c);g.dataset.f=0;$('#'+s+id).append(g)}};f('-hp',20,'r');f('-gd',5,'g');f('-mn',5,'b')})}
-function gemSet(box,n,base){const sl=$$('.gem',box),lost=[];
- sl.forEach((g,i)=>{const w=i<n?1:0,h=+g.dataset.f;g.dataset.f=w;if(w&&!h){g.classList.remove('shatter');g.classList.add('on')}else if(!w&&h)lost.push(i)});
+let regenN=0;
+function gemSet(box,n,base,snd){const sl=$$('.gem',box),lost=[],first=!box.dataset.i;box.dataset.i=1;
+ sl.forEach((g,i)=>{const w=i<n?1:0,h=+g.dataset.f;g.dataset.f=w;if(w&&!h){g.classList.remove('shatter');g.classList.add('on');if(snd&&!first)regenN++}else if(!w&&h)lost.push(i)});
  lost.reverse().forEach((i,k)=>setTimeout(()=>{const g=sl[i];if(+g.dataset.f)return;g.classList.remove('on');g.classList.add('shatter');sfx('break');setTimeout(()=>g.classList.remove('shatter'),480)},(base+k)*200));return lost.length}
-function renderSide(s,hp,gd,mn){let d=0;d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d);d+=gemSet($('#'+s+'-gd'),gd,d);gemSet($('#'+s+'-mn'),mn,d)}
+function renderSide(s,hp,gd,mn){let d=0;regenN=0;d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d,true);d+=gemSet($('#'+s+'-gd'),gd,d,false);gemSet($('#'+s+'-mn'),mn,d,true);if(regenN)sfx('regen')}
 const syncMe=()=>renderSide('me',G.S.hp,G.S.gold,G.S.mana);
 
 /* ---------- battle ---------- */
@@ -247,7 +248,7 @@ async function commit(i){if(!myMove()||G.stuck)return;const id=G.hand[i],c=CARDS
  try{await updateDoc(G.ref,{['c.'+G.me]:id,phase:second?'resolve':'react',['pub.'+G.me]:pubOf()})}catch(e){}}
 
 function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
- G.flipAt=Date.now()+3000;G.shownAt=0;
+ G.flipAt=Date.now()+3000;G.shownAt=0;G.sum='';G.myRes=null;
  if(mc)$('#me-slot').replaceChildren(backEl());if(oc)$('#op-slot').replaceChildren(backEl());
  setMsg('');
  /* both cards stay face down for 3s, then flip together */
@@ -256,29 +257,38 @@ function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
   put(mc,'#me-slot');put(oc,'#op-slot');G.shownAt=Date.now();
   setTimeout(()=>doResolve(mc,oc,seq),600)},3000)}
 
-function doResolve(mc,oc,seq){if(!G||G.over)return;const S=G.S,out={back:0},m=mc&&CARDS[mc-1],t=oc&&CARDS[oc-1];
+/* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
+   Everything happens at the same time: heals and damage are netted, so a heal can never be wasted by the heart cap. */
+function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals=0,selfLoss=0,hpLoss=0;
  if(m){
-  if(m.dmg&&m.heal)heal(m.heal);
+  if(m.dmg&&m.heal)heals+=m.heal;
   if(m.shield)S.shield={heal:m.heal||0,back:m.back||0};
-  else if(m.th)heal(S.hp<=m.th?m.big:m.small);
-  else if(m.rn){heal(m.heal);S.dots.push({a:m.rn[0],t:m.rn[1]})}
-  else if(m.heal&&!m.dmg)heal(m.heal);
+  else if(m.th)heals+=S.hp<=m.th?m.big:m.small;
+  else if(m.rn){heals+=m.heal;S.dots.push({a:m.rn[0],t:m.rn[1]})}
+  else if(m.heal&&!m.dmg)heals+=m.heal;
   if(m.red)S.red+=m.red;
-  if(m.hpl)S.hp=Math.max(0,S.hp-m.hpl);
+  if(m.hpl)selfLoss+=m.hpl;
   if(m.mana){S.mana=Math.min(5,S.mana+m.mana);S.nm+=m.nm||0}
   if(m.gold)S.gold=Math.min(5,S.gold+m.gold);
   if(m.vamp)S.vamp=Math.max(S.vamp,m.vamp)}
  if(t){
   if(t.mb)S.mana=Math.max(0,S.mana-t.mb);
-  if(t.dmg){let d=t.dmg;
-   if(S.shield){heal(S.shield.heal);out.back=S.shield.back;S.shield=null;d=0}
-   else{if(S.red){d=Math.max(0,d-S.red);S.red=0}
-    if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heal(cv);S.vamp=0}
-    hitMe(d)}}}
- G.rd=seq;syncMe();
- updateDoc(G.ref,{['res.'+G.me]:{seq,back:out.back},['pub.'+G.me]:pubOf()})}
+  if(t.dmg){let d=t.dmg;o.dmgIn=d;
+   if(S.shield){heals+=S.shield.heal;o.back=S.shield.back;S.shield=null;o.blk=1;d=0}
+   else{if(S.red){const c=Math.min(S.red,d);d-=c;o.cut+=c;S.red=0}
+    if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.cut+=cv;S.vamp=0}
+    const g=Math.min(S.gold,d);S.gold-=g;hpLoss=d-g;o.took=d}}}
+ S.hp=Math.max(0,Math.min(20,S.hp+heals-selfLoss-hpLoss));
+ return o}
 
-function finish(r){G.fin=r.seq;const b=r.res[G.opp].back;if(b){hitMe(b);syncMe()}
+function doResolve(mc,oc,seq){if(!G||G.over)return;
+ const o=applyRound(G.S,mc&&CARDS[mc-1],oc&&CARDS[oc-1]);
+ G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut};syncMe();
+ updateDoc(G.ref,{['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
+
+const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut?` (${x.cut} PREVENTED)`:'');
+function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
+ G.sum=[sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:''].filter(Boolean).join('\n');
  updateDoc(G.ref,{['fin.'+G.me]:r.seq,['pub.'+G.me]:pubOf()});
  if(G.S.hp<=0)endWrite(G.opp,'hearts')}
 
@@ -307,7 +317,7 @@ setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
-  else if(G.shownAt)setMsg(`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+5000-now)/1000))}`)}
+  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+5000-now)/1000))}`)}
 },250);
 
 /* forfeit */

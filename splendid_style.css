@@ -253,3 +253,4 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
  #s-game .clk{min-width:100px}#s-game .clk b{font-size:1.6rem}#s-game .clk small{font-size:.85rem;max-width:100px}
  #s-game .inf small{font-size:1.2rem}
 }
+#s-game .msg{white-space:pre-line}
