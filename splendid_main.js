@@ -113,14 +113,15 @@ async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show
 /* ---------- menu ---------- */
 function goTab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.tab').forEach(x=>x.classList.toggle('on',x.id==='t-'+t));if(t==='stats')loadStats('best')}
 $$('.tabs button').forEach(b=>b.onclick=()=>goTab(b.dataset.t));
-const ready24=()=>nodes(U.deck)===24;
+const MAXN=32;
+const ready24=()=>nodes(U.deck)===MAXN;
 function updateLock(){const l=!ready24();['bCode','bJoin','bCreate'].forEach(i=>$('#'+i).classList.toggle('lockd',l));
- $('#lockHint').textContent=l?'Your deck needs exactly 24 nodes. Open DECK to finish it.':''}
+ $('#lockHint').textContent=l?'Your deck needs exactly 32 nodes. Open DECK to finish it.':''}
 const gate=f=>()=>{if(!ready24()){goTab('deck');return}f()};
 
 /* deck tab */
 let dSel=null;
-function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{d.push(id);while(nodes(d)>24)d.shift()}
+function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{d.push(id);while(nodes(d)>MAXN)d.shift()}
  updateDoc(doc(db,'splendid_users',user.uid),{deck:U.deck}).catch(()=>{});renderDeck();updateLock()}
 function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
  FAM.forEach((f,fi)=>{
@@ -129,7 +130,7 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
   for(let r=0;r<4;r++){const c=CARDS[fi*4+r];const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':''));w.append(cardEl(c));
    const t=el('button','tg');t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};row.append(w)}
   g.append(row)});
- g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / 24  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/24*100)+'%';
+ g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / ${MAXN}  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/MAXN*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
  if(!dSel){p.innerHTML='<p style="margin:auto;opacity:.6">Select a card to inspect it.<br>Use the circle on a card to add it to your deck.</p>';return}
  const c=CARDS[dSel-1],r=RAR[c.r],on=U.deck.includes(c.id);
@@ -198,7 +199,7 @@ function draw(){if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx
 function initGame(r){G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
  G.S={hp:20,gold:0,mana:5,shield:null,vamp:0,red:0,dots:[],nm:0};G.deck=shuffle(U.deck);G.hand=[];G.t0=Date.now();G.last=Date.now();
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
- for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,5);renderOpHand(3);$('#op-dn').textContent=24;renderFooter();pub()}
+ for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,5);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
 
 function onRoom(r){
