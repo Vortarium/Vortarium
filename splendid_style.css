@@ -259,3 +259,5 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 .botrow{display:flex;justify-content:center;margin-top:34px}
 .botrow button{width:280px;height:72px;font-size:1.25rem;letter-spacing:.14em}
 .card.skip:not(.back){background:#00000033;border:2px dashed #d9a441aa;box-shadow:none;color:var(--gold2,#f3d58a);font-family:"Cinzel",serif;font-weight:800;letter-spacing:.1em}
+
+.fx{min-height:1.2em;font-size:.8rem;font-weight:800;letter-spacing:.08em;color:#c7b8ff;text-shadow:0 2px 4px #000}

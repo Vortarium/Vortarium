@@ -178,18 +178,19 @@ $('#bJoin').onclick=gate(async()=>{modal(`<h2>SEARCHING</h2><div class="spin"></
   await createRoom(true,true)}catch(e){modal(`<h2>ERROR</h2><p>${e.message}</p><button class="lav" onclick="document.getElementById('modal').classList.remove('on')">OK</button>`)}});
 
 /* ---------- gems ---------- */
-function buildGems(){['op','me'].forEach(s=>{$('#'+s+'-gems').innerHTML=`<div class="hpbox"><div class="gd" id="${s}-gd"></div><div class="hp" id="${s}-hp"></div></div><div class="mn" id="${s}-mn"></div>`;
+function buildGems(){['op','me'].forEach(s=>{$('#'+s+'-gems').innerHTML=`<div class="hpbox"><div class="fx" id="${s}-fx"></div><div class="gd" id="${s}-gd"></div><div class="hp" id="${s}-hp"></div></div><div class="mn" id="${s}-mn"></div>`;
  const f=(id,n,c)=>{for(let i=0;i<n;i++){const g=el('i','gem '+c);g.dataset.f=0;$('#'+s+id).append(g)}};f('-hp',20,'r');f('-gd',5,'g');f('-mn',5,'b')})}
 let regenN=0;
 function gemSet(box,n,base,snd){const sl=$$('.gem',box),lost=[],first=!box.dataset.i;box.dataset.i=1;
  sl.forEach((g,i)=>{const w=i<n?1:0,h=+g.dataset.f;g.dataset.f=w;if(w&&!h){g.classList.remove('shatter');g.classList.add('on');if(snd&&!first)regenN++}else if(!w&&h)lost.push(i)});
  lost.reverse().forEach((i,k)=>setTimeout(()=>{const g=sl[i];if(+g.dataset.f)return;g.classList.remove('on');g.classList.add('shatter');sfx('break');setTimeout(()=>g.classList.remove('shatter'),480)},(base+k)*200));return lost.length}
 function renderSide(s,hp,gd,mn){let d=0;regenN=0;d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d,true);d+=gemSet($('#'+s+'-gd'),gd,d,false);gemSet($('#'+s+'-mn'),mn,d,true);if(regenN)sfx('regen')}
-const syncMe=()=>renderSide('me',G.S.hp,G.S.gold,G.S.mana);
+const fxTxt=S=>[S.shield?'SHIELD':'',S.vamp?'VAMPIRISM '+S.vamp:'',S.red?'-'+S.red+' NEXT HIT':'',S.dots.length?'REGEN '+S.dots.reduce((a,d)=>a+d.a*d.t,0):''].filter(Boolean).join('  \u00b7  ');
+const syncMe=()=>{renderSide('me',G.S.hp,G.S.gold,G.S.mana);$('#me-fx').textContent=fxTxt(G.S)};
 
 /* ---------- battle ---------- */
 const setMsg=t=>$('#gmsg').textContent=t;
-const pubOf=()=>({hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
+const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
 const wr=p=>G&&G.bot?Promise.resolve(botWrite(p)):updateDoc(G.ref,p).catch(()=>{});
 const pub=()=>wr({['pub.'+G.me]:pubOf()});
 /* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve' */
@@ -217,7 +218,7 @@ function onRoom(r){
  const pk=r.seq+r.phase;if(G.pk!==pk){G.pk=pk;G.opSeen=Date.now()}
  if(o){if(o.clock!==G.opClk){G.opClk=o.clock;G.opSeen=Date.now()}
   G.clk.op=m===op?Math.min(G.clk.op,o.clock):o.clock;
-  renderSide('op',o.hp,o.gold,o.mana);$('#op-dn').textContent=o.deck;renderOpHand(o.hand)}
+  renderSide('op',o.hp,o.gold,o.mana);$('#op-fx').textContent=o.fx||'';$('#op-dn').textContent=o.deck;renderOpHand(o.hand)}
  /* new round: clear table, apply start-of-round mana and regen */
  if(r.phase==='act'&&G.a!==r.seq){G.a=r.seq;$('#me-slot').innerHTML='';$('#op-slot').innerHTML='';startRound()}
  if(r.phase==='react'&&r.turn===op&&G.rc!==r.seq){G.rc=r.seq;$('#op-slot').replaceChildren(backEl())}
@@ -256,7 +257,7 @@ function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
   setTimeout(()=>doResolve(mc,oc,seq),600)},3000)}
 
 /* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
-   Everything happens at the same time: heals and damage are netted, so a heal can never be wasted by the heart cap. */
+   Heals are applied first (capped at 20 hearts), then damage, so an attack that gets through can never be erased by a heal. */
 function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals=0,selfLoss=0,hpLoss=0;
  if(m){
   if(m.dmg&&m.heal)heals+=m.heal;
@@ -276,7 +277,7 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0};let heals
    else{if(S.red){const c=Math.min(S.red,d);d-=c;o.cut+=c;S.red=0}
     if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.cut+=cv;S.vamp=0}
     const g=Math.min(S.gold,d);S.gold-=g;hpLoss=d-g;o.took=d}}}
- S.hp=Math.max(0,Math.min(20,S.hp+heals-selfLoss-hpLoss));
+ S.hp=Math.min(20,S.hp+heals);S.hp=Math.max(0,S.hp-selfLoss-hpLoss);   /* heals land first (capped at 20), then damage always lands */
  return o}
 
 function doResolve(mc,oc,seq){if(!G||G.over)return;
@@ -383,7 +384,7 @@ function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAM
 
 const bDraw=()=>{const B=G.bot;if(B.hand.length>=3)return;if(!B.deck.length)B.deck=shuffle(B.all.filter(id=>!B.hand.includes(id)));
  if(B.deck.length){B.hand.push(B.deck.pop());if(!B.deck.length)B.deck=shuffle(B.all.filter(id=>!B.hand.includes(id)))}};
-const botPub=()=>{const B=G.bot;return{hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
+const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
 const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana}};
 
 /* the bot's side of the round loop (mirrors onRoom) */
