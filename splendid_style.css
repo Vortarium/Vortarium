@@ -190,3 +190,20 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
  .tabs button{height:64px;font-size:1.2rem}
  .orn{display:none}
 }
+
+/* ---- dark etched cards + grouped deck ---- */
+.card:not(.back){background:radial-gradient(circle at 50% 32%,color-mix(in srgb,var(--rc) 20%,#3b2a1f),#1b110b 78%);border-color:var(--rc);box-shadow:0 5px 14px #000c,0 0 14px color-mix(in srgb,var(--rc) 40%,transparent),inset 0 0 0 2px #00000066,inset 0 0 14px #000a}
+.card svg{width:68%;fill:none;stroke:none;overflow:visible}
+.card svg *{stroke-linecap:round;stroke-linejoin:round;fill:none}
+.card .rg{stroke:var(--tl);stroke-width:.8;opacity:.4}
+.card .rg2{stroke:var(--tl);stroke-width:.6;stroke-dasharray:.8 2.6;opacity:.55}
+.card .sh path{stroke:#000;stroke-width:2.6;opacity:.8}
+.card .hl path{stroke:#fff;stroke-width:1;opacity:.3}
+.card .et path{stroke:var(--tl);stroke-width:2.2;fill:var(--tl);fill-opacity:.1}
+.card span{color:#f0d9a6;text-shadow:0 1px 2px #000}
+.dgrid{display:block;padding:14px 18px}
+.sech{display:flex;align-items:center;gap:14px;margin:10px 0 16px;font-family:"Cinzel",serif;font-weight:800;letter-spacing:.22em;color:var(--sc);font-size:1.1rem;text-shadow:0 0 14px color-mix(in srgb,var(--sc) 50%,transparent)}
+.sech::before,.sech::after{content:'';flex:1;height:2px;background:linear-gradient(90deg,transparent,var(--sc),transparent)}
+.sech i{width:10px;height:10px;transform:rotate(45deg);background:var(--sc)}
+.fam{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:22px;margin-bottom:18px;padding:14px 12px;border-radius:14px;background:#00000030;border:1px solid #5a3d2299;box-shadow:inset 0 0 22px #0008}
+.fl{width:118px;text-align:left;font-family:"Cinzel",serif;font-weight:800;color:#e5cd96;letter-spacing:.16em;font-size:.82rem}

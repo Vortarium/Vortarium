@@ -31,13 +31,24 @@ startMusic();
 /* ---------- cards ---------- */
 const RAR=[{n:'Ember',c:'#b4bcc8',node:1},{n:'Spark',c:'#f6cf4a',node:2},{n:'Flare',c:'#ff9b54',node:3},{n:'Blaze',c:'#ff5a6e',node:4}];
 const TC={'ATTACK':'#ff8fa3','HEAL':'#5fd3a4','MANA HEAL':'#6cb4ff','SPELL':'#b09cff'};
+const TL={'ATTACK':'#ffa9b8','HEAL':'#86e6bc','MANA HEAL':'#92c9ff','SPELL':'#c7b8ff'};
 const ICONS={
- strike:'M10 38L38 10M26 10h12v12',pierce:'M8 24h30M28 14l10 10-10 10',crush:'M12 14h24v12H12zM24 26v14',
- leech:'M24 8C34 20 36 26 24 40 12 26 14 20 24 8z',mend:'M24 10v28M10 24h28',renewal:'M36 24a12 12 0 1 1-4-9M34 8v8h-8',
- resolve:'M8 38L20 14l8 14 4-6 8 16z',crimson:'M24 40C8 28 10 12 24 20 38 12 40 28 24 40z',focus:'M24 12a12 12 0 1 0 .01 0M24 22a2 2 0 1 0 .01 0',
- reserve:'M12 16h24M12 25h24M12 34h24',exchange:'M10 18h26M30 12l6 6-6 6M38 32H12M18 26l-6 6 6 6',offering:'M10 22h28c0 10-6 16-14 16S10 32 10 22zM24 8v8',
- golden:'M24 40C8 28 10 12 24 20 38 12 40 28 24 40zM24 24l4 5-4 5-4-5z',shield:'M24 8l12 6v10c0 8-6 13-12 16-6-3-12-8-12-16V14z',
- vamp:'M12 14h24M16 14l5 20M32 14l-5 20',mbreak:'M24 8l12 16-12 16-12-16zM19 24l9-4'};
+ strike:['M10 10L32 32','M28 38L38 28','M34 34l5 5','M38 10L16 32','M10 28l10 10','M14 34l-5 5'],
+ pierce:['M24 5L29 25 24 30 19 25z','M15 30h18','M24 30v10','M21 43h6','M24 9v14'],
+ crush:['M11 9h26v11H11z','M24 20v22','M22 42h4','M16 14h5M27 14h5','M22 28h4M22 34h4'],
+ leech:['M24 5C34 18 37 26 24 41 11 26 14 18 24 5z','M18 27c1 4 4 7 7 7','M20 19l2 7M28 19l-2 7'],
+ mend:['M24 41C7 29 9 11 24 20 39 11 41 29 24 41z','M24 22v12M18 28h12'],
+ renewal:['M10 37C8 18 22 7 39 9 41 27 29 40 10 37z','M10 37L33 15','M19 29l-1-8M26 23l-1-8M25 31l7-1'],
+ resolve:['M24 5C26 14 37 18 35 30c-1 8-6 12-11 12S14 38 13 30c-1-5 2-9 5-12 0 4 2 6 4 6 0-6-2-11 2-19z','M24 40c-4 0-6-3-5-6 1-3 4-5 5-9 3 3 6 6 5 10-1 3-2 5-5 5z'],
+ crimson:['M24 5l15 5v12c0 9-6 15-15 20-9-5-15-11-15-20V10z','M24 33C16 28 15 22 20 21c2 0 4 1 4 3 0-2 2-3 4-3 5 1 4 7-4 12z'],
+ focus:['M24 8a16 16 0 1 0 .01 0','M24 16a8 8 0 1 0 .01 0','M24 22a2 2 0 1 0 .01 0','M24 1v5M24 42v5M1 24h5M42 24h5'],
+ reserve:['M24 4L39 18 24 44 9 18z','M9 18h30','M24 4l-6 14 6 26 6-26z'],
+ exchange:['M8 14h32','M24 7v31','M15 40h18','M8 14L3 27h10z','M40 14l-5 13h10z','M3 27a5 4 0 0 0 10 0M35 27a5 4 0 0 0 10 0'],
+ offering:['M18 22h12v19H18z','M24 6c4 5 5 8 3 11-1 2-5 2-6 0-2-3-1-6 3-11z','M24 17v5','M12 41h24','M18 29c-3 2-3 5 0 6'],
+ golden:['M24 42C7 29 9 13 24 21 39 13 41 29 24 42z','M24 3l2.5 5 5 2.5-5 2.5L24 18l-2.5-5-5-2.5 5-2.5z','M16 24c-2 3-1 6 2 9'],
+ shield:['M24 5l15 5v12c0 9-6 15-15 20-9-5-15-11-15-20V10z','M24 11v28','M13 19h22'],
+ vamp:['M24 20C20 12 12 10 5 13c3 3 3 8 1 11 3-2 6-1 8 2 2-3 6-3 8 0l2 5 2-5c2-3 6-3 8 0 2-3 5-4 8-2-2-3-2-8 1-11-7-3-15-1-19 7z','M21 18l-1-6M27 18l1-6','M22 28v3M26 28v3'],
+ mbreak:['M24 3l5 12 13-4-8 10 10 8-13 0 1 13-8-9-8 9 1-13-13 0 10-8-8-10 13 4z','M24 20a4 4 0 1 0 .01 0']};
 const FAM=[
 ['Strike','ATTACK','strike',{cost:[1,2,3,4],dmg:[1,2,3,4]}],
 ['Pierce','ATTACK','pierce',{cost:[1,2,3,4],dmg:[2,4,6,8]}],
@@ -58,7 +69,9 @@ const FAM=[
 const CARDS=[];
 FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
 const nodes=d=>d.reduce((a,id)=>a+RAR[CARDS[id-1].r].node,0);
-const cardEl=(c,x='')=>{const e=el('div','card '+x);e.style.setProperty('--rc',RAR[c.r].c);e.style.setProperty('--tc',TC[c.type]);e.innerHTML=`<svg viewBox="0 0 48 48"><path d="${ICONS[c.ic]}"/></svg><span>${c.name}</span>`;return e};
+const cardEl=(c,x='')=>{const e=el('div','card '+x);e.style.setProperty('--rc',RAR[c.r].c);e.style.setProperty('--tc',TC[c.type]);e.style.setProperty('--tl',TL[c.type]);
+ const P=ICONS[c.ic].map(d=>`<path d="${d}"/>`).join('');
+ e.innerHTML=`<svg viewBox="0 0 48 48"><circle class="rg" cx="24" cy="24" r="23"/><circle class="rg2" cx="24" cy="24" r="20"/><g class="sh" transform="translate(1.2 1.7)">${P}</g><g class="hl" transform="translate(-.6 -.7)">${P}</g><g class="et">${P}</g></svg><span>${c.name}</span>`;return e};
 const backEl=()=>el('div','card back','<i></i>');
 const gem=t=>`<i class="gem ${t}"></i>`;
 function desc(c){const s=[];
@@ -110,8 +123,12 @@ let dSel=null;
 function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{d.push(id);while(nodes(d)>24)d.shift()}
  updateDoc(doc(db,'splendid_users',user.uid),{deck:U.deck}).catch(()=>{});renderDeck();updateLock()}
 function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
- CARDS.forEach(c=>{const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':''));w.append(cardEl(c));
-  const t=el('button','tg');t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};g.append(w)});
+ FAM.forEach((f,fi)=>{
+  if(fi%4===0){const h=el('div','sech','<i></i>'+f[1]+' CARDS<i></i>');h.style.setProperty('--sc',TL[f[1]]);g.append(h)}
+  const row=el('div','fam');row.append(el('div','fl',f[0].toUpperCase()));
+  for(let r=0;r<4;r++){const c=CARDS[fi*4+r];const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':''));w.append(cardEl(c));
+   const t=el('button','tg');t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};row.append(w)}
+  g.append(row)});
  g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / 24  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/24*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
  if(!dSel){p.innerHTML='<p style="margin:auto;opacity:.6">Select a card to inspect it.<br>Use the circle on a card to add it to your deck.</p>';return}
