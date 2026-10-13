@@ -60,7 +60,7 @@ const FAM=[
 ['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[3,4,6,8],small:[1,2,3,4]}],
 ['Crimson','HEAL','crimson',{cost:[1,3,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
-['Reserve','MANA HEAL','reserve',{cost:0,mana:[1,2,3,4],nm:[1,1,1,2],hpl:[1,2,3,4]}],
+['Reserve','MANA HEAL','reserve',{cost:0,mana:[1,2,3,4],nm:[1,1,1,2],hpl:[2,3,4,4]}],
 ['Exchange','MANA HEAL','exchange',{cost:0,hpl:[1,2,3,4],mana:[2,3,4,5]}],
 ['Offering','MANA HEAL','offering',{cost:0,mana:[2,3,4,6],disc:[1,2,2,9]}],
 ['Golden Heart','SPELL','golden',{cost:[2,4,7,10],gold:[1,2,4,6]}],
@@ -219,9 +219,9 @@ const refill=()=>{G.deck=shuffle(U.deck.filter(id=>!G.hand.includes(id)))};
 function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx('take');if(!G.deck.length){refill();sfx('regen')}}}
 
 function initGame(r){G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
- G.S={hp:20,gold:0,mana:5,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0};G.deck=shuffle(U.deck);G.hand=[];G.t0=Date.now();G.last=Date.now();
+ G.S={hp:20,gold:0,mana:4,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0};G.deck=shuffle(U.deck);G.hand=[];G.t0=Date.now();G.last=Date.now();
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
- for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,5);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
+ for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
 
 function onRoom(r){
@@ -242,9 +242,9 @@ function onRoom(r){
  else if(m===op&&G.mk!==mk){G.mk=mk;G.sel=null;setMsg("OPPONENT'S TURN");renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
- /* first player starts the next round once both sides finished and cards were shown for 5s */
+ /* first player starts the next round once both sides finished and cards were shown for 6s */
  if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
-  const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+5000-Date.now());
+  const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+6000-Date.now());
   setTimeout(()=>{if(G&&!G.over)wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
 
 function startRound(){const S=G.S;S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;
@@ -266,14 +266,14 @@ async function commit(i){if(!myMove())return;const skip=i<0,id=skip?0:G.hand[i],
  await wr({['c.'+G.me]:id,phase:second?'resolve':'react',['pub.'+G.me]:pubOf()})}
 
 function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
- G.flipAt=Date.now()+3000;G.shownAt=0;G.sum='';G.myRes=null;
+ G.flipAt=Date.now()+1000;G.shownAt=0;G.sum='';G.myRes=null;
  $('#me-slot').replaceChildren(backEl());$('#op-slot').replaceChildren(backEl());
  setMsg('');
  /* both cards stay face down for 3s, then flip together */
  setTimeout(()=>{if(!G||G.over||G.rv!==seq)return;
   const put=(id,slot)=>{if(!id){$(slot).replaceChildren(el('div','card skip flip','SKIP'));return}const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
   put(mc,'#me-slot');put(oc,'#op-slot');G.shownAt=Date.now();
-  setTimeout(()=>doResolve(mc,oc,seq),600)},3000)}
+  setTimeout(()=>doResolve(mc,oc,seq),600)},1000)}
 
 /* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
    Heals are applied first (capped at 20 hearts), then damage, so an attack that gets through can never be erased by a heal. */
@@ -333,14 +333,14 @@ function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
 /* timers: only the player whose pick it is has a ticking clock; nothing ticks while cards are revealed */
 setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r,m=mover(r);
- if(m){const k=m===G.me?'me':'op';G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time');
+ if(m){const k=m===G.me?'me':'op';if(!G.bot){G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time')}
   if(k==='me'&&now-(G.lastPub||0)>1500){G.lastPub=now;pub()}
-  if(k==='op'&&now-(G.opSeen||now)>30000)endWrite(G.me,'disconnect')}
- $('#me-clk b').textContent=fmt(G.clk.me);$('#op-clk b').textContent=fmt(G.clk.op);
+  if(k==='op'&&!G.bot&&now-(G.opSeen||now)>30000)endWrite(G.me,'disconnect')}
+ $('#me-clk b').textContent=G.bot?'\u221e':fmt(G.clk.me);$('#op-clk b').textContent=G.bot?'\u221e':fmt(G.clk.op);
  $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
-  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+5000-now)/1000))}`)}
+  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+6000-now)/1000))}`)}
 },250);
 
 /* forfeit */
@@ -378,7 +378,7 @@ const BOT={think:[1100,2600],   // ms of "thinking" before it commits
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
 const live=B=>!!(G&&G.bot===B&&!G.over);
-const newSide=()=>({hp:20,gold:0,mana:5,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0});
+const newSide=()=>({hp:20,gold:0,mana:4,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0});
 const sideStart=S=>{S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;S.dots=S.dots.filter(d=>{S.hp=Math.min(20,S.hp+d.a);d.t--;return d.t>0});tickBleed(S)};
 const sideHit=(S,d)=>{const g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))};
 function setPath(o,k,v){const p=k.split('.');let x=o;for(let i=0;i<p.length-1;i++)x=x[p[i]]=x[p[i]]||{};x[p[p.length-1]]=v}
@@ -399,7 +399,7 @@ function makeBotDeck(){const W={ATTACK:4,HEAL:3.2,'MANA HEAL':1.6,SPELL:2.4},RW=
 function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
  G=newG('BOT');G.ref=null;
  const room={code:'BOT',status:'playing',host:{uid:user.uid,name:U.name},guest:{uid:'bot',name},turn:Math.random()<.5?user.uid:'bot',seq:1,phase:'act',pub:{},c:{},res:{},fin:{}};
- const B=G.bot={room,S:newSide(),O:newSide(),all,deck:shuffle(all),hand:[],seen:{},a:0,mk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:5};
+ const B=G.bot={room,S:newSide(),O:newSide(),all,deck:shuffle(all),hand:[],seen:{},a:0,mk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
  for(let i=0;i<3;i++)bDraw();
  room.pub.bot=botPub();
  onRoom(cl(room));botTick()}
@@ -417,7 +417,7 @@ function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.sta
   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},BOT.think[0]+Math.random()*(BOT.think[1]-BOT.think[0]))}
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
  if(r.phase==='resolve'&&B.rd===r.seq&&B.fin!==r.seq&&r.res[hu]&&r.res[hu].seq===r.seq)botFinish(r);
- if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+5000-Date.now());
+ if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+6000-Date.now());
   setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
@@ -426,7 +426,7 @@ function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
   const bk=bc&&CARDS[bc-1],hk=hc&&CARDS[hc-1];
   const rb=applyRound(B.S,bk,hk);applyRound(B.O,hk,bk);if(rb.back)sideHit(B.O,rb.back);
   B.rd=seq;B.oppEnd=B.O.mana;
-  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv},['pub.bot']:botPub()})},3600)}
+  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv},['pub.bot']:botPub()})},1600)}
 
 function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back)sideHit(B.S,h.back);
  wr({['fin.bot']:r.seq,['pub.bot']:botPub()});if(B.S.hp<=0)endWrite(G.me,'hearts')}
