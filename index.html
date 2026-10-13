@@ -852,9 +852,9 @@
         //    (e.g. 'center', 'top', 'bottom', 'center 30%').
         const TRENDING_FOCUS = 'center';
 
-        // 2) POPULAR LEADERBOARD — the projects ranked 1–5 right under the banner, in this order.
+        // 2) POPULAR LEADERBOARD — the projects ranked right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
-        const POPULAR = ['rpg', 'aetherium', 'breakout', 'ragebait', 'mini pet'];
+        const POPULAR = ['rpg', 'aetherium', 'breakout', 'splendid', 'ragebait'];
 
         // 3) Should popular projects ALSO show up again in the "All projects" list?
         const SHOW_POPULAR_IN_ALL = true;
@@ -869,6 +869,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'splendid',        name: 'Splendid',         img: 'splendid.png',         date: 'OCT 2026',
+              blurb: 'A fantasy duel of gems and nerve. Build a 24-node deck and outwit a rival online.' },
             { prefix: 'rpg',             name: 'dragoneer',        img: 'rpg.png',              date: 'SEP 2026',
               blurb: 'Explore, fight and team up with friends to gather resources and become the strongest.' },
             { prefix: 'aetherium',       name: 'AETHERIUM',        img: 'aetherium.png',        date: 'AUG 2026' },
@@ -881,14 +883,14 @@
             { prefix: 'spotify',         name: 'Spotify',          img: 'spotify.png',          date: 'MAY 2026', warn: true },
             { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png',     date: 'MAY 2026' },
             { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png',        date: 'MAY 2026' },
-            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026', warn: true },
+            { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026' },
             { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026', warn: true },
             { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026', warn: true },
             { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026', warn: true },
             { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026' },
             { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026', warn: true },
             { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png',           date: 'APR 2026' },
-            { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png',       date: 'APR 2026' },
+            { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png',       date: 'APR 2026', warn: true },
             { prefix: 'coriachi island', name: 'Coriachi Island',  img: 'coriachi-island.png',  date: 'APR 2026', warn: true },
             { prefix: 'home',            name: 'Home',             img: 'home.png',             date: 'APR 2026', warn: true },
             { prefix: 'void run',        name: 'Void Run',         img: 'void-run.png',         date: 'APR 2026' },

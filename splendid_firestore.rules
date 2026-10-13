@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Player profiles: anyone signed in can read (leaderboard), only the owner can write.
+    match /splendid_users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Battle rooms (document id is the 4-letter code).
+    match /splendid_rooms/{code} {
+      allow read: if request.auth != null;
+
+      // Only the host can create a room under their own uid.
+      allow create: if request.auth != null
+        && request.resource.data.host.uid == request.auth.uid;
+
+      // The host and guest can update; a stranger can only take the empty guest seat of an open room.
+      allow update: if request.auth != null && (
+        resource.data.host.uid == request.auth.uid
+        || (resource.data.guest != null && resource.data.guest.uid == request.auth.uid)
+        || (resource.data.status == 'open'
+            && resource.data.guest == null
+            && request.resource.data.guest.uid == request.auth.uid)
+      );
+
+      allow delete: if request.auth != null && resource.data.host.uid == request.auth.uid;
+    }
+  }
+}

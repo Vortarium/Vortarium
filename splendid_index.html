@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Splendid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="splendid_style.css">
+</head>
+<body>
+<div class="embers" id="embers"></div>
+<div class="frame"></div><div class="orn tl"></div><div class="orn tr"></div><div class="orn bl"></div><div class="orn br"></div>
+
+<section id="s-auth" class="screen on">
+  <div class="center">
+    <h1 class="logo">SPLENDID</h1>
+    <p class="tag">a duel of gems and nerve</p>
+    <div class="rune"><i></i></div>
+    <div class="row">
+      <button class="blue" id="bSign">SIGN UP</button>
+      <button class="green" id="bLog">LOG IN</button>
+    </div>
+    <form id="af" autocomplete="off">
+      <h3 id="aTitle"></h3>
+      <input id="aUser" placeholder="Username" maxlength="14">
+      <input id="aPass" type="password" placeholder="Password (6+ characters)">
+      <div id="aErr"></div>
+      <button class="lav" type="submit">CONTINUE</button>
+    </form>
+  </div>
+</section>
+
+<section id="s-menu" class="screen">
+  <nav class="tabs">
+    <button class="blue on" data-t="play">PLAY</button>
+    <button class="green" data-t="deck">DECK</button>
+    <button class="red" data-t="stats">STATS</button>
+  </nav>
+  <div class="mebar"><b id="meName"></b><button class="lav sm" id="bOut">LOG OUT</button></div>
+
+  <div class="tab on" id="t-play">
+    <div class="playrow">
+      <button class="side lav" id="bCode">JOIN ROOM CODE</button>
+      <button class="bigjoin blue" id="bJoin">JOIN</button>
+      <button class="side lav" id="bCreate">CREATE ROOM</button>
+    </div>
+    <p class="hint" id="lockHint"></p>
+  </div>
+
+  <div class="tab" id="t-deck">
+    <div class="dtop"><b id="nodeTxt"></b><div class="bar"><i id="nodeBar"></i></div></div>
+    <div class="deckwrap">
+      <div class="dgrid" id="dgrid"></div>
+      <div class="dpanel" id="dpanel"></div>
+    </div>
+  </div>
+
+  <div class="tab" id="t-stats">
+    <div class="sub">
+      <button class="red on" data-f="best">WIN STREAK</button>
+      <button class="red" data-f="wins">TOTAL WINS</button>
+      <button class="red" data-f="losses">TOTAL LOSSES</button>
+    </div>
+    <div id="board"></div>
+    <h3>YOUR STATS</h3>
+    <div class="sgrid" id="mystats"></div>
+  </div>
+</section>
+
+<section id="s-game" class="screen">
+  <div class="gemrow" id="op-gems"></div>
+  <div class="hdr">
+    <div class="pile" id="op-pile"><div class="card back"><i></i></div><b id="op-dn">24</b></div>
+    <div class="hand" id="op-hand"></div>
+  </div>
+  <div class="board">
+    <div class="lcol">
+      <div class="clk" id="op-clk"><small id="op-name"></small><b>5:00</b></div>
+      <button class="red" id="forfeit"><u></u><span>HOLD TO FORFEIT</span></button>
+      <div class="clk" id="me-clk"><small id="me-name"></small><b>5:00</b></div>
+    </div>
+    <div class="slots"><div class="slot" id="op-slot"></div><div class="slot" id="me-slot"></div></div>
+    <div class="msg" id="gmsg"></div>
+  </div>
+  <div class="gemrow" id="me-gems"></div>
+  <div class="ftr" id="ftr"></div>
+</section>
+
+<div id="modal"></div>
+<script type="module" src="splendid_main.js"></script>
+</body>
+</html>
