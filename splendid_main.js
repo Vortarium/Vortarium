@@ -214,7 +214,10 @@ function onRoom(r){
  if(r.phase==='react'&&r.turn===op&&G.rc!==r.seq){G.rc=r.seq;G.rcDone=false;G.rcAt=Date.now();$('#op-slot').replaceChildren(backEl());renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
- if(r.phase==='resolve'&&r.turn===op&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;startMyTurn(r)}}
+ if(r.phase==='resolve'&&r.turn===op&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
+  /* cards stay face up for 5s (no clocks running) before the next turn */
+  const wait=Math.max(0,(G.shownAt||Date.now())+5000-Date.now());
+  setTimeout(()=>{if(G&&!G.over)startMyTurn(r)},wait)}}
 
 function checkStuck(){if(!G||G.over||G.stuck||!myAct())return;
  if(!G.hand.length||G.hand.every(id=>CARDS[id-1].cost>G.S.mana)){
@@ -232,10 +235,13 @@ async function commit(i){const react=myReact(),id=G.hand[i],c=CARDS[id-1];
  await updateDoc(G.ref,{['c.'+G.me]:id,phase:react?'resolve':'react',['pub.'+G.me]:pubOf()})}
 async function ready(){if(!myReact())return;G.rcDone=true;renderFooter();await updateDoc(G.ref,{['c.'+G.me]:0,phase:'resolve'})}
 
-function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp];setMsg('');
- const put=(id,slot)=>{if(!id)return;const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
- put(mc,'#me-slot');put(oc,'#op-slot');
- setTimeout(()=>doResolve(mc,oc,r.seq),1000)}
+function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
+ G.flipAt=Date.now()+3000;G.shownAt=0;
+ /* both cards stay face down for 3s, then flip together */
+ setTimeout(()=>{if(!G||G.over||G.rv!==seq)return;
+  const put=(id,slot)=>{if(!id)return;const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
+  put(mc,'#me-slot');put(oc,'#op-slot');G.shownAt=Date.now();
+  setTimeout(()=>doResolve(mc,oc,seq),600)},3000)}
 
 function doResolve(mc,oc,seq){if(!G||G.over)return;const S=G.S,out={back:0},m=mc&&CARDS[mc-1],t=oc&&CARDS[oc-1];
  if(m){
@@ -286,9 +292,13 @@ function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
 /* timers */
 setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r;
- if(r.phase==='act'){const k=r.turn===G.me?'me':'op';G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time')}
+ if(r.phase==='act'){const k=r.turn===G.me?'me':'op';G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time');
+  if(k==='me'&&now-(G.lastPub||0)>2000){G.lastPub=now;pub()}}
  $('#me-clk b').textContent=fmt(G.clk.me);$('#op-clk b').textContent=fmt(G.clk.op);
  $('#me-clk').classList.toggle('act',r.phase==='act'&&r.turn===G.me);$('#op-clk').classList.toggle('act',r.phase==='act'&&r.turn===G.opp);
+ if(r.phase==='resolve'){
+  if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
+  else if(G.shownAt)setMsg(`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+5000-now)/1000))}`)}
  if(r.phase==='react'){
   if(r.turn===G.opp&&!G.rcDone){const left=10000-(now-G.rcAt);if(left<=0)ready();else setMsg(`OPPONENT IS READY - PLACE A SPELL OR PRESS READY (${Math.ceil(left/1000)})`)}
   if(r.turn===G.me&&G.reactStart&&now-G.reactStart>25000)endWrite(G.me,'disconnect')}
