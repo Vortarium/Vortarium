@@ -121,7 +121,7 @@ async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await get
 async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show('s-menu');goTab('play');renderDeck();updateLock()}
 
 /* ---------- menu ---------- */
-function goTab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.tab').forEach(x=>x.classList.toggle('on',x.id==='t-'+t));if(t==='stats')loadStats('best')}
+function goTab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.tab').forEach(x=>x.classList.toggle('on',x.id==='t-'+t));if(t==='stats')loadStats(statsF)}
 $$('.tabs button').forEach(b=>b.onclick=()=>goTab(b.dataset.t));
 const MAXN=32,MIN_RATE_MATCHES=5;   /* win-rate board only lists players with this many matches */
 const ready24=()=>nodes(U.deck)===MAXN;
@@ -154,8 +154,11 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
  const full=!on&&nodes(U.deck)+r.node>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
 /* stats tab */
-async function loadStats(f){$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));const bd=$('#board');bd.innerHTML='<p>Loading...</p>';
- try{const rate=f==='rate',s=await getDocs(query(collection(db,'splendid_users'),orderBy(rate?'matches':f,'desc'),limit(rate?200:5)));bd.innerHTML='';
+/* every visit to STATS (and every click on a board button) re-reads Firestore; statsTok drops stale answers, statsSave waits for a just-finished match to be saved first */
+let statsF='best',statsTok=0,statsSave=Promise.resolve();
+async function loadStats(f){statsF=f;const tok=++statsTok;$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));const bd=$('#board');bd.innerHTML='<p>Loading...</p>';
+ await statsSave;if(tok!==statsTok)return;
+ try{const rate=f==='rate',s=await getDocs(query(collection(db,'splendid_users'),orderBy(rate?'matches':f,'desc'),limit(rate?200:5)));if(tok!==statsTok)return;bd.innerHTML='';
   /* win rate is worked out live from each player's saved wins and matches, so nobody needs a stored rate */
   let rows=s.docs.map(d=>d.data());
   if(rate)rows=rows.filter(x=>(x.matches||0)>=MIN_RATE_MATCHES).map(x=>({...x,rate:Math.round((x.wins||0)/x.matches*100)})).sort((a,b)=>b.rate-a.rate||b.matches-a.matches);
@@ -163,7 +166,7 @@ async function loadStats(f){$$('.sub button').forEach(b=>b.classList.toggle('on'
   rows.forEach((x,i)=>bd.append(el('div','lb',`<i>${i+1}</i><b>${x.name}</b><span>${rate?(x.rate||0)+'%':(x[f]||0)}</span>`)));
   if(!rows.length)bd.innerHTML='<p>'+(rate?'Nobody has played '+MIN_RATE_MATCHES+' matches yet.':'No players yet.')+'</p>'}
  catch(e){bd.innerHTML='<p>Could not load leaderboard.</p>'}
- await loadU();const t=U.time||0,m=U.matches||0;
+ await loadU();if(tok!==statsTok)return;const t=U.time||0,m=U.matches||0;
  $('#mystats').innerHTML=[['WINS',U.wins],['LOSSES',U.losses],['CURRENT STREAK',U.streak],['WIN STREAK RECORD',U.best],['MATCHES',m],['WIN RATE',m?Math.round(U.wins/m*100)+'%':'0%'],['TIME PLAYED',Math.floor(t/3600)+'h '+Math.floor(t%3600/60)+'m']].map(([a,b])=>`<div><small>${a}</small><b>${b||0}</b></div>`).join('')}
 $$('.sub button').forEach(b=>b.onclick=()=>loadStats(b.dataset.f));
 
@@ -362,7 +365,7 @@ function endGame(r){if(G.over)return;G.over=true;G.unsub&&G.unsub();const won=r.
  const txt={time:'ran out of time',forfeit:'forfeited','hearts':'lost all hearts',disconnect:'disconnected'}[r.reason]||'lost';
  modal(`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);
  $('#bk').onclick=async()=>{closeModal();G=null;show('s-menu');goTab('play');await loadU();updateLock()};
- saveStats(won,G.t0)}
+ statsSave=saveStats(won,G.t0)}
 async function saveStats(won,t0){try{const ref=doc(db,'splendid_users',user.uid),d=(await getDoc(ref)).data();
  const streak=won?(d.streak||0)+1:0;
  await setDoc(ref,{wins:(d.wins||0)+(won?1:0),losses:(d.losses||0)+(won?0:1),streak,best:Math.max(d.best||0,streak),matches:(d.matches||0)+1,rate:Math.round(((d.wins||0)+(won?1:0))/((d.matches||0)+1)*100),time:(d.time||0)+Math.round((Date.now()-t0)/1000)},{merge:true})}catch(e){}}
