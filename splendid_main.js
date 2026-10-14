@@ -55,9 +55,9 @@ const FAM=[
 ['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[2,3,4,6],pdot:[1,1,2,3]}],
 ['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[4,6,8,10]}],
 ['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,4,5],heal:[1,1,2,3]}],
-['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[1,2,4,6]}],
-['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[1,2,2,3],rn:[[1,1],[1,1],[2,1],[2,1]]}],
-['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[3,4,6,8],small:[1,2,3,4]}],
+['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[2,3,5,7]}],
+['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[2,3,3,4],rn:[[1,1],[1,1],[2,1],[2,1]]}],
+['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[4,5,7,9],small:[2,3,4,5]}],
 ['Crimson','HEAL','crimson',{cost:[1,3,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
 ['Reserve','MANA HEAL','reserve',{cost:0,mana:[1,2,3,4],nm:[1,1,1,2],hpl:[2,3,4,4]}],
@@ -154,7 +154,7 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
  const full=!on&&nodes(U.deck)+r.node>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
 /* stats tab: ONE live listener on every player document. All four boards and "my stats" are drawn from it, so
-   everyone is ranked (online or offline), changes appear instantly, and switching boards costs no extra reads.
+   everyone is ranked (online or offline) and the top 5 are shown, changes appear instantly, and switching boards costs no extra reads.
    It is switched off whenever the STATS tab is not showing. */
 let statsF='best',statsUnsub=null,statsDocs=[],statsReady=false;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -163,7 +163,7 @@ const statsOff=()=>{if(statsUnsub){statsUnsub();statsUnsub=null}};
 function drawStats(){const f=statsF,bd=$('#board');$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
  const key=x=>f==='rate'?rateOf(x):(x[f]||0);
  const rows=statsDocs.filter(x=>f!=='rate'||(x.matches||0)>=MIN_RATE_MATCHES)
-  .sort((a,b)=>key(b)-key(a)||(b.matches||0)-(a.matches||0)||String(a.name).localeCompare(String(b.name)));
+  .sort((a,b)=>key(b)-key(a)||(b.matches||0)-(a.matches||0)||String(a.name).localeCompare(String(b.name))).slice(0,5);   /* top 5 only */
  bd.innerHTML='';
  rows.forEach((x,i)=>bd.append(el('div','lb'+(x.uid===user.uid?' mine':''),`<i>${i+1}</i><b>${esc(x.name||'?')}</b><span>${f==='rate'?rateOf(x)+'%':key(x)}</span>`)));
  if(!rows.length)bd.innerHTML='<p>'+(statsReady?'No players yet.':'Loading...')+'</p>';
