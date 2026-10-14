@@ -62,7 +62,7 @@ const FAM=[
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
 ['Reserve','MANA HEAL','reserve',{cost:0,mana:[1,2,3,4],nm:[1,1,1,2],hpl:[2,3,4,4]}],
 ['Exchange','MANA HEAL','exchange',{cost:0,hpl:[1,2,3,4],mana:[2,3,4,5]}],
-['Offering','MANA HEAL','offering',{cost:0,mana:[2,3,4,6],disc:[1,2,2,9]}],
+['Offering','MANA HEAL','offering',{cost:0,mana:[1,2,3,4],disc:[1,2,2,9]}],
 ['Golden Heart','SPELL','golden',{cost:[2,4,7,10],gold:[1,2,4,6]}],
 ['Shield','SPELL','shield',{cost:[1,2,4,7],shield:1,back:[0,1,2,4]}],
 ['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[2,4,6,8]}],
@@ -112,7 +112,7 @@ $('#af').onsubmit=async e=>{e.preventDefault();const n=$('#aUser').value.trim(),
    await setDoc(doc(db,'splendid_users',c.user.uid),{name:n,wins:0,losses:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});signing=false;await boot(c.user)}
   else await signInWithEmailAndPassword(auth,mail(n),p)}
  catch(err){signing=false;$('#aErr').textContent=nice(err)}};
-$('#bOut').onclick=()=>signOut(auth);
+$('#bOut').onclick=()=>{statsOff();signOut(auth)};
 onAuthStateChanged(auth,u=>{if(signing)return;if(u)boot(u);else{user=null;U=null;show('s-auth')}});
 async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await getDoc(r);
  if(!s.exists()){await setDoc(r,{name:user.displayName||'Player',wins:0,losses:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});s=await getDoc(r)}
@@ -121,9 +121,9 @@ async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await get
 async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show('s-menu');goTab('play');renderDeck();updateLock()}
 
 /* ---------- menu ---------- */
-function goTab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.tab').forEach(x=>x.classList.toggle('on',x.id==='t-'+t));if(t==='stats')loadStats(statsF)}
+function goTab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));$$('.tab').forEach(x=>x.classList.toggle('on',x.id==='t-'+t));if(t==='stats')loadStats(statsF);else statsOff()}
 $$('.tabs button').forEach(b=>b.onclick=()=>goTab(b.dataset.t));
-const MAXN=32,MIN_RATE_MATCHES=5;   /* win-rate board only lists players with this many matches */
+const MAXN=32,MIN_RATE_MATCHES=0;   /* win-rate board lists players with at least this many matches (0 = everyone is ranked) */
 const ready24=()=>nodes(U.deck)===MAXN;
 function updateLock(){const l=!ready24();['bCode','bJoin','bCreate','bBot'].forEach(i=>$('#'+i).classList.toggle('lockd',l));
  $('#lockHint').textContent=l?'Your deck needs exactly 32 nodes. Open DECK to finish it.':''}
@@ -153,21 +153,27 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
   el('div','',`<span class="chip">${r.node} NODE${r.node>1?'S':''}</span><span class="chip">${c.type}</span><span class="chip">${c.cost} ${gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
  const full=!on&&nodes(U.deck)+r.node>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
-/* stats tab */
-/* every visit to STATS (and every click on a board button) re-reads Firestore; statsTok drops stale answers, statsSave waits for a just-finished match to be saved first */
-let statsF='best',statsTok=0,statsSave=Promise.resolve();
-async function loadStats(f){statsF=f;const tok=++statsTok;$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));const bd=$('#board');bd.innerHTML='<p>Loading...</p>';
- await statsSave;if(tok!==statsTok)return;
- try{const rate=f==='rate',s=await getDocs(query(collection(db,'splendid_users'),orderBy(rate?'matches':f,'desc'),limit(rate?200:5)));if(tok!==statsTok)return;bd.innerHTML='';
-  /* win rate is worked out live from each player's saved wins and matches, so nobody needs a stored rate */
-  let rows=s.docs.map(d=>d.data());
-  if(rate)rows=rows.filter(x=>(x.matches||0)>=MIN_RATE_MATCHES).map(x=>({...x,rate:Math.round((x.wins||0)/x.matches*100)})).sort((a,b)=>b.rate-a.rate||b.matches-a.matches);
-  rows=rows.slice(0,5);
-  rows.forEach((x,i)=>bd.append(el('div','lb',`<i>${i+1}</i><b>${x.name}</b><span>${rate?(x.rate||0)+'%':(x[f]||0)}</span>`)));
-  if(!rows.length)bd.innerHTML='<p>'+(rate?'Nobody has played '+MIN_RATE_MATCHES+' matches yet.':'No players yet.')+'</p>'}
- catch(e){bd.innerHTML='<p>Could not load leaderboard.</p>'}
- await loadU();if(tok!==statsTok)return;const t=U.time||0,m=U.matches||0;
- $('#mystats').innerHTML=[['WINS',U.wins],['LOSSES',U.losses],['CURRENT STREAK',U.streak],['WIN STREAK RECORD',U.best],['MATCHES',m],['WIN RATE',m?Math.round(U.wins/m*100)+'%':'0%'],['TIME PLAYED',Math.floor(t/3600)+'h '+Math.floor(t%3600/60)+'m']].map(([a,b])=>`<div><small>${a}</small><b>${b||0}</b></div>`).join('')}
+/* stats tab: ONE live listener on every player document. All four boards and "my stats" are drawn from it, so
+   everyone is ranked (online or offline), changes appear instantly, and switching boards costs no extra reads.
+   It is switched off whenever the STATS tab is not showing. */
+let statsF='best',statsUnsub=null,statsDocs=[],statsReady=false;
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rateOf=x=>(x.matches||0)?Math.round((x.wins||0)/x.matches*100):0;
+const statsOff=()=>{if(statsUnsub){statsUnsub();statsUnsub=null}};
+function drawStats(){const f=statsF,bd=$('#board');$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
+ const key=x=>f==='rate'?rateOf(x):(x[f]||0);
+ const rows=statsDocs.filter(x=>f!=='rate'||(x.matches||0)>=MIN_RATE_MATCHES)
+  .sort((a,b)=>key(b)-key(a)||(b.matches||0)-(a.matches||0)||String(a.name).localeCompare(String(b.name)));
+ bd.innerHTML='';
+ rows.forEach((x,i)=>bd.append(el('div','lb'+(x.uid===user.uid?' mine':''),`<i>${i+1}</i><b>${esc(x.name||'?')}</b><span>${f==='rate'?rateOf(x)+'%':key(x)}</span>`)));
+ if(!rows.length)bd.innerHTML='<p>'+(statsReady?'No players yet.':'Loading...')+'</p>';
+ const me=statsDocs.find(x=>x.uid===user.uid);if(me)Object.assign(U,me);
+ const t=U.time||0,m=U.matches||0;
+ $('#mystats').innerHTML=[['WINS',U.wins],['LOSSES',U.losses],['CURRENT STREAK',U.streak],['WIN STREAK RECORD',U.best],['MATCHES',m],['WIN RATE',rateOf(U)+'%'],['TIME PLAYED',Math.floor(t/3600)+'h '+Math.floor(t%3600/60)+'m']].map(([a,b])=>`<div><small>${a}</small><b>${b||0}</b></div>`).join('')}
+function loadStats(f){statsF=f;drawStats();
+ if(!statsUnsub)statsUnsub=onSnapshot(query(collection(db,'splendid_users'),limit(300)),
+  snap=>{statsDocs=snap.docs.map(d=>({...d.data(),uid:d.id}));statsReady=true;drawStats()},
+  ()=>{$('#board').innerHTML='<p>Could not load leaderboard.</p>'})}
 $$('.sub button').forEach(b=>b.onclick=()=>loadStats(b.dataset.f));
 
 /* ---------- rooms ---------- */
@@ -225,7 +231,7 @@ function hitMe(d){const S=G.S,g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.h
 const refill=()=>{G.deck=shuffle(U.deck.filter(id=>!G.hand.includes(id)))};
 function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx('take');if(!G.deck.length){refill();sfx('regen')}}}
 
-function initGame(r){G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
+function initGame(r){statsOff();G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
  G.S={hp:20,gold:0,mana:4,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0};G.deck=shuffle(U.deck);G.hand=[];G.t0=Date.now();G.last=Date.now();
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
  for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
@@ -365,7 +371,7 @@ function endGame(r){if(G.over)return;G.over=true;G.unsub&&G.unsub();const won=r.
  const txt={time:'ran out of time',forfeit:'forfeited','hearts':'lost all hearts',disconnect:'disconnected'}[r.reason]||'lost';
  modal(`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);
  $('#bk').onclick=async()=>{closeModal();G=null;show('s-menu');goTab('play');await loadU();updateLock()};
- statsSave=saveStats(won,G.t0)}
+ saveStats(won,G.t0)}
 async function saveStats(won,t0){try{const ref=doc(db,'splendid_users',user.uid),d=(await getDoc(ref)).data();
  const streak=won?(d.streak||0)+1:0;
  await setDoc(ref,{wins:(d.wins||0)+(won?1:0),losses:(d.losses||0)+(won?0:1),streak,best:Math.max(d.best||0,streak),matches:(d.matches||0)+1,rate:Math.round(((d.wins||0)+(won?1:0))/((d.matches||0)+1)*100),time:(d.time||0)+Math.round((Date.now()-t0)/1000)},{merge:true})}catch(e){}}

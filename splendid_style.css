@@ -279,3 +279,6 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 *::-webkit-scrollbar-thumb:hover{filter:brightness(1.18)}
 *::-webkit-scrollbar-corner{background:#1e1209}
 @supports not selector(::-webkit-scrollbar){*{scrollbar-color:#a8743a #1e1209;scrollbar-width:auto}}
+
+#board{max-height:52vh;overflow-y:auto;padding-right:6px}
+.lb.mine{border-color:var(--gold2,#f3d58a);box-shadow:0 0 0 2px #f3d58a55,0 0 14px #f3d58a44}
