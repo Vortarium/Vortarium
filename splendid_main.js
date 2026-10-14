@@ -51,10 +51,10 @@ const ICONS={
  mbreak:['M24 3l5 12 13-4-8 10 10 8-13 0 1 13-8-9-8 9 1-13-13 0 10-8-8-10 13 4z','M24 20a4 4 0 1 0 .01 0']};
 const MM=10,MG=10;   /* max mana, max golden hearts */
 const FAM=[
-['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[1,3,5,7]}],
-['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[1,2,3,5],pdot:[1,1,2,3]}],
-['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[3,5,7,9]}],
-['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[1,2,3,4],heal:[1,1,2,3]}],
+['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8]}],
+['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[2,3,4,6],pdot:[1,1,2,3]}],
+['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[4,6,8,10]}],
+['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,4,5],heal:[1,1,2,3]}],
 ['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[1,2,4,6]}],
 ['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[1,2,2,3],rn:[[1,1],[1,1],[2,1],[2,1]]}],
 ['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[3,4,6,8],small:[1,2,3,4]}],
@@ -67,8 +67,9 @@ const FAM=[
 ['Shield','SPELL','shield',{cost:[1,2,4,7],shield:1,back:[0,1,2,4]}],
 ['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[2,4,6,8]}],
 ['Mana Break','SPELL','mbreak',{cost:[1,2,3,5],mb:[2,3,5,99]}]];
-/* Shield lasts until it blocks an attack or 2 rounds pass. Crimson reduction and Vampirism wait for the next attack. */
-const NXT='the next';
+/* Shield, Crimson's reduction and Vampirism only work against the attack in the SAME round they are played. Nothing carries over. (CARRY=true brings the old 'wait for the next attack' behaviour back.) */
+const CARRY=false;
+const NXT=CARRY?'the next':"this turn's";
 const CARDS=[];
 FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
 const nodes=d=>d.reduce((a,id)=>a+RAR[CARDS[id-1].r].node,0);
@@ -79,16 +80,16 @@ const backEl=()=>el('div','card back','<i></i>');
 const gem=t=>`<i class="gem ${t}"></i>`;
 function desc(c){const s=[];
  if(c.dmg)s.push(`deal ${c.dmg} damage`+(c.pdot?` and ${c.pdot} damage the next turn`:''));
- if(c.shield)s.push('block the next attack against you'+(c.back?` and deal ${c.back} damage back`:'')+' (expires after 2 turns)');
+ if(c.shield)s.push('block '+NXT+' attack against you'+(c.back?` and deal ${c.back} damage back`:''));
  else if(c.th)s.push(`restore ${c.big} HP if you have ${c.th} HP or less, otherwise restore ${c.small} HP`);
  else if(c.rn)s.push(`restore ${c.heal} HP now and ${c.rn[0]} HP at the start of ${c.rn[1]>1?'each of your next '+c.rn[1]+' turns':'your next turn'}`);
  else if(c.heal)s.push(c.dmg?`heal ${c.heal} HP`:`restore ${c.heal} HP`);
- if(c.red)s.push(`reduce the next incoming attack's damage by ${c.red}`);
+ if(c.red)s.push(`reduce ${NXT} incoming attack's damage by ${c.red}`);
  if(c.hpl&&!c.nm)s.push(`lose ${c.hpl} HP`);
  if(c.mana)s.push(`restore ${c.mana} mana`+(c.nm?` now and ${c.nm} mana at the start of your next turn`:'')+(c.hpl&&c.nm?` but take ${c.hpl} damage`:''));
  if(c.disc)s.push(c.disc>=9?'auto discard your whole hand':`auto discard ${c.disc} random card${c.disc>1?'s':''}`);
  if(c.gold)s.push(`gain ${c.gold} golden heart${c.gold>1?'s':''}`);
- if(c.vamp)s.push(`convert up to ${c.vamp} damage from the next attack into healing`);
+ if(c.vamp)s.push(`convert up to ${c.vamp} damage from ${NXT} attack into healing`);
  if(c.mb)s.push(c.mb>=99?'remove all mana from your opponent':`remove ${c.mb} mana from your opponent`);
  const t=s.join(' and ');return t[0].toUpperCase()+t.slice(1)+'.'}
 function eff(c){const o=[];const add=(n,t,w)=>o.push(`<span class="chip">${n>0?'+':'-'}${Math.abs(n)}${gem(t)}${w?'<small>'+w+'</small>':''}</span>`);
@@ -211,7 +212,7 @@ const setMsg=t=>$('#gmsg').textContent=t;
 const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
 const wr=p=>G&&G.bot?Promise.resolve(botWrite(p)):updateDoc(G.ref,p).catch(()=>{});
 const pub=()=>wr({['pub.'+G.me]:pubOf()});
-/* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve' */
+/* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve'. room.turn flips every round. */
 const mover=r=>r.phase==='act'?r.turn:r.phase==='react'?(r.turn===G.me?G.opp:G.me):null;
 const myMove=()=>!!(G&&G.r&&!G.over&&mover(G.r)===G.me&&!G.locked);
 const canPlay=c=>myMove()&&c.cost<=G.S.mana;
@@ -245,10 +246,10 @@ function onRoom(r){
  else if(m===op&&G.mk!==mk){G.mk=mk;G.sel=null;setMsg("OPPONENT'S TURN");renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
- /* first player starts the next round once both sides finished and cards were shown for 4s */
+ /* turn order alternates: A starts and B finishes, then B starts and A finishes, and so on. The round's first player starts the next round once both sides finished and cards were shown for 4s */
  if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
   const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
-  setTimeout(()=>{if(G&&!G.over)wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
+  setTimeout(()=>{if(G&&!G.over)wr({seq:seq+1,phase:'act',turn:op,c:{},res:{},fin:{}})},wait)}}
 
 function startRound(){const S=G.S;S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;
  S.dots=S.dots.filter(d=>{heal(d.a);d.t--;return d.t>0});tickBleed(S);syncMe();pub();if(S.hp<=0)endWrite(G.opp,'hearts')}
@@ -300,7 +301,7 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};le
     if(S.vamp){const cv=Math.min(S.vamp,d);d-=cv;heals+=cv;o.conv=cv;S.vamp=0}
     const g=Math.min(S.gold,d);S.gold-=g;hpLoss=d-g;o.took=d;if(t.pdot)S.bleed.push({a:t.pdot,t:1})}}}
  S.hp=Math.min(20,S.hp+heals);S.hp=Math.max(0,S.hp-selfLoss-hpLoss);
- if(S.shield&&--S.shield.t<=0)S.shield=null   /* an unused shield lasts 2 rounds */
+ if(!CARRY){S.shield=null;S.vamp=0;S.red=0}else if(S.shield&&--S.shield.t<=0)S.shield=null
  return o}
 
 function doResolve(mc,oc,seq){if(!G||G.over)return;
@@ -421,7 +422,7 @@ function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.sta
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
  if(r.phase==='resolve'&&B.rd===r.seq&&B.fin!==r.seq&&r.res[hu]&&r.res[hu].seq===r.seq)botFinish(r);
  if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
-  setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',c:{},res:{},fin:{}})},wait)}}
+  setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',turn:hu,c:{},res:{},fin:{}})},wait)}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
  syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;
