@@ -154,8 +154,11 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
 
 /* stats tab */
 async function loadStats(f){$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));const bd=$('#board');bd.innerHTML='<p>Loading...</p>';
- try{const rate=f==='rate',s=await getDocs(query(collection(db,'splendid_users'),orderBy(f,'desc'),limit(rate?50:5)));bd.innerHTML='';
-  const rows=s.docs.map(d=>d.data()).filter(x=>!rate||(x.matches||0)>=MIN_RATE_MATCHES).slice(0,5);
+ try{const rate=f==='rate',s=await getDocs(query(collection(db,'splendid_users'),orderBy(rate?'matches':f,'desc'),limit(rate?200:5)));bd.innerHTML='';
+  /* win rate is worked out live from each player's saved wins and matches, so nobody needs a stored rate */
+  let rows=s.docs.map(d=>d.data());
+  if(rate)rows=rows.filter(x=>(x.matches||0)>=MIN_RATE_MATCHES).map(x=>({...x,rate:Math.round((x.wins||0)/x.matches*100)})).sort((a,b)=>b.rate-a.rate||b.matches-a.matches);
+  rows=rows.slice(0,5);
   rows.forEach((x,i)=>bd.append(el('div','lb',`<i>${i+1}</i><b>${x.name}</b><span>${rate?(x.rate||0)+'%':(x[f]||0)}</span>`)));
   if(!rows.length)bd.innerHTML='<p>'+(rate?'Nobody has played '+MIN_RATE_MATCHES+' matches yet.':'No players yet.')+'</p>'}
  catch(e){bd.innerHTML='<p>Could not load leaderboard.</p>'}
