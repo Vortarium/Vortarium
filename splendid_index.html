@@ -79,7 +79,7 @@
   <div class="board">
     <div class="lcol">
       <div class="clk" id="op-clk"><small id="op-name"></small><b>5:00</b></div>
-      <button class="red" id="forfeit"><u></u><span>HOLD TO FORFEIT</span></button>
+      <div class="fbtns"><button class="red" id="forfeit"><u></u><span>HOLD TO FORFEIT</span></button><button class="lav" id="haltBtn">REQUEST A HALT</button></div>
       <div class="clk" id="me-clk"><small id="me-name"></small><b>5:00</b></div>
     </div>
     <div class="slots"><div class="slot" id="op-slot"></div><div class="slot" id="me-slot"></div></div>
@@ -90,6 +90,7 @@
 </section>
 
 <div id="modal"></div>
+<div id="halt"><div class="mbox" id="haltBox"></div></div>
 <script type="module" src="splendid_main.js"></script>
 </body>
 </html>

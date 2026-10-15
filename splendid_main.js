@@ -23,15 +23,17 @@ const closeModal=()=>$('#modal').classList.remove('on');
 /* ---------- audio ---------- */
 const SFX={};['take','place','hit','break','regen'].forEach(n=>{SFX[n]=new Audio(`splendid_${n}.mp3`);SFX[n].preload='auto'});
 const sfx=n=>{try{const a=SFX[n].cloneNode();a.volume=.8;a.play().catch(()=>{})}catch(e){}};
-const music=new Audio('splendid_music.mp3');music.loop=true;music.volume=.4;
+const music=new Audio('splendid_music.mp3');music.loop=true;music.volume=.5;
 const startMusic=()=>music.play().catch(()=>{});
 startMusic();
 ['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>{if(music.paused)startMusic()}));
 
 /* ---------- cards ---------- */
 const RAR=[{n:'Ember',c:'#b4bcc8',node:1},{n:'Spark',c:'#f6cf4a',node:2},{n:'Flare',c:'#ff9b54',node:3},{n:'Blaze',c:'#ff5a6e',node:4}];
-const TC={'ATTACK':'#ff8fa3','HEAL':'#5fd3a4','MANA HEAL':'#6cb4ff','SPELL':'#b09cff'};
-const TL={'ATTACK':'#ffa9b8','HEAL':'#86e6bc','MANA HEAL':'#92c9ff','SPELL':'#c7b8ff'};
+const TC={'ATTACK':'#ff8fa3','HEAL':'#5fd3a4','MANA HEAL':'#6cb4ff','SPELL':'#b09cff','BONUS':'#b09cff'};
+const TL={'ATTACK':'#ffa9b8','HEAL':'#86e6bc','MANA HEAL':'#92c9ff','SPELL':'#c7b8ff','BONUS':'#c7b8ff'};
+const star=(cx,cy,R,r)=>{let p='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,k=i%2?r:R;p+=(i?'L':'M')+(cx+k*Math.cos(a)).toFixed(1)+' '+(cy+k*Math.sin(a)).toFixed(1)}return p+'z'};
+const HRT='M24 35C16 29 17 22 21 22c1.6 0 2.7 1 3 2 .3-1 1.4-2 3-2 4 0 5 7-3 13z';
 const ICONS={
  strike:['M10 10L32 32','M28 38L38 28','M34 34l5 5','M38 10L16 32','M10 28l10 10','M14 34l-5 5'],
  pierce:['M24 5L29 25 24 30 19 25z','M15 30h18','M24 30v10','M21 43h6','M24 9v14'],
@@ -45,25 +47,29 @@ const ICONS={
  reserve:['M24 4L39 18 24 44 9 18z','M9 18h30','M24 4l-6 14 6 26 6-26z'],
  exchange:['M8 14h32','M24 7v31','M15 40h18','M8 14L3 27h10z','M40 14l-5 13h10z','M3 27a5 4 0 0 0 10 0M35 27a5 4 0 0 0 10 0'],
  offering:['M18 22h12v19H18z','M24 6c4 5 5 8 3 11-1 2-5 2-6 0-2-3-1-6 3-11z','M24 17v5','M12 41h24','M18 29c-3 2-3 5 0 6'],
- golden:['M24 42C7 29 9 13 24 21 39 13 41 29 24 42z','M24 3l2.5 5 5 2.5-5 2.5L24 18l-2.5-5-5-2.5 5-2.5z','M16 24c-2 3-1 6 2 9'],
+ cloud:['M14 36a8 8 0 0 1-1-16 11 11 0 0 1 21-1 8 8 0 0 1 1 17z','M19 27c2-3 6-3 8 0','M18 41l-2 4M26 41l-2 4M34 41l-2 4'],
  shield:['M24 5l15 5v12c0 9-6 15-15 20-9-5-15-11-15-20V10z','M24 11v28','M13 19h22'],
  vamp:['M24 20C20 12 12 10 5 13c3 3 3 8 1 11 3-2 6-1 8 2 2-3 6-3 8 0l2 5 2-5c2-3 6-3 8 0 2-3 5-4 8-2-2-3-2-8 1-11-7-3-15-1-19 7z','M21 18l-1-6M27 18l1-6','M22 28v3M26 28v3'],
- mbreak:['M24 3l5 12 13-4-8 10 10 8-13 0 1 13-8-9-8 9 1-13-13 0 10-8-8-10 13 4z','M24 20a4 4 0 1 0 .01 0']};
+ mbreak:['M24 3l5 12 13-4-8 10 10 8-13 0 1 13-8-9-8 9 1-13-13 0 10-8-8-10 13 4z','M24 20a4 4 0 1 0 .01 0'],
+ mclaim:[star(24,25,21,9),'M24 19l5 6-5 7-5-7z'],
+ life:[star(24,25,21,9),HRT],
+ gheart:[star(24,25,21,9),HRT,'M24 13v5M21.5 15.5h5'],
+ wither:[star(24,25,21,9),'M19 20l10 11M29 20L19 31']};
 const MM=10,MG=10;   /* max mana, max golden hearts */
 const FAM=[
 ['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8]}],
 ['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[2,3,4,6],pdot:[1,1,2,3]}],
 ['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[4,6,8,10]}],
-['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,4,5],heal:[1,1,2,3]}],
+['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,5,6],heal:[1,2,2,3]}],
 ['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[2,3,5,7]}],
 ['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[2,3,3,4],rn:[[1,1],[1,1],[2,1],[2,1]]}],
 ['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[4,5,7,9],small:[2,3,4,5]}],
 ['Crimson','HEAL','crimson',{cost:[1,3,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
-['Reserve','MANA HEAL','reserve',{cost:0,mana:[1,2,3,4],nm:[1,1,1,2],hpl:[2,3,4,4]}],
+['Reserve','MANA HEAL','reserve',{cost:0,mana:[2,3,4,5],dl:[1,2,3,4]}],
 ['Exchange','MANA HEAL','exchange',{cost:0,hpl:[1,2,3,4],mana:[2,3,4,5]}],
 ['Offering','MANA HEAL','offering',{cost:0,mana:[1,2,3,4],disc:[1,2,2,9]}],
-['Golden Heart','SPELL','golden',{cost:[2,4,7,10],gold:[1,2,4,6]}],
+['Cloud','SPELL','cloud',{cost:[3,5,7,10],cd:[1,2,9,9],steal:[0,0,0,1]}],
 ['Shield','SPELL','shield',{cost:[1,2,4,7],shield:1,back:[0,1,2,4]}],
 ['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[2,4,6,8]}],
 ['Mana Break','SPELL','mbreak',{cost:[1,2,3,5],mb:[2,3,5,99]}]];
@@ -71,33 +77,45 @@ const FAM=[
 const CARRY=false;
 const NXT=CARRY?'the next':"this turn's";
 const CARDS=[];
-FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
-const nodes=d=>d.reduce((a,id)=>a+RAR[CARDS[id-1].r].node,0);
+FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r,nd:RAR[r].node};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
+/* bonus abilities: global passives (never in your hand), each costs double nodes. ids 65-68 */
+[['Mana Claim','mclaim'],['Lifeblood','life'],['Gold Heart','gheart'],['Wither','wither']].forEach(([name,k],r)=>CARDS.push({id:65+r,name,type:'BONUS',ic:k,r,cost:0,bonus:k,nd:RAR[r].node*2}));
+const BN={mclaim:65,life:66,gheart:67,wither:68};
+const bonusOf=ids=>({mclaim:ids.includes(65),life:ids.includes(66),gheart:ids.includes(67),wither:ids.includes(68)});
+const nodes=d=>d.reduce((a,id)=>a+CARDS[id-1].nd,0);
 const cardEl=(c,x='')=>{const e=el('div','card '+x);e.style.setProperty('--rc',RAR[c.r].c);e.style.setProperty('--tc',TC[c.type]);e.style.setProperty('--tl',TL[c.type]);
  const P=ICONS[c.ic].map(d=>`<path d="${d}"/>`).join('');
  e.innerHTML=`<svg viewBox="0 0 48 48"><circle class="rg" cx="24" cy="24" r="23"/><circle class="rg2" cx="24" cy="24" r="20"/><g class="sh" transform="translate(1.2 1.7)">${P}</g><g class="hl" transform="translate(-.6 -.7)">${P}</g><g class="et">${P}</g></svg><span>${c.name}</span>`;return e};
 const backEl=()=>el('div','card back','<i></i>');
 const gem=t=>`<i class="gem ${t}"></i>`;
-function desc(c){const s=[];
+const BONUS_TXT={mclaim:'Gain golden mana containers: your mana can stack up to 5 over the limit, so mana you gain while full is no longer wasted. Global for the whole game.',
+ life:'Heal 1 HP at the start of every one of your turns. Global for the whole game.',
+ gheart:'Start every game with 10 golden hearts. Global for the whole game.',
+ wither:'Your opponent loses 1 heart every round. Global for the whole game.'};
+function desc(c){if(c.bonus)return BONUS_TXT[c.bonus];const s=[];
  if(c.dmg)s.push(`deal ${c.dmg} damage`+(c.pdot?` and ${c.pdot} damage the next turn`:''));
  if(c.shield)s.push('block '+NXT+' attack against you'+(c.back?` and deal ${c.back} damage back`:''));
  else if(c.th)s.push(`restore ${c.big} HP if you have ${c.th} HP or less, otherwise restore ${c.small} HP`);
  else if(c.rn)s.push(`restore ${c.heal} HP now and ${c.rn[0]} HP at the start of ${c.rn[1]>1?'each of your next '+c.rn[1]+' turns':'your next turn'}`);
  else if(c.heal)s.push(c.dmg?`heal ${c.heal} HP`:`restore ${c.heal} HP`);
  if(c.red)s.push(`reduce ${NXT} incoming attack's damage by ${c.red}`);
- if(c.hpl&&!c.nm)s.push(`lose ${c.hpl} HP`);
- if(c.mana)s.push(`restore ${c.mana} mana`+(c.nm?` now and ${c.nm} mana at the start of your next turn`:'')+(c.hpl&&c.nm?` but take ${c.hpl} damage`:''));
+ if(c.hpl)s.push(`lose ${c.hpl} HP`);
+ if(c.mana)s.push(`restore ${c.mana} mana`+(c.dl?` now and lose ${c.dl} HP at the start of your next turn`:''));
  if(c.disc)s.push(c.disc>=9?'auto discard your whole hand':`auto discard ${c.disc} random card${c.disc>1?'s':''}`);
- if(c.gold)s.push(`gain ${c.gold} golden heart${c.gold>1?'s':''}`);
+ if(c.cd)s.push(c.cd>=9?"discard all of your opponent's cards":`discard ${c.cd} random card${c.cd>1?'s':''} of your opponent`);
+ if(c.steal)s.push("steal a random card from their deck into yours (a spare that disappears once used)");
  if(c.vamp)s.push(`convert up to ${c.vamp} damage from ${NXT} attack into healing`);
  if(c.mb)s.push(c.mb>=99?'remove all mana from your opponent':`remove ${c.mb} mana from your opponent`);
  const t=s.join(' and ');return t[0].toUpperCase()+t.slice(1)+'.'}
-function eff(c){const o=[];const add=(n,t,w)=>o.push(`<span class="chip">${n>0?'+':'-'}${Math.abs(n)}${gem(t)}${w?'<small>'+w+'</small>':''}</span>`);
+function eff(c){const o=[];if(c.bonus)return '<span class="chip">&#9733; GLOBAL</span>';
+ const add=(n,t,w)=>o.push(`<span class="chip">${n>0?'+':'-'}${Math.abs(n)}${gem(t)}${w?'<small>'+w+'</small>':''}</span>`);
  if(c.dmg)add(-c.dmg,'r','foe');if(c.pdot)add(-c.pdot,'r','next turn');
- if(c.heal&&!c.shield)add(c.heal,'r');if(c.th)add(c.big,'r');if(c.hpl)add(-c.hpl,'r');
- if(c.mana)add(c.mana,'b');if(c.gold)add(c.gold,'g');
+ if(c.heal&&!c.shield)add(c.heal,'r');if(c.th)add(c.big,'r');if(c.hpl)add(-c.hpl,'r');if(c.dl)add(-c.dl,'r','next turn');
+ if(c.mana)add(c.mana,'b');
  if(c.mb)c.mb>=99?o.push(`<span class="chip">ALL${gem('b')}<small>foe</small></span>`):add(-c.mb,'b','foe');
  if(c.disc)o.push(`<span class="chip">DISCARD ${c.disc>=9?'ALL':c.disc}</span>`);
+ if(c.cd)o.push(`<span class="chip">FOE DISCARDS ${c.cd>=9?'ALL':c.cd}</span>`);
+ if(c.steal)o.push('<span class="chip">STEAL 1</span>');
  return o.join('')}
 
 /* ---------- auth ---------- */
@@ -109,13 +127,13 @@ const nice=e=>({'auth/email-already-in-use':'That username is taken','auth/inval
 $('#af').onsubmit=async e=>{e.preventDefault();const n=$('#aUser').value.trim(),p=$('#aPass').value;
  try{if(!/^[A-Za-z0-9_]{3,14}$/.test(n))throw{m:'Username: 3-14 letters, numbers or _'};
   if(mode==='up'){signing=true;const c=await createUserWithEmailAndPassword(auth,mail(n),p);await updateProfile(c.user,{displayName:n});
-   await setDoc(doc(db,'splendid_users',c.user.uid),{name:n,wins:0,losses:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});signing=false;await boot(c.user)}
+   await setDoc(doc(db,'splendid_users',c.user.uid),{name:n,wins:0,losses:0,ties:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});signing=false;await boot(c.user)}
   else await signInWithEmailAndPassword(auth,mail(n),p)}
  catch(err){signing=false;$('#aErr').textContent=nice(err)}};
 $('#bOut').onclick=()=>{statsOff();signOut(auth)};
 onAuthStateChanged(auth,u=>{if(signing)return;if(u)boot(u);else{user=null;U=null;show('s-auth')}});
 async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await getDoc(r);
- if(!s.exists()){await setDoc(r,{name:user.displayName||'Player',wins:0,losses:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});s=await getDoc(r)}
+ if(!s.exists()){await setDoc(r,{name:user.displayName||'Player',wins:0,losses:0,ties:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});s=await getDoc(r)}
  U=s.data();U.deck=U.deck||[];
  if(U.rate===undefined&&(U.matches||0)>0){U.rate=Math.round((U.wins||0)/U.matches*100);updateDoc(r,{rate:U.rate}).catch(()=>{})}}
 async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show('s-menu');goTab('play');renderDeck();updateLock()}
@@ -131,34 +149,37 @@ const gate=f=>()=>{if(!ready24()){goTab('deck');return}f()};
 
 /* deck tab */
 let dSel=null;
-function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{if(nodes(d)+RAR[CARDS[id-1].r].node>MAXN)return;d.push(id)}
+function toggle(id){let d=U.deck;if(d.includes(id))U.deck=d.filter(x=>x!==id);else{if(nodes(d)+CARDS[id-1].nd>MAXN)return;d.push(id)}
  updateDoc(doc(db,'splendid_users',user.uid),{deck:U.deck}).catch(()=>{});renderDeck();updateLock()}
 let clrArm=0;
 $('#bClr').onclick=()=>{const b=$('#bClr');if(!U||!U.deck.length)return;
  if(Date.now()-clrArm<2500){clrArm=0;b.textContent='DESELECT ALL';U.deck=[];updateDoc(doc(db,'splendid_users',user.uid),{deck:[]}).catch(()=>{});renderDeck();updateLock()}
  else{clrArm=Date.now();b.textContent='TAP AGAIN';setTimeout(()=>{if(Date.now()-clrArm>=2400){clrArm=0;b.textContent='DESELECT ALL'}},2600)}};
 function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
+ const cell=c=>{const lock=!U.deck.includes(c.id)&&nodes(U.deck)+c.nd>MAXN;const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':'')+(lock?' lk':''));w.append(cardEl(c));
+   const t=el('button','tg');t.disabled=lock;t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};return w};
  FAM.forEach((f,fi)=>{
   if(fi%4===0){const h=el('div','sech','<i></i>'+f[1]+' CARDS<i></i>');h.style.setProperty('--sc',TL[f[1]]);g.append(h)}
   const row=el('div','fam');row.append(el('div','fl',f[0].toUpperCase()));
-  for(let r=0;r<4;r++){const c=CARDS[fi*4+r];const lock=!U.deck.includes(c.id)&&nodes(U.deck)+RAR[c.r].node>MAXN;const w=el('div','cw'+(U.deck.includes(c.id)?' sel':'')+(dSel===c.id?' view':'')+(lock?' lk':''));w.append(cardEl(c));
-   const t=el('button','tg');t.disabled=lock;t.onclick=e=>{e.stopPropagation();toggle(c.id)};w.append(t);w.onclick=()=>{dSel=c.id;renderDeck()};row.append(w)}
+  for(let r=0;r<4;r++)row.append(cell(CARDS[fi*4+r]));
   g.append(row)});
+ {const h=el('div','sech','<i></i>BONUS ABILITIES<i></i>');h.style.setProperty('--sc',TL.BONUS);g.append(h);
+  const row=el('div','fam');row.append(el('div','fl','STARS'));CARDS.filter(c=>c.bonus).forEach(c=>row.append(cell(c)));g.append(row)}
  g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / ${MAXN}  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/MAXN*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
  if(!dSel){p.innerHTML='<p style="margin:auto;opacity:.6">Select a card to inspect it.<br>Use the circle on a card to add it to your deck.</p>';return}
  const c=CARDS[dSel-1],r=RAR[c.r],on=U.deck.includes(c.id);
  const big=cardEl(c,'big');p.append(big);
  p.append(el('h2','',c.name),el('b','',`<span style="color:${r.c}">${r.n.toUpperCase()}</span>`),
-  el('div','',`<span class="chip">${r.node} NODE${r.node>1?'S':''}</span><span class="chip">${c.type}</span><span class="chip">${c.cost} ${gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
- const full=!on&&nodes(U.deck)+r.node>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
+  el('div','',`<span class="chip">${c.nd} NODE${c.nd>1?'S':''}</span><span class="chip">${c.bonus?'BONUS ABILITY':c.type}</span><span class="chip">${c.bonus?'&#9733; GLOBAL':c.cost+' '+gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
+ const full=!on&&nodes(U.deck)+c.nd>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
 /* stats tab: ONE live listener on every player document. All four boards and "my stats" are drawn from it, so
    everyone is ranked (online or offline) and the top 5 are shown, changes appear instantly, and switching boards costs no extra reads.
    It is switched off whenever the STATS tab is not showing. */
 let statsF='best',statsUnsub=null,statsDocs=[],statsReady=false;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const rateOf=x=>(x.matches||0)?Math.round((x.wins||0)/x.matches*100):0;
+const rateOf=x=>{const g=(x.wins||0)+(x.losses||0);return g?Math.round((x.wins||0)/g*100):0};   /* ties do not count for or against the win rate */
 const statsOff=()=>{if(statsUnsub){statsUnsub();statsUnsub=null}};
 function drawStats(){const f=statsF,bd=$('#board');$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
  const key=x=>f==='rate'?rateOf(x):(x[f]||0);
@@ -169,7 +190,7 @@ function drawStats(){const f=statsF,bd=$('#board');$$('.sub button').forEach(b=>
  if(!rows.length)bd.innerHTML='<p>'+(statsReady?'No players yet.':'Loading...')+'</p>';
  const me=statsDocs.find(x=>x.uid===user.uid);if(me)Object.assign(U,me);
  const t=U.time||0,m=U.matches||0;
- $('#mystats').innerHTML=[['WINS',U.wins],['LOSSES',U.losses],['CURRENT STREAK',U.streak],['WIN STREAK RECORD',U.best],['MATCHES',m],['WIN RATE',rateOf(U)+'%'],['TIME PLAYED',Math.floor(t/3600)+'h '+Math.floor(t%3600/60)+'m']].map(([a,b])=>`<div><small>${a}</small><b>${b||0}</b></div>`).join('')}
+ $('#mystats').innerHTML=[['WINS',U.wins],['LOSSES',U.losses],['TIES',U.ties],['CURRENT STREAK',U.streak],['WIN STREAK RECORD',U.best],['MATCHES',m],['WIN RATE',rateOf(U)+'%'],['TIME PLAYED',Math.floor(t/3600)+'h '+Math.floor(t%3600/60)+'m']].map(([a,b])=>`<div><small>${a}</small><b>${b||0}</b></div>`).join('')}
 function loadStats(f){statsF=f;drawStats();
  if(!statsUnsub)statsUnsub=onSnapshot(query(collection(db,'splendid_users'),limit(300)),
   snap=>{statsDocs=snap.docs.map(d=>({...d.data(),uid:d.id}));statsReady=true;drawStats()},
@@ -207,32 +228,36 @@ $('#bJoin').onclick=gate(async()=>{modal(`<h2>SEARCHING</h2><div class="spin"></
 
 /* ---------- gems ---------- */
 function buildGems(){['op','me'].forEach(s=>{$('#'+s+'-gems').innerHTML=`<div class="hpbox"><div class="fx" id="${s}-fx"></div><div class="gd" id="${s}-gd"></div><div class="hp" id="${s}-hp"></div></div><div class="mn" id="${s}-mn"></div>`;
- const f=(id,n,c)=>{for(let i=0;i<n;i++){const g=el('i','gem '+c);g.dataset.f=0;$('#'+s+id).append(g)}};f('-hp',20,'r');f('-gd',MG,'g');f('-mn',MM,'b')})}
+ const f=(id,n,c)=>{for(let i=0;i<n;i++){const g=el('i','gem '+c);g.dataset.f=0;$('#'+s+id).append(g)}};f('-hp',20,'r');f('-gd',MG,'g');f('-mn',MM+5,'b')})}
 let regenN=0;
 function gemSet(box,n,base,snd){const sl=$$('.gem',box),lost=[],first=!box.dataset.i;box.dataset.i=1;
  sl.forEach((g,i)=>{const w=i<n?1:0,h=+g.dataset.f;g.dataset.f=w;if(w&&!h){g.classList.remove('shatter');g.classList.add('on');if(snd&&!first)regenN++}else if(!w&&h)lost.push(i)});
  lost.reverse().forEach((i,k)=>setTimeout(()=>{const g=sl[i];if(+g.dataset.f)return;g.classList.remove('on');g.classList.add('shatter');sfx('break');setTimeout(()=>g.classList.remove('shatter'),480)},(base+k)*200));return lost.length}
-function renderSide(s,hp,gd,mn){let d=0;regenN=0;d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d,true);d+=gemSet($('#'+s+'-gd'),gd,d,false);gemSet($('#'+s+'-mn'),mn,d,true);if(regenN)sfx('regen')}
-const fxTxt=S=>[S.shield?'SHIELD ('+S.shield.t+' LEFT)':'',S.bleed&&S.bleed.length?'BLEED '+S.bleed.reduce((a,b)=>a+b.a,0):'',S.vamp?'VAMPIRISM '+S.vamp:'',S.red?'-'+S.red+' NEXT HIT':'',S.dots.length?'REGEN '+S.dots.reduce((a,d)=>a+d.a*d.t,0):''].filter(Boolean).join('  \u00b7  ');
-const syncMe=()=>{renderSide('me',G.S.hp,G.S.gold,G.S.mana);$('#me-fx').textContent=fxTxt(G.S)};
+function renderSide(s,hp,gd,mn,mm){let d=0;regenN=0;$('#'+s+'-mn').classList.toggle('wide',(mm||MM)>MM);d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d,true);d+=gemSet($('#'+s+'-gd'),gd,d,false);gemSet($('#'+s+'-mn'),mn,d,true);if(regenN)sfx('regen')}
+const fxTxt=S=>[S.shield?'SHIELD ('+S.shield.t+' LEFT)':'',S.bleed&&S.bleed.length?'BLEED '+S.bleed.reduce((a,b)=>a+b.a,0):'',S.dl?'LOSE '+S.dl+' NEXT TURN':'',S.vamp?'VAMPIRISM '+S.vamp:'',S.red?'-'+S.red+' NEXT HIT':'',S.dots.length?'REGEN '+S.dots.reduce((a,d)=>a+d.a*d.t,0):'',
+ ...(S.bonus?[S.bonus.mclaim&&'\u2605 MANA CLAIM',S.bonus.life&&'\u2605 LIFEBLOOD',S.bonus.gheart&&'\u2605 GOLD HEART',S.bonus.wither&&'\u2605 WITHER']:[])].filter(Boolean).join('  \u00b7  ');
+const syncMe=()=>{renderSide('me',G.S.hp,G.S.gold,G.S.mana,G.S.mm);$('#me-fx').textContent=fxTxt(G.S)};
 
 /* ---------- battle ---------- */
 const setMsg=t=>$('#gmsg').textContent=t;
-const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
+const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,mm:G.S.mm,bn:G.bn||[],dx:G.extras?G.extras.length:0,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
 const wr=p=>G&&G.bot?Promise.resolve(botWrite(p)):updateDoc(G.ref,p).catch(()=>{});
 const pub=()=>wr({['pub.'+G.me]:pubOf()});
 /* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve'. room.turn flips every round. */
 const mover=r=>r.phase==='act'?r.turn:r.phase==='react'?(r.turn===G.me?G.opp:G.me):null;
-const myMove=()=>!!(G&&G.r&&!G.over&&mover(G.r)===G.me&&!G.locked);
+const paused=()=>{const h=G&&G.r&&G.r.halt;return !!h&&(h.st==='on'||h.st==='rask')};
+const myMove=()=>!!(G&&G.r&&!G.over&&mover(G.r)===G.me&&!G.locked&&!paused());
+const later=f=>{const go=()=>{if(!G||G.over)return;if(paused())setTimeout(go,500);else f()};go()};
 const canPlay=c=>myMove()&&c.cost<=G.S.mana;
 const heal=n=>G.S.hp=Math.min(20,G.S.hp+n);
 function hitMe(d){const S=G.S,g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))}
 /* pile empty -> whole deck (minus cards in hand) is reshuffled back in, so nobody ever runs out */
-const refill=()=>{G.deck=shuffle(U.deck.filter(id=>!G.hand.includes(id)))};
+const refill=()=>{const pool=U.deck.filter(id=>CARDS[id-1].type!=='BONUS').concat(G.extras||[]);G.hand.forEach(h=>{const i=pool.indexOf(h);if(i>=0)pool.splice(i,1)});G.deck=shuffle(pool)};
 function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx('take');if(!G.deck.length){refill();sfx('regen')}}}
 
 function initGame(r){statsOff();G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
- G.S={hp:20,gold:0,mana:4,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0};G.deck=shuffle(U.deck);G.hand=[];G.t0=Date.now();G.last=Date.now();
+ const bn=U.deck.filter(id=>CARDS[id-1].type==='BONUS'),bo=bonusOf(bn);G.bn=bn;G.extras=[];
+ G.S={hp:20,gold:bo.gheart?MG:0,mana:4,mm:MM+(bo.mclaim?5:0),bonus:bo,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.filter(id=>CARDS[id-1].type!=='BONUS'));G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
  for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
@@ -246,24 +271,34 @@ function onRoom(r){
  const pk=r.seq+r.phase;if(G.pk!==pk){G.pk=pk;G.opSeen=Date.now()}
  if(o){if(o.clock!==G.opClk){G.opClk=o.clock;G.opSeen=Date.now()}
   G.clk.op=m===op?Math.min(G.clk.op,o.clock):o.clock;
-  renderSide('op',o.hp,o.gold,o.mana);$('#op-fx').textContent=o.fx||'';$('#op-dn').textContent=o.deck;renderOpHand(o.hand)}
- /* new round: clear table, apply start-of-round mana and regen */
- if(r.phase==='act'&&G.a!==r.seq){G.a=r.seq;$('#me-slot').innerHTML='';$('#op-slot').innerHTML='';startRound()}
+  renderSide('op',o.hp,o.gold,o.mana,o.mm);$('#op-fx').textContent=o.fx||'';$('#op-dn').textContent=o.dx?o.deck+'+'+o.dx:o.deck;renderOpHand(o.hand)}
+ /* new round: clear the table (mana and delayed effects now tick at the start of each player's OWN turn, see beginTurn) */
+ if(r.phase==='act'&&G.a!==r.seq){G.a=r.seq;$('#me-slot').innerHTML='';$('#op-slot').innerHTML=''}
  if(r.phase==='react'&&r.turn===op&&G.rc!==r.seq){G.rc=r.seq;$('#op-slot').replaceChildren(backEl())}
  const mk=r.seq+':'+r.phase;
- if(m===me&&G.mk!==mk){G.mk=mk;G.locked=false;G.disc=false;G.skipArm=0;G.sel=null;G.last=Date.now();setMsg('YOUR TURN');renderFooter()}
+ if(m===me&&G.mk!==mk){G.mk=mk;G.locked=false;G.disc=false;G.skipArm=0;G.sel=null;G.last=Date.now();setMsg('YOUR TURN');beginTurn();renderFooter()}
  else if(m===op&&G.mk!==mk){G.mk=mk;G.sel=null;setMsg("OPPONENT'S TURN");renderFooter()}
  if(r.phase==='resolve'&&G.rv!==r.seq){G.rv=r.seq;reveal(r)}
  if(r.phase==='resolve'&&G.rd===r.seq&&G.fin!==r.seq&&r.res&&r.res[op]&&r.res[op].seq===r.seq)finish(r);
+ if(r.phase==='resolve'&&G.fin===r.seq&&G.dj!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq&&r.pub&&r.pub[op]){G.dj=r.seq;judge(r)}
  /* turn order alternates: A starts and B finishes, then B starts and A finishes, and so on. The round's first player starts the next round once both sides finished and cards were shown for 4s */
  if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
   const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
-  setTimeout(()=>{if(G&&!G.over)wr({seq:seq+1,phase:'act',turn:op,c:{},res:{},fin:{}})},wait)}}
+  setTimeout(()=>later(()=>wr({seq:seq+1,phase:'act',turn:op,c:{},res:{},fin:{}})),wait)}
+ renderHalt()}
 
-function startRound(){const S=G.S;S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;
- S.dots=S.dots.filter(d=>{heal(d.a);d.t--;return d.t>0});tickBleed(S);syncMe();pub();if(S.hp<=0)endWrite(G.opp,'hearts')}
-/* Pierce's delayed damage: hits at the start of the victim's next round, golden hearts absorb it first */
+/* Pierce's delayed damage: hits at the start of the victim's next turn, golden hearts absorb it first */
 const tickBleed=S=>{S.bleed=S.bleed.filter(b=>{const g=Math.min(S.gold,b.a);S.gold-=g;S.hp=Math.max(0,S.hp-(b.a-g));b.t--;return b.t>0})};
+/* The start of ONE player's own turn (the first player at the start of the round, the second player once the first has played):
+   +1 mana, heals first (Renewal, Lifeblood), then delayed losses (Reserve, Pierce wounds, enemy Wither). Shared with the bot. */
+function turnStart(S,foeWither){
+ S.mana=Math.min(S.mm||MM,S.mana+1+S.nm);S.nm=0;
+ S.dots=S.dots.filter(d=>{S.hp=Math.min(20,S.hp+d.a);d.t--;return d.t>0});
+ if(S.bonus&&S.bonus.life)S.hp=Math.min(20,S.hp+1);
+ if(S.dl){S.hp=Math.max(0,S.hp-S.dl);S.dl=0}
+ tickBleed(S);
+ if(foeWither)S.hp=Math.max(0,S.hp-1)}
+function beginTurn(){const S=G.S,o=G.r.pub&&G.r.pub[G.opp];turnStart(S,!!(o&&o.bn&&o.bn.includes(BN.wither)));syncMe();pub();if(S.hp<=0)endWrite(G.opp,'hearts')}
 
 /* one discard per turn; it does not use up the turn */
 function discard(i){if(!myMove()||G.disc||!G.hand[i])return;G.disc=true;G.hand.splice(i,1);G.sel=null;draw();pub();renderFooter()}
@@ -272,9 +307,10 @@ async function commit(i){if(!myMove())return;const skip=i<0,id=skip?0:G.hand[i],
  if(!skip&&(!c||c.cost>G.S.mana))return;
  const second=G.r.phase==='react';
  G.locked=true;G.sel=null;
- if(!skip){G.hand.splice(i,1);G.S.mana-=c.cost;
+ if(!skip){G.hand.splice(i,1);G.S.mana-=c.cost;const xi=G.extras.indexOf(id);if(xi>=0)G.extras.splice(xi,1);
   if(c.disc){const n=c.disc>=9?G.hand.length:Math.min(c.disc,G.hand.length);for(let k=0;k<n;k++)G.hand.splice(Math.random()*G.hand.length|0,1)}
-  for(let k=0;k<3&&G.hand.length<3;k++)draw()}
+  }
+ for(let k=0;k<3&&G.hand.length<3;k++)draw()   /* refill after every move (a skip too), so a Cloud only costs you one turn of options */
  $('#me-slot').replaceChildren(backEl());syncMe();renderFooter();setMsg(second?'':'WAITING FOR OPPONENT...');
  await wr({['c.'+G.me]:id,phase:second?'resolve':'react',['pub.'+G.me]:pubOf()})}
 
@@ -284,13 +320,18 @@ function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
  setMsg('');
  /* both cards stay face down for 3s, then flip together */
  setTimeout(()=>{if(!G||G.over||G.rv!==seq)return;
-  const put=(id,slot)=>{if(!id){$(slot).replaceChildren(el('div','card skip flip','SKIP'));return}const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
-  put(mc,'#me-slot');put(oc,'#op-slot');G.shownAt=Date.now();
+  /* bonus abilities are not cards you play: on each player's FIRST turn they are shown automatically, stacked (slightly offset) under the card that was played */
+  const mkc=(id,x)=>id?cardEl(CARDS[id-1],x):el('div','card skip '+x,'SKIP');
+  const put=(id,slot,bn)=>{if(bn.length){const st=el('div','stack');[...bn,id].forEach((x,j,a)=>{const e=mkc(x,'flip'+(j<a.length-1?' bn':''));e.style.setProperty('--k',a.length-1-j);st.append(e)});$(slot).replaceChildren(st)}
+   else $(slot).replaceChildren(mkc(id,'flip'));
+   if(id){sfx('place');if(CARDS[id-1].dmg)setTimeout(()=>sfx('hit'),200)}};
+  const first=r.seq===1,srt=a=>[...(a||[])].sort((x,y)=>x-y);
+  put(mc,'#me-slot',first?srt(G.bn):[]);put(oc,'#op-slot',first?srt(r.pub&&r.pub[G.opp]&&r.pub[G.opp].bn):[]);G.shownAt=Date.now();
   setTimeout(()=>doResolve(mc,oc,seq),600)},1000)}
 
 /* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
    Heals are applied first (capped at 20 hearts), then damage, so an attack that gets through can never be erased by a heal. */
-function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};let heals=0,selfLoss=0,hpLoss=0;
+function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0,cd:0,steal:0};let heals=0,selfLoss=0,hpLoss=0;
  if(m){
   if(m.dmg&&m.heal)heals+=m.heal;
   if(m.shield)S.shield={heal:0,back:m.back||0,t:2};
@@ -299,10 +340,12 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};le
   else if(m.heal&&!m.dmg)heals+=m.heal;
   if(m.red)S.red+=m.red;
   if(m.hpl)selfLoss+=m.hpl;
-  if(m.mana){S.mana=Math.min(MM,S.mana+m.mana);S.nm+=m.nm||0}
+  if(m.dl)S.dl=(S.dl||0)+m.dl;
+  if(m.mana){S.mana=Math.min(S.mm||MM,S.mana+m.mana);S.nm+=m.nm||0}
   if(m.gold)S.gold=Math.min(MG,S.gold+m.gold);
   if(m.vamp)S.vamp=Math.max(S.vamp,m.vamp)}
  if(t){
+  if(t.cd){o.cd=t.cd;o.steal=t.steal||0}
   if(t.mb)S.mana=Math.max(0,S.mana-t.mb);
   if(t.dmg){let d=t.dmg;o.dmgIn=d;
    if(S.shield){heals+=S.shield.heal;o.back=S.shield.back;S.shield=null;o.blk=1;d=0}
@@ -316,15 +359,21 @@ function applyRound(S,m,t){const o={back:0,dmgIn:0,took:0,blk:0,cut:0,conv:0};le
 function doResolve(mc,oc,seq){if(!G||G.over)return;
  G.pre={hp:G.S.hp,gold:G.S.gold,mana:G.S.mana};
  const o=applyRound(G.S,mc&&CARDS[mc-1],oc&&CARDS[oc-1]);
- G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut,conv:o.conv};syncMe();
+ let stolen=0,lost=0;
+ if(o.cd){lost=o.cd>=9?G.hand.length:Math.min(o.cd,G.hand.length);for(let k=0;k<lost;k++)G.hand.splice(Math.random()*G.hand.length|0,1);
+  if(o.steal&&G.deck.length)stolen=G.deck.splice(Math.random()*G.deck.length|0,1)[0];if(!G.deck.length)refill()}
+ G.cloudTxt=o.cd?`CLOUD: ${lost} CARD${lost===1?'':'S'} OF YOURS DISCARDED`+(stolen?', 1 STOLEN':''):'';
+ G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut,conv:o.conv,stolen};syncMe();if(o.cd)renderFooter();
  wr({['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
 
 const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut||x.conv?' ('+[x.cut?x.cut+' PREVENTED':'',x.conv?x.conv+' CONVERTED TO HEARTS':''].filter(Boolean).join(', ')+')':'');
 function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
+ if(ro.stolen){G.extras.push(ro.stolen);G.deck.splice(Math.random()*(G.deck.length+1)|0,0,ro.stolen);renderFooter()}
  const P=G.pre||G.S,mine='YOU: HEARTS '+P.hp+' > '+G.S.hp+'   MANA '+P.mana+' > '+G.S.mana+(P.gold!==G.S.gold?'   GOLD '+P.gold+' > '+G.S.gold:'');
- G.sum=[mine,sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:''].filter(Boolean).join('\n');
- wr({['fin.'+G.me]:r.seq,['pub.'+G.me]:pubOf()});
- if(G.S.hp<=0)endWrite(G.opp,'hearts')}
+ G.sum=[mine,sideTxt('YOU',G.myRes),sideTxt((G.oppName||'OPPONENT').toUpperCase(),ro),b?'SHIELD REFLECTED '+b:'',G.cloudTxt,ro.stolen?'YOU STOLE '+CARDS[ro.stolen-1].name.toUpperCase()+' (SPARE)':''].filter(Boolean).join('\n');
+ wr({['fin.'+G.me]:r.seq,['pub.'+G.me]:pubOf()})}
+/* the round is judged only once BOTH sides have finished it, so hearts are final. Both at 0 = a tie (no coin flip) */
+function judge(r){const a=G.S.hp<=0,b=r.pub[G.opp].hp<=0;if(a&&b)endWrite(null,'tie');else if(a)endWrite(G.opp,'hearts');else if(b)endWrite(G.me,'hearts')}
 
 /* footer */
 function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
@@ -341,12 +390,12 @@ function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
  const sk=el('button','lav',G.skipArm&&Date.now()-G.skipArm<2500?'TAP AGAIN':'SKIP TURN');sk.disabled=!myMove();
  sk.onclick=()=>{if(G.skipArm&&Date.now()-G.skipArm<2500){G.skipArm=0;commit(-1)}else{G.skipArm=Date.now();sk.textContent='TAP AGAIN';setTimeout(renderFooter,2600)}};
  f.append(sk,hd);
- const pile=el('div','pile');pile.append(backEl(),el('b','',G.deck.length));f.append(pile)}
+ const pile=el('div','pile');pile.append(backEl(),el('b','',G.deck.length+(G.extras&&G.extras.length?'+'+G.extras.length:'')));f.append(pile)}
 
 /* timers: only the player whose pick it is has a ticking clock; nothing ticks while cards are revealed */
 setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
- const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r,m=mover(r);
- if(m){const k=m===G.me?'me':'op';if(!G.bot){G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time')}
+ const now=Date.now(),dt=now-G.last;G.last=now;const r=G.r,m=mover(r),pz=paused();if(pz)G.opSeen=now;
+ if(m&&!pz){const k=m===G.me?'me':'op';if(!G.bot){G.clk[k]-=dt;if(G.clk[k]<=0)endWrite(k==='me'?G.opp:G.me,'time')}
   if(k==='me'&&now-(G.lastPub||0)>1500){G.lastPub=now;pub()}
   if(k==='op'&&!G.bot&&now-(G.opSeen||now)>30000)endWrite(G.me,'disconnect')}
  $('#me-clk b').textContent=G.bot?'\u221e':fmt(G.clk.me);$('#op-clk b').textContent=G.bot?'\u221e':fmt(G.clk.op);
@@ -354,27 +403,53 @@ setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
   else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`)}
-},250);
+ haltTick(now)},250);
 
-/* forfeit */
-(()=>{const b=$('#forfeit'),u=$('u',b);let t=null;
+/* hold-to-confirm button (forfeit) */
+function holdBtn(b,fn){const u=$('u',b);let t=null;
  const stop=()=>{clearTimeout(t);u.style.transition='none';u.style.width='0'};
- b.onpointerdown=()=>{if(!G||G.over)return;u.style.transition='width 3s linear';u.style.width='100%';t=setTimeout(()=>{stop();if(G&&!G.over)endWrite(G.opp,'forfeit')},3000)};
- ['pointerup','pointerleave','pointercancel'].forEach(e=>b.addEventListener(e,stop))})();
+ b.onpointerdown=()=>{if(!G||G.over)return;u.style.transition='width 3s linear';u.style.width='100%';t=setTimeout(()=>{stop();fn()},3000)};
+ ['pointerup','pointerleave','pointercancel'].forEach(e=>b.addEventListener(e,stop))}
+holdBtn($('#forfeit'),()=>{if(G&&!G.over)endWrite(G.opp,'forfeit')});
+
+/* ---------- request a halt (player vs player only) ----------
+   room.halt = null | {st:'ask',by} | {st:'on',until} | {st:'rask',by,until}
+   Both players must agree to pause; a 10 minute timer runs; either side can ask to resume (the other must agree) or forfeit;
+   the game resumes by itself when the timer ends. While paused nobody can move and the 5:00 clocks do not tick. */
+const HALT_MS=10*60*1000;let haltKey='';
+$('#haltBtn').onclick=()=>{if(G&&!G.bot&&!G.over&&G.r&&!G.r.halt)wr({halt:{st:'ask',by:G.me}})};
+function renderHalt(){const box=$('#halt'),h=G&&!G.bot&&!G.over&&G.r&&G.r.halt||null;
+ if(!h){const was=haltKey!=='';box.classList.remove('on');haltKey='';if(was&&G&&G.init)renderFooter();return}
+ box.classList.add('on');const key=h.st+':'+(h.by||'');if(key===haltKey)return;haltKey=key;renderFooter();
+ const mine=h.by===G.me,nm=esc(G.oppName),btn=(id,c,t)=>`<button class="${c}" id="${id}">${t}</button>`;let html;
+ if(h.st==='ask')html=mine?`<h2>HALT REQUESTED</h2><div class="spin"></div><p>Waiting for ${nm} to agree...</p>${btn('hCancel','lav','CANCEL')}`
+  :`<h2>HALT REQUEST</h2><p>${nm} wants to pause the game.</p><div class="row">${btn('hNo','red','DECLINE')}${btn('hYes','green','ACCEPT')}</div>`;
+ else{html=`<h2>GAME PAUSED</h2><div class="htime" id="haltTime">${fmt(h.until-Date.now())}</div><p>The game resumes by itself when the timer ends.</p>`
+  +(h.st==='rask'?(mine?`<p>Resume requested, waiting for ${nm}...</p>${btn('hCancelR','lav','CANCEL RESUME')}`
+    :`<p>${nm} wants to resume.</p><div class="row">${btn('hNoR','red','DECLINE')}${btn('hYesR','green','ACCEPT')}</div>`):btn('hResume','blue','REQUEST RESUME'))
+  +`<button class="red hold" id="hFf"><u></u><span>HOLD TO FORFEIT</span></button>`}
+ $('#haltBox').innerHTML=html;const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};
+ on('hCancel',()=>wr({halt:null}));on('hNo',()=>wr({halt:null}));on('hYes',()=>wr({halt:{st:'on',until:Date.now()+HALT_MS}}));
+ on('hResume',()=>wr({halt:{st:'rask',by:G.me,until:h.until}}));on('hCancelR',()=>wr({halt:{st:'on',until:h.until}}));
+ on('hNoR',()=>wr({halt:{st:'on',until:h.until}}));on('hYesR',()=>wr({halt:null}));
+ const ff=$('#hFf');if(ff)holdBtn(ff,()=>{if(G&&!G.over)endWrite(G.opp,'forfeit')})}
+function haltTick(now){const h=G&&!G.bot&&G.r&&G.r.halt;if(!h||!h.until)return;const t=$('#haltTime');if(t)t.textContent=fmt(h.until-now);
+ if(now>=h.until&&!G.hAuto){G.hAuto=1;wr({halt:null});setTimeout(()=>{if(G)G.hAuto=0},3000)}}
 
 /* end */
 async function endWrite(winner,reason){if(!G||G.over)return;
  if(G.bot){if(G.bot.room.status!=='done')botWrite({status:'done',winner,reason});return}
  if(!G.ref)return;
  try{await runTransaction(db,async t=>{const s=await t.get(G.ref);if(!s.exists()||s.data().status==='done')return;t.update(G.ref,{status:'done',winner,reason})})}catch(e){}}
-function endGame(r){if(G.over)return;G.over=true;G.unsub&&G.unsub();const won=r.winner===G.me,who=won?G.oppName:'You';
+function endGame(r){if(G.over)return;G.over=true;$('#halt').classList.remove('on');G.unsub&&G.unsub();const tie=r.reason==='tie',won=!tie&&r.winner===G.me,who=won?G.oppName:'You';
  const txt={time:'ran out of time',forfeit:'forfeited','hearts':'lost all hearts',disconnect:'disconnected'}[r.reason]||'lost';
- modal(`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);
+ modal(tie?`<h2 class="tie">TIE</h2><p>Both players fell at the same time.</p><button class="blue" id="bk">CONTINUE</button>`
+  :`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);
  $('#bk').onclick=async()=>{closeModal();G=null;show('s-menu');goTab('play');await loadU();updateLock()};
- saveStats(won,G.t0)}
-async function saveStats(won,t0){try{const ref=doc(db,'splendid_users',user.uid),d=(await getDoc(ref)).data();
- const streak=won?(d.streak||0)+1:0;
- await setDoc(ref,{wins:(d.wins||0)+(won?1:0),losses:(d.losses||0)+(won?0:1),streak,best:Math.max(d.best||0,streak),matches:(d.matches||0)+1,rate:Math.round(((d.wins||0)+(won?1:0))/((d.matches||0)+1)*100),time:(d.time||0)+Math.round((Date.now()-t0)/1000)},{merge:true})}catch(e){}}
+ saveStats(tie?'tie':won?'win':'loss',G.t0)}
+async function saveStats(res,t0){try{const ref=doc(db,'splendid_users',user.uid),d=(await getDoc(ref)).data(),won=res==='win',tie=res==='tie';
+ const wins=(d.wins||0)+(won?1:0),losses=(d.losses||0)+(res==='loss'?1:0),streak=tie?(d.streak||0):won?(d.streak||0)+1:0;   /* a tie is no win and no loss: the streak is left alone */
+ await setDoc(ref,{wins,losses,ties:(d.ties||0)+(tie?1:0),streak,best:Math.max(d.best||0,streak),matches:(d.matches||0)+1,rate:wins+losses?Math.round(wins/(wins+losses)*100):0,time:(d.time||0)+Math.round((Date.now()-t0)/1000)},{merge:true})}catch(e){}}
 
 
 /* =====================================================================
@@ -391,8 +466,7 @@ const BOT={think:[1100,2600],   // ms of "thinking" before it commits
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
 const live=B=>!!(G&&G.bot===B&&!G.over);
-const newSide=()=>({hp:20,gold:0,mana:4,shield:null,vamp:0,red:0,dots:[],bleed:[],nm:0});
-const sideStart=S=>{S.mana=Math.min(MM,S.mana+1+S.nm);S.nm=0;S.dots=S.dots.filter(d=>{S.hp=Math.min(20,S.hp+d.a);d.t--;return d.t>0});tickBleed(S)};
+const newSide=()=>({hp:20,gold:0,mana:4,mm:MM,bonus:bonusOf([]),shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0});
 const sideHit=(S,d)=>{const g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))};
 function setPath(o,k,v){const p=k.split('.');let x=o;for(let i=0;i<p.length-1;i++)x=x[p[i]]=x[p[i]]||{};x[p[p.length-1]]=v}
 
@@ -400,58 +474,67 @@ function setPath(o,k,v){const p=k.split('.');let x=o;for(let i=0;i<p.length-1;i+
 function botWrite(p){const B=G&&G.bot;if(!B)return;for(const k in p)setPath(B.room,k,p[k]);
  setTimeout(()=>{if(!live(B))return;onRoom(cl(B.room));botTick()},0)}
 
-function makeBotDeck(){const W={ATTACK:4,HEAL:3.2,'MANA HEAL':1.6,SPELL:2.4},RW=[1.2,1.4,1,.7];const d=[];let n=0;
- const add=c=>{d.push(c.id);n+=RAR[c.r].node};
- const seed=(f,k)=>{for(let i=0;i<k;i++){const p=CARDS.filter(c=>f(c)&&c.r<=2&&!d.includes(c.id));add(p[Math.random()*p.length|0])}};
- seed(c=>c.type==='ATTACK',3);seed(c=>c.type==='HEAL',2);seed(c=>c.name==='Focus',1);
- while(n<MAXN){const p=CARDS.filter(c=>!d.includes(c.id)&&n+RAR[c.r].node<=MAXN);
-  let x=Math.random()*p.reduce((a,c)=>a+W[c.type]*RW[c.r],0),pick=p[p.length-1];
-  for(const c of p){x-=W[c.type]*RW[c.r];if(x<=0){pick=c;break}}add(pick)}
+/* the bot's deck mirrors YOUR node usage card by card: for every card in your deck it picks a random card with the same node cost
+   (one 4-node, two 3-node, one 1-node... for you means the same shape for the bot, but different random cards).
+   A bonus ability of yours becomes a random bonus ability that costs no more nodes; any leftover nodes are filled with random cards. */
+function makeBotDeck(){const mine=U.deck.map(id=>CARDS[id-1]),d=[],POOL=CARDS.filter(c=>c.type!=='BONUS'),BON=CARDS.filter(c=>c.bonus),pick=p=>p[Math.random()*p.length|0];
+ mine.filter(c=>c.bonus).sort((a,b)=>b.nd-a.nd).forEach(c=>{const p=BON.filter(x=>x.nd<=c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
+ mine.filter(c=>!c.bonus).forEach(c=>{const p=POOL.filter(x=>x.nd===c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
+ let n=nodes(d);while(n<MAXN){const p=POOL.filter(x=>!d.includes(x.id)&&n+x.nd<=MAXN);if(!p.length)break;const x=pick(p);d.push(x.id);n+=x.nd}
  return d}
 
-function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
+function startBot(){const full=makeBotDeck(),all=full.filter(id=>CARDS[id-1].type!=='BONUS'),bn=full.filter(id=>CARDS[id-1].type==='BONUS').sort((a,b)=>a-b),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
  G=newG('BOT');G.ref=null;
  const room={code:'BOT',status:'playing',host:{uid:user.uid,name:U.name},guest:{uid:'bot',name},turn:Math.random()<.5?user.uid:'bot',seq:1,phase:'act',pub:{},c:{},res:{},fin:{}};
- const B=G.bot={room,S:newSide(),O:newSide(),all,deck:shuffle(all),hand:[],seen:{},a:0,mk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
+ const B=G.bot={room,S:newSide(),O:newSide(),all,bn,idle:0,k:0,oStart:0,deck:shuffle(all),hand:[],extras:[],seen:{},a:0,mk:null,hmk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
+ {const bo=bonusOf(bn);B.S.bonus=bo;B.S.gold=bo.gheart?MG:0;B.S.mm=MM+(bo.mclaim?5:0)}
  for(let i=0;i<3;i++)bDraw();
  room.pub.bot=botPub();
  onRoom(cl(room));botTick()}
 
-const bDraw=()=>{const B=G.bot;if(B.hand.length>=3)return;if(!B.deck.length)B.deck=shuffle(B.all.filter(id=>!B.hand.includes(id)));
- if(B.deck.length){B.hand.push(B.deck.pop());if(!B.deck.length)B.deck=shuffle(B.all.filter(id=>!B.hand.includes(id)))}};
-const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
-const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana}};
+const bPool=B=>{const p=B.all.concat(B.extras);B.hand.forEach(h=>{const i=p.indexOf(h);if(i>=0)p.splice(i,1)});return shuffle(p)};
+const bDraw=()=>{const B=G.bot;if(B.hand.length>=3)return;if(!B.deck.length)B.deck=bPool(B);
+ if(B.deck.length){B.hand.push(B.deck.pop());if(!B.deck.length)B.deck=bPool(B)}};
+const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,mm:B.S.mm,bn:B.bn,dx:B.extras.length,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
+const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana;B.O.mm=o.mm||MM;B.O.bonus=bonusOf(o.bn||[])}};
 
 /* the bot's side of the round loop (mirrors onRoom) */
 function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.status!=='playing')return;const hu=G.me;
- if(r.phase==='act'&&B.a!==r.seq){B.a=r.seq;sideStart(B.S);sideStart(B.O);wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}}
  const m=r.phase==='act'?r.turn:r.phase==='react'?(r.turn==='bot'?hu:'bot'):null,mk=r.seq+':'+r.phase;
- if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;
+ /* each side's turn starts when it becomes that side's move (mana, delayed effects, bonus abilities) */
+ if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;turnStart(B.S,!!(G.S&&G.S.bonus&&G.S.bonus.wither));wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}
   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},BOT.think[0]+Math.random()*(BOT.think[1]-BOT.think[0]))}
+ if(m===hu&&B.hmk!==mk){B.hmk=mk;syncO();turnStart(B.O,false);B.oStart=B.O.mana;B.k=Math.random()<.75?.8+Math.random()*1.4:0}   /* B.k: how strongly the bot reads a big mana spend this round (0 = it doesn't notice) */
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
  if(r.phase==='resolve'&&B.rd===r.seq&&B.fin!==r.seq&&r.res[hu]&&r.res[hu].seq===r.seq)botFinish(r);
  if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
   setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',turn:hu,c:{},res:{},fin:{}})},wait)}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
- syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;
+ syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;B.idle=(!hc||CARDS[hc-1].cost<=1)?B.idle+1:0;
  setTimeout(()=>{if(!live(B)||B.rv!==seq)return;
   const bk=bc&&CARDS[bc-1],hk=hc&&CARDS[hc-1];
   const rb=applyRound(B.S,bk,hk);applyRound(B.O,hk,bk);if(rb.back)sideHit(B.O,rb.back);
+  let stolen=0;if(rb.cd){const n=rb.cd>=9?B.hand.length:Math.min(rb.cd,B.hand.length);for(let k=0;k<n;k++)B.hand.splice(Math.random()*B.hand.length|0,1);
+   if(rb.steal&&B.deck.length)stolen=B.deck.splice(Math.random()*B.deck.length|0,1)[0];if(!B.deck.length)B.deck=bPool(B)}
   B.rd=seq;B.oppEnd=B.O.mana;
-  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv},['pub.bot']:botPub()})},1600)}
+  wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv,stolen},['pub.bot']:botPub()})},1600)}
 
-function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back)sideHit(B.S,h.back);
- wr({['fin.bot']:r.seq,['pub.bot']:botPub()});if(B.S.hp<=0)endWrite(G.me,'hearts')}
+function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back)sideHit(B.S,h.back);if(h&&h.stolen){B.extras.push(h.stolen);B.deck.splice(Math.random()*(B.deck.length+1)|0,0,h.stolen)}
+ wr({['fin.bot']:r.seq,['pub.bot']:botPub()})}   /* the human client judges the round (win / loss / tie) once both sides finished */
 
 /* ---- decision making ---- */
 /* what could the human play? every card they can afford, weighted by what the bot has seen and by their situation */
-function oppDist(mana){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
- CARDS.forEach(c=>{if(c.cost>mana)return;let w=RW[c.r];const sn=B.seen[c.id]||0;if(sn)w*=3+Math.min(sn,3);
+/* tell = {spent,k} when you already committed this round and your mana gems dropped a lot: a big spend hints at a big (attack) card. It is only a hunch,
+   so it just shifts the odds. Sitting on lots of unspent mana for a few rounds also makes a big play more likely. */
+function oppDist(mana,tell){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
+ CARDS.forEach(c=>{if(c.type==='BONUS'||c.cost>mana)return;let w=RW[c.r];const sn=B.seen[c.id]||0;if(sn)w*=3+Math.min(sn,3);
   if(c.type==='ATTACK')w*=mana>=2?1.5:1;
   else if(c.type==='HEAL')w*=O.hp<=10?2.2:O.hp>=17?.15:.7;
-  else if(c.hpl)w*=O.hp<=8?.1:mana<=2?2:.6;
+  else if(c.hpl||c.dl)w*=O.hp<=8?.1:mana<=2?2:.6;
   else if(c.type==='MANA HEAL')w*=mana<=2?2.2:.5;
+  if(tell&&tell.spent>=5&&Math.abs(c.cost-tell.spent)<=1)w*=1+tell.k*(c.type==='ATTACK'?1.6:.8);
+  else if(!tell&&B.idle>=2&&mana>=6&&c.cost>=5&&c.type==='ATTACK')w*=1.5;
   out.push({t:c,w})});
  out.push({t:null,w:mana<=1?2:.3});return out}
 
@@ -459,13 +542,15 @@ function oppDist(mana){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
 function botEval(a,b){
  if(a.hp<=0&&b.hp<=0)return -300;if(b.hp<=0)return 1000;if(a.hp<=0)return -1000;
  const hv=x=>x.hp+.85*x.gold,mv=m=>.8*Math.min(m,4)+.1*m;
- const pot=x=>-x.bleed.reduce((s,b)=>s+b.a*.9,0)+(x.shield?2.2:0)+Math.min(x.vamp,6)*.45+x.red*.7+x.dots.reduce((s,d)=>s+d.a*d.t*.8,0);
+ const pot=x=>-x.bleed.reduce((s,b)=>s+b.a*.9,0)-(x.dl||0)+(x.bonus&&x.bonus.life?1.2:0)+(x.shield?2.2:0)+Math.min(x.vamp,6)*.45+x.red*.7+x.dots.reduce((s,d)=>s+d.a*d.t*.8,0);
  const wa=1+Math.max(0,9-a.hp)*.14,wb=1+Math.max(0,8-b.hp)*.08;   // own hearts matter more when low, kill pressure when you're low
  return wa*hv(a)-wb*hv(b)+mv(a.mana)-.9*mv(b.mana)+pot(a)-pot(b)}
 
 /* score every playable card + skipping: simulate the round against each card you might play */
 function botOptions(){const B=G.bot,S=B.S;syncO();
- const om=Math.max(B.O.mana,Math.min(MM,B.oppEnd+1)),dist=oppDist(om),opts=[];   // assume you could have up to this much mana
+ const rm=B.room,tell=rm.phase==='react'&&rm.turn===G.me&&B.k?{spent:Math.max(0,B.oStart-B.O.mana),k:B.k}:null,
+  om=Math.max(B.O.mana,Math.min(MM,B.oppEnd+1),tell?tell.spent:0),dist=oppDist(om,tell),opts=[];
+ const def=c=>tell&&tell.spent>=5&&(c.shield||c.red||c.vamp)?tell.k*.6:0;   // suspicious of a big hit -> lean defensive   // assume you could have up to this much mana
  const ev=m=>{const vals=[];let W=0;
   dist.forEach(({t,w})=>{const a=cl(S),b=cl(B.O);b.mana=om;if(m)a.mana-=m.cost;if(t)b.mana-=t.cost;
    const ra=applyRound(a,m,t),rb=applyRound(b,t,m);if(rb.back)sideHit(a,rb.back);if(ra.back)sideHit(b,ra.back);
@@ -474,15 +559,18 @@ function botOptions(){const B=G.bot,S=B.S;syncO();
   vals.forEach(([v,w])=>{mean+=v*w/W;if(acc<W*.25){const u=Math.min(w,W*.25-acc);tail+=v*u;tw+=u;acc+=u}});
   return .75*mean+.25*(tail/tw)};   // mostly the average case, a bit of fear for your best plays
  opts.push({i:-1,s:ev(null)});
- B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)})});
+ B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+def(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
  return opts.sort((x,y)=>y.s-x.s)}
 
-/* discard (max once per turn) only when the hand is weak: a card it can't afford first, else its worst card */
+/* Discarding is free (once per turn, it doesn't use the turn), so the bot cycles its hand whenever it can:
+   1) a card that is still 4+ mana out of reach (the costliest first), else 2) a card that is worse than just skipping.
+   It never throws away the card it is about to play. */
 function botDiscardPick(opts){const B=G.bot,best=opts[0],skip=opts.find(o=>o.i<0);
- if(best.s>=900||(best.i>=0&&best.s-skip.s>=1.2))return -1;
- const dead=B.hand.map((id,i)=>({i,c:CARDS[id-1]})).filter(x=>x.c.cost>B.S.mana).sort((x,y)=>y.c.cost-x.c.cost);
+ if(best.s>=900)return -1;
+ const dead=B.hand.map((id,i)=>({i,need:CARDS[id-1].cost-B.S.mana})).filter(x=>x.i!==best.i&&x.need>=4).sort((x,y)=>y.need-x.need);
  if(dead.length)return dead[0].i;
- const cards=opts.filter(o=>o.i>=0&&o.i!==best.i);return cards.length?cards[cards.length-1].i:-1}
+ const bad=opts.filter(o=>o.i>=0&&o.i!==best.i&&o.s<skip.s-.8);
+ return bad.length?bad[bad.length-1].i:-1}
 
 function botChoose(opts){opts.forEach(o=>o.s+=(Math.random()-.5)*BOT.noise);opts.sort((x,y)=>y.s-x.s);
  return opts[0].s<900&&opts.length>1&&Math.random()<BOT.mistake&&opts[0].s-opts[1].s<5?opts[1]:opts[0]}
@@ -494,7 +582,8 @@ function botAct(){const B=G.bot;if(!live(B))return;const mk=B.mk,opts=botOptions
  botCommit(botChoose(opts))}
 
 function botCommit(sel){const B=G.bot,second=B.room.phase==='react';let id=0;
- if(sel.i>=0){id=B.hand[sel.i];const c=CARDS[id-1];B.S.mana-=c.cost;B.hand.splice(sel.i,1);
+ if(sel.i>=0){id=B.hand[sel.i];const c=CARDS[id-1];B.S.mana-=c.cost;B.hand.splice(sel.i,1);const xi=B.extras.indexOf(id);if(xi>=0)B.extras.splice(xi,1);
   if(c.disc){const n=c.disc>=9?B.hand.length:Math.min(c.disc,B.hand.length);for(let k=0;k<n;k++)B.hand.splice(Math.random()*B.hand.length|0,1)}
-  for(let k=0;k<3&&B.hand.length<3;k++)bDraw()}
+  }
+ for(let k=0;k<3&&B.hand.length<3;k++)bDraw()
  wr({['c.bot']:id,phase:second?'resolve':'react',['pub.bot']:botPub()})}

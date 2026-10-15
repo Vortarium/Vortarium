@@ -282,3 +282,25 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 
 #board{max-height:52vh;overflow-y:auto;padding-right:6px}
 .lb.mine{border-color:var(--gold2,#f3d58a);box-shadow:0 0 0 2px #f3d58a55,0 0 14px #f3d58a44}
+
+/* ---- v4: halt screen, golden mana containers ---- */
+.fbtns{display:flex;flex-direction:column;gap:8px;align-self:stretch}
+#haltBtn{font-size:.68rem;padding:10px 12px}
+#s-game #haltBtn{font-size:.8rem;padding:12px 14px}
+#halt{position:fixed;inset:0;display:none;place-items:center;background:#0a0502dd;backdrop-filter:blur(6px);z-index:30}
+#halt.on{display:grid}
+#halt .mbox{min-width:min(92vw,440px)}
+#halt .htime{font-family:"Cinzel",serif;font-size:4.2rem;font-weight:900;color:var(--gold2);letter-spacing:.08em;text-shadow:0 3px 8px #000;margin:4px 0}
+#halt .mbox button{margin-top:10px}
+#halt .mbox .row button{margin-top:0}
+.hold{position:relative;overflow:hidden}
+.hold u{position:absolute;left:0;top:0;bottom:0;width:0;background:#ffffff66}
+.hold span{position:relative}
+.mn .gem:nth-child(n+11){display:none}
+.mn.wide .gem:nth-child(n+11){display:block;filter:sepia(1) saturate(4) hue-rotate(-12deg) brightness(1.2) drop-shadow(0 0 4px #ffd25a)}
+
+/* first-turn bonus stack: bonus abilities sit under the played card, each one offset a little */
+.stack{position:relative;width:100%;height:100%}
+.stack .card{position:absolute;left:50%;top:50%;transform:translate(calc(-50% - var(--k)*4%),calc(-50% - var(--k)*8%))}
+.stack .card.bn{filter:brightness(.82)}
+.tie{color:var(--gold2);font-size:2.6rem;text-shadow:0 0 24px #d9a44188}
