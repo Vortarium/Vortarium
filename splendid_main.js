@@ -257,7 +257,7 @@ function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.
 
 function initGame(r){statsOff();G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
  const bn=U.deck.filter(id=>CARDS[id-1].type==='BONUS'),bo=bonusOf(bn);G.bn=bn;G.extras=[];
- G.S={hp:20,gold:bo.gheart?MG:0,mana:4,mm:MM+(bo.mclaim?5:0),bonus:bo,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.filter(id=>CARDS[id-1].type!=='BONUS'));G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();
+ G.S={hp:20,gold:bo.gheart?MG:0,mana:4,mm:MM+(bo.mclaim?5:0),bonus:bo,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.filter(id=>CARDS[id-1].type!=='BONUS'));G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();$('#contBtn').style.display='none';
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
  for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
@@ -284,7 +284,7 @@ function onRoom(r){
  /* turn order alternates: A starts and B finishes, then B starts and A finishes, and so on. The round's first player starts the next round once both sides finished and cards were shown for 4s */
  if(r.phase==='resolve'&&r.turn===me&&G.st!==r.seq&&r.fin&&r.fin[me]===r.seq&&r.fin[op]===r.seq){G.st=r.seq;
   const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
-  setTimeout(()=>later(()=>wr({seq:seq+1,phase:'act',turn:op,c:{},res:{},fin:{}})),wait)}
+  const go=()=>later(()=>wr({seq:seq+1,phase:'act',turn:op,c:{},res:{},fin:{}}));if(G.bot)holdCont(go);else setTimeout(go,wait)}
  renderHalt()}
 
 /* Pierce's delayed damage: hits at the start of the victim's next turn, golden hearts absorb it first */
@@ -366,6 +366,8 @@ function doResolve(mc,oc,seq){if(!G||G.over)return;
  G.rd=seq;G.myRes={seq,back:o.back,dmgIn:o.dmgIn,took:o.took,blk:o.blk,cut:o.cut,conv:o.conv,stolen};syncMe();if(o.cd)renderFooter();
  wr({['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
 
+/* vs bot: the next round starts when the player clicks CONTINUE (no 4s auto-advance) */
+function holdCont(f){const b=$('#contBtn');b.style.display='block';b.onclick=()=>{b.style.display='none';f()}}
 const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut||x.conv?' ('+[x.cut?x.cut+' PREVENTED':'',x.conv?x.conv+' CONVERTED TO HEARTS':''].filter(Boolean).join(', ')+')':'');
 function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
  if(ro.stolen){G.extras.push(ro.stolen);G.deck.splice(Math.random()*(G.deck.length+1)|0,0,ro.stolen);renderFooter()}
@@ -402,7 +404,7 @@ setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
-  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`)}
+  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+(G.bot?'PRESS CONTINUE WHEN READY':`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`))}
  haltTick(now)},250);
 
 /* hold-to-confirm button (forfeit) */
@@ -441,7 +443,7 @@ async function endWrite(winner,reason){if(!G||G.over)return;
  if(G.bot){if(G.bot.room.status!=='done')botWrite({status:'done',winner,reason});return}
  if(!G.ref)return;
  try{await runTransaction(db,async t=>{const s=await t.get(G.ref);if(!s.exists()||s.data().status==='done')return;t.update(G.ref,{status:'done',winner,reason})})}catch(e){}}
-function endGame(r){if(G.over)return;G.over=true;$('#halt').classList.remove('on');G.unsub&&G.unsub();const tie=r.reason==='tie',won=!tie&&r.winner===G.me,who=won?G.oppName:'You';
+function endGame(r){if(G.over)return;G.over=true;$('#contBtn').style.display='none';$('#halt').classList.remove('on');G.unsub&&G.unsub();const tie=r.reason==='tie',won=!tie&&r.winner===G.me,who=won?G.oppName:'You';
  const txt={time:'ran out of time',forfeit:'forfeited','hearts':'lost all hearts',disconnect:'disconnected'}[r.reason]||'lost';
  modal(tie?`<h2 class="tie">TIE</h2><p>Both players fell at the same time.</p><button class="blue" id="bk">CONTINUE</button>`
   :`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);
@@ -508,7 +510,7 @@ function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.sta
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
  if(r.phase==='resolve'&&B.rd===r.seq&&B.fin!==r.seq&&r.res[hu]&&r.res[hu].seq===r.seq)botFinish(r);
  if(r.phase==='resolve'&&r.turn==='bot'&&B.st!==r.seq&&r.fin&&r.fin.bot===r.seq&&r.fin[hu]===r.seq){B.st=r.seq;const seq=r.seq,wait=Math.max(0,(G.shownAt||Date.now())+4000-Date.now());
-  setTimeout(()=>{if(live(B))wr({seq:seq+1,phase:'act',turn:hu,c:{},res:{},fin:{}})},wait)}}
+  holdCont(()=>{if(live(B))wr({seq:seq+1,phase:'act',turn:hu,c:{},res:{},fin:{}})})}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
  syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;B.idle=(!hc||CARDS[hc-1].cost<=1)?B.idle+1:0;

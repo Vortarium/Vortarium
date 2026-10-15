@@ -304,3 +304,6 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 .stack .card{position:absolute;left:50%;top:50%;transform:translate(calc(-50% - var(--k)*4%),calc(-50% - var(--k)*8%))}
 .stack .card.bn{filter:brightness(.82)}
 .tie{color:var(--gold2);font-size:2.6rem;text-shadow:0 0 24px #d9a44188}
+
+#s-game .board{position:relative}
+#contBtn{position:absolute;right:16px;bottom:12px;z-index:5;padding:12px 26px}
