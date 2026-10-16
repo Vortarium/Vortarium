@@ -20,13 +20,21 @@ const closeModal=()=>$('#modal').classList.remove('on');
 /* ---------- embers ---------- */
 (()=>{const b=$('#embers');for(let i=0;i<22;i++){const e=document.createElement('i');e.style.left=Math.random()*100+'%';e.style.setProperty('--dx',(Math.random()*160-80)+'px');e.style.animationDuration=(7+Math.random()*9)+'s';e.style.animationDelay=(-Math.random()*14)+'s';const z=3+Math.random()*4;e.style.width=e.style.height=z+'px';b.append(e)}})();
 
+/* ---------- settings (saved on this device) ---------- */
+const SET=(()=>{const d={sfx:true,music:true,manual:true};try{return Object.assign(d,JSON.parse(localStorage.getItem('splendid_set')||'{}'))}catch(e){return d}})();
+const saveSet=()=>{try{localStorage.setItem('splendid_set',JSON.stringify(SET))}catch(e){}};
 /* ---------- audio ---------- */
 const SFX={};['take','place','hit','break','regen'].forEach(n=>{SFX[n]=new Audio(`splendid_${n}.mp3`);SFX[n].preload='auto'});
-const sfx=n=>{try{const a=SFX[n].cloneNode();a.volume=.8;a.play().catch(()=>{})}catch(e){}};
+const sfx=n=>{if(!SET.sfx)return;try{const a=SFX[n].cloneNode();a.volume=.8;a.play().catch(()=>{})}catch(e){}};
 const music=new Audio('splendid_music.mp3');music.loop=true;music.volume=.5;
-const startMusic=()=>music.play().catch(()=>{});
+const startMusic=()=>{if(SET.music)music.play().catch(()=>{})};
 startMusic();
 ['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>{if(music.paused)startMusic()}));
+function drawSet(){[['tSfx','SFX',SET.sfx],['tMus','MUSIC',SET.music]].forEach(([id,n,on])=>{const b=$('#'+id);b.textContent=n+': '+(on?'ON':'OFF');b.className=on?'green':'red'});const a=$('#tAuto');a.textContent='BOT TURNS: '+(SET.manual?'MANUAL':'AUTO');a.className='blue'}
+$('#tSfx').onclick=()=>{SET.sfx=!SET.sfx;saveSet();drawSet()};
+$('#tMus').onclick=()=>{SET.music=!SET.music;saveSet();drawSet();if(SET.music)startMusic();else music.pause()};
+$('#tAuto').onclick=()=>{SET.manual=!SET.manual;saveSet();drawSet()};
+drawSet();
 
 /* ---------- cards ---------- */
 const RAR=[{n:'Ember',c:'#b4bcc8',node:1},{n:'Spark',c:'#f6cf4a',node:2},{n:'Flare',c:'#ff9b54',node:3},{n:'Blaze',c:'#ff5a6e',node:4}];
@@ -54,22 +62,22 @@ const ICONS={
 };
 const MM=10,MG=10;   /* max mana, max golden hearts */
 const FAM=[
-['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8]}],
+['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8],mb:[0,1,2,3]}],
 ['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[2,3,4,6],pdot:[1,1,2,3]}],
 ['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[4,6,8,10]}],
-['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,5,6],heal:[1,2,2,3]}],
-['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[2,3,5,7]}],
-['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[2,3,3,4],rn:[[1,1],[1,1],[2,1],[2,1]]}],
-['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[4,5,7,9],small:[2,3,4,5]}],
+['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[3,4,6,7],heal:[1,2,2,3]}],
+['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[1,2,4,6]}],
+['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[1,2,3,4],rn:[[1,1],[1,1],[2,1],[3,1]]}],
+['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[6,5,4,3],big:[4,5,7,9],small:[2,3,4,5]}],
 ['Crimson','HEAL','crimson',{cost:[1,3,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
 ['Reserve','MANA HEAL','reserve',{cost:0,mana:[2,3,4,5],dl:[1,2,3,4]}],
 ['Exchange','MANA HEAL','exchange',{cost:0,hpl:[1,2,3,4],mana:[2,3,4,5]}],
 ['Offering','MANA HEAL','offering',{cost:0,mana:[1,2,3,4],disc:[1,2,2,9]}],
 ['Cloud','SPELL','cloud',{cost:[3,5,7,10],cd:[1,2,9,9],steal:[0,0,0,1]}],
-['Shield','SPELL','shield',{cost:[1,2,4,7],shield:1,back:[0,1,2,4]}],
+['Shield','SPELL','shield',{cost:[2,3,5,8],shield:1,back:[0,1,2,4]}],
 ['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[2,4,6,8]}],
-['Mana Break','SPELL','mbreak',{cost:[1,2,3,5],mb:[2,3,5,99]}]];
+['Mana Break','SPELL','mbreak',{cost:[0,1,2,4],mb:[2,3,5,99]}]];
 /* Shield, Crimson's reduction and Vampirism only work against the attack in the SAME round they are played. Nothing carries over. (CARRY=true brings the old 'wait for the next attack' behaviour back.) */
 const CARRY=false;
 const NXT=CARRY?'the next':"this turn's";
@@ -244,7 +252,7 @@ function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.
 
 function initGame(r){statsOff();G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
  G.extras=[];
- G.S={hp:20,gold:0,mana:4,mm:MM,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.slice());G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();$('#contBtn').style.display='none';
+ G.S={hp:20,gold:0,mana:4,mm:MM,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.slice());G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();G.contFn=null;
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
  for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
@@ -347,7 +355,7 @@ function doResolve(mc,oc,seq){if(!G||G.over)return;
  wr({['res.'+G.me]:G.myRes,['pub.'+G.me]:pubOf()})}
 
 /* vs bot: the next round starts when the player clicks CONTINUE (no 4s auto-advance) */
-function holdCont(f){const b=$('#contBtn');b.style.display='block';b.onclick=()=>{b.style.display='none';f()}}
+function holdCont(f){if(!SET.manual){setTimeout(f,Math.max(0,(G.shownAt||Date.now())+4000-Date.now()));return}G.contFn=f;renderFooter()}
 const sideTxt=(who,x)=>!x||!x.dmgIn?'':x.blk?`${who} BLOCKED ${x.dmgIn} DAMAGE`:`${who} TOOK ${x.took} DAMAGE`+(x.cut||x.conv?' ('+[x.cut?x.cut+' PREVENTED':'',x.conv?x.conv+' CONVERTED TO HEARTS':''].filter(Boolean).join(', ')+')':'');
 function finish(r){G.fin=r.seq;const ro=r.res[G.opp],b=ro.back;if(b){hitMe(b);syncMe()}
  if(ro.stolen){G.extras.push(ro.stolen);G.deck.splice(Math.random()*(G.deck.length+1)|0,0,ro.stolen);renderFooter()}
@@ -372,6 +380,8 @@ function renderFooter(){if(!G||!G.init)return;const f=$('#ftr');f.innerHTML='';
  const sk=el('button','lav',G.skipArm&&Date.now()-G.skipArm<2500?'TAP AGAIN':'SKIP TURN');sk.disabled=!myMove();
  sk.onclick=()=>{if(G.skipArm&&Date.now()-G.skipArm<2500){G.skipArm=0;commit(-1)}else{G.skipArm=Date.now();sk.textContent='TAP AGAIN';setTimeout(renderFooter,2600)}};
  f.append(sk,hd);
+ f.classList.toggle('hasc',!!G.contFn);
+ if(G.contFn){const cb=el('button','blue cont','CONTINUE');cb.onclick=()=>{const fn=G.contFn;G.contFn=null;renderFooter();fn()};f.append(cb)}
  const pile=el('div','pile');pile.append(backEl(),el('b','',G.deck.length+(G.extras&&G.extras.length?'+'+G.extras.length:'')));f.append(pile)}
 
 /* timers: only the player whose pick it is has a ticking clock; nothing ticks while cards are revealed */
@@ -384,7 +394,7 @@ setInterval(()=>{if(!G||G.over||!G.init||!G.r||G.r.status!=='playing')return;
  $('#me-clk').classList.toggle('act',m===G.me);$('#op-clk').classList.toggle('act',m===G.opp);
  if(r.phase==='resolve'){
   if(now<G.flipAt)setMsg(`CARDS REVEAL IN ${Math.ceil((G.flipAt-now)/1000)}`);
-  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+(G.bot?'PRESS CONTINUE WHEN READY':`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`))}
+  else if(G.shownAt)setMsg((G.sum?G.sum+'\n':'')+(G.bot&&SET.manual?'PRESS CONTINUE WHEN READY':`NEXT TURN IN ${Math.max(0,Math.ceil((G.shownAt+4000-now)/1000))}`))}
  haltTick(now)},250);
 
 /* hold-to-confirm button (forfeit) */
@@ -396,9 +406,9 @@ holdBtn($('#forfeit'),()=>{if(G&&!G.over)endWrite(G.opp,'forfeit')});
 
 /* ---------- request a halt (player vs player only) ----------
    room.halt = null | {st:'ask',by} | {st:'on',until} | {st:'rask',by,until}
-   Both players must agree to pause; a 10 minute timer runs; either side can ask to resume (the other must agree) or forfeit;
+   Both players must agree to pause; a 15 minute timer runs; either side can ask to resume (the other must agree) or forfeit;
    the game resumes by itself when the timer ends. While paused nobody can move and the 5:00 clocks do not tick. */
-const HALT_MS=10*60*1000;let haltKey='';
+const HALT_MS=15*60*1000;let haltKey='';
 $('#haltBtn').onclick=()=>{if(G&&!G.bot&&!G.over&&G.r&&!G.r.halt)wr({halt:{st:'ask',by:G.me}})};
 function renderHalt(){const box=$('#halt'),h=G&&!G.bot&&!G.over&&G.r&&G.r.halt||null;
  if(!h){const was=haltKey!=='';box.classList.remove('on');haltKey='';if(was&&G&&G.init)renderFooter();return}
@@ -423,7 +433,7 @@ async function endWrite(winner,reason){if(!G||G.over)return;
  if(G.bot){if(G.bot.room.status!=='done')botWrite({status:'done',winner,reason});return}
  if(!G.ref)return;
  try{await runTransaction(db,async t=>{const s=await t.get(G.ref);if(!s.exists()||s.data().status==='done')return;t.update(G.ref,{status:'done',winner,reason})})}catch(e){}}
-function endGame(r){if(G.over)return;G.over=true;$('#contBtn').style.display='none';$('#halt').classList.remove('on');G.unsub&&G.unsub();const tie=r.reason==='tie',won=!tie&&r.winner===G.me,who=won?G.oppName:'You';
+function endGame(r){if(G.over)return;G.over=true;G.contFn=null;$('#halt').classList.remove('on');G.unsub&&G.unsub();const tie=r.reason==='tie',won=!tie&&r.winner===G.me,who=won?G.oppName:'You';
  const txt={time:'ran out of time',forfeit:'forfeited','hearts':'lost all hearts',disconnect:'disconnected'}[r.reason]||'lost';
  modal(tie?`<h2 class="tie">TIE</h2><p>Both players fell at the same time.</p><button class="blue" id="bk">CONTINUE</button>`
   :`<h2 class="${won?'win':'lose'}">${won?'VICTORY':'DEFEAT'}</h2><p>${who} ${txt}.</p><button class="blue" id="bk">CONTINUE</button>`);

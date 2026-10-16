@@ -300,3 +300,7 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 .mn.wide .gem:nth-child(n+11){display:block;filter:sepia(1) saturate(4) hue-rotate(-12deg) brightness(1.2) drop-shadow(0 0 4px #ffd25a)}
 
 .tie{color:var(--gold2);font-size:2.6rem;text-shadow:0 0 24px #d9a44188}
+.setrow{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:10px}
+.ftr.hasc .hand{margin-right:0}
+.ftr.hasc>.cont{margin-left:auto}
+.ftr.hasc .pile{margin-left:0}
