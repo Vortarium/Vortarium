@@ -519,6 +519,19 @@
         .warn:hover .warn-tip, .warn:focus .warn-tip, .warn:focus-visible .warn-tip { opacity: 1; transform: none; }
 
 
+        /* ── Locked projects (the ones with the red warning) ── */
+        .locked { cursor: not-allowed !important; }
+        .locked .thumb-wrap, .locked .rank-bg { filter: grayscale(1) brightness(0.45); }
+        .locked .game-title, .locked .rank-name { opacity: 0.45; }
+        .game-card.locked:hover .thumb-wrap, .rank-row.locked:hover { transform: none; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+        .rank-row.locked:hover .rank-bg { filter: grayscale(1) brightness(0.45); }
+        .rank-row.locked .rank-play { display: none; }
+        .lock-ico {
+            position: absolute; inset: 0; display: grid; place-items: center;
+            color: rgba(255,255,255,0.75); pointer-events: none; z-index: 2;
+        }
+        .rank-row .lock-ico { inset: auto 18px auto auto; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; }
+
         /* ── Popular: long thin ranked banners ── */
         .rank-row {
             position: relative;
@@ -887,7 +900,7 @@
             { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026', warn: true },
             { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026', warn: true },
             { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026', warn: true },
-            { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026' },
+            { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026', warn: true },
             { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026', warn: true },
             { prefix: 'trivio',          name: 'Trivio',           img: 'trivio.png',           date: 'APR 2026' },
             { prefix: 'ragebait 2',      name: 'Ragebait 2',       img: 'ragebait-2.png',       date: 'APR 2026', warn: true },
@@ -939,6 +952,11 @@
         const noResultsTerm   = document.getElementById('no-results-term');
 
         const WARN_TEXT = 'This game is very unfinished and low quality compared to the others';
+        // Projects with the red warning are locked (greyed out) unless "vortarium" is typed in the search bar
+        const SECRET = 'vortarium';
+        let unlocked = false;
+        const isLocked = g => !!g.warn && !unlocked;
+        const LOCK_SVG = `<span class="lock-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM10 7a2 2 0 0 1 4 0v2h-4V7z"/></svg></span>`;
         function warnHTML(game) {
             return game.warn
                 ? `<span class="warn" tabindex="0" role="img" aria-label="${WARN_TEXT}">!<span class="warn-tip">${WARN_TEXT}</span></span>`
@@ -947,9 +965,10 @@
 
         function cardHTML(game) {
             return `
-                <button class="game-card" data-prefix="${game.prefix}">
+                <button class="game-card${isLocked(game) ? ' locked' : ''}" ${isLocked(game) ? 'aria-disabled="true"' : `data-prefix="${game.prefix}"`}>
                     <div class="thumb-wrap">
                         <img src="${game.img}" class="game-thumb" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+                        ${isLocked(game) ? LOCK_SVG : ''}
                     </div>
                     <div class="game-title">${game.name}</div>
                     <div class="game-date">${game.date || ''}${warnHTML(game)}</div>
@@ -958,13 +977,14 @@
 
         function rankRowHTML(game, rank) {
             return `
-                <button class="rank-row" data-prefix="${game.prefix}">
+                <button class="rank-row${isLocked(game) ? ' locked' : ''}" ${isLocked(game) ? 'aria-disabled="true"' : `data-prefix="${game.prefix}"`}>
                     <img class="rank-bg" src="${game.img}" alt="" onerror="this.style.visibility='hidden'">
                     <span class="rank-num">${rank}</span>
                     <div class="rank-info">
                         <div class="rank-name">${game.name}</div>
                         <div class="game-date">${game.date || ''}${warnHTML(game)}</div>
                     </div>
+                    ${isLocked(game) ? LOCK_SVG : ''}
                     <span class="rank-play">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>
                     </span>
@@ -974,7 +994,7 @@
         // Trending banner
         if (trendingGame) {
             trendingSection.innerHTML = `
-                <div class="trending" role="button" tabindex="0" aria-label="Play ${trendingGame.name}" data-prefix="${trendingGame.prefix}">
+                <div class="trending${isLocked(trendingGame) ? ' locked' : ''}" role="button" tabindex="0" aria-label="Play ${trendingGame.name}" ${isLocked(trendingGame) ? 'aria-disabled="true"' : `data-prefix="${trendingGame.prefix}"`} ${isLocked(trendingGame) ? 'style="filter:grayscale(1) brightness(.5)"' : ''}>
                     <img class="trending-bg" src="${trendingGame.img}" alt="" style="object-position:${TRENDING_FOCUS}" onerror="this.style.visibility='hidden'">
                     <div class="trending-scrim"></div>
                     <div class="trending-copy">
@@ -1002,6 +1022,7 @@
         function render() {
             const query    = searchInput.value.trim().toLowerCase();
             const browsing = !query;
+            unlocked = query === SECRET;   // typing the secret unlocks every locked project
 
             // Banner + popular leaderboard only show when not searching
             if (trendingGame) trendingSection.style.display = browsing ? '' : 'none';
@@ -1009,10 +1030,11 @@
 
             let list = sortedGames;
             if (browsing && !SHOW_POPULAR_IN_ALL) list = list.filter(g => !popularSet.has(g.prefix));
-            if (query) list = list.filter(g => g.name.toLowerCase().includes(query));
+            if (unlocked) list = sortedGames.filter(g => g.warn);
+            else if (query) list = list.filter(g => g.name.toLowerCase().includes(query));
 
             grid.innerHTML = list.map(g => cardHTML(g)).join('');
-            allTitle.textContent = browsing ? 'All projects' : 'Results';
+            allTitle.textContent = browsing ? 'All projects' : unlocked ? 'Unlocked projects' : 'Results';
             allCount.textContent = list.length + (list.length === 1 ? ' project' : ' projects');
 
             if (list.length === 0 && query) {
@@ -1224,6 +1246,8 @@
 
         // ── Launch game ───────────────────────────────────────────────────────
         function launchGame(prefix) {
+            const g = byPrefix[prefix];
+            if (g && isLocked(g)) return;   // locked projects can't be opened
             inGame = true;
             fadeOut(music, 600);
             setScrollbarVisible(false);

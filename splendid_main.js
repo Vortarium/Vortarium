@@ -30,8 +30,8 @@ startMusic();
 
 /* ---------- cards ---------- */
 const RAR=[{n:'Ember',c:'#b4bcc8',node:1},{n:'Spark',c:'#f6cf4a',node:2},{n:'Flare',c:'#ff9b54',node:3},{n:'Blaze',c:'#ff5a6e',node:4}];
-const TC={'ATTACK':'#ff8fa3','HEAL':'#5fd3a4','MANA HEAL':'#6cb4ff','SPELL':'#b09cff','BONUS':'#b09cff'};
-const TL={'ATTACK':'#ffa9b8','HEAL':'#86e6bc','MANA HEAL':'#92c9ff','SPELL':'#c7b8ff','BONUS':'#c7b8ff'};
+const TC={'ATTACK':'#ff8fa3','HEAL':'#5fd3a4','MANA HEAL':'#6cb4ff','SPELL':'#b09cff'};
+const TL={'ATTACK':'#ffa9b8','HEAL':'#86e6bc','MANA HEAL':'#92c9ff','SPELL':'#c7b8ff'};
 const star=(cx,cy,R,r)=>{let p='';for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,k=i%2?r:R;p+=(i?'L':'M')+(cx+k*Math.cos(a)).toFixed(1)+' '+(cy+k*Math.sin(a)).toFixed(1)}return p+'z'};
 const HRT='M24 35C16 29 17 22 21 22c1.6 0 2.7 1 3 2 .3-1 1.4-2 3-2 4 0 5 7-3 13z';
 const ICONS={
@@ -51,10 +51,7 @@ const ICONS={
  shield:['M24 5l15 5v12c0 9-6 15-15 20-9-5-15-11-15-20V10z','M24 11v28','M13 19h22'],
  vamp:['M24 20C20 12 12 10 5 13c3 3 3 8 1 11 3-2 6-1 8 2 2-3 6-3 8 0l2 5 2-5c2-3 6-3 8 0 2-3 5-4 8-2-2-3-2-8 1-11-7-3-15-1-19 7z','M21 18l-1-6M27 18l1-6','M22 28v3M26 28v3'],
  mbreak:['M24 3l5 12 13-4-8 10 10 8-13 0 1 13-8-9-8 9 1-13-13 0 10-8-8-10 13 4z','M24 20a4 4 0 1 0 .01 0'],
- mclaim:[star(24,25,21,9),'M24 19l5 6-5 7-5-7z'],
- life:[star(24,25,21,9),HRT],
- gheart:[star(24,25,21,9),HRT,'M24 13v5M21.5 15.5h5'],
- wither:[star(24,25,21,9),'M19 20l10 11M29 20L19 31']};
+};
 const MM=10,MG=10;   /* max mana, max golden hearts */
 const FAM=[
 ['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8]}],
@@ -78,21 +75,13 @@ const CARRY=false;
 const NXT=CARRY?'the next':"this turn's";
 const CARDS=[];
 FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r,nd:RAR[r].node};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
-/* bonus abilities: global passives (never in your hand), each costs double nodes. ids 65-68 */
-[['Mana Claim','mclaim'],['Lifeblood','life'],['Gold Heart','gheart'],['Wither','wither']].forEach(([name,k],r)=>CARDS.push({id:65+r,name,type:'BONUS',ic:k,r,cost:0,bonus:k,nd:RAR[r].node*2}));
-const BN={mclaim:65,life:66,gheart:67,wither:68};
-const bonusOf=ids=>({mclaim:ids.includes(65),life:ids.includes(66),gheart:ids.includes(67),wither:ids.includes(68)});
 const nodes=d=>d.reduce((a,id)=>a+CARDS[id-1].nd,0);
 const cardEl=(c,x='')=>{const e=el('div','card '+x);e.style.setProperty('--rc',RAR[c.r].c);e.style.setProperty('--tc',TC[c.type]);e.style.setProperty('--tl',TL[c.type]);
  const P=ICONS[c.ic].map(d=>`<path d="${d}"/>`).join('');
  e.innerHTML=`<svg viewBox="0 0 48 48"><circle class="rg" cx="24" cy="24" r="23"/><circle class="rg2" cx="24" cy="24" r="20"/><g class="sh" transform="translate(1.2 1.7)">${P}</g><g class="hl" transform="translate(-.6 -.7)">${P}</g><g class="et">${P}</g></svg><span>${c.name}</span>`;return e};
 const backEl=()=>el('div','card back','<i></i>');
 const gem=t=>`<i class="gem ${t}"></i>`;
-const BONUS_TXT={mclaim:'Gain golden mana containers: your mana can stack up to 5 over the limit, so mana you gain while full is no longer wasted. Global for the whole game.',
- life:'Heal 1 HP at the start of every one of your turns. Global for the whole game.',
- gheart:'Start every game with 10 golden hearts. Global for the whole game.',
- wither:'Your opponent loses 1 heart every round. Global for the whole game.'};
-function desc(c){if(c.bonus)return BONUS_TXT[c.bonus];const s=[];
+function desc(c){const s=[];
  if(c.dmg)s.push(`deal ${c.dmg} damage`+(c.pdot?` and ${c.pdot} damage the next turn`:''));
  if(c.shield)s.push('block '+NXT+' attack against you'+(c.back?` and deal ${c.back} damage back`:''));
  else if(c.th)s.push(`restore ${c.big} HP if you have ${c.th} HP or less, otherwise restore ${c.small} HP`);
@@ -107,7 +96,7 @@ function desc(c){if(c.bonus)return BONUS_TXT[c.bonus];const s=[];
  if(c.vamp)s.push(`convert up to ${c.vamp} damage from ${NXT} attack into healing`);
  if(c.mb)s.push(c.mb>=99?'remove all mana from your opponent':`remove ${c.mb} mana from your opponent`);
  const t=s.join(' and ');return t[0].toUpperCase()+t.slice(1)+'.'}
-function eff(c){const o=[];if(c.bonus)return '<span class="chip">&#9733; GLOBAL</span>';
+function eff(c){const o=[];
  const add=(n,t,w)=>o.push(`<span class="chip">${n>0?'+':'-'}${Math.abs(n)}${gem(t)}${w?'<small>'+w+'</small>':''}</span>`);
  if(c.dmg)add(-c.dmg,'r','foe');if(c.pdot)add(-c.pdot,'r','next turn');
  if(c.heal&&!c.shield)add(c.heal,'r');if(c.th)add(c.big,'r');if(c.hpl)add(-c.hpl,'r');if(c.dl)add(-c.dl,'r','next turn');
@@ -134,7 +123,7 @@ $('#bOut').onclick=()=>{statsOff();signOut(auth)};
 onAuthStateChanged(auth,u=>{if(signing)return;if(u)boot(u);else{user=null;U=null;show('s-auth')}});
 async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await getDoc(r);
  if(!s.exists()){await setDoc(r,{name:user.displayName||'Player',wins:0,losses:0,ties:0,streak:0,best:0,matches:0,rate:0,time:0,deck:[]});s=await getDoc(r)}
- U=s.data();U.deck=U.deck||[];
+ U=s.data();U.deck=U.deck||[];{const ok=U.deck.filter(id=>id>=1&&id<=64);if(ok.length!==U.deck.length){U.deck=ok;updateDoc(r,{deck:ok}).catch(()=>{})}}   /* drop any old bonus-card ids */
  if(U.rate===undefined&&(U.matches||0)>0){U.rate=Math.round((U.wins||0)/U.matches*100);updateDoc(r,{rate:U.rate}).catch(()=>{})}}
 async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show('s-menu');goTab('play');renderDeck();updateLock()}
 
@@ -163,15 +152,13 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
   const row=el('div','fam');row.append(el('div','fl',f[0].toUpperCase()));
   for(let r=0;r<4;r++)row.append(cell(CARDS[fi*4+r]));
   g.append(row)});
- {const h=el('div','sech','<i></i>BONUS ABILITIES<i></i>');h.style.setProperty('--sc',TL.BONUS);g.append(h);
-  const row=el('div','fam');row.append(el('div','fl','STARS'));CARDS.filter(c=>c.bonus).forEach(c=>row.append(cell(c)));g.append(row)}
  g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / ${MAXN}  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/MAXN*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
  if(!dSel){p.innerHTML='<p style="margin:auto;opacity:.6">Select a card to inspect it.<br>Use the circle on a card to add it to your deck.</p>';return}
  const c=CARDS[dSel-1],r=RAR[c.r],on=U.deck.includes(c.id);
  const big=cardEl(c,'big');p.append(big);
  p.append(el('h2','',c.name),el('b','',`<span style="color:${r.c}">${r.n.toUpperCase()}</span>`),
-  el('div','',`<span class="chip">${c.nd} NODE${c.nd>1?'S':''}</span><span class="chip">${c.bonus?'BONUS ABILITY':c.type}</span><span class="chip">${c.bonus?'&#9733; GLOBAL':c.cost+' '+gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
+  el('div','',`<span class="chip">${c.nd} NODE${c.nd>1?'S':''}</span><span class="chip">${c.type}</span><span class="chip">${c.cost+' '+gem('b')}</span>`),el('div','',eff(c)),el('p','',desc(c)));
  const full=!on&&nodes(U.deck)+c.nd>MAXN;const b=el('button',on?'red':'green',on?'REMOVE FROM DECK':full?'NOT ENOUGH NODES':'ADD TO DECK');b.disabled=full;b.onclick=()=>toggle(c.id);p.append(b)}
 
 /* stats tab: ONE live listener on every player document. All four boards and "my stats" are drawn from it, so
@@ -235,12 +222,12 @@ function gemSet(box,n,base,snd){const sl=$$('.gem',box),lost=[],first=!box.datas
  lost.reverse().forEach((i,k)=>setTimeout(()=>{const g=sl[i];if(+g.dataset.f)return;g.classList.remove('on');g.classList.add('shatter');sfx('break');setTimeout(()=>g.classList.remove('shatter'),480)},(base+k)*200));return lost.length}
 function renderSide(s,hp,gd,mn,mm){let d=0;regenN=0;$('#'+s+'-mn').classList.toggle('wide',(mm||MM)>MM);d+=gemSet($('#'+s+'-hp'),Math.max(0,hp),d,true);d+=gemSet($('#'+s+'-gd'),gd,d,false);gemSet($('#'+s+'-mn'),mn,d,true);if(regenN)sfx('regen')}
 const fxTxt=S=>[S.shield?'SHIELD ('+S.shield.t+' LEFT)':'',S.bleed&&S.bleed.length?'BLEED '+S.bleed.reduce((a,b)=>a+b.a,0):'',S.dl?'LOSE '+S.dl+' NEXT TURN':'',S.vamp?'VAMPIRISM '+S.vamp:'',S.red?'-'+S.red+' NEXT HIT':'',S.dots.length?'REGEN '+S.dots.reduce((a,d)=>a+d.a*d.t,0):'',
- ...(S.bonus?[S.bonus.mclaim&&'\u2605 MANA CLAIM',S.bonus.life&&'\u2605 LIFEBLOOD',S.bonus.gheart&&'\u2605 GOLD HEART',S.bonus.wither&&'\u2605 WITHER']:[])].filter(Boolean).join('  \u00b7  ');
+].filter(Boolean).join('  \u00b7  ');
 const syncMe=()=>{renderSide('me',G.S.hp,G.S.gold,G.S.mana,G.S.mm);$('#me-fx').textContent=fxTxt(G.S)};
 
 /* ---------- battle ---------- */
 const setMsg=t=>$('#gmsg').textContent=t;
-const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,mm:G.S.mm,bn:G.bn||[],dx:G.extras?G.extras.length:0,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
+const pubOf=()=>({fx:fxTxt(G.S),hp:G.S.hp,gold:G.S.gold,mana:G.S.mana,mm:G.S.mm,dx:G.extras?G.extras.length:0,deck:G.deck.length,hand:G.hand.length,clock:G.clk.me});
 const wr=p=>G&&G.bot?Promise.resolve(botWrite(p)):updateDoc(G.ref,p).catch(()=>{});
 const pub=()=>wr({['pub.'+G.me]:pubOf()});
 /* turn model: first player (room.turn) picks in phase 'act', second player picks in phase 'react', then 'resolve'. room.turn flips every round. */
@@ -252,12 +239,12 @@ const canPlay=c=>myMove()&&c.cost<=G.S.mana;
 const heal=n=>G.S.hp=Math.min(20,G.S.hp+n);
 function hitMe(d){const S=G.S,g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))}
 /* pile empty -> whole deck (minus cards in hand) is reshuffled back in, so nobody ever runs out */
-const refill=()=>{const pool=U.deck.filter(id=>CARDS[id-1].type!=='BONUS').concat(G.extras||[]);G.hand.forEach(h=>{const i=pool.indexOf(h);if(i>=0)pool.splice(i,1)});G.deck=shuffle(pool)};
+const refill=()=>{const pool=U.deck.concat(G.extras||[]);G.hand.forEach(h=>{const i=pool.indexOf(h);if(i>=0)pool.splice(i,1)});G.deck=shuffle(pool)};
 function draw(){if(!G.deck.length)refill();if(G.deck.length&&G.hand.length<3){G.hand.push(G.deck.pop());sfx('take');if(!G.deck.length){refill();sfx('regen')}}}
 
 function initGame(r){statsOff();G.init=1;G.waiting=false;G.opp=r.host.uid===G.me?r.guest.uid:r.host.uid;G.oppName=r.host.uid===G.me?r.guest.name:r.host.name;
- const bn=U.deck.filter(id=>CARDS[id-1].type==='BONUS'),bo=bonusOf(bn);G.bn=bn;G.extras=[];
- G.S={hp:20,gold:bo.gheart?MG:0,mana:4,mm:MM+(bo.mclaim?5:0),bonus:bo,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.filter(id=>CARDS[id-1].type!=='BONUS'));G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();$('#contBtn').style.display='none';
+ G.extras=[];
+ G.S={hp:20,gold:0,mana:4,mm:MM,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0};G.deck=shuffle(U.deck.slice());G.hand=[];$('#haltBtn').style.display=G.bot?'none':'';G.t0=Date.now();G.last=Date.now();$('#contBtn').style.display='none';
  clearInterval(G.beat);closeModal();show('s-game');buildGems();$('#me-name').textContent=U.name;$('#op-name').textContent=G.oppName;
  for(let i=0;i<3;i++)draw();syncMe();renderSide('op',20,0,4);renderOpHand(3);$('#op-dn').textContent='';renderFooter();pub()}
 function renderOpHand(n){const h=$('#op-hand');h.innerHTML='';for(let i=0;i<n;i++)h.append(backEl())}
@@ -290,15 +277,13 @@ function onRoom(r){
 /* Pierce's delayed damage: hits at the start of the victim's next turn, golden hearts absorb it first */
 const tickBleed=S=>{S.bleed=S.bleed.filter(b=>{const g=Math.min(S.gold,b.a);S.gold-=g;S.hp=Math.max(0,S.hp-(b.a-g));b.t--;return b.t>0})};
 /* The start of ONE player's own turn (the first player at the start of the round, the second player once the first has played):
-   +1 mana, heals first (Renewal, Lifeblood), then delayed losses (Reserve, Pierce wounds, enemy Wither). Shared with the bot. */
-function turnStart(S,foeWither){
+   +1 mana, heals first (Renewal), then delayed losses (Reserve, Pierce wounds). Shared with the bot. */
+function turnStart(S){
  S.mana=Math.min(S.mm||MM,S.mana+1+S.nm);S.nm=0;
  S.dots=S.dots.filter(d=>{S.hp=Math.min(20,S.hp+d.a);d.t--;return d.t>0});
- if(S.bonus&&S.bonus.life)S.hp=Math.min(20,S.hp+1);
  if(S.dl){S.hp=Math.max(0,S.hp-S.dl);S.dl=0}
- tickBleed(S);
- if(foeWither)S.hp=Math.max(0,S.hp-1)}
-function beginTurn(){const S=G.S,o=G.r.pub&&G.r.pub[G.opp];turnStart(S,!!(o&&o.bn&&o.bn.includes(BN.wither)));syncMe();pub();if(S.hp<=0)endWrite(G.opp,'hearts')}
+ tickBleed(S)}
+function beginTurn(){const S=G.S;turnStart(S);syncMe();pub();if(S.hp<=0)endWrite(G.opp,'hearts')}
 
 /* one discard per turn; it does not use up the turn */
 function discard(i){if(!myMove()||G.disc||!G.hand[i])return;G.disc=true;G.hand.splice(i,1);G.sel=null;draw();pub();renderFooter()}
@@ -320,13 +305,8 @@ function reveal(r){const mc=r.c[G.me],oc=r.c[G.opp],seq=r.seq;
  setMsg('');
  /* both cards stay face down for 3s, then flip together */
  setTimeout(()=>{if(!G||G.over||G.rv!==seq)return;
-  /* bonus abilities are not cards you play: on each player's FIRST turn they are shown automatically, stacked (slightly offset) under the card that was played */
-  const mkc=(id,x)=>id?cardEl(CARDS[id-1],x):el('div','card skip '+x,'SKIP');
-  const put=(id,slot,bn)=>{if(bn.length){const st=el('div','stack');[...bn,id].forEach((x,j,a)=>{const e=mkc(x,'flip'+(j<a.length-1?' bn':''));e.style.setProperty('--k',a.length-1-j);st.append(e)});$(slot).replaceChildren(st)}
-   else $(slot).replaceChildren(mkc(id,'flip'));
-   if(id){sfx('place');if(CARDS[id-1].dmg)setTimeout(()=>sfx('hit'),200)}};
-  const first=r.seq===1,srt=a=>[...(a||[])].sort((x,y)=>x-y);
-  put(mc,'#me-slot',first?srt(G.bn):[]);put(oc,'#op-slot',first?srt(r.pub&&r.pub[G.opp]&&r.pub[G.opp].bn):[]);G.shownAt=Date.now();
+  const put=(id,slot)=>{if(!id){$(slot).replaceChildren(el('div','card skip flip','SKIP'));return}const c=CARDS[id-1],e=cardEl(c,'flip');$(slot).replaceChildren(e);sfx('place');if(c.dmg)setTimeout(()=>sfx('hit'),200)};
+  put(mc,'#me-slot');put(oc,'#op-slot');G.shownAt=Date.now();
   setTimeout(()=>doResolve(mc,oc,seq),600)},1000)}
 
 /* Resolves one round for ONE side. S = that side's state, m = card that side played, t = card the other side played.
@@ -468,7 +448,7 @@ const BOT={think:[1100,2600],   // ms of "thinking" before it commits
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
 const live=B=>!!(G&&G.bot===B&&!G.over);
-const newSide=()=>({hp:20,gold:0,mana:4,mm:MM,bonus:bonusOf([]),shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0});
+const newSide=()=>({hp:20,gold:0,mana:4,mm:MM,shield:null,vamp:0,red:0,dots:[],bleed:[],dl:0,nm:0});
 const sideHit=(S,d)=>{const g=Math.min(S.gold,d);S.gold-=g;S.hp=Math.max(0,S.hp-(d-g))};
 function setPath(o,k,v){const p=k.split('.');let x=o;for(let i=0;i<p.length-1;i++)x=x[p[i]]=x[p[i]]||{};x[p[p.length-1]]=v}
 
@@ -477,19 +457,16 @@ function botWrite(p){const B=G&&G.bot;if(!B)return;for(const k in p)setPath(B.ro
  setTimeout(()=>{if(!live(B))return;onRoom(cl(B.room));botTick()},0)}
 
 /* the bot's deck mirrors YOUR node usage card by card: for every card in your deck it picks a random card with the same node cost
-   (one 4-node, two 3-node, one 1-node... for you means the same shape for the bot, but different random cards).
-   A bonus ability of yours becomes a random bonus ability that costs no more nodes; any leftover nodes are filled with random cards. */
-function makeBotDeck(){const mine=U.deck.map(id=>CARDS[id-1]),d=[],POOL=CARDS.filter(c=>c.type!=='BONUS'),BON=CARDS.filter(c=>c.bonus),pick=p=>p[Math.random()*p.length|0];
- mine.filter(c=>c.bonus).sort((a,b)=>b.nd-a.nd).forEach(c=>{const p=BON.filter(x=>x.nd<=c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
- mine.filter(c=>!c.bonus).forEach(c=>{const p=POOL.filter(x=>x.nd===c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
- let n=nodes(d);while(n<MAXN){const p=POOL.filter(x=>!d.includes(x.id)&&n+x.nd<=MAXN);if(!p.length)break;const x=pick(p);d.push(x.id);n+=x.nd}
+   (one 4-node, two 3-node, one 1-node... for you means the same shape for the bot, but different random cards). Leftover nodes are filled randomly. */
+function makeBotDeck(){const d=[],pick=p=>p[Math.random()*p.length|0];
+ U.deck.map(id=>CARDS[id-1]).forEach(c=>{const p=CARDS.filter(x=>x.nd===c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
+ let n=nodes(d);while(n<MAXN){const p=CARDS.filter(x=>!d.includes(x.id)&&n+x.nd<=MAXN);if(!p.length)break;const x=pick(p);d.push(x.id);n+=x.nd}
  return d}
 
-function startBot(){const full=makeBotDeck(),all=full.filter(id=>CARDS[id-1].type!=='BONUS'),bn=full.filter(id=>CARDS[id-1].type==='BONUS').sort((a,b)=>a-b),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
+function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
  G=newG('BOT');G.ref=null;
  const room={code:'BOT',status:'playing',host:{uid:user.uid,name:U.name},guest:{uid:'bot',name},turn:Math.random()<.5?user.uid:'bot',seq:1,phase:'act',pub:{},c:{},res:{},fin:{}};
- const B=G.bot={room,S:newSide(),O:newSide(),all,bn,idle:0,k:0,oStart:0,deck:shuffle(all),hand:[],extras:[],seen:{},a:0,mk:null,hmk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
- {const bo=bonusOf(bn);B.S.bonus=bo;B.S.gold=bo.gheart?MG:0;B.S.mm=MM+(bo.mclaim?5:0)}
+ const B=G.bot={room,S:newSide(),O:newSide(),all,idle:0,k:0,oStart:0,deck:shuffle(all),hand:[],extras:[],seen:{},a:0,mk:null,hmk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
  for(let i=0;i<3;i++)bDraw();
  room.pub.bot=botPub();
  onRoom(cl(room));botTick()}
@@ -497,14 +474,14 @@ function startBot(){const full=makeBotDeck(),all=full.filter(id=>CARDS[id-1].typ
 const bPool=B=>{const p=B.all.concat(B.extras);B.hand.forEach(h=>{const i=p.indexOf(h);if(i>=0)p.splice(i,1)});return shuffle(p)};
 const bDraw=()=>{const B=G.bot;if(B.hand.length>=3)return;if(!B.deck.length)B.deck=bPool(B);
  if(B.deck.length){B.hand.push(B.deck.pop());if(!B.deck.length)B.deck=bPool(B)}};
-const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,mm:B.S.mm,bn:B.bn,dx:B.extras.length,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
-const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana;B.O.mm=o.mm||MM;B.O.bonus=bonusOf(o.bn||[])}};
+const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,mm:B.S.mm,dx:B.extras.length,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
+const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana;B.O.mm=o.mm||MM}};
 
 /* the bot's side of the round loop (mirrors onRoom) */
 function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.status!=='playing')return;const hu=G.me;
  const m=r.phase==='act'?r.turn:r.phase==='react'?(r.turn==='bot'?hu:'bot'):null,mk=r.seq+':'+r.phase;
- /* each side's turn starts when it becomes that side's move (mana, delayed effects, bonus abilities) */
- if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;turnStart(B.S,!!(G.S&&G.S.bonus&&G.S.bonus.wither));wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}
+ /* each side's turn starts when it becomes that side's move (mana, delayed effects) */
+ if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;turnStart(B.S);wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}
   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},BOT.think[0]+Math.random()*(BOT.think[1]-BOT.think[0]))}
  if(m===hu&&B.hmk!==mk){B.hmk=mk;syncO();turnStart(B.O,false);B.oStart=B.O.mana;B.k=Math.random()<.75?.8+Math.random()*1.4:0}   /* B.k: how strongly the bot reads a big mana spend this round (0 = it doesn't notice) */
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
@@ -530,7 +507,7 @@ function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back
 /* tell = {spent,k} when you already committed this round and your mana gems dropped a lot: a big spend hints at a big (attack) card. It is only a hunch,
    so it just shifts the odds. Sitting on lots of unspent mana for a few rounds also makes a big play more likely. */
 function oppDist(mana,tell){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
- CARDS.forEach(c=>{if(c.type==='BONUS'||c.cost>mana)return;let w=RW[c.r];const sn=B.seen[c.id]||0;if(sn)w*=3+Math.min(sn,3);
+ CARDS.forEach(c=>{if(c.cost>mana)return;let w=RW[c.r];const sn=B.seen[c.id]||0;if(sn)w*=3+Math.min(sn,3);
   if(c.type==='ATTACK')w*=mana>=2?1.5:1;
   else if(c.type==='HEAL')w*=O.hp<=10?2.2:O.hp>=17?.15:.7;
   else if(c.hpl||c.dl)w*=O.hp<=8?.1:mana<=2?2:.6;
@@ -544,7 +521,7 @@ function oppDist(mana,tell){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
 function botEval(a,b){
  if(a.hp<=0&&b.hp<=0)return -300;if(b.hp<=0)return 1000;if(a.hp<=0)return -1000;
  const hv=x=>x.hp+.85*x.gold,mv=m=>.8*Math.min(m,4)+.1*m;
- const pot=x=>-x.bleed.reduce((s,b)=>s+b.a*.9,0)-(x.dl||0)+(x.bonus&&x.bonus.life?1.2:0)+(x.shield?2.2:0)+Math.min(x.vamp,6)*.45+x.red*.7+x.dots.reduce((s,d)=>s+d.a*d.t*.8,0);
+ const pot=x=>-x.bleed.reduce((s,b)=>s+b.a*.9,0)-(x.dl||0)+(x.shield?2.2:0)+Math.min(x.vamp,6)*.45+x.red*.7+x.dots.reduce((s,d)=>s+d.a*d.t*.8,0);
  const wa=1+Math.max(0,9-a.hp)*.14,wb=1+Math.max(0,8-b.hp)*.08;   // own hearts matter more when low, kill pressure when you're low
  return wa*hv(a)-wb*hv(b)+mv(a.mana)-.9*mv(b.mana)+pot(a)-pot(b)}
 

@@ -299,11 +299,4 @@ h3{margin:20px 0 10px;letter-spacing:.16em;color:var(--gold2)}
 .mn .gem:nth-child(n+11){display:none}
 .mn.wide .gem:nth-child(n+11){display:block;filter:sepia(1) saturate(4) hue-rotate(-12deg) brightness(1.2) drop-shadow(0 0 4px #ffd25a)}
 
-/* first-turn bonus stack: bonus abilities sit under the played card, each one offset a little */
-.stack{position:relative;width:100%;height:100%}
-.stack .card{position:absolute;left:50%;top:50%;transform:translate(calc(-50% - var(--k)*4%),calc(-50% - var(--k)*8%))}
-.stack .card.bn{filter:brightness(.82)}
 .tie{color:var(--gold2);font-size:2.6rem;text-shadow:0 0 24px #d9a44188}
-
-#s-game .board{position:relative}
-#contBtn{position:absolute;right:16px;bottom:12px;z-index:5;padding:12px 26px}
