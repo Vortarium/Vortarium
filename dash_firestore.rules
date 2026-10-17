@@ -29,7 +29,10 @@ service cloud.firestore {
 
     match /levels/{id} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'unrated';
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'unrated'
+        && request.resource.data.data is string && request.resource.data.data.size() < 900000
+        && request.resource.data.title is string && request.resource.data.title.size() <= 30
+        && request.resource.data.likes == 0 && request.resource.data.dislikes == 0 && request.resource.data.views == 0;
       allow update: if only(['views', 'likes', 'dislikes']) || isMod();
       allow delete: if isMod() || (signedIn() && resource.data.authorId == request.auth.uid);
       match /comments/{cid} {
@@ -71,3 +74,19 @@ service cloud.firestore {
     }
   }
 }
+
+// ------------------------------------------------------------------
+// FIREBASE STORAGE RULES (Console > Storage > Rules) - needed for level songs:
+//
+// rules_version = '2';
+// service firebase.storage {
+//   match /b/{bucket}/o {
+//     match /songs/{file} {
+//       allow read: if true;
+//       allow write: if request.auth != null && request.resource.size < 12 * 1024 * 1024
+//                    && request.resource.contentType.matches('audio/.*');
+//       allow delete: if request.auth != null;
+//     }
+//   }
+// }
+// ------------------------------------------------------------------

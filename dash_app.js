@@ -1,9 +1,434 @@
+// dash_app.js - DASH (single file: Firebase setup, engine, UI, editor). Put all future code here.
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { getStorage, ref as sref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-storage.js";
+// dash_firebase.js - Firebase setup for DASH
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAlQ0fG9UUgyFFdwlKlTb0p2nbeoJkc3ig",
+  authDomain: "dash-da809.firebaseapp.com",
+  projectId: "dash-da809",
+  storageBucket: "dash-da809.firebasestorage.app",
+  messagingSenderId: "463073446480",
+  appId: "1:463073446480:web:d939f6448a8391dcfa9f55",
+  measurementId: "G-G3D6GQ09CJ"
+};
+
+const app = initializeApp(firebaseConfig);
+isSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+/* ===== ENGINE ===== */
+// dash_game.js - DASH engine: constants, icon drawing, object drawing, physics + renderer
+const U = 30, BASE = 311, STEP = 1 / 240, G = 3250, JUMP = 640, VMAX = 950;
+const PRIMARY = ['#7dff2a', '#ff3b3b', '#ff9a1f', '#ffe81f', '#1fd1ff', '#2f6bff', '#a43bff', '#ff4fd8', '#ffffff', '#3a3a4c'];
+const SECONDARY = ['#1fffe0', '#ffffff', '#ffd21f', '#ff6a3d', '#ff2f6d', '#7a4dff', '#3a8bff', '#2bd45a', '#111118', '#b0b0c0'];
+const DIFFS = [
+  { id: 'easy', name: 'EASY', stars: 1, col: '#3aa0ff' },
+  { id: 'medium', name: 'MEDIUM', stars: 2, col: '#35d35a' },
+  { id: 'hard', name: 'HARD', stars: 3, col: '#ffd21f' },
+  { id: 'insane', name: 'INSANE', stars: 4, col: '#ff3b3b' },
+  { id: 'demon', name: 'DEMON', stars: 5, col: '#c4222f' }
+];
+const SPEEDS = { port_s1: .8, port_s2: 1, port_s3: 1.3, port_s4: 1.6 };
+const PORT_COL = { port_s1: '#f9a825', port_s2: '#2979ff', port_s3: '#2ee86b', port_s4: '#ff3d7f', port_gd: '#2ee0ff', port_gu: '#ff9a2e' };
+const GRAV = { port_gd: 1, port_gu: 1 }, CEIL = 450;
+const OBJ = {
+  block: { name: 'Block', cat: 'blocks', solid: true },
+  spike: { name: 'Spike', cat: 'hazards' },
+  orb_y: { name: 'Yellow Orb', cat: 'orbs' },
+  orb_p: { name: 'Pink Orb', cat: 'orbs' },
+  pad_y: { name: 'Yellow Pad', cat: 'pads' },
+  pad_p: { name: 'Pink Pad', cat: 'pads' },
+  port_s1: { name: 'Slow Portal', cat: 'portals' },
+  port_s2: { name: 'Normal Portal', cat: 'portals' },
+  port_s3: { name: 'Fast Portal', cat: 'portals' },
+  port_s4: { name: 'Faster Portal', cat: 'portals' },
+  trig_color: { name: 'Color Trigger', cat: 'triggers', trig: true },
+  trig_move: { name: 'Move Trigger', cat: 'triggers', trig: true },
+  trig_end: { name: 'End Trigger', cat: 'triggers', trig: true },
+  orb_b: { name: 'Blue Orb (gravity)', cat: 'orbs' },
+  port_gd: { name: 'Gravity Down Portal', cat: 'portals' },
+  port_gu: { name: 'Gravity Up Portal', cat: 'portals' }
+};
+OBJ.spike.hz = { k: 't', a: 1, b: 1, n: 1 };
+['Plain','Inset','Cross','Dots','Stripes','Checker','Bevel','Slab','Frame','Diamond'].forEach((n, i) => [0, 1].forEach(v => { if (i + v) OBJ['blk' + (i + v * 10)] = { name: n + (v ? ' Dark' : ''), cat: 'blocks', solid: true, bs: i, bv: v }; }));
+OBJ.block.solid = true;
+[['Half Spike','t',1,.5,1],['Thin Spike','t',.5,1,1],['Wide Spike','t',1,.7,1],['Double Spike','t',1,1,2],['Triple Spike','t',1,1,3],['Mini Spikes','t',1,.5,3],['Quad Mini','t',1,.4,4],['Needle','t',.3,1,1],['Fang','t',.7,1,1],
+ ['Mini Saw','s',.22,6],['Small Saw','s',.35,8],['Saw','s',.5,8],['Big Saw','s',.75,10],['Large Saw','s',1,12],['Huge Saw','s',1.5,14],['Star Saw','s',.5,5],['Blade Saw','s',.6,3],['Gear','s',.5,12],['Spiky Ball','s',.4,16]]
+ .forEach(([n, k, a, b, c], i) => OBJ['hz' + i] = { name: n, cat: 'hazards', hz: k === 't' ? { k, a, b, n: c } : { k, a, b } });
+['Flower','Tulip','Bush','Tree','Grass','Cloud','Big Cloud','Brick','Mini Bricks','Mini Spike','Mini Spike Row','Star','Moon','Sun','Dots','Ring','Diamond','Crystal','Vine','Mushroom','Leaf','Pebbles','Fence','Lamp','Arrow','Cross','Wave','Zigzag','Heart','Pillar']
+ .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
+function hsl(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''); }
+const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620 };
+
+const hex2rgb = h => { h = h.replace('#', ''); if (h.length === 3) h = [...h].map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgb2hex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+const lerpC = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const shade = (h, f) => rgb2hex(hex2rgb(h).map(v => Math.max(0, Math.min(255, v + 255 * f))));
+
+// ---------- icons (36 cube skins = 6 faces x 6 patterns) ----------
+function face(c, f, s) {
+  const eye = (x, y, w, h, round) => {
+    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = s * .04;
+    if (round) { c.beginPath(); c.ellipse(x * s, y * s, w * s / 2, h * s / 2, 0, 0, 7); c.fill(); c.stroke(); }
+    else { c.fillRect((x - w / 2) * s, (y - h / 2) * s, w * s, h * s); c.strokeRect((x - w / 2) * s, (y - h / 2) * s, w * s, h * s); }
+    c.fillStyle = '#000'; c.fillRect((x - w * .15) * s, (y - h * .15) * s, w * .3 * s, h * .3 * s);
+  };
+  const mouth = (x, y, w, h) => { c.fillStyle = '#000'; c.fillRect(x * s, y * s, w * s, h * s); };
+  if (f === 0) { eye(-.2, -.1, .22, .22); eye(.2, -.1, .22, .22); mouth(-.22, .2, .44, .07); }
+  else if (f === 1) { eye(-.2, -.1, .2, .2, 1); eye(.2, -.1, .2, .2, 1); c.strokeStyle = '#000'; c.lineWidth = s * .06; c.beginPath(); c.arc(0, .08 * s, .22 * s, .2, Math.PI - .2); c.stroke(); }
+  else if (f === 2) { eye(0, -.08, .42, .34, 1); mouth(-.2, .22, .4, .06); }
+  else if (f === 3) { eye(-.2, -.05, .2, .18); eye(.2, -.05, .2, .18); c.strokeStyle = '#000'; c.lineWidth = s * .07; c.beginPath(); c.moveTo(-.34 * s, -.26 * s); c.lineTo(-.08 * s, -.14 * s); c.moveTo(.34 * s, -.26 * s); c.lineTo(.08 * s, -.14 * s); c.stroke(); mouth(-.2, .22, .4, .06); }
+  else if (f === 4) { eye(-.2, -.12, .14, .14, 1); eye(.2, -.12, .14, .14, 1); mouth(-.14, .12, .28, .18); }
+  else { mouth(-.36, -.2, .72, .2); c.fillStyle = '#fff'; c.fillRect(-.3 * s, -.17 * s, .2 * s, .05 * s); c.fillRect(.1 * s, -.17 * s, .2 * s, .05 * s); mouth(-.2, .2, .4, .07); }
+}
+function drawIcon(c, skin, c1, c2, s) {
+  const h = s / 2, f = skin % 6, p = Math.floor(skin / 6) % 6, lw = Math.max(1, s * .08);
+  c.save();
+  c.fillStyle = c1; c.fillRect(-h, -h, s, s); c.fillStyle = c2;
+  if (p === 0) c.fillRect(-s * .3, -s * .3, s * .6, s * .6);
+  else if (p === 1) c.fillRect(-h, -s * .12, s, s * .24);
+  else if (p === 2) { const q = s * .25;[[-h, -h], [h - q, -h], [-h, h - q], [h - q, h - q]].forEach(([x, y]) => c.fillRect(x, y, q, q)); }
+  else if (p === 3) { c.beginPath(); c.moveTo(-h, -h); c.lineTo(h, -h); c.lineTo(-h, h); c.fill(); }
+  else if (p === 4) { c.fillRect(-h, -h, s, s); c.fillStyle = c1; c.fillRect(-s * .3, -s * .3, s * .6, s * .6); }
+  else { c.fillRect(-h, -h, h, h); c.fillRect(0, 0, h, h); }
+  face(c, f, s);
+  c.strokeStyle = '#000'; c.lineWidth = lw; c.strokeRect(-h + lw / 2, -h + lw / 2, s - lw, s - lw);
+  c.restore();
+}
+const ICACHE = {};
+function skinURL(skin, c1, c2, size = 64) {
+  const k = [skin, c1, c2, size].join('|'); if (ICACHE[k]) return ICACHE[k];
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const x = cv.getContext('2d');
+  x.translate(size / 2, size / 2); drawIcon(x, skin, c1, c2, size * .84); return ICACHE[k] = cv.toDataURL();
+}
+function diffURL(id, size = 64) {
+  const k = 'd' + id + size; if (ICACHE[k]) return ICACHE[k];
+  const d = DIFFS.find(x => x.id === id) || DIFFS[0];
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const c = cv.getContext('2d'); const s = size;
+  c.translate(s / 2, s / 2); c.lineWidth = s * .06; c.strokeStyle = '#000';
+  if (id === 'demon') { c.fillStyle = '#7d0f1a'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .2, -s * .3); c.lineTo(sg * s * .42, -s * .52); c.lineTo(sg * s * .38, -s * .18); c.closePath(); c.fill(); c.stroke(); }); }
+  c.fillStyle = d.col; c.beginPath(); c.arc(0, 0, s * .36, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = '#000';
+  if (id === 'hard' || id === 'insane' || id === 'demon') { c.fillRect(-s * .2, -s * .12, s * .14, s * .1); c.fillRect(s * .06, -s * .12, s * .14, s * .1); }
+  else { c.beginPath(); c.arc(-s * .13, -s * .08, s * .05, 0, 7); c.arc(s * .13, -s * .08, s * .05, 0, 7); c.fill(); }
+  c.strokeStyle = '#000'; c.lineWidth = s * .05; c.beginPath();
+  if (id === 'easy') c.arc(0, s * .02, s * .17, .15, Math.PI - .15);
+  else if (id === 'medium') c.arc(0, s * .05, s * .12, .25, Math.PI - .25);
+  else if (id === 'hard') { c.moveTo(-s * .12, s * .14); c.lineTo(s * .12, s * .14); }
+  else c.arc(0, s * .24, s * .13, Math.PI + .3, -.3);
+  c.stroke();
+  if (id === 'demon') { c.fillStyle = '#fff'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .06, s * .14); c.lineTo(sg * s * .12, s * .14); c.lineTo(sg * s * .09, s * .24); c.fill(); }); }
+  return ICACHE[k] = cv.toDataURL();
+}
+
+// ---------- object drawing (x,y = top-left of the cell on screen, cs = cell px) ----------
+function drawObj(c, o, x, y, cs, col, ed, time = 0) {
+  const t = o.t, r = o.r || 0, lw = Math.max(1, cs * .07);
+  c.save(); c.lineJoin = 'round';
+  if (OBJ[t].hz && t !== 'spike') hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
+  else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
+  else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
+  else if (t === 'block') {
+    c.fillStyle = col; c.fillRect(x, y, cs, cs); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, cs - lw, cs - lw);
+    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = lw * .6; c.strokeRect(x + cs * .22, y + cs * .22, cs * .56, cs * .56);
+  } else if (t === 'spike') {
+    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
+    c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(0, -cs / 2); c.lineTo(cs / 2, cs / 2); c.closePath();
+    c.fillStyle = col; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
+    c.beginPath(); c.moveTo(-cs * .2, cs * .42); c.lineTo(0, -cs * .12); c.lineTo(cs * .2, cs * .42); c.strokeStyle = 'rgba(255,255,255,.25)'; c.stroke();
+  } else if (['orb_y', 'orb_p', 'orb_b'].includes(t)) {
+    const cl = t === 'orb_y' ? '#ffe21f' : t === 'orb_b' ? '#2fb6ff' : '#ff5fd2', cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
+    c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = 1;
+    c.beginPath(); c.arc(cx, cy, cs * .26, 0, 7); c.fillStyle = cl; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
+  } else if (t === 'pad_y' || t === 'pad_p') {
+    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
+    c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
+    c.fillStyle = t === 'pad_y' ? '#ffe21f' : '#ff5fd2'; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
+  } else if (SPEEDS[t] || GRAV[t]) {
+    const cx = x + cs / 2, cl = PORT_COL[t];
+    c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
+    c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
+    c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+  } else if (ed && OBJ[t].trig) {
+    const cl = t === 'trig_color' ? (o.col || '#ff5252') : t === 'trig_move' ? '#3aa0ff' : '#35d35a';
+    c.fillStyle = cl; c.globalAlpha = .85; c.fillRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84); c.globalAlpha = 1;
+    c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84);
+    c.fillStyle = '#fff'; c.font = `bold ${cs * .34}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(t === 'trig_color' ? 'COL' : t === 'trig_move' ? 'MOV' : 'END', x + cs / 2, y + cs / 2);
+  }
+  c.restore();
+}
+
+function rotRect(r, x0, y0, x1, y1) {
+  let pts = [[x0, y0], [x1, y1]];
+  for (let i = 0; i < r; i++) pts = pts.map(([x, y]) => { const dx = x - 15, dy = y - 15; return [15 + dy, 15 - dx]; });
+  return [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
+}
+function drawBG(c, W, H, s, camX, st = 'stripes') {
+  c.fillStyle = 'rgba(255,255,255,.06)'; c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2 * s;
+  const gg = (st === 'tri' ? 120 : st === 'circles' ? 140 : 90) * s, off = (camX * .35 * s) % gg;
+  if (st === 'stripes') { const gs = 150 * s, o = (camX * .35 * s) % gs; for (let x = -o; x < W; x += gs) c.fillRect(x, 0, gs * .5, H); }
+  else if (st === 'dots') for (let x = -off; x < W; x += gg) for (let y = gg / 2; y < H; y += gg) { c.beginPath(); c.arc(x, y, 9 * s, 0, 7); c.fill(); }
+  else if (st === 'tri') for (let x = -off; x < W; x += gg) for (let y = 0; y < H; y += gg) { c.beginPath(); c.moveTo(x, y + gg * .8); c.lineTo(x + gg * .4, y + gg * .2); c.lineTo(x + gg * .8, y + gg * .8); c.closePath(); c.fill(); }
+  else if (st === 'circles') for (let x = -off; x < W; x += gg) for (let y = gg / 2; y < H; y += gg) { c.beginPath(); c.arc(x, y, gg * .3, 0, 7); c.stroke(); }
+  else if (st === 'grid') { for (let x = -off; x < W; x += gg) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); } for (let y = 0; y < H; y += gg) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); } }
+  else if (st === 'waves') for (let y = gg / 2; y < H; y += gg) { c.beginPath(); for (let x = -gg; x < W + gg; x += 12 * s) c[x === -gg ? 'moveTo' : 'lineTo'](x, y + Math.sin((x + off * 2) / (30 * s)) * 12 * s); c.stroke(); }
+}
+function blockDraw(c, b, x, y, s, col, lw) {
+  c.fillStyle = col; c.fillRect(x, y, s, s); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, s - lw, s - lw);
+  c.fillStyle = 'rgba(255,255,255,.25)'; c.strokeStyle = 'rgba(255,255,255,.3)';
+  if (b === 1) c.strokeRect(x + s * .2, y + s * .2, s * .6, s * .6);
+  else if (b === 2) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + s, y + s); c.moveTo(x + s, y); c.lineTo(x, y + s); c.stroke(); }
+  else if (b === 3) for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(x + s * (.3 + .4 * (i & 1)), y + s * (.3 + .4 * (i >> 1)), s * .07, 0, 7); c.fill(); }
+  else if (b === 4) for (let i = 1; i < 4; i++) c.fillRect(x, y + s * i / 4 - s * .03, s, s * .06);
+  else if (b === 5) { c.fillRect(x, y, s / 2, s / 2); c.fillRect(x + s / 2, y + s / 2, s / 2, s / 2); }
+  else if (b === 6) { c.fillRect(x, y, s, s * .18); c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(x, y + s * .82, s, s * .18); }
+  else if (b === 7) c.fillRect(x, y, s, s * .35);
+  else if (b === 8) { c.lineWidth = s * .16; c.strokeRect(x + s * .15, y + s * .15, s * .7, s * .7); }
+  else if (b === 9) { c.beginPath(); c.moveTo(x + s / 2, y + s * .15); c.lineTo(x + s * .85, y + s / 2); c.lineTo(x + s / 2, y + s * .85); c.lineTo(x + s * .15, y + s / 2); c.closePath(); c.stroke(); }
+}
+function hzDraw(c, h, o, x, y, s, col, lw, time) {
+  c.translate(x + s / 2, y + s / 2); c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = lw;
+  if (h.k === 't') {
+    c.rotate((o.r || 0) * Math.PI / 2); const n = h.n, w = s * h.a / n, hh = s * h.b;
+    for (let i = 0; i < n; i++) { const x0 = -s * h.a / 2 + i * w; c.beginPath(); c.moveTo(x0, s / 2); c.lineTo(x0 + w / 2, s / 2 - hh); c.lineTo(x0 + w, s / 2); c.closePath(); c.fill(); c.stroke(); }
+  } else {
+    c.rotate(time * 4 + (o.r || 0)); const R = s * h.a, N = h.b; c.beginPath();
+    for (let i = 0; i < N * 2; i++) { const an = i * Math.PI / N, rr = i & 1 ? R * .72 : R; c[i ? 'lineTo' : 'moveTo'](Math.cos(an) * rr, Math.sin(an) * rr); }
+    c.closePath(); c.fill(); c.stroke(); c.beginPath(); c.arc(0, 0, R * .22, 0, 7); c.fillStyle = '#fff'; c.fill();
+  }
+}
+function decor(c, k, s, col) {
+  const f = (x, y, w, h) => c.fillRect(x * s, y * s, w * s, h * s), o = (x, y, r) => { c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); },
+    P = (...a) => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); c.fill(); },
+    L = (...a) => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.stroke(); };
+  c.fillStyle = col; c.strokeStyle = col; c.lineWidth = s * .07; c.lineCap = 'round';
+  const GR = '#3fbf4f', BR = '#8a5a2b';
+  switch (k) {
+    case 0: c.strokeStyle = GR; L(.5, 1, .5, .5); for (let i = 0; i < 5; i++) o(.5 + Math.cos(i * 1.257) * .15, .4 + Math.sin(i * 1.257) * .15, .1); c.fillStyle = '#ffe36b'; o(.5, .4, .08); break;
+    case 1: c.strokeStyle = GR; L(.5, 1, .5, .5); P(.3, .15, .5, .4, .7, .15, .65, .55, .35, .55); break;
+    case 2: c.fillStyle = GR; o(.3, .75, .22); o(.55, .65, .28); o(.75, .8, .18); break;
+    case 3: c.fillStyle = BR; f(.45, .5, .1, .5); c.fillStyle = GR; o(.5, .35, .3); break;
+    case 4: c.strokeStyle = GR; L(.3, 1, .25, .5); L(.5, 1, .5, .35); L(.7, 1, .75, .5); break;
+    case 5: o(.3, .6, .2); o(.5, .5, .25); o(.7, .6, .2); f(.3, .6, .4, .2); break;
+    case 6: o(.2, .65, .18); o(.4, .45, .25); o(.65, .5, .22); o(.82, .68, .15); f(.2, .65, .62, .18); break;
+    case 7: f(.05, .2, .9, .6); c.strokeStyle = 'rgba(0,0,0,.4)'; L(.05, .5, .95, .5); L(.5, .2, .5, .5); L(.28, .5, .28, .8); break;
+    case 8: f(.08, .1, .38, .3); f(.54, .1, .38, .3); f(.3, .5, .4, .3); break;
+    case 9: P(.3, 1, .5, .55, .7, 1); break;
+    case 10: P(.05, 1, .25, .6, .45, 1); P(.55, 1, .75, .6, .95, 1); break;
+    case 11: { c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i & 1 ? .17 : .4; c[i ? 'lineTo' : 'moveTo']((.5 + Math.cos(a) * r) * s, (.5 + Math.sin(a) * r) * s); } c.fill(); break; }
+    case 12: c.beginPath(); c.arc(.5 * s, .5 * s, .35 * s, .6, 5.7); c.arc(.62 * s, .45 * s, .28 * s, 5.2, 1.0, true); c.fill(); break;
+    case 13: o(.5, .5, .2); for (let i = 0; i < 8; i++) L(.5 + Math.cos(i * .785) * .28, .5 + Math.sin(i * .785) * .28, .5 + Math.cos(i * .785) * .42, .5 + Math.sin(i * .785) * .42); break;
+    case 14: o(.25, .3, .08); o(.6, .5, .1); o(.4, .78, .07); break;
+    case 15: c.beginPath(); c.arc(.5 * s, .5 * s, .32 * s, 0, 7); c.stroke(); break;
+    case 16: P(.5, .1, .85, .5, .5, .9, .15, .5); break;
+    case 17: P(.5, .05, .7, .4, .5, .95, .3, .4); break;
+    case 18: c.strokeStyle = GR; L(.5, 0, .35, .25, .65, .5, .35, .75, .5, 1); break;
+    case 19: c.fillStyle = '#eee'; f(.43, .5, .14, .5); c.fillStyle = col; c.beginPath(); c.arc(.5 * s, .5 * s, .35 * s, Math.PI, 0); c.fill(); break;
+    case 20: c.beginPath(); c.ellipse(.5 * s, .5 * s, .4 * s, .18 * s, -.7, 0, 7); c.fill(); break;
+    case 21: c.fillStyle = '#9aa'; o(.25, .8, .15); o(.55, .85, .12); o(.75, .75, .18); break;
+    case 22: f(.1, .2, .1, .8); f(.8, .2, .1, .8); f(.05, .35, .9, .08); f(.05, .65, .9, .08); break;
+    case 23: c.fillStyle = '#556'; f(.46, .35, .08, .65); c.fillStyle = '#ffe36b'; o(.5, .28, .2); break;
+    case 24: P(.1, .4, .55, .4, .55, .2, .92, .5, .55, .8, .55, .6, .1, .6); break;
+    case 25: L(.2, .2, .8, .8); L(.8, .2, .2, .8); break;
+    case 26: c.beginPath(); for (let x = 0; x <= 1.001; x += .05) c[x ? 'lineTo' : 'moveTo'](x * s, (.5 + Math.sin(x * 12) * .15) * s); c.stroke(); break;
+    case 27: L(.05, .7, .25, .3, .45, .7, .65, .3, .85, .7); break;
+    case 28: o(.35, .38, .2); o(.65, .38, .2); P(.17, .5, .83, .5, .5, .9); break;
+    default: f(.3, .15, .4, .85); f(.2, .05, .6, .15); f(.2, .9, .6, .1);
+  }
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+// ---------- the game ----------
+class Game {
+  constructor(cv) {
+    this.cv = cv; this.c = cv.getContext('2d'); this.cb = {}; this.running = false; this.paused = false;
+    this.held = false; this.edgeT = 0; this.skin = { id: 0, c1: PRIMARY[0], c2: SECONDARY[0] };
+    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) this.edgeT = .05; this.held = true; } else this.held = false; };
+    cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true); });
+    addEventListener('pointerup', () => press(false)); addEventListener('pointercancel', () => press(false));
+    addEventListener('keydown', e => {
+      if (!this.running) return;
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); if (!e.repeat) press(true); }
+      else if (e.code === 'Escape' && !e.repeat) this.cb.onPause && this.cb.onPause();
+    });
+    addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') press(false); });
+    addEventListener('resize', () => this.running && this.resize());
+  }
+  resize() { const d = Math.min(2, devicePixelRatio || 1); this.cv.width = this.cv.clientWidth * d; this.cv.height = this.cv.clientHeight * d; }
+  load(level) {
+    this.level = level;
+    const objs = (level.objs || []).map(o => ({ ...o, ex: o.x * U, ey: o.y * U, col0: o.c || defColor(o.t), col: o.c || defColor(o.t), used: false }));
+    objs.sort((a, b) => a.ex - b.ex);
+    this.groups = {};
+    objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); const h = OBJ[o.t].hz; if (h) { if (h.k === 's') o.hr = h.a * U * .8; else { const hw = h.n > 1 ? 12 : 6 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 18 * h.b); } } });
+    const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
+    const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco;
+    this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || GRAV[o.t]);
+    this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
+    this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
+    this.T = objs.filter(o => OBJ[o.t].trig);
+    this.ports = objs.filter(o => SPEEDS[o.t]);
+    const end = this.T.find(o => o.t === 'trig_end'); this.endX = end ? end.ex : Infinity;
+    this.objs = objs;
+  }
+  timeAtX(x) {
+    let t = 0, x0 = 0, sp = 1;
+    for (const p of this.ports) { if (p.ex >= x) break; t += (p.ex - x0) / (BASE * sp); x0 = p.ex; sp = SPEEDS[p.t]; }
+    return t + (x - x0) / (BASE * sp);
+  }
+  start(o = {}) {
+    this.sx = o.x || 0; this.sy = o.y || 0; this.attempts = 1; this.best = 0; this.jumps = 0; this.camY = -70; this.won = false;
+    this.reset(true); this.running = true; this.paused = false; this.acc = 0; this.last = performance.now();
+    cancelAnimationFrame(this.raf); this.resize(); this.raf = requestAnimationFrame(t => this.frame(t));
+  }
+  stop() { this.running = false; cancelAnimationFrame(this.raf); this.held = false; }
+  pause() { this.paused = true; }
+  resume() { this.paused = false; this.last = performance.now(); }
+  reset(first) {
+    this.objs.forEach(o => { o.col = o.col0; o.used = false; });
+    this.gr = 1; this.gOff = {}; this.acts = []; this.parts = [];
+    this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
+    this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0 };
+    this.speed = 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
+    this.time = this.timeAtX(this.sx); this.ti = 0; this.si = 0;
+    while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
+    this.runActs();
+    if (!first) this.attempts++;
+    this.cb.onSpawn && this.cb.onSpawn(this.time);
+  }
+  fire(t, instant) {
+    const dur = instant ? 0 : (t.dur || 0);
+    if (t.t === 'trig_color') {
+      const key = t.tg === 0 ? 'bg' : t.tg === -1 ? 'gr' : 'c' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
+      const to = hex2rgb(t.col || '#ff5252');
+      if (t.tg === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
+      else if (t.tg === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
+      else this.acts.push({ key, k: 'col', list: (this.groups[t.tg] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
+    } else if (t.t === 'trig_move') {
+      const b = this.gOff[t.tg] || { x: 0, y: 0 };
+      this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], t0: this.time, dur });
+    }
+  }
+  runActs() {
+    for (let i = this.acts.length - 1; i >= 0; i--) {
+      const a = this.acts[i], pr = a.dur > 0 ? Math.min(1, (this.time - a.t0) / a.dur) : 1;
+      if (a.k === 'bg') this.bg = rgb2hex(lerpC(a.from, a.to, pr));
+      else if (a.k === 'gr') this.ground = rgb2hex(lerpC(a.from, a.to, pr));
+      else if (a.k === 'col') { const h = rgb2hex(lerpC([0, 0, 0], a.to, 1)); for (const [o, f] of a.list) o.col = pr >= 1 ? h : rgb2hex(lerpC(f, a.to, pr)); }
+      else if (a.k === 'mv') { const e = ease(pr); this.gOff[a.g] = { x: a.b.x + a.d[0] * e, y: a.b.y + a.d[1] * e }; }
+      if (pr >= 1) this.acts.splice(i, 1);
+    }
+  }
+  die() {
+    const p = this.p; p.dead = true; p.deadT = .7;
+    for (let i = 0; i < 22; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: p.x + 15, y: p.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? this.skin.c1 : this.skin.c2, s: 3 + Math.random() * 5 }); }
+    this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
+  }
+  pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
+  hit(p, x, y, w, h, inset = 0) { return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }
+  step(dt) {
+    const p = this.p;
+    if (p.dead) {
+      p.deadT -= dt; for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy -= 600 * dt; q.life -= dt; }
+      this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.reset(); return;
+    }
+    this.time += dt; this.edgeT -= dt;
+    while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
+      const t = this.T[this.ti++]; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
+    }
+    this.runActs();
+    if (this.held && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
+    const edge = this.edgeT > 0, prevB = p.y;
+    p.grounded = false;
+    const gr = this.gr; p.x += BASE * this.speed * dt; p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; p.y += p.vy * dt;
+    if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
+    if (this.hasGrav && p.y > CEIL - 30) { p.y = CEIL - 30; if (p.vy > 0 || gr < 0) p.vy = 0; if (gr < 0) p.grounded = true; }
+    const S = this.S;
+    while (this.si < S.length && S[this.si].ex < p.x - 40) this.si++;
+    for (let i = this.si; i < S.length && S[i].ex < p.x + 40; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
+    for (const o of this.D) {
+      const g = this.gOff[o.g]; this.inter(o, g ? g.x * U : 0, g ? g.y * U : 0, prevB, edge); if (p.dead) return;
+    }
+    if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    else p.rot += 420 * dt * this.gr;
+    if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
+    for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
+    if (this.parts.length > 60) this.parts = this.parts.filter(q => q.life > 0);
+  }
+  inter(o, gx, gy, prevB, edge) {
+    const p = this.p, x = o.ex + gx, y = o.ey + gy, t = o.t;
+    if (OBJ[t].solid) {
+      if (this.hit(p, x, y, U, U)) {
+        if (this.gr > 0 ? (p.vy <= 0 && prevB >= y + U - 4) : (p.vy >= 0 && prevB + 30 <= y + 4)) { p.y = this.gr > 0 ? y + U : y - 30; p.vy = 0; p.grounded = true; }
+        else this.die();
+      }
+    } else if (OBJ[t].hz) {
+      if (o.hr) { const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15); if (dx * dx + dy * dy < (o.hr + 9) ** 2) this.die(); }
+      else { const h = o.hb; if (this.hit(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], 4)) this.die(); }
+    } else if (['orb_y', 'orb_p', 'orb_b'].includes(t)) {
+      const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < 26 * 26;
+      if (on && (edge || this.held) && !o.used) { if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; } else p.vy = PHYS[t] * this.gr; o.used = true; p.grounded = false; this.edgeT = 0; this.jumps++; }
+      else if (!on) o.used = false;
+    } else if (t === 'pad_y' || t === 'pad_p') {
+      const on = this.hit(p, x + 2, y, U - 4, 12);
+      if (on && !o.used) { p.vy = PHYS[t] * this.gr; o.used = true; p.grounded = false; }
+      else if (!on) o.used = false;
+    } else if (SPEEDS[t]) {
+      if (this.hit(p, x + 5, y, 20, 60)) this.speed = SPEEDS[t];
+    } else if (t === 'port_gd' || t === 'port_gu') {
+      if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
+    }
+  }
+  win() { this.won = true; this.p.grounded = true; this.cb.onWin && this.cb.onWin(); }
+  frame(ts) {
+    if (!this.running) return;
+    const dt = Math.min(.05, (ts - this.last) / 1000); this.last = ts;
+    if (!this.paused && !this.won) { this.acc += dt; let n = 0; while (this.acc >= STEP && n++ < 40) { this.step(STEP); this.acc -= STEP; } if (this.p.dead === false) this.best = Math.max(this.best, this.pct()); }
+    this.render(dt);
+    this.cb.onFrame && this.cb.onFrame(this.pct(), this.attempts);
+    this.raf = requestAnimationFrame(t => this.frame(t));
+  }
+  render(dt) {
+    const c = this.c, W = this.cv.width, H = this.cv.height, s = H / 330, p = this.p;
+    this.camX = p.x - (W / s) * .3;
+    const ty = Math.max(-70, p.y - 330 * .4); this.camY += (ty - this.camY) * Math.min(1, 6 * dt);
+    const X = x => (x - this.camX) * s, Y = y => H - (y - this.camY) * s;
+    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    drawBG(c, W, H, s, this.camX, this.level.bgs);
+    const gy = Y(0);
+    if (gy < H) {
+      c.fillStyle = this.ground; c.fillRect(0, gy, W, H - gy);
+      c.fillStyle = 'rgba(0,0,0,.18)'; const g2 = 60 * s, o2 = (this.camX * s) % g2; for (let x = -o2; x < W; x += g2) c.fillRect(x, gy + 3 * s, g2 / 2, H);
+      c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(0, gy - 2 * s, W, 3 * s);
+    }
+    if (this.hasGrav) { const cy = Y(CEIL); c.fillStyle = this.ground; c.fillRect(0, 0, W, cy - s); c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(0, cy - s, W, 3 * s); }
+    if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }
+    const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 60;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
+    const rx = this.camX + W / s + 60;
+    for (const o of this.DEC) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, o.col, false, this.time); }
+    for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; drawObj(c, o, X(o.ex), Y(o.ey + U), cs, o.col, false, this.time); }
+    for (const o of this.D) { const gg = this.gOff[o.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0, x = X(o.ex + gx); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + gyy + U), cs, o.col, false, this.time); }
+    if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
+    for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
+    c.globalAlpha = 1;
+    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+  }
+}
+
+/* ===== APP ===== */
 // dash_app.js - DASH: UI, accounts, community, editor, moderation (all synced to Firebase)
-import { auth, db, storage } from './dash_firebase.js';
-import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
-import { ref as sref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-storage.js';
-import { Game, U, PRIMARY, SECONDARY, DIFFS, OBJ, drawObj, drawIcon, skinURL, diffURL, defColor } from './dash_game.js';
 
 /* ================= helpers ================= */
 const $ = s => document.querySelector(s);
@@ -33,7 +458,7 @@ function toast(msg, kind = '') {
 }
 let modalClose = null;
 function modal(html, wide) { $('#modalBody').innerHTML = html; $('#modalBox').classList.toggle('wide', !!wide); $('#modal').classList.add('open'); }
-function closeModal() { $('#modal').classList.remove('open'); if (modalClose) { modalClose(); modalClose = null; } }
+function closeModal() { try { prevA && prevA.pause(); prevA = null; } catch { } $('#modal').classList.remove('open'); if (modalClose) { modalClose(); modalClose = null; } }
 async function batchDelete(refs) { for (let i = 0; i < refs.length; i += 400) { const b = writeBatch(db); refs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit(); } }
 async function delCol(path) { const s = await getDocs(collection(db, ...path)); await batchDelete(s.docs.map(d => d.ref)); }
 
@@ -293,12 +718,12 @@ async function syncSongs() {
 
 /* ================= playing ================= */
 const game = new Game($('#gameCanvas'));
-let PL = null, lvAudio = null;
+let PL = null, lvAudio = null, prevA = null;
 async function playPublished(id) {
   const lv = LV[id]; updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1;
   let songUrl = null;
   if (lv.songUrl) { const s = await idbGet('level:' + id); if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
-  startPlay({ level: JSON.parse(lv.data), kind: 'play', id, lv, songUrl, onExit: () => { showLayer('view'); views.level({ id }); } });
+  startPlay({ level: JSON.parse(lv.data), kind: 'play', id, lv, songUrl, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
@@ -307,7 +732,7 @@ function startPlay(o) {
   game.skin = { id: P?.skin || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   game.cb = {
-    onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { lvAudio.currentTime = t; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
+    onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
     onDeath: pct => { lvAudio && lvAudio.pause(); sfx('die'); PL.best = Math.max(PL.best, pct); if (PL.kind === 'play' && pct > (+localStorage[bestKey(PL.id)] || 0)) localStorage[bestKey(PL.id)] = Math.floor(pct); },
     onWin: () => { lvAudio && lvAudio.pause(); sfx('win'); $('#pfill').style.width = '100%'; $('#ppct').textContent = '100%'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}`; $('#winBox').classList.add('open'); onWon(); },
     onFrame: pct => { $('#pfill').style.width = pct + '%'; $('#ppct').textContent = Math.floor(pct) + '%'; },
@@ -438,7 +863,7 @@ views.editor = () => {
 };
 
 /* ================= editor: canvas ================= */
-const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks' };
+const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks' };
 const iconCache = {};
 function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
@@ -448,13 +873,13 @@ function objIcon(t) {
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
-  ed.slot = i; ed.lv = slots[i]; ed.camX = -90; ed.camY = -80; ed.z = 1; ed.sel = null; ed.hist = []; ed.mode = 'build'; ed.on = true;
+  ed.slot = i; ed.lv = slots[i]; ed.camX = -90; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.on = true;
   showLayer('edit'); setTrack('editor'); renderEdUI(); renderProps(); edDraw();
 }
 function renderEdUI() {
   document.querySelectorAll('#edModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ed.mode));
   const cats = [...new Set(Object.values(OBJ).map(o => o.cat))];
-  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrot">↻ Rotate (Q/E)</button>`;
+  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
   $('#edItems').innerHTML = Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
 }
@@ -466,7 +891,7 @@ function pick(cx, cy) { const os = ed.lv.objs; for (let i = os.length - 1; i >= 
 function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
   if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot)) return;
-  if (!OBJ[t].trig) lv.objs = lv.objs.filter(o => OBJ[o.t].trig || !(o.x === cx && o.y === cy));
+  if (!OBJ[t].trig && !OBJ[t].deco) lv.objs = lv.objs.filter(o => OBJ[o.t].trig || OBJ[o.t].deco || !(o.x === cx && o.y === cy));
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 };
   if (t === 'block' || t === 'spike') o.c = '#0d0d22';
@@ -476,20 +901,21 @@ function place(cx, cy) {
 }
 function delAt(cx, cy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !(o.x === cx && (o.t.startsWith('port') ? (o.y === cy || o.y + 1 === cy) : o.y === cy))); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
 function renderProps() {
-  const el = $('#edProps'), o = ed.sel; if (!o) return el.classList.remove('open'); el.classList.add('open');
+  const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
+  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level.</p>';
-  else { h += `<label>Group (0 = none)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label>`; if (o.t === 'block' || o.t === 'spike') h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; }
-  h += `<div class="row">${['spike', 'pad_y', 'pad_p'].includes(o.t) ? '<button class="btn sm" data-act="edrot">↻ Rotate</button>' : ''}<button class="btn sm red" data-act="eddel">Delete</button></div>`; el.innerHTML = h;
+  else { h += `<label>Group (0 = none)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; }
+  h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm red" data-act="eddel">Delete</button></div>`; el.innerHTML = h;
 }
 function edDraw() {
   if (!ed.on) return; requestAnimationFrame(edDraw);
   const cv = $('#editCanvas'), d = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
   if (cv.width !== W * d || cv.height !== H * d) { cv.width = W * d; cv.height = H * d; }
   const c = cv.getContext('2d'); c.setTransform(d, 0, 0, d, 0, 0); const z = ed.z, cs = U * z, lv = ed.lv, X = x => (x - ed.camX) * z, Y = y => H - (y - ed.camY) * z, now = performance.now() / 1000;
-  c.fillStyle = lv.bg; c.fillRect(0, 0, W, H);
+  c.fillStyle = lv.bg; c.fillRect(0, 0, W, H); drawBG(c, W, H, z, ed.camX, lv.bgs);
   c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 1; c.beginPath();
   for (let gx = Math.floor(ed.camX / U) * U; X(gx) < W; gx += U) { c.moveTo(X(gx), 0); c.lineTo(X(gx), H); }
   for (let gy = Math.floor(ed.camY / U) * U; Y(gy) > 0; gy += U) { c.moveTo(0, Y(gy)); c.lineTo(W, Y(gy)); } c.stroke();
@@ -497,7 +923,8 @@ function edDraw() {
   c.strokeStyle = '#3ddc4a'; c.setLineDash([6, 6]); c.beginPath(); c.moveTo(X(0), 0); c.lineTo(X(0), H); c.stroke(); c.setLineDash([]);
   c.globalAlpha = .5; c.save(); c.translate(X(15), Y(15)); drawIcon(c, P?.skin || 0, PRIMARY[P?.c1 || 0], SECONDARY[P?.c2 || 0], cs); c.restore(); c.globalAlpha = 1;
   for (const o of lv.objs) { const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 2 || sx > W + cs || sy < -cs * 3 || sy > H + cs) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }
-  if (ed.sel) { const o = ed.sel; c.strokeStyle = '#ffe36b'; c.lineWidth = 3; c.strokeRect(X(o.x * U) - 2, Y(o.y * U + U) - 2, cs + 4, cs + 4); }
+  c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) c.strokeRect(X(o.x * U) - 2, Y(o.y * U + U) - 2, cs + 4, cs + 4);
+  if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
   if (ed.mode === 'build') { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
 }
 (() => {
@@ -509,36 +936,47 @@ function edDraw() {
     snap();
     if (ed.mode === 'build') { ed.drag = { k: 'paint' }; place(cx, cy); }
     else if (ed.mode === 'delete') { ed.drag = { k: 'del' }; delAt(cx, cy); }
-    else { ed.sel = pick(cx, cy); renderProps(); ed.drag = ed.sel ? { k: 'move', cx, cy } : null; }
+    else {
+      const o = pick(cx, cy);
+      if (e.shiftKey) { if (!o) ed.drag = { k: 'box', x0: wx, y0: wy }; else { const i = ed.sels.indexOf(o); i < 0 ? ed.sels.push(o) : ed.sels.splice(i, 1); } }
+      else { if (!o) ed.sels = []; else if (!ed.sels.includes(o)) ed.sels = [o]; ed.drag = o ? { k: 'move', cx, cy } : null; }
+      ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps();
+    }
   });
   cv.addEventListener('pointermove', e => {
     const [wx, wy] = s2w(e), cx = Math.floor(wx / U), cy = Math.floor(wy / U), dr = ed.drag; if (!dr) return;
     if (dr.k === 'pan') { ed.camX -= (e.clientX - dr.x) / ed.z; ed.camY += (e.clientY - dr.y) / ed.z; dr.x = e.clientX; dr.y = e.clientY; }
     else if (dr.k === 'paint') place(cx, cy); else if (dr.k === 'del') delAt(cx, cy);
-    else if (dr.k === 'move' && ed.sel && (cx !== dr.cx || cy !== dr.cy)) { ed.sel.x = Math.max(0, ed.sel.x + cx - dr.cx); ed.sel.y = Math.max(0, ed.sel.y + cy - dr.cy); dr.cx = cx; dr.cy = cy; changed(); renderProps(); }
+    else if (dr.k === 'box') { dr.x1 = wx; dr.y1 = wy; }
+    else if (dr.k === 'move' && ed.sels.length && (cx !== dr.cx || cy !== dr.cy)) { const dx = cx - dr.cx, dy = cy - dr.cy; ed.sels.forEach(o => { o.x = Math.max(0, o.x + dx); o.y = Math.max(0, o.y + dy); }); dr.cx = cx; dr.cy = cy; changed(); renderProps(); }
   });
-  const up = () => { ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const up = () => { const d = ed.drag; if (d && d.k === 'box' && d.x1 != null) { const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1); ed.lv.objs.filter(o => (o.x + 1) * U > x0 && o.x * U < x1 && (o.y + 1) * U > y0 && o.y * U < y1).forEach(o => ed.sels.includes(o) || ed.sels.push(o)); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); } ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', e => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { const f = e.deltaY < 0 ? 1.1 : .9, bx = e.offsetX / ed.z + ed.camX; ed.z = Math.max(.4, Math.min(2.5, ed.z * f)); ed.camX = bx - e.offsetX / ed.z; }
     else if (e.shiftKey) ed.camX += e.deltaY / ed.z; else { ed.camY -= e.deltaY / ed.z; ed.camX += e.deltaX / ed.z; }
   }, { passive: false });
 })();
-function edRotate() { if (ed.sel) { if (['spike', 'pad_y', 'pad_p'].includes(ed.sel.t)) { snap(); ed.sel.r = ((ed.sel.r || 0) + 1) % 4; changed(); } } else ed.rot = (ed.rot + 1) % 4; }
+function edRotate(d = 1) { if (ed.sels.length) { snap(); ed.sels.forEach(o => o.r = (((o.r || 0) + d) % 4 + 4) % 4); changed(); } else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
+function edDelSel() { if (!ed.sels.length) return; snap(); const s = new Set(ed.sels); ed.lv.objs = ed.lv.objs.filter(o => !s.has(o)); ed.sels = []; ed.sel = null; renderProps(); changed(); }
+function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); }
+function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0, Math.floor(ed.wx / U)), by = Math.max(0, Math.floor(ed.wy / U)); const n = ed.clip.filter(o => o.t !== 'trig_end').map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x + bx, y: o.y + by })); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); }
 addEventListener('keydown', e => {
   if (!ed.on || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || $('#modal').classList.contains('open')) return;
   const k = e.key.toLowerCase(), st = 60 / ed.z;
-  if (k === 'q' || k === 'e') edRotate();
-  else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); edUndo(); }
-  else if (k === 'delete' || k === 'backspace') { if (ed.sel) { snap(); ed.lv.objs = ed.lv.objs.filter(o => o !== ed.sel); ed.sel = null; renderProps(); changed(); } }
+  if (k === 'q') edRotate(-1); else if (k === 'e') edRotate(1);
+  else if ((e.ctrlKey || e.metaKey) && k === 'c') edCopy(); else if ((e.ctrlKey || e.metaKey) && k === 'v') edPaste(); else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); edUndo(); }
+  else if (k === 'delete' || k === 'backspace') edDelSel();
   else if (k === 'arrowleft') ed.camX -= st; else if (k === 'arrowright') ed.camX += st; else if (k === 'arrowup') ed.camY += st; else if (k === 'arrowdown') ed.camY -= st;
   else if (k === 'p') edPlay(e.shiftKey);
-  else if (k === 'escape') { ed.sel = null; renderProps(); }
+  else if (k === 'escape') { ed.sel = null; ed.sels = []; renderProps(); }
 });
-function edUndo() { if (!ed.hist.length) return; ed.lv.objs = JSON.parse(ed.hist.pop()); ed.sel = null; renderProps(); changed(); }
+function edUndo() { if (!ed.hist.length) return; ed.lv.objs = JSON.parse(ed.hist.pop()); ed.sel = null; ed.sels = []; renderProps(); changed(); }
 document.addEventListener('focusin', e => { if (e.target.dataset?.p && ed.on) snap(); });
 document.addEventListener('input', e => {
   if (e.target.id === 'volr') { settings.vol = +e.target.value; saveSettings(); return; }
+  if (e.target.id === 'songspd') { ed.lv.songSpeed = +e.target.value; saveSlots(ed.slot); return; }
+  if (e.target.id === 'songoff') { ed.lv.songOff = Math.max(0, +e.target.value || 0); saveSlots(ed.slot); return; }
   const p = e.target.dataset?.p; if (!p || !ed.sel) return;
   ed.sel[p] = (e.target.type === 'number') ? (+e.target.value || 0) : e.target.value; changed();
 });
@@ -547,13 +985,13 @@ function edPlay(here) {
   let sx = 0, sy = 0; if (here) { sx = Math.max(0, Math.floor(ed.wx / U) * U); sy = Math.max(0, Math.floor(ed.wy / U) * U); }
   saveSlots(ed.slot); ed.on = false;
   idbGet(`draft:${me.uid}:${ed.slot}`).then(b => {
-    startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground }, kind: 'test', lv0: lv, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
+    startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
   });
 }
 async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
 function edSettings() {
   const lv = ed.lv;
-  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="30" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Level song (mp3)<input type="file" id="songfile" accept="audio/mpeg,audio/*"></label><p class="muted">${lv.songName ? '🎵 ' + esc(lv.songName) : 'No song set'} - the song is played in sync with where you start a playtest, and uploaded to the servers when you publish.</p><div class="row"><button class="btn green" data-act="edsave">Save</button>${lv.songName ? '<button class="btn red" data-act="edsong-rm">Remove song</button>' : ''}</div>`);
+  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="30" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
 }
 
 /* ================= actions (click delegation) ================= */
@@ -609,10 +1047,11 @@ const actions = {
   slotpub: async d => { await publish(+d.i); },
   // editor
   edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edplay: () => edPlay(false), edplayhere: () => edPlay(true),
-  edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; renderProps(); renderEdUI(); },
-  edrot: edRotate, edsettings: edSettings,
-  eddel: () => { if (ed.sel) { snap(); ed.lv.objs = ed.lv.objs.filter(o => o !== ed.sel); ed.sel = null; renderProps(); changed(); } },
-  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.ground = val('lvGr'); lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
+  edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; ed.sels = []; renderProps(); renderEdUI(); },
+  edrot: () => edRotate(1), edsettings: edSettings,
+  eddel: edDelSel, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
+  songprev: async () => { if (prevA) { prevA.pause(); prevA = null; return; } const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err'); prevA = new Audio(URL.createObjectURL(b)); prevA.volume = settings.vol; prevA.playbackRate = ed.lv.songSpeed || 1; prevA.currentTime = (ed.lv.songOff || 0) / 1000; prevA.play().catch(() => { }); setTimeout(() => { prevA && prevA.pause(); prevA = null; }, 10000); },
+  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
@@ -627,7 +1066,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('change', async e => {
   if (e.target.id === 'songfile' && e.target.files[0]) {
     const f = e.target.files[0]; if (f.size > 12 * 1024 * 1024) return toast('Song must be under 12 MB', 'err');
-    await idbSet(`draft:${me.uid}:${ed.slot}`, f); ed.lv.songName = f.name.slice(0, 60); saveSlots(ed.slot); toast('Song added', 'ok'); edSettings();
+    await idbSet(`draft:${me.uid}:${ed.slot}`, f); ed.lv.songName = f.name.replace(/\.[^.]+$/, '').slice(0, 60); ed.lv.songSpeed = ed.lv.songSpeed || 1; ed.lv.songOff = ed.lv.songOff || 0; saveSlots(ed.slot); toast('Song added', 'ok'); edSettings();
   }
 });
 $('#pauseBtn').addEventListener('click', e => { e.stopPropagation(); pauseToggle(); });
@@ -638,12 +1077,21 @@ async function publish(i) {
   const lv = slots[i]; if (!me || !P) return toast('Log in first', 'err');
   if (lv.verified !== sigOf(lv.objs)) return toast('Beat the level from 0 to 100% first', 'err');
   if (!confirm(`Publish "${lv.name}"? Published levels can't be edited (you can copy them).`)) return;
-  const r = doc(collection(db, 'levels')); let songUrl = null, songName = null; toast('Uploading…');
-  const sb = await idbGet(`draft:${me.uid}:${i}`);
-  if (sb instanceof Blob) { const sr = sref(storage, `songs/${r.id}.mp3`); await uploadBytes(sr, sb, { contentType: sb.type || 'audio/mpeg' }); songUrl = await getDownloadURL(sr); songName = lv.songName; }
-  const data = JSON.stringify({ objs: lv.objs, bg: lv.bg, ground: lv.ground }); if (data.length > 900000) throw 'Level is too big to upload';
-  await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl, songName, count: lv.objs.length });
-  lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); views.editor();
+  try {
+    const data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
+    if (data.length > 900000) throw 'Level is too big to upload';
+    const r = doc(collection(db, 'levels')); let songUrl = null, songName = null; toast('Uploading level…');
+    const sb = await idbGet(`draft:${me.uid}:${i}`);
+    if (sb instanceof Blob) {
+      try {
+        const sr = sref(storage, `songs/${r.id}.mp3`);
+        await Promise.race([uploadBytes(sr, sb, { contentType: sb.type || 'audio/mpeg' }).then(() => getDownloadURL(sr)).then(u => { songUrl = u; }), new Promise((_, rej) => setTimeout(() => rej('timed out'), 25000))]);
+        songName = lv.songName;
+      } catch (e) { toast('Song not uploaded (' + errMsg(e) + ') - publishing without it. Check your Storage rules.', 'err'); }
+    }
+    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl, songName, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length });
+    lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); views.editor();
+  } catch (e) { console.error(e); toast('Publish failed: ' + errMsg(e), 'err'); }
 }
 async function banUser(uid, name) {
   const ls = await getDocs(query(collection(db, 'levels'), where('authorId', '==', uid))); for (const d of ls.docs) await takeDown(d.id);

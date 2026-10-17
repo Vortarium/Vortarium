@@ -139,3 +139,16 @@ label{display:block;font-size:14px;color:#9fd4ff}
 #edProps.open{display:block}
 #edProps h3{margin:0 0 6px;font-size:18px}
 @media (max-width:760px){.lp{grid-template-columns:1fr;overflow:auto}.cosm{grid-template-columns:1fr}#footer{gap:10px;font-size:14px}.menu-row{gap:16px}}
+
+/* ---- v2 polish: minimalist abstract look ---- */
+#bgfx{background:radial-gradient(circle at 20% 15%,#3b6cf0 0,transparent 45%),radial-gradient(circle at 85% 85%,#7a3df0 0,transparent 45%),#101a55}
+#bgfx:after{content:"";position:absolute;inset:0;background:conic-gradient(from 45deg at 50% 120%,rgba(255,255,255,.06) 0 12%,transparent 12% 25%,rgba(255,255,255,.04) 25% 37%,transparent 37%);animation:spin 40s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+.big-btn{border-radius:28px;border-width:3px;box-shadow:inset 0 5px 0 rgba(255,255,255,.3),0 8px 0 rgba(0,0,0,.55),0 14px 24px rgba(0,0,0,.35)}
+.btn,.tabs button,.seg button{border-radius:999px}
+.page>header{justify-content:center;position:relative}.page>header .round{position:absolute;left:16px}
+.pbody{max-width:1000px;width:100%;margin:0 auto}
+.card{border-radius:22px;backdrop-filter:blur(6px);background:rgba(14,26,100,.72)}
+.lvl{border-radius:22px}.tabs{justify-content:center}.pager{margin-bottom:10px}
+#edTop,#edBottom,#edProps{backdrop-filter:blur(8px);border-radius:0 0 18px 18px}#edBottom{border-radius:18px 18px 0 0}#edProps{border-radius:18px}
+.it{border-radius:14px}.it:hover{background:#254cc9}
