@@ -466,11 +466,11 @@ function setPath(o,k,v){const p=k.split('.');let x=o;for(let i=0;i<p.length-1;i+
 function botWrite(p){const B=G&&G.bot;if(!B)return;for(const k in p)setPath(B.room,k,p[k]);
  setTimeout(()=>{if(!live(B))return;onRoom(cl(B.room));botTick()},0)}
 
-/* the bot's deck mirrors YOUR node usage card by card: for every card in your deck it picks a random card with the same node cost
-   (one 4-node, two 3-node, one 1-node... for you means the same shape for the bot, but different random cards). Leftover nodes are filled randomly. */
+/* every bot gets the same boosted 20-card deck, no node limit and nothing based on YOUR deck:
+   4 attack, 4 healing, 4 mana healing, 4 spell, plus 4 more random cards from any category (no duplicates). */
 function makeBotDeck(){const d=[],pick=p=>p[Math.random()*p.length|0];
- U.deck.map(id=>CARDS[id-1]).forEach(c=>{const p=CARDS.filter(x=>x.nd===c.nd&&!d.includes(x.id));if(p.length)d.push(pick(p).id)});
- let n=nodes(d);while(n<MAXN){const p=CARDS.filter(x=>!d.includes(x.id)&&n+x.nd<=MAXN);if(!p.length)break;const x=pick(p);d.push(x.id);n+=x.nd}
+ for(const t of ['ATTACK','HEAL','MANA HEAL','SPELL'])for(let k=0;k<4;k++){const p=CARDS.filter(x=>x.type===t&&!d.includes(x.id));if(p.length)d.push(pick(p).id)}
+ for(let k=0;k<4;k++){const p=CARDS.filter(x=>!d.includes(x.id));if(p.length)d.push(pick(p).id)}
  return d}
 
 function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
