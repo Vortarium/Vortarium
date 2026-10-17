@@ -62,6 +62,14 @@ Object.assign(OBJ, {
   trig_zoom: { name: 'Zoom Trigger', cat: 'triggers', trig: true }, trig_toggle: { name: 'Toggle Trigger', cat: 'triggers', trig: true }, trig_alpha: { name: 'Alpha Trigger', cat: 'triggers', trig: true },
   coin: { name: 'Star Coin', cat: 'coins', coin: true }
 });
+Object.assign(OBJ, {
+  port_ball: { name: 'Ball Portal', cat: 'portals' }, port_ufo: { name: 'UFO Portal', cat: 'portals' }, port_wave: { name: 'Wave Portal', cat: 'portals' },
+  half: { name: 'Half Block', cat: 'blocks', solid: true, half: true }, slope: { name: 'Slope', cat: 'blocks', solid: true, slope: true }
+});
+Object.assign(MODEP, { port_ball: 1, port_ufo: 1, port_wave: 1 });
+Object.assign(PORT_COL, { port_ball: '#ff7a1f', port_ufo: '#ffd21f', port_wave: '#2fd0ff' });
+const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave' };
+const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W' };
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
@@ -77,7 +85,7 @@ OBJ.block.solid = true;
  .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
 function hsl(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''); }
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
-const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
 const hex2rgb = h => { h = h.replace('#', ''); if (h.length === 3) h = [...h].map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
@@ -127,6 +135,21 @@ function drawIcon(c, skin, c1, c2, s) {
   ];
   c.save(); c.lineJoin = 'round'; rr(c, -h, -h, s, s, s * .2); c.fillStyle = c1; c.fill(); c.save(); c.clip();
   D[((skin % 30) + 30) % 30](); c.restore(); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+}
+function drawBall(c, skin, c1, c2, s) {
+  const r = s * .5, lw = Math.max(1.5, s * .07); c.save(); c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = c1; c.fill(); c.save(); c.clip();
+  c.fillStyle = c2; c.fillRect(-r, -s * .09, s, s * .18); c.fillRect(-s * .09, -r, s * .18, s); c.restore();
+  c.beginPath(); c.arc(0, 0, s * .14, 0, 7); c.fillStyle = '#111'; c.fill(); c.beginPath(); c.arc(0, 0, r - lw / 2, 0, 7); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+}
+function drawUfo(c, cube, c1, c2, s) {
+  c.save(); c.lineJoin = 'round'; c.save(); c.translate(0, -s * .2); drawIcon(c, cube, c1, c2, s * .5); c.restore();
+  c.beginPath(); c.ellipse(0, s * .17, s * .52, s * .16, 0, 0, 7); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .05); c.stroke();
+  [-.3, 0, .3].forEach(x => { c.beginPath(); c.arc(x * s, s * .17, s * .04, 0, 7); c.fillStyle = c1; c.fill(); }); c.restore();
+}
+function drawWave(c, c1, c2, s) {
+  const dart = k => { c.beginPath(); c.moveTo(-s * .5 * k, -s * .38 * k); c.lineTo(s * .55 * k, 0); c.lineTo(-s * .5 * k, s * .38 * k); c.lineTo(-s * .22 * k, 0); c.closePath(); };
+  c.save(); c.lineJoin = 'round'; dart(1); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .08); c.stroke();
+  c.translate(-s * .06, 0); dart(.5); c.fillStyle = c2; c.fill(); c.restore();
 }
 const SHIPS = [
   [-.5, .3, -.4, .04, .35, .04, .55, .2, .4, .3], [-.55, .1, -.25, .1, -.1, .02, .2, .02, .55, .22, .2, .32, -.3, .32], [-.55, .05, .55, .18, -.55, .3, -.35, .18], [-.5, .32, -.5, .1, .55, .24, .55, .32],
@@ -196,6 +219,10 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   else if (t === 'block') {
     c.fillStyle = col; c.fillRect(x, y, cs, cs); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, cs - lw, cs - lw);
     c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = lw * .6; c.strokeRect(x + cs * .22, y + cs * .22, cs * .56, cs * .56);
+  } else if (t === 'half' || t === 'slope') {
+    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = lw;
+    if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.strokeRect(-cs / 2 + lw / 2, lw / 2, cs - lw, cs / 2 - lw); }
+    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.stroke(); c.strokeStyle = 'rgba(255,255,255,.22)'; c.beginPath(); c.moveTo(-cs * .1, cs * .38); c.lineTo(cs * .38, cs * .38); c.lineTo(cs * .38, -cs * .1); c.closePath(); c.stroke(); }
   } else if (t === 'spike') {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(0, -cs / 2); c.lineTo(cs / 2, cs / 2); c.closePath();
@@ -216,7 +243,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
     c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(MODEP[t] ? (t === 'port_ship' ? 'S' : 'C') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+    c.fillText(MODEP[t] ? PLET[t] : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
@@ -334,6 +361,7 @@ class Game {
     objs.sort((a, b) => a.ex - b.ex);
     this.groups = {};
     objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); const h = OBJ[o.t].hz; if (h) { const sc = o.sc || 1; if (h.k === 's') o.hr = h.a * U * .7 * sc; else { const hw = h.n > 1 ? 10 : 5 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b).map(v => 15 + (v - 15) * sc); } } if (PADS.includes(o.t)) { const sc = o.sc || 1; o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc); } });
+    objs.forEach(o => { if (OBJ[o.t].solid && !OBJ[o.t].slope) { const sc = o.sc || 1, r = OBJ[o.t].half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); } });
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin;
     this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
@@ -358,8 +386,8 @@ class Game {
   pause() { this.paused = true; }
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
-    this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set();
-    this.gr = 1; this.holdUsed = false; this.mode = 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = q.t === 'port_ship' ? 'ship' : 'cube'; } this.gOff = {}; this.acts = []; this.parts = [];
+    this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
+    this.gr = 1; this.holdUsed = false; this.mode = 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null };
     this.speed = 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
@@ -421,11 +449,14 @@ class Game {
     this.runActs();
     for (const t of this.TT) if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
-    if (this.mode !== 'ship' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
-    const edge = this.edgeT > 0, prevB = p.y;
+    if (this.mode === 'cube' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
+    const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
-    if (p.dash && (!this.held || p.dash.t > .45 || this.mode === 'ship')) p.dash = null; if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (!p.dash) { p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
+    if (p.dash && (!this.held || p.dash.t > .45 || this.mode === 'ship' || this.mode === 'wave')) p.dash = null; if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
+      if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
+      else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
+      p.vy -= G * (this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : 1) * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (this.hasGrav && p.y > CEIL - 30) { p.y = CEIL - 30; if (p.vy > 0 || gr < 0) p.vy = 0; if (gr < 0) p.grounded = true; }
     const S = this.S;
@@ -434,8 +465,9 @@ class Game {
     for (const o of this.D) {
       if (o.off) continue; const g = this.gOff[o.g]; this.inter(o, g ? g.x * U : 0, g ? g.y * U : 0, prevB, edge); if (p.dead) return;
     }
-    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
+    if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
     if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
     if (this.parts.length > 60) this.parts = this.parts.filter(q => q.life > 0);
@@ -443,11 +475,13 @@ class Game {
   inter(o, gx, gy, prevB, edge) {
     const p = this.p, x = o.ex + gx, y = o.ey + gy, t = o.t;
     if (o.off) return;
+    if (OBJ[t].slope) return this.slope(o, x, y);
     if (OBJ[t].solid) {
-      const W = U * (o.sc || 1), bx = x + (U - W) / 2, by = y + (U - W) / 2;
-      if (this.hit(p, bx, by, W, W)) {
-        if (this.mode === 'ship') { if (prevB >= by + W - 4) { p.y = by + W; if (p.vy < 0) p.vy = 0; } else if (prevB + 30 <= by + 4) { p.y = by - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
-        else if (this.gr > 0 ? (p.vy <= 0 && prevB >= by + W - 4) : (p.vy >= 0 && prevB + 30 <= by + 4)) { p.y = this.gr > 0 ? by + W : by - 30; p.vy = 0; p.grounded = true; }
+      const sb = o.sb, bx = x + sb[0], by = y + sb[1], bw = sb[2] - sb[0], bh = sb[3] - sb[1];
+      if (this.hit(p, bx, by, bw, bh)) {
+        if (this.mode === 'wave') this.die();
+        else if (this.mode === 'ship') { if (prevB >= by + bh - 4) { p.y = by + bh; if (p.vy < 0) p.vy = 0; } else if (prevB + 30 <= by + 4) { p.y = by - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
+        else if (this.gr > 0 ? (p.vy <= 0 && prevB >= by + bh - 4) : (p.vy >= 0 && prevB + 30 <= by + 4)) { p.y = this.gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
         else this.die();
       }
     } else if (OBJ[t].hz) {
@@ -470,7 +504,21 @@ class Game {
     } else if (t === 'port_gd' || t === 'port_gu') {
       if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
     } else if (MODEP[t]) {
-      if (this.hit(p, x + 5, y, 20, 60)) this.mode = t === 'port_ship' ? 'ship' : 'cube';
+      if (this.hit(p, x + 5, y, 20, 60)) this.mode = PMODE[t];
+    }
+  }
+  slope(o, x, y) {
+    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'wave';
+    if (!(p.x + 30 > x + 2 && p.x < x + 28)) return;
+    const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? 30 - xl : xl);
+    if (floor) {
+      const h = sf(cl(k ? p.x - x : p.x + 30 - x)), depth = h - p.y; if (depth <= 0) return;
+      if (slide) { if (depth <= 14) { p.y = h; if (p.vy < 0) p.vy = 0; } else this.die(); }
+      else if (gr > 0 && depth <= 14) { if (p.vy <= 0) { p.y = h; p.vy = 0; p.grounded = true; } } else this.die();
+    } else {
+      const h = sf(cl(k ? p.x + 30 - x : p.x - x)), depth = p.y + 30 - h; if (depth <= 0) return;
+      if (slide) { if (depth <= 14) { p.y = h - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
+      else if (gr < 0 && depth <= 14) { if (p.vy >= 0) { p.y = h - 30; p.vy = 0; p.grounded = true; } } else this.die();
     }
   }
   win() { this.won = true; this.p.grounded = true; this.cb.onWin && this.cb.onWin(); }
@@ -508,7 +556,8 @@ class Game {
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
-    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 6 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(p.x + 15), Y(p.y + 15)); c.stroke(); c.globalAlpha = 1; }
+    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ball') drawBall(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
   }
 }
 
@@ -1023,7 +1072,7 @@ function place(cx, cy) {
   if (!OBJ[t].trig && !OBJ[t].deco) lv.objs = lv.objs.filter(o => OBJ[o.t].trig || OBJ[o.t].deco || !(o.x === cx && o.y === cy));
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 };
-  if (t === 'block' || t === 'spike') o.c = '#0d0d22';
+  if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
   if (t === 'trig_color') Object.assign(o, { tg: 1, col: '#ff5252', dur: 1 });
   if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1 });
   if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
@@ -1047,7 +1096,7 @@ function renderProps() {
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level.</p>';
   else { h += `<label>Group (0 = none)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
-  else h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
+  else if (!OBJ[o.t].slope) h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
   h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
 }
 function edDraw() {
@@ -1194,7 +1243,7 @@ const actions = {
   edrot: () => edRotate(1), edsettings: edSettings,
   eddel: edDelSel,
   edhalf: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { o.x = Math.max(0, o.x + +d.dx); o.y = Math.max(0, o.y + +d.dy); }); changed(); renderProps(); },
-  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig) o.sc = Math.max(.5, Math.min(2, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
+  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.5, Math.min(2, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
   songprev: async () => { if (prevA) { prevA.pause(); prevA = null; return; } const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err'); prevA = new Audio(URL.createObjectURL(b)); prevA.volume = settings.vol; prevA.playbackRate = ed.lv.songSpeed || 1; prevA.currentTime = (ed.lv.songOff || 0) / 1000; prevA.play().catch(() => { }); setTimeout(() => { prevA && prevA.pause(); prevA = null; }, 10000); },
   edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
