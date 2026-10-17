@@ -1,176 +1,19 @@
-/* dash_style.css */
-:root{--blue:#1e6bff;--green:#3ddc4a;--orange:#ff9a1f;--red:#ff4040;--ink:#0b1030;--panel:#142060;--line:#fff}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:#0b1a5c;color:#fff;font-family:Nunito,system-ui,sans-serif;font-weight:700;user-select:none}
-h1,h2,h3,.logo,.btn,.big-btn,.tabs button,.seg button{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;letter-spacing:.5px}
-#bgfx{position:fixed;inset:0;background:linear-gradient(#2a62e0,#12307f);z-index:0}
-#bgfx:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 90px,transparent 90px 180px);animation:bgs 14s linear infinite}
-@keyframes bgs{to{background-position:-180px 0}}
-.layer{position:fixed;inset:0 0 44px 0;display:none;z-index:1}
-.layer.active{display:flex}
-#play,#edit{inset:0;background:#000}
-#footer{position:fixed;left:0;right:0;bottom:0;height:44px;background:rgba(5,10,40,.92);border-top:3px solid #000;display:flex;gap:22px;align-items:center;justify-content:center;z-index:5;font-size:17px;white-space:nowrap;overflow:hidden;font-family:"Lilita One",sans-serif}
-#footer .fname{color:#8fe9ff;margin-right:10px}
-body.fs #footer{display:none}
-.modm{display:inline-grid;place-items:center;width:1.15em;height:1.15em;margin-left:.3em;border-radius:50%;background:linear-gradient(#ffe36b,#e09b00);color:#3a2300;font:normal 800 .8em "Lilita One",sans-serif;border:2px solid #000;vertical-align:middle}
-
-/* menu */
-#menu{flex-direction:column;align-items:center;justify-content:center;gap:26px}
-.logo{display:flex;gap:6px;font-size:min(22vw,150px);line-height:1;filter:drop-shadow(0 6px 0 #000)}
-.logo span{background:linear-gradient(#fff,#8fe9ff);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:5px #000;paint-order:stroke fill;animation:bob 2s ease-in-out infinite}
-.logo span:nth-child(2){animation-delay:.15s}.logo span:nth-child(3){animation-delay:.3s}.logo span:nth-child(4){animation-delay:.45s}
-@keyframes bob{50%{transform:translateY(-8px)}}
-.menu-row{display:flex;gap:min(8vw,70px)}
-.big-btn{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:min(36vw,190px);height:min(36vw,170px);font-size:24px;color:#fff;border:4px solid #000;border-radius:18px;cursor:pointer;text-shadow:2px 2px 0 #000;box-shadow:inset 0 6px 0 rgba(255,255,255,.35),0 7px 0 #000;transition:transform .08s}
-.big-btn:hover{transform:translateY(-3px) scale(1.04)}.big-btn:active{transform:translateY(3px)}
-.big-btn.small{width:min(36vw,170px);height:min(28vw,130px);flex-direction:row;font-size:20px}
-.big-btn.small img{width:58px;height:58px;image-rendering:pixelated}
-.big-btn .bb-ico{font-style:normal;font-size:52px;line-height:1}
-.green{background:linear-gradient(#5cf06a,#1fae35)}.blue{background:linear-gradient(#4a9bff,#1450d0)}.orange{background:linear-gradient(#ffc04a,#e5780a)}.red{background:linear-gradient(#ff7676,#d11f1f)}
-.badge{position:absolute;top:-10px;right:-10px;min-width:30px;height:30px;padding:0 8px;border-radius:15px;background:#ff2b2b;border:3px solid #000;display:grid;place-items:center;font:normal 16px "Lilita One"}
-.hide{display:none!important}
-
-/* generic */
-.btn{padding:10px 20px;font-size:19px;color:#fff;border:3px solid #000;border-radius:12px;cursor:pointer;text-shadow:1px 2px 0 #000;box-shadow:inset 0 4px 0 rgba(255,255,255,.35),0 4px 0 #000;background:linear-gradient(#6a7490,#3a4260)}
-.btn.sm{padding:6px 12px;font-size:15px}.btn:active{transform:translateY(3px)}.btn:disabled{filter:grayscale(1) brightness(.7);cursor:not-allowed}
-.btn.green{background:linear-gradient(#5cf06a,#1fae35)}.btn.blue{background:linear-gradient(#4a9bff,#1450d0)}.btn.orange{background:linear-gradient(#ffc04a,#e5780a)}.btn.red{background:linear-gradient(#ff7676,#d11f1f)}
-.round{width:44px;height:44px;border-radius:50%;border:3px solid #000;background:linear-gradient(#ffc04a,#e5780a);color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 0 #000;flex:none}
-input,textarea,select{width:100%;padding:10px 12px;margin:4px 0 10px;border:3px solid #000;border-radius:10px;background:#0a1240;color:#fff;font:700 16px Nunito,sans-serif;user-select:text}
-input[type=color]{padding:0;height:38px;cursor:pointer}input[type=checkbox]{width:auto}input[type=range]{padding:0}
-label{display:block;font-size:14px;color:#9fd4ff}
-.page{width:100%;display:flex;flex-direction:column;overflow:hidden}
-.page>header{display:flex;align-items:center;gap:16px;padding:14px 18px;background:rgba(5,10,40,.55);border-bottom:3px solid #000}
-.page>header h2{margin:0;font-size:30px;text-shadow:2px 3px 0 #000}
-.pbody{flex:1;overflow:auto;padding:18px;min-height:0}
-.card{background:rgba(10,20,80,.8);border:3px solid #000;border-radius:14px;padding:16px;margin-bottom:14px}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.tabs button,.seg button{padding:8px 18px;font-size:18px;color:#fff;background:#243a90;border:3px solid #000;border-radius:10px;cursor:pointer;text-shadow:1px 2px 0 #000}
-.tabs button.on,.seg button.on{background:linear-gradient(#5cf06a,#1fae35)}
-.seg{display:flex;gap:4px}
-.grid{display:grid;gap:12px}
-.menu4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));max-width:900px;margin:auto}
-.menu4 .big-btn{width:100%;height:150px;font-size:26px}
-.muted{color:#9fb4ff;font-size:14px}
-
-/* level cards */
-.lvl{display:flex;align-items:center;gap:14px;padding:10px 14px;background:linear-gradient(90deg,#1b3aa8,#102a7a);border:3px solid #000;border-radius:14px;cursor:pointer;box-shadow:0 4px 0 #000}
-.lvl:hover{filter:brightness(1.2)}
-.lvl img{width:56px;height:56px;flex:none}
-.lvl h3{margin:0;font-size:24px;text-shadow:2px 2px 0 #000}
-.lvl .meta{margin-left:auto;text-align:right;font-size:15px;color:#cfe4ff}
-.pager{display:flex;gap:14px;align-items:center;justify-content:center;margin-top:14px}
-.list{display:flex;flex-direction:column;gap:10px}
-
-/* level page */
-.lp{display:grid;grid-template-columns:1fr 340px;gap:16px;height:100%}
-.lp-main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
-.lp-main h1{margin:0;font-size:44px;text-shadow:3px 4px 0 #000}
-.playbtn{width:130px;height:130px;border-radius:50%;border:5px solid #000;background:linear-gradient(#5cf06a,#1fae35);font-size:64px;color:#fff;cursor:pointer;box-shadow:inset 0 8px 0 rgba(255,255,255,.4),0 8px 0 #000;display:grid;place-items:center;padding-left:10px}
-.playbtn:hover{transform:scale(1.07)}
-.pb{width:min(420px,80%);height:22px;border:3px solid #000;border-radius:12px;background:#07102f;overflow:hidden;position:relative}
-.pb i{display:block;height:100%;background:linear-gradient(#7dff7d,#1fae35)}
-.pb b{position:absolute;inset:0;display:grid;place-items:center;font:normal 13px "Lilita One"}
-.votes{display:flex;gap:18px;align-items:center;font:normal 30px "Lilita One"}
-.votes .round{width:56px;height:56px;font-size:26px;background:linear-gradient(#4a9bff,#1450d0)}
-.votes .round.on{background:linear-gradient(#5cf06a,#1fae35)}.votes .round.down.on{background:linear-gradient(#ff7676,#d11f1f)}
-.side{display:flex;flex-direction:column;background:rgba(5,10,40,.6);border:3px solid #000;border-radius:14px;padding:12px;min-height:0}
-.comments{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
-.cm{background:#0f1c66;border:2px solid #000;border-radius:10px;padding:8px 10px;font-size:14px;word-break:break-word;user-select:text}
-.cm b{color:#8fe9ff;cursor:pointer}.cm .del{float:right;cursor:pointer;color:#ff6b6b}
-.rate-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.rate-grid button{background:#0f1c66;border:3px solid #000;border-radius:14px;padding:10px 4px;color:#fff;cursor:pointer;font:normal 15px "Lilita One"}
-.rate-grid button:hover{filter:brightness(1.4)}.rate-grid img{width:62px;height:62px;display:block;margin:auto}
-
-/* cosmetics */
-.cosm{display:grid;grid-template-columns:230px 1fr;gap:18px}
-.preview{display:flex;flex-direction:column;align-items:center;gap:10px}
-.preview img{width:160px;height:160px;image-rendering:pixelated}
-.swatches{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
-.sw{width:46px;height:46px;border:3px solid #000;border-radius:8px;cursor:pointer;position:relative}
-.sw.sel,.sk.sel{outline:4px solid #fff}
-.sk{width:70px;height:70px;border:3px solid #000;border-radius:10px;background:#0f1c66;cursor:pointer;position:relative;display:grid;place-items:center}
-.sk img{width:56px;height:56px}
-.locked{filter:grayscale(1) brightness(.45)}
-.locked:after{content:"🔒";position:absolute;right:2px;bottom:0;font-size:16px;filter:none}
-.ach{display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid #000;border-radius:10px;background:#0f1c66;margin-bottom:6px;font-size:15px}
-.ach.done{background:#17673a}.ach .st{margin-left:auto;font-family:"Lilita One";white-space:nowrap}
-
-/* leaderboard rows */
-.lb{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#12257f;border:3px solid #000;border-radius:12px;cursor:pointer}
-.lb:hover{filter:brightness(1.25)}.lb .rk{width:50px;font:normal 22px "Lilita One";color:#ffe36b}.lb img{width:40px;height:40px}.lb .v{margin-left:auto;font:normal 22px "Lilita One"}
-
-/* modal / toast / overlays */
-#modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;place-items:center;z-index:50;padding:14px}
-#modal.open{display:grid}
-#modalBox{position:relative;width:min(640px,100%);max-height:92vh;overflow:auto;background:linear-gradient(#1b3aa8,#0f2272);border:4px solid #000;border-radius:18px;padding:22px;box-shadow:0 10px 0 #000}
-#modalBox.wide{width:min(900px,100%)}
-#modalBox .x{position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:50%;border:3px solid #000;background:#ff4040;color:#fff;cursor:pointer;font-size:16px}
-#modalBody h2{margin:0 0 12px;font-size:30px;text-shadow:2px 3px 0 #000}
-#toasts{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:99;pointer-events:none}
-.toast{background:#0b1030;border:3px solid #000;border-radius:12px;padding:10px 18px;font-size:16px;box-shadow:0 5px 0 #000;animation:tin .25s;max-width:90vw;text-align:center}
-.toast.err{background:#a31515}.toast.ok{background:#14803a}
-@keyframes tin{from{transform:translateY(-20px);opacity:0}}
-.overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:5}
-.overlay.open{display:grid}
-.panel{background:linear-gradient(#1b3aa8,#0f2272);border:4px solid #000;border-radius:18px;padding:26px 36px;display:flex;flex-direction:column;gap:14px;align-items:center;min-width:280px;box-shadow:0 8px 0 #000}
-.panel h2{margin:0;font-size:36px;text-shadow:2px 3px 0 #000}
-
-/* HUD */
-#gameCanvas,#editCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-#hud{position:absolute;top:10px;left:14px;right:14px;display:flex;align-items:center;gap:12px;pointer-events:none}
-#hud .round{pointer-events:auto;width:38px;height:38px;font-size:14px}
-#pbar{flex:1;max-width:440px;margin:0 auto;height:14px;border:3px solid #000;border-radius:9px;background:rgba(0,0,0,.45);overflow:hidden}
-#pfill{height:100%;width:0;background:linear-gradient(#7dff7d,#1fae35)}
-#ppct{font:normal 20px "Lilita One";text-shadow:2px 2px 0 #000;position:absolute;left:0;right:0;text-align:center;top:22px}
-
-/* editor */
-#edTop{position:absolute;top:0;left:0;right:0;display:flex;gap:8px;align-items:center;padding:8px;background:rgba(5,10,40,.88);border-bottom:3px solid #000;flex-wrap:wrap;z-index:3}
-#edTop .round{width:38px;height:38px;font-size:16px}
-#edStatus{margin-left:auto;font:normal 15px "Lilita One";color:#9fd4ff}
-#edBottom{position:absolute;left:0;right:0;bottom:0;background:rgba(5,10,40,.92);border-top:3px solid #000;padding:6px 8px;z-index:3}
-#edTabs{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}
-#edTabs button{padding:4px 12px;font:normal 15px "Lilita One";color:#fff;background:#243a90;border:2px solid #000;border-radius:8px;cursor:pointer}
-#edTabs button.on{background:#3ddc4a}
-#edItems{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
-.it{flex:none;width:76px;padding:4px;background:#0f1c66;border:3px solid #000;border-radius:10px;color:#fff;font:700 11px Nunito;cursor:pointer;text-align:center}
-.it img{width:44px;height:44px;display:block;margin:auto}.it.on{outline:3px solid #ffe36b;background:#254cc9}
-#edProps{position:absolute;right:8px;top:64px;width:240px;max-height:calc(100% - 200px);overflow:auto;background:rgba(5,10,40,.92);border:3px solid #000;border-radius:12px;padding:10px;display:none;z-index:3;font-size:14px}
-#edProps.open{display:block}
-#edProps h3{margin:0 0 6px;font-size:18px}
-@media (max-width:760px){.lp{grid-template-columns:1fr;overflow:auto}.cosm{grid-template-columns:1fr}#footer{gap:10px;font-size:14px}.menu-row{gap:16px}}
-
-/* ---- v2 polish: minimalist abstract look ---- */
-#bgfx{background:radial-gradient(circle at 20% 15%,#3b6cf0 0,transparent 45%),radial-gradient(circle at 85% 85%,#7a3df0 0,transparent 45%),#101a55}
-#bgfx:after{content:"";position:absolute;inset:0;background:conic-gradient(from 45deg at 50% 120%,rgba(255,255,255,.06) 0 12%,transparent 12% 25%,rgba(255,255,255,.04) 25% 37%,transparent 37%);animation:spin 40s linear infinite}
-@keyframes spin{to{transform:rotate(1turn)}}
-.big-btn{border-radius:28px;border-width:3px;box-shadow:inset 0 5px 0 rgba(255,255,255,.3),0 8px 0 rgba(0,0,0,.55),0 14px 24px rgba(0,0,0,.35)}
-.btn,.tabs button,.seg button{border-radius:999px}
-.page>header{justify-content:center;position:relative}.page>header .round{position:absolute;left:16px}
-.pbody{max-width:1000px;width:100%;margin:0 auto}
-.card{border-radius:22px;backdrop-filter:blur(6px);background:rgba(14,26,100,.72)}
-.lvl{border-radius:22px}.tabs{justify-content:center}.pager{margin-bottom:10px}
-#edTop,#edBottom,#edProps{backdrop-filter:blur(8px);border-radius:0 0 18px 18px}#edBottom{border-radius:18px 18px 0 0}#edProps{border-radius:18px}
-.it{border-radius:14px}.it:hover{background:#254cc9}
-
-/* ---- v3: full UI + editor redesign ---- */
-.bb-ico svg{width:58px;height:58px;display:block;filter:drop-shadow(0 3px 0 rgba(0,0,0,.6))}
-.logo{font-size:min(20vw,140px)}
-.menu-row{justify-content:center}
-.big-btn{transition:transform .12s,filter .12s}.big-btn:hover{filter:brightness(1.12)}
-.skgrid{display:grid;grid-template-columns:repeat(auto-fill,78px);gap:10px;justify-content:center}
-.sk{width:78px;height:78px;border-radius:18px}.sk img{width:62px;height:62px}
-.sw{border-radius:50%}.sw.sel,.sk.sel{outline:4px solid #ffe36b;outline-offset:2px}
-.pvrow{display:flex;gap:6px;align-items:center}.pvrow img{width:110px;height:110px}
-.cosm{grid-template-columns:260px 1fr;max-width:980px;margin:auto}
-.page>header h2{font-size:34px}
-/* editor: floating top bar, left palette */
-#edTop{top:10px;left:10px;right:10px;border:3px solid #000;border-radius:18px;background:rgba(8,14,56,.82)}
-#edModes button,.seg button{min-width:64px}
-#edBottom{left:10px;top:76px;bottom:10px;right:auto;width:236px;border:3px solid #000;border-radius:18px;background:rgba(8,14,56,.82);display:flex;flex-direction:column;padding:8px}
-#edTabs{flex-wrap:wrap;gap:5px}
-#edTabs button{border-radius:999px;text-transform:capitalize;padding:3px 10px;font-size:14px}
-#edItems{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;overflow-y:auto;overflow-x:hidden;flex:1;align-content:start}
-.it{width:auto;border-radius:12px}.it img{width:40px;height:40px}
-#edProps{top:76px;right:10px;border-radius:18px;background:rgba(8,14,56,.88);max-height:calc(100% - 96px)}
-@media (max-width:760px){#edBottom{width:170px}#edItems{grid-template-columns:repeat(2,1fr)}}
+*{box-sizing:border-box;margin:0}
+body{background:#12143a;color:#f4f2ff;font:600 16px "Trebuchet MS",system-ui,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#ui{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px 16px 56px;overflow:auto;text-align:center;
+background:radial-gradient(circle at 15% 20%,#3a3fa8 0,transparent 38%),radial-gradient(circle at 85% 75%,#7a2fa0 0,transparent 42%),radial-gradient(circle at 60% 10%,#1fa3c4 0,transparent 25%),#12143a}
+.off{display:none!important}
+h1{font-size:clamp(56px,14vw,120px);letter-spacing:.12em;font-style:italic;text-shadow:0 6px 0 #5b2fa0,0 0 40px #4de1ff}
+h2{font-size:28px}
+.row{display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap}
+button,input{font:inherit;color:inherit;border:2px solid #9fa8ff;background:rgba(20,22,70,.75);border-radius:14px;padding:12px 26px;min-width:150px;cursor:pointer;transition:transform .12s,background .12s}
+input{cursor:text;text-align:center}
+button:hover:not(:disabled){transform:translateY(-3px);background:#3a3fa8}
+button:disabled{opacity:.4;cursor:default}
+.sc{max-height:50vh;overflow:auto;min-width:260px;text-align:left}.sc p{padding:4px 0}
+.pb{width:min(360px,80vw);height:14px;border:2px solid #9fa8ff;border-radius:9px;overflow:hidden}.pb i{display:block;height:100%;background:#4de1ff}
+#bar{position:fixed;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:96vw}
+#bar button{min-width:0;padding:8px 12px;font-size:14px}
+#ft{position:fixed;left:0;right:0;bottom:0;padding:12px;text-align:center;background:rgba(10,12,36,.85);border-top:2px solid #5b2fa0;pointer-events:none}
+.mod{display:inline-block;background:#ffd84d;color:#12143a;border-radius:6px;padding:0 7px;font-size:.8em;font-weight:800;box-shadow:0 0 10px #ffd84d}
