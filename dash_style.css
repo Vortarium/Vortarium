@@ -174,3 +174,6 @@ label{display:block;font-size:14px;color:#9fd4ff}
 .bb-ico svg{width:56px;height:56px;display:block;margin:0 auto}
 .auth{color:#8fe9ff;cursor:pointer}.auth:hover{text-decoration:underline}
 #edProps input[type=checkbox]{width:auto;margin-right:6px}
+
+.pvrow{flex-wrap:wrap}.pvrow img{width:84px;height:84px}
+.cosm{grid-template-columns:300px 1fr}
