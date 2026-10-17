@@ -365,7 +365,7 @@ class Game {
     if (this.mode !== 'ship' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
     const edge = this.edgeT > 0, prevB = p.y;
     p.grounded = false;
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { p.vy += (this.held ? 1 : -1) * gr * 2600 * dt; p.vy = Math.max(-400, Math.min(400, p.vy)); } else { p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else { p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (this.hasGrav && p.y > CEIL - 30) { p.y = CEIL - 30; if (p.vy > 0 || gr < 0) p.vy = 0; if (gr < 0) p.grounded = true; }
     const S = this.S;
@@ -374,7 +374,7 @@ class Game {
     for (const o of this.D) {
       const g = this.gOff[o.g]; this.inter(o, g ? g.x * U : 0, g ? g.y * U : 0, prevB, edge); if (p.dead) return;
     }
-    if (this.mode === 'ship') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
@@ -663,7 +663,23 @@ async function fetchLevels(kind) {
   const s = await getDocs(query(collection(db, 'levels'), where('status', '==', kind === 'stars' ? 'rated' : 'unrated'), limit(200)));
   const a = s.docs.map(d => ({ id: d.id, ...d.data() })); a.sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); return a;
 }
-const lvlCard = l => `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${l.diff ? diffURL(l.diff, 56) : diffURL('easy', 56)}" style="${l.diff ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)}</h3><div class="muted">by ${nameHTML(l.authorName)}${l.diff ? ' · ' + DIFFS.find(d => d.id === l.diff).name + ' ⭐' + (DIFFS.find(d => d.id === l.diff).stars) : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`;
+function lenSecs(objs) {
+  const end = objs.find(o => o.t === 'trig_end'); if (!end) return 0;
+  const ports = objs.filter(o => SPEEDS[o.t]).sort((a, b) => a.x - b.x);
+  let t = 0, x0 = 0, sp = 1; const ex = end.x * U;
+  for (const p of ports) { const px = p.x * U; if (px >= ex) break; t += (px - x0) / (BASE * sp); x0 = px; sp = SPEEDS[p.t]; }
+  return t + (ex - x0) / (BASE * sp);
+}
+function levelLen(l) {
+  if (l.len == null) { try { l.len = lenSecs(JSON.parse(l.data).objs || []); } catch { l.len = 0; } }
+  return l.len;
+}
+function lenTag(l) {
+  const s = levelLen(l); if (!s) return '';
+  const n = s < 10 ? 'Tiny' : s < 30 ? 'Short' : s < 60 ? 'Medium' : s < 120 ? 'Long' : 'XL';
+  return `<span class="len len-${n.toLowerCase()}" title="${Math.round(s)}s">${n}</span>`;
+}
+const lvlCard = l => `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${l.diff ? diffURL(l.diff, 56) : diffURL('easy', 56)}" style="${l.diff ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)} ${lenTag(l)}</h3><div class="muted">by ${nameHTML(l.authorName)}${l.diff ? ' · ' + DIFFS.find(d => d.id === l.diff).name + ' ⭐' + (DIFFS.find(d => d.id === l.diff).stars) : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`;
 views.levels = async ({ kind }) => {
   page(kind === 'stars' ? 'Stars - Rated Levels' : 'New Levels', '<p class="muted">Loading…</p>');
   try { LISTS[kind] = await fetchLevels(kind); } catch (e) { return page('Levels', `<p>${esc(errMsg(e))}</p>`); }
@@ -697,7 +713,7 @@ views.level = async ({ id }) => {
   const cmHtml = cms.map(c => `<div class="cm">${isMod() || (me && c.uid === me.uid) ? `<span class="del" data-act="delcm" data-id="${id}" data-cid="${c.id}">✕</span>` : ''}<b data-act="profile" data-uid="${c.uid}">${nameHTML(c.name)}</b><br>${esc(c.text)}</div>`).join('') || '<p class="muted">No comments yet.</p>';
   page(esc(lv.title), `<div class="lp"><div class="lp-main">
     <h1>${esc(lv.title)}</h1><div>by <b style="color:#8fe9ff;cursor:pointer" data-act="profile" data-uid="${lv.authorId}">${nameHTML(lv.authorName)}</b></div>
-    <div class="row" style="justify-content:center"><img src="${d ? diffURL(d.id, 56) : diffURL('easy', 56)}" width="56" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><b>${d ? d.name + ' · ⭐ ' + d.stars : 'Unrated'}</b></div>
+    <div class="row" style="justify-content:center"><img src="${d ? diffURL(d.id, 56) : diffURL('easy', 56)}" width="56" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><b>${d ? d.name + ' · ⭐ ' + d.stars : 'Unrated'}</b> ${lenTag(lv)}</div>
     <p class="muted" style="max-width:480px">${esc(lv.desc || 'No description')}</p>
     <button class="playbtn" data-act="playlvl" data-id="${id}">▶</button>
     <div class="pb"><i style="width:${best}%"></i><b>Best: ${best}%</b></div>
@@ -757,7 +773,8 @@ async function playPublished(id) {
   const lv = LV[id]; updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1;
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
-  startPlay({ level: JSON.parse(lv.data), kind: 'play', id, lv, songUrl, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
+  const prevBest = await getBest(id);
+  startPlay({ level: JSON.parse(lv.data), kind: 'play', id, lv, songUrl, prevBest, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
@@ -767,7 +784,7 @@ function startPlay(o) {
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   game.cb = {
     onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
-    onDeath: pct => { lvAudio && lvAudio.pause(); sfx('die'); PL.best = Math.max(PL.best, pct); if (PL.kind === 'play' && pct > (+localStorage[bestKey(PL.id)] || 0)) localStorage[bestKey(PL.id)] = Math.floor(pct); },
+    onDeath: pct => { lvAudio && lvAudio.pause(); sfx('die'); const oldBest = Math.max(PL.best, PL.prevBest || 0); if (pct >= 1 && Math.floor(pct) > Math.floor(oldBest)) toast(`🏅 New best: ${Math.floor(pct)}%`, 'ok'); PL.best = Math.max(PL.best, pct); if (PL.kind === 'play' && pct > (+localStorage[bestKey(PL.id)] || 0)) localStorage[bestKey(PL.id)] = Math.floor(pct); },
     onWin: () => { lvAudio && lvAudio.pause(); sfx('win'); $('#pfill').style.width = '100%'; $('#ppct').textContent = '100%'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}`; $('#winBox').classList.add('open'); onWon(); },
     onFrame: pct => { $('#pfill').style.width = pct + '%'; $('#ppct').textContent = Math.floor(pct) + '%'; },
     onPause: pauseToggle
@@ -1120,7 +1137,7 @@ async function publish(i) {
     if (data.length > 900000) throw 'Level is too big to upload';
     const sb = await idbGet(`draft:${me.uid}:${i}`), has = sb instanceof Blob && sb.size > 0, parts = has ? Math.ceil(sb.size / SONG_CHUNK) : 0;
     const r = doc(collection(db, 'levels')); toast('Uploading level…');
-    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length });
+    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length, len: Math.round(lenSecs(lv.objs) * 10) / 10 });
     if (has) {
       try {
         for (let k = 0; k < parts; k += 3) {

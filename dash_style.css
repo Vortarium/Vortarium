@@ -152,3 +152,15 @@ label{display:block;font-size:14px;color:#9fd4ff}
 .lvl{border-radius:22px}.tabs{justify-content:center}.pager{margin-bottom:10px}
 #edTop,#edBottom,#edProps{backdrop-filter:blur(8px);border-radius:0 0 18px 18px}#edBottom{border-radius:18px 18px 0 0}#edProps{border-radius:18px}
 .it{border-radius:14px}.it:hover{background:#254cc9}
+
+/* ---- length tags ---- */
+.len{display:inline-block;vertical-align:middle;margin-left:6px;padding:1px 8px;border:2px solid #000;border-radius:999px;font:normal 11px "Lilita One",sans-serif;letter-spacing:.5px;color:#fff;text-shadow:1px 1px 0 #000}
+.len-tiny{background:#7a8bb5}.len-short{background:#35d35a}.len-medium{background:#e5a50a}.len-long{background:#ff6a3d}.len-xl{background:#d11f1f}
+
+/* ---- editor object properties docked at the bottom ---- */
+#edProps{left:8px;right:8px;top:auto;bottom:138px;width:auto;max-height:150px}
+#edProps.open{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px 14px}
+#edProps h3{width:100%;margin:0}
+#edProps label{width:150px;margin:0}
+#edProps input{margin:2px 0}
+#edProps .row{margin-left:auto}
