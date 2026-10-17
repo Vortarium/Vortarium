@@ -929,8 +929,8 @@
             { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png',     date: 'MAY 2026' },
             { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png',        date: 'MAY 2026' },
             { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026' },
-            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026', warn: true },
-            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026', warn: true },
+            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026' },
+            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026' },
             { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026', warn: true },
             { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026', warn: true },
             { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026', warn: true },
@@ -1121,6 +1121,18 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
+            { v: '2.1.4', date: '10/16/2026',
+              desc: 'Slither.io and Paper.io were rebuilt from the ground up, so both are unlocked and no longer carry the warning.',
+              bullets: [
+                'Slither.io: fixed the heavy lag with a much faster engine',
+                'Slither.io: much smarter bots that dodge other snakes, hunt smaller ones and cut them off',
+                'Slither.io: new look with a honeycomb floor, glowing orbs, snakes with eyes and a glowing world edge',
+                'Paper.io: bots now use the whole map, including the edges and margins',
+                'Paper.io: you now spawn at a random spot instead of the corner',
+                'Paper.io: smarter bot AI that plans loops, defends its trail and goes after your trail',
+                'Paper.io: smoother movement and visuals closer to the original game',
+                'Slither.io and Paper.io are now unlocked and the red warning is removed'
+            ]},
             { v: '2.1.3', date: '10/16/2026', bullets: [
                 'Splendid balancing and bugfixes',
                 'Changed some card values and updated the bot AI',

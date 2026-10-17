@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -161,15 +161,6 @@ canvas{display:block;}
   </div>
 </div>
 <script>
-// ===== CONFIG =====
-const GRID_SIZE = 250;
-const CELL = 20;
-const MAX_BOTS = 30;
-const PLAYER_SPEED = 8;   // cells/sec
-const BOT_SPEED = 7;
-const SPAWN_INTERVAL = 5000;
-const MIN_SPAWN_DIST = 30;
-
 // ===== SKINS =====
 const SKINS = [
   {name:'Crimson', fill:'rgba(220,50,50,0.28)', stroke:'#e03232', dot:'#e03232', light:'rgba(220,50,50,0.12)'},
@@ -290,6 +281,7 @@ function checkAchievements(human,elapsed,loopTime){
 // Achievement popup — slides down from top, auto-hides
 let achQueue=[], achShowing=false;
 function queueAchPopup(track,tier){
+  newAchs.push({icon:track.icon,name:track.name+' '+TIER_NAMES[tier.t]});
   achQueue.push({track,tier});
   if(!achShowing) nextAchPopup();
 }
@@ -412,1156 +404,627 @@ document.getElementById('btnPlayAgain').onclick=()=>{
 };
 document.getElementById('btnGoHome').onclick=goHome;
 
-// ===== GAME STATE =====
-let players=[], gameRunning=false, animId=null, lastTime=0, gameStartTime=0, pidCounter=0, newAchs=[];
-let camX=0, camY=0;
-const keys={};
 
-// grid[y][x] = player id who owns that territory (0=unclaimed)
-// tgrid[y][x] = player id whose trail is on that cell (0=none)
-let grid=[], tgrid=[], cellCounts={};
+// =====================================================================
+//  ENGINE  (flat typed-array grid, smooth movement, real bot AI)
+// =====================================================================
+const GRID_SIZE = 200, MAX_BOTS = 24, PLAYER_SPEED = 7.4, BASE_CELL = 30;
+const N = GRID_SIZE, NN = N * N;
+const own = new Int16Array(NN);          // territory owner id per cell (0 = nobody)
+const trl = new Int16Array(NN);          // trail owner id per cell
+const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];   // 0 right, 1 down, 2 left, 3 up
+const inB = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
 
-function initGrid(){
-  grid=[]; tgrid=[]; cellCounts={};
-  for(let y=0;y<GRID_SIZE;y++){
-    grid.push(new Int32Array(GRID_SIZE));
-    tgrid.push(new Int32Array(GRID_SIZE));
+let players = [], byId = [null], particles = [];
+let gameRunning = false, gameStartTime = 0, newAchs = [];
+let camX = N / 2, camY = N / 2, camZoom = 1, DPR = 1;
+const minimapCanvas = document.getElementById('minimap');
+const mmCtx = minimapCanvas.getContext('2d');
+minimapCanvas.width = N; minimapCanvas.height = N;
+const mmImg = mmCtx.createImageData(N, N);
+const mm32 = new Uint32Array(mmImg.data.buffer);
+
+// ---------- colour helpers ----------
+const hexRGB = h => { const v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; };
+const mixC = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const cssC = c => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+function setColors(p) {
+  const b = hexRGB(p.skin.dot);
+  p.rgb = b;
+  p.cFill = cssC(mixC(b, [255, 255, 255], 0.12));
+  p.cDark = cssC(mixC(b, [0, 0, 0], 0.30));
+  p.cTrail = cssC(mixC(b, [255, 255, 255], 0.50));
+  p.cTrailD = cssC(mixC(b, [255, 255, 255], 0.18));
+  p.cHead = cssC(b);
+  const f = mixC(b, [255, 255, 255], 0.12);
+  p.mm32 = (255 << 24) | ((f[2] | 0) << 16) | ((f[1] | 0) << 8) | (f[0] | 0);
+}
+
+// ---------- player ----------
+class Player {
+  constructor(name, skin, isHuman) {
+    this.id = players.length + 1; byId[this.id] = this;
+    this.name = name; this.skin = skin; this.isHuman = isHuman;
+    this.alive = false; this.trail = []; this.queue = [];
+    this.kills = 0; this.count = 0; this.territoryPct = 0; this.maxTerritoryPct = 0;
+    this.respawnT = 0; this.prog = 0; this.speed = PLAYER_SPEED;
+    this.cx = this.cy = this.tx = this.ty = this.px = this.py = 0; this.vx = this.vy = 0;
+    this.dirI = 0; this.outside = false; this.fromX = this.fromY = 0;
+    this.x0 = this.y0 = 0; this.x1 = this.y1 = 0;
+    // bot personality
+    this.aggr = 0.25 + Math.random() * 0.65;
+    this.greed = 0.6 + Math.random() * 0.8;
+    this.plan = null;
+    setColors(this);
   }
 }
-function gCell(x,y){ return (x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)?0:grid[y][x]; }
-function sCell(x,y,id){
-  if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return;
-  const old=grid[y][x];
-  if(old===id)return;
-  if(old>0)cellCounts[old]=(cellCounts[old]||1)-1;
-  if(id>0)cellCounts[id]=(cellCounts[id]||0)+1;
-  grid[y][x]=id;
+
+// ---------- territory ----------
+function setOwn(i, p) {
+  const o = own[i]; if (o === p.id) return;
+  if (o > 0) { const q = byId[o]; if (q) q.count--; }
+  own[i] = p.id; p.count++;
+  const x = i % N, y = (i / N) | 0;
+  if (x < p.x0) p.x0 = x; if (x > p.x1) p.x1 = x; if (y < p.y0) p.y0 = y; if (y > p.y1) p.y1 = y;
 }
-function gTrail(x,y){ return (x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)?0:tgrid[y][x]; }
-function sTrail(x,y,id){ if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return; tgrid[y][x]=id; }
-function countCells(id){ return cellCounts[id]||0; }
+const fillStamp = new Int32Array(NN), fq = new Int32Array(NN); let stampId = 0;
+function capture(p) {
+  for (let k = 0; k < p.trail.length; k++) { const i = p.trail[k]; trl[i] = 0; setOwn(i, p); }
+  p.trail.length = 0;
+  const x0 = Math.max(0, p.x0 - 1), x1 = Math.min(N - 1, p.x1 + 1), y0 = Math.max(0, p.y0 - 1), y1 = Math.min(N - 1, p.y1 + 1);
+  stampId++;
+  let qh = 0, qt = 0;
+  const seed = (x, y) => { const i = y * N + x; if (own[i] !== p.id && fillStamp[i] !== stampId) { fillStamp[i] = stampId; fq[qt++] = i; } };
+  for (let x = x0; x <= x1; x++) { seed(x, y0); seed(x, y1); }
+  for (let y = y0; y <= y1; y++) { seed(x0, y); seed(x1, y); }
+  while (qh < qt) {
+    const i = fq[qh++], x = i % N, y = (i / N) | 0;
+    if (x > x0) { const j = i - 1; if (own[j] !== p.id && fillStamp[j] !== stampId) { fillStamp[j] = stampId; fq[qt++] = j; } }
+    if (x < x1) { const j = i + 1; if (own[j] !== p.id && fillStamp[j] !== stampId) { fillStamp[j] = stampId; fq[qt++] = j; } }
+    if (y > y0) { const j = i - N; if (own[j] !== p.id && fillStamp[j] !== stampId) { fillStamp[j] = stampId; fq[qt++] = j; } }
+    if (y < y1) { const j = i + N; if (own[j] !== p.id && fillStamp[j] !== stampId) { fillStamp[j] = stampId; fq[qt++] = j; } }
+  }
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * N + x;
+    if (own[i] !== p.id && fillStamp[i] !== stampId) setOwn(i, p);
+  }
+  // anybody who lost every last cell is out
+  for (const q of players) if (q !== p && q.alive && q.count <= 0) killPlayer(q, p, 'wiped');
+}
 
-// Find a free spawn point:
-// - Must be at least 20 cells from any border
-// - 10x10 area (±5 cells) must be completely free of territory
-// - No active trail within 5 cells of the spawn centre
-function findFreeSpawn(){
-  const BORDER = 30;  // stay 30 cells from map edges
-  const TERR_R = 5;
-  const TRAIL_R = 5;
+// ---------- death ----------
+function spawnBurst(v) {
+  for (let k = 0; k < 30; k++) {
+    const a = Math.random() * 6.283, s = 2 + Math.random() * 6;
+    particles.push({ x: v.vx + 0.5, y: v.vy + 0.5, dx: Math.cos(a) * s, dy: Math.sin(a) * s, life: 0.8, max: 0.8, c: Math.random() < 0.5 ? v.cHead : v.cTrail });
+  }
+}
+function killPlayer(v, killer, reason) {
+  if (!v.alive) return;
+  v.alive = false;
+  spawnBurst(v);
+  for (let k = 0; k < v.trail.length; k++) trl[v.trail[k]] = 0;
+  v.trail.length = 0; v.outside = false; v.plan = null;
+  for (let y = v.y0; y <= v.y1; y++) { const b = y * N; for (let x = v.x0; x <= v.x1; x++) if (own[b + x] === v.id) own[b + x] = 0; }
+  v.count = 0;
+  if (killer && killer !== v) { killer.kills++; if (killer.isHuman) sessionKills++; }
+  if (v.isHuman) onHumanDeath(v, killer, reason); else v.respawnT = 3 + Math.random() * 4;
+}
+function onHumanDeath(h, killer, reason) {
+  const elapsed = (performance.now() - gameStartTime) / 1000;
+  const rec = getRecords();
+  if (h.maxTerritoryPct > rec.territory) rec.territory = h.maxTerritoryPct;
+  if (h.kills > rec.kills) rec.kills = h.kills;
+  if (elapsed > rec.survival) rec.survival = elapsed;
+  saveRecords(rec);
+  document.getElementById('dsBestTerritory').textContent = h.maxTerritoryPct.toFixed(1) + '%';
+  document.getElementById('dsKills').textContent = h.kills;
+  document.getElementById('dsTime').textContent = fmtTime(elapsed);
+  document.getElementById('deathSub').textContent =
+    reason === 'wall' ? 'You crashed into the wall!' :
+    reason === 'self' ? 'You ran into your own trail!' :
+    reason === 'wiped' ? 'Your whole territory was captured!' :
+    killer ? 'You were eliminated by ' + killer.name + '!' : 'You were eliminated!';
+  const box = document.getElementById('deathNewAch'), badges = document.getElementById('deathAchBadges');
+  badges.innerHTML = '';
+  if (newAchs.length) {
+    newAchs.forEach(a => { const s = document.createElement('span'); s.className = 'death-ach-badge'; s.textContent = a.icon + ' ' + a.name; badges.appendChild(s); });
+    box.style.display = 'block';
+  } else box.style.display = 'none';
+  h.deadAt = performance.now();
+  setTimeout(() => { if (!h.alive) deathScreen.classList.add('active'); }, 650);
+}
 
-  for(let attempt=0;attempt<500;attempt++){
-    const cx=BORDER+Math.floor(Math.random()*(GRID_SIZE-BORDER*2));
-    const cy=BORDER+Math.floor(Math.random()*(GRID_SIZE-BORDER*2));
-
-    let ok=true;
-    outer: for(let dy=-TERR_R;dy<=TERR_R;dy++){
-      for(let dx=-TERR_R;dx<=TERR_R;dx++){
-        if(gCell(cx+dx,cy+dy)!==0){ok=false;break outer;}
-      }
+// ---------- spawning ----------
+function findSpawn(margin, free) {
+  for (let a = 0; a < 300; a++) {
+    const cx = margin + ((Math.random() * (N - margin * 2)) | 0), cy = margin + ((Math.random() * (N - margin * 2)) | 0);
+    let ok = true;
+    for (let dy = -free; dy <= free && ok; dy++) for (let dx = -free; dx <= free; dx++) {
+      const i = (cy + dy) * N + cx + dx;
+      if (own[i] !== 0 || trl[i] !== 0) { ok = false; break; }
     }
-    if(!ok) continue;
-
-    for(const p of players){
-      if(!p.alive||p.trail.length===0) continue;
-      for(const c of p.trail){
-        if(Math.abs(c.cx-cx)<=TRAIL_R&&Math.abs(c.cy-cy)<=TRAIL_R){ok=false;break;}
-      }
-      if(!ok) break;
-    }
-    if(ok) return {cx,cy};
+    if (!ok) continue;
+    for (const q of players) if (q.alive && Math.abs(q.cx - cx) + Math.abs(q.cy - cy) < 14) { ok = false; break; }
+    if (ok) return { cx, cy };
   }
   return null;
 }
-function findFreeSpawnOrNull(){ return findFreeSpawn(); }
-
-// ===== PLAYER CLASS =====
-class Player {
-  constructor(id,name,skin,isHuman){
-    this.id=id; this.name=name; this.skin=skin; this.isHuman=isHuman;
-    this.cx=0; this.cy=0;
-    this.dir={x:1,y:0}; this.nextDir={x:1,y:0};
-    this.trail=[];
-    this.inTrail=false;
-    this.kills=0; this.alive=true; this.deathCount=0;
-    this.maxTerritoryPct=0; this.lowTerritoryFlag=false;
-    this.respawnTimer=0; this.loopStartTime=0; this.moveTimer=0;
-    this.speed=isHuman?PLAYER_SPEED:(BOT_SPEED+(Math.random()-0.5)*2);
-    // Bot fields
-    this.botPhase='out';   // out | sweep | close | return
-    this.botOutDir={x:1,y:0};
-    this.botOutSteps=0;
-    this.botOutTarget=0;
-    this.botSweepDir={x:0,y:1};
-    this.botSweepSteps=0;
-    this.botSweepTarget=0;
-    this.botCloseDir={x:-1,y:0};
-    this.botCloseSteps=0;
-    this.botCloseTarget=0;
-    this.botDecideTimer=0;
-    this.aggression=Math.random();
-    this.straightCount=0;
-    this.lastOutDir=null;
-    this.trailTimer=0;
-    this.trailReturnAt=5000;
-    this.restTimer=0;
-    this.baseCx=0; this.baseCy=0;
-    this.huntTarget=null; this.huntOwner=null;
-  }
-  get territoryPct(){ return Math.min(100,countCells(this.id)/(GRID_SIZE*GRID_SIZE)*100); }
-  spawnAt(cx,cy){
-    this.cx=cx; this.cy=cy;
-    this.dir={x:1,y:0}; this.nextDir={x:1,y:0};
-    this.trail=[]; this.inTrail=false; this.alive=true; this.moveTimer=0;
-    this.trailTimer=0; this.trailReturnAt=5000; this.restTimer=300+Math.random()*200;
-    this.huntTarget=null; this.huntOwner=null;
-    if(!this.isHuman) assignPersonality(this);
-    // 11x11 starting territory
-    for(let dy=-5;dy<=5;dy++) for(let dx=-5;dx<=5;dx++) sCell(cx+dx,cy+dy,this.id);
-    this.botPhase='out';
-    this.botDecideTimer=0;
-    this.straightCount=0;
-    this._pickOutDir();
-  }
-  _pickOutDir(){
-    // Find territory centroid
-    let tcx=this.cx, tcy=this.cy, tn=0;
-    for(let y=0;y<GRID_SIZE;y+=3){
-      for(let x=0;x<GRID_SIZE;x+=3){
-        if(grid[y][x]===this.id){tcx+=x;tcy+=y;tn++;}
-      }
-    }
-    if(tn>0){tcx=Math.round(tcx/tn);tcy=Math.round(tcy/tn);}
-    this.baseCx=tcx; this.baseCy=tcy;
-
-    const mapCx=GRID_SIZE/2, mapCy=GRID_SIZE/2;
-    const allDirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-
-    // Score each direction: open space ahead, away from borders, toward map centre
-    let bestDir=null, bestScore=-Infinity;
-    for(const d of allDirs){
-      if(this.lastOutDir&&d.x===-this.lastOutDir.x&&d.y===-this.lastOutDir.y) continue;
-      let score=0;
-      for(let s=1;s<=25;s++){
-        const lx=tcx+d.x*s, ly=tcy+d.y*s;
-        if(lx<30||ly<30||lx>=GRID_SIZE-30||ly>=GRID_SIZE-30){score-=100;break;}
-        const v=gCell(lx,ly);
-        if(v===0) score+=4;
-        else if(v===this.id) score-=3;
-        else score+=2;
-      }
-      const fx=tcx+d.x*15, fy=tcy+d.y*15;
-      score-=(Math.abs(fx-mapCx)+Math.abs(fy-mapCy))*0.08;
-      if(score>bestScore){bestScore=score;bestDir=d;}
-    }
-    if(!bestDir) bestDir=allDirs[Math.floor(Math.random()*allDirs.length)];
-
-    this.botOutDir={x:bestDir.x,y:bestDir.y};
-    this.lastOutDir={x:bestDir.x,y:bestDir.y};
-
-    // Rectangle size from personality loopSize, or default
-    const sz=(this.loopSize?this.loopSize():22)+Math.floor(Math.random()*6);
-    const outLen=sz, sweepLen=sz;
-
-    this.botOutTarget=outLen;
-    this.botOutSteps=0;
-
-    // Pick sweep direction with more open space
-    const cw={x:-bestDir.y,y:bestDir.x};
-    const ccw={x:bestDir.y,y:-bestDir.x};
-    let cwScore=0, ccwScore=0;
-    for(let s=1;s<=sweepLen;s++){
-      if(gCell(tcx+cw.x*s,tcy+cw.y*s)===0) cwScore++;
-      if(gCell(tcx+ccw.x*s,tcy+ccw.y*s)===0) ccwScore++;
-    }
-    this.botSweepDir=cwScore>=ccwScore?cw:ccw;
-    this.botSweepTarget=sweepLen;
-    this.botSweepSteps=0;
-
-    // No close phase — just out→sweep→return. Flood fill handles the interior.
-    this.botPhase='out';
-    this.restTimer=150+Math.random()*150;
-  }
+function spawnPlayer(p) {
+  const pos = findSpawn(5, 4) || findSpawn(5, 2);
+  if (!pos) return false;
+  p.alive = true; p.trail.length = 0; p.queue.length = 0; p.outside = false; p.plan = null;
+  p.x0 = p.x1 = pos.cx; p.y0 = p.y1 = pos.cy; p.count = 0;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) setOwn((pos.cy + dy) * N + pos.cx + dx, p);
+  p.cx = p.px = pos.cx; p.cy = p.py = pos.cy;
+  // head towards the middle of the map so a new player never starts by running into a wall
+  const ddx = N / 2 - pos.cx, ddy = N / 2 - pos.cy;
+  p.dirI = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 0 : 2) : (ddy > 0 ? 1 : 3);
+  p.tx = p.cx + DX[p.dirI]; p.ty = p.cy + DY[p.dirI]; p.prog = 0;
+  p.vx = p.cx; p.vy = p.cy;
+  p.speed = p.isHuman ? PLAYER_SPEED : 6.3 + Math.random() * 0.9;
+  p.kills = 0; p.maxTerritoryPct = 0;
+  return true;
 }
 
-// ===== INPUT =====
-document.addEventListener('keydown',e=>{
-  keys[e.key]=true;
-  if(!gameRunning)return;
-  const h=players.find(p=>p.isHuman&&p.alive);
-  if(!h)return;
-  let nd=null;
-  if(e.key==='ArrowUp'||e.key==='w'||e.key==='W') nd={x:0,y:-1};
-  else if(e.key==='ArrowDown'||e.key==='s'||e.key==='S') nd={x:0,y:1};
-  else if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') nd={x:-1,y:0};
-  else if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') nd={x:1,y:0};
-  if(nd){
-    // Block 180 reversal only while in trail (would immediately cross own trail)
-    const is180 = nd.x===-h.dir.x && nd.y===-h.dir.y;
-    if(!is180 || !h.inTrail) h.nextDir=nd;
-  }
-  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
-});
-document.addEventListener('keyup',e=>{keys[e.key]=false;});
-
-// ===== KILL =====
-function killPlayer(victim,killer){
-  if(!victim.alive)return;
-  victim.alive=false;
-  victim.deathCount++;
-  // Clear trail from tgrid
-  for(const c of victim.trail) sTrail(c.cx,c.cy,0);
-  victim.trail=[]; victim.inTrail=false;
-  // Clear all territory
-  for(let y=0;y<GRID_SIZE;y++) for(let x=0;x<GRID_SIZE;x++) if(grid[y][x]===victim.id) sCell(x,y,0);
-  if(killer&&killer.id!==victim.id){
-    killer.kills++;
-    if(killer.isHuman){
-      sessionKills++;
-    }
-  }
-  if(victim.isHuman){
-    sessionDeathFreeStart=performance.now(); // reset death-free timer
-    const elapsed=(performance.now()-gameStartTime)/1000;
-    const pct=victim.maxTerritoryPct;
-    const kills=victim.kills;
-    const rec=getRecords();
-    if(pct>rec.territory)rec.territory=pct;
-    if(kills>rec.kills)rec.kills=kills;
-    if(elapsed>rec.survival)rec.survival=elapsed;
-    saveRecords(rec);
-    if(victim.deathCount===1&&elapsed>30) unlockAch('untouchable');
-    // Show death screen — player must click to respawn, game keeps running in background
-    document.getElementById('dsBestTerritory').textContent=pct.toFixed(1)+'%';
-    document.getElementById('dsKills').textContent=kills;
-    document.getElementById('dsTime').textContent=fmtTime(elapsed);
-    document.getElementById('deathNewAch').style.display='none';
-    deathScreen.classList.add('active');
+// ---------- movement ----------
+function chooseNext(p) {
+  let d;
+  if (p.isHuman) {
+    while (p.queue.length) { const q = p.queue.shift(); if (q !== (p.dirI + 2) % 4) { d = q; break; } }
+    if (d === undefined) d = p.dirI;
   } else {
-    victim.respawnTimer=SPAWN_INTERVAL+Math.random()*3000;
+    d = botDir(p);
+    if (d < 0) d = p.dirI;
+    const inside = own[p.cy * N + p.cx] === p.id && !p.trail.length;
+    if (d === (p.dirI + 2) % 4 && !inside) d = p.dirI;
   }
+  p.dirI = d; p.tx = p.cx + DX[d]; p.ty = p.cy + DY[d];
+  if (!inB(p.tx, p.ty)) killPlayer(p, null, 'wall');
+}
+function arrive(p) {
+  p.px = p.cx; p.py = p.cy; p.cx = p.tx; p.cy = p.ty;
+  const i = p.cy * N + p.cx, to = trl[i];
+  if (to !== 0) {
+    if (to === p.id) { killPlayer(p, p, 'self'); return; }
+    const q = byId[to]; if (q && q.alive) killPlayer(q, p, 'trail');
+  }
+  if (own[i] === p.id) { if (p.trail.length) capture(p); p.outside = false; }
+  else {
+    if (!p.trail.length) { p.fromX = p.px; p.fromY = p.py; }
+    p.outside = true; trl[i] = p.id; p.trail.push(i);
+  }
+  if (!p.alive) return;
+  chooseNext(p);
+}
+function advance(p, dt) {
+  if (!p.alive) return;
+  p.prog += dt * p.speed;
+  let guard = 0;
+  while (p.prog >= 1 && p.alive && guard++ < 4) { p.prog -= 1; arrive(p); }
+  if (p.alive) { p.vx = p.cx + (p.tx - p.cx) * p.prog; p.vy = p.cy + (p.ty - p.cy) * p.prog; }
 }
 
-// ===== FLOOD FILL CAPTURE =====
-// When a player returns to their territory, fill everything enclosed by trail+territory
-function floodFillCapture(player){
-  if(player.trail.length<1)return;
-
-  // Bounding box: scan ALL owned cells (sample every 2nd for performance) + trail cells
-  let minX=GRID_SIZE,maxX=0,minY=GRID_SIZE,maxY=0;
-  for(const c of player.trail){
-    if(c.cx<minX)minX=c.cx; if(c.cx>maxX)maxX=c.cx;
-    if(c.cy<minY)minY=c.cy; if(c.cy>maxY)maxY=c.cy;
-  }
-  // Expand bounding box to include all owned territory cells
-  for(let y=0;y<GRID_SIZE;y+=2){
-    for(let x=0;x<GRID_SIZE;x+=2){
-      if(grid[y][x]===player.id){
-        if(x<minX)minX=x; if(x>maxX)maxX=x;
-        if(y<minY)minY=y; if(y>maxY)maxY=y;
-      }
+// =====================================================================
+//  BOT AI
+// =====================================================================
+const bfsStamp = new Int32Array(NN), bfsFirst = new Int8Array(NN), bfsDst = new Int16Array(NN), bq = new Int32Array(NN);
+let bfsId = 0, bfsDist = 0;
+function bfs(sx, sy, noRev, goalFn, passFn, maxNodes) {
+  bfsId++; let qh = 0, qt = 0;
+  const s = sy * N + sx; bfsStamp[s] = bfsId; bfsDst[s] = 0; bfsFirst[s] = -1; bq[qt++] = s;
+  while (qh < qt && qt < maxNodes) {
+    const i = bq[qh++], x = i % N, y = (i / N) | 0;
+    for (let d = 0; d < 4; d++) {
+      if (i === s && d === noRev) continue;
+      const nx = x + DX[d], ny = y + DY[d];
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      const j = ny * N + nx;
+      if (bfsStamp[j] === bfsId) continue;
+      const f = i === s ? d : bfsFirst[i];
+      if (goalFn(j)) { bfsDist = bfsDst[i] + 1; return f; }
+      if (!passFn(j)) continue;
+      bfsStamp[j] = bfsId; bfsFirst[j] = f; bfsDst[j] = bfsDst[i] + 1; bq[qt++] = j;
     }
   }
-  // Expand by 1 for flood fill seed
-  const x0=Math.max(0,minX-1), y0=Math.max(0,minY-1);
-  const x1=Math.min(GRID_SIZE-1,maxX+1), y1=Math.min(GRID_SIZE-1,maxY+1);
+  bfsDist = 1e9; return -1;
+}
+function safeStep(p, d, noRev) {
+  if (d === noRev) return false;
+  const nx = p.cx + DX[d], ny = p.cy + DY[d];
+  if (!inB(nx, ny)) return false;
+  return trl[ny * N + nx] !== p.id;
+}
+function anySafe(p, noRev) {
+  const order = [p.dirI, (p.dirI + 1) % 4, (p.dirI + 3) % 4, (p.dirI + 2) % 4];
+  // prefer a direction that keeps us in open space (not next to a wall)
+  for (const d of order) if (safeStep(p, d, noRev)) return d;
+  return -1;
+}
+const wallDist = (x, y, d) => d === 0 ? N - 1 - x : d === 1 ? N - 1 - y : d === 2 ? x : y;
 
-  // A cell blocks flood fill if it's our territory OR our trail
-  function isWall(x,y){
-    if(x<0||y<0||x>=GRID_SIZE||y>=GRID_SIZE)return true;
-    return grid[y][x]===player.id || tgrid[y][x]===player.id;
+function homeInfo(p, noRev) {
+  const id = p.id;
+  const d = bfs(p.cx, p.cy, noRev, j => own[j] === id, j => trl[j] !== id, 3500);
+  return { dir: d, dist: bfsDist };
+}
+function threatened(p, dh) {
+  if (!p.trail.length || dh.dist > 1e8) return false;
+  for (const q of players) {
+    if (q === p || !q.alive) continue;
+    let minD = 1e9;
+    for (let k = 0; k < p.trail.length; k++) {
+      const t = p.trail[k], d = Math.abs((t % N) - q.cx) + Math.abs(((t / N) | 0) - q.cy);
+      if (d < minD) minD = d;
+    }
+    if (minD <= 16 && minD <= dh.dist * (q.speed / p.speed) + 2) return true;
   }
-
-  // Flood fill from all border cells of the bounding box to find "outside"
-  // Use a flat Uint8Array for visited — much faster than Set
-  const W=x1-x0+1, H=y1-y0+1;
-  const visited=new Uint8Array(W*H);
-  const stack=[];
-
-  function push(x,y){
-    if(x<x0||x>x1||y<y0||y>y1)return;
-    const idx=(y-y0)*W+(x-x0);
-    if(visited[idx]||isWall(x,y))return;
-    visited[idx]=1;
-    stack.push(x,y);
-  }
-
-  // Seed from all 4 edges of bounding box
-  for(let x=x0;x<=x1;x++){ push(x,y0); push(x,y1); }
-  for(let y=y0+1;y<y1;y++){ push(x0,y); push(x1,y); }
-
-  while(stack.length){
-    const y=stack.pop(), x=stack.pop();
-    push(x+1,y); push(x-1,y); push(x,y+1); push(x,y-1);
-  }
-
-  // Everything NOT visited and NOT already ours gets claimed
-  for(let y=y0;y<=y1;y++){
-    for(let x=x0;x<=x1;x++){
-      const idx=(y-y0)*W+(x-x0);
-      if(!visited[idx]) sCell(x,y,player.id);
+  return false;
+}
+function findPrey(p) {
+  let bestD = 1e9, bid = 0;
+  for (const q of players) {
+    if (q === p || !q.alive || !q.trail.length) continue;
+    for (let k = 0; k < q.trail.length; k++) {
+      const t = q.trail[k], d = Math.abs((t % N) - p.cx) + Math.abs(((t / N) | 0) - p.cy);
+      if (d < bestD) { bestD = d; bid = q.id; }
     }
   }
-  // Convert trail to territory, clear tgrid
-  for(const c of player.trail){
-    sCell(c.cx,c.cy,player.id);
-    sTrail(c.cx,c.cy,0);
-  }
-  // No encirclement kills — players are only killed by direct trail contact
+  return bestD <= Math.round(6 + p.aggr * 8) ? bid : 0;
+}
+function huntDir(p, noRev, maxLen) {
+  const bid = findPrey(p); if (!bid) return -1;
+  const id = p.id;
+  const d = bfs(p.cx, p.cy, noRev, j => trl[j] === bid, j => trl[j] !== id, 700);
+  return (d >= 0 && bfsDist <= maxLen) ? d : -1;
 }
 
-// ===== BOT AI =====
-// Implements the 7-step decision hierarchy from the spec.
-// All movement is cardinal only (no diagonal).
-// Each bot has a unique personality affecting risk tolerance and aggression.
-
-// ── Personality assignment ──
-// Personalities: rusher, defender, sniper, expander, opportunist, cautious
-function assignPersonality(bot){
-  const types=['rusher','defender','sniper','expander','opportunist','cautious'];
-  const p=types[Math.floor(Math.random()*types.length)];
-  bot.personality=p;
-  // huntRange: how far (Manhattan) to look for enemy trails to attack
-  // dangerThresh: how close an enemy must be to trigger retreat
-  // maxTrailLen: max trail cells before forced return
-  // loopSize: function returning rectangle side length
-  // speed: cells per second
-  switch(p){
-    case 'rusher':
-      bot.huntRange=22; bot.dangerThresh=3; bot.maxTrailLen=50;
-      bot.loopSize=()=>22+Math.floor(Math.random()*10);
-      bot.speed=BOT_SPEED+2+Math.random(); break;
-    case 'defender':
-      bot.huntRange=8; bot.dangerThresh=14; bot.maxTrailLen=35;
-      bot.loopSize=()=>18+Math.floor(Math.random()*8);
-      bot.speed=BOT_SPEED+Math.random()*0.5; break;
-    case 'sniper':
-      bot.huntRange=30; bot.dangerThresh=5; bot.maxTrailLen=45;
-      bot.loopSize=()=>24+Math.floor(Math.random()*10);
-      bot.speed=BOT_SPEED+1+Math.random(); break;
-    case 'expander':
-      bot.huntRange=5; bot.dangerThresh=10; bot.maxTrailLen=60;
-      bot.loopSize=()=>30+Math.floor(Math.random()*12);
-      bot.speed=BOT_SPEED+0.5+Math.random()*0.5; break;
-    case 'opportunist':
-      bot.huntRange=16; bot.dangerThresh=7; bot.maxTrailLen=48;
-      bot.loopSize=()=>24+Math.floor(Math.random()*10);
-      bot.speed=BOT_SPEED+1+Math.random()*1.5; break;
-    case 'cautious':
-      bot.huntRange=5; bot.dangerThresh=16; bot.maxTrailLen=30;
-      bot.loopSize=()=>16+Math.floor(Math.random()*8);
-      bot.speed=Math.max(4,BOT_SPEED-0.5+Math.random()*0.5); break;
+function planExcursion(p) {
+  let best = null, bestS = -1e9;
+  const R = 14;
+  for (let a = 0; a < 18; a++) {
+    const D = (Math.random() * 4) | 0, S = (D + (Math.random() < 0.5 ? 1 : 3)) % 4;
+    const sx = p.cx + ((Math.random() * (2 * R + 1)) | 0) - R, sy = p.cy + ((Math.random() * (2 * R + 1)) | 0) - R;
+    if (!inB(sx, sy) || own[sy * N + sx] !== p.id) continue;
+    const ex = sx + DX[D], ey = sy + DY[D];
+    if (!inB(ex, ey) || own[ey * N + ex] === p.id || trl[ey * N + ex] === p.id) continue;
+    const L1 = Math.min(wallDist(sx, sy, D), 4 + ((Math.random() * (8 + 9 * p.greed)) | 0));
+    const L2 = Math.min(wallDist(sx, sy, S), 4 + ((Math.random() * (8 + 9 * p.greed)) | 0));
+    if (L1 < 2 || L2 < 2) continue;
+    let val = 0;
+    for (let a1 = 1; a1 <= L1; a1++) for (let b = 0; b <= L2; b++) {
+      const cx = sx + DX[D] * a1 + DX[S] * b, cy = sy + DY[D] * a1 + DY[S] * b;
+      if (!inB(cx, cy)) continue;
+      const i = cy * N + cx, o = own[i];
+      if (o === p.id) continue;
+      val += o === 0 ? 1 : 1.5;
+      if (trl[i] && trl[i] !== p.id) val += 2;
+    }
+    const dist = Math.abs(sx - p.cx) + Math.abs(sy - p.cy);
+    const score = val / (L1 + L2 + dist * 0.5 + 4) + Math.random() * 0.15;
+    if (score > bestS) { bestS = score; best = { state: 'goto', sx, sy, D, S, L1, L2, left: 0 }; }
   }
+  p.plan = best;
+  return best;
+}
+function followLegs(p, noRev) {
+  const pl = p.plan;
+  while (pl && pl.state !== 'done') {
+    const d = pl.state === 'leg1' ? pl.D : pl.S;
+    if (pl.left <= 0 || !safeStep(p, d, noRev)) {
+      if (pl.state === 'leg1') { pl.state = 'leg2'; pl.left = pl.L2; continue; }
+      pl.state = 'done'; break;
+    }
+    pl.left--; return d;
+  }
+  return -1;
 }
 
-// Safe cardinal direction picker — HARD border exclusion at 30 cells from edge
-function safeDirFor(bot, preferred){
-  const BORDER=30; // never go within 30 cells of any edge
-  const cands=[
-    preferred,
-    {x:-preferred.y, y:preferred.x},
-    {x:preferred.y,  y:-preferred.x},
-    {x:-preferred.x, y:-preferred.y}
-  ];
-  for(const d of cands){
-    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
-    const nx=bot.cx+d.x, ny=bot.cy+d.y;
-    if(gTrail(nx,ny)===bot.id) continue;
-    // Hard border exclusion — always reject directions into the border zone
-    if(nx<BORDER||ny<BORDER||nx>=GRID_SIZE-BORDER||ny>=GRID_SIZE-BORDER) continue;
-    return d;
-  }
-  // Fallback: any direction that avoids own trail (border avoidance relaxed if trapped)
-  for(const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]){
-    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
-    if(gTrail(bot.cx+d.x,bot.cy+d.y)===bot.id) continue;
-    // Still try to move away from border even in fallback
-    const nx=bot.cx+d.x, ny=bot.cy+d.y;
-    const awayFromBorder=nx>=BORDER&&ny>=BORDER&&nx<GRID_SIZE-BORDER&&ny<GRID_SIZE-BORDER;
-    if(awayFromBorder) return d;
-  }
-  // Absolute last resort — just avoid own trail
-  for(const d of [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}]){
-    if(bot.inTrail&&d.x===-bot.dir.x&&d.y===-bot.dir.y) continue;
-    if(gTrail(bot.cx+d.x,bot.cy+d.y)===bot.id) continue;
-    return d;
-  }
-  return preferred;
-}
+function botDir(p) {
+  const i = p.cy * N + p.cx, id = p.id;
+  const inside = own[i] === id && !p.trail.length;
+  const noRev = inside ? -1 : (p.dirI + 2) % 4;
 
-// ── Find nearest own territory cell, biased toward map centre ──
-function nearestOwnCell(bot){
-  const mapCx=GRID_SIZE/2, mapCy=GRID_SIZE/2;
-  let best=Infinity, bx=bot.cx, by=bot.cy;
-  for(let y=0;y<GRID_SIZE;y+=2) for(let x=0;x<GRID_SIZE;x+=2){
-    if(grid[y][x]===bot.id){
-      const s=Math.abs(x-bot.cx)+Math.abs(y-bot.cy)
-             +(Math.abs(x-mapCx)+Math.abs(y-mapCy))*0.04;
-      if(s<best){best=s;bx=x;by=y;}
+  if (!inside) {
+    const dh = homeInfo(p, noRev);
+    // 1) danger or over-extended: run home
+    if (threatened(p, dh) || p.trail.length > 26 + p.greed * 24) { if (p.plan) p.plan.state = 'done'; return dh.dir >= 0 ? dh.dir : anySafe(p, noRev); }
+    // 2) a rival trail is within reach: go for the kill (as long as we can still get back)
+    if (p.trail.length < 12 && Math.random() < 0.35 + p.aggr * 0.5) {
+      const hd = huntDir(p, noRev, 12);
+      if (hd >= 0 && dh.dist + bfsDist <= 30) return hd;
     }
-  }
-  return {bx,by};
-}
-
-// ── Cardinal direction toward a target ──
-function cardinalToward(fx,fy,tx,ty){
-  const dx=tx-fx, dy=ty-fy;
-  if(dx===0&&dy===0) return {x:1,y:0};
-  return Math.abs(dx)>=Math.abs(dy)?{x:Math.sign(dx),y:0}:{x:0,y:Math.sign(dy)};
-}
-
-// ── Count enemies within radius ──
-function enemiesNearby(bot, radius){
-  let count=0;
-  for(const q of players){
-    if(!q.alive||q.id===bot.id) continue;
-    if(Math.abs(q.cx-bot.cx)+Math.abs(q.cy-bot.cy)<=radius) count++;
-  }
-  return count;
-}
-
-// ── Main per-step decision function ──
-function updateBotStep(bot){
-  if(!bot.alive) return;
-
-  const pct=bot.territoryPct;
-  const huntRange=bot.huntRange||12;
-  const dangerThresh=bot.dangerThresh||7;
-  const maxTrailLen=bot.maxTrailLen||20;
-
-  // ════════════════════════════════════════════
-  // SCAN — build situational awareness
-  // ════════════════════════════════════════════
-  const humanPlayer=players.find(p=>p.isHuman&&p.alive);
-  const humanPct=humanPlayer?humanPlayer.territoryPct:0;
-  const sortedAlive=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct);
-  const top3ids=new Set(sortedAlive.slice(0,3).map(p=>p.id));
-  const myRank=sortedAlive.findIndex(p=>p.id===bot.id); // 0 = first place
-  const isLeading=myRank<=2;
-  const isBehindHuman=pct<humanPct;
-  const nearbyEnemyCount=enemiesNearby(bot,12);
-
-  // Nearest enemy player (body)
-  let nearestEnemyDist=Infinity;
-  for(const q of players){
-    if(!q.alive||q.id===bot.id) continue;
-    const d=Math.abs(q.cx-bot.cx)+Math.abs(q.cy-bot.cy);
-    if(d<nearestEnemyDist) nearestEnemyDist=d;
-  }
-
-  // Nearest enemy trail cell
-  // Bots behind the human prioritise the human's trail (aggression toward leader)
-  let nearestTrailCell=null, nearestTrailDist=Infinity, nearestTrailOwner=null;
-  for(const q of players){
-    if(!q.alive||q.id===bot.id||q.trail.length<1) continue;
-    if(top3ids.has(q.id)&&!q.isHuman) continue; // never hunt top-3 bots
-    for(const c of q.trail){
-      let d=Math.abs(c.cx-bot.cx)+Math.abs(c.cy-bot.cy);
-      if(q.isHuman&&isBehindHuman) d*=0.5; // prioritise human when behind
-      if(d<nearestTrailDist){nearestTrailDist=d;nearestTrailCell=c;nearestTrailOwner=q;}
+    // 3) follow the excursion plan, then close the loop by heading home
+    if (p.plan && p.plan.state !== 'goto' && p.plan.state !== 'done') {
+      const d = followLegs(p, noRev); if (d >= 0) return d;
     }
+    if (dh.dir >= 0) return dh.dir;
+    return anySafe(p, noRev);
   }
 
-  // Distance to nearest own territory cell
-  const {bx:homeCx,by:homeCy}=nearestOwnCell(bot);
-  const distToHome=Math.abs(bot.cx-homeCx)+Math.abs(bot.cy-homeCy);
-
-  // ════════════════════════════════════════════
-  // DECISION 1: Am I in immediate danger?
-  // Condition: trailing AND enemy within dangerThresh cells
-  // Action: abort everything, return home immediately
-  // ════════════════════════════════════════════
-  if(bot.inTrail&&nearestEnemyDist<=dangerThresh){
-    bot.botPhase='return';
-    bot.huntTarget=null;
-  }
-
-  // ════════════════════════════════════════════
-  // DECISION 2: Is my trail at risk?
-  // Adaptive risk: more enemies nearby = shorter loops, less risk
-  //               fewer enemies nearby = longer loops, more risk
-  // ════════════════════════════════════════════
-  const BORDER=30;
-  const nearBorder=bot.cx<BORDER||bot.cx>=GRID_SIZE-BORDER||bot.cy<BORDER||bot.cy>=GRID_SIZE-BORDER;
-
-  // Adaptive max trail length based on nearby enemies and rank
-  // 0 enemies nearby: full loop size (aggressive)
-  // 1-2 enemies: 80% of max
-  // 3-4 enemies: 60% of max
-  // 5+ enemies: 40% of max (very cautious)
-  // Also reduce when leading (defensive play)
-  let riskFactor=1.0;
-  if(nearbyEnemyCount===0) riskFactor=1.2;       // no one around — go big
-  else if(nearbyEnemyCount<=2) riskFactor=0.85;
-  else if(nearbyEnemyCount<=4) riskFactor=0.65;
-  else riskFactor=0.45;
-  if(isLeading) riskFactor*=0.7; // defensive when leading
-
-  const effectiveMax=Math.max(8, Math.floor(maxTrailLen*riskFactor));
-
-  // Force return if near border (hard exclusion)
-  if(nearBorder&&bot.inTrail){
-    bot.botPhase='return';
-    bot.huntTarget=null;
-  }
-
-  if(bot.inTrail&&bot.trail.length>=effectiveMax){
-    bot.botPhase='return';
-    bot.huntTarget=null;
-  }
-
-  // Adaptive hunt range: scale with risk factor
-  const effectiveHuntRange=Math.floor(huntRange*riskFactor);
-  // Adaptive danger threshold: more enemies = retreat sooner
-  const effectiveDanger=nearbyEnemyCount>=3
-    ? dangerThresh+4
-    : nearbyEnemyCount===0
-      ? Math.max(2,dangerThresh-2)
-      : dangerThresh;
-
-  // Re-check danger with effective threshold
-  if(bot.inTrail&&nearestEnemyDist<=effectiveDanger){
-    bot.botPhase='return';
-    bot.huntTarget=null;
-  }
-
-  // ════════════════════════════════════════════
-  // DECISION 4: Is there a safe attack opportunity?
-  // ════════════════════════════════════════════
-  if(!bot.inTrail&&nearestTrailDist>=2&&nearestTrailDist<=effectiveHuntRange&&nearestTrailCell){
-    const owner=nearestTrailOwner;
-    const enemyVulnerable=owner&&owner.trail.length>=4;
-    const safeReturn=distToHome<nearestTrailDist+12;
-    const notTooRisky=nearbyEnemyCount<=2;
-    if(enemyVulnerable&&safeReturn&&notTooRisky){
-      bot.botPhase='hunt';
-      bot.huntTarget=nearestTrailCell;
-      bot.huntOwner=nearestTrailOwner;
-    }
-  }
-
-  if(bot.botPhase==='hunt'){
-    const ownerAlive=bot.huntOwner&&bot.huntOwner.alive&&bot.huntOwner.trail.length>0;
-    if(!ownerAlive||nearestTrailDist>effectiveHuntRange+8){
-      bot.botPhase='out';
-      bot.huntTarget=null;
-    }
-  }
-
-  // ════════════════════════════════════════════
-  // DECISION 5: PATH PLANNING — compute desired direction
-  // All directions are cardinal (no diagonal).
-  // ════════════════════════════════════════════
-  let desired=null;
-
-  if(bot.botPhase==='hunt'){
-    // Pathfind toward nearest enemy trail cell
-    const target=nearestTrailCell||bot.huntTarget;
-    if(target){
-      desired=cardinalToward(bot.cx,bot.cy,target.cx,target.cy);
-    } else {
-      bot.botPhase='out';
-    }
-  }
-
-  if(bot.botPhase==='out'){
-    // Move straight out from base in chosen direction
-    // Count steps only once outside own territory
-    if(gCell(bot.cx,bot.cy)!==bot.id) bot.botOutSteps++;
-    if(bot.botOutSteps>=bot.botOutTarget){
-      bot.botPhase='sweep';
-      bot.botSweepSteps=0;
-      desired=bot.botSweepDir;
-    } else {
-      desired=bot.botOutDir;
-    }
-  }
-
-  if(bot.botPhase==='sweep'){
-    // Move perpendicular to carve a rectangle
-    bot.botSweepSteps++;
-    if(bot.botSweepSteps>=bot.botSweepTarget){
-      bot.botPhase='return';
-    } else {
-      desired=bot.botSweepDir;
-    }
-  }
-
-  if(bot.botPhase==='return'){
-    if(!bot.inTrail&&bot.trail.length===0){
-      // Resting on own territory — hold position
-      desired={x:bot.dir.x,y:bot.dir.y};
-    } else {
-      // Shortest safe path home: head toward nearest own territory cell
-      // biased toward map centre (avoids border traps)
-      desired=cardinalToward(bot.cx,bot.cy,homeCx,homeCy);
-    }
-  }
-
-  // ════════════════════════════════════════════
-  // DECISION 6: ADAPTIVE RISK MANAGEMENT
-  // Already applied above via effectiveMax and hunt conditions.
-  // Final check: if desired direction leads into own trail, override.
-  // ════════════════════════════════════════════
-  if(!desired) desired={x:bot.dir.x,y:bot.dir.y};
-
-  // ════════════════════════════════════════════
-  // DECISION 7: SAFETY FILTER
-  // Ensure the chosen direction is safe before committing.
-  // ════════════════════════════════════════════
-  bot.nextDir=safeDirFor(bot,desired);
-}
-
-// ── Per-frame timer updates (trail timer, rest timer) ──
-function updateBotTimers(bot,dt){
-  if(!bot.alive) return;
-
-  if(bot.inTrail){
-    bot.trailTimer+=dt;
-    // Time-based hard cap: force return if trail timer exceeds travel time for maxTrailLen
-    const maxMs=(bot.maxTrailLen||20)*(1000/Math.max(1,bot.speed));
-    if(bot.trailTimer>=maxMs&&bot.botPhase!=='return'){
-      bot.botPhase='return';
-    }
-  } else {
-    bot.trailTimer=0;
-  }
-
-  // Rest between expansion cycles
-  if(bot.botPhase==='return'&&!bot.inTrail&&bot.trail.length===0){
-    bot.restTimer-=dt;
-    if(bot.restTimer<=0) bot._pickOutDir();
-  }
-}
-function respawnBot(bot){
-  const pos=findFreeSpawn();
-  if(!pos){
-    // No valid spawn right now — retry in 3 seconds
-    bot.respawnTimer=3000;
-    return;
-  }
-  bot.kills=0;
-  bot.spawnAt(pos.cx,pos.cy);
-}
-
-// ===== UPDATE =====
-function update(dt,now){
-  const elapsed=(now-gameStartTime)/1000;
-  players.forEach(p=>{
-    if(!p.alive){
-      if(!p.isHuman){ p.respawnTimer-=dt; if(p.respawnTimer<=0)respawnBot(p); }
-      return;
-    }
-    if(!p.isHuman) updateBotTimers(p,dt);
-
-    p.moveTimer+=dt;
-    const stepMs=1000/p.speed;
-    while(p.moveTimer>=stepMs){
-      p.moveTimer-=stepMs;
-      // Update bot direction once per grid step (accurate step counting)
-      if(!p.isHuman) updateBotStep(p);
-      p.dir={x:p.nextDir.x,y:p.nextDir.y};
-      let nx=p.cx+p.dir.x, ny=p.cy+p.dir.y;
-      // Bounce off walls
-      if(nx<0||ny<0||nx>=GRID_SIZE||ny>=GRID_SIZE){
-        p.nextDir={x:-p.dir.x,y:-p.dir.y};
-        p.dir={x:-p.dir.x,y:-p.dir.y};
-        nx=Math.max(0,Math.min(GRID_SIZE-1,p.cx+p.dir.x));
-        ny=Math.max(0,Math.min(GRID_SIZE-1,p.cy+p.dir.y));
-      }
-      p.cx=nx; p.cy=ny;
-
-      const terrOwner=gCell(p.cx,p.cy);
-      const trailOwner=gTrail(p.cx,p.cy);
-      const onOwn=(terrOwner===p.id);
-      const onOwnTrail=(trailOwner===p.id);
-
-      // ALWAYS check: if an enemy trail is on this cell, kill them (works inside your base too)
-      if(trailOwner>0&&trailOwner!==p.id){
-        const victim=players.find(q=>q.id===trailOwner);
-        if(victim&&victim.alive) killPlayer(victim,p);
-      }
-
-      if(onOwn&&p.inTrail){
-        // Returned home — fill enclosed area and start new cycle
-        const loopTime=(performance.now()-p.loopStartTime)/1000;
-        floodFillCapture(p);
-        p.trail=[]; p.inTrail=false;
-        if(!p.isHuman) p._pickOutDir();
-        if(p.isHuman){
-          const pct=p.territoryPct;
-          if(pct>p.maxTerritoryPct)p.maxTerritoryPct=pct;
-          checkAchievements(p,elapsed,loopTime);
-        } else {
-          const pct=p.territoryPct;
-          if(pct>p.maxTerritoryPct)p.maxTerritoryPct=pct;
+  // ----- inside our own territory -----
+  if (Math.random() < 0.2 + p.aggr * 0.5) { const hd = huntDir(p, -1, 10); if (hd >= 0) return hd; }
+  if (!p.plan || p.plan.state === 'done') planExcursion(p);
+  const pl = p.plan;
+  if (pl) {
+    if (pl.state === 'goto') {
+      if (p.cx === pl.sx && p.cy === pl.sy) { pl.state = 'leg1'; pl.left = pl.L1; }
+      else {
+        const ti = pl.sy * N + pl.sx;
+        if (own[ti] !== id) { p.plan = null; }
+        else {
+          const d = bfs(p.cx, p.cy, -1, j => j === ti, j => own[j] === id, 1800);
+          if (d >= 0) return d;
+          p.plan = null;
         }
-      } else if(onOwnTrail&&p.inTrail){
-        // Crossed own trail while actively trailing — die
-        killPlayer(p,p);
-        break;
-      } else if(!onOwn){
-        // On unclaimed or enemy territory — lay trail
-        if(!p.inTrail){ p.inTrail=true; p.loopStartTime=now; }
-        sTrail(p.cx,p.cy,p.id);
-        p.trail.push({cx:p.cx,cy:p.cy});
       }
-
-      if(p.isHuman&&p.territoryPct<2)p.lowTerritoryFlag=true;
-      if(p.isHuman&&elapsed>=180)unlockAch('survivor');
-      // Periodic achievement check (every step)
-      if(p.isHuman) checkAchievements(p,elapsed,null);
     }
+    if (p.plan && p.plan.state !== 'goto') {
+      const d = followLegs(p, -1);
+      if (d >= 0) return d;
+      p.plan = null;
+    }
+  }
+  // fallback: walk to the nearest border cell of our land and step out from there
+  for (let d = 0; d < 4; d++) {
+    const nx = p.cx + DX[d], ny = p.cy + DY[d];
+    if (inB(nx, ny) && own[ny * N + nx] !== id && trl[ny * N + nx] !== id && wallDist(p.cx, p.cy, d) >= 2) {
+      const S = (d + 1) % 4;
+      p.plan = { state: 'leg1', D: d, S, L1: 3 + ((Math.random() * 5) | 0), L2: 3 + ((Math.random() * 5) | 0), left: 0 };
+      p.plan.left = p.plan.L1;
+      const r = followLegs(p, -1); if (r >= 0) return r;
+    }
+  }
+  const dd = bfs(p.cx, p.cy, -1, j => { if (own[j] !== id) return false; const x = j % N, y = (j / N) | 0; for (let k = 0; k < 4; k++) { const ax = x + DX[k], ay = y + DY[k]; if (inB(ax, ay) && own[ay * N + ax] !== id) return true; } return false; }, j => own[j] === id, 2500);
+  if (dd >= 0) return dd;
+  return anySafe(p, -1);
+}
+
+// =====================================================================
+//  INPUT
+// =====================================================================
+function humanPlayer() { return players.find(p => p.isHuman); }
+function pushDir(d) {
+  const h = humanPlayer(); if (!h || !h.alive || !gameRunning) return;
+  const ref = h.queue.length ? h.queue[h.queue.length - 1] : h.dirI;
+  if (d === ref || d === (ref + 2) % 4) return;
+  if (h.queue.length < 3) h.queue.push(d);
+}
+document.addEventListener('keydown', e => {
+  const k = e.key; let d = -1;
+  if (k === 'ArrowRight' || k === 'd' || k === 'D') d = 0;
+  else if (k === 'ArrowDown' || k === 's' || k === 'S') d = 1;
+  else if (k === 'ArrowLeft' || k === 'a' || k === 'A') d = 2;
+  else if (k === 'ArrowUp' || k === 'w' || k === 'W') d = 3;
+  if (d >= 0) { if (homeScreen.style.display === 'none') e.preventDefault(); pushDir(d); }
+  if (k === ' ' && homeScreen.style.display === 'none') e.preventDefault();
+});
+let tsx = 0, tsy = 0;
+canvas.addEventListener('touchstart', e => { const t = e.touches[0]; tsx = t.clientX; tsy = t.clientY; }, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  const t = e.touches[0], dx = t.clientX - tsx, dy = t.clientY - tsy;
+  if (Math.abs(dx) > 24 || Math.abs(dy) > 24) { pushDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3)); tsx = t.clientX; tsy = t.clientY; }
+  e.preventDefault();
+}, { passive: false });
+
+// =====================================================================
+//  HUD
+// =====================================================================
+function updateHUD(elapsed) {
+  const h = humanPlayer();
+  if (!h || !h.alive) { statTerritory.textContent = '—'; statKills.textContent = '—'; statTime.textContent = '—'; return; }
+  statTerritory.textContent = h.territoryPct.toFixed(1) + '%';
+  statKills.textContent = h.kills;
+  statTime.textContent = fmtTime(elapsed);
+}
+function updateLeaderboard() {
+  const alive = players.filter(p => p.alive).sort((a, b) => b.territoryPct - a.territoryPct).slice(0, 5);
+  let html = '';
+  alive.forEach((p, i) => {
+    const crown = i === 0 ? '<span style="font-size:13px;margin-right:3px;">&#128081;</span>' : '';
+    html += '<div class="lb-row"><span class="lb-rank">' + (i + 1) + '</span><span class="lb-dot" style="background:' + p.skin.dot + '"></span><span class="lb-name' + (p.isHuman ? ' me' : '') + '">' + crown + p.name.replace(/</g, '&lt;') + '</span><span class="lb-pct">' + p.territoryPct.toFixed(1) + '%</span></div>';
   });
-  updateLeaderboard();
-  updateHUD(elapsed);
+  lbRows.innerHTML = html;
 }
-
-// ===== HUD =====
-function updateHUD(elapsed){
-  const h=players.find(p=>p.isHuman);
-  if(!h||!h.alive){
-    statTerritory.textContent='—';
-    statKills.textContent='—';
-    statTime.textContent='—';
-    return;
+function renderMinimap() {
+  const base = 0xFFF2ECE8;
+  for (let i = 0; i < NN; i++) { const o = own[i]; mm32[i] = o ? byId[o].mm32 : base; }
+  mmCtx.putImageData(mmImg, 0, 0);
+  const h = humanPlayer();
+  const f = (h && h.alive) ? h : null;
+  if (f) {
+    mmCtx.strokeStyle = 'rgba(0,0,0,0.55)'; mmCtx.lineWidth = 2;
+    const cp = BASE_CELL * camZoom, vw = innerWidth / cp, vh = innerHeight / cp;
+    mmCtx.strokeRect(camX - vw / 2, camY - vh / 2, vw, vh);
+    mmCtx.fillStyle = '#fff'; mmCtx.strokeStyle = f.cDark; mmCtx.lineWidth = 3;
+    mmCtx.beginPath(); mmCtx.arc(f.vx + 0.5, f.vy + 0.5, 4.5, 0, 6.283); mmCtx.fill(); mmCtx.stroke();
   }
-  statTerritory.textContent=h.territoryPct.toFixed(1)+'%';
-  statKills.textContent=h.kills;
-  statTime.textContent=fmtTime(elapsed);
 }
 
-function updateLeaderboard(){
-  const alive=players.filter(p=>p.alive);
-  alive.sort((a,b)=>b.territoryPct-a.territoryPct);
-  const top5=alive.slice(0,5);
-  lbRows.innerHTML='';
-  top5.forEach((p,i)=>{
-    const isMe=p.isHuman;
-    const crown=i===0?'<span style="font-size:13px;margin-right:3px;">&#128081;</span>':'';
-    const row=document.createElement('div');
-    row.className='lb-row';
-    row.innerHTML=`<span class="lb-rank">${i+1}</span><span class="lb-dot" style="background:${p.skin.dot}"></span><span class="lb-name${isMe?' me':''}">${crown}${p.name}</span><span class="lb-pct">${p.territoryPct.toFixed(1)}%</span>`;
-    lbRows.appendChild(row);
-  });
+// =====================================================================
+//  RENDER
+// =====================================================================
+function rrect(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
 }
+function render() {
+  const W = canvas.width, H = canvas.height, cp = BASE_CELL * camZoom * DPR;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#394050'; ctx.fillRect(0, 0, W, H);
+  const ox = W / 2 - camX * cp, oy = H / 2 - camY * cp;
+  ctx.fillStyle = '#f2f4f8'; ctx.fillRect(ox, oy, N * cp, N * cp);
+  const x0 = Math.max(0, Math.floor(-ox / cp)), y0 = Math.max(0, Math.floor(-oy / cp));
+  const x1 = Math.min(N - 1, Math.floor((W - ox) / cp)), y1 = Math.min(N - 1, Math.floor((H - oy) / cp));
 
-// ===== RENDER =====
-function render(){
-  const W=canvas.width,H=canvas.height;
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#e8e8e8';
-  ctx.fillRect(0,0,W,H);
+  // territory
+  let last = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const o = own[y * N + x]; if (!o) continue;
+    if (o !== last) { ctx.fillStyle = byId[o].cFill; last = o; }
+    ctx.fillRect(ox + x * cp, oy + y * cp, cp + 0.6, cp + 0.6);
+  }
+  // darker lip under the bottom edge of each territory = the little "3D tile" look of the original
+  const band = Math.max(2, cp * 0.2); last = 0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * N + x, o = own[i]; if (!o) continue;
+    if (y + 1 < N && own[i + N] === o) continue;
+    if (o !== last) { ctx.fillStyle = byId[o].cDark; last = o; }
+    ctx.fillRect(ox + x * cp, oy + (y + 1) * cp - band, cp + 0.6, band);
+  }
+  // faint paper grid
+  ctx.strokeStyle = 'rgba(0,0,0,0.055)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = x0; x <= x1 + 1; x++) { const sx = Math.round(ox + x * cp) + 0.5; ctx.moveTo(sx, Math.max(0, oy)); ctx.lineTo(sx, Math.min(H, oy + N * cp)); }
+  for (let y = y0; y <= y1 + 1; y++) { const sy = Math.round(oy + y * cp) + 0.5; ctx.moveTo(Math.max(0, ox), sy); ctx.lineTo(Math.min(W, ox + N * cp), sy); }
+  ctx.stroke();
 
-  const ox=-camX, oy=-camY;
-  const startCX=Math.max(0,Math.floor(camX/CELL));
-  const startCY=Math.max(0,Math.floor(camY/CELL));
-  const endCX=Math.min(GRID_SIZE-1,Math.ceil((camX+W)/CELL));
-  const endCY=Math.min(GRID_SIZE-1,Math.ceil((camY+H)/CELL));
+  // trails
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const p of players) {
+    if (!p.alive || !p.trail.length) continue;
+    ctx.beginPath();
+    ctx.moveTo(ox + (p.fromX + 0.5) * cp, oy + (p.fromY + 0.5) * cp);
+    for (let k = 0; k < p.trail.length; k++) { const t = p.trail[k]; ctx.lineTo(ox + ((t % N) + 0.5) * cp, oy + (((t / N) | 0) + 0.5) * cp); }
+    ctx.lineTo(ox + (p.vx + 0.5) * cp, oy + (p.vy + 0.5) * cp);
+    ctx.strokeStyle = p.cTrailD; ctx.lineWidth = cp * 0.66; ctx.stroke();
+    ctx.strokeStyle = p.cTrail; ctx.lineWidth = cp * 0.5; ctx.stroke();
+  }
 
-  const playerMap=new Map();
-  for(const p of players) playerMap.set(p.id,p);
-
-  // Draw territory and trails
-  for(let cy=startCY;cy<=endCY;cy++){
-    for(let cx=startCX;cx<=endCX;cx++){
-      const own=grid[cy][cx];
-      const tr=tgrid[cy][cx];
-      const px=cx*CELL+ox, py=cy*CELL+oy;
-      if(own===0&&tr===0){
-        ctx.fillStyle='#ffffff';
-        ctx.fillRect(px,py,CELL,CELL);
-      } else if(own>0){
-        const p=playerMap.get(own);
-        ctx.fillStyle=p?p.skin.fill.replace('0.28','0.75'):'#ccc';
-        ctx.fillRect(px,py,CELL,CELL);
-      }
-      if(tr>0){
-        const p=playerMap.get(tr);
-        if(p){ ctx.fillStyle=p.skin.dot; ctx.fillRect(px,py,CELL,CELL); }
-      }
+  // players
+  const s = cp * 0.86;
+  for (const p of players) {
+    if (!p.alive) continue;
+    const hx = ox + (p.vx + 0.5) * cp, hy = oy + (p.vy + 0.5) * cp;
+    if (hx < -cp * 3 || hx > W + cp * 3 || hy < -cp * 3 || hy > H + cp * 3) continue;
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'; rrect(hx - s / 2 + cp * 0.05, hy - s / 2 + cp * 0.14, s, s, s * 0.28); ctx.fill();
+    ctx.fillStyle = p.cDark; rrect(hx - s / 2, hy - s / 2 + cp * 0.06, s, s, s * 0.28); ctx.fill();
+    ctx.fillStyle = p.cHead; rrect(hx - s / 2, hy - s / 2, s, s, s * 0.28); ctx.fill();
+    const ex = DX[p.dirI], ey = DY[p.dirI], px = -ey, py = ex;
+    for (const sd of [-1, 1]) {
+      const cx = hx + ex * s * 0.12 + px * s * 0.2 * sd, cy = hy + ey * s * 0.12 + py * s * 0.2 * sd;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.17, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#1b1b24'; ctx.beginPath(); ctx.arc(cx + ex * s * 0.07, cy + ey * s * 0.07, s * 0.085, 0, 6.283); ctx.fill();
     }
+    // name tag
+    ctx.font = '700 ' + Math.max(11, cp * 0.4) + 'px "Segoe UI",Arial'; ctx.textAlign = 'center';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.strokeText(p.name, hx, hy - s * 0.72);
+    ctx.fillStyle = '#2a2d38'; ctx.fillText(p.name, hx, hy - s * 0.72);
   }
 
-  // Grid lines
-  ctx.strokeStyle='rgba(0,0,0,0.1)';
-  ctx.lineWidth=0.5;
-  for(let cx=startCX;cx<=endCX+1;cx++){
-    const px=cx*CELL+ox;
-    ctx.beginPath();ctx.moveTo(px,startCY*CELL+oy);ctx.lineTo(px,(endCY+1)*CELL+oy);ctx.stroke();
+  // death particles
+  for (const q of particles) {
+    ctx.globalAlpha = Math.max(0, q.life / q.max); ctx.fillStyle = q.c;
+    const sz = cp * 0.22; ctx.fillRect(ox + q.x * cp - sz / 2, oy + q.y * cp - sz / 2, sz, sz);
   }
-  for(let cy=startCY;cy<=endCY+1;cy++){
-    const py=cy*CELL+oy;
-    ctx.beginPath();ctx.moveTo(startCX*CELL+ox,py);ctx.lineTo((endCX+1)*CELL+ox,py);ctx.stroke();
-  }
+  ctx.globalAlpha = 1;
 
-  // Players
-  const sortedByTerritory=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct);
-  for(const p of players){
-    if(!p.alive)continue;
-    const px=p.cx*CELL+ox+CELL/2, py=p.cy*CELL+oy+CELL/2;
-    const r=CELL*0.5;
-    ctx.fillStyle='rgba(0,0,0,0.2)';
-    ctx.beginPath();ctx.ellipse(px+2,py+3,r,r*0.55,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle=p.skin.dot;
-    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.stroke();
-    // Direction dot
-    const da=Math.atan2(p.dir.y,p.dir.x);
-    ctx.fillStyle='rgba(255,255,255,0.9)';
-    ctx.beginPath();ctx.arc(px+Math.cos(da)*(r+4),py+Math.sin(da)*(r+4),3,0,Math.PI*2);ctx.fill();
-    // Name
-    ctx.font=p.isHuman?'bold 11px Segoe UI':'10px Segoe UI';
-    ctx.textAlign='center';
-    const tw=ctx.measureText(p.name).width;
-    ctx.fillStyle='rgba(0,0,0,0.6)';
-    ctx.beginPath();ctx.roundRect(px-tw/2-4,py-r-20,tw+8,14,3);ctx.fill();
-    ctx.fillStyle='#fff';
-    ctx.fillText(p.name,px,py-r-9);
-    // Rank badge above name tag
-    const rankIdx=sortedByTerritory.indexOf(p);
-    if(rankIdx===0){ ctx.font='14px serif'; ctx.fillText('👑',px,py-r-24); }
-    else if(rankIdx===1){ ctx.font='13px serif'; ctx.fillText('🥈',px,py-r-24); }
-    else if(rankIdx===2){ ctx.font='13px serif'; ctx.fillText('🥉',px,py-r-24); }
-  }
-
-  // Map border
-  ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=3;
-  ctx.strokeRect(ox,oy,GRID_SIZE*CELL,GRID_SIZE*CELL);
+  // map border
+  ctx.lineWidth = Math.max(4, cp * 0.3); ctx.strokeStyle = '#2a2f3c';
+  ctx.strokeRect(ox - ctx.lineWidth / 2, oy - ctx.lineWidth / 2, N * cp + ctx.lineWidth, N * cp + ctx.lineWidth);
 }
 
-// ===== MINIMAP =====
-const minimapCanvas=document.getElementById('minimap');
-const mmCtx=minimapCanvas.getContext('2d');
-let mmImageData=null;
+// =====================================================================
+//  MAIN LOOP
+// =====================================================================
+let lastTs = 0, hudT = 0, lbT = 0, mmT = 0, achT = 0, camTarget = null;
+function update(dt) {
+  for (const p of players) {
+    if (p.alive) advance(p, dt);
+    else if (!p.isHuman) { p.respawnT -= dt; if (p.respawnT <= 0) { if (spawnPlayer(p)) { p.name = randomName(); const c = randomBotColor(); p.skin = c; setColors(p); p.plan = null; } else p.respawnT = 1; } }
+    p.territoryPct = p.count / NN * 100;
+  }
+  for (let i = particles.length - 1; i >= 0; i--) { const q = particles[i]; q.life -= dt; q.x += q.dx * dt; q.y += q.dy * dt; q.dx *= 0.96; q.dy *= 0.96; if (q.life <= 0) particles.splice(i, 1); }
 
-function renderMinimap(){
-  if(!gameRunning)return;
-  const human=players.find(p=>p.isHuman&&p.alive);
-  if(!mmImageData||mmImageData.width!==GRID_SIZE) mmImageData=mmCtx.createImageData(GRID_SIZE,GRID_SIZE);
-  const d=mmImageData.data;
-  const colorCache=new Map();
-  function rgb(id){
-    if(colorCache.has(id))return colorCache.get(id);
-    const p=players.find(q=>q.id===id);
-    if(!p){colorCache.set(id,[200,200,200]);return[200,200,200];}
-    const h=p.skin.dot.replace('#','');
-    const c=[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];
-    colorCache.set(id,c);return c;
+  const h = humanPlayer();
+  if (h && h.alive && h.territoryPct > h.maxTerritoryPct) h.maxTerritoryPct = h.territoryPct;
+
+  // camera: follow the player; otherwise watch the biggest bot (menu / death screen)
+  let f = (h && h.alive) ? h : null;
+  if (!f) { if (!camTarget || !camTarget.alive) camTarget = players.filter(p => p.alive).sort((a, b) => b.count - a.count)[0] || null; f = camTarget; }
+  if (f) {
+    const k = 1 - Math.exp(-dt * (f === h ? 7 : 2.5));
+    camX += (f.vx - camX) * k; camY += (f.vy - camY) * k;
+    const tz = Math.max(0.62, 1 - f.territoryPct * 0.012);
+    camZoom += (tz - camZoom) * (1 - Math.exp(-dt * 1.5));
   }
-  for(let y=0;y<GRID_SIZE;y++){
-    for(let x=0;x<GRID_SIZE;x++){
-      const i=(y*GRID_SIZE+x)*4;
-      const t=tgrid[y][x];
-      const v=grid[y][x];
-      if(t>0){
-        d[i]=255;d[i+1]=255;d[i+2]=255;d[i+3]=230;
-      } else if(v>0){
-        const [r,g,b]=rgb(v);
-        d[i]=r;d[i+1]=g;d[i+2]=b;
-        d[i+3]=human&&v===human.id?255:160;
-      } else {
-        d[i]=220;d[i+1]=220;d[i+2]=220;d[i+3]=255;
-      }
-    }
-  }
-  mmCtx.putImageData(mmImageData,0,0);
-  const dotPlayer=human||(players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct)[0]);
-  if(dotPlayer){
-    mmCtx.fillStyle='#fff';
-    mmCtx.beginPath();mmCtx.arc(dotPlayer.cx,dotPlayer.cy,4,0,Math.PI*2);mmCtx.fill();
-    mmCtx.strokeStyle=dotPlayer.skin.dot;mmCtx.lineWidth=2;mmCtx.stroke();
-  }
+
+  const elapsed = (performance.now() - gameStartTime) / 1000;
+  hudT -= dt; if (hudT <= 0) { updateHUD(elapsed); hudT = 0.12; }
+  lbT -= dt; if (lbT <= 0) { updateLeaderboard(); lbT = 0.35; }
+  mmT -= dt; if (mmT <= 0) { if (homeScreen.style.display === 'none') renderMinimap(); mmT = 0.14; }
+  achT -= dt; if (achT <= 0) { if (h && h.alive) checkAchievements(h, elapsed, performance.now()); achT = 0.5; }
 }
-function respawnHuman(human){
+function loop(ts) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000)); lastTs = ts;
+  update(dt); render();
+}
+
+// =====================================================================
+//  GAME FLOW
+// =====================================================================
+function sizeCanvas() {
+  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  canvas.width = Math.round(innerWidth * DPR); canvas.height = Math.round(innerHeight * DPR);
+  canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px';
+}
+window.addEventListener('resize', sizeCanvas);
+
+function initWorld() {
+  own.fill(0); trl.fill(0);
+  players = []; byId = [null]; particles = [];
+  for (let i = 0; i < MAX_BOTS; i++) {
+    const b = new Player(randomName(), randomBotColor(), false);
+    players.push(b);
+    if (!spawnPlayer(b)) b.respawnT = 1 + Math.random() * 3;
+  }
+  // give the bots a little head start so the map already looks lived-in
+  for (let t = 0; t < 60 * 12; t++) update(1 / 30);
+  particles = [];
+}
+function respawnHuman(h) {
   deathScreen.classList.remove('active');
-  const pos=findFreeSpawn();
-  if(!pos){
-    // No valid spawn — show a waiting message and retry in 1s
-    document.getElementById('deathSub').textContent='Finding a safe spawn...';
-    deathScreen.classList.add('active');
-    setTimeout(()=>respawnHuman(human),1000);
-    return;
-  }
-  document.getElementById('deathSub').textContent='You were eliminated!';
-  human.kills=0;
-  human.maxTerritoryPct=0;
-  human.lowTerritoryFlag=false;
-  human.spawnAt(pos.cx,pos.cy);
-  gameStartTime=performance.now();
-  sessionKills=0;
-  sessionStartTime=performance.now();
-  sessionDeathFreeStart=performance.now();
-  sessionComebacks=0;
-  sessionLowFlag=false;
-  newAchs=[];
-  camX=human.cx*CELL+CELL/2-canvas.width/2;
-  camY=human.cy*CELL+CELL/2-canvas.height/2;
+  if (!spawnPlayer(h)) { setTimeout(() => respawnHuman(h), 500); return; }
+  gameStartTime = performance.now(); sessionKills = 0; newAchs = [];
+  camX = h.vx; camY = h.vy;
 }
-
-// ===== UPDATE CAMERA =====
-function updateCamera(){
-  const W=canvas.width,H=canvas.height;
-  const h=players.find(p=>p.isHuman&&p.alive);
-  if(h){
-    const tx=h.cx*CELL+CELL/2-W/2;
-    const ty=h.cy*CELL+CELL/2-H/2;
-    camX+=(tx-camX)*0.1;
-    camY+=(ty-camY)*0.1;
-  } else {
-    // Spectate #1 player
-    const top=players.filter(p=>p.alive).sort((a,b)=>b.territoryPct-a.territoryPct)[0];
-    if(top){
-      const tx=top.cx*CELL+CELL/2-W/2;
-      const ty=top.cy*CELL+CELL/2-H/2;
-      camX+=(tx-camX)*0.05;
-      camY+=(ty-camY)*0.05;
-    }
-  }
-}
-
-// ===== GAME LOOP =====
-function gameLoop(ts){
-  if(!gameRunning)return;
-  const dt=Math.min(ts-lastTime,50);
-  lastTime=ts;
-  update(dt,ts);
-  updateCamera();
-  render();
-  renderMinimap();
-  animId=requestAnimationFrame(gameLoop);
-}
-
-// ===== START GAME =====
-// World is persistent — only initialised once. Calling startGame again just respawns the human.
-let worldInitialised=false;
-
-function initWorld(){
-  if(worldInitialised)return;
-  worldInitialised=true;
-  initGrid();
-  players=[]; pidCounter=0;
-  minimapCanvas.width=GRID_SIZE; minimapCanvas.height=GRID_SIZE;
-  mmImageData=null;
-  sessionKills=0; sessionStartTime=performance.now();
-  sessionDeathFreeStart=performance.now();
-  sessionComebacks=0; sessionLowFlag=false;
-  // Spawn bots — only in valid free spots
-  for(let i=0;i<MAX_BOTS;i++){
-    const bot=new Player(++pidCounter,randomName(),randomBotColor(),false);
-    const pos=findFreeSpawn();
-    if(pos){
-      bot.spawnAt(pos.cx,pos.cy);
-    } else {
-      // Defer spawn — bot will respawn via respawnTimer
-      bot.alive=false;
-      bot.respawnTimer=2000+Math.random()*3000;
-    }
-    players.push(bot);
-  }
-  gameStartTime=performance.now(); lastTime=gameStartTime;
-  gameRunning=true;
-  animId=requestAnimationFrame(gameLoop);
-}
-
-function startGame(){
-  homeScreen.style.display='none';
+function startGame() {
+  homeScreen.style.display = 'none';
   deathScreen.classList.remove('active');
   gameScreen.classList.add('active');
-
-  // Find or create human player
-  let human=players.find(p=>p.isHuman);
-  if(!human){
-    const hName=nameInput.value.trim()||randomName();
-    human=new Player(++pidCounter,hName,SKINS[selectedSkin],true);
-    players.push(human);
-  } else {
-    human.name=nameInput.value.trim()||human.name;
-    human.skin=SKINS[selectedSkin];
-  }
-  if(!human.alive){
-    respawnHuman(human);
-  } else {
-    // Already alive — just snap camera
-    camX=human.cx*CELL+CELL/2-canvas.width/2;
-    camY=human.cy*CELL+CELL/2-canvas.height/2;
-  }
+  let h = humanPlayer();
+  const nm = nameInput.value.trim() || randomName();
+  if (!h) { h = new Player(nm, SKINS[selectedSkin], false); h.isHuman = true; h.speed = PLAYER_SPEED; players.push(h); }
+  h.name = nm; h.skin = SKINS[selectedSkin]; setColors(h);
+  gameRunning = true;
+  if (!h.alive) respawnHuman(h);
 }
-
-// ===== END GAME (legacy — no longer used for human death) =====
-function endGame(human){
-  // Not called anymore — human death handled by showDeathOverlay+respawnHuman
-}
-
-// ===== GO HOME =====
-function goHome(){
+function endGame() {}
+function goHome() {
   deathScreen.classList.remove('active');
-  gameScreen.classList.remove('active');
-  homeScreen.style.display='flex';
-  updateRecords();
-  buildAchList();
+  homeScreen.style.display = 'flex';
+  gameRunning = false;
+  updateRecords(); buildAchList();
 }
 
-// ===== RESIZE =====
-window.addEventListener('resize',()=>{
-  canvas.width=window.innerWidth;
-  canvas.height=window.innerHeight;
-});
-
-// ===== MENU PIXEL GRID ANIMATION =====
-const menuCanvas=document.getElementById('menuCanvas');
-const mctx=menuCanvas.getContext('2d');
-let menuAnimId=null;
-const MENU_CELL=18;
-const MENU_BOTS=14;
-let menuPlayers=[];
-let menuGrid=[];
-
-function resizeMenuCanvas(){
-  menuCanvas.width=window.innerWidth;
-  menuCanvas.height=window.innerHeight;
+// ---- music (starts on the first click / key press) ----
+let bgMusic = null;
+function ensureMusic() {
+  if (!bgMusic) { bgMusic = new Audio('paperio_music.mp3'); bgMusic.loop = true; bgMusic.volume = 0.4; }
+  if (bgMusic.paused) bgMusic.play().catch(() => {});
 }
+document.addEventListener('click', () => ensureMusic());
+document.addEventListener('keydown', () => ensureMusic());
 
-function initMenuGrid(){
-  const cols=Math.ceil(menuCanvas.width/MENU_CELL)+2;
-  const rows=Math.ceil(menuCanvas.height/MENU_CELL)+2;
-  menuGrid=[];
-  for(let y=0;y<rows;y++) menuGrid.push(new Int32Array(cols));
-  menuPlayers=[];
-  for(let i=0;i<MENU_BOTS;i++){
-    const color=randomBotColor();
-    const cx=2+Math.floor(Math.random()*(cols-4));
-    const cy=2+Math.floor(Math.random()*(rows-4));
-    const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-    const dir=dirs[Math.floor(Math.random()*4)];
-    const mp={id:i+1,cx,cy,dir:{...dir},nextDir:{...dir},color,trail:[],inTrail:false,moveTimer:0,speed:3+Math.random()*3};
-    // Starting territory
-    for(let dy=-3;dy<=3;dy++) for(let dx=-3;dx<=3;dx++){
-      const nx=cx+dx,ny=cy+dy;
-      if(ny>=0&&ny<rows&&nx>=0&&nx<cols) menuGrid[ny][nx]=mp.id;
-    }
-    menuPlayers.push(mp);
-  }
-}
-
-function menuStep(dt){
-  const cols=menuGrid[0]?menuGrid[0].length:0;
-  const rows=menuGrid.length;
-  for(const p of menuPlayers){
-    p.moveTimer+=dt;
-    const stepMs=1000/p.speed;
-    while(p.moveTimer>=stepMs){
-      p.moveTimer-=stepMs;
-      // Occasionally change direction randomly
-      if(Math.random()<0.04){
-        const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-        const nd=dirs[Math.floor(Math.random()*4)];
-        if(!(nd.x===-p.dir.x&&nd.y===-p.dir.y)) p.nextDir=nd;
-      }
-      p.dir={...p.nextDir};
-      let nx=p.cx+p.dir.x, ny=p.cy+p.dir.y;
-      if(nx<0||ny<0||nx>=cols||ny>=rows){
-        p.dir={x:-p.dir.x,y:-p.dir.y};
-        p.nextDir={...p.dir};
-        nx=p.cx+p.dir.x; ny=p.cy+p.dir.y;
-        nx=Math.max(0,Math.min(cols-1,nx));
-        ny=Math.max(0,Math.min(rows-1,ny));
-      }
-      p.cx=nx; p.cy=ny;
-      const owner=menuGrid[p.cy][p.cx];
-      if(owner===p.id){
-        if(p.inTrail){
-          // Fill enclosed area
-          for(const c of p.trail) menuGrid[c.cy][c.cx]=p.id;
-          p.trail=[]; p.inTrail=false;
-        }
-      } else {
-        if(!p.inTrail) p.inTrail=true;
-        menuGrid[p.cy][p.cx]=-(p.id);
-        p.trail.push({cx:p.cx,cy:p.cy});
-      }
-    }
-  }
-}
-
-function renderMenu(){
-  const W=menuCanvas.width, H=menuCanvas.height;
-  mctx.clearRect(0,0,W,H);
-  mctx.fillStyle='#0d0d1a';
-  mctx.fillRect(0,0,W,H);
-  const rows=menuGrid.length, cols=menuGrid[0]?menuGrid[0].length:0;
-  for(let cy=0;cy<rows;cy++){
-    for(let cx=0;cx<cols;cx++){
-      const owner=menuGrid[cy][cx];
-      if(owner===0) continue;
-      const px=cx*MENU_CELL, py=cy*MENU_CELL;
-      if(owner>0){
-        const p=menuPlayers.find(q=>q.id===owner);
-        if(p){
-          mctx.fillStyle=p.color.fill.replace('0.28','0.5');
-          mctx.fillRect(px,py,MENU_CELL,MENU_CELL);
-        }
-      } else {
-        const p=menuPlayers.find(q=>q.id===-owner);
-        if(p){
-          mctx.fillStyle=p.color.dot;
-          mctx.fillRect(px,py,MENU_CELL,MENU_CELL);
-        }
-      }
-    }
-  }
-  // Grid lines
-  mctx.strokeStyle='rgba(255,255,255,0.04)';
-  mctx.lineWidth=0.5;
-  for(let cx=0;cx<=cols;cx++){mctx.beginPath();mctx.moveTo(cx*MENU_CELL,0);mctx.lineTo(cx*MENU_CELL,H);mctx.stroke();}
-  for(let cy=0;cy<=rows;cy++){mctx.beginPath();mctx.moveTo(0,cy*MENU_CELL);mctx.lineTo(W,cy*MENU_CELL);mctx.stroke();}
-}
-
-let menuLastTime=0;
-function menuLoop(ts){
-  if(!menuAnimId)return;
-  const dt=Math.min(ts-menuLastTime,50);
-  menuLastTime=ts;
-  menuStep(dt);
-  renderMenu();
-  menuAnimId=requestAnimationFrame(menuLoop);
-}
-
-function startMenuAnimation(){
-  if(menuAnimId)return;
-  resizeMenuCanvas();
-  initMenuGrid();
-  menuLastTime=performance.now();
-  menuAnimId=requestAnimationFrame(menuLoop);
-}
-
-function stopMenuAnimation(){
-  if(menuAnimId){cancelAnimationFrame(menuAnimId);menuAnimId=null;}
-}
-
-// ===== PERSISTENT MUSIC =====
-let bgMusic=null;
-function ensureMusic(){
-  if(!bgMusic){
-    bgMusic=new Audio('paperio_music.mp3');
-    bgMusic.loop=true;
-    bgMusic.volume=0.4;
-  }
-  if(bgMusic.paused) bgMusic.play().catch(()=>{});
-}
-// Start music on first user interaction
-document.addEventListener('click',()=>ensureMusic(),{once:false});
-document.addEventListener('keydown',()=>ensureMusic(),{once:false});
-
-// ===== INIT =====
-// Start world immediately — home screen shows as overlay on top of live game
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
-minimapCanvas.width=GRID_SIZE; minimapCanvas.height=GRID_SIZE;
-// Show game screen behind home screen from the start
+// ---- boot: the live world runs behind the home screen ----
+sizeCanvas();
 gameScreen.classList.add('active');
 initWorld();
 updateRecords();
+requestAnimationFrame(loop);
+
 </script>
 </body>
 </html>
