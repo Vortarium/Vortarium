@@ -1,58 +1,84 @@
 rules_version = '2';
+// DASH starter rules. Paste into Firebase Console > Firestore > Rules.
+// NOTE: this is client-trusting (stats are written by the client), fine for a hobby game; move stat writes
+// to Cloud Functions if you ever need cheat-proofing.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // The mod account is the one signed up as "vortarium" (email vortarium@dash.game).
-    // Sign up that username yourself first so nobody else can claim it.
-    function isMod() { return request.auth != null && request.auth.token.email == 'vortarium@dash.game'; }
-    function isUser(id) { return request.auth != null && request.auth.uid == id; }
+    function signedIn() { return request.auth != null; }
+    function uname() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username; }
+    function isMod() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && uname() == 'Vortarium'; }
     function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
 
-    match /users/{id} {
+    match /usernames/{n} {
       allow read: if true;
-      allow create: if isUser(id);
-      // owner syncs stats; signed-in players can add likes/views to a creator; the mod can add a verified (rated) count
-      allow update: if isUser(id) || (request.auth != null && (only(['likes']) || only(['views']))) || (isMod() && only(['rated']));
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && n == n.lower();
       allow delete: if isMod();
     }
 
-    // level slots in the editor, private to their owner (ids look like <uid>_<slot>)
-    match /drafts/{id} {
-      allow read, write: if request.auth != null && id.matches(request.auth.uid + '_[0-9]+');
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if (signedIn() && request.auth.uid == uid)
+        || (signedIn() && only(['netLikes']) && math.abs(request.resource.data.netLikes - resource.data.netLikes) <= 2)
+        || isMod();
+      allow delete: if isMod();
+      match /{sub}/{id} {
+        allow read, write: if signedIn() && (request.auth.uid == uid || isMod());
+      }
     }
 
     match /levels/{id} {
       allow read: if true;
-      allow create: if request.auth != null && request.resource.data.aid == request.auth.uid && request.resource.data.rating == 0;
-      // anyone (even anonymous) adds a view, signed-in players change likes, only the mod can rate
-      allow update: if isMod() || only(['views']) || (request.auth != null && only(['likes']));
-      allow delete: if isMod() || isUser(resource.data.aid);
-
-      match /votes/{voter} {
-        allow read, write: if isUser(voter);
-      }
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'unrated'
+        && request.resource.data.data is string && request.resource.data.data.size() < 900000
+        && request.resource.data.title is string && request.resource.data.title.size() <= 30
+        && request.resource.data.likes == 0 && request.resource.data.dislikes == 0 && request.resource.data.views == 0;
+      allow update: if only(['views', 'likes', 'dislikes']) || isMod();
+      allow delete: if isMod() || (signedIn() && resource.data.authorId == request.auth.uid);
       match /comments/{cid} {
         allow read: if true;
-        allow create: if isUser(request.resource.data.uid) && request.resource.data.text.size() <= 200;
-        allow delete: if isMod() || isUser(resource.data.uid);
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isMod() || (signedIn() && (resource.data.uid == request.auth.uid
+          || get(/databases/$(database)/documents/levels/$(id)).data.authorId == request.auth.uid));
+      }
+      match /songChunks/{cid} {
+        allow read: if true;
+        allow create: if signedIn() && request.resource.data.d.size() < 900000
+          && get(/databases/$(database)/documents/levels/$(id)).data.authorId == request.auth.uid;
+        allow delete: if isMod() || (signedIn() && get(/databases/$(database)/documents/levels/$(id)).data.authorId == request.auth.uid);
+      }
+      match /votes/{vid} {
+        allow read: if signedIn() && (vid == request.auth.uid || isMod());
+        allow write: if signedIn() && vid == request.auth.uid;
+        allow delete: if isMod() || (signedIn() && get(/databases/$(database)/documents/levels/$(id)).data.authorId == request.auth.uid);
       }
     }
 
-    match /bans/{id} {
-      allow read: if request.auth != null;
-      allow write: if isMod();
-    }
-    // friend requests: the document id is the two uids sorted and joined with "_"
-    match /requests/{pairId} {
-      allow read, delete: if request.auth != null && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
-      allow create: if request.auth != null && request.resource.data.from == request.auth.uid && pairId.split('_').hasAny([request.auth.uid]) && request.resource.data.status == 'pending';
-      allow update: if request.auth != null && resource.data.to == request.auth.uid && request.resource.data.status == 'accepted' && only(['status']);
+    match /friendRequests/{rid} {
+      allow read: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.from == request.auth.uid;
+      allow update: if signedIn() && resource.data.to == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.from == request.auth.uid || resource.data.to == request.auth.uid);
     }
 
-    // direct messages, only between accepted friends
-    match /dms/{pairId}/msgs/{m} {
-      allow read, delete: if request.auth != null && pairId.split('_').hasAny([request.auth.uid]) && get(/databases/$(database)/documents/requests/$(pairId)).data.status == 'accepted';
-      allow create: if request.auth != null && request.resource.data.from == request.auth.uid && pairId.split('_').hasAny([request.auth.uid]) && get(/databases/$(database)/documents/requests/$(pairId)).data.status == 'accepted';
+    match /friends/{uid}/list/{fid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isMod());
+      allow write: if signedIn() && (request.auth.uid == uid || isMod()
+        || (exists(/databases/$(database)/documents/friendRequests/$(uid + '_' + fid))
+            && get(/databases/$(database)/documents/friendRequests/$(uid + '_' + fid)).data.status == 'accepted'
+            && request.auth.uid == fid));
+    }
+
+    match /dms/{pair}/messages/{mid} {
+      allow read, delete: if signedIn() && request.auth.uid in pair.split('_');
+      allow create: if signedIn() && request.auth.uid in pair.split('_') && request.resource.data.from == request.auth.uid;
+    }
+
+    match /banned/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isMod());
+      allow write: if isMod();
     }
   }
 }
+
+// Level songs are now stored in Firestore (levels/{id}/songChunks), so no Firebase Storage setup is needed.

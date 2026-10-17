@@ -1,3 +1,59 @@
-<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dash</title><link rel="stylesheet" href="dash_style.css"></head>
-<body><canvas id="c"></canvas><div id="ui"></div><div id="bar" class="off"></div><footer id="ft"></footer><script type="module" src="dash_app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DASH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dash_style.css">
+</head>
+<body>
+<div id="bgfx"></div>
+
+<!-- MAIN MENU -->
+<section id="menu" class="layer active">
+  <div class="logo"><span>D</span><span>A</span><span>S</span><span>H</span></div>
+  <div class="menu-row">
+    <button class="big-btn green" data-act="go" data-v="account"><i class="bb-ico">👤</i>Account</button>
+    <button class="big-btn blue" data-act="go" data-v="community"><i class="bb-ico">🌐</i>Community<em id="menuBadge" class="badge hide"></em></button>
+  </div>
+  <div class="menu-row"><button class="big-btn orange small" data-act="go" data-v="cosmetics"><img id="menuIcon" alt=""><span>Cosmetics</span></button></div>
+</section>
+
+<!-- GENERIC PAGES -->
+<section id="view" class="layer"></section>
+
+<!-- GAME -->
+<section id="play" class="layer">
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud"><div id="pbar"><div id="pfill"></div></div><span id="ppct">0%</span><button class="round" id="pauseBtn">❚❚</button></div>
+  <div id="pauseBox" class="overlay"><div class="panel"><h2>Paused</h2><button class="btn green" data-act="resume">Resume</button><button class="btn orange" data-act="restart">Restart</button><button class="btn red" data-act="exitplay">Exit</button></div></div>
+  <div id="winBox" class="overlay"><div class="panel"><h2>Level Complete!</h2><p id="winInfo"></p><button class="btn green" data-act="restart">Replay</button><button class="btn red" data-act="exitplay">Exit</button></div></div>
+</section>
+
+<!-- EDITOR -->
+<section id="edit" class="layer">
+  <canvas id="editCanvas"></canvas>
+  <div id="edTop">
+    <button class="round" data-act="edback" title="Save &amp; exit">◀</button>
+    <div class="seg" id="edModes">
+      <button data-act="edmode" data-m="build" class="on">Build</button><button data-act="edmode" data-m="edit">Edit</button><button data-act="edmode" data-m="delete">Delete</button><button data-act="edmode" data-m="pan">Pan</button>
+    </div>
+    <button class="btn blue sm" data-act="edundo">↶ Undo</button>
+    <button class="btn sm" data-act="edsettings">⚙ Level</button>
+    <button class="btn green sm" data-act="edplay">▶ Playtest</button>
+    <button class="btn green sm" data-act="edplayhere">▶ From cursor</button>
+    <span id="edStatus"></span>
+  </div>
+  <div id="edProps"></div>
+  <div id="edBottom"><div id="edTabs"></div><div id="edItems"></div></div>
+</section>
+
+<footer id="footer"></footer>
+<div id="toasts"></div>
+<div id="modal"><div id="modalBox"><button class="x" data-act="closemodal">✕</button><div id="modalBody"></div></div></div>
+
+<script type="module" src="dash_app.js"></script>
+</body>
+</html>
