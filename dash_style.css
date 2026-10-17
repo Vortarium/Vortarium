@@ -164,3 +164,13 @@ label{display:block;font-size:14px;color:#9fd4ff}
 #edProps label{width:150px;margin:0}
 #edProps input{margin:2px 0}
 #edProps .row{margin-left:auto}
+
+/* ---- cosmetics grid ---- */
+.skgrid{display:grid;grid-template-columns:repeat(auto-fill,76px);gap:10px;justify-content:start;margin-bottom:12px}
+.skgrid .sk{width:76px;height:76px}.skgrid .sk img{width:60px;height:60px}
+.pvrow{display:flex;gap:8px;justify-content:center;align-items:center}.pvrow img{width:110px;height:110px}
+/* ---- community buttons: icon on top of label ---- */
+.menu4 .big-btn{flex-direction:column;text-align:center;line-height:1.1}
+.bb-ico svg{width:56px;height:56px;display:block;margin:0 auto}
+.auth{color:#8fe9ff;cursor:pointer}.auth:hover{text-decoration:underline}
+#edProps input[type=checkbox]{width:auto;margin-right:6px}
