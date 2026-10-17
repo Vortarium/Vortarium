@@ -84,6 +84,18 @@ OBJ.block.solid = true;
 ['Flower','Tulip','Bush','Tree','Grass','Cloud','Big Cloud','Brick','Mini Bricks','Mini Spike','Mini Spike Row','Star','Moon','Sun','Dots','Ring','Diamond','Crystal','Vine','Mushroom','Leaf','Pebbles','Fence','Lamp','Arrow','Cross','Wave','Zigzag','Heart','Pillar']
  .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
 function hsl(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''); }
+const SPEC = [];
+(() => {
+  const add = (c, g) => { PRIMARY.push(c); SECONDARY.push(c); SPEC.push({ i: PRIMARY.length - 1, g }); };
+  for (let h = 0; h < 360; h += 30) add(hsl(h, 100, 50), 'rainbow');
+  for (let h = 0; h < 360; h += 30) add(hsl(h, 100, 78), 'light');
+  for (let h = 0; h < 360; h += 30) add(hsl(h, 100, 26), 'dark');
+  for (let h = 15; h < 360; h += 30) add(hsl(h, 55, 48), 'muted');
+  ['#0b0b0b', '#2a2a2a', '#444444', '#606060', '#808080', '#a0a0a0', '#c4c4c4', '#e6e6e6'].forEach(c => add(c, 'gray'));
+})();
+const GEMS = { 1: 10, 2: 25, 3: 50, 4: 100, 5: 250 };   // gems for fully beating a rated level, by star rating
+const IN = 7.5;                                          // inner hitbox inset (cube 30 -> inner 15, centered)
+const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].ex < x) lo = m + 1; else hi = m; } return lo; };
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
 const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
@@ -394,7 +406,7 @@ const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 // ---------- the game ----------
 class Game {
   constructor(cv) {
-    this.cv = cv; this.c = cv.getContext('2d'); this.cb = {}; this.running = false; this.paused = false;
+    this.cv = cv; this.c = cv.getContext('2d', { alpha: false, desynchronized: true }); this.practice = false; this.cps = []; this.cpT = 0; this.cb = {}; this.running = false; this.paused = false;
     this.held = false; this.edgeT = 0; this.skin = { id: 0, c1: PRIMARY[0], c2: SECONDARY[0] };
     const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) { this.edgeT = .05; this.holdUsed = false; } this.held = true; } else { this.held = false; this.holdUsed = false; } };
     cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true); });
@@ -403,18 +415,20 @@ class Game {
       if (!this.running) return;
       if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); if (!e.repeat) press(true); }
       else if (e.code === 'Escape' && !e.repeat) this.cb.onPause && this.cb.onPause();
+      else if (e.code === 'KeyZ' && !e.repeat && this.practice && !this.paused) this.addCP();
+      else if (e.code === 'KeyX' && !e.repeat && this.practice && !this.paused) this.cps.pop();
     });
     addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') press(false); });
     addEventListener('resize', () => this.running && this.resize());
   }
-  resize() { const d = Math.min(2, devicePixelRatio || 1); this.cv.width = this.cv.clientWidth * d; this.cv.height = this.cv.clientHeight * d; }
+  resize() { const d = this.rs || (this.rs = Math.min(2, devicePixelRatio || 1)); this.cv.width = this.cv.clientWidth * d; this.cv.height = this.cv.clientHeight * d; }
   load(level) {
     this.level = level;
     let cn = 0; const objs = (level.objs || []).map(o => ({ ...o, ci: o.t === 'coin' ? cn++ : -1, gold: !!level.rated, ex: o.x * U, ey: o.y * U, col0: o.c || defColor(o.t), col: o.c || defColor(o.t), used: false, alp: 1, off: false, got: false, tf: false }));
     objs.sort((a, b) => a.ex - b.ex);
     this.groups = {};
-    objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); const h = OBJ[o.t].hz; if (h) { const sc = o.sc || 1; if (h.k === 's') o.hr = h.a * U * .7 * sc; else { const hw = h.n > 1 ? 10 : 5 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b).map(v => 15 + (v - 15) * sc); } } if (PADS.includes(o.t)) { const sc = o.sc || 1; o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc); } });
-    objs.forEach(o => { if (OBJ[o.t].solid && !OBJ[o.t].slope) { const sc = o.sc || 1, r = OBJ[o.t].half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); } });
+    objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); });
+    // hitboxes are built lazily in prep() the first time an object comes into range
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin;
     this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
@@ -425,13 +439,19 @@ class Game {
     const end = tr.find(o => o.t === 'trig_end'); this.endX = end ? end.ex : Infinity;
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
+  prep(o) {
+    o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
+    if (h) { if (h.k === 's') o.hr = h.a * U * .7 * sc; else { const hw = h.n > 1 ? 10 : 5 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b).map(v => 15 + (v - 15) * sc); } }
+    if (PADS.includes(o.t)) o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc);
+    if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
+  }
   timeAtX(x) {
     let t = 0, x0 = 0, sp = 1;
     for (const p of this.ports) { if (p.ex >= x) break; t += (p.ex - x0) / (BASE * sp); x0 = p.ex; sp = SPEEDS[p.t]; }
     return t + (x - x0) / (BASE * sp);
   }
   start(o = {}) {
-    this.sx = o.x || 0; this.sy = o.y || 0; this.attempts = 1; this.best = 0; this.jumps = 0; this.camY = -70; this.won = false;
+    this.practice = !!o.practice; this.cps = []; this.cpT = 0; this.sx = o.x || 0; this.sy = o.y || 0; this.attempts = 1; this.best = 0; this.jumps = 0; this.camY = -70; this.won = false;
     this.reset(true); this.running = true; this.paused = false; this.acc = 0; this.last = performance.now();
     cancelAnimationFrame(this.raf); this.resize(); this.raf = requestAnimationFrame(t => this.frame(t));
   }
@@ -444,7 +464,7 @@ class Game {
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null };
     this.speed = 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
-    this.time = this.timeAtX(this.sx); this.ti = 0; this.si = 0;
+    this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 70); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
     while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
     this.runActs();
     if (!first) this.attempts++;
@@ -482,6 +502,26 @@ class Game {
       if (pr >= 1) this.acts.splice(i, 1);
     }
   }
+  snap() {
+    const p = this.p, os = [];
+    for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col]);
+    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
+      gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
+  }
+  restore(k) {
+    for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
+    for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
+    this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
+    this.gr = k.gr; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
+    this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
+    this.si = lb(this.S, this.p.x - 70); this.tI = lb(this.TT, this.p.x - 40);
+    this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
+  }
+  addCP() { if (!this.practice || this.p.dead || this.won) return; this.cps.push({ x: this.p.x, y: this.p.y, s: this.snap() }); if (this.cps.length > 60) this.cps.shift(); this.cpT = 0; }
+  respawn() {
+    const c = this.practice && this.cps.length ? this.cps[this.cps.length - 1] : null;
+    if (c) { this.restore(c.s); this.attempts++; this.cb.onSpawn && this.cb.onSpawn(this.time); } else this.reset();
+  }
   die() {
     const p = this.p; p.dead = true; p.deadT = .7;
     for (let i = 0; i < 22; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: p.x + 15, y: p.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? this.skin.c1 : this.skin.c2, s: 3 + Math.random() * 5 }); }
@@ -493,14 +533,14 @@ class Game {
     const p = this.p;
     if (p.dead) {
       p.deadT -= dt; for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy -= 600 * dt; q.life -= dt; }
-      this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.reset(); return;
+      this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.respawn(); return;
     }
-    this.time += dt; this.edgeT -= dt;
+    this.time += dt; this.edgeT -= dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
     this.runActs();
-    for (const t of this.TT) if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); }
+    { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
     if (this.mode === 'cube' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
@@ -513,10 +553,10 @@ class Game {
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
-    while (this.si < S.length && S[this.si].ex < p.x - 40) this.si++;
-    for (let i = this.si; i < S.length && S[i].ex < p.x + 40; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
+    while (this.si < S.length && S[this.si].ex < p.x - 70) this.si++;
+    for (let i = this.si; i < S.length && S[i].ex < p.x + 70; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
     for (const o of this.D) {
-      if (o.off) continue; const g = this.gOff[o.g]; this.inter(o, g ? g.x * U : 0, g ? g.y * U : 0, prevB, edge); if (p.dead) return;
+      if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 100) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
     }
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
@@ -528,14 +568,26 @@ class Game {
   inter(o, gx, gy, prevB, edge) {
     const p = this.p, x = o.ex + gx, y = o.ey + gy, t = o.t;
     if (o.off) return;
+    if (!o.pp) this.prep(o);
     if (OBJ[t].slope) return this.slope(o, x, y);
     if (OBJ[t].solid) {
       const sb = o.sb, bx = x + sb[0], by = y + sb[1], bw = sb[2] - sb[0], bh = sb[3] - sb[1];
       if (this.hit(p, bx, by, bw, bh)) {
-        if (this.mode === 'wave') this.die();
-        else if (this.mode === 'ship') { if (prevB >= by + bh - 4) { p.y = by + bh; if (p.vy < 0) p.vy = 0; } else if (prevB + 30 <= by + 4) { p.y = by - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
-        else if (this.gr > 0 ? (p.vy <= 0 && prevB >= by + bh - 4) : (p.vy >= 0 && prevB + 30 <= by + 4)) { p.y = this.gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
-        else this.die();
+        // primary hitbox touched: only the 15x15 inner hitbox decides deaths, and it also forgives corner clips
+        const inner = this.hit(p, bx, by, bw, bh, IN), m = this.mode, gr = this.gr, above = p.y + 15 >= by + bh, below = p.y + 15 <= by;
+        if (m === 'wave') { if (inner) this.die(); }
+        else if (m === 'ship' || m === 'ufo') {
+          if (prevB >= by + bh - 4 || (!inner && above)) { p.y = by + bh; if (p.vy < 0) p.vy = 0; }
+          else if (prevB + 30 <= by + 4 || (!inner && below)) { p.y = by - 30; if (p.vy > 0) p.vy = 0; }
+          else if (inner) this.die();
+        } else {
+          const land = gr > 0 ? (p.vy <= 0 && (prevB >= by + bh - 4 || (!inner && above))) : (p.vy >= 0 && (prevB + 30 <= by + 4 || (!inner && below)));
+          if (land) { p.y = gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
+          else if (!inner) {
+            if (gr > 0 && p.vy > 0 && below) { p.y = by - 30; p.vy = 0; }
+            else if (gr < 0 && p.vy < 0 && above) { p.y = by + bh; p.vy = 0; }
+          } else this.die();
+        }
       }
     } else if (OBJ[t].hz) {
       if (o.hr) { const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15); if (dx * dx + dy * dy < (o.hr + 6) ** 2) this.die(); }
@@ -562,7 +614,7 @@ class Game {
   }
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
-    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'wave';
+    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'wave' || m === 'ufo';
     if (!(p.x + 30 > x + 2 && p.x < x + 28)) return;
     const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? 30 - xl : xl);
     if (floor) {
@@ -579,6 +631,8 @@ class Game {
   frame(ts) {
     if (!this.running) return;
     const dt = Math.min(.05, (ts - this.last) / 1000); this.last = ts;
+    this.ft = (this.ft || .016) * .95 + dt * .05;   // adaptive resolution: drop render scale if frames run long
+    if (this.ft > .024 && (this.rs || 1) > 1 && ts - (this.rsT || 0) > 1500) { this.rs = Math.max(1, this.rs - .25); this.rsT = ts; this.ft = .016; this.resize(); }
     if (!this.paused && !this.won) { this.acc += dt; let n = 0; while (this.acc >= STEP && n++ < 40) { this.step(STEP); this.acc -= STEP; } if (this.p.dead === false) this.best = Math.max(this.best, this.pct()); }
     this.render(dt);
     this.cb.onFrame && this.cb.onFrame(this.pct(), this.attempts);
@@ -603,10 +657,11 @@ class Game {
     const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 60;
     while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
     const rx = this.camX + W / s + 60;
-    for (const o of this.DEC) { if (o.off) continue; const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, o.col, false, this.time); }
+    const DEC = this.DEC; for (let i = lb(DEC, lx); i < DEC.length && DEC[i].ex < rx; i++) { const o = DEC[i]; if (o.off) continue; const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, o.col, false, this.time); }
     for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; if (o.off) continue; drawObj(c, o, X(o.ex), Y(o.ey + U), cs, o.col, false, this.time); }
     for (const o of this.D) { if (o.off) continue; const gg = this.gOff[o.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0, x = X(o.ex + gx); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + gyy + U), cs, o.col, false, this.time); }
     for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
+    if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
@@ -700,6 +755,7 @@ const rwName = r => RWN[r.k] ? `${RWN[r.k]} #${r.i + 1}` : r.k === 'p' ? `Primar
 function unlocked_() {
   const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), p: new Set([0]), s: new Set([0]) };
   if (me && P) ACH.forEach(a => { if ((P[a.stat] || 0) >= a.n) u[a.rw.k].add(a.rw.i); });
+  if (me && P) (P.bought || []).forEach(k => { const [t, i] = k.split(':'); if (t === 'col') { u.p.add(+i); u.s.add(+i); } else if (u[t]) u[t].add(+i); });
   return u;
 }
 function checkAch() {
@@ -715,7 +771,7 @@ const views = {};
 function showLayer(n) { ['menu', 'view', 'play', 'edit'].forEach(l => $('#' + l).classList.toggle('active', l === n)); document.body.classList.toggle('fs', n === 'play' || n === 'edit'); }
 function go(name, p = {}, push = true) {
   if (name === 'menu') { stack = []; cur = 'menu'; curP = {}; showLayer('menu'); }
-  else { if (push) stack.push([cur, curP]); cur = name; curP = p; showLayer('view'); views[name](p); if (me && ['account', 'cosmetics', 'community'].includes(name)) refreshMyStats().then(refreshProfile).then(() => { if (cur === name) views[name](curP); }); }
+  else { if (push) stack.push([cur, curP]); cur = name; curP = p; showLayer('view'); views[name](p); if (me && ['account', 'cosmetics', 'community', 'shop'].includes(name)) refreshMyStats().then(refreshProfile).then(() => { if (cur === name) views[name](curP); }); }
   renderFooter(); setTrack('menu');
 }
 function back() { const s = stack.pop(); s && s[0] !== 'menu' ? go(s[0], s[1], false) : go('menu'); }
@@ -729,7 +785,7 @@ function renderFooter() {
 
 /* ================= auth ================= */
 const emailOf = u => `${u.toLowerCase()}@dash-game.app`;
-const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, ball: 0, ufo: 0, wave: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
+const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, bought: [], ball: 0, ufo: 0, wave: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
 let busySignup = false;
 async function signUp(username, pw) {
   username = username.trim();
@@ -742,7 +798,7 @@ async function signUp(username, pw) {
     const cred = await createUserWithEmailAndPassword(auth, emailOf(username), pw);
     try { const b = writeBatch(db); b.set(doc(db, 'usernames', key), { uid: cred.user.uid }); b.set(doc(db, 'users', cred.user.uid), newProfile(username)); await b.commit(); }
     catch (e) { await deleteUser(cred.user).catch(() => { }); throw 'Could not create the account: ' + errMsg(e); }
-    await afterLogin(cred.user);
+    await afterLogin(cred.user); await transferAnon().catch(e => console.warn(e));
   } finally { busySignup = false; }
 }
 async function afterLogin(u) {
@@ -810,7 +866,7 @@ views.account = ({ tab = 'account' } = {}) => {
 /* ================= cosmetics ================= */
 views.cosmetics = ({ tab = 'cube' } = {}) => {
   const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0;
-  const req = (k, i) => { const a = ACH.find(a => a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : 'Default'; };
+  const req = (k, i) => { const a = ACH.find(a => a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : i ? 'Sold in Community > Shop' : 'Default'; };
   const grid = (k, n, cur, img) => Array.from({ length: n }, (_, i) => `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`).join('');
   const sw = (k, arr, cur) => arr.map((c, i) => `<div class="sw ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" style="background:${c}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? 'Color ' + (i + 1) : req(k, i))}"></div>`).join('');
   let body;
@@ -830,8 +886,48 @@ const svg = p => `<i class="bb-ico"><svg viewBox="0 0 24 24" fill="#fff">${p}</s
 const ICO = { tools: svg('<rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><rect x="8" y="3" width="8" height="8" rx="2"/>'), star: svg('<polygon points="12,2 15,9 22,9.5 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9.5 9,9"/>'), plus: svg('<circle cx="12" cy="12" r="10"/><path d="M12 7v10M7 12h10" stroke="#1450d0" stroke-width="3"/>'), trophy: svg('<path d="M7 3h10v6a5 5 0 01-10 0zM4 4h3v4H4zM17 4h3v4h-3zM11 14h2v4h3v3H8v-3h3z"/>') };
 views.community = () => {
   const mb = isMod() && modPending ? `<em class="badge">${modPending}</em>` : '', rb = reqs.length ? `<em class="badge">${reqs.length}</em>` : '';
-  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor">${ICO.tools}Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars">${ICO.star}Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new">${ICO.plus}New Levels${mb}</button><button class="big-btn red" data-act="go" data-v="lb">${ICO.trophy}Leaderboards &amp; Friends${rb}</button></div>`);
+  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor">${ICO.tools}Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars">${ICO.star}Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new">${ICO.plus}New Levels${mb}</button><button class="big-btn red" data-act="go" data-v="lb">${ICO.trophy}Leaderboards &amp; Friends${rb}</button><button class="big-btn purple" data-act="go" data-v="shop">${ICO.gem}Shop</button></div>`);
 };
+
+ICO.gem = svg('<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12 9v13" stroke="#6a1fd0" stroke-width="1.2" fill="none"/>');
+
+/* ================= shop ================= */
+const SHOP_ROTATE_DAYS = 1;   // stock reshuffles every N days (same for everybody); set 0 for one permanent stock
+const SHOP_PRICES = [100, 150, 200, 250, 300, 400, 500, 600, 750, 1000], SHOP_CPRICES = [100, 150, 200, 250, 300, 400];
+const SHOP_NAMES = { skin: 'Cube', ship: 'Ship', ball: 'Ball', ufo: 'UFO', wave: 'Wave' };
+const SHOP_GROUPS = { rainbow: 'Rainbow', light: 'Light', dark: 'Dark', muted: 'In-between', gray: 'Grayscale' };
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let shopCache = null;
+function shopStock() {
+  const day = SHOP_ROTATE_DAYS ? Math.floor(Date.now() / 864e5 / SHOP_ROTATE_DAYS) : 1;
+  if (shopCache && shopCache.day === day) return shopCache;
+  const r = rng(day * 2654435761 + 12345), shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const pool = []; [['skin', 29], ['ship', 29], ['ball', 11], ['ufo', 11], ['wave', 11]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
+  const icons = shuf(pool).slice(0, 20).map(it => ({ ...it, key: it.k + ':' + it.i, price: SHOP_PRICES[Math.floor(r() * SHOP_PRICES.length)] })).sort((a, b) => a.price - b.price);
+  const cols = shuf(Object.keys(SHOP_GROUPS)).map(g => { const a = SPEC.filter(x => x.g === g), x = a[Math.floor(r() * a.length)]; return { k: 'col', g, i: x.i, key: 'col:' + x.i, price: SHOP_CPRICES[Math.floor(r() * SHOP_CPRICES.length)] }; });
+  return shopCache = { day, icons, cols };
+}
+const shopImg = (it, z) => { const c1 = PRIMARY[P?.c1 || 0], c2 = SECONDARY[P?.c2 || 0], sk = P?.skin || 0; return it.k === 'skin' ? skinURL(it.i, c1, c2, z) : it.k === 'ship' ? shipURL(it.i, sk, c1, c2, z) : it.k === 'ball' ? ballURL(it.i, c1, c2, z) : it.k === 'ufo' ? ufoURL(it.i, sk, c1, c2, z) : waveURL(it.i, c1, c2, z); };
+const shopLabel = it => it.k === 'col' ? `${SHOP_GROUPS[it.g]} color` : `${SHOP_NAMES[it.k]} #${it.i + 1}`;
+views.shop = ({ pg = 0 } = {}) => {
+  const st = shopStock(), un = unlocked_(), pages = 4; pg = Math.max(0, Math.min(pages - 1, +pg || 0)); curP = { ...curP, pg };
+  const owned = it => it.k === 'col' ? un.p.has(it.i) : un[it.k].has(it.i);
+  const card = it => { const o = owned(it), can = (P?.crystals || 0) >= it.price;
+    const vis = it.k === 'col' ? `<div class="shsw" style="background:${PRIMARY[it.i]}"></div>` : `<img src="${shopImg(it, 64)}" width="64" height="64">`;
+    return `<div class="shopit ${o ? 'owned' : ''}">${vis}<b>${shopLabel(it)}</b>${o ? '<span class="own">✔ Owned</span>' : `<button class="btn sm ${can ? 'green' : ''}" data-act="buy" data-key="${it.key}">💎 ${fmt(it.price)}</button>`}</div>`; };
+  const items = st.icons.slice(pg * 5, pg * 5 + 5).map(card).join('');
+  const cols = pg === pages - 1 ? `<h3>Colors <span class="muted">(unlock for both primary and secondary)</span></h3><div class="shopgrid">${st.cols.map(card).join('')}</div>` : '';
+  page('Shop', `<div class="card shophead"><b>💎 ${fmt(P?.crystals)} gems</b><span class="muted">${me ? 'Stock refreshes daily' : 'Log in to buy things'}</span></div><div class="shopgrid">${items}</div>${cols}<div class="pager"><button class="btn sm" data-act="shoppg" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="shoppg" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>`);
+};
+async function buyItem(key) {
+  if (!me || !P) throw 'Log in to buy things';
+  const st = shopStock(), it = [...st.icons, ...st.cols].find(x => x.key === key); if (!it) throw 'That item is no longer in stock';
+  if ((P.bought || []).includes(key)) throw 'You already own that';
+  if ((P.crystals || 0) < it.price) throw `You need ${fmt(it.price - (P.crystals || 0))} more 💎`;
+  if (!confirm(`Buy ${shopLabel(it)} for ${fmt(it.price)} gems?`)) return;
+  await updateDoc(doc(db, 'users', me.uid), { crystals: increment(-it.price), bought: arrayUnion(key) });
+  P.crystals -= it.price; P.bought = [...(P.bought || []), key]; renderFooter(); toast(`Bought ${shopLabel(it)}!`, 'ok'); views.shop({ pg: curP.pg || 0 });
+}
 
 /* ---- level lists ---- */
 const LISTS = {}, LV = {};
@@ -874,6 +970,11 @@ async function getBest(id) {
   if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) b = Math.max(b, s.data().best || 0); } catch { } }
   return b;
 }
+async function getProgress(id) {
+  let best = +localStorage[bestKey(id)] || 0, gems = 0;
+  if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) { best = Math.max(best, s.data().best || 0); gems = s.data().gems || 0; } } catch { } }
+  return { best, gems };
+}
 views.level = async ({ id }) => {
   page('Level', '<p class="muted">Loading…</p>');
   let lv;
@@ -892,6 +993,7 @@ views.level = async ({ id }) => {
     <div class="row" style="justify-content:center"><img src="${d ? diffURL(d.id, 56) : diffURL('easy', 56)}" width="56" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><b>${d ? d.name + ' · ⭐ ' + d.stars : 'Unrated'}</b> ${lenTag(lv)}</div>
     <p class="muted" style="max-width:480px">${esc(lv.desc || 'No description')}</p>
     <button class="playbtn" data-act="playlvl" data-id="${id}">▶</button>
+    <div><button class="btn sm orange" data-act="practicelvl" data-id="${id}">⚑ Practice mode</button></div>
     <div class="pb"><i style="width:${best}%"></i><b>Best: ${best}%</b></div>
     <div class="votes"><button class="round ${my === 1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="1">👍</button><span>${fmt((lv.likes || 0) - (lv.dislikes || 0))}</span><button class="round down ${my === -1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="-1">👎</button></div>
     <div class="muted">👁 ${fmt(lv.views)} views</div>${dl}
@@ -945,61 +1047,114 @@ async function syncSongs() {
 /* ================= playing ================= */
 const game = new Game($('#gameCanvas'));
 let PL = null, lvAudio = null, prevA = null;
-async function playPublished(id) {
+async function playPublished(id, practice = false) {
   const lv = LV[id]; updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1;
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
-  const prevBest = await getBest(id);
-  startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
+  const prog = await getProgress(id), prevBest = prog.best, dd = DIFFS.find(x => x.id === lv.diff);
+  startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
-  $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0';
+  $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
   game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
+  const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
     onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
-    onDeath: pct => { lvAudio && lvAudio.pause(); sfx('die'); const oldBest = Math.max(PL.best, PL.prevBest || 0); if (pct >= 1 && Math.floor(pct) > Math.floor(oldBest)) toast(`🏅 New best: ${Math.floor(pct)}%`, 'ok'); PL.best = Math.max(PL.best, pct); if (PL.kind === 'play' && pct > (+localStorage[bestKey(PL.id)] || 0)) localStorage[bestKey(PL.id)] = Math.floor(pct); },
-    onWin: () => { lvAudio && lvAudio.pause(); sfx('win'); $('#pfill').style.width = '100%'; $('#ppct').textContent = '100%'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}`; $('#winBox').classList.add('open'); onWon(); },
-    onFrame: pct => { $('#pfill').style.width = pct + '%'; $('#ppct').textContent = Math.floor(pct) + '%'; },
+    onDeath: pct => {
+      lvAudio && lvAudio.pause(); sfx('die'); if (PL.practice) return;
+      const ls = PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0, oldBest = Math.max(PL.best, PL.prevBest || 0, ls), fp = Math.floor(pct);
+      if (fp >= 1 && fp > Math.floor(oldBest)) newRecord(fp);
+      PL.best = Math.max(PL.best, pct);
+      if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
+    },
+    onWin: () => { lvAudio && lvAudio.pause(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
+    onFrame: pct => { const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
     onPause: pauseToggle
   };
-  game.start({ x: PL.sx, y: PL.sy });
+  game.start({ x: PL.sx, y: PL.sy, practice: PL.practice });
 }
 function pauseToggle() {
   if (game.won) return;
   if (game.paused) { game.resume(); $('#pauseBox').classList.remove('open'); if (lvAudio && !game.p.dead) lvAudio.play().catch(() => { }); }
-  else { game.pause(); lvAudio && lvAudio.pause(); const pb = Math.floor(Math.max(PL.prevBest || 0, PL.best || 0, game.best || 0, PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0)); $('#pauseBest').textContent = 'Current best: ' + pb + '%'; $('#pauseBox').classList.add('open'); }
+  else { game.pause(); lvAudio && lvAudio.pause(); const pb = Math.floor(Math.max(PL.prevBest || 0, PL.best || 0, game.best || 0, PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0)); $('#pauseBest').textContent = (PL.practice ? 'Practice mode · ' : '') + 'Current best: ' + pb + '%'; $('#pracBtn').textContent = 'Practice: ' + (PL.practice ? 'ON' : 'OFF'); $('#pauseBox').classList.add('open'); }
 }
 async function stopPlay() {
-  game.stop(); lvAudio && lvAudio.pause(); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
+  game.stop(); lvAudio && lvAudio.pause(); $('#recBox').classList.remove('show'); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
   const p = PL; PL = null;
-  if (p.kind === 'play') { const b = Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0); if (me && b > 0) setDoc(doc(db, 'users', me.uid, 'progress', p.id), { best: b }).catch(() => { }); }
+  if (p.kind === 'play' && !p.practice) { const b = Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0); if (me && b > 0) setDoc(doc(db, 'users', me.uid, 'progress', p.id), { best: b }, { merge: true }).catch(() => { }); }
   setTrack(p.kind === 'test' ? 'editor' : 'menu'); p.onExit && p.onExit();
+}
+function setPracUI() { $('#pracHud').style.display = PL?.practice ? 'flex' : 'none'; }
+function showRecord(fp, gems) {
+  const el = $('#recBox'); el.innerHTML = `<div class="rec-t">NEW RECORD!</div><div class="rec-p">${fp}%</div>${gems ? `<div class="rec-g">+${fmt(gems)} 💎</div>` : ''}`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); clearTimeout(showRecord.t); showRecord.t = setTimeout(() => el.classList.remove('show'), 1700);
+}
+// new record: rated levels pay floor(total gems * record%) minus what was already paid; the rest is paid on beating the level
+function newRecord(fp) {
+  let gems = 0;
+  if (PL.kind === 'play' && PL.gemTotal && me && P) {
+    const target = Math.floor(PL.gemTotal * fp / 100), d = target - (PL.gemsGot || 0);
+    if (d > 0) {
+      gems = d; PL.gemsGot = target; P.crystals = (P.crystals || 0) + d; renderFooter();
+      const bt = writeBatch(db); bt.set(doc(db, 'users', me.uid, 'progress', PL.id), { best: Math.max(fp, Math.floor(PL.prevBest || 0)), gems: target }, { merge: true }); bt.update(doc(db, 'users', me.uid), { crystals: increment(d) });
+      bt.commit().catch(e => console.warn(e));
+    }
+  }
+  showRecord(fp, gems);
+}
+const anonGet = k => { try { return JSON.parse(localStorage[k] || '{}'); } catch { return {}; } };
+function anonBest(id, pct) { const m = anonGet('dash_anon_best'); if (pct > (m[id] || 0)) { m[id] = pct; localStorage.dash_anon_best = JSON.stringify(m); } }
+function recordAnonWin(id, coins) { const m = anonGet('dash_anon_beaten'), e = m[id] || { coins: [] }; e.coins = [...new Set([...(e.coins || []), ...coins])]; m[id] = e; localStorage.dash_anon_beaten = JSON.stringify(m); anonBest(id, 100); }
+async function awardWin(id, fb, got) {
+  const fresh = await getDoc(doc(db, 'levels', id)); if (!fresh.exists() && !fb) return null;
+  const L = fresh.exists() ? fresh.data() : fb, rated = L.status === 'rated', d = DIFFS.find(x => x.id === L.diff), ok = rated && !!d;
+  const br = doc(db, 'users', me.uid, 'beaten', id), pr = doc(db, 'users', me.uid, 'progress', id), [snap, psnap] = await Promise.all([getDoc(br), getDoc(pr)]);
+  const first = !snap.exists(), starred = snap.exists() && snap.data().starred, prevC = snap.exists() ? (snap.data().coins || []) : [];
+  const addC = ok ? got.filter(i => !prevC.includes(i)) : [], award = ok && !starred;
+  const gemTotal = ok ? GEMS[d.stars] : 0, gemHave = psnap.exists() ? (psnap.data().gems || 0) : 0, gems = Math.max(0, gemTotal - gemHave);
+  if (!first && !award && !addC.length && !gems) return { nothing: true, rated };
+  const ds = award ? d.stars * STAR_SCALE : 0, upd = {};
+  if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; }
+  if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
+  if (gems) { upd.crystals = increment(gems); P.crystals = (P.crystals || 0) + gems; }
+  if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
+  await setDoc(br, { t: serverTimestamp(), starred: starred || ok, level: id, coins: [...prevC, ...addC] }, { merge: true });
+  await setDoc(pr, gemTotal ? { best: 100, gems: Math.max(gemTotal, gemHave) } : { best: 100 }, { merge: true });
+  if (Object.keys(upd).length) await updateDoc(doc(db, 'users', me.uid), upd);
+  return { first, ok, ds, gems, gemTotal, addC: addC.length, rated };
+}
+// wins made while Anonymous are carried over to the account created afterwards
+async function transferAnon() {
+  if (!me || !P) return;
+  const beaten = anonGet('dash_anon_beaten'), bests = anonGet('dash_anon_best'), ids = Object.keys(beaten);
+  if (!ids.length && !Object.keys(bests).length) return;
+  let n = 0, stars = 0, gems = 0;
+  for (const id of ids) { try { const r = await awardWin(id, null, beaten[id].coins || []); if (r && !r.nothing) { n++; stars += r.ds; gems += r.gems; } } catch (e) { console.warn(e); } }
+  for (const [id, bst] of Object.entries(bests)) { if (beaten[id]) continue; try { await setDoc(doc(db, 'users', me.uid, 'progress', id), { best: bst }, { merge: true }); } catch { } }
+  delete localStorage.dash_anon_beaten; delete localStorage.dash_anon_best;
+  renderFooter(); checkAch();
+  if (n) toast(`Carried over ${n} beaten level${n > 1 ? 's' : ''} from Anonymous: +${stars} ⭐ +${fmt(gems)} 💎`, 'ok');
 }
 async function onWon() {
   const p = PL; if (!p) return; const got = [...game.coinSet];
+  if (p.practice) return;
   if (p.kind === 'test') {
     if (p.sx !== 0 || p.sy !== 0) return toast('Beat it from the very start to verify', '');
     if (got.length < game.coinTotal) return toast(`Collect all ${game.coinTotal} star coins to verify (got ${got.length})`, 'err');
     p.lv0.verified = sigOf(p.lv0.objs); saveSlots(ed.slot); toast('✔ Level verified! You can now upload it.', 'ok'); return;
   }
   localStorage[bestKey(p.id)] = 100; p.best = 100;
-  if (!me || !P) { toast('Log in to earn stars and track wins'); return; }
+  if (!me || !P) { recordAnonWin(p.id, got); toast('Beaten as Anonymous - sign up and it will carry over to your new account!'); return; }
   try {
-    const own = p.lv.authorId === me.uid, fresh = await getDoc(doc(db, 'levels', p.id)), L = fresh.exists() ? fresh.data() : p.lv;
-    const rated = L.status === 'rated', d = DIFFS.find(x => x.id === L.diff), ok = rated && !!d;
-    const br = doc(db, 'users', me.uid, 'beaten', p.id), snap = await getDoc(br), first = !snap.exists(), starred = snap.exists() && snap.data().starred, prevC = snap.exists() ? (snap.data().coins || []) : [];
-    const addC = ok ? got.filter(i => !prevC.includes(i)) : [], award = ok && !starred;
-    if (!first && !award && !addC.length) return toast('Already completed', '');
-    const ds = award ? d.stars * STAR_SCALE : 0, cr = award ? 5 * d.stars : 0, upd = {};
-    if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; const cc = (own ? 0 : 10) + cr; if (cc) { upd.crystals = increment(cc); P.crystals = (P.crystals || 0) + cc; } }
-    else if (cr) { upd.crystals = increment(cr); P.crystals = (P.crystals || 0) + cr; }
-    if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
-    if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
-    await setDoc(br, { t: serverTimestamp(), starred: starred || ok, level: p.id, coins: [...prevC, ...addC] }, { merge: true }); await updateDoc(doc(db, 'users', me.uid), upd);
-    renderFooter(); checkAch(); toast((ok ? `+${ds} stars!` : 'Level beaten!') + (addC.length ? ` +${addC.length} 🪙` : (got.length && !rated ? ' (copper coins only count once rated)' : '')), 'ok');
+    const r = await awardWin(p.id, p.lv, got); if (!r) return;
+    if (r.nothing) return toast('Already completed', '');
+    p.gemsGot = Math.max(p.gemsGot || 0, r.gemTotal);
+    if (r.gems && PL === p) $('#winInfo').textContent += ` · +${fmt(r.gems)} 💎`;
+    renderFooter(); checkAch();
+    toast((r.ok ? `+${r.ds} stars!` : 'Level beaten!') + (r.gems ? ` +${fmt(r.gems)} 💎` : '') + (r.addC ? ` +${r.addC} 🪙` : (got.length && !r.rated ? ' (copper coins only count once rated)' : '')), 'ok');
   } catch (e) { console.error(e); toast('Could not save your win: ' + errMsg(e), 'err'); }
 }
 
@@ -1260,12 +1415,17 @@ const actions = {
   tog: d => { settings[d.k] = !settings[d.k]; saveSettings(); views.account({ tab: 'settings' }); },
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;
-    if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Locked'), 'err'); }
+    if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Find it in Community > Shop'), 'err'); }
     const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
   pg: d => renderLevels(d.kind, +d.pg),
   playlvl: d => playPublished(d.id),
+  practicelvl: d => playPublished(d.id, true),
+  shoppg: d => views.shop({ pg: +d.pg }),
+  buy: d => buyItem(d.key),
+  pracadd: () => game.addCP(), pracdel: () => game.cps.pop(),
+  pracmode: () => { if (!PL) return; PL.practice = !PL.practice; $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); setPracUI(); game.start({ x: PL.sx, y: PL.sy, practice: PL.practice }); },
   vote: d => vote(d.id, +d.v),
   comment: async d => {
     const t = val('cmt').trim(); if (!t) return; await addDoc(collection(db, 'levels', d.id, 'comments'), { uid: me.uid, name: P.username, text: t, t: serverTimestamp() });
@@ -1285,7 +1445,7 @@ const actions = {
   dmsend: async d => { const t = val('dmtext').trim(); if (!t) return; $('#dmtext').value = ''; await addDoc(collection(db, 'dms', d.pair, 'messages'), { from: me.uid, fromName: P.username, text: t, t: serverTimestamp() }); },
   ban: async d => { if (!confirm(`Ban ${d.name}? This deletes their account data and levels.`)) return; await banUser(d.uid, d.name); closeModal(); toast(`${d.name} banned`, 'ok'); },
   // play
-  resume: pauseToggle, restart: () => { $('#winBox').classList.remove('open'); $('#pauseBox').classList.remove('open'); game.start({ x: PL.sx, y: PL.sy }); },
+  resume: pauseToggle, restart: () => { $('#winBox').classList.remove('open'); $('#pauseBox').classList.remove('open'); game.start({ x: PL.sx, y: PL.sy, practice: PL.practice }); },
   exitplay: () => stopPlay(),
   // editor slots
   slotnew: d => { if (!me) return; const i = +d.i; slots[i] = newLevel('Level ' + (i + 1)); saveSlots(i); openEditor(i); },
