@@ -899,7 +899,7 @@
 
         // 2) POPULAR LEADERBOARD — the projects ranked right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
-        const POPULAR = ['rpg', 'aetherium', 'breakout', 'splendid', 'ragebait'];
+        const POPULAR = ['rpg', 'dash', 'aetherium', 'breakout', 'splendid'];
 
         // 3) Should popular projects ALSO show up again in the "All projects" list?
         const SHOW_POPULAR_IN_ALL = true;
@@ -914,6 +914,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'dash',            name: 'Dash',             img: 'dash.png',             date: 'OCT 2026',
+              blurb: 'A Geometry Dash-style rhythm platformer. Build levels, publish them online and climb the leaderboards.' },
             { prefix: 'splendid',        name: 'Splendid',         img: 'splendid.png',         date: 'OCT 2026',
               blurb: 'A fantasy duel of gems and nerve. Build a 24-node deck and outwit a rival online.' },
             { prefix: 'rpg',             name: 'dragoneer',        img: 'rpg.png',              date: 'SEP 2026',
@@ -929,8 +931,8 @@
             { prefix: 'byte-clicker',    name: 'Byte Clicker',     img: 'byte-clicker.png',     date: 'MAY 2026' },
             { prefix: 'vortacode',       name: 'Vortacode',        img: 'vortacode.png',        date: 'MAY 2026' },
             { prefix: 'ragebait 3',      name: 'Ragebait 3',       img: 'ragebait 3.png',       date: 'MAY 2026' },
-            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026' },
-            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026' },
+            { prefix: 'slitherio',       name: 'Slither.io',       img: 'slitherio.png',        date: 'MAY 2026', warn: true },
+            { prefix: 'paperio',         name: 'Paper.io',         img: 'paperio.png',          date: 'MAY 2026', warn: true },
             { prefix: 'play2game',       name: 'Play2Game',        img: 'play2game.png',        date: 'APR 2026', warn: true },
             { prefix: 'mindscape',       name: 'Mindscape',        img: 'mindscape.png',        date: 'APR 2026', warn: true },
             { prefix: 'backrooms',       name: 'Backrooms',        img: 'backrooms.png',        date: 'APR 2026', warn: true },
@@ -1121,17 +1123,16 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
-            { v: '2.1.4', date: '10/16/2026',
-              desc: 'Slither.io and Paper.io were rebuilt from the ground up, so both are unlocked and no longer carry the warning.',
+            { v: '2.2.0', date: '10/17/2026',
+              desc: 'Dash is out, a new project: a rhythm platformer with a full level editor and online community.',
               bullets: [
-                'Slither.io: fixed the heavy lag with a much faster engine',
-                'Slither.io: much smarter bots that dodge other snakes, hunt smaller ones and cut them off',
-                'Slither.io: new look with a honeycomb floor, glowing orbs, snakes with eyes and a glowing world edge',
-                'Paper.io: bots now use the whole map, including the edges and margins',
-                'Paper.io: you now spawn at a random spot instead of the corner',
-                'Paper.io: smarter bot AI that plans loops, defends its trail and goes after your trail',
-                'Paper.io: smoother movement and visuals closer to the original game',
-                'Slither.io and Paper.io are now unlocked and the red warning is removed'
+                'New project: Dash',
+                'Jump and dodge your way through levels with spikes, blocks, orbs, pads and speed portals',
+                'Build your own levels in the editor with color and move triggers, set a custom song, and upload them once you beat them from start to finish',
+                'Community tabs for new levels, rated Stars levels, and leaderboards for stars, likes, levels beaten and demons',
+                'Like, dislike and comment on levels, and add friends to send direct messages',
+                'Account system with sign up and log in, plus 36 cube skins and 20 colors to unlock through achievements',
+                'Dash added at #2 on the Popular list'
             ]},
             { v: '2.1.3', date: '10/16/2026', bullets: [
                 'Splendid balancing and bugfixes',
