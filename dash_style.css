@@ -152,3 +152,25 @@ label{display:block;font-size:14px;color:#9fd4ff}
 .lvl{border-radius:22px}.tabs{justify-content:center}.pager{margin-bottom:10px}
 #edTop,#edBottom,#edProps{backdrop-filter:blur(8px);border-radius:0 0 18px 18px}#edBottom{border-radius:18px 18px 0 0}#edProps{border-radius:18px}
 .it{border-radius:14px}.it:hover{background:#254cc9}
+
+/* ---- v3: full UI + editor redesign ---- */
+.bb-ico svg{width:58px;height:58px;display:block;filter:drop-shadow(0 3px 0 rgba(0,0,0,.6))}
+.logo{font-size:min(20vw,140px)}
+.menu-row{justify-content:center}
+.big-btn{transition:transform .12s,filter .12s}.big-btn:hover{filter:brightness(1.12)}
+.skgrid{display:grid;grid-template-columns:repeat(auto-fill,78px);gap:10px;justify-content:center}
+.sk{width:78px;height:78px;border-radius:18px}.sk img{width:62px;height:62px}
+.sw{border-radius:50%}.sw.sel,.sk.sel{outline:4px solid #ffe36b;outline-offset:2px}
+.pvrow{display:flex;gap:6px;align-items:center}.pvrow img{width:110px;height:110px}
+.cosm{grid-template-columns:260px 1fr;max-width:980px;margin:auto}
+.page>header h2{font-size:34px}
+/* editor: floating top bar, left palette */
+#edTop{top:10px;left:10px;right:10px;border:3px solid #000;border-radius:18px;background:rgba(8,14,56,.82)}
+#edModes button,.seg button{min-width:64px}
+#edBottom{left:10px;top:76px;bottom:10px;right:auto;width:236px;border:3px solid #000;border-radius:18px;background:rgba(8,14,56,.82);display:flex;flex-direction:column;padding:8px}
+#edTabs{flex-wrap:wrap;gap:5px}
+#edTabs button{border-radius:999px;text-transform:capitalize;padding:3px 10px;font-size:14px}
+#edItems{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;overflow-y:auto;overflow-x:hidden;flex:1;align-content:start}
+.it{width:auto;border-radius:12px}.it img{width:40px;height:40px}
+#edProps{top:76px;right:10px;border-radius:18px;background:rgba(8,14,56,.88);max-height:calc(100% - 96px)}
+@media (max-width:760px){#edBottom{width:170px}#edItems{grid-template-columns:repeat(2,1fr)}}

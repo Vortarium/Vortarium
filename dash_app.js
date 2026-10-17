@@ -26,7 +26,7 @@ const storage = getStorage(app);
 // dash_game.js - DASH engine: constants, icon drawing, object drawing, physics + renderer
 const U = 30, BASE = 311, STEP = 1 / 240, G = 3250, JUMP = 640, VMAX = 950;
 const PRIMARY = ['#7dff2a', '#ff3b3b', '#ff9a1f', '#ffe81f', '#1fd1ff', '#2f6bff', '#a43bff', '#ff4fd8', '#ffffff', '#3a3a4c'];
-const SECONDARY = ['#1fffe0', '#ffffff', '#ffd21f', '#ff6a3d', '#ff2f6d', '#7a4dff', '#3a8bff', '#2bd45a', '#111118', '#b0b0c0'];
+const SECONDARY = ['#1fffe0', '#e8f1ff', '#ffd21f', '#ff6a3d', '#ff2f6d', '#7a4dff', '#3a8bff', '#2bd45a', '#111118', '#b0b0c0'];
 const DIFFS = [
   { id: 'easy', name: 'EASY', stars: 1, col: '#3aa0ff' },
   { id: 'medium', name: 'MEDIUM', stars: 2, col: '#35d35a' },
@@ -35,8 +35,8 @@ const DIFFS = [
   { id: 'demon', name: 'DEMON', stars: 5, col: '#c4222f' }
 ];
 const SPEEDS = { port_s1: .8, port_s2: 1, port_s3: 1.3, port_s4: 1.6 };
-const PORT_COL = { port_s1: '#f9a825', port_s2: '#2979ff', port_s3: '#2ee86b', port_s4: '#ff3d7f', port_gd: '#2ee0ff', port_gu: '#ff9a2e' };
-const GRAV = { port_gd: 1, port_gu: 1 }, CEIL = 450;
+const PORT_COL = { port_s1: '#f9a825', port_s2: '#2979ff', port_s3: '#2ee86b', port_s4: '#ff3d7f', port_gd: '#2ee0ff', port_gu: '#ff9a2e', port_ship: '#ff4fd8', port_cube: '#7dff2a' };
+const GRAV = { port_gd: 1, port_gu: 1 }, MODEP = { port_ship: 1, port_cube: 1 }, CEIL = 450;
 const OBJ = {
   block: { name: 'Block', cat: 'blocks', solid: true },
   spike: { name: 'Spike', cat: 'hazards' },
@@ -55,6 +55,7 @@ const OBJ = {
   port_gd: { name: 'Gravity Down Portal', cat: 'portals' },
   port_gu: { name: 'Gravity Up Portal', cat: 'portals' }
 };
+OBJ.port_ship = { name: 'Ship Portal', cat: 'portals' }; OBJ.port_cube = { name: 'Cube Portal', cat: 'portals' };
 OBJ.spike.hz = { k: 't', a: 1, b: 1, n: 1 };
 ['Plain','Inset','Cross','Dots','Stripes','Checker','Bevel','Slab','Frame','Diamond'].forEach((n, i) => [0, 1].forEach(v => { if (i + v) OBJ['blk' + (i + v * 10)] = { name: n + (v ? ' Dark' : ''), cat: 'blocks', solid: true, bs: i, bv: v }; }));
 OBJ.block.solid = true;
@@ -74,36 +75,50 @@ const lerpC = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const shade = (h, f) => rgb2hex(hex2rgb(h).map(v => Math.max(0, Math.min(255, v + 255 * f))));
 
 // ---------- icons (36 cube skins = 6 faces x 6 patterns) ----------
+function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 function face(c, f, s) {
-  const eye = (x, y, w, h, round) => {
-    c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = s * .04;
-    if (round) { c.beginPath(); c.ellipse(x * s, y * s, w * s / 2, h * s / 2, 0, 0, 7); c.fill(); c.stroke(); }
-    else { c.fillRect((x - w / 2) * s, (y - h / 2) * s, w * s, h * s); c.strokeRect((x - w / 2) * s, (y - h / 2) * s, w * s, h * s); }
-    c.fillStyle = '#000'; c.fillRect((x - w * .15) * s, (y - h * .15) * s, w * .3 * s, h * .3 * s);
-  };
-  const mouth = (x, y, w, h) => { c.fillStyle = '#000'; c.fillRect(x * s, y * s, w * s, h * s); };
-  if (f === 0) { eye(-.2, -.1, .22, .22); eye(.2, -.1, .22, .22); mouth(-.22, .2, .44, .07); }
-  else if (f === 1) { eye(-.2, -.1, .2, .2, 1); eye(.2, -.1, .2, .2, 1); c.strokeStyle = '#000'; c.lineWidth = s * .06; c.beginPath(); c.arc(0, .08 * s, .22 * s, .2, Math.PI - .2); c.stroke(); }
-  else if (f === 2) { eye(0, -.08, .42, .34, 1); mouth(-.2, .22, .4, .06); }
-  else if (f === 3) { eye(-.2, -.05, .2, .18); eye(.2, -.05, .2, .18); c.strokeStyle = '#000'; c.lineWidth = s * .07; c.beginPath(); c.moveTo(-.34 * s, -.26 * s); c.lineTo(-.08 * s, -.14 * s); c.moveTo(.34 * s, -.26 * s); c.lineTo(.08 * s, -.14 * s); c.stroke(); mouth(-.2, .22, .4, .06); }
-  else if (f === 4) { eye(-.2, -.12, .14, .14, 1); eye(.2, -.12, .14, .14, 1); mouth(-.14, .12, .28, .18); }
-  else { mouth(-.36, -.2, .72, .2); c.fillStyle = '#fff'; c.fillRect(-.3 * s, -.17 * s, .2 * s, .05 * s); c.fillRect(.1 * s, -.17 * s, .2 * s, .05 * s); mouth(-.2, .2, .4, .07); }
+  c.strokeStyle = '#111'; c.lineWidth = s * .05; c.lineCap = 'round';
+  const eye = (x, y, r) => { c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fillStyle = '#fff'; c.fill(); c.stroke(); c.fillStyle = '#111'; c.beginPath(); c.arc((x + .02) * s, y * s, r * s * .5, 0, 7); c.fill(); };
+  const arc = (x, y, r, a, b) => { c.beginPath(); c.arc(x * s, y * s, r * s, a, b); c.stroke(); };
+  if (f === 0) { eye(-.18, -.08, .11); eye(.18, -.08, .11); arc(0, .05, .18, .3, Math.PI - .3); }
+  else if (f === 1) { eye(-.18, -.08, .08); eye(.18, -.08, .08); c.beginPath(); c.moveTo(-.15 * s, .2 * s); c.lineTo(.15 * s, .2 * s); c.stroke(); }
+  else if (f === 2) { eye(0, -.05, .2); c.beginPath(); c.arc(0, .27 * s, .05 * s, 0, 7); c.fillStyle = '#111'; c.fill(); }
+  else if (f === 3) { eye(-.2, -.05, .1); eye(.2, -.05, .1); c.beginPath(); c.moveTo(-.34 * s, -.26 * s); c.lineTo(-.08 * s, -.17 * s); c.moveTo(.34 * s, -.26 * s); c.lineTo(.08 * s, -.17 * s); c.stroke(); arc(0, .32, .13, Math.PI + .4, -.4); }
+  else if (f === 4) { c.fillStyle = '#111'; c.fillRect(-.36 * s, -.17 * s, .72 * s, .18 * s); arc(0, .05, .16, .4, Math.PI - .4); }
+  else { eye(-.2, -.08, .09); eye(.2, -.08, .09); c.beginPath(); c.arc(0, .14 * s, .1 * s, 0, Math.PI); c.fillStyle = '#111'; c.fill(); }
 }
 function drawIcon(c, skin, c1, c2, s) {
-  const h = s / 2, f = skin % 6, p = Math.floor(skin / 6) % 6, lw = Math.max(1, s * .08);
-  c.save();
-  c.fillStyle = c1; c.fillRect(-h, -h, s, s); c.fillStyle = c2;
-  if (p === 0) c.fillRect(-s * .3, -s * .3, s * .6, s * .6);
-  else if (p === 1) c.fillRect(-h, -s * .12, s, s * .24);
-  else if (p === 2) { const q = s * .25;[[-h, -h], [h - q, -h], [-h, h - q], [h - q, h - q]].forEach(([x, y]) => c.fillRect(x, y, q, q)); }
-  else if (p === 3) { c.beginPath(); c.moveTo(-h, -h); c.lineTo(h, -h); c.lineTo(-h, h); c.fill(); }
-  else if (p === 4) { c.fillRect(-h, -h, s, s); c.fillStyle = c1; c.fillRect(-s * .3, -s * .3, s * .6, s * .6); }
-  else { c.fillRect(-h, -h, h, h); c.fillRect(0, 0, h, h); }
-  face(c, f, s);
-  c.strokeStyle = '#000'; c.lineWidth = lw; c.strokeRect(-h + lw / 2, -h + lw / 2, s - lw, s - lw);
-  c.restore();
+  const h = s / 2, f = skin % 6, p = Math.floor(skin / 6) % 6, lw = Math.max(1.5, s * .07);
+  c.save(); c.lineJoin = 'round'; rr(c, -h, -h, s, s, s * .2); c.fillStyle = c1; c.fill(); c.save(); c.clip(); c.fillStyle = c2; c.strokeStyle = c2;
+  if (p === 0) { c.beginPath(); c.moveTo(0, -h * .95); c.lineTo(h * .95, 0); c.lineTo(0, h * .95); c.lineTo(-h * .95, 0); c.closePath(); c.globalAlpha = .45; c.fill(); }
+  else if (p === 1) c.fillRect(-h, h * .65, s, h * .4);
+  else if (p === 2) { const q = s * .22;[[-h, -h], [h - q, -h], [-h, h - q], [h - q, h - q]].forEach(([x, y]) => c.fillRect(x, y, q, q)); }
+  else if (p === 3) { c.beginPath(); c.moveTo(-h, -h); c.lineTo(h, -h); c.lineTo(-h, h); c.closePath(); c.globalAlpha = .6; c.fill(); }
+  else if (p === 4) { c.lineWidth = s * .14; c.strokeRect(-h, -h, s, s); }
+  else { c.lineWidth = s * .1; c.beginPath(); c.moveTo(-h, h * .55); c.lineTo(0, h * .95); c.lineTo(h, h * .55); c.stroke(); }
+  c.restore(); face(c, f, s); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+}
+const HULL = [[-.5, .3, -.4, .02, .35, .02, .55, .2, .4, .3], 0, [-.5, .2, -.3, .05, .3, .05, .55, .17, .3, .3, -.3, .3], [-.5, .3, -.5, .05, .55, .22, .55, .3], 0, [-.5, .3, -.5, 0, -.3, .12, .45, .12, .55, .22, .4, .3]];
+function hull(c, k, s) { c.beginPath(); if (k === 1) c.ellipse(0, .17 * s, .52 * s, .16 * s, 0, 0, 7); else if (k === 4) rr(c, -.5 * s, .04 * s, 1.05 * s, .27 * s, .13 * s); else { const a = HULL[k]; for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); } }
+function drawShip(c, cube, ship, c1, c2, s) {
+  const k = ship % 6, p = Math.floor(ship / 6) % 5, lw = Math.max(1.5, s * .05);
+  c.save(); c.translate(0, -s * .05); c.lineJoin = 'round';
+  c.save(); c.translate(0, -s * .13); drawIcon(c, cube, c1, c2, s * .55); c.restore();
+  c.fillStyle = '#ffb020'; c.beginPath(); c.moveTo(-.5 * s, .12 * s); c.lineTo(-.7 * s, .17 * s); c.lineTo(-.5 * s, .22 * s); c.fill();
+  hull(c, k, s); c.fillStyle = c2; c.fill(); c.save(); c.clip(); c.fillStyle = c1;
+  if (p === 0) c.fillRect(-s, .14 * s, 2 * s, .06 * s);
+  else if (p === 1) [-.2, 0, .2].forEach(x => { c.beginPath(); c.arc(x * s, .17 * s, .035 * s, 0, 7); c.fill(); });
+  else if (p === 2) c.fillRect(-s, 0, .75 * s, s);
+  else if (p === 3) c.fillRect(.3 * s, 0, s, s);
+  else { c.fillRect(-s, .24 * s, 2 * s, .07 * s); c.beginPath(); c.arc(.1 * s, .12 * s, .04 * s, 0, 7); c.fill(); }
+  c.restore(); hull(c, k, s); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
 }
 const ICACHE = {};
+function shipURL(ship, cube, c1, c2, size = 64) {
+  const key = ['ship', ship, cube, c1, c2, size].join('|'); if (ICACHE[key]) return ICACHE[key];
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const x = cv.getContext('2d');
+  x.translate(size / 2, size / 2); drawShip(x, cube, ship, c1, c2, size * .8); return ICACHE[key] = cv.toDataURL();
+}
 function skinURL(skin, c1, c2, size = 64) {
   const k = [skin, c1, c2, size].join('|'); if (ICACHE[k]) return ICACHE[k];
   const cv = document.createElement('canvas'); cv.width = cv.height = size; const x = cv.getContext('2d');
@@ -152,12 +167,12 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = t === 'pad_y' ? '#ffe21f' : '#ff5fd2'; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-  } else if (SPEEDS[t] || GRAV[t]) {
+  } else if (SPEEDS[t] || GRAV[t] || MODEP[t]) {
     const cx = x + cs / 2, cl = PORT_COL[t];
     c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
     c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+    c.fillText(MODEP[t] ? (t === 'port_ship' ? 'S' : 'C') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
   } else if (ed && OBJ[t].trig) {
     const cl = t === 'trig_color' ? (o.col || '#ff5252') : t === 'trig_move' ? '#3aa0ff' : '#35d35a';
     c.fillStyle = cl; c.globalAlpha = .85; c.fillRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84); c.globalAlpha = 1;
@@ -253,7 +268,7 @@ class Game {
   constructor(cv) {
     this.cv = cv; this.c = cv.getContext('2d'); this.cb = {}; this.running = false; this.paused = false;
     this.held = false; this.edgeT = 0; this.skin = { id: 0, c1: PRIMARY[0], c2: SECONDARY[0] };
-    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) this.edgeT = .05; this.held = true; } else this.held = false; };
+    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) { this.edgeT = .05; this.holdUsed = false; } this.held = true; } else { this.held = false; this.holdUsed = false; } };
     cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true); });
     addEventListener('pointerup', () => press(false)); addEventListener('pointercancel', () => press(false));
     addEventListener('keydown', e => {
@@ -273,7 +288,7 @@ class Game {
     objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); const h = OBJ[o.t].hz; if (h) { if (h.k === 's') o.hr = h.a * U * .8; else { const hw = h.n > 1 ? 12 : 6 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 18 * h.b); } } });
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco;
-    this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || GRAV[o.t]);
+    this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     this.T = objs.filter(o => OBJ[o.t].trig);
@@ -296,7 +311,7 @@ class Game {
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
     this.objs.forEach(o => { o.col = o.col0; o.used = false; });
-    this.gr = 1; this.gOff = {}; this.acts = []; this.parts = [];
+    this.gr = 1; this.holdUsed = false; this.mode = 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = q.t === 'port_ship' ? 'ship' : 'cube'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0 };
     this.speed = 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
@@ -347,10 +362,10 @@ class Game {
       const t = this.T[this.ti++]; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
     this.runActs();
-    if (this.held && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
+    if (this.mode !== 'ship' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
     const edge = this.edgeT > 0, prevB = p.y;
     p.grounded = false;
-    const gr = this.gr; p.x += BASE * this.speed * dt; p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; p.y += p.vy * dt;
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { p.vy += (this.held ? 1 : -1) * gr * 2600 * dt; p.vy = Math.max(-400, Math.min(400, p.vy)); } else { p.vy -= G * dt * gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (this.hasGrav && p.y > CEIL - 30) { p.y = CEIL - 30; if (p.vy > 0 || gr < 0) p.vy = 0; if (gr < 0) p.grounded = true; }
     const S = this.S;
@@ -359,7 +374,7 @@ class Game {
     for (const o of this.D) {
       const g = this.gOff[o.g]; this.inter(o, g ? g.x * U : 0, g ? g.y * U : 0, prevB, edge); if (p.dead) return;
     }
-    if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
@@ -369,7 +384,8 @@ class Game {
     const p = this.p, x = o.ex + gx, y = o.ey + gy, t = o.t;
     if (OBJ[t].solid) {
       if (this.hit(p, x, y, U, U)) {
-        if (this.gr > 0 ? (p.vy <= 0 && prevB >= y + U - 4) : (p.vy >= 0 && prevB + 30 <= y + 4)) { p.y = this.gr > 0 ? y + U : y - 30; p.vy = 0; p.grounded = true; }
+        if (this.mode === 'ship') { if (prevB >= y + U - 4) { p.y = y + U; if (p.vy < 0) p.vy = 0; } else if (prevB + 30 <= y + 4) { p.y = y - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
+        else if (this.gr > 0 ? (p.vy <= 0 && prevB >= y + U - 4) : (p.vy >= 0 && prevB + 30 <= y + 4)) { p.y = this.gr > 0 ? y + U : y - 30; p.vy = 0; p.grounded = true; }
         else this.die();
       }
     } else if (OBJ[t].hz) {
@@ -377,7 +393,7 @@ class Game {
       else { const h = o.hb; if (this.hit(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], 4)) this.die(); }
     } else if (['orb_y', 'orb_p', 'orb_b'].includes(t)) {
       const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < 26 * 26;
-      if (on && (edge || this.held) && !o.used) { if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; } else p.vy = PHYS[t] * this.gr; o.used = true; p.grounded = false; this.edgeT = 0; this.jumps++; }
+      if (on && (edge || (this.held && !this.holdUsed)) && !o.used) { if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; } else p.vy = PHYS[t] * this.gr; o.used = true; p.grounded = false; this.edgeT = 0; this.holdUsed = true; this.jumps++; }
       else if (!on) o.used = false;
     } else if (t === 'pad_y' || t === 'pad_p') {
       const on = this.hit(p, x + 2, y, U - 4, 12);
@@ -387,6 +403,8 @@ class Game {
       if (this.hit(p, x + 5, y, 20, 60)) this.speed = SPEEDS[t];
     } else if (t === 'port_gd' || t === 'port_gu') {
       if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
+    } else if (MODEP[t]) {
+      if (this.hit(p, x + 5, y, 20, 60)) this.mode = t === 'port_ship' ? 'ship' : 'cube';
     }
   }
   win() { this.won = true; this.p.grounded = true; this.cb.onWin && this.cb.onWin(); }
@@ -423,7 +441,7 @@ class Game {
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
-    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
   }
 }
 
@@ -437,7 +455,8 @@ const fmt = n => (n || 0).toLocaleString();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MOD = 'Vortarium';
 const STAR_SCALE = 1;           // stars awarded per difficulty star (1..5). Change here to rebalance.
-const SLOTS = 20;
+const SLOTS = 20, SONG_CHUNK = 600000;
+const blobB64 = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(b); });
 let me = null, P = null;
 const settings = Object.assign({ music: true, sfx: true, vol: .6 }, JSON.parse(localStorage.dash_settings || '{}'));
 const isMod = () => !!P && P.username === MOD;
@@ -486,29 +505,27 @@ function saveSettings() { localStorage.dash_settings = JSON.stringify(settings);
 
 /* ================= achievements / unlocks ================= */
 const ACH_DEFS = [
-  ['totalViews', 'Popular', 'Get {n} total views on your levels', [10, 50, 100, 250, 500, 1000, 2500, 5000]],
-  ['levelsBeaten', 'Winner', 'Beat {n} levels', [1, 3, 5, 10, 20, 35, 50, 75, 100, 150]],
-  ['netLikes', 'Liked', 'Reach {n} total net likes', [1, 5, 10, 25, 50, 100, 250, 500]],
-  ['maxPostLikes', 'Hit Level', 'Get {n} net likes on a single level', [5, 10, 25, 50, 100, 250]],
-  ['rated', 'Verified', 'Get {n} of your levels rated', [1, 2, 3, 5, 10]],
-  ['stars', 'Stargazer', 'Collect {n} stars', [1, 10, 25, 50, 100, 200]],
-  ['demons', 'Demon Slayer', 'Beat {n} demon levels', [1, 3, 5, 10]],
-  ['published', 'Creator', 'Publish {n} levels', [1, 5, 10]],
-  ['comments', 'Chatty', 'Post {n} comments', [1, 5, 10]]
+  ['totalViews', 'Popular', 'Get {n} total views on your levels', [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000]],
+  ['levelsBeaten', 'Winner', 'Beat {n} levels', [1, 3, 5, 10, 20, 35, 50, 75, 100, 150, 200, 300, 500]],
+  ['netLikes', 'Liked', 'Reach {n} total net likes', [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500]],
+  ['maxPostLikes', 'Hit Level', 'Get {n} net likes on a single level', [5, 10, 25, 50, 100, 250, 500, 1000]],
+  ['rated', 'Verified', 'Get {n} of your levels rated', [1, 2, 3, 5, 10, 20, 50]],
+  ['stars', 'Stargazer', 'Collect {n} stars', [1, 10, 25, 50, 100, 200, 350, 500, 750, 1000]],
+  ['demons', 'Demon Slayer', 'Beat {n} demon levels', [1, 3, 5, 10, 20, 35, 50]],
+  ['published', 'Creator', 'Publish {n} levels', [1, 5, 10, 20, 35, 50]],
+  ['comments', 'Chatty', 'Post {n} comments', [1, 5, 10, 25, 50, 100]],
+  ['crystals', 'Gem Hoarder', 'Collect {n} crystals', [50, 250, 1000, 2500, 5000]]
 ];
 const ACH = (() => {
   const list = []; ACH_DEFS.forEach(([stat, name, desc, ns], ci) => ns.forEach((n, i) => list.push({ stat, n, name: `${name} ${i + 1}`, desc: desc.replace('{n}', fmt(n)), tier: i / ns.length, ci })));
   list.sort((a, b) => a.tier - b.tier || a.ci - b.ci);
-  const rw = []; let sk = 1, pc = 1, sc = 1, tg = 0;
-  while (rw.length < list.length) {
-    for (let k = 0; k < 2 && sk < 36; k++) rw.push({ k: 'skin', i: sk++ });
-    if (pc < 10 || sc < 10) { if (tg++ % 2 === 0 && pc < 10) rw.push({ k: 'p', i: pc++ }); else if (sc < 10) rw.push({ k: 's', i: sc++ }); else rw.push({ k: 'p', i: pc++ }); }
-  }
-  list.forEach((a, i) => a.rw = rw[i]); return list;
+  const cols = []; for (let i = 1; i < 10; i++) { cols.push({ k: 'p', i }); cols.push({ k: 's', i }); }
+  const pools = [{ a: Array.from({ length: 35 }, (_, i) => ({ k: 'skin', i: i + 1 })) }, { a: cols }, { a: Array.from({ length: 29 }, (_, i) => ({ k: 'ship', i: i + 1 })) }]; pools.forEach(p => p.n = p.a.length);
+  list.forEach(a => { pools.sort((x, y) => y.a.length / y.n - x.a.length / x.n); a.rw = pools.find(p => p.a.length).a.shift(); }); return list;
 })();
-const rwName = r => r.k === 'skin' ? `Cube skin #${r.i + 1}` : r.k === 'p' ? `Primary color #${r.i + 1}` : `Secondary color #${r.i + 1}`;
+const rwName = r => r.k === 'skin' ? `Cube skin #${r.i + 1}` : r.k === 'ship' ? `Ship skin #${r.i + 1}` : r.k === 'p' ? `Primary color #${r.i + 1}` : `Secondary color #${r.i + 1}`;
 function unlocked_() {
-  const u = { skin: new Set([0]), p: new Set([0]), s: new Set([0]) };
+  const u = { skin: new Set([0]), ship: new Set([0]), p: new Set([0]), s: new Set([0]) };
   if (me && P) ACH.forEach(a => { if ((P[a.stat] || 0) >= a.n) u[a.rw.k].add(a.rw.i); });
   return u;
 }
@@ -525,7 +542,7 @@ const views = {};
 function showLayer(n) { ['menu', 'view', 'play', 'edit'].forEach(l => $('#' + l).classList.toggle('active', l === n)); document.body.classList.toggle('fs', n === 'play' || n === 'edit'); }
 function go(name, p = {}, push = true) {
   if (name === 'menu') { stack = []; cur = 'menu'; curP = {}; showLayer('menu'); }
-  else { if (push) stack.push([cur, curP]); cur = name; curP = p; showLayer('view'); views[name](p); }
+  else { if (push) stack.push([cur, curP]); cur = name; curP = p; showLayer('view'); views[name](p); if (me && ['account', 'cosmetics', 'community'].includes(name)) refreshMyStats().then(refreshProfile).then(() => { if (cur === name) views[name](curP); }); }
   renderFooter(); setTrack('menu');
 }
 function back() { const s = stack.pop(); s && s[0] !== 'menu' ? go(s[0], s[1], false) : go('menu'); }
@@ -539,7 +556,7 @@ function renderFooter() {
 
 /* ================= auth ================= */
 const emailOf = u => `${u.toLowerCase()}@dash-game.app`;
-const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, skin: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
+const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
 let busySignup = false;
 async function signUp(username, pw) {
   username = username.trim();
@@ -570,6 +587,9 @@ onAuthStateChanged(auth, async u => {
   if (u) { try { await afterLogin(u); } catch (e) { console.error(e); toast('Could not load account: ' + errMsg(e), 'err'); } }
   else { me = null; P = null; stopListeners(); loadSlots(); renderFooter(); if (cur === 'account') views.account({ tab: 'account' }); }
 });
+async function refreshProfile() {
+  if (!me || !P) return; try { const s = await getDoc(doc(db, 'users', me.uid)); if (s.exists()) { Object.assign(P, s.data()); renderFooter(); checkAch(); } } catch { }
+}
 async function refreshMyStats() {
   if (!me || !P) return;
   try {
@@ -615,20 +635,26 @@ views.account = ({ tab = 'account' } = {}) => {
 };
 
 /* ================= cosmetics ================= */
-views.cosmetics = () => {
-  const un = unlocked_(), sk = P?.skin || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0;
+views.cosmetics = ({ tab = 'cube' } = {}) => {
+  const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0;
   const req = (k, i) => { const a = ACH.find(a => a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : 'Default'; };
-  let skins = '', p1 = '', p2 = '';
-  for (let i = 0; i < 36; i++) skins += `<div class="sk ${un.skin.has(i) ? '' : 'locked'} ${i === sk ? 'sel' : ''}" data-act="equip" data-k="skin" data-i="${i}" title="${esc(un.skin.has(i) ? 'Skin ' + (i + 1) : req('skin', i))}"><img src="${skinURL(i, PRIMARY[c1], SECONDARY[c2], 56)}"></div>`;
-  for (let i = 0; i < 10; i++) { p1 += `<div class="sw ${un.p.has(i) ? '' : 'locked'} ${i === c1 ? 'sel' : ''}" style="background:${PRIMARY[i]}" data-act="equip" data-k="p" data-i="${i}" title="${esc(un.p.has(i) ? 'Primary ' + (i + 1) : req('p', i))}"></div>`; p2 += `<div class="sw ${un.s.has(i) ? '' : 'locked'} ${i === c2 ? 'sel' : ''}" style="background:${SECONDARY[i]}" data-act="equip" data-k="s" data-i="${i}" title="${esc(un.s.has(i) ? 'Secondary ' + (i + 1) : req('s', i))}"></div>`; }
-  const ach = ACH.map(a => { const v = P?.[a.stat] || 0, done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwName(a.rw)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
-  page('Cosmetics', `<div class="cosm"><div class="preview card"><img src="${myIcon(160)}"><div class="muted">${me ? 'Tap unlocked items to equip' : 'Log in to unlock cosmetics with achievements'}</div></div><div><h3>Cube</h3><div class="row" style="gap:8px;margin-bottom:12px">${skins}</div><h3>Primary color</h3><div class="swatches">${p1}</div><h3>Secondary color</h3><div class="swatches">${p2}</div><h3>Achievements</h3>${ach}</div></div>`);
+  const grid = (k, n, cur, img) => Array.from({ length: n }, (_, i) => `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`).join('');
+  const sw = (k, arr, cur) => arr.map((c, i) => `<div class="sw ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" style="background:${c}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? 'Color ' + (i + 1) : req(k, i))}"></div>`).join('');
+  let body;
+  if (tab === 'cube') body = `<div class="skgrid">${grid('skin', 36, sk, i => skinURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ship') body = `<div class="skgrid">${grid('ship', 30, sh, i => shipURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'colors') body = `<h3>Primary</h3><div class="swatches">${sw('p', PRIMARY, c1)}</div><h3>Secondary</h3><div class="swatches">${sw('s', SECONDARY, c2)}</div>`;
+  else body = ACH.map(a => { const v = P?.[a.stat] || 0, done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwName(a.rw)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
+  const tabs = ['cube', 'ship', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
+  page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
 };
 
 /* ================= community ================= */
+const svg = p => `<i class="bb-ico"><svg viewBox="0 0 24 24" fill="#fff">${p}</svg></i>`;
+const ICO = { tools: svg('<rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><rect x="8" y="3" width="8" height="8" rx="2"/>'), star: svg('<polygon points="12,2 15,9 22,9.5 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9.5 9,9"/>'), plus: svg('<circle cx="12" cy="12" r="10"/><path d="M12 7v10M7 12h10" stroke="#1450d0" stroke-width="3"/>'), trophy: svg('<path d="M7 3h10v6a5 5 0 01-10 0zM4 4h3v4H4zM17 4h3v4h-3zM11 14h2v4h3v3H8v-3h3z"/>') };
 views.community = () => {
   const mb = isMod() && modPending ? `<em class="badge">${modPending}</em>` : '', rb = reqs.length ? `<em class="badge">${reqs.length}</em>` : '';
-  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor"><i class="bb-ico">🛠️</i>Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars"><i class="bb-ico">⭐</i>Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new"><i class="bb-ico">🆕</i>New Levels${mb}</button><button class="big-btn red" data-act="go" data-v="lb"><i class="bb-ico">🏆</i>Leaderboards &amp; Friends${rb}</button></div>`);
+  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor">${ICO.tools}Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars">${ICO.star}Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new">${ICO.plus}New Levels${mb}</button><button class="big-btn red" data-act="go" data-v="lb">${ICO.trophy}Leaderboards &amp; Friends${rb}</button></div>`);
 };
 
 /* ---- level lists ---- */
@@ -667,7 +693,7 @@ views.level = async ({ id }) => {
   const best = await getBest(id);
   let cms = []; try { cms = (await getDocs(query(collection(db, 'levels', id, 'comments'), orderBy('t', 'desc'), limit(60)))).docs.map(d => ({ id: d.id, ...d.data() })); } catch { }
   const d = DIFFS.find(x => x.id === lv.diff), mine = me && lv.authorId === me.uid;
-  const dl = lv.songUrl ? (await idbGet('level:' + id) ? '<span class="muted">✔ Song downloaded</span>' : `<button class="btn sm blue" data-act="dlsong" data-id="${id}">⬇ Download song${lv.songName ? ': ' + esc(lv.songName) : ''}</button>`) : '';
+  const dl = (lv.songParts || lv.songUrl) ? (await idbGet('level:' + id) ? '<span class="muted">✔ Song downloaded</span>' : `<button class="btn sm blue" data-act="dlsong" data-id="${id}">⬇ Download song${lv.songName ? ': ' + esc(lv.songName) : ''}</button>`) : '';
   const cmHtml = cms.map(c => `<div class="cm">${isMod() || (me && c.uid === me.uid) ? `<span class="del" data-act="delcm" data-id="${id}" data-cid="${c.id}">✕</span>` : ''}<b data-act="profile" data-uid="${c.uid}">${nameHTML(c.name)}</b><br>${esc(c.text)}</div>`).join('') || '<p class="muted">No comments yet.</p>';
   page(esc(lv.title), `<div class="lp"><div class="lp-main">
     <h1>${esc(lv.title)}</h1><div>by <b style="color:#8fe9ff;cursor:pointer" data-act="profile" data-uid="${lv.authorId}">${nameHTML(lv.authorName)}</b></div>
@@ -688,11 +714,11 @@ async function vote(id, v) {
   nv === 0 ? b.delete(vr) : b.set(vr, { v: nv });
   b.update(lr, { likes: increment((nv === 1 ? 1 : 0) - (old === 1 ? 1 : 0)), dislikes: increment((nv === -1 ? 1 : 0) - (old === -1 ? 1 : 0)) });
   b.update(doc(db, 'users', ls.data().authorId), { netLikes: increment(nv - old) });
-  await b.commit(); views.level({ id });
+  await b.commit(); if (ls.data().authorId === me.uid) refreshMyStats(); views.level({ id });
 }
 async function takeDown(id) {
   const s = await getDoc(doc(db, 'levels', id)); if (!s.exists()) return; const lv = s.data();
-  await delCol(['levels', id, 'comments']); await delCol(['levels', id, 'votes']);
+  await delCol(['levels', id, 'comments']); await delCol(['levels', id, 'votes']); await delCol(['levels', id, 'songChunks']).catch(() => { });
   await deleteDoc(doc(db, 'levels', id));
   await updateDoc(doc(db, 'users', lv.authorId), { netLikes: increment(-((lv.likes || 0) - (lv.dislikes || 0))) }).catch(() => { });
   if (lv.songUrl) deleteObject(sref(storage, `songs/${id}.mp3`)).catch(() => { });
@@ -702,17 +728,25 @@ async function rateLevel(id, diff) {
   const d = DIFFS.find(x => x.id === diff);
   await updateDoc(doc(db, 'levels', id), { status: 'rated', diff, stars: d.stars * STAR_SCALE }); closeModal(); toast(`Rated ${d.name}`, 'ok'); views.level({ id });
 }
+async function fetchSong(id, lv) {
+  if (lv.songParts) {
+    const s = await getDocs(query(collection(db, 'levels', id, 'songChunks'), orderBy('n')));
+    if (s.size < lv.songParts) throw 'Song data is incomplete on the server';
+    const blob = new Blob(s.docs.map(d => Uint8Array.from(atob(d.data().d), c => c.charCodeAt(0))), { type: 'audio/mpeg' });
+    await idbSet('level:' + id, blob); return blob;
+  }
+  if (lv.songUrl) { try { const r = await fetch(lv.songUrl); if (!r.ok) throw 0; const b = await r.blob(); await idbSet('level:' + id, b); return b; } catch { const o = { url: lv.songUrl }; await idbSet('level:' + id, o); return o; } }
+  return null;
+}
 async function downloadSong(id) {
-  const lv = LV[id]; toast('Downloading song…');
-  try { const r = await fetch(lv.songUrl); if (!r.ok) throw 0; await idbSet('level:' + id, await r.blob()); }
-  catch { await idbSet('level:' + id, { url: lv.songUrl }); toast('Direct download blocked (set CORS on your Storage bucket); the song will stream instead.'); }
+  toast('Downloading song…'); try { await fetchSong(id, LV[id]); } catch (e) { return toast(errMsg(e), 'err'); }
   if (me) updateDoc(doc(db, 'users', me.uid), { songs: arrayUnion(id) }).catch(() => { });
   toast('Song saved', 'ok'); views.level({ id });
 }
 async function syncSongs() {
   for (const id of (P?.songs || [])) {
     if (await idbGet('level:' + id)) continue;
-    try { const s = await getDoc(doc(db, 'levels', id)); if (!s.exists() || !s.data().songUrl) continue; const r = await fetch(s.data().songUrl); await idbSet('level:' + id, await r.blob()); } catch { }
+    try { const s = await getDoc(doc(db, 'levels', id)); if (s.exists()) await fetchSong(id, { id, ...s.data() }); } catch { }
   }
 }
 
@@ -722,14 +756,14 @@ let PL = null, lvAudio = null, prevA = null;
 async function playPublished(id) {
   const lv = LV[id]; updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1;
   let songUrl = null;
-  if (lv.songUrl) { const s = await idbGet('level:' + id); if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
+  if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
   startPlay({ level: JSON.parse(lv.data), kind: 'play', id, lv, songUrl, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0';
   showLayer('play'); setTrack(null);
-  game.skin = { id: P?.skin || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
+  game.skin = { id: P?.skin || 0, ship: P?.ship || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   game.cb = {
     onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
@@ -755,16 +789,19 @@ async function onWon() {
   const p = PL; if (!p) return;
   if (p.kind === 'test') { if (p.sx === 0 && p.sy === 0) { p.lv0.verified = sigOf(p.lv0.objs); saveSlots(ed.slot); toast('✔ Level verified! You can now upload it.', 'ok'); } else toast('Beat it from the very start to verify', ''); return; }
   localStorage[bestKey(p.id)] = 100; p.best = 100;
-  if (!me || !P || p.lv.authorId === me.uid) { if (!me) toast('Log in to earn stars and track wins'); return; }
+  if (!me || !P) { toast('Log in to earn stars and track wins'); return; }
   try {
-    const br = doc(db, 'users', me.uid, 'beaten', p.id), snap = await getDoc(br), rated = p.lv.status === 'rated', d = DIFFS.find(x => x.id === p.lv.diff);
-    const first = !snap.exists(), starred = snap.exists() && snap.data().starred; if (!first && (starred || !rated)) return;
-    const upd = {}, ds = rated ? d.stars * STAR_SCALE : 0;
-    if (first) { upd.levelsBeaten = increment(1); upd.crystals = increment(10 + (rated ? 5 * d.stars : 0)); P.levelsBeaten++; P.crystals += 10 + (rated ? 5 * d.stars : 0); } else if (rated) { upd.crystals = increment(5 * d.stars); P.crystals += 5 * d.stars; }
-    if (rated) { upd.stars = increment(ds); P.stars += ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons++; } }
-    await setDoc(br, { t: serverTimestamp(), starred: rated, level: p.id }, { merge: true }); await updateDoc(doc(db, 'users', me.uid), upd);
-    renderFooter(); checkAch(); toast(rated ? `+${ds} stars!` : 'Level beaten!', 'ok');
-  } catch (e) { console.warn(e); }
+    const own = p.lv.authorId === me.uid, fresh = await getDoc(doc(db, 'levels', p.id)), L = fresh.exists() ? fresh.data() : p.lv;
+    const rated = L.status === 'rated' && !own, d = DIFFS.find(x => x.id === L.diff), ok = rated && !!d;
+    const br = doc(db, 'users', me.uid, 'beaten', p.id), snap = await getDoc(br), first = !snap.exists(), starred = snap.exists() && snap.data().starred;
+    if (!first && (starred || !ok)) return toast('Already completed', '');
+    const ds = ok ? d.stars * STAR_SCALE : 0, cr = ok ? 5 * d.stars : 0, upd = {};
+    if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; if (!own) { upd.crystals = increment(10 + cr); P.crystals = (P.crystals || 0) + 10 + cr; } }
+    else { upd.crystals = increment(cr); P.crystals = (P.crystals || 0) + cr; }
+    if (ok) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
+    await setDoc(br, { t: serverTimestamp(), starred: ok, level: p.id }, { merge: true }); await updateDoc(doc(db, 'users', me.uid), upd);
+    renderFooter(); checkAch(); toast(ok ? `+${ds} stars!` : 'Level beaten!', 'ok');
+  } catch (e) { console.error(e); toast('Could not save your win: ' + errMsg(e), 'err'); }
 }
 
 /* ================= leaderboards / friends / DMs ================= */
@@ -873,7 +910,7 @@ function objIcon(t) {
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
-  ed.slot = i; ed.lv = slots[i]; ed.camX = -90; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.on = true;
+  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.on = true;
   showLayer('edit'); setTrack('editor'); renderEdUI(); renderProps(); edDraw();
 }
 function renderEdUI() {
@@ -998,7 +1035,8 @@ function edSettings() {
 const val = id => $('#' + id)?.value ?? '';
 const actions = {
   go: d => go(d.v, { ...d }), back: () => back(), closemodal: closeModal,
-  acctab: d => views.account({ tab: d.t }),
+  costab: d => { curP = { ...curP, tab: d.t }; views.cosmetics({ tab: d.t }); },
+  acctab: d => { curP = { ...curP, tab: d.t }; views.account({ tab: d.t }); },
   login: async () => { const u = val('au').trim(), p = val('ap'); if (!u || !p) throw 'Enter a username and password'; await signInWithEmailAndPassword(auth, emailOf(u), p); },
   signup: async () => { await signUp(val('au'), val('ap')); toast('Welcome to DASH!', 'ok'); },
   logout: async () => { await signOut(auth); toast('Logged out'); },
@@ -1007,7 +1045,7 @@ const actions = {
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;
     if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Locked'), 'err'); }
-    const f = d.k === 'skin' ? 'skin' : d.k === 'p' ? 'c1' : 'c2'; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics();
+    const f = ({ skin: 'skin', ship: 'ship', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
   pg: d => renderLevels(d.kind, +d.pg),
@@ -1065,7 +1103,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('change', async e => {
   if (e.target.id === 'songfile' && e.target.files[0]) {
-    const f = e.target.files[0]; if (f.size > 12 * 1024 * 1024) return toast('Song must be under 12 MB', 'err');
+    const f = e.target.files[0]; if (f.size > 8 * 1024 * 1024) return toast('Song must be under 8 MB', 'err');
     await idbSet(`draft:${me.uid}:${ed.slot}`, f); ed.lv.songName = f.name.replace(/\.[^.]+$/, '').slice(0, 60); ed.lv.songSpeed = ed.lv.songSpeed || 1; ed.lv.songOff = ed.lv.songOff || 0; saveSlots(ed.slot); toast('Song added', 'ok'); edSettings();
   }
 });
@@ -1080,16 +1118,18 @@ async function publish(i) {
   try {
     const data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
     if (data.length > 900000) throw 'Level is too big to upload';
-    const r = doc(collection(db, 'levels')); let songUrl = null, songName = null; toast('Uploading level…');
-    const sb = await idbGet(`draft:${me.uid}:${i}`);
-    if (sb instanceof Blob) {
+    const sb = await idbGet(`draft:${me.uid}:${i}`), has = sb instanceof Blob && sb.size > 0, parts = has ? Math.ceil(sb.size / SONG_CHUNK) : 0;
+    const r = doc(collection(db, 'levels')); toast('Uploading level…');
+    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length });
+    if (has) {
       try {
-        const sr = sref(storage, `songs/${r.id}.mp3`);
-        await Promise.race([uploadBytes(sr, sb, { contentType: sb.type || 'audio/mpeg' }).then(() => getDownloadURL(sr)).then(u => { songUrl = u; }), new Promise((_, rej) => setTimeout(() => rej('timed out'), 25000))]);
-        songName = lv.songName;
-      } catch (e) { toast('Song not uploaded (' + errMsg(e) + ') - publishing without it. Check your Storage rules.', 'err'); }
+        for (let k = 0; k < parts; k += 3) {
+          const b = writeBatch(db);
+          for (let j = k; j < Math.min(parts, k + 3); j++) b.set(doc(db, 'levels', r.id, 'songChunks', String(j).padStart(3, '0')), { n: j, d: await blobB64(sb.slice(j * SONG_CHUNK, (j + 1) * SONG_CHUNK)) });
+          await b.commit(); toast(`Uploading song… ${Math.min(parts, k + 3)}/${parts}`);
+        }
+      } catch (e) { await delCol(['levels', r.id, 'songChunks']).catch(() => { }); await deleteDoc(r).catch(() => { }); throw 'Song upload failed (' + errMsg(e) + '). Level was not published - did you update the Firestore rules?'; }
     }
-    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl, songName, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length });
     lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); views.editor();
   } catch (e) { console.error(e); toast('Publish failed: ' + errMsg(e), 'err'); }
 }
