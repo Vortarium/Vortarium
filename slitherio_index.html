@@ -112,15 +112,15 @@ canvas { display:block; }
 // ============================================================
 // CONFIG
 // ============================================================
-const MAP_R = 4200;            // world radius
-const NUM_BOTS = 40;
-const TARGET_ORBS = 5200;
-const CELL = 64;               // spatial hash cell
+const MAP_R = 12600;            // world radius
+const NUM_BOTS = 140;
+const TARGET_ORBS = 46800;
+const CELL = 128;               // spatial hash cell
 const OFF = MAP_R + CELL * 2;
 const GW = Math.ceil((MAP_R * 2 + CELL * 4) / CELL);
 const BASE_SPEED = 150;        // units / second
 const BOOST_SPEED = 300;
-const BOOST_COST = 7;          // mass / second while boosting
+const BOOST_COST = 10.5;         // mass / second while boosting
 const MIN_BOOST_MASS = 14;
 const PI2 = Math.PI * 2;
 
@@ -210,8 +210,8 @@ let orbCount = 0;
 const cix = v => ((v + OFF) / CELL) | 0;
 const cellOf = (x, y) => cix(y) * GW + cix(x);
 
-function addOrb(x, y, v, h) {
-  const o = { x, y, v, h, p: Math.random() * PI2, r: 3.6 + Math.min(v, 9) * 1.15 };
+function addOrb(x, y, v, h, k) {
+  const o = { x, y, v, h, k: k ? 1 : 0, p: Math.random() * PI2, r: 3.6 + Math.min(v, 9) * 1.15 };
   const c = cellOf(x, y);
   (orbCells[c] || (orbCells[c] = [])).push(o);
   o.c = c; orbCount++;
@@ -240,8 +240,9 @@ function eatOrbs(s) {
 // ============================================================
 // SNAKES
 // ============================================================
-const radiusOf = m => 9 + 6 * Math.log10(1 + m / 20);
-const segCount = m => Math.floor(10 + 6 * Math.sqrt(m));
+const radiusOf = m => 9 + 18 * Math.log10(1 + m / 20);
+const segCount = m => Math.floor(10 + 7 * Math.sqrt(m));
+const corpseSites = [];   // recent death spots bots like to visit
 let snakes = [], player = null, camera = { x: 0, y: 0, zoom: 0.95 };
 let time = 0, gameRunning = false, playerDead = false, spectateTarget = null;
 let mouseX = innerWidth / 2, mouseY = innerHeight / 2;
@@ -265,7 +266,8 @@ class Snake {
     this.col = Math.random() * COLORS.length | 0;
     this.kills = 0;
     // bot personality
-    this.aggr = rnd(0.25, 1);       // how much it hunts
+    this.hunter = isBot ? Math.random() < 0.5 : false;   // 50% of bots hunt other bots, 50% only graze (all still chase the player)
+    this.aggr = this.hunter ? rnd(0.55, 1) : rnd(0.2, 0.5);       // how much it hunts
     this.react = rnd(0.07, 0.14);   // seconds between decisions
     this.look = rnd(0.9, 1.25);     // lookahead multiplier
     this.care = rnd(0.5, 1);        // how much risk it avoids (low = reckless)
@@ -342,12 +344,13 @@ function killSnake(s, by, reason) {
   if (!s.alive) return;
   s.alive = false;
   if (by && by !== s) by.kills++;
+  corpseSites.push({ x: s.x[s.n >> 1], y: s.y[s.n >> 1], v: s.mass, t: time });
   // drop orbs along the body
   const per = Math.max(1, (s.mass * 0.8) / Math.max(1, s.n / 2));
   let drops = 0;
   for (let i = 0; i < s.n && drops < 260; i += 2) {
     const v = per > 6 ? 6 : per;
-    addOrb(s.x[i] + rnd(-s.r, s.r) * 0.6, s.y[i] + rnd(-s.r, s.r) * 0.6, v < 1 ? 1 : Math.round(v), s.col);
+    addOrb(s.x[i] + rnd(-s.r, s.r) * 0.6, s.y[i] + rnd(-s.r, s.r) * 0.6, v < 1 ? 1 : Math.round(v), s.col, 1);
     drops++;
   }
   if (s === player) handlePlayerDeath(by, reason);
@@ -454,7 +457,7 @@ function foodObjective(b, hx, hy) {
     for (let i = 0; i < arr.length; i++) {
       const o = arr[i], dx = o.x - hx, dy = o.y - hy, d2 = dx * dx + dy * dy;
       if (d2 > R2 || d2 < 1) continue;
-      const d = Math.sqrt(d2), w = o.v / Math.pow(d + 35, 1.5);
+      const d = Math.sqrt(d2), w = o.v / Math.pow(d + 35, 1.5) * (o.k ? 3 : 1);
       fx += dx / d * w; fy += dy / d * w;
     }
   }
@@ -481,10 +484,11 @@ function decide(b) {
 
   // 1) hunt a clearly smaller snake, but only if the approach is safe
   let res = null, hunting = false, huntDist = 1e9, huntDiff = 0;
-  if (b.aggr > 0.3 && b.mass > 25) {
+  {
     let bestS = 0, tx = 0, ty = 0, td = 0;
     for (let k = 0; k < snakes.length; k++) {
       const o = snakes[k]; if (o === b || !o.alive || o.inv > 0 || o.mass > b.mass * 0.9) continue;
+      if (o.isBot && !(b.hunter && b.mass > 25)) continue;   // grazers only ever target the player
       const dx = o.x[0] - hx, dy = o.y[0] - hy, d = Math.sqrt(dx * dx + dy * dy);
       if (d > 650) continue;
       const sc = (o.mass + 15) / (d + 80);
@@ -501,7 +505,18 @@ function decide(b) {
     }
   }
   // 2) otherwise collect food (or wander)
-  if (!res) res = evalHeadings(b, foodObjective(b, hx, hy), speed);
+  if (!res) {
+    // head for a fresh corpse if one is within range (the nearby orbs take over once we arrive)
+    let obj = null, bestC = 0;
+    for (let i = 0; i < corpseSites.length; i++) {
+      const c = corpseSites[i], dx = c.x - hx, dy = c.y - hy, d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 260 || d > 2200) continue;
+      const sc = (c.v + 30) / (d + 250);
+      if (sc > bestC) { bestC = sc; obj = Math.atan2(dy, dx); }
+    }
+    if (obj === null || Math.random() > 0.85) obj = foodObjective(b, hx, hy);
+    res = evalHeadings(b, obj, speed);
+  }
 
   b.tAng = res.a + rnd(-0.02, 0.02);
   let boost = false;
@@ -593,6 +608,7 @@ function respawnPlayer() {
 let lbTimer = 0, mmTimer = 0, hudTimer = 0;
 function step(dt) {
   time += dt;
+  for (let i = corpseSites.length - 1; i >= 0; i--) if (time - corpseSites[i].t > 25) corpseSites.splice(i, 1);
   playerSteer();
   for (let k = 0; k < snakes.length; k++) {
     const s = snakes[k];
@@ -600,7 +616,7 @@ function step(dt) {
       if (s.isBot) { s.respawnT -= dt; if (s.respawnT <= 0) { s.col = Math.random() * COLORS.length | 0; s.name = rndName(); s.spawn(rnd(10, 40)); } }
       continue;
     }
-    if (s.isBot) { s.nextDecide -= dt; if (s.nextDecide <= 0) { decide(s); s.nextDecide = s.react; } }
+    if (s.isBot) { s.nextDecide -= dt; if (s.nextDecide <= 0) { decide(s); const fx = s.x[0] - camera.x, fy = s.y[0] - camera.y, fr = 2400 / camera.zoom; s.nextDecide = s.react * (fx * fx + fy * fy > fr * fr ? 2.5 : 1); } }
     s.update(dt);
   }
   buildHash();
@@ -623,7 +639,7 @@ function step(dt) {
   if (focus) {
     const k = 1 - Math.pow(0.0004, dt);
     camera.x += (focus.x[0] - camera.x) * k; camera.y += (focus.y[0] - camera.y) * k;
-    const tz = clamp(1.0 - 0.02 * (focus.r - 9), 0.5, 1.0);
+    const tz = clamp(1 / (1 + (focus.r - 9) * 0.04), 0.3, 1.0);
     camera.zoom += (tz - camera.zoom) * (1 - Math.pow(0.02, dt));
     if (playerDead) $('spectatingName').textContent = focus.name;
   }
