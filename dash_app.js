@@ -568,15 +568,15 @@ class Game {
   }
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
-    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'wave';
-    if (!(p.x + 30 > x + 2 && p.x < x + 28)) return;
+    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship';
+    if (!(p.x + 30 > x && p.x < x + 30)) return;
     const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? 30 - xl : xl);
     if (floor) {
-      const h = sf(cl(k ? p.x - x : p.x + 30 - x)), depth = h - p.y; if (depth <= 0) return;
+      const h = sf(cl(k ? p.x - x : p.x + 30 - x)), depth = h - p.y; if (depth <= 0) return; if (m === 'wave') return this.die();
       if (slide) { if (depth <= 14) { p.y = h; if (p.vy < 0) p.vy = 0; } else this.die(); }
       else if (gr > 0 && depth <= 14) { if (p.vy <= 0) { p.y = h; p.vy = 0; p.grounded = true; } } else this.die();
     } else {
-      const h = sf(cl(k ? p.x + 30 - x : p.x - x)), depth = p.y + 30 - h; if (depth <= 0) return;
+      const h = sf(cl(k ? p.x + 30 - x : p.x - x)), depth = p.y + 30 - h; if (depth <= 0) return; if (m === 'wave') return this.die();
       if (slide) { if (depth <= 14) { p.y = h - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
       else if (gr < 0 && depth <= 14) { if (p.vy >= 0) { p.y = h - 30; p.vy = 0; p.grounded = true; } } else this.die();
     }
