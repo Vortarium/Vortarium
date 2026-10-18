@@ -676,11 +676,11 @@ class Game {
   fire(t, instant) {
     const dur = instant ? 0 : (t.dur || 0);
     if (t.t === 'trig_color') {
-      const key = t.tg === 0 ? 'bg' : t.tg === -1 ? 'gr' : 'c' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
+      const tgt = Number(t.tg) || 0, key = tgt === 0 ? 'bg' : tgt === -1 ? 'gr' : 'c' + tgt; this.acts = this.acts.filter(a => a.key !== key);
       const to = hex2rgb(t.tcol || t.col || '#ff5252');
-      if (t.tg === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
-      else if (t.tg === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
-      else this.acts.push({ key, k: 'col', list: (this.groups[t.tg] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
+      if (tgt === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
+      else if (tgt === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
+      else this.acts.push({ key, k: 'col', list: (this.groups[tgt] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
     } else if (t.t === 'trig_move') {
       const b = this.gOff[t.tg] || { x: 0, y: 0 };
       this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], pe: 0, t0: this.time, dur });
@@ -1644,14 +1644,14 @@ function place(cx, cy) {
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 };
   if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
-  if (t === 'trig_color') Object.assign(o, { tg: 1, col: '#ff5252', dur: 1 });
+  if (t === 'trig_color') { const pv = [...lv.objs].reverse().find(q => q.t === 'trig_color'); Object.assign(o, { tg: pv ? pv.tg : 0, col: '#ff5252', dur: pv ? pv.dur : 1 }); }
   if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
   if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
   if (t === 'trig_toggle') Object.assign(o, { tg: 1, on: false });
   if (t === 'trig_alpha') Object.assign(o, { tg: 1, pc: 50, dur: 1 });
   if (OBJ[t].trig) o.touch = false;
   if (DASH[t]) o.a = 0;
-  lv.objs.push(o); changed();
+  lv.objs.push(o); if (t === 'trig_color') { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
 }
 function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !under(o, wx, wy)); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
