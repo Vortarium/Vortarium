@@ -1346,8 +1346,7 @@ async function awardAuthor(id, L, d) {
   await setDoc(br, { t: serverTimestamp(), starred: true, level: id, coins: [...prevC, ...addC] }, { merge: true });
   await setDoc(pr, { best: 100, gems: Math.max(gemTotal, gemHave) }, { merge: true });
   if (Object.keys(upd).length) await updateDoc(doc(db, 'users', uid), upd);
-  localStorage[bestKey(id)] = 100;
-  if (me && uid === me.uid) refreshProfile();
+  if (me && uid === me.uid) { BEATEN.add(id); localStorage[bestKey(id)] = 100; refreshProfile(); }
 }
 async function rateLevel(id, diff) {
   const d = DIFFS.find(x => x.id === diff);
@@ -1396,15 +1395,16 @@ async function playPublished(id, practice = false) {
 const attKey = id => 'dash_att_' + id;
 function bumpAttempts() { if (!PL || game.practice) return; if (PL.kind === 'play') { PL.attTot = (PL.attTot || 0) + 1; localStorage[attKey(PL.id)] = PL.attTot; } else if (PL.kind === 'test' && PL.lv0) PL.lv0.attempts = (PL.lv0.attempts || 0) + 1; }   // practice runs don't count
 function startPlay(o) {
+  cancelFade();
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
   PL.attTot = o.kind === 'play' ? Math.max(+localStorage[attKey(o.id)] || 0, o.attBase || 0) : 0;
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
   game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
-  game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null; if (lvAudio) { const a = lvAudio; a.addEventListener('play', () => { if (game.won || a !== lvAudio) a.pause(); }); }   // safety net: never let the song play once the level is beaten
+  game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null; if (lvAudio) { const a = lvAudio; a.addEventListener('play', () => { if (a !== lvAudio) a.pause(); }); }   // safety net: an old level's song never plays over a new one
   const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
-    onSpawn: t => { bumpAttempts(); if (!lvAudio || !settings.music || game.won) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
+    onSpawn: t => { bumpAttempts(); cancelFade(); if (!lvAudio || !settings.music || game.won) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
     onDeath: pct => {
       lvAudio && lvAudio.pause(); sfx('die'); if (PL.practice) return;
       const ls = PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0, oldBest = Math.max(PL.best, PL.prevBest || 0, ls), fp = Math.floor(pct);
@@ -1412,20 +1412,26 @@ function startPlay(o) {
       PL.best = Math.max(PL.best, pct);
       if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
     },
-    onWin: () => { stopSong(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
+    onWin: () => { winSongFade(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
     onFrame: pct => { const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
     onPause: pauseToggle
   };
   game.start({ x: PL.sx, y: PL.sy, practice: PL.practice });
 }
-function stopSong() { if (!lvAudio) return; try { lvAudio.pause(); } catch { } }
+let fadeT = null, fadeI = null;
+function cancelFade() { clearTimeout(fadeT); clearInterval(fadeI); fadeT = fadeI = null; if (lvAudio) lvAudio.volume = settings.vol; }
+// after beating a level the song keeps playing for 5 seconds, then fades to nothing over 2.5s
+function winSongFade() {
+  cancelFade(); const a = lvAudio; if (!a || a.paused) return;
+  fadeT = setTimeout(() => { const v0 = a.volume, t0 = performance.now(); fadeI = setInterval(() => { const k = Math.min(1, (performance.now() - t0) / 2500); a.volume = Math.max(0, v0 * (1 - k)); if (k >= 1) { clearInterval(fadeI); fadeI = null; a.pause(); a.volume = settings.vol; } }, 50); }, 5000);
+}
 function pauseToggle() {
   if (game.won) return;
   if (game.paused) { game.resume(); $('#pauseBox').classList.remove('open'); if (lvAudio && !game.p.dead) lvAudio.play().catch(() => { }); }
   else { game.pause(); lvAudio && lvAudio.pause(); const pb = Math.floor(Math.max(PL.prevBest || 0, PL.best || 0, game.best || 0, PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0)); $('#pauseBest').textContent = (PL.practice ? 'Practice mode · ' : '') + 'Current best: ' + pb + '%'; $('#pracBtn').textContent = 'Practice: ' + (PL.practice ? 'ON' : 'OFF'); $('#pauseBox').classList.add('open'); }
 }
 async function stopPlay() {
-  game.stop(); lvAudio && lvAudio.pause(); $('#recBox').classList.remove('show'); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
+  game.stop(); cancelFade(); lvAudio && lvAudio.pause(); $('#recBox').classList.remove('show'); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
   const p = PL; PL = null; if (p.kind === 'test' && p.lv0) saveSlots(ed.slot);
   if (p.kind === 'play') { const b = p.practice ? 0 : Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0), up = {}; if (b > 0) up.best = b; if (p.attTot) up.attempts = p.attTot; if (me && Object.keys(up).length) setDoc(doc(db, 'users', me.uid, 'progress', p.id), up, { merge: true }).catch(() => { }); }
   setTrack(p.kind === 'test' ? 'editor' : 'menu'); p.onExit && p.onExit();
@@ -1963,6 +1969,14 @@ async function publish(i) {
         }
       } catch (e) { await delCol(['levels', r.id, 'songChunks']).catch(() => { }); await deleteDoc(r).catch(() => { }); throw 'Song upload failed (' + errMsg(e) + '). Level was not published - did you update the Firestore rules?'; }
     }
+    try {   // you had to beat it to upload it, so it counts as beaten on your profile and gets the checkmark now (stars/gems/coins follow when it is rated)
+      await setDoc(doc(db, 'users', me.uid, 'beaten', r.id), { t: serverTimestamp(), starred: false, level: r.id, coins: [] });
+      await setDoc(doc(db, 'users', me.uid, 'progress', r.id), { best: 100 }, { merge: true });
+      const upd = { levelsBeaten: increment(1) }; P.levelsBeaten = (P.levelsBeaten || 0) + 1;
+      if (P.beatByOk) { upd['beatBy.unrated'] = increment(1); P.beatBy = P.beatBy || {}; P.beatBy.unrated = (P.beatBy.unrated || 0) + 1; }
+      await updateDoc(doc(db, 'users', me.uid), upd);
+      BEATEN.add(r.id); localStorage[bestKey(r.id)] = 100; renderFooter();
+    } catch (e) { console.warn('could not credit author', e); }
     lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); edRefresh();
   } catch (e) { console.error(e); toast('Publish failed: ' + errMsg(e), 'err'); }
 }
