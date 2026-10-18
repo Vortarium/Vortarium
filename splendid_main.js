@@ -453,14 +453,14 @@ async function saveStats(res,t0){try{const ref=doc(db,'splendid_users',user.uid)
    or the card you committed before the reveal.
    ===================================================================== */
 const BOT={think:[1100,2600],   // ms of "thinking" before it commits
- mistake:.04,                   // chance to take its 2nd best option (set 0 for a ruthless bot)
- regen:1,                       // EXTRA mana the bot gains at the start of every one of its turns (on top of the normal +1)
+ mistake:.01,                   // chance to take its 2nd best option (set 0 for a ruthless bot)
+ regen:2,                       // EXTRA mana the bot gains at the start of every one of its turns (on top of the normal +1)
  lowHp:8,                       // under this many hearts the bot prioritizes healing, at or above it prioritizes attacking
- shieldChance:.85,              // chance it blocks when you hold an expensive / powerful attack
+ shieldChance:.9,              // chance it blocks when you hold an expensive / powerful attack
  bigHit:6,                      // an attack with this much damage counts as "powerful"
  bigCost:5,                     // an attack costing this much mana counts as "powerful" too
  breakAt:8,                     // Mana Break is only used when you have at least this much mana
- noise:.3};                   // random wobble on scores so it isn't perfectly predictable
+ noise:.15};                   // random wobble on scores so it isn't perfectly predictable
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
 const live=B=>!!(G&&G.bot===B&&!G.over);
@@ -479,15 +479,13 @@ function makeBotDeck(){return CARDS.map(c=>c.id)}   /* the bot owns every card i
 function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
  G=newG('BOT');G.ref=null;
  const room={code:'BOT',status:'playing',host:{uid:user.uid,name:U.name},guest:{uid:'bot',name},turn:Math.random()<.5?user.uid:'bot',seq:1,phase:'act',pub:{},c:{},res:{},fin:{}};
- const B=G.bot={room,S:newSide(),O:newSide(),all,idle:0,k:0,oStart:0,deck:shuffle(all),hand:[],extras:[],seen:{},a:0,mk:null,hmk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
- for(let i=0;i<3;i++)bDraw();
+ const B=G.bot={room,S:newSide(),O:newSide(),all,idle:0,k:0,oStart:0,deck:shuffle(all).slice(3),hand:all.slice(),extras:[],seen:{},a:0,mk:null,hmk:null,rv:0,rd:0,fin:0,st:0,disc:false,oppEnd:4};
  room.pub.bot=botPub();
  onRoom(cl(room));botTick()}
 
-const bPool=B=>{const p=B.all.concat(B.extras);B.hand.forEach(h=>{const i=p.indexOf(h);if(i>=0)p.splice(i,1)});return shuffle(p)};
-const bDraw=()=>{const B=G.bot;if(B.hand.length>=3)return;if(!B.deck.length)B.deck=bPool(B);
- if(B.deck.length){B.hand.push(B.deck.pop());if(!B.deck.length)B.deck=bPool(B)}};
-const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,mm:B.S.mm,dx:B.extras.length,deck:B.deck.length,hand:B.hand.length,clock:Math.max(0,Math.round(G.clk.op))}};
+const bPool=B=>shuffle(B.all.slice(3));   /* only a cosmetic draw pile: the bot's real hand is every card in the game */
+const bDraw=()=>{};   /* the bot never draws: it always holds the whole deck */
+const botPub=()=>{const B=G.bot;return{fx:fxTxt(B.S),hp:B.S.hp,gold:B.S.gold,mana:B.S.mana,mm:B.S.mm,dx:B.extras.length,deck:B.deck.length,hand:3,clock:Math.max(0,Math.round(G.clk.op))}};
 const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.gold;B.O.mana=o.mana;B.O.mm=o.mm||MM}};
 
 /* the bot's side of the round loop (mirrors onRoom) */
@@ -507,7 +505,7 @@ function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
  setTimeout(()=>{if(!live(B)||B.rv!==seq)return;
   const bk=bc&&CARDS[bc-1],hk=hc&&CARDS[hc-1];
   const rb=applyRound(B.S,bk,hk);applyRound(B.O,hk,bk);if(rb.back)sideHit(B.O,rb.back);
-  let stolen=0;if(rb.cd){const n=rb.cd>=9?B.hand.length:Math.min(rb.cd,B.hand.length);for(let k=0;k<n;k++)B.hand.splice(Math.random()*B.hand.length|0,1);
+  let stolen=0;if(rb.cd){
    if(rb.steal&&B.deck.length)stolen=B.deck.splice(Math.random()*B.deck.length|0,1)[0];if(!B.deck.length)B.deck=bPool(B)}
   B.rd=seq;B.oppEnd=B.O.mana;
   wr({['res.bot']:{seq,back:rb.back,dmgIn:rb.dmgIn,took:rb.took,blk:rb.blk,cut:rb.cut,conv:rb.conv,stolen},['pub.bot']:botPub()})},1600)}
@@ -563,7 +561,7 @@ function botOptions(){const B=G.bot,S=B.S;syncO();
   /* Mana Break is only worth it against a full or nearly full mana bar */
   if(c.mb){if(B.O.mana>=BOT.breakAt)p+=4+B.O.mana*.3;else p-=40}
   return p};
- B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+pri(c)+def(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
+ B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+pri(c)+def(c)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
  return opts.sort((x,y)=>y.s-x.s)}
 
 /* Discarding is free (once per turn, it doesn't use the turn), so the bot cycles its hand whenever it can:
@@ -588,15 +586,20 @@ function botAct(){const B=G.bot;if(!live(B))return;const mk=B.mk,opts=botOptions
  if(B.shieldRoll.go){const ok=opts.filter(o=>o.i>=0&&CARDS[B.hand[o.i]-1].shield).sort((a,b)=>CARDS[B.hand[b.i]-1].back-CARDS[B.hand[a.i]-1].back);
   const alt=opts.filter(o=>o.i>=0&&(CARDS[B.hand[o.i]-1].red||CARDS[B.hand[o.i]-1].vamp));   /* no Shield in hand: Crimson / Vampirism soften the hit */
   const sh=ok[0]||alt[0];if(sh){botCommit(sh);return}}
- if(!B.disc){const d=botDiscardPick(opts);
-  if(d>=0){B.disc=true;B.hand.splice(d,1);bDraw();wr({['pub.bot']:botPub()});
-   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},700);return}}
- const play=opts.filter(o=>o.i>=0&&!(CARDS[B.hand[o.i]-1].mb&&B.O.mana<BOT.breakAt));   /* never skip while any useful card is affordable (a pointless Mana Break doesn't count) */
- botCommit(botChoose(play.length?play:opts))}
+ const play=opts.filter(o=>o.i>=0&&!(CARDS[B.hand[o.i]-1].mb&&B.O.mana<BOT.breakAt));
+ const pool=play.length?play:opts;
+ pool.forEach(o=>o.s+=(Math.random()-.5)*BOT.noise);pool.sort((x,y)=>y.s-x.s);
+ if(pool[0].s>=900){botCommit(pool[0]);return}   /* lethal: always take the kill */
+ /* mostly damage, otherwise block or heal. Low on hearts it leans toward heal / block. */
+ const kind=o=>{if(o.i<0)return'skip';const c=CARDS[B.hand[o.i]-1];
+  if(c.type==='ATTACK')return'atk';if(c.type==='HEAL'||c.vamp)return'heal';if(c.shield||c.red)return'blk';return'oth'};
+ const hp=B.S.hp,r=Math.random();
+ const want=hp<BOT.lowHp?(r<.55?'heal':r<.8?'blk':'atk'):hp>=17?(r<.85?'atk':'blk'):(r<.78?'atk':r<.9?'blk':'heal');
+ const order=[want,'atk','blk','heal'];
+ for(const k of order){const hit=pool.find(o=>kind(o)===k);if(hit){botCommit(hit);return}}
+ botCommit(pool[0])}
 
 function botCommit(sel){const B=G.bot,second=B.room.phase==='react';let id=0;
- if(sel.i>=0){id=B.hand[sel.i];const c=CARDS[id-1];B.S.mana-=c.cost;B.hand.splice(sel.i,1);const xi=B.extras.indexOf(id);if(xi>=0)B.extras.splice(xi,1);
-  if(c.disc){const n=c.disc>=9?B.hand.length:Math.min(c.disc,B.hand.length);for(let k=0;k<n;k++)B.hand.splice(Math.random()*B.hand.length|0,1)}
+ if(sel.i>=0){id=B.hand[sel.i];const c=CARDS[id-1];B.S.mana-=c.cost;   /* the card stays in its hand */
   }
- for(let k=0;k<3&&B.hand.length<3;k++)bDraw()
  wr({['c.bot']:id,phase:second?'resolve':'react',['pub.bot']:botPub()})}
