@@ -114,7 +114,10 @@ const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles
 const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
-const topRows = objs => objs.reduce((m, o) => OBJ[o.t].trig ? m : Math.max(m, o.y + (o.t.startsWith('port') ? 2 : 1)), 0);
+const PH = 3;   // portals are 3 cells tall
+const topRows = objs => objs.reduce((m, o) => OBJ[o.t].trig ? m : Math.max(m, o.y + (o.t.startsWith('port') ? PH : 1)), 0);
+// the level ends at the placed End Trigger; without one it ends 3 blocks after the right edge of the farthest object
+const endCell = objs => { const e = objs.find(o => o.t === 'trig_end'); if (e) return e.x; let m = -1; for (const o of objs) if (o.x > m) m = o.x; return Math.max(0, m) + 1 + 3; };
 const hex2rgb = h => { h = h.replace('#', ''); if (h.length === 3) h = [...h].map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const rgb2hex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 const lerpC = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -448,8 +451,9 @@ function diffURL(id, size = 64) {
 function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   const t = o.t, r = o.r || 0, lw = Math.max(1, cs * .07);
   c.save(); c.lineJoin = 'round';
-  if (o.sc && o.sc !== 1) { c.translate(x + cs / 2, y + cs / 2); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -(y + cs / 2)); }
+  if (o.sc && o.sc !== 1) { const sy = t.startsWith('port') ? y - cs / 2 : y + cs / 2; c.translate(x + cs / 2, sy); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -sy); }
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
+  const A0 = c.globalAlpha;   // base alpha (fade-in x alpha trigger); effects below multiply it instead of resetting to 1
   if (OBJ[t].hz && t !== 'spike') hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
   else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
   else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
@@ -467,7 +471,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.beginPath(); c.moveTo(-cs * .2, cs * .42); c.lineTo(0, -cs * .12); c.lineTo(cs * .2, cs * .42); c.strokeStyle = 'rgba(255,255,255,.25)'; c.stroke();
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
-    c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = 1;
+    c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
     c.beginPath(); c.arc(cx, cy, cs * .26, 0, 7); c.fillStyle = cl; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
     if (DASH[t]) { c.save(); c.translate(cx, cy); c.rotate(-(o.a || 0) * Math.PI / 180); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(-cs * .14, -cs * .08); c.lineTo(cs * .02, -cs * .08); c.lineTo(cs * .02, -cs * .17); c.lineTo(cs * .17, 0); c.lineTo(cs * .02, cs * .17); c.lineTo(cs * .02, cs * .08); c.lineTo(-cs * .14, cs * .08); c.closePath(); c.fill(); c.restore(); }
     if (t === 'orb_r') { c.beginPath(); c.arc(cx, cy, cs * .12, 0, 7); c.fillStyle = '#ffb0b0'; c.fill(); }
@@ -476,11 +480,13 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = PADCOL[t]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
   } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t]) {
-    const cx = x + cs / 2, cl = PORT_COL[t];
-    c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
+    const cl = PORT_COL[t], pcx = x + cs / 2, pcy = y - cs / 2;   // centre of the 3-cell stack
+    c.translate(pcx, pcy); c.rotate(r * Math.PI / 2);
+    c.beginPath(); c.ellipse(0, 0, cs * .34, cs * PH / 2, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = A0 * .22; c.fill(); c.globalAlpha = A0;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
+    c.rotate(-r * Math.PI / 2);
     c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+    c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), 0, 0);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
@@ -495,9 +501,9 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   c.restore();
 }
 
-function rotRect(r, x0, y0, x1, y1) {
+function rotRect(r, x0, y0, x1, y1, cx = 15, cy = 15) {
   let pts = [[x0, y0], [x1, y1]];
-  for (let i = 0; i < r; i++) pts = pts.map(([x, y]) => { const dx = x - 15, dy = y - 15; return [15 + dy, 15 - dx]; });
+  for (let i = 0; i < r; i++) pts = pts.map(([x, y]) => { const dx = x - cx, dy = y - cy; return [cx + dy, cy - dx]; });
   return [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
 }
 function drawBG(c, W, H, s, camX, st = 'stripes') {
@@ -638,12 +644,13 @@ class Game {
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
     this.ports = objs.filter(o => SPEEDS[o.t]); this.rports = objs.filter(o => REVP[o.t]);
-    const end = tr.find(o => o.t === 'trig_end'); this.endX = end ? end.ex : Infinity;
+    const end = tr.find(o => o.t === 'trig_end'); this.autoEnd = !end; this.endX = end ? end.ex : (objs.length ? objs.reduce((m, o) => Math.max(m, o.ex), 0) : 0) + U + 3 * U;   // no End Trigger placed: level ends 3 blocks past the farthest object
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
   prep(o) {
     o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
     if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b * .75).map(v => 15 + (v - 15) * sc); } }
+    if (o.t.startsWith('port')) { const b = rotRect(o.r || 0, 5, 0, 25, PH * U, 15, PH * U / 2); o.qb = [15 + (b[0] - 15) * sc, PH * U / 2 + (b[1] - PH * U / 2) * sc, 15 + (b[2] - 15) * sc, PH * U / 2 + (b[3] - PH * U / 2) * sc]; }
     if (PADS.includes(o.t)) o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc);
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
   }
@@ -741,11 +748,12 @@ class Game {
   secIn() { const m = this.mode; return m === 'wave' ? this.priIn() : m === 'cube' ? (30 - 22 * .7) / 2 : m === 'ship' ? (30 - 22 * .5) / 2 : 4; }
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
-    const p = this.p;
+    const p = this.p; if (this.won) return;
     if (p.dead) {
       p.deadT -= dt; for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.vy -= 600 * dt; q.life -= dt; }
       this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.respawn(); return;
     }
+    if (this.autoEnd && p.x >= this.endX) { this.win(); return; }
     this.time += dt; this.edgeT -= dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
@@ -815,16 +823,14 @@ class Game {
       }
     } else if (PADS.includes(t)) {
       const b = o.pb, on = this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1]);
-      if (on && !o.used) { o.used = true; p.grounded = false; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr; }
+      if (on && !o.used) { o.used = true; p.grounded = false; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr * (t !== 'pad_b' && ((o.r || 0) & 3) === 2 ? -1 : 1); }   // a pad turned upside down (rotated 180) launches the other way
       else if (!on) o.used = false;
-    } else if (SPEEDS[t]) {
-      if (this.hit(p, x + 5, y, 20, 60)) this.speed = SPEEDS[t];
-    } else if (t === 'port_gd' || t === 'port_gu') {
-      if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
-    } else if (MODEP[t]) {
-      if (this.hit(p, x + 5, y, 20, 60)) this.mode = PMODE[t];
-    } else if (REVP[t]) {
-      if (this.hit(p, x + 5, y, 20, 60)) this.mir = t === 'port_mb' ? 1 : 0;
+    } else if (t.startsWith('port')) {
+      const b = o.qb; if (!this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])) return;
+      if (SPEEDS[t]) this.speed = SPEEDS[t];
+      else if (t === 'port_gd' || t === 'port_gu') this.gr = t === 'port_gu' ? -1 : 1;
+      else if (MODEP[t]) this.mode = PMODE[t];
+      else if (REVP[t]) this.mir = t === 'port_mb' ? 1 : 0;
     }
   }
   // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
@@ -1196,9 +1202,9 @@ async function fetchLevels(kind) {
   const a = s.docs.map(d => ({ id: d.id, ...d.data() })); a.sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); return a;
 }
 function lenSecs(objs, ss = 1) {
-  const end = objs.find(o => o.t === 'trig_end'); if (!end) return 0;
+  if (!objs.length) return 0;
   const ports = objs.filter(o => SPEEDS[o.t]).sort((a, b) => a.x - b.x);
-  let t = 0, x0 = 0, sp = ss || 1; const ex = end.x * U;
+  let t = 0, x0 = 0, sp = ss || 1; const ex = endCell(objs) * U;
   for (const p of ports) { const px = p.x * U; if (px >= ex) break; t += (px - x0) / (BASE * sp); x0 = px; sp = SPEEDS[p.t]; }
   return t + (ex - x0) / (BASE * sp);
 }
@@ -1278,7 +1284,7 @@ views.level = async ({ id }) => {
     lv = { id, ...snap.data() }; LV[id] = lv;
   } catch (e) { return page('Level', `<p>${esc(errMsg(e))}</p>`); }
   let my = 0; if (me) { try { const v = await getDoc(doc(db, 'levels', id, 'votes', me.uid)); my = v.exists() ? v.data().v : 0; } catch { } }
-  const best = await getBest(id);
+  const best = await getBest(id), atts = (await getProgress(id)).attempts, attN = Math.max(atts || 0, +localStorage[attKey(id)] || 0);
   let cms = []; try { cms = (await getDocs(query(collection(db, 'levels', id, 'comments'), orderBy('t', 'desc'), limit(60)))).docs.map(d => ({ id: d.id, ...d.data() })); } catch { }
   const d = dOf(lv), mine = me && lv.authorId === me.uid;
   const dl = (lv.songParts || lv.songUrl) ? (await idbGet('level:' + id) ? '<span class="muted">✔ Song downloaded</span>' : `<button class="btn sm blue" data-act="dlsong" data-id="${id}">⬇ Download song${lv.songName ? ': ' + esc(lv.songName) : ''}</button>`) : '';
@@ -1291,7 +1297,7 @@ views.level = async ({ id }) => {
     <div><button class="btn sm orange" data-act="practicelvl" data-id="${id}">⚑ Practice mode</button></div>
     <div class="pb"><i style="width:${best}%"></i><b>Best: ${best}%</b></div>
     <div class="votes"><button class="round ${my === 1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="1">👍</button><span>${fmt((lv.likes || 0) - (lv.dislikes || 0))}</span><button class="round down ${my === -1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="-1">👎</button></div>
-    <div class="muted">👁 ${fmt(lv.views)} views</div>${dl}
+    <div class="muted">👁 ${fmt(lv.views)} views · 🎯 ${fmt(attN)} attempts</div>${dl}
     <div class="row" style="justify-content:center">${isMod() ? `<button class="btn orange sm" data-act="ratemenu" data-id="${id}">⭐ Rate</button>` : ''}${isMod() || mine ? `<button class="btn red sm" data-act="takedown" data-id="${id}">Take down</button>` : ''}</div>
   </div><div class="side"><h3 style="margin:0 0 8px">Comments</h3><div class="comments">${cmHtml}</div>${me ? `<input id="cmt" maxlength="200" placeholder="Write a comment…"><button class="btn green sm" data-act="comment" data-id="${id}">Post</button>` : '<p class="muted">Log in to comment.</p>'}</div></div>`);
 };
@@ -1387,20 +1393,18 @@ async function playPublished(id, practice = false) {
   const prog = await getProgress(id), prevBest = prog.best, dd = dOf(lv);
   startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, attBase: prog.attempts, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
-const attEl = document.createElement('div'); attEl.id = 'attTot'; $('#play').appendChild(attEl);
 const attKey = id => 'dash_att_' + id;
-function showAtt() { attEl.textContent = PL && PL.kind === 'play' ? 'Total attempts: ' + fmt(PL.attTot || 0) : ''; }
-function bumpAttempts() { if (!PL || PL.kind !== 'play' || game.practice) return; PL.attTot = (PL.attTot || 0) + 1; localStorage[attKey(PL.id)] = PL.attTot; showAtt(); }   // practice runs don't count
+function bumpAttempts() { if (!PL || game.practice) return; if (PL.kind === 'play') { PL.attTot = (PL.attTot || 0) + 1; localStorage[attKey(PL.id)] = PL.attTot; } else if (PL.kind === 'test' && PL.lv0) PL.lv0.attempts = (PL.lv0.attempts || 0) + 1; }   // practice runs don't count
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
-  PL.attTot = o.kind === 'play' ? Math.max(+localStorage[attKey(o.id)] || 0, o.attBase || 0) : 0; showAtt();
+  PL.attTot = o.kind === 'play' ? Math.max(+localStorage[attKey(o.id)] || 0, o.attBase || 0) : 0;
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
   game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
-  game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
+  game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null; if (lvAudio) { const a = lvAudio; a.addEventListener('play', () => { if (game.won || a !== lvAudio) a.pause(); }); }   // safety net: never let the song play once the level is beaten
   const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
-    onSpawn: t => { bumpAttempts(); if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
+    onSpawn: t => { bumpAttempts(); if (!lvAudio || !settings.music || game.won) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
     onDeath: pct => {
       lvAudio && lvAudio.pause(); sfx('die'); if (PL.practice) return;
       const ls = PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0, oldBest = Math.max(PL.best, PL.prevBest || 0, ls), fp = Math.floor(pct);
@@ -1408,12 +1412,13 @@ function startPlay(o) {
       PL.best = Math.max(PL.best, pct);
       if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
     },
-    onWin: () => { lvAudio && lvAudio.pause(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
+    onWin: () => { stopSong(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
     onFrame: pct => { const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
     onPause: pauseToggle
   };
   game.start({ x: PL.sx, y: PL.sy, practice: PL.practice });
 }
+function stopSong() { if (!lvAudio) return; try { lvAudio.pause(); } catch { } }
 function pauseToggle() {
   if (game.won) return;
   if (game.paused) { game.resume(); $('#pauseBox').classList.remove('open'); if (lvAudio && !game.p.dead) lvAudio.play().catch(() => { }); }
@@ -1421,7 +1426,7 @@ function pauseToggle() {
 }
 async function stopPlay() {
   game.stop(); lvAudio && lvAudio.pause(); $('#recBox').classList.remove('show'); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
-  const p = PL; PL = null;
+  const p = PL; PL = null; if (p.kind === 'test' && p.lv0) saveSlots(ed.slot);
   if (p.kind === 'play') { const b = p.practice ? 0 : Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0), up = {}; if (b > 0) up.best = b; if (p.attTot) up.attempts = p.attTot; if (me && Object.keys(up).length) setDoc(doc(db, 'users', me.uid, 'progress', p.id), up, { merge: true }).catch(() => { }); }
   setTrack(p.kind === 'test' ? 'editor' : 'menu'); p.onExit && p.onExit();
 }
@@ -1619,12 +1624,11 @@ views.draft = ({ i }) => {
     <div class="row" style="justify-content:center"><button class="btn sm" data-act="slotrename" data-i="${i}">Rename</button><button class="btn sm" data-act="slotdesc" data-i="${i}">Description</button>${pub ? `<button class="btn blue sm" data-act="openlvl" data-id="${l.pub}">View online</button>` : `<button class="btn green sm" data-act="slotpub" data-i="${i}" ${ok ? '' : 'disabled'}>⬆ Upload</button>`}<button class="btn sm" data-act="slotcopy" data-i="${i}">Copy</button></div>
     <div class="row" style="justify-content:center"><button class="btn sm blue" data-act="importlvl" data-i="${i}">⬇ Import</button><button class="btn sm blue" data-act="exportlvl" data-i="${i}">⬆ Export</button><button class="btn red sm" data-act="slotdel" data-i="${i}" title="Delete level">🗑</button></div>
     <div class="votes"><button class="round" disabled title="Locked until posted">👍</button><span>🔒</span><button class="round down" disabled title="Locked until posted">👎</button></div>
-    <div class="muted">${l.songName ? '🎵 ' + esc(l.songName) : 'No song'}</div>
+    <div class="muted">${l.songName ? '🎵 ' + esc(l.songName) : 'No song'} · 🎯 ${fmt(l.attempts || 0)} attempts</div>
   </div><div class="side"><h3 style="margin:0 0 8px">Comments 🔒</h3><div class="comments"><p class="muted">Comments and likes unlock once this level is posted.</p></div><input disabled placeholder="Locked until posted"><button class="btn green sm" disabled>Post</button></div></div>`);
 };
 function draftPlay(i) {
   const lv = slots[i]; if (!lv) return;
-  if (!lv.objs.some(o => o.t === 'trig_end')) return toast('Add an End Trigger first (Triggers tab)', 'err');
   ed.slot = i; ed.lv = lv; ed.posMode = false; ed.spawn = null; saveSlots(i);
   idbGet(`draft:${me.uid}:${i}`).then(b => startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs, grs: lv.grs, startMode: lv.startMode, startSpeed: lv.startSpeed }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: 0, startY: 0, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { showLayer('view'); views.draft({ i }); } }));
 }
@@ -1661,11 +1665,11 @@ function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
   const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
   const o = { t, r: 0, col: t === 'trig_color' ? '#ff5252' : undefined };
-  if (t.startsWith('port')) drawObj(c, o, 20, 32, 24, '#000', true); else drawObj(c, o, 10, 10, 44, defColor(t), true);
+  if (t.startsWith('port')) drawObj(c, o, 24, 44, 16, '#000', true); else drawObj(c, o, 10, 10, 44, defColor(t), true);
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
-  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.posMode = false; ed.spawn = null; ed.on = true;
+  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.redo = []; ed.mode = 'build'; ed.posMode = false; ed.spawn = null; ed.on = true;
   showLayer('edit'); setTrack('editor'); renderEdUI(); renderProps(); edDraw();
 }
 function renderEdUI() {
@@ -1676,7 +1680,9 @@ function renderEdUI() {
   const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
 }
-const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? 2 : 1;
+const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? PH : 1;
+// bounding box in cells (portals are 3 tall; rotated 90/270 they lie flat: 3 wide, 1 tall, centred on the same spot)
+const objBox = o => { if (!o.t.startsWith('port') || ((o.r || 0) & 1) === 0) return { x: o.x, y: o.y, w: 1, h: oh(o) }; return { x: o.x - 1, y: o.y + 1, w: 3, h: 1 }; };
 function EDPANEL() {
   const arrows = (n, k) => `<div class="eg"><b>Move ${n}</b><div class="row2"><button class="btn sm" data-act="edhalf" data-dx="${-k}" data-dy="0">◀</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${k}">▲</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${-k}">▼</button><button class="btn sm" data-act="edhalf" data-dx="${k}" data-dy="0">▶</button></div></div>`;
   return `<div class="eg"><b>Rotate 90°</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="ccw">↺ Left</button><button class="btn sm" data-act="edxf" data-k="cw">↻ Right</button></div></div><div class="eg"><b>Mirror</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="mx">⇋ X axis</button><button class="btn sm" data-act="edxf" data-k="my">⇅ Y axis</button></div></div>` + arrows('½', .5) + arrows('1', 1) + arrows('5', 5) + arrows('1/10', .1) + `<div class="eg"><b>Tip</b><span class="muted" style="font-size:13px;max-width:190px">Use Edit mode to select objects (Shift = multi-select). Rotate/mirror act on the whole selection.</span></div>`;
@@ -1684,7 +1690,7 @@ function EDPANEL() {
 function edXform(kind) {
   if (!ed.sels.length) return toast('Select something first (Edit mode)', 'err');
   snap(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-  for (const o of ed.sels) { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + 1); y1 = Math.max(y1, o.y + oh(o)); }
+  for (const o of ed.sels) { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + 1); y1 = Math.max(y1, o.y + oh(o)); }   // (selection centre uses each object's anchor cell)
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   for (const o of ed.sels) {
     const h = oh(o), ox = o.x + .5 - cx, oy = o.y + h / 2 - cy, r = ((o.r || 0) % 4 + 4) % 4, sl = !!OBJ[o.t].slope;
@@ -1700,9 +1706,9 @@ function edXform(kind) {
 }
 const snap = () => { const s = JSON.stringify(ed.lv.objs); if (ed.hist[ed.hist.length - 1] !== s) { ed.hist.push(s); if (ed.hist.length > 60) ed.hist.shift(); } };
 let asT = null;
-function changed() { ed.lv.updated = Date.now(); clearTimeout(asT); asT = setTimeout(() => saveSlots(ed.slot), 800); renderEdUI(); }
+function changed() { if (!ed.keepRedo) ed.redo = []; ed.lv.updated = Date.now(); clearTimeout(asT); asT = setTimeout(() => saveSlots(ed.slot), 800); renderEdUI(); }
 function s2w(e) { const cv = $('#editCanvas'), H = cv.clientHeight; ed.mx = e.offsetX; ed.my = e.offsetY; ed.wx = e.offsetX / ed.z + ed.camX; ed.wy = (H - e.offsetY) / ed.z + ed.camY; return [ed.wx, ed.wy]; }
-const under = (o, wx, wy) => { const px = wx / U, py = wy / U, h = o.t.startsWith('port') ? 2 : 1; return px >= o.x && px < o.x + 1 && py >= o.y && py < o.y + h; };
+const under = (o, wx, wy) => { const px = wx / U, py = wy / U, b = objBox(o); return px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h; };
 function pick(wx, wy) { const os = ed.lv.objs; for (let i = os.length - 1; i >= 0; i--) if (under(os[i], wx, wy)) return os[i]; return null; }
 function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
@@ -1732,7 +1738,7 @@ function renderProps() {
   else if (o.t === 'trig_zoom') h += `<label>Zoom (1 = default)<input type="number" step=".1" min=".2" max="4" data-p="zoom" value="${o.zoom ?? 1}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
-  else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level.</p>';
+  else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
@@ -1752,8 +1758,8 @@ function edDraw() {
   const ky = Y((topRows(lv.objs) + 10) * U);
   if (ky > 0) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.setLineDash([10, 6]); c.beginPath(); c.moveTo(0, ky); c.lineTo(W, ky); c.stroke(); c.setLineDash([]); c.fillStyle = '#ff4040'; c.font = 'bold 12px sans-serif'; c.textAlign = 'left'; c.fillText('KILL LINE (10 above tallest object)', 8, ky - 4); }
   c.globalAlpha = .5; c.save(); c.translate(X(15), Y(15)); drawIcon(c, P?.skin || 0, PRIMARY[P?.c1 || 0], SECONDARY[P?.c2 || 0], cs); c.restore(); c.globalAlpha = 1;
-  for (const o of lv.objs) { const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 2 || sx > W + cs || sy < -cs * 3 || sy > H + cs) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }
-  c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) c.strokeRect(X(o.x * U) - 2, Y(o.y * U + U) - 2, cs + 4, cs + 4);
+  for (const o of lv.objs) { const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 4 || sx > W + cs * 3 || sy < -cs * 4 || sy > H + cs * 3) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }
+  c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) { const b = objBox(o); c.strokeRect(X(b.x * U) - 2, Y((b.y + b.h) * U) - 2, b.w * cs + 4, b.h * cs + 4); }
   if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
   if (ed.spawn && ed.posMode) { const sx = X(ed.spawn.x * U), sy = Y(ed.spawn.y * U + U); c.fillStyle = 'rgba(53,255,106,.35)'; c.fillRect(sx, sy, cs, cs); c.strokeStyle = '#35ff6a'; c.lineWidth = 3; c.strokeRect(sx, sy, cs, cs); c.fillStyle = '#35ff6a'; c.beginPath(); c.moveTo(sx + cs / 2, sy - cs * .45); c.lineTo(sx + cs * .75, sy - cs * .15); c.lineTo(sx + cs / 2, sy + cs * .15); c.lineTo(sx + cs * .25, sy - cs * .15); c.closePath(); c.fill(); }
   if (ed.mode === 'build' && !ed.posMode) { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
@@ -1783,7 +1789,7 @@ function edDraw() {
     else if (dr.k === 'box') { dr.x1 = wx; dr.y1 = wy; }
     else if (dr.k === 'move' && ed.sels.length && (cx !== dr.cx || cy !== dr.cy)) { const dx = cx - dr.cx, dy = cy - dr.cy; ed.sels.forEach(o => { o.x = Math.max(0, o.x + dx); o.y = Math.max(0, o.y + dy); }); dr.cx = cx; dr.cy = cy; changed(); renderProps(); }
   });
-  const up = () => { const d = ed.drag; if (d && d.k === 'box' && d.x1 != null) { const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1); ed.lv.objs.filter(o => (o.x + 1) * U > x0 && o.x * U < x1 && (o.y + 1) * U > y0 && o.y * U < y1).forEach(o => ed.sels.includes(o) || ed.sels.push(o)); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); } ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const up = () => { const d = ed.drag; if (d && d.k === 'box' && d.x1 != null) { const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1); ed.lv.objs.filter(o => { const b = objBox(o); return (b.x + b.w) * U > x0 && b.x * U < x1 && (b.y + b.h) * U > y0 && b.y * U < y1; }).forEach(o => ed.sels.includes(o) || ed.sels.push(o)); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); } ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', e => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { const f = e.deltaY < 0 ? 1.1 : .9, bx = e.offsetX / ed.z + ed.camX; ed.z = Math.max(.4, Math.min(2.5, ed.z * f)); ed.camX = bx - e.offsetX / ed.z; }
@@ -1798,7 +1804,7 @@ addEventListener('keydown', e => {
   if (!ed.on || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || $('#modal').classList.contains('open')) return;
   const k = e.key.toLowerCase(), st = 60 / ed.z;
   if (k === 'q') edRotate(-1); else if (k === 'e') edRotate(1);
-  else if ((e.ctrlKey || e.metaKey) && k === 'c') edCopy(); else if ((e.ctrlKey || e.metaKey) && k === 'v') edPaste(); else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); edUndo(); }
+  else if ((e.ctrlKey || e.metaKey) && k === 'c') edCopy(); else if ((e.ctrlKey || e.metaKey) && k === 'v') edPaste(); else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? edRedo() : edUndo(); } else if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); edRedo(); }
   else if (k === 'delete' || k === 'backspace') edDelSel();
   else if (e.altKey && k.startsWith('arrow')) { e.preventDefault(); actions.edhalf({ dx: k === 'arrowleft' ? -.5 : k === 'arrowright' ? .5 : 0, dy: k === 'arrowup' ? .5 : k === 'arrowdown' ? -.5 : 0 }); }
   else if (k.length === 1 && 'wasd'.includes(k) && !e.ctrlKey && !e.metaKey && !e.altKey) { if (ed.sels.length) { e.preventDefault(); actions.edhalf({ dx: k === 'a' ? -1 : k === 'd' ? 1 : 0, dy: k === 'w' ? 1 : k === 's' ? -1 : 0 }); } }
@@ -1806,7 +1812,9 @@ addEventListener('keydown', e => {
   else if (k === 'p') edPlay(e.shiftKey);
   else if (k === 'escape') { ed.sel = null; ed.sels = []; renderProps(); }
 });
-function edUndo() { if (!ed.hist.length) return; ed.lv.objs = JSON.parse(ed.hist.pop()); ed.sel = null; ed.sels = []; renderProps(); changed(); }
+function edHistDone() { ed.sel = null; ed.sels = []; renderProps(); ed.keepRedo = true; changed(); ed.keepRedo = false; }
+function edUndo() { if (!ed.hist.length) return; (ed.redo = ed.redo || []).push(JSON.stringify(ed.lv.objs)); ed.lv.objs = JSON.parse(ed.hist.pop()); edHistDone(); }
+function edRedo() { if (!ed.redo || !ed.redo.length) return; ed.hist.push(JSON.stringify(ed.lv.objs)); ed.lv.objs = JSON.parse(ed.redo.pop()); edHistDone(); }
 document.addEventListener('focusin', e => { if (e.target.dataset?.p && ed.on) snap(); });
 document.addEventListener('input', e => {
   if (e.target.id === 'volr') { settings.vol = +e.target.value; saveSettings(); return; }
@@ -1816,7 +1824,7 @@ document.addEventListener('input', e => {
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; o[p] = p === 'sc' ? Math.max(.5, Math.min(2, v || 1)) : v; }); changed();
 });
 function edPlay(here) {
-  const lv = ed.lv; if (!lv.objs.some(o => o.t === 'trig_end')) return toast('Add an End Trigger first (Triggers tab)', 'err');
+  const lv = ed.lv;
   let sx = 0, sy = 0; if (ed.posMode && ed.spawn) { sx = ed.spawn.x * U; sy = ed.spawn.y * U; }
   saveSlots(ed.slot); ed.on = false;
   idbGet(`draft:${me.uid}:${ed.slot}`).then(b => {
@@ -1893,7 +1901,7 @@ const actions = {
   },
   slotpub: async d => { await publish(+d.i); },
   // editor
-  edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edplay: () => edPlay(false), edpos: () => { ed.posMode = !ed.posMode; ed.drag = null; if (ed.posMode) toast('Click any cell to set the spawn position'); renderEdUI(); },
+  edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edredo: edRedo, edplay: () => edPlay(false), edpos: () => { ed.posMode = !ed.posMode; ed.drag = null; if (ed.posMode) toast('Click any cell to set the spawn position'); renderEdUI(); },
   edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; ed.sels = []; renderProps(); renderEdUI(); },
   edrot: () => edRotate(1), edsettings: edSettings,
   eddel: edDelSel,
