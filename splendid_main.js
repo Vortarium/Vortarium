@@ -456,8 +456,10 @@ const BOT={think:[1100,2600],   // ms of "thinking" before it commits
  mistake:.04,                   // chance to take its 2nd best option (set 0 for a ruthless bot)
  regen:1,                       // EXTRA mana the bot gains at the start of every one of its turns (on top of the normal +1)
  lowHp:8,                       // under this many hearts the bot prioritizes healing, at or above it prioritizes attacking
- shieldChance:.6,               // chance it shields when you hold a powerful attack
+ shieldChance:.85,              // chance it blocks when you hold an expensive / powerful attack
  bigHit:6,                      // an attack with this much damage counts as "powerful"
+ bigCost:5,                     // an attack costing this much mana counts as "powerful" too
+ breakAt:8,                     // Mana Break is only used when you have at least this much mana
  noise:.3};                   // random wobble on scores so it isn't perfectly predictable
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
@@ -536,7 +538,7 @@ function botEval(a,b){
  if(a.hp<=0&&b.hp<=0)return -300;if(b.hp<=0)return 1000;if(a.hp<=0)return -1000;
  const hv=x=>x.hp+.85*x.gold,mv=m=>.8*Math.min(m,4)+.1*m;
  const pot=x=>-x.bleed.reduce((s,b)=>s+b.a*.9,0)-(x.dl||0)+(x.shield?2.2:0)+Math.min(x.vamp,6)*.45+x.red*.7+x.dots.reduce((s,d)=>s+d.a*d.t*.8,0);
- const wa=1+Math.max(0,9-a.hp)*.14,wb=1+Math.max(0,8-b.hp)*.08;   // own hearts matter more when low, kill pressure when you're low
+ const wa=1+Math.max(0,9-a.hp)*.14,wb=1.25+Math.max(0,8-b.hp)*.1;   // own hearts matter more when low, kill pressure when you're low
  return wa*hv(a)-wb*hv(b)+mv(a.mana)-.9*mv(b.mana)+pot(a)-pot(b)}
 
 /* score every playable card + skipping: simulate the round against each card you might play */
@@ -556,7 +558,10 @@ function botOptions(){const B=G.bot,S=B.S;syncO();
  const low=S.hp<BOT.lowHp,pressed=B.lastType==='HEAL'||B.lastType==='MANA HEAL';
  const pri=c=>{let p=0;const isHeal=c.type==='HEAL'||c.vamp||c.shield||c.red;
   if(low){if(c.type==='HEAL'||c.vamp)p+=7;else if(c.shield||c.red)p+=3;if(c.type==='ATTACK'&&!c.heal)p-=3;if(c.hpl||c.dl)p-=6}
-  else{if(c.type==='ATTACK')p+=4+c.dmg*.4;if(c.mb&&B.O.mana>=3)p+=1.5;if(pressed&&c.type==='ATTACK')p+=3;if(c.type==='HEAL'&&S.hp>=17)p-=5}
+  else{if(c.type==='ATTACK')p+=6+c.dmg*.9;if(pressed&&c.type==='ATTACK')p+=3;if(c.type==='HEAL'&&S.hp>=17)p-=5}
+  if(low&&c.type==='ATTACK'&&c.heal)p+=3;   /* Leech both hurts and heals */
+  /* Mana Break is only worth it against a full or nearly full mana bar */
+  if(c.mb){if(B.O.mana>=BOT.breakAt)p+=4+B.O.mana*.3;else p-=40}
   return p};
  B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+pri(c)+def(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
  return opts.sort((x,y)=>y.s-x.s)}
@@ -568,7 +573,9 @@ function botDiscardPick(opts){const B=G.bot,best=opts[0],skip=opts.find(o=>o.i<0
  if(best.s>=900)return -1;
  const dead=B.hand.map((id,i)=>({i,need:CARDS[id-1].cost-B.S.mana})).filter(x=>x.i!==best.i&&x.need>=4).sort((x,y)=>y.need-x.need);
  if(dead.length)return dead[0].i;
- const bad=opts.filter(o=>o.i>=0&&o.i!==best.i&&o.s<skip.s-.8);
+ /* nothing affordable -> cycle the costliest card now so the next look has a chance at a playable one instead of skipping */
+ if(opts.length===1&&B.hand.length){let w=0;B.hand.forEach((id,i)=>{if(CARDS[id-1].cost>CARDS[B.hand[w]-1].cost)w=i});return w}
+ const bad=opts.filter(o=>o.i>=0&&o.i!==best.i&&o.s<skip.s-3);
  return bad.length?bad[bad.length-1].i:-1}
 
 function botChoose(opts){opts.forEach(o=>o.s+=(Math.random()-.5)*BOT.noise);opts.sort((x,y)=>y.s-x.s);
@@ -576,14 +583,16 @@ function botChoose(opts){opts.forEach(o=>o.s+=(Math.random()-.5)*BOT.noise);opts
 
 function botAct(){const B=G.bot;if(!live(B))return;const mk=B.mk,opts=botOptions();
  /* you hold a powerful attack you can afford -> 60% chance the bot plays a Shield (if it has one it can pay for) */
- if(!B.shieldRoll||B.shieldRoll.mk!==mk){const threat=(G.hand||[]).some(id=>{const c=CARDS[id-1];return c.dmg>=BOT.bigHit&&c.cost<=Math.min(MM,B.O.mana+1)});
+ if(!B.shieldRoll||B.shieldRoll.mk!==mk){const threat=(G.hand||[]).some(id=>{const c=CARDS[id-1];return c.dmg&&(c.dmg>=BOT.bigHit||c.cost>=BOT.bigCost)&&c.cost<=Math.min(MM,B.O.mana+1)});
   B.shieldRoll={mk,go:threat&&Math.random()<BOT.shieldChance}}
- if(B.shieldRoll.go){const sh=opts.filter(o=>o.i>=0&&CARDS[B.hand[o.i]-1].shield).sort((a,b)=>CARDS[B.hand[b.i]-1].back-CARDS[B.hand[a.i]-1].back)[0];
-  if(sh){botCommit(sh);return}}
+ if(B.shieldRoll.go){const ok=opts.filter(o=>o.i>=0&&CARDS[B.hand[o.i]-1].shield).sort((a,b)=>CARDS[B.hand[b.i]-1].back-CARDS[B.hand[a.i]-1].back);
+  const alt=opts.filter(o=>o.i>=0&&(CARDS[B.hand[o.i]-1].red||CARDS[B.hand[o.i]-1].vamp));   /* no Shield in hand: Crimson / Vampirism soften the hit */
+  const sh=ok[0]||alt[0];if(sh){botCommit(sh);return}}
  if(!B.disc){const d=botDiscardPick(opts);
   if(d>=0){B.disc=true;B.hand.splice(d,1);bDraw();wr({['pub.bot']:botPub()});
    setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},700);return}}
- botCommit(botChoose(opts))}
+ const play=opts.filter(o=>o.i>=0&&!(CARDS[B.hand[o.i]-1].mb&&B.O.mana<BOT.breakAt));   /* never skip while any useful card is affordable (a pointless Mana Break doesn't count) */
+ botCommit(botChoose(play.length?play:opts))}
 
 function botCommit(sel){const B=G.bot,second=B.room.phase==='react';let id=0;
  if(sel.i>=0){id=B.hand[sel.i];const c=CARDS[id-1];B.S.mana-=c.cost;B.hand.splice(sel.i,1);const xi=B.extras.indexOf(id);if(xi>=0)B.extras.splice(xi,1);
