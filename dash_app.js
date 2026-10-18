@@ -338,6 +338,21 @@ function drawBG(c, W, H, s, camX, st = 'stripes') {
   else if (st === 'grid') { for (let x = -off; x < W; x += gg) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); } for (let y = 0; y < H; y += gg) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); } }
   else if (st === 'waves') for (let y = gg / 2; y < H; y += gg) { c.beginPath(); for (let x = -gg; x < W + gg; x += 12 * s) c[x === -gg ? 'moveTo' : 'lineTo'](x, y + Math.sin((x + off * 2) / (30 * s)) * 12 * s); c.stroke(); }
 }
+const GRS = [['tiles','Tiles'],['plain','Plain'],['stripes','Diagonal stripes'],['dots','Dots'],['bricks','Bricks'],['grid','Grid'],['waves','Waves']];
+function drawGround(c, W, H, gy, s, camX, col, st = 'tiles') {
+  c.fillStyle = col; c.fillRect(0, gy, W, H - gy);
+  c.save(); c.beginPath(); c.rect(0, gy, W, H - gy); c.clip();
+  c.fillStyle = 'rgba(0,0,0,.18)'; c.strokeStyle = 'rgba(0,0,0,.22)'; c.lineWidth = 2 * s;
+  const g = 60 * s, o = (camX * s) % g, B = H - gy;
+  if (st === 'tiles') for (let x = -o; x < W; x += g) c.fillRect(x, gy + 3 * s, g / 2, H);
+  else if (st === 'stripes') { c.lineWidth = 10 * s; for (let x = -o - B; x < W + B; x += g) { c.beginPath(); c.moveTo(x, gy + B + 20); c.lineTo(x + B + 20, gy - 20); c.stroke(); } }
+  else if (st === 'dots') for (let x = -o; x < W; x += g) for (let y = gy + g / 2; y < H + g; y += g) { c.beginPath(); c.arc(x + g / 2, y, 7 * s, 0, 7); c.fill(); }
+  else if (st === 'bricks') { const h = g / 2; let r = 0; for (let y = gy; y < H + h; y += h, r++) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); for (let x = -o + (r & 1 ? g / 2 : 0) - g; x < W + g; x += g) { c.moveTo(x, y); c.lineTo(x, y + h); } c.stroke(); } }
+  else if (st === 'grid') { c.beginPath(); for (let x = -o; x < W; x += g) { c.moveTo(x, gy); c.lineTo(x, H); } for (let y = gy + g; y < H + g; y += g) { c.moveTo(0, y); c.lineTo(W, y); } c.stroke(); }
+  else if (st === 'waves') for (let y = gy + g * .6; y < H + g; y += g * .6) { c.beginPath(); for (let x = -g; x < W + g; x += 10 * s) c[x === -g ? 'moveTo' : 'lineTo'](x, y + Math.sin((x + o * 2) / (22 * s)) * 6 * s); c.stroke(); }
+  c.restore();
+  c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(0, gy - 2 * s, W, 3 * s);
+}
 function blockDraw(c, b, x, y, s, col, lw) {
   c.fillStyle = col; c.fillRect(x, y, s, s); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, s - lw, s - lw);
   c.fillStyle = 'rgba(255,255,255,.25)'; c.strokeStyle = 'rgba(255,255,255,.3)';
@@ -461,7 +476,7 @@ class Game {
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
   }
   timeAtX(x) {
-    let t = 0, x0 = 0, sp = 1;
+    let t = 0, x0 = 0, sp = this.level.startSpeed || 1;
     for (const p of this.ports) { if (p.ex >= x) break; t += (p.ex - x0) / (BASE * sp); x0 = p.ex; sp = SPEEDS[p.t]; }
     return t + (x - x0) / (BASE * sp);
   }
@@ -475,10 +490,10 @@ class Game {
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
     this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
-    this.gr = 1; this.holdUsed = false; this.mode = 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
+    this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null };
-    this.speed = 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
+    this.speed = this.level.startSpeed || 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
     this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 70); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
     while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
     this.runActs();
@@ -670,11 +685,7 @@ class Game {
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     drawBG(c, W, H, s, this.camX, this.level.bgs);
     const gy = Y(0);
-    if (gy < H) {
-      c.fillStyle = this.ground; c.fillRect(0, gy, W, H - gy);
-      c.fillStyle = 'rgba(0,0,0,.18)'; const g2 = 60 * s, o2 = (this.camX * s) % g2; for (let x = -o2; x < W; x += g2) c.fillRect(x, gy + 3 * s, g2 / 2, H);
-      c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(0, gy - 2 * s, W, 3 * s);
-    }
+    if (gy < H) drawGround(c, W, H, gy, s, this.camX, this.ground, this.level.grs);
 
     if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }
     const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 60;
@@ -959,10 +970,10 @@ async function fetchLevels(kind) {
   const s = await getDocs(query(collection(db, 'levels'), where('status', '==', kind === 'stars' ? 'rated' : 'unrated'), limit(200)));
   const a = s.docs.map(d => ({ id: d.id, ...d.data() })); a.sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); return a;
 }
-function lenSecs(objs) {
+function lenSecs(objs, ss = 1) {
   const end = objs.find(o => o.t === 'trig_end'); if (!end) return 0;
   const ports = objs.filter(o => SPEEDS[o.t]).sort((a, b) => a.x - b.x);
-  let t = 0, x0 = 0, sp = 1; const ex = end.x * U;
+  let t = 0, x0 = 0, sp = ss || 1; const ex = end.x * U;
   for (const p of ports) { const px = p.x * U; if (px >= ex) break; t += (px - x0) / (BASE * sp); x0 = px; sp = SPEEDS[p.t]; }
   return t + (ex - x0) / (BASE * sp);
 }
@@ -1299,7 +1310,7 @@ views.editor = () => {
 };
 
 /* ================= editor: canvas ================= */
-const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks' };
+const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null };
 const iconCache = {};
 function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
@@ -1309,7 +1320,7 @@ function objIcon(t) {
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
-  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.on = true;
+  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.mode = 'build'; ed.posMode = false; ed.spawn = null; ed.on = true;
   showLayer('edit'); setTrack('editor'); renderEdUI(); renderProps(); edDraw();
 }
 function renderEdUI() {
@@ -1317,6 +1328,7 @@ function renderEdUI() {
   const cats = [...new Set(Object.values(OBJ).map(o => o.cat))];
   $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
   $('#edItems').innerHTML = Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
+  const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
 }
 const snap = () => { const s = JSON.stringify(ed.lv.objs); if (ed.hist[ed.hist.length - 1] !== s) { ed.hist.push(s); if (ed.hist.length > 60) ed.hist.shift(); } };
@@ -1368,7 +1380,7 @@ function edDraw() {
   c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 1; c.beginPath();
   for (let gx = Math.floor(ed.camX / U) * U; X(gx) < W; gx += U) { c.moveTo(X(gx), 0); c.lineTo(X(gx), H); }
   for (let gy = Math.floor(ed.camY / U) * U; Y(gy) > 0; gy += U) { c.moveTo(0, Y(gy)); c.lineTo(W, Y(gy)); } c.stroke();
-  if (Y(0) < H) { c.fillStyle = lv.ground; c.fillRect(0, Y(0), W, H - Y(0)); c.fillStyle = '#fff'; c.fillRect(0, Y(0) - 1, W, 3); }
+  if (Y(0) < H) drawGround(c, W, H, Y(0), z, ed.camX, lv.ground, lv.grs);
   c.strokeStyle = '#3ddc4a'; c.setLineDash([6, 6]); c.beginPath(); c.moveTo(X(0), 0); c.lineTo(X(0), H); c.stroke(); c.setLineDash([]);
   const ky = Y((topRows(lv.objs) + 10) * U);
   if (ky > 0) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.setLineDash([10, 6]); c.beginPath(); c.moveTo(0, ky); c.lineTo(W, ky); c.stroke(); c.setLineDash([]); c.fillStyle = '#ff4040'; c.font = 'bold 12px sans-serif'; c.textAlign = 'left'; c.fillText('KILL LINE (10 above tallest object)', 8, ky - 4); }
@@ -1376,13 +1388,15 @@ function edDraw() {
   for (const o of lv.objs) { const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 2 || sx > W + cs || sy < -cs * 3 || sy > H + cs) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }
   c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) c.strokeRect(X(o.x * U) - 2, Y(o.y * U + U) - 2, cs + 4, cs + 4);
   if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
-  if (ed.mode === 'build') { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
+  if (ed.spawn && ed.posMode) { const sx = X(ed.spawn.x * U), sy = Y(ed.spawn.y * U + U); c.fillStyle = 'rgba(53,255,106,.35)'; c.fillRect(sx, sy, cs, cs); c.strokeStyle = '#35ff6a'; c.lineWidth = 3; c.strokeRect(sx, sy, cs, cs); c.fillStyle = '#35ff6a'; c.beginPath(); c.moveTo(sx + cs / 2, sy - cs * .45); c.lineTo(sx + cs * .75, sy - cs * .15); c.lineTo(sx + cs / 2, sy + cs * .15); c.lineTo(sx + cs * .25, sy - cs * .15); c.closePath(); c.fill(); }
+  if (ed.mode === 'build' && !ed.posMode) { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
 }
 (() => {
   const cv = $('#editCanvas');
   cv.addEventListener('contextmenu', e => e.preventDefault());
   cv.addEventListener('pointerdown', e => {
     cv.setPointerCapture(e.pointerId); const [wx, wy] = s2w(e), cx = Math.floor(wx / U), cy = Math.floor(wy / U);
+    if (ed.posMode && e.button === 0) { ed.spawn = { x: Math.max(0, cx), y: Math.max(0, cy) }; return; }
     if (e.button === 2 && ed.mode === 'build') { snap(); ed.drag = { k: 'del' }; delAt(wx, wy); return; }
     if (e.button === 1 || e.button === 2 || ed.mode === 'pan') { ed.drag = { k: 'pan', x: e.clientX, y: e.clientY }; return; }
     snap();
@@ -1420,6 +1434,7 @@ addEventListener('keydown', e => {
   else if ((e.ctrlKey || e.metaKey) && k === 'c') edCopy(); else if ((e.ctrlKey || e.metaKey) && k === 'v') edPaste(); else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); edUndo(); }
   else if (k === 'delete' || k === 'backspace') edDelSel();
   else if (e.altKey && k.startsWith('arrow')) { e.preventDefault(); actions.edhalf({ dx: k === 'arrowleft' ? -.5 : k === 'arrowright' ? .5 : 0, dy: k === 'arrowup' ? .5 : k === 'arrowdown' ? -.5 : 0 }); }
+  else if (k.length === 1 && 'wasd'.includes(k) && !e.ctrlKey && !e.metaKey && !e.altKey) { if (ed.sels.length) { e.preventDefault(); actions.edhalf({ dx: k === 'a' ? -1 : k === 'd' ? 1 : 0, dy: k === 'w' ? 1 : k === 's' ? -1 : 0 }); } }
   else if (k === 'arrowleft') ed.camX -= st; else if (k === 'arrowright') ed.camX += st; else if (k === 'arrowup') ed.camY += st; else if (k === 'arrowdown') ed.camY -= st;
   else if (k === 'p') edPlay(e.shiftKey);
   else if (k === 'escape') { ed.sel = null; ed.sels = []; renderProps(); }
@@ -1435,16 +1450,16 @@ document.addEventListener('input', e => {
 });
 function edPlay(here) {
   const lv = ed.lv; if (!lv.objs.some(o => o.t === 'trig_end')) return toast('Add an End Trigger first (Triggers tab)', 'err');
-  let sx = 0, sy = 0; if (here) { sx = Math.max(0, Math.floor(ed.wx / U) * U); sy = Math.max(0, Math.floor(ed.wy / U) * U); }
+  let sx = 0, sy = 0; if (ed.posMode && ed.spawn) { sx = ed.spawn.x * U; sy = ed.spawn.y * U; }
   saveSlots(ed.slot); ed.on = false;
   idbGet(`draft:${me.uid}:${ed.slot}`).then(b => {
-    startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
+    startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs, grs: lv.grs, startMode: lv.startMode, startSpeed: lv.startSpeed }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
   });
 }
 async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
 function edSettings() {
   const lv = ed.lv;
-  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="30" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
+  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="30" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
 }
 
 /* ================= actions (click delegation) ================= */
@@ -1505,14 +1520,14 @@ const actions = {
   },
   slotpub: async d => { await publish(+d.i); },
   // editor
-  edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edplay: () => edPlay(false), edplayhere: () => edPlay(true),
+  edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edplay: () => edPlay(false), edpos: () => { ed.posMode = !ed.posMode; ed.drag = null; if (ed.posMode) toast('Click any cell to set the spawn position'); renderEdUI(); },
   edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; ed.sels = []; renderProps(); renderEdUI(); },
   edrot: () => edRotate(1), edsettings: edSettings,
   eddel: edDelSel,
   edhalf: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { o.x = Math.max(0, o.x + +d.dx); o.y = Math.max(0, o.y + +d.dy); }); changed(); renderProps(); },
   edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.5, Math.min(2, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
   songprev: async () => { if (prevA) { prevA.pause(); prevA = null; return; } const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err'); prevA = new Audio(URL.createObjectURL(b)); prevA.volume = settings.vol; prevA.playbackRate = ed.lv.songSpeed || 1; prevA.currentTime = (ed.lv.songOff || 0) / 1000; prevA.play().catch(() => { }); setTimeout(() => { prevA && prevA.pause(); prevA = null; }, 10000); },
-  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
+  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
@@ -1540,11 +1555,11 @@ async function publish(i) {
   if (!confirm(`Publish "${lv.name}"? Published levels can't be edited (you can copy them).`)) return;
   try {
     if (lv.objs.filter(o => o.t === 'coin').length > 3) throw 'Max 3 star coins per level';
-    const data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
+    const data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', grs: lv.grs || 'tiles', startMode: lv.startMode || 'cube', startSpeed: lv.startSpeed || 1, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
     if (data.length > 900000) throw 'Level is too big to upload';
     const sb = await idbGet(`draft:${me.uid}:${i}`), has = sb instanceof Blob && sb.size > 0, parts = has ? Math.ceil(sb.size / SONG_CHUNK) : 0;
     const r = doc(collection(db, 'levels')); toast('Uploading level…');
-    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length, coins: lv.objs.filter(o => o.t === 'coin').length, len: Math.round(lenSecs(lv.objs) * 10) / 10 });
+    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length, coins: lv.objs.filter(o => o.t === 'coin').length, len: Math.round(lenSecs(lv.objs, lv.startSpeed) * 10) / 10 });
     if (has) {
       try {
         for (let k = 0; k < parts; k += 3) {
