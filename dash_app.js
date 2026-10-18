@@ -734,11 +734,12 @@ class Game {
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
-  hit(p, x, y, w, h, inset = 0, lethal = false) {   // lethal = deadly (secondary) hitbox test: cube side -30%, ship side -50%, wave side -30%
-    const m = this.mode; if (m === 'wave') inset += 7.5;
-    if (lethal) { const f = m === 'cube' || m === 'wave' ? .7 : m === 'ship' ? .5 : 1; inset = (30 - (30 - 2 * inset) * f) / 2; }
-    return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y;
-  }
+  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
+  // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
+  priIn() { return this.mode === 'wave' ? (30 - 15 * .7) / 2 : 0; }
+  // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
+  secIn() { const m = this.mode; return m === 'wave' ? this.priIn() : m === 'cube' ? (30 - 22 * .7) / 2 : m === 'ship' ? (30 - 22 * .5) / 2 : 4; }
+  hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p;
     if (p.dead) {
@@ -784,16 +785,16 @@ class Game {
     if (OBJ[t].slope) return this.slope(o, x, y);
     if (OBJ[t].solid) {
       const sb = o.sb, bx = x + sb[0], by = y + sb[1], bw = sb[2] - sb[0], bh = sb[3] - sb[1];
-      if (this.hit(p, bx, by, bw, bh, 0, this.mode === 'wave')) {
+      if (this.hitI(p, bx, by, bw, bh, this.priIn())) {
         // primary hitbox touched: only the 15x15 inner hitbox decides deaths, and it also forgives corner clips
-        const inner = true, m = this.mode, gr = this.gr, above = false, below = false;   // strict physical hitbox: any overlap that isn't a landing (or a ufo/ship ceiling slide) kills; wave dies on any touch
+        const inner = this.hitI(p, bx, by, bw, bh, this.secIn()), tol = Math.max(4, this.secIn()), m = this.mode, gr = this.gr, above = false, below = false;   // inner = secondary box touches the wall (kills); a primary-only brush is forgiven   // strict physical hitbox: any overlap that isn't a landing (or a ufo/ship ceiling slide) kills; wave dies on any touch
         if (m === 'wave') { if (inner) this.die(); }
         else if (m === 'ship' || m === 'ufo') {
-          if (prevB >= by + bh - 4 || (!inner && above)) { p.y = by + bh; if (p.vy < 0) p.vy = 0; }
-          else if (prevB + 30 <= by + 4 || (!inner && below)) { p.y = by - 30; if (p.vy > 0) p.vy = 0; }
+          if (prevB >= by + bh - tol || (!inner && above)) { p.y = by + bh; if (p.vy < 0) p.vy = 0; }
+          else if (prevB + 30 <= by + tol || (!inner && below)) { p.y = by - 30; if (p.vy > 0) p.vy = 0; }
           else if (inner) this.die();
         } else {
-          const land = gr > 0 ? (p.vy <= 0 && (prevB >= by + bh - 4 || (!inner && above))) : (p.vy >= 0 && (prevB + 30 <= by + 4 || (!inner && below)));
+          const land = gr > 0 ? (p.vy <= 0 && (prevB >= by + bh - tol || (!inner && above))) : (p.vy >= 0 && (prevB + 30 <= by + tol || (!inner && below)));
           if (land) { p.y = gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
           else if (!inner) {
             if (gr > 0 && p.vy > 0 && below) { p.y = by - 30; p.vy = 0; }
@@ -802,8 +803,8 @@ class Game {
         }
       }
     } else if (OBJ[t].hz) {
-      if (o.hr) { const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), m = this.mode, pr = m === 'cube' || m === 'wave' ? 4.2 : m === 'ship' ? 3 : 6; if (dx * dx + dy * dy < (o.hr + pr) ** 2) this.die(); }
-      else { const h = o.hb; if (this.hit(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], 4, true)) this.die(); }
+      if (o.hr) { const i = this.priIn(), dx = Math.max(p.x + i, Math.min(x + 15, p.x + 30 - i)) - (x + 15), dy = Math.max(p.y + i, Math.min(y + 15, p.y + 30 - i)) - (y + 15); if (dx * dx + dy * dy < o.hr * o.hr) this.die(); }
+      else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
       const sc = o.sc || 1, dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < (26 * sc) ** 2;
       if (on && !o.used && (edge || (this.held && !this.holdUsed))) {
