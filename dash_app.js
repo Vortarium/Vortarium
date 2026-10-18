@@ -543,7 +543,7 @@ class Game {
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
-  hit(p, x, y, w, h, inset = 0) { return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }
+  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }
   step(dt) {
     const p = this.p;
     if (p.dead) {
@@ -630,6 +630,13 @@ class Game {
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
     const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
+    if (m === 'wave') {   // wave uses a half-size (15x15, centered) hitbox
+      const x0 = p.x + 7.5, x1 = p.x + 22.5, y0 = p.y + 7.5, y1 = p.y + 22.5;
+      if (!(x1 > x && x0 < x + 30) || y0 >= y + 30 || y1 <= y) return;
+      const c = v => Math.max(0, Math.min(30, v)), sy = xl => y + (k ? 30 - xl : xl);
+      if (floor ? sy(c(k ? x0 - x : x1 - x)) > y0 : y1 > sy(c(k ? x1 - x : x0 - x))) this.die();
+      return;
+    }
     if (!(p.x + 30 > x && p.x < x + 30) || p.y >= y + 30 || p.y + 30 <= y) return;
     const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? 30 - xl : xl);
     if (floor) {
@@ -1339,7 +1346,7 @@ function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.fi
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
 function renderProps() {
   const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
-  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
+  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
@@ -1423,8 +1430,8 @@ document.addEventListener('input', e => {
   if (e.target.id === 'volr') { settings.vol = +e.target.value; saveSettings(); return; }
   if (e.target.id === 'songspd') { ed.lv.songSpeed = +e.target.value; saveSlots(ed.slot); return; }
   if (e.target.id === 'songoff') { ed.lv.songOff = Math.max(0, +e.target.value || 0); saveSlots(ed.slot); return; }
-  const p = e.target.dataset?.p; if (!p || !ed.sel) return;
-  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; ed.sel[p] = p === 'sc' ? Math.max(.5, Math.min(2, v || 1)) : v; changed();
+  const p = e.target.dataset?.p, tg = ed.sel ? [ed.sel] : ed.sels; if (!p || !tg.length) return;
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; o[p] = p === 'sc' ? Math.max(.5, Math.min(2, v || 1)) : v; }); changed();
 });
 function edPlay(here) {
   const lv = ed.lv; if (!lv.objs.some(o => o.t === 'trig_end')) return toast('Add an End Trigger first (Triggers tab)', 'err');
