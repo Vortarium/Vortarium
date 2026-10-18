@@ -31,13 +31,8 @@ const DIFFS = [
   { id: 'easy', name: 'EASY', stars: 1, col: '#3aa0ff' },
   { id: 'medium', name: 'MEDIUM', stars: 2, col: '#35d35a' },
   { id: 'hard', name: 'HARD', stars: 3, col: '#ffd21f' },
-  { id: 'harder', name: 'HARDER', stars: 4, col: '#ff3b3b' },
-  { id: 'insane', name: 'INSANE', stars: 5, col: '#9b3bff' },
-  { id: 'edemon', name: 'EASY DEMON', stars: 6, col: '#a855f7', demon: true },
-  { id: 'mdemon', name: 'MEDIUM DEMON', stars: 7, col: '#ff6fb5', demon: true },
-  { id: 'hdemon', name: 'HARD DEMON', stars: 8, col: '#c4222f', demon: true },
-  { id: 'idemon', name: 'INSANE DEMON', stars: 9, col: '#e0101f', demon: true },
-  { id: 'xdemon', name: 'EXTREME DEMON', stars: 10, col: '#7a0010', demon: true }
+  { id: 'insane', name: 'INSANE', stars: 4, col: '#ff3b3b' },
+  { id: 'demon', name: 'DEMON', stars: 5, col: '#c4222f' }
 ];
 const SPEEDS = { port_s1: .8, port_s2: 1, port_s3: 1.3, port_s4: 1.6 };
 const PORT_COL = { port_s1: '#f9a825', port_s2: '#2979ff', port_s3: '#2ee86b', port_s4: '#ff3d7f', port_gd: '#2ee0ff', port_gu: '#ff9a2e', port_ship: '#ff4fd8', port_cube: '#7dff2a' };
@@ -73,15 +68,8 @@ Object.assign(OBJ, {
 });
 Object.assign(MODEP, { port_ball: 1, port_ufo: 1, port_wave: 1 });
 Object.assign(PORT_COL, { port_ball: '#ff7a1f', port_ufo: '#ffd21f', port_wave: '#2fd0ff' });
-Object.assign(OBJ, {
-  port_robot: { name: 'Robot Portal', cat: 'portals' }, port_spider: { name: 'Spider Portal', cat: 'portals' },
-  port_mf: { name: 'Forward Portal (normal view)', cat: 'portals' }, port_mb: { name: 'Reverse Portal (flip view)', cat: 'portals' }
-});
-Object.assign(MODEP, { port_robot: 1, port_spider: 1 });
-const REVP = { port_mf: 1, port_mb: 1 };   // reverse portals: flip the whole screen left<->right
-Object.assign(PORT_COL, { port_robot: '#dfe3f2', port_spider: '#a24bff', port_mf: '#4dffb0', port_mb: '#ff5d6e' });
-const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave', port_robot: 'robot', port_spider: 'spider' };
-const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W', port_robot: 'R', port_spider: 'SP' };
+const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave' };
+const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W' };
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
@@ -105,9 +93,7 @@ const SPEC = [];
   for (let h = 15; h < 360; h += 30) add(hsl(h, 55, 48), 'muted');
   ['#0b0b0b', '#2a2a2a', '#444444', '#606060', '#808080', '#a0a0a0', '#c4c4c4', '#e6e6e6'].forEach(c => add(c, 'gray'));
 })();
-const GEMS = { 1: 10, 2: 25, 3: 50, 4: 100, 5: 150, 6: 250, 7: 250, 8: 250, 9: 250, 10: 250 };   // gems for fully beating a rated level, by star rating (every demon = 250)
-// levels rated before the 10-star update: old 'insane' (4 stars) is now HARDER, old 'demon' (5 stars) is now HARD DEMON
-function dOf(l) { let id = l && l.diff; if (!id) return null; if (id === 'insane' && (l.stars || 0) === 4) id = 'harder'; else if (id === 'demon') id = 'hdemon'; return DIFFS.find(x => x.id === id) || null; }
+const GEMS = { 1: 10, 2: 25, 3: 50, 4: 100, 5: 250 };   // gems for fully beating a rated level, by star rating
 const IN = 7.5;                                          // inner hitbox inset (cube 30 -> inner 15, centered)
 const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].ex < x) lo = m + 1; else hi = m; } return lo; };
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
@@ -158,16 +144,28 @@ function drawIcon(c, skin, c1, c2, s) {
     () => { for (let j = 0; j < 3; j++) { const a = []; for (let x = -.5; x <= .5; x += .1) a.push(x, -.3 + j * .3 + Math.sin(x * 12) * .07); Ln(.07, c2, ...a); } }, // 26 waves
     () => { for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) E(-.27 + i * .27, -.27 + j * .27, .08, (i + j) % 2 ? W : c2); }, // 27 dice
     () => { Pg(c2, 0, -.45, .25, -.1, .3, .2, 0, .42, -.3, .2, -.2, -.1); Pg(c1, 0, -.05, .12, .15, 0, .3, -.12, .15); },        // 28 flame
-    () => { Pg(c2, -.4, .3, -.4, -.25, -.2, 0, 0, -.35, .2, 0, .4, -.25, .4, .3); E(0, .08, .07, K); }                          // 29 crown
+    () => { Pg(c2, -.4, .3, -.4, -.25, -.2, 0, 0, -.35, .2, 0, .4, -.25, .4, .3); E(0, .08, .07, K); },                         // 29 crown
+    () => { for (let i = 0; i < 6; i++) Ln(.09, c2, -.9 + i * .3, .6, .3 + i * .3, -.6); },                                   // 30 diagonal stripes
+    () => { for (let i = 0; i < 4; i++) { const r = .46 - i * .12; Ln(.05, i % 2 ? W : c2, -r, -r, r, -r, r, r, -r, r, -r, -r); } }, // 31 nested squares
+    () => { for (let j = 0; j < 3; j++) { const a = []; for (let i = 0; i <= 8; i++) a.push(-.5 + i * .125, -.3 + j * .3 + (i % 2 ? .08 : -.08)); Ln(.07, c2, ...a); } }, // 32 zigzag
+    () => { for (let i = 0; i < 3; i++) { F(-.5, -.4 + i * .3, 1, .1); F(-.4 + i * .3, -.5, .1, 1, W); } },                     // 33 plaid
+    () => { const a = []; for (let i = 0; i <= 40; i++) { const t = i * .4, r = .03 + i * .0095; a.push(Math.cos(t) * r, Math.sin(t) * r); } Ln(.06, c2, ...a); }, // 34 spiral
+    () => { F(-.5, -.5, .28, .28); F(.22, -.5, .28, .28); F(-.5, .22, .28, .28); F(.22, .22, .28, .28); E(0, 0, .1, W); },     // 35 corner squares
+    () => { for (let i = -2; i <= 2; i++) { Ln(.05, c2, i * .25 - .5, -.5, i * .25 + .5, .5); Ln(.05, c2, i * .25 + .5, -.5, i * .25 - .5, .5); } }, // 36 lattice
+    () => { [.3, .6, .9, .5, .75].forEach((h, i) => F(-.45 + i * .19, .5 - h * .9, .14, h * .9)); },                           // 37 equalizer
+    () => { E(-.17, -.12, .07, K); E(.17, -.12, .07, K); Ln(.06, K, -.25, .1, -.1, .25, .1, .25, .25, .1); },                  // 38 smile
+    () => { c.fillStyle = c2; c.beginPath(); c.arc(0, 0, .4 * s, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); E(0, -.2, .1, c1); E(0, .2, .1, c2); } // 39 split disc
   ];
   c.save(); c.lineJoin = 'round'; rr(c, -h, -h, s, s, s * .2); c.fillStyle = c1; c.fill(); c.save(); c.clip();
-  D[((skin % 30) + 30) % 30](); c.restore(); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+  D[((skin % 40) + 40) % 40](); c.restore(); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
 }
 function drawBall(c, idx, c1, c2, s) {
   const r = s * .5, lw = Math.max(1.5, s * .07), K = '#111', W = '#fff';
   const F = (x, y, w, h, col = c2) => { c.fillStyle = col; c.fillRect(x * s, y * s, w * s, h * s); };
   const E = (x, y, d, col = c2) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
   const Ln = (w, col, ...a) => { c.strokeStyle = col; c.lineWidth = w * s; c.lineCap = 'round'; c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.stroke(); };
+  const Pg = (col, ...a) => { c.fillStyle = col; c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); c.fill(); };
+  const Wd = (a0, a1, col = c2) => { c.fillStyle = col; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, s * .6, a0, a1); c.closePath(); c.fill(); };
   const D = [
     () => { F(-.5, -.09, 1, .18); F(-.09, -.5, .18, 1); E(0, 0, .14, K); },
     () => { F(-.5, -.34, 1, .14); F(-.5, -.07, 1, .14); F(-.5, .2, 1, .14); },
@@ -180,13 +178,41 @@ function drawBall(c, idx, c1, c2, s) {
     () => { F(-.5, 0, 1, .5); E(0, .25, .12, c1); E(0, -.25, .12); },
     () => { E(0, 0, .3, W); E(.06, 0, .15, K); E(.1, -.04, .04, W); },
     () => { for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4; E(Math.cos(t) * .36, Math.sin(t) * .36, .07); } E(0, 0, .1, K); },
-    () => { Ln(.14, c2, -.5, -.1, .1, .5); Ln(.14, c2, -.2, -.5, .5, .2); }
+    () => { Ln(.14, c2, -.5, -.1, .1, .5); Ln(.14, c2, -.2, -.5, .5, .2); },
+    () => { E(0, 0, .42); E(0, 0, .3, c1); E(0, 0, .18); },
+    () => { for (let i = -3; i <= 3; i++) F(i * .15 - .035, -.5, .07, 1); },
+    () => { for (let i = -3; i <= 3; i++) Ln(.07, c2, i * .28 - .6, .6, i * .28 + .6, -.6); },
+    () => { for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) E(-.28 + i * .28, -.28 + j * .28, .08); },
+    () => { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if ((i + j) & 1) F(-.5 + i * .25, -.5 + j * .25, .25, .25); },
+    () => { const a = []; for (let i = 0; i <= 36; i++) { const t = i * .45, r = .02 + i * .011; a.push(Math.cos(t) * r, Math.sin(t) * r); } Ln(.07, c2, ...a); },
+    () => { E(-.04, 0, .34); E(.1, -.04, .3, c1); },
+    () => { F(0, -.5, .5, 1, K); E(-.2, 0, .06, W); },
+    () => { for (let i = 0; i < 6; i += 2) Wd(i * Math.PI / 3, (i + 1) * Math.PI / 3); E(0, 0, .07, W); },
+    () => { Wd(0, Math.PI / 2); Wd(Math.PI, Math.PI * 1.5); },
+    () => { F(-.22, -.22, .44, .44); E(0, 0, .08, K); },
+    () => { Ln(.14, c2, -.5, -.5, .5, .5); Ln(.14, c2, .5, -.5, -.5, .5); },
+    () => { for (let j = -2; j <= 2; j++) { const a = []; for (let x = -.55; x <= .55; x += .1) a.push(x, j * .2 + Math.sin(x * 10) * .05); Ln(.06, c2, ...a); } },
+    () => { Pg(c2, 0, -.38, .36, .26, -.36, .26); },
+    () => { for (let i = 0; i < 4; i++) { const t = i * Math.PI / 2 + Math.PI / 4; E(Math.cos(t) * .3, Math.sin(t) * .3, .09); } E(0, 0, .1, K); },
+    () => { for (let i = 0; i < 12; i++) { const t = i * Math.PI / 6; E(Math.cos(t) * .38, Math.sin(t) * .38, .05); } },
+    () => { E(0, 0, .45); F(-.5, -.04, 1, .08, K); },
+    () => { Wd(Math.PI / 2, Math.PI * 1.5); E(0, -.25, .25); E(0, .25, .25, c1); E(0, -.25, .07, c1); E(0, .25, .07); },
+    () => { for (let i = 0; i < 12; i++) { const t = i * Math.PI / 6; Ln(.05, c2, Math.cos(t) * .15, Math.sin(t) * .15, Math.cos(t) * .55, Math.sin(t) * .55); } E(0, 0, .12, K); },
+    () => { Pg(c2, 0, -.4, .4, 0, 0, .4, -.4, 0); Pg(c1, 0, -.2, .2, 0, 0, .2, -.2, 0); },
+    () => { for (let i = -2; i <= 2; i++) { Ln(.04, c2, i * .22, -.55, i * .22, .55); Ln(.04, c2, -.55, i * .22, .55, i * .22); } },
+    () => { E(-.1, -.1, .36); E(-.1, -.1, .22, c1); E(-.1, -.1, .1); },
+    () => { Ln(.1, c2, -.3, -.35, 0, -.05, -.3, .25); Ln(.1, c2, .05, -.35, .35, -.05, .05, .25); },
+    () => { for (let j = 0; j < 2; j++) { const a = []; for (let i = 0; i <= 8; i++) a.push(-.55 + i * .14, -.18 + j * .36 + (i & 1 ? .08 : -.08)); Ln(.07, c2, ...a); } },
+    () => { [[-.25, -.2, .07], [.2, -.28, .05], [.05, 0, .08], [-.2, .22, .05], [.28, .18, .07], [-.05, -.38, .04], [.35, -.05, .04]].forEach(([x, y, r], i) => E(x, y, r, i % 2 ? W : c2)); },
+    () => { Pg(c2, -.55, -.55, .55, -.55, -.55, .55); },
+    () => { E(0, 0, .5); E(0, 0, .34, c1); E(0, 0, .14); },
+    () => { for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3; E(Math.cos(t) * .22, Math.sin(t) * .22, .17); } E(0, 0, .1, K); }
   ];
-  c.save(); c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = c1; c.fill(); c.save(); c.clip(); D[idx % 12](); c.restore();
+  c.save(); c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = c1; c.fill(); c.save(); c.clip(); D[idx % 40](); c.restore();
   c.beginPath(); c.arc(0, 0, r - lw / 2, 0, 7); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
 }
 function drawUfo(c, cube, idx, c1, c2, s) {
-  const k = idx % 12, lw = Math.max(1.5, s * .05), dot = (x, y, d, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
+  const k = idx % 40, lw = Math.max(1.5, s * .05), dot = (x, y, d, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
   const poly = a => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); };
   c.save(); c.lineJoin = 'round'; c.save(); c.translate(0, -s * .2); drawIcon(c, cube, c1, c2, s * .5); c.restore();
   if (k === 0) { c.beginPath(); c.ellipse(0, s * .17, s * .52, s * .16, 0, 0, 7); }
@@ -200,6 +226,7 @@ function drawUfo(c, cube, idx, c1, c2, s) {
   else if (k === 8) { c.beginPath(); c.ellipse(0, s * .17, s * .52, s * .16, 0, 0, 7); }
   else if (k === 9) { c.beginPath(); c.moveTo(-.5 * s, .12 * s); c.lineTo(.5 * s, .12 * s); c.ellipse(0, .12 * s, .5 * s, .25 * s, 0, 0, Math.PI); c.closePath(); }
   else if (k === 10) { c.beginPath(); c.ellipse(0, s * .17, s * .5, s * .15, 0, 0, 7); }
+  else if (k >= 12) { const q = (k - 12) % 7; if (q === 0) { c.beginPath(); c.ellipse(0, s * .18, s * .56, s * .12, 0, 0, 7); } else if (q === 1) { c.beginPath(); c.ellipse(0, s * .17, s * .36, s * .22, 0, 0, 7); } else if (q === 2) poly([-.5, .34, -.3, .04, .3, .04, .5, .34]); else if (q === 3) poly([-.55, .18, -.3, .04, .3, .04, .55, .18, .3, .32, -.3, .32]); else if (q === 4) rr(c, -.5 * s, .05 * s, s, .28 * s, .14 * s); else if (q === 5) poly([-.6, .2, -.4, .1, .4, .1, .6, .2, .4, .3, -.4, .3]); else rr(c, -.4 * s, .03 * s, .8 * s, .32 * s, .05 * s); }
   else poly([-.45, .04, .45, .04, .55, .2, .3, .34, -.3, .34, -.55, .2]);
   c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
   if (k === 0) [-.3, 0, .3].forEach(x => dot(x, .17, .04, c1));
@@ -213,6 +240,7 @@ function drawUfo(c, cube, idx, c1, c2, s) {
   else if (k === 8) { c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.beginPath(); c.moveTo(-.4 * s, .17 * s); c.lineTo(.4 * s, .17 * s); c.stroke(); }
   else if (k === 9) { c.strokeStyle = c1; c.lineWidth = lw; c.beginPath(); c.moveTo(-.3 * s, .22 * s); c.lineTo(.3 * s, .22 * s); c.stroke(); }
   else if (k === 10) [-.4, -.2, 0, .2, .4].forEach(x => { c.fillStyle = c1; poly([x - .05, .3, x + .05, .3, x, .4]); });
+  else if (k >= 12) { const d = ((k - 12) / 7) | 0; if (d === 0) [-.3, 0, .3].forEach(x => dot(x, .19, .04, c1)); else if (d === 1) { c.fillStyle = c1; c.fillRect(-.45 * s, .17 * s, .9 * s, .05 * s); } else if (d === 2) { dot(-.2, .19, .045, '#fff'); dot(.2, .19, .045, '#fff'); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.beginPath(); c.moveTo(-.35 * s, .12 * s); c.lineTo(.35 * s, .12 * s); c.stroke(); } else [-.25, 0, .25].forEach(x => dot(x, .39, .035, c1)); }
   else { c.fillStyle = c1; c.beginPath(); c.ellipse(0, s * .38, s * .22, s * .05, 0, 0, 7); c.fill(); }
   c.restore();
 }
@@ -221,62 +249,18 @@ const WV = [
   [-.5, -.25, .1, -.4, .55, 0, .1, .4, -.5, .25], [-.55, -.35, -.15, -.35, -.05, -.1, .55, 0, -.05, .1, -.15, .35, -.55, .35, -.35, 0], [-.5, -.45, .55, -.05, .15, 0, .55, .05, -.5, .45, -.3, 0], [-.55, -.4, -.3, 0, -.55, .4, .1, .3, .55, 0, .1, -.3],
   [-.5, -.4, .5, -.3, -.1, -.1, .55, 0, -.1, .1, .5, .3, -.5, .4, -.25, 0], [-.45, -.35, .2, -.4, .55, 0, .2, .4, -.45, .35], [-.55, 0, -.2, -.12, -.3, -.45, 0, -.2, .55, 0, 0, .2, -.3, .45, -.2, .12], [-.5, -.4, .3, -.4, .55, 0, .3, .4, -.5, .4, -.3, 0]
 ];
+const WV2 = [
+  [-.55, -.3, .1, -.3, .55, 0, .1, .3, -.55, .3], [-.5, -.45, .55, 0, -.5, .45], [-.55, -.2, -.1, -.4, .55, 0, -.1, .4, -.55, .2], [-.5, -.35, .05, -.35, .55, -.1, .55, .1, .05, .35, -.5, .35],
+  [-.55, 0, -.2, -.4, .2, -.15, .55, 0, .2, .15, -.2, .4], [-.5, -.4, -.1, -.15, .55, -.15, .55, .15, -.1, .15, -.5, .4], [-.55, -.25, .55, 0, -.55, .25]
+];
 function drawWave(c, idx, c1, c2, s) {
-  const a = WV[idx % 12], poly = k => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s * k, a[i + 1] * s * k); c.closePath(); };
+  const a = idx < 12 ? WV[idx] : WV2[(idx - 12) % 7], poly = k => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s * k, a[i + 1] * s * k); c.closePath(); };
   c.save(); c.lineJoin = 'round'; poly(1); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .08); c.stroke();
-  c.translate(-s * .05, 0); poly(.5); c.fillStyle = c2; c.fill(); c.restore();
-}
-function drawRobot(c, idx, c1, c2, s, ph = 0, air = false) {
-  const k = ((idx % 12) + 12) % 12, ey = k % 4, tp = k % 3, ac = k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
-  const seg = (x0, y0, x1, y1, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x0 * s, y0 * s); c.lineTo(x1 * s, y1 * s); c.stroke(); };
-  const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
-  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
-  [[-.2, 0], [.2, Math.PI]].forEach(([hx, off]) => {   // legs (swing while running, tuck in the air)
-    const a = air ? (hx < 0 ? -.55 : .5) : Math.sin(ph + off) * .75, b = air ? (hx < 0 ? .9 : -.2) : -a * .6 + .35 + Math.max(0, Math.cos(ph + off)) * .45;
-    const kx = hx + Math.sin(a) * .19, ky = .1 + Math.cos(a) * .19, fx = kx + Math.sin(b) * .2, fy = ky + Math.cos(b) * .2;
-    seg(hx, .1, kx, ky, lw * 2.5, '#000'); seg(kx, ky, fx, fy, lw * 2.5, '#000'); seg(hx, .1, kx, ky, lw * 1.2, c2); seg(kx, ky, fx, fy, lw * 1.2, c2);
-    c.fillStyle = c1; c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.beginPath(); c.rect((fx - .02) * s, (fy - .03) * s, .12 * s, .06 * s); c.fill(); c.stroke();
-  });
-  if (tp === 0) { seg(0, -.42, .06, -.5, lw * 1.2, '#000'); dot(.06, -.5, .04, c2); }
-  else if (tp === 1) [[-.46, -.3], [.38, -.3]].forEach(([x, y]) => { rr(c, x * s, y * s, .08 * s, .2 * s, .03 * s); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.stroke(); });
-  else { rr(c, -.18 * s, -.5 * s, .36 * s, .09 * s, .03 * s); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.stroke(); }
-  rr(c, -.4 * s, -.42 * s, .8 * s, .52 * s, .1 * s); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
-  rr(c, -.3 * s, -.34 * s, .6 * s, .24 * s, .06 * s); c.fillStyle = K; c.fill();
-  c.fillStyle = c2;
-  if (ey === 0) c.fillRect(-.23 * s, -.25 * s, .46 * s, .06 * s);
-  else if (ey === 1) { c.fillRect(-.22 * s, -.3 * s, .13 * s, .13 * s); c.fillRect(.09 * s, -.3 * s, .13 * s, .13 * s); }
-  else if (ey === 2) { dot(0, -.22, .09, c2); dot(0, -.22, .04, K); }
-  else { dot(-.13, -.22, .07, c2); dot(.13, -.22, .07, c2); }
-  if (ac === 0) [-.1, 0, .1].forEach(x => seg(x, -.04, x, .05, lw * .8, '#000'));
-  else if (ac === 1) { c.fillStyle = c2; c.fillRect(-.3 * s, -.04 * s, .6 * s, .05 * s); }
-  else [-.14, 0, .14].forEach(x => dot(x, .0, .03, c2));
-  c.restore();
-}
-function drawSpider(c, idx, c1, c2, s, ph = 0, air = false) {
-  const k = ((idx % 12) + 12) % 12, bs = k % 3, ee = k % 4, mk = k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
-  const line = (a, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.stroke(); };
-  const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
-  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
-  [-1, 1].forEach(sg => [0, 1, 2].forEach(i => {   // 3 legs per side, walking cycle on the ground, splayed out in the air
-    const hx = sg * (.08 + i * .05), sw = Math.sin(ph * 1.3 + i * 1.7 + (sg > 0 ? Math.PI : 0)), lift = air ? 0 : Math.max(0, sw);
-    const kx = hx + sg * (.14 + i * .03), ky = -.24 + i * .06;
-    const fx = air ? hx + sg * (.26 + i * .03) : hx + sg * (.2 + i * .04) + sw * .035, fy = air ? .22 + i * .1 : .46 - lift * .1;
-    const a = [hx, 0, kx, ky, fx, fy]; line(a, lw * 2.3, '#000'); line(a, lw * 1.0, c2);
-  }));
-  c.fillStyle = c1; c.strokeStyle = '#000'; c.lineWidth = lw; c.beginPath();
-  if (bs === 0) c.arc(0, -.02 * s, .26 * s, 0, 7);
-  else if (bs === 1) c.ellipse(0, -.02 * s, .33 * s, .24 * s, 0, 0, 7);
-  else for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](Math.cos(t) * .29 * s, (-.02 + Math.sin(t) * .27) * s); }
-  c.closePath(); c.fill(); c.stroke();
-  if (mk === 0) { c.fillStyle = c2; c.beginPath(); c.ellipse(0, .12 * s, .1 * s, .06 * s, 0, 0, 7); c.fill(); }
-  else if (mk === 1) [-.12, 0, .12].forEach(x => dot(x, -.19 + Math.abs(x) * .3, .035, c2));
-  else line([-.2, .1, .2, .1], lw * 1.5, c2);
-  const eye = (x, y, r) => { dot(x, y, r, '#fff'); dot(x, y + r * .15, r * .5, K); };
-  if (ee === 0) { eye(-.1, -.06, .075); eye(.1, -.06, .075); }
-  else if (ee === 1) { eye(-.1, -.03, .065); eye(.1, -.03, .065); eye(-.05, -.15, .04); eye(.05, -.15, .04); }
-  else if (ee === 2) eye(0, -.04, .12);
-  else { eye(-.12, -.03, .06); eye(.12, -.03, .06); eye(0, -.14, .05); }
-  if (mk === 2) { c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = lw * .5; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * .03 * s, .06 * s); c.lineTo(sg * .09 * s, .06 * s); c.lineTo(sg * .06 * s, .15 * s); c.closePath(); c.fill(); c.stroke(); }); }
+  const st = idx < 12 ? 0 : ((idx - 12) / 7) | 0;
+  if (st === 0) { c.translate(-s * .05, 0); poly(.5); c.fillStyle = c2; c.fill(); }
+  else if (st === 1) { c.save(); poly(1); c.clip(); c.fillStyle = c2; c.fillRect(-s, -.07 * s, 2 * s, .14 * s); c.restore(); }
+  else if (st === 2) { c.fillStyle = c2; [-.25, 0, .25].forEach(x => { c.beginPath(); c.arc(x * s, 0, .07 * s, 0, 7); c.fill(); }); }
+  else { c.save(); poly(1); c.clip(); c.fillStyle = c2; c.fillRect(-s, 0, 2 * s, s); c.restore(); poly(1); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .08); c.stroke(); }
   c.restore();
 }
 const SHIPS = [
@@ -287,11 +271,14 @@ const SHIPS = [
   [-.5, .32, -.5, .2, -.2, .2, -.2, .1, .2, .1, .2, .02, .55, .02, .55, .32], [-.45, .07, .45, .07, .55, .18, .45, .3, -.45, .3, -.55, .18], [-.55, .04, .2, .04, .55, .2, .3, .3, .3, .18, -.55, .18], [-.5, .3, -.5, .1, -.3, .2, -.15, .02, 0, .2, .15, .02, .3, .2, .5, .1, .5, .3],
   [-.55, .3, -.55, .12, -.3, .04, .3, .04, .58, .2, .58, .3], [-.4, .18, .1, .02, .55, .18, .1, .32], [-.55, .32, .55, .32, .55, .1, -.1, .1, -.55, .04], [-.55, .1, -.2, .28, .2, .28, .55, .1, .4, .04, .15, .2, -.15, .2, -.4, .04],
   [-.55, .04, .5, .04, .58, .18, .5, .32, -.55, .32, -.3, .18], [-.5, .04, .5, .04, .55, .1, -.1, .14, .55, .26, .5, .32, -.5, .32], [-.5, .04, .5, .04, .5, .18, 0, .34, -.5, .18], [-.5, .04, .5, .04, .5, .2, .35, .32, .2, .2, .05, .32, -.1, .2, -.25, .32, -.4, .2, -.5, .2],
-  [-.55, .32, -.45, .04, -.25, .18, -.05, .02, .15, .18, .35, .06, .55, .32], [-.55, .18, -.2, .04, .2, .04, .55, .18, .2, .32, -.2, .32]
+  [-.55, .32, -.45, .04, -.25, .18, -.05, .02, .15, .18, .35, .06, .55, .32], [-.55, .18, -.2, .04, .2, .04, .55, .18, .2, .32, -.2, .32],
+  [-.5, .3, -.5, .1, -.2, .04, .4, .04, .58, .2, .4, .32], [-.55, .2, -.3, .04, .1, .04, .3, .14, .58, .14, .58, .26, .3, .26, .1, .32, -.3, .32], [-.5, .04, .5, .04, .58, .32, -.58, .32], [-.55, .18, -.35, .04, .35, .04, .55, .18, .35, .32, -.35, .32],
+  [-.5, .3, -.3, .04, 0, .2, .3, .04, .5, .3], [-.55, .1, .1, .04, .55, .18, .1, .32, -.55, .26], [-.5, .04, .3, .04, .55, .32, -.5, .32], [-.45, .32, -.55, .18, -.45, .04, .45, .04, .55, .18, .45, .32],
+  [-.55, .04, .55, .04, .55, .1, .3, .32, .1, .1, -.1, .32, -.3, .1, -.55, .32], [-.5, .18, -.3, .04, 0, .12, .3, .04, .55, .18, .3, .32, 0, .24, -.3, .32]
 ];
-function hull(c, k, s) { c.beginPath(); const a = SHIPS[k % 30]; for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); }
+function hull(c, k, s) { c.beginPath(); const a = SHIPS[k % 40]; for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); }
 function drawShip(c, cube, ship, c1, c2, s) {
-  const k = ((ship % 30) + 30) % 30, p = k % 6, lw = Math.max(1.5, s * .05);
+  const k = ((ship % 40) + 40) % 40, p = k % 6, lw = Math.max(1.5, s * .05);
   c.save(); c.translate(0, -s * .05); c.lineJoin = 'round';
   c.save(); c.translate(0, -s * .13); drawIcon(c, cube, c1, c2, s * .55); c.restore();
   c.fillStyle = '#ffb020'; c.beginPath(); c.moveTo(-.5 * s, .12 * s); c.lineTo(-.7 * s, .17 * s); c.lineTo(-.5 * s, .22 * s); c.fill();
@@ -314,61 +301,28 @@ const urlOf = (key, size, draw) => { if (ICACHE[key]) return ICACHE[key]; const 
 const ballURL = (i, c1, c2, size = 64) => urlOf(['ball', i, c1, c2, size].join('|'), size, x => drawBall(x, i, c1, c2, size * .84));
 const ufoURL = (i, cube, c1, c2, size = 64) => urlOf(['ufo', i, cube, c1, c2, size].join('|'), size, x => drawUfo(x, cube, i, c1, c2, size * .9));
 const waveURL = (i, c1, c2, size = 64) => urlOf(['wave', i, c1, c2, size].join('|'), size, x => drawWave(x, i, c1, c2, size * .8));
-const robotURL = (i, c1, c2, size = 64) => urlOf(['robot', i, c1, c2, size].join('|'), size, x => drawRobot(x, i, c1, c2, size * .84, 1.1, false));
-const spiderURL = (i, c1, c2, size = 64) => urlOf(['spider', i, c1, c2, size].join('|'), size, x => drawSpider(x, i, c1, c2, size * .84, .8, false));
 function skinURL(skin, c1, c2, size = 64) {
   const k = [skin, c1, c2, size].join('|'); if (ICACHE[k]) return ICACHE[k];
   const cv = document.createElement('canvas'); cv.width = cv.height = size; const x = cv.getContext('2d');
   x.translate(size / 2, size / 2); drawIcon(x, skin, c1, c2, size * .84); return ICACHE[k] = cv.toDataURL();
 }
 function diffURL(id, size = 64) {
-  if (id === 'demon') id = 'hdemon';
   const k = 'd' + id + size; if (ICACHE[k]) return ICACHE[k];
-  const d = DIFFS.find(x => x.id === id) || DIFFS[0], n = d.stars, s = size;
-  const cv = document.createElement('canvas'); cv.width = cv.height = size; const c = cv.getContext('2d');
-  c.translate(s / 2, s / 2); c.lineJoin = 'round'; c.lineCap = 'round';
-  if (n >= 6) { c.translate(0, s * .1); c.scale(.8, .8); }       // demons are drawn a bit smaller so the horns fit
-  c.lineWidth = s * .06; c.strokeStyle = '#000';
-  if (n >= 6) {   // horns: [tipX, tipY, outer ctrl X, outer ctrl Y, inner ctrl X, inner ctrl Y, color]
-    const [tx, ty, cx, cy, ix, iy, hc] = { 6: [.3, -.46, .4, -.3, .2, -.4, '#6b2fb0'], 7: [.34, -.52, .46, -.34, .22, -.44, '#b0306e'], 8: [.42, -.55, .44, -.3, .24, -.4, '#7d0f1a'], 9: [.3, -.62, .58, -.42, .22, -.46, '#4a0008'], 10: [.15, -.7, .64, -.46, .2, -.5, '#1c0004'] }[n];
-    c.fillStyle = hc;
-    [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .34, -s * .12); c.quadraticCurveTo(sg * cx * s, cy * s, sg * tx * s, ty * s); c.quadraticCurveTo(sg * ix * s, iy * s, sg * s * .12, -s * .32); c.closePath(); c.fill(); c.stroke(); });
-  }
-  if (n === 10) { const g = c.createRadialGradient(0, -s * .06, s * .03, 0, 0, s * .4); g.addColorStop(0, '#c00020'); g.addColorStop(1, '#2e0008'); c.fillStyle = g; } else c.fillStyle = d.col;
-  c.beginPath(); c.arc(0, 0, s * .36, 0, 7); c.fill(); c.stroke();
-  if (n === 10) { c.save(); c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = s * .03; [-1, 1].forEach(sg => [0, 1].forEach(i => { c.beginPath(); c.moveTo(sg * s * (.2 + i * .06), s * (.0 + i * .02)); c.lineTo(sg * s * (.3 + i * .04), s * (.16 + i * .02)); c.stroke(); })); c.restore(); }
-  const brow = (w, ya, yb) => { c.save(); c.lineWidth = s * w; c.strokeStyle = '#000'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .29, ya * s); c.lineTo(sg * s * .04, yb * s); c.stroke(); }); c.restore(); };
-  const rect = (x, y, w, h) => { c.fillStyle = '#000'; c.fillRect(x * s, y * s, w * s, h * s); c.fillRect(-(x + w) * s, y * s, w * s, h * s); };
-  const dots = (y, r) => { c.fillStyle = '#000'; c.beginPath(); c.arc(-s * .13, y * s, r * s, 0, 7); c.arc(s * .13, y * s, r * s, 0, 7); c.fill(); };
-  const slit = col => { c.save(); if (n === 10) { c.shadowColor = '#ff7a00'; c.shadowBlur = s * .1; } c.fillStyle = col; c.lineWidth = s * .025; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .26, -s * .14); c.lineTo(sg * s * .05, -s * .05); c.lineTo(sg * s * .09, s * .01); c.lineTo(sg * s * .25, -s * .07); c.closePath(); c.fill(); c.stroke(); }); c.restore(); };
-  const fangs = (x, w, h, y = .14) => { c.fillStyle = '#fff'; c.lineWidth = s * .02; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * x, y * s); c.lineTo(sg * s * (x + w), y * s); c.lineTo(sg * s * (x + w / 2), (y + h) * s); c.closePath(); c.fill(); c.stroke(); }); };
-  const grin = (w, top, bot) => {   // wide evil grin with jagged teeth
-    const Q = (t, y0, cy) => [(2 * t - 1) * w * s, ((1 - t) * (1 - t) * .08 + 2 * (1 - t) * t * cy + t * t * .08) * s];
-    c.beginPath(); c.moveTo(-w * s, .08 * s); c.quadraticCurveTo(0, .2 * s, w * s, .08 * s); c.quadraticCurveTo(0, .38 * s, -w * s, .08 * s); c.closePath(); c.fillStyle = '#000'; c.fill();
-    c.fillStyle = '#fff';
-    for (let i = 1; i <= top; i++) { const [x, y] = Q(i / (top + 1), .08, .2); c.beginPath(); c.moveTo(x - s * .03, y); c.lineTo(x + s * .03, y); c.lineTo(x, y + s * .075); c.fill(); }
-    for (let i = 1; i <= bot; i++) { const [x, y] = Q(i / (bot + 1), .08, .38); c.beginPath(); c.moveTo(x - s * .03, y); c.lineTo(x + s * .03, y); c.lineTo(x, y - s * .07); c.fill(); }
-  };
-  // eyes + brows
-  if (n <= 2) dots(-.08, .05);
-  else if (n === 3 || n === 4 || n === 8) rect(.06, -.12, .14, .1);
-  else if (n === 5) { rect(.06, -.09, .14, .09); brow(.075, -.27, -.09); }
-  else if (n === 6) dots(-.08, .055);
-  else if (n === 7) { rect(.07, -.1, .12, .09); brow(.05, -.24, -.14); }
-  else if (n === 9) { slit('#ffe21f'); brow(.085, -.31, -.08); }
-  else { slit('#fff2a0'); brow(.1, -.36, -.06); }
-  // mouth
+  const d = DIFFS.find(x => x.id === id) || DIFFS[0];
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const c = cv.getContext('2d'); const s = size;
+  c.translate(s / 2, s / 2); c.lineWidth = s * .06; c.strokeStyle = '#000';
+  if (id === 'demon') { c.fillStyle = '#7d0f1a'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .2, -s * .3); c.lineTo(sg * s * .42, -s * .52); c.lineTo(sg * s * .38, -s * .18); c.closePath(); c.fill(); c.stroke(); }); }
+  c.fillStyle = d.col; c.beginPath(); c.arc(0, 0, s * .36, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = '#000';
+  if (id === 'hard' || id === 'insane' || id === 'demon') { c.fillRect(-s * .2, -s * .12, s * .14, s * .1); c.fillRect(s * .06, -s * .12, s * .14, s * .1); }
+  else { c.beginPath(); c.arc(-s * .13, -s * .08, s * .05, 0, 7); c.arc(s * .13, -s * .08, s * .05, 0, 7); c.fill(); }
   c.strokeStyle = '#000'; c.lineWidth = s * .05; c.beginPath();
-  if (n === 1) { c.arc(0, s * .02, s * .17, .15, Math.PI - .15); c.stroke(); }
-  else if (n === 2) { c.arc(0, s * .05, s * .12, .25, Math.PI - .25); c.stroke(); }
-  else if (n === 3) { c.moveTo(-s * .12, s * .14); c.lineTo(s * .12, s * .14); c.stroke(); }
-  else if (n === 4) { c.arc(0, s * .24, s * .13, Math.PI + .3, -.3); c.stroke(); }
-  else if (n === 5) { c.lineWidth = s * .065; c.arc(0, s * .27, s * .16, Math.PI + .22, -.22); c.stroke(); }
-  else if (n === 6) { c.arc(0, s * .04, s * .14, .2, Math.PI - .2); c.stroke(); fangs(.09, .05, .1, .12); }
-  else if (n === 7) { c.moveTo(-s * .14, s * .15); c.lineTo(0, s * .16); c.lineTo(s * .14, s * .1); c.stroke(); fangs(.05, .05, .09, .15); }
-  else if (n === 8) { c.arc(0, s * .24, s * .13, Math.PI + .3, -.3); c.stroke(); fangs(.06, .06, .1); }
-  else if (n === 9) grin(.22, 4, 3);
-  else grin(.27, 6, 5);
+  if (id === 'easy') c.arc(0, s * .02, s * .17, .15, Math.PI - .15);
+  else if (id === 'medium') c.arc(0, s * .05, s * .12, .25, Math.PI - .25);
+  else if (id === 'hard') { c.moveTo(-s * .12, s * .14); c.lineTo(s * .12, s * .14); }
+  else c.arc(0, s * .24, s * .13, Math.PI + .3, -.3);
+  c.stroke();
+  if (id === 'demon') { c.fillStyle = '#fff'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .06, s * .14); c.lineTo(sg * s * .12, s * .14); c.lineTo(sg * s * .09, s * .24); c.fill(); }); }
   return ICACHE[k] = cv.toDataURL();
 }
 
@@ -403,12 +357,12 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = PADCOL[t]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t]) {
+  } else if (SPEEDS[t] || GRAV[t] || MODEP[t]) {
     const cx = x + cs / 2, cl = PORT_COL[t];
     c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
     c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+    c.fillText(MODEP[t] ? PLET[t] : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
@@ -554,7 +508,7 @@ class Game {
   resize() { const d = this.rs || (this.rs = Math.min(2, devicePixelRatio || 1)); this.cv.width = this.cv.clientWidth * d; this.cv.height = this.cv.clientHeight * d; }
   load(level) {
     this.level = level;
-    let cn = 0; const objs = (level.objs || []).map(o => ({ ...o, ci: o.t === 'coin' ? cn++ : -1, gold: !!level.rated, ex: o.x * U, ey: o.y * U, col0: o.c || defColor(o.t), col: o.c || defColor(o.t), used: false, alp: 1, off: false, got: false, tf: false }));
+    let cn = 0; const objs = (level.objs || []).map(o => ({ ...o, ci: o.t === 'coin' ? cn++ : -1, gold: !!level.rated, ex: o.x * U, ey: o.y * U, tcol: o.col, col0: o.c || defColor(o.t), col: o.c || defColor(o.t), used: false, alp: 1, off: false, got: false, tf: false }));
     objs.sort((a, b) => a.ex - b.ex);
     this.groups = {};
     objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); });
@@ -565,7 +519,7 @@ class Game {
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
-    this.ports = objs.filter(o => SPEEDS[o.t]); this.rports = objs.filter(o => REVP[o.t]);
+    this.ports = objs.filter(o => SPEEDS[o.t]);
     const end = tr.find(o => o.t === 'trig_end'); this.endX = end ? end.ex : Infinity;
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
@@ -591,9 +545,8 @@ class Game {
   reset(first) {
     this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
     this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
-    this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
-    this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
+    this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null };
     this.speed = this.level.startSpeed || 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
     this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 70); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
     while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
@@ -605,7 +558,7 @@ class Game {
     const dur = instant ? 0 : (t.dur || 0);
     if (t.t === 'trig_color') {
       const key = t.tg === 0 ? 'bg' : t.tg === -1 ? 'gr' : 'c' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
-      const to = hex2rgb(t.col || '#ff5252');
+      const to = hex2rgb(t.tcol || t.col || '#ff5252');
       if (t.tg === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
       else if (t.tg === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
       else this.acts.push({ key, k: 'col', list: (this.groups[t.tg] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
@@ -639,14 +592,14 @@ class Game {
   snap() {
     const p = this.p, os = [];
     for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col]);
-    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
+    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
       gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
   }
   restore(k) {
     for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
     for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
-    this.gr = k.gr; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
+    this.gr = k.gr; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
     this.si = lb(this.S, this.p.x - 70); this.tI = lb(this.TT, this.p.x - 40);
     this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
@@ -662,7 +615,11 @@ class Game {
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
-  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }
+  hit(p, x, y, w, h, inset = 0, lethal = false) {   // lethal = deadly (secondary) hitbox test: cube side -30%, ship side -50%, wave side -30%
+    const m = this.mode; if (m === 'wave') inset += 7.5;
+    if (lethal) { const f = m === 'cube' || m === 'wave' ? .7 : m === 'ship' ? .5 : 1; inset = (30 - (30 - 2 * inset) * f) / 2; }
+    return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y;
+  }
   step(dt) {
     const p = this.p;
     if (p.dead) {
@@ -677,15 +634,13 @@ class Game {
     { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
     if (this.mode === 'cube' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
-    if (this.mode === 'robot' && this.held && !this.holdUsed && p.grounded) { p.vy = 441 * this.gr; p.grounded = false; p.rb = .3; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
     const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
-      else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
-      const gm = this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
+      p.vy -= G * (this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : 1) * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
@@ -694,7 +649,7 @@ class Game {
     for (const o of this.D) {
       if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 100) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
     }
-    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
     if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
@@ -708,7 +663,7 @@ class Game {
     if (OBJ[t].slope) return this.slope(o, x, y);
     if (OBJ[t].solid) {
       const sb = o.sb, bx = x + sb[0], by = y + sb[1], bw = sb[2] - sb[0], bh = sb[3] - sb[1];
-      if (this.hit(p, bx, by, bw, bh)) {
+      if (this.hit(p, bx, by, bw, bh, 0, this.mode === 'wave')) {
         // primary hitbox touched: only the 15x15 inner hitbox decides deaths, and it also forgives corner clips
         const inner = true, m = this.mode, gr = this.gr, above = false, below = false;   // strict physical hitbox: any overlap that isn't a landing (or a ufo/ship ceiling slide) kills; wave dies on any touch
         if (m === 'wave') { if (inner) this.die(); }
@@ -726,19 +681,19 @@ class Game {
         }
       }
     } else if (OBJ[t].hz) {
-      if (o.hr) { const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15); if (dx * dx + dy * dy < (o.hr + 6) ** 2) this.die(); }
-      else { const h = o.hb; if (this.hit(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], 4)) this.die(); }
+      if (o.hr) { const dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), m = this.mode, pr = m === 'cube' || m === 'wave' ? 4.2 : m === 'ship' ? 3 : 6; if (dx * dx + dy * dy < (o.hr + pr) ** 2) this.die(); }
+      else { const h = o.hb; if (this.hit(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], 4, true)) this.die(); }
     } else if (ORBS.includes(t)) {
       const sc = o.sc || 1, dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < (26 * sc) ** 2;
       if (on && !o.used && (edge || (this.held && !this.holdUsed))) {
-        o.used = true; p.grounded = false; p.rb = 0; this.edgeT = 0; this.holdUsed = true; this.jumps++;
+        o.used = true; p.grounded = false; this.edgeT = 0; this.holdUsed = true; this.jumps++;
         if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
         else if (DASH[t]) { const an = (o.a || 0) * Math.PI / 180; p.dash = { vy: Math.sin(an) * BASE * this.speed * this.gr, t: 0, flip: t === 'orb_db' }; p.vy = p.dash.vy; }
         else p.vy = PHYS[t] * this.gr;
       }
     } else if (PADS.includes(t)) {
       const b = o.pb, on = this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1]);
-      if (on && !o.used) { o.used = true; p.grounded = false; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr; }
+      if (on && !o.used) { o.used = true; p.grounded = false; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr; }
       else if (!on) o.used = false;
     } else if (SPEEDS[t]) {
       if (this.hit(p, x + 5, y, 20, 60)) this.speed = SPEEDS[t];
@@ -746,32 +701,13 @@ class Game {
       if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
     } else if (MODEP[t]) {
       if (this.hit(p, x + 5, y, 20, 60)) this.mode = PMODE[t];
-    } else if (REVP[t]) {
-      if (this.hit(p, x + 5, y, 20, 60)) this.mir = t === 'port_mb' ? 1 : 0;
     }
-  }
-  // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
-  spiderJump() {
-    const p = this.p, up = this.gr > 0; let best = null;
-    const test = (o, gx, gy) => {
-      if (o.off) return; const d = OBJ[o.t]; if (!d.solid) return; if (!o.pp) this.prep(o);
-      const sb = d.slope ? [0, 0, 30, 30] : o.sb, x = o.ex + gx + sb[0], y = o.ey + gy + sb[1], w = sb[2] - sb[0], h = sb[3] - sb[1];
-      if (!(p.x + 30 > x && p.x < x + w)) return;
-      if (up) { if (y >= p.y + 30 - 2) { const t = y - 30; if (best === null || t < best) best = t; } }
-      else if (y + h <= p.y + 2) { const t = y + h; if (best === null || t > best) best = t; }
-    };
-    const S = this.S; for (let i = lb(S, p.x - 70); i < S.length && S[i].ex < p.x + 70; i++) test(S[i], 0, 0);
-    for (const o of this.D) { const g = this.gOff[o.g]; test(o, g ? g.x * U : 0, g ? g.y * U : 0); }
-    if (!up && best === null) best = 0;
-    if (best === null) return;
-    const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
-    for (let i = 0; i < 10; i++) this.parts.push({ x: p.x + 15, y: from + (best - from) * i / 9 + 15, vx: -60 - Math.random() * 80, vy: (Math.random() - .5) * 60, life: .3, col: this.skin.c1, s: 3 + Math.random() * 3 });
   }
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
     const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
     if (m === 'wave') {   // wave uses a half-size (15x15, centered) hitbox
-      const x0 = p.x + 7.5, x1 = p.x + 22.5, y0 = p.y + 7.5, y1 = p.y + 22.5;
+      const x0 = p.x + 9.75, x1 = p.x + 20.25, y0 = p.y + 9.75, y1 = p.y + 20.25;
       if (!(x1 > x && x0 < x + 30) || y0 >= y + 30 || y1 <= y) return;
       const c = v => Math.max(0, Math.min(30, v)), sy = xl => y + (k ? 30 - xl : xl);
       if (floor ? sy(c(k ? x0 - x : x1 - x)) > y0 : y1 > sy(c(k ? x1 - x : x0 - x))) this.die();
@@ -806,8 +742,6 @@ class Game {
     this.camX = p.x - (W / s) * .3;
     const ty = Math.max(-70, p.y - (H / s) * .4); this.camY += (ty - this.camY) * Math.min(1, 6 * dt);
     const X = x => (x - this.camX) * s, Y = y => H - (y - this.camY) * s;
-    const mt = this.mir ? -1 : 1; this.mf += (mt - this.mf) * Math.min(1, 9 * dt); if (Math.abs(mt - this.mf) < .003) this.mf = mt;
-    c.fillStyle = this.bg; c.fillRect(0, 0, W, H); c.save(); if (this.mf !== 1) { c.translate(W / 2, 0); c.scale(this.mf, 1); c.translate(-W / 2, 0); }
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     drawBG(c, W, H, s, this.camX, this.level.bgs);
@@ -828,8 +762,7 @@ class Game {
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
     if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 6 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(p.x + 15), Y(p.y + 15)); c.stroke(); c.globalAlpha = 1; }
-    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
-    c.restore();
+    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
   }
 }
 
@@ -909,29 +842,31 @@ const ACH_DEFS = [
 const ACH = (() => {
   const list = []; ACH_DEFS.forEach(([stat, name, desc, ns], ci) => ns.forEach((n, i) => list.push({ stat, n, name: `${name} ${i + 1}`, desc: desc.replace('{n}', fmt(n)), tier: i / ns.length, ci })));
   list.sort((a, b) => a.tier - b.tier || a.ci - b.ci);
-  const cols = []; for (let i = 1; i < 13; i++) { cols.push({ k: 'p', i }); cols.push({ k: 's', i }); }
-  const mk = (k, n) => Array.from({ length: n }, (_, i) => ({ k, i: i + 1 }));
-  const pools = [{ a: mk('skin', 29) }, { a: cols }, { a: mk('ship', 29) }, { a: mk('ball', 11) }, { a: mk('ufo', 11) }, { a: mk('wave', 11) }]; pools.forEach(p => p.n = p.a.length);
-  list.forEach(a => { pools.sort((x, y) => y.a.length / y.n - x.a.length / x.n); a.rw = pools.find(p => p.a.length).a.shift(); });
-  // robot + spider skins: extra late-game achievements (assigned after the originals, so existing unlocks never change)
-  const rw2 = []; for (let i = 1; i <= 11; i++) rw2.push({ k: 'robot', i }, { k: 'spider', i });
-  const cnt = {};
-  [['levelsBeaten', 100], ['stars', 200], ['demons', 40], ['crystals', 2000], ['starCoins', 50], ['totalViews', 1500], ['netLikes', 200], ['published', 40], ['comments', 150], ['rated', 40], ['maxPostLikes', 75],
-   ['levelsBeaten', 150], ['stars', 300], ['demons', 50], ['crystals', 3000], ['starCoins', 75], ['totalViews', 2500], ['netLikes', 300], ['published', 50], ['comments', 200], ['rated', 60], ['maxPostLikes', 100]]
-    .forEach(([stat, n], j) => { const df = ACH_DEFS.find(d => d[0] === stat); cnt[stat] = (cnt[stat] || df[3].length) + 1; list.push({ stat, n, name: `${df[1]} ${cnt[stat]}`, desc: df[2].replace('{n}', fmt(n)), tier: 1 + j / 100, ci: 99, rw: rw2[j] }); });
-  return list;
+  const cols = []; for (let i = 1; i < 23; i++) { cols.push({ k: 'p', i }); cols.push({ k: 's', i }); }
+  // each mode has 40 icons (0 = default). Only some are achievement rewards (picked pseudo-randomly, handed out slightly out of order); the rest are shop-only
+  const mk = (k, cnt, seed) => {
+    const r = rng(seed); let idx = Array.from({ length: 39 }, (_, i) => i + 1);
+    for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    idx = idx.slice(0, cnt).sort((a, b) => a - b);
+    for (let i = 0; i < idx.length - 1; i++) if (r() < .3) { const j = Math.min(idx.length - 1, i + 1 + Math.floor(r() * 3)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    return idx.map(i => ({ k, i }));
+  };
+  const pools = [{ a: mk('skin', 14, 101) }, { a: cols }, { a: mk('ship', 14, 202) }, { a: mk('ball', 14, 303) }, { a: mk('ufo', 14, 404) }, { a: mk('wave', 15, 505) }]; pools.forEach(p => p.n = p.a.length);
+  list.forEach(a => { pools.sort((x, y) => y.a.length / y.n - x.a.length / x.n); a.rw = pools.find(p => p.a.length).a.shift(); }); return list;
 })();
-const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin', robot: 'Robot skin', spider: 'Spider skin' };
+const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin' };
 const rwName = r => RWN[r.k] ? `${RWN[r.k]} #${r.i + 1}` : r.k === 'p' ? `Primary color #${r.i + 1}` : `Secondary color #${r.i + 1}`;
+const achVal = a => a.stat === 'crystals' ? Math.max(P?.crystals || 0, P?.maxCrystals || 0) : (P?.[a.stat] || 0);   // crystals can be spent, so use the highest amount ever held
+function trackMaxCrystals() { if (me && P && (P.crystals || 0) > (P.maxCrystals || 0)) { P.maxCrystals = P.crystals; updateDoc(doc(db, 'users', me.uid), { maxCrystals: P.crystals }).catch(() => { }); } }
 function unlocked_() {
-  const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), robot: new Set([0]), spider: new Set([0]), p: new Set([0]), s: new Set([0]) };
-  if (me && P) ACH.forEach(a => { if ((P[a.stat] || 0) >= a.n) u[a.rw.k].add(a.rw.i); });
+  const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), p: new Set([0]), s: new Set([0]) };
+  if (me && P) ACH.forEach(a => { if (achVal(a) >= a.n) u[a.rw.k].add(a.rw.i); });
   if (me && P) (P.bought || []).forEach(k => { const [t, i] = k.split(':'); if (t === 'col') { u.p.add(+i); u.s.add(+i); } else if (u[t]) u[t].add(+i); });
   return u;
 }
 function checkAch() {
-  if (!me || !P) return; const key = 'dash_ach_' + me.uid; const seen = new Set(JSON.parse(localStorage[key] || '[]'));
-  const first = !localStorage[key]; const now = ACH.filter(a => (P[a.stat] || 0) >= a.n).map(a => a.name);
+  if (!me || !P) return; trackMaxCrystals(); const key = 'dash_ach_' + me.uid; const seen = new Set(JSON.parse(localStorage[key] || '[]'));
+  const first = !localStorage[key]; const now = ACH.filter(a => achVal(a) >= a.n).map(a => a.name);
   if (!first) now.filter(n => !seen.has(n)).forEach(n => { const a = ACH.find(x => x.name === n); toast(`🏆 Achievement: ${a.name} - unlocked ${rwName(a.rw)}`, 'ok'); });
   localStorage[key] = JSON.stringify(now);
 }
@@ -948,7 +883,7 @@ function go(name, p = {}, push = true) {
 function back() { const s = stack.pop(); s && s[0] !== 'menu' ? go(s[0], s[1], false) : go('menu'); }
 const page = (title, html) => { $('#view').innerHTML = `<div class="page"><header><button class="round" data-act="back">◀</button><h2>${title}</h2></header><div class="pbody">${html}</div></div>`; };
 function renderFooter() {
-  const s = P || {};
+  trackMaxCrystals(); const s = P || {};
   $('#footer').innerHTML = `<span class="fname">${me ? nameHTML(P?.username || '…') : 'Anonymous'}</span><span>💎 ${fmt(s.crystals)}</span><span>⭐ ${fmt(s.stars)}</span><span>🪙 ${fmt(s.starCoins)}</span><span>😈 ${fmt(s.demons)}</span><span>👍 ${fmt(s.netLikes)}</span><span>✅ ${fmt(s.levelsBeaten)}</span>`;
   $('#menuIcon').src = myIcon(64);
   const b = $('#menuBadge'); const n = (reqs.length || 0) + (isMod() ? modPending : 0); b.textContent = n; b.classList.toggle('hide', !n);
@@ -956,7 +891,7 @@ function renderFooter() {
 
 /* ================= auth ================= */
 const emailOf = u => `${u.toLowerCase()}@dash-game.app`;
-const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, bought: [], ball: 0, ufo: 0, wave: 0, robot: 0, spider: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
+const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, bought: [], ball: 0, ufo: 0, wave: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
 let busySignup = false;
 async function signUp(username, pw) {
   username = username.trim();
@@ -978,14 +913,14 @@ async function afterLogin(u) {
   let s = await getDoc(doc(db, 'users', u.uid)); if (!s.exists()) { await sleep(1200); s = await getDoc(doc(db, 'users', u.uid)); }
   if (!s.exists()) { await signOut(auth); me = null; toast('Account data not found', 'err'); return; }
   P = s.data(); if (P.settings) { Object.assign(settings, P.settings); localStorage.dash_settings = JSON.stringify(settings); applyAudio(); }
-  loadSlots(); startListeners(); renderFooter();
+  loadSlots(); startListeners(); renderFooter(); loadBeaten();
   refreshMyStats(); pullDrafts(); syncSongs(); purgeDMs();
   if (cur === 'account') views.account({ tab: 'account' });
 }
 onAuthStateChanged(auth, async u => {
   if (busySignup) return;
   if (u) { try { await afterLogin(u); } catch (e) { console.error(e); toast('Could not load account: ' + errMsg(e), 'err'); } }
-  else { me = null; P = null; stopListeners(); loadSlots(); renderFooter(); if (cur === 'account') views.account({ tab: 'account' }); }
+  else { me = null; P = null; BEATEN = new Set(); stopListeners(); loadSlots(); renderFooter(); if (cur === 'account') views.account({ tab: 'account' }); }
 });
 async function refreshProfile() {
   if (!me || !P) return; try { const s = await getDoc(doc(db, 'users', me.uid)); if (s.exists()) { Object.assign(P, s.data()); renderFooter(); checkAch(); } } catch { }
@@ -1036,22 +971,20 @@ views.account = ({ tab = 'account' } = {}) => {
 
 /* ================= cosmetics ================= */
 views.cosmetics = ({ tab = 'cube' } = {}) => {
-  const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0, rbt = P?.robot || 0, spd = P?.spider || 0;
+  const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0;
   const req = (k, i) => { const a = ACH.find(a => a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : i ? 'Sold in Community > Shop' : 'Default'; };
   const grid = (k, n, cur, img) => Array.from({ length: n }, (_, i) => `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`).join('');
   const sw = (k, arr, cur) => arr.map((c, i) => `<div class="sw ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" style="background:${c}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? 'Color ' + (i + 1) : req(k, i))}"></div>`).join('');
   let body;
-  if (tab === 'cube') body = `<div class="skgrid">${grid('skin', 30, sk, i => skinURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ship') body = `<div class="skgrid">${grid('ship', 30, sh, i => shipURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ball') body = `<div class="skgrid">${grid('ball', 12, bl, i => ballURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ufo') body = `<div class="skgrid">${grid('ufo', 12, uf, i => ufoURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'wave') body = `<div class="skgrid">${grid('wave', 12, wv, i => waveURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'robot') body = `<div class="skgrid">${grid('robot', 12, rbt, i => robotURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'spider') body = `<div class="skgrid">${grid('spider', 12, spd, i => spiderURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  if (tab === 'cube') body = `<div class="skgrid">${grid('skin', 40, sk, i => skinURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ship') body = `<div class="skgrid">${grid('ship', 40, sh, i => shipURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ball') body = `<div class="skgrid">${grid('ball', 40, bl, i => ballURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ufo') body = `<div class="skgrid">${grid('ufo', 40, uf, i => ufoURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'wave') body = `<div class="skgrid">${grid('wave', 40, wv, i => waveURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'colors') body = `<h3>Primary</h3><div class="swatches">${sw('p', PRIMARY, c1)}</div><h3>Secondary</h3><div class="swatches">${sw('s', SECONDARY, c2)}</div>`;
-  else body = ACH.map(a => { const v = P?.[a.stat] || 0, done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwName(a.rw)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
-  const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
-  page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${robotURL(rbt, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${spiderURL(spd, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
+  else body = ACH.map(a => { const v = achVal(a), done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwName(a.rw)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
+  const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
+  page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
 };
 
 /* ================= community ================= */
@@ -1068,7 +1001,7 @@ ICO.gem = svg('<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12
 /* ================= shop ================= */
 const SHOP_ROTATE_DAYS = 1;   // stock reshuffles every N days (same for everybody); set 0 for one permanent stock
 const SHOP_PRICES = [100, 150, 200, 250, 300, 400, 500, 600, 750, 1000], SHOP_CPRICES = [100, 150, 200, 250, 300, 400];
-const SHOP_NAMES = { skin: 'Cube', ship: 'Ship', ball: 'Ball', ufo: 'UFO', wave: 'Wave', robot: 'Robot', spider: 'Spider' };
+const SHOP_NAMES = { skin: 'Cube', ship: 'Ship', ball: 'Ball', ufo: 'UFO', wave: 'Wave' };
 const SHOP_GROUPS = { rainbow: 'Rainbow', light: 'Light', dark: 'Dark', muted: 'In-between', gray: 'Grayscale' };
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 let shopCache = null;
@@ -1076,15 +1009,15 @@ function shopStock() {
   const day = SHOP_ROTATE_DAYS ? Math.floor(Date.now() / 864e5 / SHOP_ROTATE_DAYS) : 1;
   if (shopCache && shopCache.day === day) return shopCache;
   const r = rng(day * 2654435761 + 12345), shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const pool = []; [['skin', 29], ['ship', 29], ['ball', 11], ['ufo', 11], ['wave', 11], ['robot', 11], ['spider', 11]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
-  const icons = shuf(pool).slice(0, 20).map(it => ({ ...it, key: it.k + ':' + it.i, price: SHOP_PRICES[Math.floor(r() * SHOP_PRICES.length)] })).sort((a, b) => a.price - b.price);
+  const pool = []; [['skin', 39], ['ship', 39], ['ball', 39], ['ufo', 39], ['wave', 39]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
+  const icons = shuf(pool).slice(0, 30).map(it => ({ ...it, key: it.k + ':' + it.i, price: SHOP_PRICES[Math.floor(r() * SHOP_PRICES.length)] })).sort((a, b) => a.price - b.price);
   const cols = shuf(Object.keys(SHOP_GROUPS)).map(g => { const a = SPEC.filter(x => x.g === g), x = a[Math.floor(r() * a.length)]; return { k: 'col', g, i: x.i, key: 'col:' + x.i, price: SHOP_CPRICES[Math.floor(r() * SHOP_CPRICES.length)] }; });
   return shopCache = { day, icons, cols };
 }
-const shopImg = (it, z) => { const c1 = PRIMARY[P?.c1 || 0], c2 = SECONDARY[P?.c2 || 0], sk = P?.skin || 0; return it.k === 'skin' ? skinURL(it.i, c1, c2, z) : it.k === 'ship' ? shipURL(it.i, sk, c1, c2, z) : it.k === 'ball' ? ballURL(it.i, c1, c2, z) : it.k === 'ufo' ? ufoURL(it.i, sk, c1, c2, z) : it.k === 'wave' ? waveURL(it.i, c1, c2, z) : it.k === 'robot' ? robotURL(it.i, c1, c2, z) : spiderURL(it.i, c1, c2, z); };
+const shopImg = (it, z) => { const c1 = PRIMARY[P?.c1 || 0], c2 = SECONDARY[P?.c2 || 0], sk = P?.skin || 0; return it.k === 'skin' ? skinURL(it.i, c1, c2, z) : it.k === 'ship' ? shipURL(it.i, sk, c1, c2, z) : it.k === 'ball' ? ballURL(it.i, c1, c2, z) : it.k === 'ufo' ? ufoURL(it.i, sk, c1, c2, z) : waveURL(it.i, c1, c2, z); };
 const shopLabel = it => it.k === 'col' ? `${SHOP_GROUPS[it.g]} color` : `${SHOP_NAMES[it.k]} #${it.i + 1}`;
 views.shop = ({ pg = 0 } = {}) => {
-  const st = shopStock(), un = unlocked_(), pages = 4; pg = Math.max(0, Math.min(pages - 1, +pg || 0)); curP = { ...curP, pg };
+  const st = shopStock(), un = unlocked_(), pages = Math.max(1, Math.ceil(st.icons.length / 5)); pg = Math.max(0, Math.min(pages - 1, +pg || 0)); curP = { ...curP, pg };
   const owned = it => it.k === 'col' ? un.p.has(it.i) : un[it.k].has(it.i);
   const card = it => { const o = owned(it), can = (P?.crystals || 0) >= it.price;
     const vis = it.k === 'col' ? `<div class="shsw" style="background:${PRIMARY[it.i]}"></div>` : `<img src="${shopImg(it, 64)}" width="64" height="64">`;
@@ -1097,7 +1030,7 @@ async function buyItem(key) {
   if (!me || !P) throw 'Log in to buy things';
   const st = shopStock(), it = [...st.icons, ...st.cols].find(x => x.key === key); if (!it) throw 'That item is no longer in stock';
   if ((P.bought || []).includes(key)) throw 'You already own that';
-  if ((P.crystals || 0) < it.price) throw `You need ${fmt(it.price - (P.crystals || 0))} more 💎`;
+  trackMaxCrystals(); if ((P.crystals || 0) < it.price) throw `You need ${fmt(it.price - (P.crystals || 0))} more 💎`;
   if (!confirm(`Buy ${shopLabel(it)} for ${fmt(it.price)} gems?`)) return;
   await updateDoc(doc(db, 'users', me.uid), { crystals: increment(-it.price), bought: arrayUnion(key) });
   P.crystals -= it.price; P.bought = [...(P.bought || []), key]; renderFooter(); toast(`Bought ${shopLabel(it)}!`, 'ok'); views.shop({ pg: curP.pg || 0 });
@@ -1120,14 +1053,12 @@ function levelLen(l) {
   if (l.len == null) { try { l.len = lenSecs(JSON.parse(l.data).objs || []); } catch { l.len = 0; } }
   return l.len;
 }
-const LENS = [['tiny', 'Tiny', 10], ['short', 'Short', 30], ['medium', 'Medium', 60], ['long', 'Long', 120], ['xl', 'XL', Infinity]];   // [key, label, upper bound in seconds]
-const lenKey = s => s ? LENS.find(x => s < x[2])[0] : '';
 function lenTag(l) {
   const s = levelLen(l); if (!s) return '';
-  const e = LENS.find(x => s < x[2]);
-  return `<span class="len len-${e[0]}" title="${Math.round(s)}s">${e[1]}</span>`;
+  const n = s < 10 ? 'Tiny' : s < 30 ? 'Short' : s < 60 ? 'Medium' : s < 120 ? 'Long' : 'XL';
+  return `<span class="len len-${n.toLowerCase()}" title="${Math.round(s)}s">${n}</span>`;
 }
-const lvlCard = l => { const d = dOf(l); return `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${diffURL(d ? d.id : 'easy', 56)}" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)} ${lenTag(l)}</h3><div class="muted">by <b class="auth" data-act="profile" data-uid="${l.authorId}">${nameHTML(l.authorName)}</b>${d ? ' · ' + d.name + ' ⭐' + d.stars : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`; };
+const lvlCard = l => `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${l.diff ? diffURL(l.diff, 56) : diffURL('easy', 56)}" style="${l.diff ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)}${beatMark(l.id)} ${lenTag(l)}</h3><div class="muted">by <b class="auth" data-act="profile" data-uid="${l.authorId}">${nameHTML(l.authorName)}</b>${l.diff ? ' · ' + DIFFS.find(d => d.id === l.diff).name + ' ⭐' + (DIFFS.find(d => d.id === l.diff).stars) : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`;
 views.levels = async ({ kind }) => {
   page(kind === 'stars' ? 'Stars - Rated Levels' : 'New Levels', '<p class="muted">Loading…</p>');
   try { LISTS[kind] = await fetchLevels(kind); } catch (e) { return page('Levels', `<p>${esc(errMsg(e))}</p>`); }
@@ -1140,7 +1071,7 @@ function renderLevels(kind, pg) {
 }
 
 /* ---- search ---- */
-const SRCH = { q: '', status: 'all', diff: 'any', len: 'any', sort: 'new', pg: 0, res: [], cache: null, loading: false };
+const SRCH = { q: '', status: 'all', diff: 'any', pg: 0, res: [], cache: null, loading: false };
 async function searchPool(status) {
   const c = SRCH.cache; if (!c || Date.now() - c.t > 120000) SRCH.cache = { t: Date.now(), rated: null, unrated: null };
   const need = status === 'rated' ? ['rated'] : status === 'unrated' ? ['unrated'] : ['rated', 'unrated'];
@@ -1149,26 +1080,26 @@ async function searchPool(status) {
 }
 views.search = async () => { SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); };
 async function runSearch() {
-  const q = SRCH.q.trim().toLowerCase(), lw = LENS.find(x => x[0] === q || x[1].toLowerCase() === q);   // typing "short", "long", "xl"... also matches by length
-  let a = await searchPool(SRCH.diff !== 'any' ? 'rated' : SRCH.status);
-  if (SRCH.diff !== 'any') a = a.filter(l => dOf(l)?.id === SRCH.diff);
-  if (SRCH.len !== 'any') a = a.filter(l => lenKey(levelLen(l)) === SRCH.len);
-  if (q) a = a.filter(l => (l.title || '').toLowerCase().includes(q) || (l.authorName || '').toLowerCase().includes(q) || (lw && lenKey(levelLen(l)) === lw[0]));
-  a.forEach(l => { LV[l.id] = l; });
-  const by = SRCH.sort === 'short' ? (x, y) => levelLen(x) - levelLen(y) : SRCH.sort === 'long' ? (x, y) => levelLen(y) - levelLen(x) : (x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0);
-  SRCH.res = a.slice().sort(by); SRCH.pg = 0;
+  const q = SRCH.q.trim().toLowerCase(); let a = await searchPool(SRCH.diff !== 'any' ? 'rated' : SRCH.status);
+  if (SRCH.diff !== 'any') a = a.filter(l => l.diff === SRCH.diff);
+  if (q) a = a.filter(l => (l.title || '').toLowerCase().includes(q) || (l.authorName || '').toLowerCase().includes(q));
+  a.forEach(l => { LV[l.id] = l; }); SRCH.res = a.slice().sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); SRCH.pg = 0;
 }
 function renderSearch() {
   const a = SRCH.res, pages = Math.max(1, Math.ceil(a.length / 10)), pg = Math.min(SRCH.pg, pages - 1), opt = (v, n, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${n}</option>`;
-  const ctl = `<div class="card"><div class="row"><input id="sq" maxlength="40" placeholder="Search by level name, creator or length (tiny, short, medium, long, xl)…" value="${esc(SRCH.q)}" style="flex:1;min-width:200px;margin:0"><button class="btn green sm" data-act="dosearch">🔍 Search</button></div><div class="row" style="margin-top:8px"><label style="flex:1">Status<select id="sstat">${opt('all', 'Rated & unrated', SRCH.status)}${opt('rated', 'Rated only', SRCH.status)}${opt('unrated', 'Unrated only', SRCH.status)}</select></label><label style="flex:1">Rating<select id="sdiff">${opt('any', 'Any', SRCH.diff)}${DIFFS.map(d => opt(d.id, `${d.name} (⭐${d.stars})`, SRCH.diff)).join('')}</select></label></div><div class="row" style="margin-top:8px"><label style="flex:1">Length<select id="slen">${opt('any', 'Any length', SRCH.len)}${LENS.map(([k, n, mx], i) => opt(k, `${n} (${i ? LENS[i - 1][2] : 0}${mx === Infinity ? '+' : '–' + mx}s)`, SRCH.len)).join('')}</select></label><label style="flex:1">Sort by<select id="ssort">${opt('new', 'Newest', SRCH.sort)}${opt('short', 'Shortest first', SRCH.sort)}${opt('long', 'Longest first', SRCH.sort)}</select></label></div></div>`;
+  const ctl = `<div class="card"><div class="row"><input id="sq" maxlength="40" placeholder="Search by level name or creator…" value="${esc(SRCH.q)}" style="flex:1;min-width:200px;margin:0"><button class="btn green sm" data-act="dosearch">🔍 Search</button></div><div class="row" style="margin-top:8px"><label style="flex:1">Status<select id="sstat">${opt('all', 'Rated & unrated', SRCH.status)}${opt('rated', 'Rated only', SRCH.status)}${opt('unrated', 'Unrated only', SRCH.status)}</select></label><label style="flex:1">Rating<select id="sdiff">${opt('any', 'Any', SRCH.diff)}${DIFFS.map(d => opt(d.id, `${d.name} (⭐${d.stars})`, SRCH.diff)).join('')}</select></label></div></div>`;
   const body = SRCH.loading ? '<p class="muted">Searching…</p>' : a.length ? `<p class="muted">${a.length} level${a.length === 1 ? '' : 's'} found</p><div class="list">${a.slice(pg * 10, pg * 10 + 10).map(lvlCard).join('')}</div><div class="pager"><button class="btn sm" data-act="srchpg" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="srchpg" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>` : '<p class="muted">No levels match.</p>';
   page('Search Levels', ctl + body);
 }
-async function doSearch() { SRCH.q = val('sq'); SRCH.status = val('sstat'); SRCH.diff = val('sdiff'); SRCH.len = val('slen') || 'any'; SRCH.sort = val('ssort') || 'new'; SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); const i = $('#sq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+async function doSearch() { SRCH.q = val('sq'); SRCH.status = val('sstat'); SRCH.diff = val('sdiff'); SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); const i = $('#sq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'sq') doSearch(); });
-document.addEventListener('change', e => { if (['sstat', 'sdiff', 'slen', 'ssort'].includes(e.target.id)) doSearch(); });
+document.addEventListener('change', e => { if (e.target.id === 'sstat' || e.target.id === 'sdiff') doSearch(); });
 
 /* ---- level page ---- */
+let BEATEN = new Set();   // ids of levels the current account (or anonymous browser) has beaten
+async function loadBeaten() { BEATEN = new Set(); if (!me) return; try { (await getDocs(collection(db, 'users', me.uid, 'beaten'))).forEach(d => BEATEN.add(d.id)); } catch { } }
+const isBeaten = id => BEATEN.has(id) || (!me && !!anonGet('dash_anon_beaten')[id]);
+const beatMark = id => isBeaten(id) ? ' <span class="beat" title="Beaten">✔</span>' : '';
 const bestKey = id => 'dash_best_' + id;
 async function getBest(id) {
   let b = +localStorage[bestKey(id)] || 0;
@@ -1190,11 +1121,11 @@ views.level = async ({ id }) => {
   let my = 0; if (me) { try { const v = await getDoc(doc(db, 'levels', id, 'votes', me.uid)); my = v.exists() ? v.data().v : 0; } catch { } }
   const best = await getBest(id);
   let cms = []; try { cms = (await getDocs(query(collection(db, 'levels', id, 'comments'), orderBy('t', 'desc'), limit(60)))).docs.map(d => ({ id: d.id, ...d.data() })); } catch { }
-  const d = dOf(lv), mine = me && lv.authorId === me.uid;
+  const d = DIFFS.find(x => x.id === lv.diff), mine = me && lv.authorId === me.uid;
   const dl = (lv.songParts || lv.songUrl) ? (await idbGet('level:' + id) ? '<span class="muted">✔ Song downloaded</span>' : `<button class="btn sm blue" data-act="dlsong" data-id="${id}">⬇ Download song${lv.songName ? ': ' + esc(lv.songName) : ''}</button>`) : '';
   const cmHtml = cms.map(c => `<div class="cm">${isMod() || (me && c.uid === me.uid) ? `<span class="del" data-act="delcm" data-id="${id}" data-cid="${c.id}">✕</span>` : ''}<b data-act="profile" data-uid="${c.uid}">${nameHTML(c.name)}</b><br>${esc(c.text)}</div>`).join('') || '<p class="muted">No comments yet.</p>';
   page(esc(lv.title), `<div class="lp"><div class="lp-main">
-    <h1>${esc(lv.title)}</h1><div>by <b style="color:#8fe9ff;cursor:pointer" data-act="profile" data-uid="${lv.authorId}">${nameHTML(lv.authorName)}</b></div>
+    <h1>${esc(lv.title)}${beatMark(id)}</h1><div>by <b style="color:#8fe9ff;cursor:pointer" data-act="profile" data-uid="${lv.authorId}">${nameHTML(lv.authorName)}</b></div>
     <div class="row" style="justify-content:center"><img src="${d ? diffURL(d.id, 56) : diffURL('easy', 56)}" width="56" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><b>${d ? d.name + ' · ⭐ ' + d.stars : 'Unrated'}</b> ${lenTag(lv)}</div>
     <p class="muted" style="max-width:480px">${esc(lv.desc || 'No description')}</p>
     <button class="playbtn" data-act="playlvl" data-id="${id}">▶</button>
@@ -1244,7 +1175,7 @@ async function awardAuthor(id, L, d) {
   const addC = Array.from({ length: nc }, (_, i) => i).filter(i => !prevC.includes(i));
   const gemTotal = GEMS[d.stars], gemHave = psnap.exists() ? (psnap.data().gems || 0) : 0, gems = Math.max(0, gemTotal - gemHave), upd = {};
   if (first) upd.levelsBeaten = increment(1);
-  if (!starred) { upd.stars = increment(d.stars * STAR_SCALE); if (d.demon) upd.demons = increment(1); }
+  if (!starred) { upd.stars = increment(d.stars * STAR_SCALE); if (d.id === 'demon') upd.demons = increment(1); }
   if (gems) upd.crystals = increment(gems);
   if (addC.length) upd.starCoins = increment(addC.length);
   await setDoc(br, { t: serverTimestamp(), starred: true, level: id, coins: [...prevC, ...addC] }, { merge: true });
@@ -1294,14 +1225,14 @@ async function playPublished(id, practice = false) {
   if (Date.now() - (+localStorage[vk] || 0) > 600000) { localStorage[vk] = Date.now(); updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1; }
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
-  const prog = await getProgress(id), prevBest = prog.best, dd = dOf(lv);
+  const prog = await getProgress(id), prevBest = prog.best, dd = DIFFS.find(x => x.id === lv.diff);
   startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
-  game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
+  game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
@@ -1353,7 +1284,7 @@ function anonBest(id, pct) { const m = anonGet('dash_anon_best'); if (pct > (m[i
 function recordAnonWin(id, coins) { const m = anonGet('dash_anon_beaten'), e = m[id] || { coins: [] }; e.coins = [...new Set([...(e.coins || []), ...coins])]; m[id] = e; localStorage.dash_anon_beaten = JSON.stringify(m); anonBest(id, 100); }
 async function awardWin(id, fb, got) {
   const fresh = await getDoc(doc(db, 'levels', id)); if (!fresh.exists() && !fb) return null;
-  const L = fresh.exists() ? fresh.data() : fb, rated = L.status === 'rated', d = dOf(L), ok = rated && !!d;
+  const L = fresh.exists() ? fresh.data() : fb, rated = L.status === 'rated', d = DIFFS.find(x => x.id === L.diff), ok = rated && !!d;
   const br = doc(db, 'users', me.uid, 'beaten', id), pr = doc(db, 'users', me.uid, 'progress', id), [snap, psnap] = await Promise.all([getDoc(br), getDoc(pr)]);
   const first = !snap.exists(), starred = snap.exists() && snap.data().starred, prevC = snap.exists() ? (snap.data().coins || []) : [];
   const addC = ok ? got.filter(i => !prevC.includes(i)) : [], award = ok && !starred;
@@ -1361,7 +1292,7 @@ async function awardWin(id, fb, got) {
   if (!first && !award && !addC.length && !gems) return { nothing: true, rated };
   const ds = award ? d.stars * STAR_SCALE : 0, upd = {};
   if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; }
-  if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.demon) { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
+  if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
   if (gems) { upd.crystals = increment(gems); P.crystals = (P.crystals || 0) + gems; }
   if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
   await setDoc(br, { t: serverTimestamp(), starred: starred || ok, level: id, coins: [...prevC, ...addC] }, { merge: true });
@@ -1378,7 +1309,7 @@ async function transferAnon() {
   for (const id of ids) { try { const r = await awardWin(id, null, beaten[id].coins || []); if (r && !r.nothing) { n++; stars += r.ds; gems += r.gems; } } catch (e) { console.warn(e); } }
   for (const [id, bst] of Object.entries(bests)) { if (beaten[id]) continue; try { await setDoc(doc(db, 'users', me.uid, 'progress', id), { best: bst }, { merge: true }); } catch { } }
   delete localStorage.dash_anon_beaten; delete localStorage.dash_anon_best;
-  renderFooter(); checkAch();
+  renderFooter(); checkAch(); loadBeaten();
   if (n) toast(`Carried over ${n} beaten level${n > 1 ? 's' : ''} from Anonymous: +${stars} ⭐ +${fmt(gems)} 💎`, 'ok');
 }
 async function onWon() {
@@ -1389,7 +1320,7 @@ async function onWon() {
     if (got.length < game.coinTotal) return toast(`Collect all ${game.coinTotal} star coins to verify (got ${got.length})`, 'err');
     p.lv0.verified = sigOf(p.lv0.objs); saveSlots(ed.slot); toast('✔ Level verified! You can now upload it.', 'ok'); return;
   }
-  localStorage[bestKey(p.id)] = 100; p.best = 100;
+  localStorage[bestKey(p.id)] = 100; p.best = 100; BEATEN.add(p.id);
   if (!me || !P) { recordAnonWin(p.id, got); toast('Beaten as Anonymous - sign up and it will carry over to your new account!'); return; }
   try {
     const r = await awardWin(p.id, p.lv, got); if (!r) return;
@@ -1567,7 +1498,7 @@ function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.fi
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
 function renderProps() {
   const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
-  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
+  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label><label>Follow player X<input type="checkbox" data-p="fx" ${o.fx ? 'checked' : ''}> moves up/down with the player</label><label>Follow player Y<input type="checkbox" data-p="fy" ${o.fy ? 'checked' : ''}> moves right with the player</label>`;
@@ -1575,8 +1506,8 @@ function renderProps() {
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level.</p>';
-  else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
-  if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
+  else { h += `<label>Group (0 = none)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
+  if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
   h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
 }
@@ -1668,7 +1599,7 @@ function edPlay(here) {
 async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
 function edSettings() {
   stopPreview(); const lv = ed.lv;
-  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave'],['robot','Robot'],['spider','Spider']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
+  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
 }
 
 /* ================= actions (click delegation) ================= */
@@ -1685,7 +1616,7 @@ const actions = {
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;
     if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Find it in Community > Shop'), 'err'); }
-    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', robot: 'robot', spider: 'spider', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
+    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
   pg: d => renderLevels(d.kind, +d.pg), dosearch: doSearch, srchpg: d => { SRCH.pg = Math.max(0, +d.pg); renderSearch(); },
@@ -1745,11 +1676,6 @@ const actions = {
     previewing = true; applyAudio(); a.play().catch(done);
   },
   edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 18) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
-  edgrp: () => {   // put the smallest group ID nobody in this level uses yet on the selection
-    const tg = ed.sel ? [ed.sel] : ed.sels; if (!tg.length) return; snap();
-    const used = new Set(ed.lv.objs.map(o => o.g | 0)); let n = 1; while (used.has(n)) n++;
-    tg.forEach(o => { o.g = n; }); changed(); renderProps();
-  },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
