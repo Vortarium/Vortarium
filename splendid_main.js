@@ -453,8 +453,12 @@ async function saveStats(res,t0){try{const ref=doc(db,'splendid_users',user.uid)
    or the card you committed before the reveal.
    ===================================================================== */
 const BOT={think:[1100,2600],   // ms of "thinking" before it commits
- mistake:.12,                   // chance to take its 2nd best option (set 0 for a ruthless bot)
- noise:.5};                     // random wobble on scores so it isn't perfectly predictable
+ mistake:.04,                   // chance to take its 2nd best option (set 0 for a ruthless bot)
+ regen:1,                       // EXTRA mana the bot gains at the start of every one of its turns (on top of the normal +1)
+ lowHp:8,                       // under this many hearts the bot prioritizes healing, at or above it prioritizes attacking
+ shieldChance:.6,               // chance it shields when you hold a powerful attack
+ bigHit:6,                      // an attack with this much damage counts as "powerful"
+ noise:.3};                   // random wobble on scores so it isn't perfectly predictable
 const BOT_NAMES=['Cinder','Onyx','Vesper','Gloam','Rune','Ashen'];
 const cl=o=>structuredClone(o);
 const live=B=>!!(G&&G.bot===B&&!G.over);
@@ -468,10 +472,7 @@ function botWrite(p){const B=G&&G.bot;if(!B)return;for(const k in p)setPath(B.ro
 
 /* every bot gets the same boosted 20-card deck, no node limit and nothing based on YOUR deck:
    4 attack, 4 healing, 4 mana healing, 4 spell, plus 4 more random cards from any category (no duplicates). */
-function makeBotDeck(){const d=[],pick=p=>p[Math.random()*p.length|0];
- for(const t of ['ATTACK','HEAL','MANA HEAL','SPELL'])for(let k=0;k<4;k++){const p=CARDS.filter(x=>x.type===t&&!d.includes(x.id));if(p.length)d.push(pick(p).id)}
- for(let k=0;k<4;k++){const p=CARDS.filter(x=>!d.includes(x.id));if(p.length)d.push(pick(p).id)}
- return d}
+function makeBotDeck(){return CARDS.map(c=>c.id)}   /* the bot owns every card in the game */
 
 function startBot(){const all=makeBotDeck(),name=BOT_NAMES[Math.random()*BOT_NAMES.length|0]+' [BOT]';
  G=newG('BOT');G.ref=null;
@@ -491,7 +492,7 @@ const syncO=()=>{const B=G.bot,o=B.room.pub[G.me];if(o){B.O.hp=o.hp;B.O.gold=o.g
 function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.status!=='playing')return;const hu=G.me;
  const m=r.phase==='act'?r.turn:r.phase==='react'?(r.turn==='bot'?hu:'bot'):null,mk=r.seq+':'+r.phase;
  /* each side's turn starts when it becomes that side's move (mana, delayed effects) */
- if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;turnStart(B.S);wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}
+ if(m==='bot'&&B.mk!==mk){B.mk=mk;B.disc=false;turnStart(B.S);B.S.mana=Math.min(B.S.mm||MM,B.S.mana+BOT.regen);wr({['pub.bot']:botPub()});if(B.S.hp<=0){endWrite(G.me,'hearts');return}
   setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},BOT.think[0]+Math.random()*(BOT.think[1]-BOT.think[0]))}
  if(m===hu&&B.hmk!==mk){B.hmk=mk;syncO();turnStart(B.O,false);B.oStart=B.O.mana;B.k=Math.random()<.75?.8+Math.random()*1.4:0}   /* B.k: how strongly the bot reads a big mana spend this round (0 = it doesn't notice) */
  if(r.phase==='resolve'&&B.rv!==r.seq){B.rv=r.seq;botReveal(r)}
@@ -500,7 +501,7 @@ function botTick(){const B=G&&G.bot;if(!B||G.over)return;const r=B.room;if(r.sta
   holdCont(()=>{if(live(B))wr({seq:seq+1,phase:'act',turn:hu,c:{},res:{},fin:{}})})}}
 
 function botReveal(r){const B=G.bot,seq=r.seq,bc=r.c.bot,hc=r.c[G.me];
- syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;B.idle=(!hc||CARDS[hc-1].cost<=1)?B.idle+1:0;
+ syncO();if(hc)B.seen[hc]=(B.seen[hc]||0)+1;B.lastType=hc?CARDS[hc-1].type:null;B.idle=(!hc||CARDS[hc-1].cost<=1)?B.idle+1:0;
  setTimeout(()=>{if(!live(B)||B.rv!==seq)return;
   const bk=bc&&CARDS[bc-1],hk=hc&&CARDS[hc-1];
   const rb=applyRound(B.S,bk,hk);applyRound(B.O,hk,bk);if(rb.back)sideHit(B.O,rb.back);
@@ -517,6 +518,9 @@ function botFinish(r){const B=G.bot;B.fin=r.seq;const h=r.res[G.me];if(h&&h.back
 /* tell = {spent,k} when you already committed this round and your mana gems dropped a lot: a big spend hints at a big (attack) card. It is only a hunch,
    so it just shifts the odds. Sitting on lots of unspent mana for a few rounds also makes a big play more likely. */
 function oppDist(mana,tell){const B=G.bot,O=B.O,out=[],RW=[1,1,.75,.5];
+ /* the bot can see your hand: you can only play what you actually hold (and can afford) */
+ if(G.hand&&G.hand.length){G.hand.forEach(id=>{const c=CARDS[id-1];if(c.cost>mana)return;out.push({t:c,w:c.type==='ATTACK'?1.5:1})});
+  out.push({t:null,w:out.length?.2:1});return out}
  CARDS.forEach(c=>{if(c.cost>mana)return;let w=RW[c.r];const sn=B.seen[c.id]||0;if(sn)w*=3+Math.min(sn,3);
   if(c.type==='ATTACK')w*=mana>=2?1.5:1;
   else if(c.type==='HEAL')w*=O.hp<=10?2.2:O.hp>=17?.15:.7;
@@ -548,7 +552,13 @@ function botOptions(){const B=G.bot,S=B.S;syncO();
   vals.forEach(([v,w])=>{mean+=v*w/W;if(acc<W*.25){const u=Math.min(w,W*.25-acc);tail+=v*u;tw+=u;acc+=u}});
   return .75*mean+.25*(tail/tw)};   // mostly the average case, a bit of fear for your best plays
  opts.push({i:-1,s:ev(null)});
- B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+def(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
+ /* priority: under lowHp hearts heal first, otherwise attack; if you just healed / restored mana, press the attack */
+ const low=S.hp<BOT.lowHp,pressed=B.lastType==='HEAL'||B.lastType==='MANA HEAL';
+ const pri=c=>{let p=0;const isHeal=c.type==='HEAL'||c.vamp||c.shield||c.red;
+  if(low){if(c.type==='HEAL'||c.vamp)p+=7;else if(c.shield||c.red)p+=3;if(c.type==='ATTACK'&&!c.heal)p-=3;if(c.hpl||c.dl)p-=6}
+  else{if(c.type==='ATTACK')p+=4+c.dmg*.4;if(c.mb&&B.O.mana>=3)p+=1.5;if(pressed&&c.type==='ATTACK')p+=3;if(c.type==='HEAL'&&S.hp>=17)p-=5}
+  return p};
+ B.hand.forEach((id,i)=>{const c=CARDS[id-1];if(c.cost<=S.mana)opts.push({i,s:ev(c)+pri(c)+def(c)-(c.disc?Math.min(c.disc>=9?2:c.disc,B.hand.length-1)*.5:0)+(c.cd?Math.min(c.cd>=9?3:c.cd,3)*.9+(c.steal?1.5:0):0)})});
  return opts.sort((x,y)=>y.s-x.s)}
 
 /* Discarding is free (once per turn, it doesn't use the turn), so the bot cycles its hand whenever it can:
@@ -565,6 +575,11 @@ function botChoose(opts){opts.forEach(o=>o.s+=(Math.random()-.5)*BOT.noise);opts
  return opts[0].s<900&&opts.length>1&&Math.random()<BOT.mistake&&opts[0].s-opts[1].s<5?opts[1]:opts[0]}
 
 function botAct(){const B=G.bot;if(!live(B))return;const mk=B.mk,opts=botOptions();
+ /* you hold a powerful attack you can afford -> 60% chance the bot plays a Shield (if it has one it can pay for) */
+ if(!B.shieldRoll||B.shieldRoll.mk!==mk){const threat=(G.hand||[]).some(id=>{const c=CARDS[id-1];return c.dmg>=BOT.bigHit&&c.cost<=Math.min(MM,B.O.mana+1)});
+  B.shieldRoll={mk,go:threat&&Math.random()<BOT.shieldChance}}
+ if(B.shieldRoll.go){const sh=opts.filter(o=>o.i>=0&&CARDS[B.hand[o.i]-1].shield).sort((a,b)=>CARDS[B.hand[b.i]-1].back-CARDS[B.hand[a.i]-1].back)[0];
+  if(sh){botCommit(sh);return}}
  if(!B.disc){const d=botDiscardPick(opts);
   if(d>=0){B.disc=true;B.hand.splice(d,1);bDraw();wr({['pub.bot']:botPub()});
    setTimeout(()=>{if(live(B)&&B.mk===mk)botAct()},700);return}}
