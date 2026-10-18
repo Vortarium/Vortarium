@@ -31,8 +31,13 @@ const DIFFS = [
   { id: 'easy', name: 'EASY', stars: 1, col: '#3aa0ff' },
   { id: 'medium', name: 'MEDIUM', stars: 2, col: '#35d35a' },
   { id: 'hard', name: 'HARD', stars: 3, col: '#ffd21f' },
-  { id: 'insane', name: 'INSANE', stars: 4, col: '#ff3b3b' },
-  { id: 'demon', name: 'DEMON', stars: 5, col: '#c4222f' }
+  { id: 'harder', name: 'HARDER', stars: 4, col: '#ff3b3b' },
+  { id: 'insane', name: 'INSANE', stars: 5, col: '#9b3bff' },
+  { id: 'edemon', name: 'EASY DEMON', stars: 6, col: '#a855f7', demon: true },
+  { id: 'mdemon', name: 'MEDIUM DEMON', stars: 7, col: '#ff6fb5', demon: true },
+  { id: 'hdemon', name: 'HARD DEMON', stars: 8, col: '#c4222f', demon: true },
+  { id: 'idemon', name: 'INSANE DEMON', stars: 9, col: '#e0101f', demon: true },
+  { id: 'xdemon', name: 'EXTREME DEMON', stars: 10, col: '#7a0010', demon: true }
 ];
 const SPEEDS = { port_s1: .8, port_s2: 1, port_s3: 1.3, port_s4: 1.6 };
 const PORT_COL = { port_s1: '#f9a825', port_s2: '#2979ff', port_s3: '#2ee86b', port_s4: '#ff3d7f', port_gd: '#2ee0ff', port_gu: '#ff9a2e', port_ship: '#ff4fd8', port_cube: '#7dff2a' };
@@ -68,8 +73,15 @@ Object.assign(OBJ, {
 });
 Object.assign(MODEP, { port_ball: 1, port_ufo: 1, port_wave: 1 });
 Object.assign(PORT_COL, { port_ball: '#ff7a1f', port_ufo: '#ffd21f', port_wave: '#2fd0ff' });
-const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave' };
-const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W' };
+Object.assign(OBJ, {
+  port_robot: { name: 'Robot Portal', cat: 'portals' }, port_spider: { name: 'Spider Portal', cat: 'portals' },
+  port_mf: { name: 'Forward Portal (normal view)', cat: 'portals' }, port_mb: { name: 'Reverse Portal (flip view)', cat: 'portals' }
+});
+Object.assign(MODEP, { port_robot: 1, port_spider: 1 });
+const REVP = { port_mf: 1, port_mb: 1 };   // reverse portals: flip the whole screen left<->right
+Object.assign(PORT_COL, { port_robot: '#dfe3f2', port_spider: '#a24bff', port_mf: '#4dffb0', port_mb: '#ff5d6e' });
+const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave', port_robot: 'robot', port_spider: 'spider' };
+const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W', port_robot: 'R', port_spider: 'SP' };
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
@@ -93,7 +105,9 @@ const SPEC = [];
   for (let h = 15; h < 360; h += 30) add(hsl(h, 55, 48), 'muted');
   ['#0b0b0b', '#2a2a2a', '#444444', '#606060', '#808080', '#a0a0a0', '#c4c4c4', '#e6e6e6'].forEach(c => add(c, 'gray'));
 })();
-const GEMS = { 1: 10, 2: 25, 3: 50, 4: 100, 5: 250 };   // gems for fully beating a rated level, by star rating
+const GEMS = { 1: 10, 2: 25, 3: 50, 4: 100, 5: 150, 6: 250, 7: 250, 8: 250, 9: 250, 10: 250 };   // gems for fully beating a rated level, by star rating (every demon = 250)
+// levels rated before the 10-star update: old 'insane' (4 stars) is now HARDER, old 'demon' (5 stars) is now HARD DEMON
+function dOf(l) { let id = l && l.diff; if (!id) return null; if (id === 'insane' && (l.stars || 0) === 4) id = 'harder'; else if (id === 'demon') id = 'hdemon'; return DIFFS.find(x => x.id === id) || null; }
 const IN = 7.5;                                          // inner hitbox inset (cube 30 -> inner 15, centered)
 const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].ex < x) lo = m + 1; else hi = m; } return lo; };
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
@@ -212,6 +226,59 @@ function drawWave(c, idx, c1, c2, s) {
   c.save(); c.lineJoin = 'round'; poly(1); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .08); c.stroke();
   c.translate(-s * .05, 0); poly(.5); c.fillStyle = c2; c.fill(); c.restore();
 }
+function drawRobot(c, idx, c1, c2, s, ph = 0, air = false) {
+  const k = ((idx % 12) + 12) % 12, ey = k % 4, tp = k % 3, ac = k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
+  const seg = (x0, y0, x1, y1, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x0 * s, y0 * s); c.lineTo(x1 * s, y1 * s); c.stroke(); };
+  const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  [[-.2, 0], [.2, Math.PI]].forEach(([hx, off]) => {   // legs (swing while running, tuck in the air)
+    const a = air ? (hx < 0 ? -.55 : .5) : Math.sin(ph + off) * .75, b = air ? (hx < 0 ? .9 : -.2) : -a * .6 + .35 + Math.max(0, Math.cos(ph + off)) * .45;
+    const kx = hx + Math.sin(a) * .19, ky = .1 + Math.cos(a) * .19, fx = kx + Math.sin(b) * .2, fy = ky + Math.cos(b) * .2;
+    seg(hx, .1, kx, ky, lw * 2.5, '#000'); seg(kx, ky, fx, fy, lw * 2.5, '#000'); seg(hx, .1, kx, ky, lw * 1.2, c2); seg(kx, ky, fx, fy, lw * 1.2, c2);
+    c.fillStyle = c1; c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.beginPath(); c.rect((fx - .02) * s, (fy - .03) * s, .12 * s, .06 * s); c.fill(); c.stroke();
+  });
+  if (tp === 0) { seg(0, -.42, .06, -.5, lw * 1.2, '#000'); dot(.06, -.5, .04, c2); }
+  else if (tp === 1) [[-.46, -.3], [.38, -.3]].forEach(([x, y]) => { rr(c, x * s, y * s, .08 * s, .2 * s, .03 * s); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.stroke(); });
+  else { rr(c, -.18 * s, -.5 * s, .36 * s, .09 * s, .03 * s); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.stroke(); }
+  rr(c, -.4 * s, -.42 * s, .8 * s, .52 * s, .1 * s); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
+  rr(c, -.3 * s, -.34 * s, .6 * s, .24 * s, .06 * s); c.fillStyle = K; c.fill();
+  c.fillStyle = c2;
+  if (ey === 0) c.fillRect(-.23 * s, -.25 * s, .46 * s, .06 * s);
+  else if (ey === 1) { c.fillRect(-.22 * s, -.3 * s, .13 * s, .13 * s); c.fillRect(.09 * s, -.3 * s, .13 * s, .13 * s); }
+  else if (ey === 2) { dot(0, -.22, .09, c2); dot(0, -.22, .04, K); }
+  else { dot(-.13, -.22, .07, c2); dot(.13, -.22, .07, c2); }
+  if (ac === 0) [-.1, 0, .1].forEach(x => seg(x, -.04, x, .05, lw * .8, '#000'));
+  else if (ac === 1) { c.fillStyle = c2; c.fillRect(-.3 * s, -.04 * s, .6 * s, .05 * s); }
+  else [-.14, 0, .14].forEach(x => dot(x, .0, .03, c2));
+  c.restore();
+}
+function drawSpider(c, idx, c1, c2, s, ph = 0, air = false) {
+  const k = ((idx % 12) + 12) % 12, bs = k % 3, ee = k % 4, mk = k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
+  const line = (a, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.stroke(); };
+  const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
+  c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
+  [-1, 1].forEach(sg => [0, 1, 2].forEach(i => {   // 3 legs per side, walking cycle on the ground, splayed out in the air
+    const hx = sg * (.08 + i * .05), sw = Math.sin(ph * 1.3 + i * 1.7 + (sg > 0 ? Math.PI : 0)), lift = air ? 0 : Math.max(0, sw);
+    const kx = hx + sg * (.14 + i * .03), ky = -.24 + i * .06;
+    const fx = air ? hx + sg * (.26 + i * .03) : hx + sg * (.2 + i * .04) + sw * .035, fy = air ? .22 + i * .1 : .46 - lift * .1;
+    const a = [hx, 0, kx, ky, fx, fy]; line(a, lw * 2.3, '#000'); line(a, lw * 1.0, c2);
+  }));
+  c.fillStyle = c1; c.strokeStyle = '#000'; c.lineWidth = lw; c.beginPath();
+  if (bs === 0) c.arc(0, -.02 * s, .26 * s, 0, 7);
+  else if (bs === 1) c.ellipse(0, -.02 * s, .33 * s, .24 * s, 0, 0, 7);
+  else for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](Math.cos(t) * .29 * s, (-.02 + Math.sin(t) * .27) * s); }
+  c.closePath(); c.fill(); c.stroke();
+  if (mk === 0) { c.fillStyle = c2; c.beginPath(); c.ellipse(0, .12 * s, .1 * s, .06 * s, 0, 0, 7); c.fill(); }
+  else if (mk === 1) [-.12, 0, .12].forEach(x => dot(x, -.19 + Math.abs(x) * .3, .035, c2));
+  else line([-.2, .1, .2, .1], lw * 1.5, c2);
+  const eye = (x, y, r) => { dot(x, y, r, '#fff'); dot(x, y + r * .15, r * .5, K); };
+  if (ee === 0) { eye(-.1, -.06, .075); eye(.1, -.06, .075); }
+  else if (ee === 1) { eye(-.1, -.03, .065); eye(.1, -.03, .065); eye(-.05, -.15, .04); eye(.05, -.15, .04); }
+  else if (ee === 2) eye(0, -.04, .12);
+  else { eye(-.12, -.03, .06); eye(.12, -.03, .06); eye(0, -.14, .05); }
+  if (mk === 2) { c.fillStyle = '#fff'; c.strokeStyle = '#000'; c.lineWidth = lw * .5; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * .03 * s, .06 * s); c.lineTo(sg * .09 * s, .06 * s); c.lineTo(sg * .06 * s, .15 * s); c.closePath(); c.fill(); c.stroke(); }); }
+  c.restore();
+}
 const SHIPS = [
   [-.5, .3, -.4, .04, .35, .04, .55, .2, .4, .3], [-.55, .1, -.25, .1, -.1, .02, .2, .02, .55, .22, .2, .32, -.3, .32], [-.55, .05, .55, .18, -.55, .3, -.35, .18], [-.5, .32, -.5, .1, .55, .24, .55, .32],
   [-.5, .06, .5, .06, .5, .3, -.5, .3], [-.55, .12, -.4, .04, .2, .04, .55, .18, .2, .32, -.4, .32], [-.5, .04, .55, .18, -.5, .32, -.3, .18], [-.45, .32, -.3, .04, .3, .04, .5, .32],
@@ -247,28 +314,61 @@ const urlOf = (key, size, draw) => { if (ICACHE[key]) return ICACHE[key]; const 
 const ballURL = (i, c1, c2, size = 64) => urlOf(['ball', i, c1, c2, size].join('|'), size, x => drawBall(x, i, c1, c2, size * .84));
 const ufoURL = (i, cube, c1, c2, size = 64) => urlOf(['ufo', i, cube, c1, c2, size].join('|'), size, x => drawUfo(x, cube, i, c1, c2, size * .9));
 const waveURL = (i, c1, c2, size = 64) => urlOf(['wave', i, c1, c2, size].join('|'), size, x => drawWave(x, i, c1, c2, size * .8));
+const robotURL = (i, c1, c2, size = 64) => urlOf(['robot', i, c1, c2, size].join('|'), size, x => drawRobot(x, i, c1, c2, size * .84, 1.1, false));
+const spiderURL = (i, c1, c2, size = 64) => urlOf(['spider', i, c1, c2, size].join('|'), size, x => drawSpider(x, i, c1, c2, size * .84, .8, false));
 function skinURL(skin, c1, c2, size = 64) {
   const k = [skin, c1, c2, size].join('|'); if (ICACHE[k]) return ICACHE[k];
   const cv = document.createElement('canvas'); cv.width = cv.height = size; const x = cv.getContext('2d');
   x.translate(size / 2, size / 2); drawIcon(x, skin, c1, c2, size * .84); return ICACHE[k] = cv.toDataURL();
 }
 function diffURL(id, size = 64) {
+  if (id === 'demon') id = 'hdemon';
   const k = 'd' + id + size; if (ICACHE[k]) return ICACHE[k];
-  const d = DIFFS.find(x => x.id === id) || DIFFS[0];
-  const cv = document.createElement('canvas'); cv.width = cv.height = size; const c = cv.getContext('2d'); const s = size;
-  c.translate(s / 2, s / 2); c.lineWidth = s * .06; c.strokeStyle = '#000';
-  if (id === 'demon') { c.fillStyle = '#7d0f1a'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .2, -s * .3); c.lineTo(sg * s * .42, -s * .52); c.lineTo(sg * s * .38, -s * .18); c.closePath(); c.fill(); c.stroke(); }); }
-  c.fillStyle = d.col; c.beginPath(); c.arc(0, 0, s * .36, 0, 7); c.fill(); c.stroke();
-  c.fillStyle = '#000';
-  if (id === 'hard' || id === 'insane' || id === 'demon') { c.fillRect(-s * .2, -s * .12, s * .14, s * .1); c.fillRect(s * .06, -s * .12, s * .14, s * .1); }
-  else { c.beginPath(); c.arc(-s * .13, -s * .08, s * .05, 0, 7); c.arc(s * .13, -s * .08, s * .05, 0, 7); c.fill(); }
+  const d = DIFFS.find(x => x.id === id) || DIFFS[0], n = d.stars, s = size;
+  const cv = document.createElement('canvas'); cv.width = cv.height = size; const c = cv.getContext('2d');
+  c.translate(s / 2, s / 2); c.lineJoin = 'round'; c.lineCap = 'round';
+  if (n >= 6) { c.translate(0, s * .1); c.scale(.8, .8); }       // demons are drawn a bit smaller so the horns fit
+  c.lineWidth = s * .06; c.strokeStyle = '#000';
+  if (n >= 6) {   // horns: [tipX, tipY, outer ctrl X, outer ctrl Y, inner ctrl X, inner ctrl Y, color]
+    const [tx, ty, cx, cy, ix, iy, hc] = { 6: [.3, -.46, .4, -.3, .2, -.4, '#6b2fb0'], 7: [.34, -.52, .46, -.34, .22, -.44, '#b0306e'], 8: [.42, -.55, .44, -.3, .24, -.4, '#7d0f1a'], 9: [.3, -.62, .58, -.42, .22, -.46, '#4a0008'], 10: [.15, -.7, .64, -.46, .2, -.5, '#1c0004'] }[n];
+    c.fillStyle = hc;
+    [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .34, -s * .12); c.quadraticCurveTo(sg * cx * s, cy * s, sg * tx * s, ty * s); c.quadraticCurveTo(sg * ix * s, iy * s, sg * s * .12, -s * .32); c.closePath(); c.fill(); c.stroke(); });
+  }
+  if (n === 10) { const g = c.createRadialGradient(0, -s * .06, s * .03, 0, 0, s * .4); g.addColorStop(0, '#c00020'); g.addColorStop(1, '#2e0008'); c.fillStyle = g; } else c.fillStyle = d.col;
+  c.beginPath(); c.arc(0, 0, s * .36, 0, 7); c.fill(); c.stroke();
+  if (n === 10) { c.save(); c.strokeStyle = 'rgba(0,0,0,.55)'; c.lineWidth = s * .03; [-1, 1].forEach(sg => [0, 1].forEach(i => { c.beginPath(); c.moveTo(sg * s * (.2 + i * .06), s * (.0 + i * .02)); c.lineTo(sg * s * (.3 + i * .04), s * (.16 + i * .02)); c.stroke(); })); c.restore(); }
+  const brow = (w, ya, yb) => { c.save(); c.lineWidth = s * w; c.strokeStyle = '#000'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .29, ya * s); c.lineTo(sg * s * .04, yb * s); c.stroke(); }); c.restore(); };
+  const rect = (x, y, w, h) => { c.fillStyle = '#000'; c.fillRect(x * s, y * s, w * s, h * s); c.fillRect(-(x + w) * s, y * s, w * s, h * s); };
+  const dots = (y, r) => { c.fillStyle = '#000'; c.beginPath(); c.arc(-s * .13, y * s, r * s, 0, 7); c.arc(s * .13, y * s, r * s, 0, 7); c.fill(); };
+  const slit = col => { c.save(); if (n === 10) { c.shadowColor = '#ff7a00'; c.shadowBlur = s * .1; } c.fillStyle = col; c.lineWidth = s * .025; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .26, -s * .14); c.lineTo(sg * s * .05, -s * .05); c.lineTo(sg * s * .09, s * .01); c.lineTo(sg * s * .25, -s * .07); c.closePath(); c.fill(); c.stroke(); }); c.restore(); };
+  const fangs = (x, w, h, y = .14) => { c.fillStyle = '#fff'; c.lineWidth = s * .02; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * x, y * s); c.lineTo(sg * s * (x + w), y * s); c.lineTo(sg * s * (x + w / 2), (y + h) * s); c.closePath(); c.fill(); c.stroke(); }); };
+  const grin = (w, top, bot) => {   // wide evil grin with jagged teeth
+    const Q = (t, y0, cy) => [(2 * t - 1) * w * s, ((1 - t) * (1 - t) * .08 + 2 * (1 - t) * t * cy + t * t * .08) * s];
+    c.beginPath(); c.moveTo(-w * s, .08 * s); c.quadraticCurveTo(0, .2 * s, w * s, .08 * s); c.quadraticCurveTo(0, .38 * s, -w * s, .08 * s); c.closePath(); c.fillStyle = '#000'; c.fill();
+    c.fillStyle = '#fff';
+    for (let i = 1; i <= top; i++) { const [x, y] = Q(i / (top + 1), .08, .2); c.beginPath(); c.moveTo(x - s * .03, y); c.lineTo(x + s * .03, y); c.lineTo(x, y + s * .075); c.fill(); }
+    for (let i = 1; i <= bot; i++) { const [x, y] = Q(i / (bot + 1), .08, .38); c.beginPath(); c.moveTo(x - s * .03, y); c.lineTo(x + s * .03, y); c.lineTo(x, y - s * .07); c.fill(); }
+  };
+  // eyes + brows
+  if (n <= 2) dots(-.08, .05);
+  else if (n === 3 || n === 4 || n === 8) rect(.06, -.12, .14, .1);
+  else if (n === 5) { rect(.06, -.09, .14, .09); brow(.075, -.27, -.09); }
+  else if (n === 6) dots(-.08, .055);
+  else if (n === 7) { rect(.07, -.1, .12, .09); brow(.05, -.24, -.14); }
+  else if (n === 9) { slit('#ffe21f'); brow(.085, -.31, -.08); }
+  else { slit('#fff2a0'); brow(.1, -.36, -.06); }
+  // mouth
   c.strokeStyle = '#000'; c.lineWidth = s * .05; c.beginPath();
-  if (id === 'easy') c.arc(0, s * .02, s * .17, .15, Math.PI - .15);
-  else if (id === 'medium') c.arc(0, s * .05, s * .12, .25, Math.PI - .25);
-  else if (id === 'hard') { c.moveTo(-s * .12, s * .14); c.lineTo(s * .12, s * .14); }
-  else c.arc(0, s * .24, s * .13, Math.PI + .3, -.3);
-  c.stroke();
-  if (id === 'demon') { c.fillStyle = '#fff'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * s * .06, s * .14); c.lineTo(sg * s * .12, s * .14); c.lineTo(sg * s * .09, s * .24); c.fill(); }); }
+  if (n === 1) { c.arc(0, s * .02, s * .17, .15, Math.PI - .15); c.stroke(); }
+  else if (n === 2) { c.arc(0, s * .05, s * .12, .25, Math.PI - .25); c.stroke(); }
+  else if (n === 3) { c.moveTo(-s * .12, s * .14); c.lineTo(s * .12, s * .14); c.stroke(); }
+  else if (n === 4) { c.arc(0, s * .24, s * .13, Math.PI + .3, -.3); c.stroke(); }
+  else if (n === 5) { c.lineWidth = s * .065; c.arc(0, s * .27, s * .16, Math.PI + .22, -.22); c.stroke(); }
+  else if (n === 6) { c.arc(0, s * .04, s * .14, .2, Math.PI - .2); c.stroke(); fangs(.09, .05, .1, .12); }
+  else if (n === 7) { c.moveTo(-s * .14, s * .15); c.lineTo(0, s * .16); c.lineTo(s * .14, s * .1); c.stroke(); fangs(.05, .05, .09, .15); }
+  else if (n === 8) { c.arc(0, s * .24, s * .13, Math.PI + .3, -.3); c.stroke(); fangs(.06, .06, .1); }
+  else if (n === 9) grin(.22, 4, 3);
+  else grin(.27, 6, 5);
   return ICACHE[k] = cv.toDataURL();
 }
 
@@ -303,12 +403,12 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = PADCOL[t]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-  } else if (SPEEDS[t] || GRAV[t] || MODEP[t]) {
+  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t]) {
     const cx = x + cs / 2, cl = PORT_COL[t];
     c.beginPath(); c.ellipse(cx, y, cs * .34, cs, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = .22; c.fill(); c.globalAlpha = 1;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
     c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(MODEP[t] ? PLET[t] : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
+    c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), cx, y);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
@@ -465,7 +565,7 @@ class Game {
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
-    this.ports = objs.filter(o => SPEEDS[o.t]);
+    this.ports = objs.filter(o => SPEEDS[o.t]); this.rports = objs.filter(o => REVP[o.t]);
     const end = tr.find(o => o.t === 'trig_end'); this.endX = end ? end.ex : Infinity;
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
@@ -491,8 +591,9 @@ class Game {
   reset(first) {
     this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
     this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
+    this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
-    this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null };
+    this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
     this.speed = this.level.startSpeed || 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
     this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 70); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
     while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
@@ -538,14 +639,14 @@ class Game {
   snap() {
     const p = this.p, os = [];
     for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col]);
-    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
+    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
       gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
   }
   restore(k) {
     for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
     for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
-    this.gr = k.gr; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
+    this.gr = k.gr; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
     this.si = lb(this.S, this.p.x - 70); this.tI = lb(this.TT, this.p.x - 40);
     this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
@@ -576,13 +677,15 @@ class Game {
     { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
     if (this.mode === 'cube' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
+    if (this.mode === 'robot' && this.held && !this.holdUsed && p.grounded) { p.vy = 441 * this.gr; p.grounded = false; p.rb = .3; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
     const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
-      p.vy -= G * (this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : 1) * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
+      else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
+      const gm = this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
@@ -591,7 +694,7 @@ class Game {
     for (const o of this.D) {
       if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 100) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
     }
-    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
     if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
@@ -628,14 +731,14 @@ class Game {
     } else if (ORBS.includes(t)) {
       const sc = o.sc || 1, dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < (26 * sc) ** 2;
       if (on && !o.used && (edge || (this.held && !this.holdUsed))) {
-        o.used = true; p.grounded = false; this.edgeT = 0; this.holdUsed = true; this.jumps++;
+        o.used = true; p.grounded = false; p.rb = 0; this.edgeT = 0; this.holdUsed = true; this.jumps++;
         if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
         else if (DASH[t]) { const an = (o.a || 0) * Math.PI / 180; p.dash = { vy: Math.sin(an) * BASE * this.speed * this.gr, t: 0, flip: t === 'orb_db' }; p.vy = p.dash.vy; }
         else p.vy = PHYS[t] * this.gr;
       }
     } else if (PADS.includes(t)) {
       const b = o.pb, on = this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1]);
-      if (on && !o.used) { o.used = true; p.grounded = false; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr; }
+      if (on && !o.used) { o.used = true; p.grounded = false; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr; }
       else if (!on) o.used = false;
     } else if (SPEEDS[t]) {
       if (this.hit(p, x + 5, y, 20, 60)) this.speed = SPEEDS[t];
@@ -643,7 +746,26 @@ class Game {
       if (this.hit(p, x + 5, y, 20, 60)) this.gr = t === 'port_gu' ? -1 : 1;
     } else if (MODEP[t]) {
       if (this.hit(p, x + 5, y, 20, 60)) this.mode = PMODE[t];
+    } else if (REVP[t]) {
+      if (this.hit(p, x + 5, y, 20, 60)) this.mir = t === 'port_mb' ? 1 : 0;
     }
+  }
+  // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
+  spiderJump() {
+    const p = this.p, up = this.gr > 0; let best = null;
+    const test = (o, gx, gy) => {
+      if (o.off) return; const d = OBJ[o.t]; if (!d.solid) return; if (!o.pp) this.prep(o);
+      const sb = d.slope ? [0, 0, 30, 30] : o.sb, x = o.ex + gx + sb[0], y = o.ey + gy + sb[1], w = sb[2] - sb[0], h = sb[3] - sb[1];
+      if (!(p.x + 30 > x && p.x < x + w)) return;
+      if (up) { if (y >= p.y + 30 - 2) { const t = y - 30; if (best === null || t < best) best = t; } }
+      else if (y + h <= p.y + 2) { const t = y + h; if (best === null || t > best) best = t; }
+    };
+    const S = this.S; for (let i = lb(S, p.x - 70); i < S.length && S[i].ex < p.x + 70; i++) test(S[i], 0, 0);
+    for (const o of this.D) { const g = this.gOff[o.g]; test(o, g ? g.x * U : 0, g ? g.y * U : 0); }
+    if (!up && best === null) best = 0;
+    if (best === null) return;
+    const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
+    for (let i = 0; i < 10; i++) this.parts.push({ x: p.x + 15, y: from + (best - from) * i / 9 + 15, vx: -60 - Math.random() * 80, vy: (Math.random() - .5) * 60, life: .3, col: this.skin.c1, s: 3 + Math.random() * 3 });
   }
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
@@ -684,6 +806,8 @@ class Game {
     this.camX = p.x - (W / s) * .3;
     const ty = Math.max(-70, p.y - (H / s) * .4); this.camY += (ty - this.camY) * Math.min(1, 6 * dt);
     const X = x => (x - this.camX) * s, Y = y => H - (y - this.camY) * s;
+    const mt = this.mir ? -1 : 1; this.mf += (mt - this.mf) * Math.min(1, 9 * dt); if (Math.abs(mt - this.mf) < .003) this.mf = mt;
+    c.fillStyle = this.bg; c.fillRect(0, 0, W, H); c.save(); if (this.mf !== 1) { c.translate(W / 2, 0); c.scale(this.mf, 1); c.translate(-W / 2, 0); }
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     drawBG(c, W, H, s, this.camX, this.level.bgs);
@@ -704,7 +828,8 @@ class Game {
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
     if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 6 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(p.x + 15), Y(p.y + 15)); c.stroke(); c.globalAlpha = 1; }
-    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    if (!p.dead) { c.save(); c.translate(X(p.x) + 15 * s, Y(p.y) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    c.restore();
   }
 }
 
@@ -787,12 +912,19 @@ const ACH = (() => {
   const cols = []; for (let i = 1; i < 13; i++) { cols.push({ k: 'p', i }); cols.push({ k: 's', i }); }
   const mk = (k, n) => Array.from({ length: n }, (_, i) => ({ k, i: i + 1 }));
   const pools = [{ a: mk('skin', 29) }, { a: cols }, { a: mk('ship', 29) }, { a: mk('ball', 11) }, { a: mk('ufo', 11) }, { a: mk('wave', 11) }]; pools.forEach(p => p.n = p.a.length);
-  list.forEach(a => { pools.sort((x, y) => y.a.length / y.n - x.a.length / x.n); a.rw = pools.find(p => p.a.length).a.shift(); }); return list;
+  list.forEach(a => { pools.sort((x, y) => y.a.length / y.n - x.a.length / x.n); a.rw = pools.find(p => p.a.length).a.shift(); });
+  // robot + spider skins: extra late-game achievements (assigned after the originals, so existing unlocks never change)
+  const rw2 = []; for (let i = 1; i <= 11; i++) rw2.push({ k: 'robot', i }, { k: 'spider', i });
+  const cnt = {};
+  [['levelsBeaten', 100], ['stars', 200], ['demons', 40], ['crystals', 2000], ['starCoins', 50], ['totalViews', 1500], ['netLikes', 200], ['published', 40], ['comments', 150], ['rated', 40], ['maxPostLikes', 75],
+   ['levelsBeaten', 150], ['stars', 300], ['demons', 50], ['crystals', 3000], ['starCoins', 75], ['totalViews', 2500], ['netLikes', 300], ['published', 50], ['comments', 200], ['rated', 60], ['maxPostLikes', 100]]
+    .forEach(([stat, n], j) => { const df = ACH_DEFS.find(d => d[0] === stat); cnt[stat] = (cnt[stat] || df[3].length) + 1; list.push({ stat, n, name: `${df[1]} ${cnt[stat]}`, desc: df[2].replace('{n}', fmt(n)), tier: 1 + j / 100, ci: 99, rw: rw2[j] }); });
+  return list;
 })();
-const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin' };
+const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin', robot: 'Robot skin', spider: 'Spider skin' };
 const rwName = r => RWN[r.k] ? `${RWN[r.k]} #${r.i + 1}` : r.k === 'p' ? `Primary color #${r.i + 1}` : `Secondary color #${r.i + 1}`;
 function unlocked_() {
-  const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), p: new Set([0]), s: new Set([0]) };
+  const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), robot: new Set([0]), spider: new Set([0]), p: new Set([0]), s: new Set([0]) };
   if (me && P) ACH.forEach(a => { if ((P[a.stat] || 0) >= a.n) u[a.rw.k].add(a.rw.i); });
   if (me && P) (P.bought || []).forEach(k => { const [t, i] = k.split(':'); if (t === 'col') { u.p.add(+i); u.s.add(+i); } else if (u[t]) u[t].add(+i); });
   return u;
@@ -824,7 +956,7 @@ function renderFooter() {
 
 /* ================= auth ================= */
 const emailOf = u => `${u.toLowerCase()}@dash-game.app`;
-const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, bought: [], ball: 0, ufo: 0, wave: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
+const newProfile = username => ({ username, stars: 0, crystals: 0, levelsBeaten: 0, demons: 0, netLikes: 0, totalViews: 0, published: 0, rated: 0, maxPostLikes: 0, comments: 0, starCoins: 0, bought: [], ball: 0, ufo: 0, wave: 0, robot: 0, spider: 0, skin: 0, ship: 0, c1: 0, c2: 0, songs: [], settings, created: serverTimestamp() });
 let busySignup = false;
 async function signUp(username, pw) {
   username = username.trim();
@@ -904,7 +1036,7 @@ views.account = ({ tab = 'account' } = {}) => {
 
 /* ================= cosmetics ================= */
 views.cosmetics = ({ tab = 'cube' } = {}) => {
-  const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0;
+  const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0, rbt = P?.robot || 0, spd = P?.spider || 0;
   const req = (k, i) => { const a = ACH.find(a => a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : i ? 'Sold in Community > Shop' : 'Default'; };
   const grid = (k, n, cur, img) => Array.from({ length: n }, (_, i) => `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`).join('');
   const sw = (k, arr, cur) => arr.map((c, i) => `<div class="sw ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" style="background:${c}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? 'Color ' + (i + 1) : req(k, i))}"></div>`).join('');
@@ -914,10 +1046,12 @@ views.cosmetics = ({ tab = 'cube' } = {}) => {
   else if (tab === 'ball') body = `<div class="skgrid">${grid('ball', 12, bl, i => ballURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'ufo') body = `<div class="skgrid">${grid('ufo', 12, uf, i => ufoURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'wave') body = `<div class="skgrid">${grid('wave', 12, wv, i => waveURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'robot') body = `<div class="skgrid">${grid('robot', 12, rbt, i => robotURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'spider') body = `<div class="skgrid">${grid('spider', 12, spd, i => spiderURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'colors') body = `<h3>Primary</h3><div class="swatches">${sw('p', PRIMARY, c1)}</div><h3>Secondary</h3><div class="swatches">${sw('s', SECONDARY, c2)}</div>`;
   else body = ACH.map(a => { const v = P?.[a.stat] || 0, done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwName(a.rw)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
-  const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
-  page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
+  const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
+  page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${robotURL(rbt, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${spiderURL(spd, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
 };
 
 /* ================= community ================= */
@@ -934,7 +1068,7 @@ ICO.gem = svg('<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12
 /* ================= shop ================= */
 const SHOP_ROTATE_DAYS = 1;   // stock reshuffles every N days (same for everybody); set 0 for one permanent stock
 const SHOP_PRICES = [100, 150, 200, 250, 300, 400, 500, 600, 750, 1000], SHOP_CPRICES = [100, 150, 200, 250, 300, 400];
-const SHOP_NAMES = { skin: 'Cube', ship: 'Ship', ball: 'Ball', ufo: 'UFO', wave: 'Wave' };
+const SHOP_NAMES = { skin: 'Cube', ship: 'Ship', ball: 'Ball', ufo: 'UFO', wave: 'Wave', robot: 'Robot', spider: 'Spider' };
 const SHOP_GROUPS = { rainbow: 'Rainbow', light: 'Light', dark: 'Dark', muted: 'In-between', gray: 'Grayscale' };
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 let shopCache = null;
@@ -942,12 +1076,12 @@ function shopStock() {
   const day = SHOP_ROTATE_DAYS ? Math.floor(Date.now() / 864e5 / SHOP_ROTATE_DAYS) : 1;
   if (shopCache && shopCache.day === day) return shopCache;
   const r = rng(day * 2654435761 + 12345), shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const pool = []; [['skin', 29], ['ship', 29], ['ball', 11], ['ufo', 11], ['wave', 11]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
+  const pool = []; [['skin', 29], ['ship', 29], ['ball', 11], ['ufo', 11], ['wave', 11], ['robot', 11], ['spider', 11]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
   const icons = shuf(pool).slice(0, 20).map(it => ({ ...it, key: it.k + ':' + it.i, price: SHOP_PRICES[Math.floor(r() * SHOP_PRICES.length)] })).sort((a, b) => a.price - b.price);
   const cols = shuf(Object.keys(SHOP_GROUPS)).map(g => { const a = SPEC.filter(x => x.g === g), x = a[Math.floor(r() * a.length)]; return { k: 'col', g, i: x.i, key: 'col:' + x.i, price: SHOP_CPRICES[Math.floor(r() * SHOP_CPRICES.length)] }; });
   return shopCache = { day, icons, cols };
 }
-const shopImg = (it, z) => { const c1 = PRIMARY[P?.c1 || 0], c2 = SECONDARY[P?.c2 || 0], sk = P?.skin || 0; return it.k === 'skin' ? skinURL(it.i, c1, c2, z) : it.k === 'ship' ? shipURL(it.i, sk, c1, c2, z) : it.k === 'ball' ? ballURL(it.i, c1, c2, z) : it.k === 'ufo' ? ufoURL(it.i, sk, c1, c2, z) : waveURL(it.i, c1, c2, z); };
+const shopImg = (it, z) => { const c1 = PRIMARY[P?.c1 || 0], c2 = SECONDARY[P?.c2 || 0], sk = P?.skin || 0; return it.k === 'skin' ? skinURL(it.i, c1, c2, z) : it.k === 'ship' ? shipURL(it.i, sk, c1, c2, z) : it.k === 'ball' ? ballURL(it.i, c1, c2, z) : it.k === 'ufo' ? ufoURL(it.i, sk, c1, c2, z) : it.k === 'wave' ? waveURL(it.i, c1, c2, z) : it.k === 'robot' ? robotURL(it.i, c1, c2, z) : spiderURL(it.i, c1, c2, z); };
 const shopLabel = it => it.k === 'col' ? `${SHOP_GROUPS[it.g]} color` : `${SHOP_NAMES[it.k]} #${it.i + 1}`;
 views.shop = ({ pg = 0 } = {}) => {
   const st = shopStock(), un = unlocked_(), pages = 4; pg = Math.max(0, Math.min(pages - 1, +pg || 0)); curP = { ...curP, pg };
@@ -986,12 +1120,14 @@ function levelLen(l) {
   if (l.len == null) { try { l.len = lenSecs(JSON.parse(l.data).objs || []); } catch { l.len = 0; } }
   return l.len;
 }
+const LENS = [['tiny', 'Tiny', 10], ['short', 'Short', 30], ['medium', 'Medium', 60], ['long', 'Long', 120], ['xl', 'XL', Infinity]];   // [key, label, upper bound in seconds]
+const lenKey = s => s ? LENS.find(x => s < x[2])[0] : '';
 function lenTag(l) {
   const s = levelLen(l); if (!s) return '';
-  const n = s < 10 ? 'Tiny' : s < 30 ? 'Short' : s < 60 ? 'Medium' : s < 120 ? 'Long' : 'XL';
-  return `<span class="len len-${n.toLowerCase()}" title="${Math.round(s)}s">${n}</span>`;
+  const e = LENS.find(x => s < x[2]);
+  return `<span class="len len-${e[0]}" title="${Math.round(s)}s">${e[1]}</span>`;
 }
-const lvlCard = l => `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${l.diff ? diffURL(l.diff, 56) : diffURL('easy', 56)}" style="${l.diff ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)} ${lenTag(l)}</h3><div class="muted">by <b class="auth" data-act="profile" data-uid="${l.authorId}">${nameHTML(l.authorName)}</b>${l.diff ? ' · ' + DIFFS.find(d => d.id === l.diff).name + ' ⭐' + (DIFFS.find(d => d.id === l.diff).stars) : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`;
+const lvlCard = l => { const d = dOf(l); return `<div class="lvl" data-act="openlvl" data-id="${l.id}"><img src="${diffURL(d ? d.id : 'easy', 56)}" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><div><h3>${esc(l.title)} ${lenTag(l)}</h3><div class="muted">by <b class="auth" data-act="profile" data-uid="${l.authorId}">${nameHTML(l.authorName)}</b>${d ? ' · ' + d.name + ' ⭐' + d.stars : ' · Unrated'}</div></div><div class="meta">👍 ${fmt((l.likes || 0) - (l.dislikes || 0))}<br>👁 ${fmt(l.views)}</div></div>`; };
 views.levels = async ({ kind }) => {
   page(kind === 'stars' ? 'Stars - Rated Levels' : 'New Levels', '<p class="muted">Loading…</p>');
   try { LISTS[kind] = await fetchLevels(kind); } catch (e) { return page('Levels', `<p>${esc(errMsg(e))}</p>`); }
@@ -1004,7 +1140,7 @@ function renderLevels(kind, pg) {
 }
 
 /* ---- search ---- */
-const SRCH = { q: '', status: 'all', diff: 'any', pg: 0, res: [], cache: null, loading: false };
+const SRCH = { q: '', status: 'all', diff: 'any', len: 'any', sort: 'new', pg: 0, res: [], cache: null, loading: false };
 async function searchPool(status) {
   const c = SRCH.cache; if (!c || Date.now() - c.t > 120000) SRCH.cache = { t: Date.now(), rated: null, unrated: null };
   const need = status === 'rated' ? ['rated'] : status === 'unrated' ? ['unrated'] : ['rated', 'unrated'];
@@ -1013,20 +1149,24 @@ async function searchPool(status) {
 }
 views.search = async () => { SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); };
 async function runSearch() {
-  const q = SRCH.q.trim().toLowerCase(); let a = await searchPool(SRCH.diff !== 'any' ? 'rated' : SRCH.status);
-  if (SRCH.diff !== 'any') a = a.filter(l => l.diff === SRCH.diff);
-  if (q) a = a.filter(l => (l.title || '').toLowerCase().includes(q) || (l.authorName || '').toLowerCase().includes(q));
-  a.forEach(l => { LV[l.id] = l; }); SRCH.res = a.slice().sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); SRCH.pg = 0;
+  const q = SRCH.q.trim().toLowerCase(), lw = LENS.find(x => x[0] === q || x[1].toLowerCase() === q);   // typing "short", "long", "xl"... also matches by length
+  let a = await searchPool(SRCH.diff !== 'any' ? 'rated' : SRCH.status);
+  if (SRCH.diff !== 'any') a = a.filter(l => dOf(l)?.id === SRCH.diff);
+  if (SRCH.len !== 'any') a = a.filter(l => lenKey(levelLen(l)) === SRCH.len);
+  if (q) a = a.filter(l => (l.title || '').toLowerCase().includes(q) || (l.authorName || '').toLowerCase().includes(q) || (lw && lenKey(levelLen(l)) === lw[0]));
+  a.forEach(l => { LV[l.id] = l; });
+  const by = SRCH.sort === 'short' ? (x, y) => levelLen(x) - levelLen(y) : SRCH.sort === 'long' ? (x, y) => levelLen(y) - levelLen(x) : (x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0);
+  SRCH.res = a.slice().sort(by); SRCH.pg = 0;
 }
 function renderSearch() {
   const a = SRCH.res, pages = Math.max(1, Math.ceil(a.length / 10)), pg = Math.min(SRCH.pg, pages - 1), opt = (v, n, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${n}</option>`;
-  const ctl = `<div class="card"><div class="row"><input id="sq" maxlength="40" placeholder="Search by level name or creator…" value="${esc(SRCH.q)}" style="flex:1;min-width:200px;margin:0"><button class="btn green sm" data-act="dosearch">🔍 Search</button></div><div class="row" style="margin-top:8px"><label style="flex:1">Status<select id="sstat">${opt('all', 'Rated & unrated', SRCH.status)}${opt('rated', 'Rated only', SRCH.status)}${opt('unrated', 'Unrated only', SRCH.status)}</select></label><label style="flex:1">Rating<select id="sdiff">${opt('any', 'Any', SRCH.diff)}${DIFFS.map(d => opt(d.id, `${d.name} (⭐${d.stars})`, SRCH.diff)).join('')}</select></label></div></div>`;
+  const ctl = `<div class="card"><div class="row"><input id="sq" maxlength="40" placeholder="Search by level name, creator or length (tiny, short, medium, long, xl)…" value="${esc(SRCH.q)}" style="flex:1;min-width:200px;margin:0"><button class="btn green sm" data-act="dosearch">🔍 Search</button></div><div class="row" style="margin-top:8px"><label style="flex:1">Status<select id="sstat">${opt('all', 'Rated & unrated', SRCH.status)}${opt('rated', 'Rated only', SRCH.status)}${opt('unrated', 'Unrated only', SRCH.status)}</select></label><label style="flex:1">Rating<select id="sdiff">${opt('any', 'Any', SRCH.diff)}${DIFFS.map(d => opt(d.id, `${d.name} (⭐${d.stars})`, SRCH.diff)).join('')}</select></label></div><div class="row" style="margin-top:8px"><label style="flex:1">Length<select id="slen">${opt('any', 'Any length', SRCH.len)}${LENS.map(([k, n, mx], i) => opt(k, `${n} (${i ? LENS[i - 1][2] : 0}${mx === Infinity ? '+' : '–' + mx}s)`, SRCH.len)).join('')}</select></label><label style="flex:1">Sort by<select id="ssort">${opt('new', 'Newest', SRCH.sort)}${opt('short', 'Shortest first', SRCH.sort)}${opt('long', 'Longest first', SRCH.sort)}</select></label></div></div>`;
   const body = SRCH.loading ? '<p class="muted">Searching…</p>' : a.length ? `<p class="muted">${a.length} level${a.length === 1 ? '' : 's'} found</p><div class="list">${a.slice(pg * 10, pg * 10 + 10).map(lvlCard).join('')}</div><div class="pager"><button class="btn sm" data-act="srchpg" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="srchpg" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>` : '<p class="muted">No levels match.</p>';
   page('Search Levels', ctl + body);
 }
-async function doSearch() { SRCH.q = val('sq'); SRCH.status = val('sstat'); SRCH.diff = val('sdiff'); SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); const i = $('#sq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+async function doSearch() { SRCH.q = val('sq'); SRCH.status = val('sstat'); SRCH.diff = val('sdiff'); SRCH.len = val('slen') || 'any'; SRCH.sort = val('ssort') || 'new'; SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); const i = $('#sq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'sq') doSearch(); });
-document.addEventListener('change', e => { if (e.target.id === 'sstat' || e.target.id === 'sdiff') doSearch(); });
+document.addEventListener('change', e => { if (['sstat', 'sdiff', 'slen', 'ssort'].includes(e.target.id)) doSearch(); });
 
 /* ---- level page ---- */
 const bestKey = id => 'dash_best_' + id;
@@ -1050,7 +1190,7 @@ views.level = async ({ id }) => {
   let my = 0; if (me) { try { const v = await getDoc(doc(db, 'levels', id, 'votes', me.uid)); my = v.exists() ? v.data().v : 0; } catch { } }
   const best = await getBest(id);
   let cms = []; try { cms = (await getDocs(query(collection(db, 'levels', id, 'comments'), orderBy('t', 'desc'), limit(60)))).docs.map(d => ({ id: d.id, ...d.data() })); } catch { }
-  const d = DIFFS.find(x => x.id === lv.diff), mine = me && lv.authorId === me.uid;
+  const d = dOf(lv), mine = me && lv.authorId === me.uid;
   const dl = (lv.songParts || lv.songUrl) ? (await idbGet('level:' + id) ? '<span class="muted">✔ Song downloaded</span>' : `<button class="btn sm blue" data-act="dlsong" data-id="${id}">⬇ Download song${lv.songName ? ': ' + esc(lv.songName) : ''}</button>`) : '';
   const cmHtml = cms.map(c => `<div class="cm">${isMod() || (me && c.uid === me.uid) ? `<span class="del" data-act="delcm" data-id="${id}" data-cid="${c.id}">✕</span>` : ''}<b data-act="profile" data-uid="${c.uid}">${nameHTML(c.name)}</b><br>${esc(c.text)}</div>`).join('') || '<p class="muted">No comments yet.</p>';
   page(esc(lv.title), `<div class="lp"><div class="lp-main">
@@ -1104,7 +1244,7 @@ async function awardAuthor(id, L, d) {
   const addC = Array.from({ length: nc }, (_, i) => i).filter(i => !prevC.includes(i));
   const gemTotal = GEMS[d.stars], gemHave = psnap.exists() ? (psnap.data().gems || 0) : 0, gems = Math.max(0, gemTotal - gemHave), upd = {};
   if (first) upd.levelsBeaten = increment(1);
-  if (!starred) { upd.stars = increment(d.stars * STAR_SCALE); if (d.id === 'demon') upd.demons = increment(1); }
+  if (!starred) { upd.stars = increment(d.stars * STAR_SCALE); if (d.demon) upd.demons = increment(1); }
   if (gems) upd.crystals = increment(gems);
   if (addC.length) upd.starCoins = increment(addC.length);
   await setDoc(br, { t: serverTimestamp(), starred: true, level: id, coins: [...prevC, ...addC] }, { merge: true });
@@ -1154,14 +1294,14 @@ async function playPublished(id, practice = false) {
   if (Date.now() - (+localStorage[vk] || 0) > 600000) { localStorage[vk] = Date.now(); updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1; }
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
-  const prog = await getProgress(id), prevBest = prog.best, dd = DIFFS.find(x => x.id === lv.diff);
+  const prog = await getProgress(id), prevBest = prog.best, dd = dOf(lv);
   startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
-  game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
+  game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
@@ -1213,7 +1353,7 @@ function anonBest(id, pct) { const m = anonGet('dash_anon_best'); if (pct > (m[i
 function recordAnonWin(id, coins) { const m = anonGet('dash_anon_beaten'), e = m[id] || { coins: [] }; e.coins = [...new Set([...(e.coins || []), ...coins])]; m[id] = e; localStorage.dash_anon_beaten = JSON.stringify(m); anonBest(id, 100); }
 async function awardWin(id, fb, got) {
   const fresh = await getDoc(doc(db, 'levels', id)); if (!fresh.exists() && !fb) return null;
-  const L = fresh.exists() ? fresh.data() : fb, rated = L.status === 'rated', d = DIFFS.find(x => x.id === L.diff), ok = rated && !!d;
+  const L = fresh.exists() ? fresh.data() : fb, rated = L.status === 'rated', d = dOf(L), ok = rated && !!d;
   const br = doc(db, 'users', me.uid, 'beaten', id), pr = doc(db, 'users', me.uid, 'progress', id), [snap, psnap] = await Promise.all([getDoc(br), getDoc(pr)]);
   const first = !snap.exists(), starred = snap.exists() && snap.data().starred, prevC = snap.exists() ? (snap.data().coins || []) : [];
   const addC = ok ? got.filter(i => !prevC.includes(i)) : [], award = ok && !starred;
@@ -1221,7 +1361,7 @@ async function awardWin(id, fb, got) {
   if (!first && !award && !addC.length && !gems) return { nothing: true, rated };
   const ds = award ? d.stars * STAR_SCALE : 0, upd = {};
   if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; }
-  if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.id === 'demon') { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
+  if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.demon) { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
   if (gems) { upd.crystals = increment(gems); P.crystals = (P.crystals || 0) + gems; }
   if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
   await setDoc(br, { t: serverTimestamp(), starred: starred || ok, level: id, coins: [...prevC, ...addC] }, { merge: true });
@@ -1427,7 +1567,7 @@ function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.fi
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
 function renderProps() {
   const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
-  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
+  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label><label>Follow player X<input type="checkbox" data-p="fx" ${o.fx ? 'checked' : ''}> moves up/down with the player</label><label>Follow player Y<input type="checkbox" data-p="fy" ${o.fy ? 'checked' : ''}> moves right with the player</label>`;
@@ -1435,8 +1575,8 @@ function renderProps() {
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level.</p>';
-  else { h += `<label>Group (0 = none)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
-  if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<input type="number" min="0" data-p="g" value="${o.g || 0}"></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
+  else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
+  if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
   h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
 }
@@ -1528,7 +1668,7 @@ function edPlay(here) {
 async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
 function edSettings() {
   stopPreview(); const lv = ed.lv;
-  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
+  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave'],['robot','Robot'],['spider','Spider']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
 }
 
 /* ================= actions (click delegation) ================= */
@@ -1545,7 +1685,7 @@ const actions = {
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;
     if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Find it in Community > Shop'), 'err'); }
-    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
+    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', robot: 'robot', spider: 'spider', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
   pg: d => renderLevels(d.kind, +d.pg), dosearch: doSearch, srchpg: d => { SRCH.pg = Math.max(0, +d.pg); renderSearch(); },
@@ -1605,6 +1745,11 @@ const actions = {
     previewing = true; applyAudio(); a.play().catch(done);
   },
   edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 18) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
+  edgrp: () => {   // put the smallest group ID nobody in this level uses yet on the selection
+    const tg = ed.sel ? [ed.sel] : ed.sels; if (!tg.length) return; snap();
+    const used = new Set(ed.lv.objs.map(o => o.g | 0)); let n = 1; while (used.has(n)) n++;
+    tg.forEach(o => { o.g = n; }); changed(); renderProps();
+  },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
