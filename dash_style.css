@@ -206,3 +206,8 @@ label{display:block;font-size:14px;color:#9fd4ff}
 
 .gp{display:flex;gap:4px;align-items:center}.gp input{flex:1;min-width:0}.gp .btn{padding:2px 10px;margin:2px 0;line-height:1.1}
 .beat{color:#46ff7a;font-size:.8em;margin-left:4px;text-shadow:2px 2px 0 #000}
+
+#attTot{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:normal 22px "Lilita One",sans-serif;color:#fff;text-shadow:2px 2px 0 #000;pointer-events:none;z-index:5;white-space:nowrap}
+.playbtn.wrench{background:linear-gradient(#ffc04a,#e5780a);font-size:56px}
+.picons{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.picons div{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border:2px solid #000;border-radius:10px;padding:3px 5px}.picons small{font-size:11px;color:#cfe4ff}
+.brk{grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:10px 0}.brk div{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border:2px solid #000;border-radius:10px;padding:6px}.brk b{font-size:20px}

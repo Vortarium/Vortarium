@@ -643,7 +643,7 @@ class Game {
   }
   prep(o) {
     o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
-    if (h) { if (h.k === 's') o.hr = h.a * U * .7 * sc; else { const hw = h.n > 1 ? 10 : 5 * h.a; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b).map(v => 15 + (v - 15) * sc); } }
+    if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b * .75).map(v => 15 + (v - 15) * sc); } }
     if (PADS.includes(o.t)) o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc);
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
   }
@@ -1064,7 +1064,7 @@ async function afterLogin(u) {
   let s = await getDoc(doc(db, 'users', u.uid)); if (!s.exists()) { await sleep(1200); s = await getDoc(doc(db, 'users', u.uid)); }
   if (!s.exists()) { await signOut(auth); me = null; toast('Account data not found', 'err'); return; }
   P = s.data(); if (P.settings) { Object.assign(settings, P.settings); localStorage.dash_settings = JSON.stringify(settings); applyAudio(); }
-  loadSlots(); startListeners(); renderFooter(); loadBeaten();
+  loadSlots(); startListeners(); renderFooter(); loadBeaten(); backfillBeat();
   refreshMyStats(); pullDrafts(); syncSongs(); purgeDMs();
   if (cur === 'account') views.account({ tab: 'account' });
 }
@@ -1266,9 +1266,9 @@ async function getBest(id) {
   return b;
 }
 async function getProgress(id) {
-  let best = +localStorage[bestKey(id)] || 0, gems = 0;
-  if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) { best = Math.max(best, s.data().best || 0); gems = s.data().gems || 0; } } catch { } }
-  return { best, gems };
+  let best = +localStorage[bestKey(id)] || 0, gems = 0, attempts = 0;
+  if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) { best = Math.max(best, s.data().best || 0); gems = s.data().gems || 0; attempts = s.data().attempts || 0; } } catch { } }
+  return { best, gems, attempts };
 }
 views.level = async ({ id }) => {
   page('Level', '<p class="muted">Loading…</p>');
@@ -1385,17 +1385,22 @@ async function playPublished(id, practice = false) {
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
   const prog = await getProgress(id), prevBest = prog.best, dd = dOf(lv);
-  startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
+  startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, attBase: prog.attempts, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
+const attEl = document.createElement('div'); attEl.id = 'attTot'; $('#play').appendChild(attEl);
+const attKey = id => 'dash_att_' + id;
+function showAtt() { attEl.textContent = PL && PL.kind === 'play' ? 'Total attempts: ' + fmt(PL.attTot || 0) : ''; }
+function bumpAttempts() { if (!PL || PL.kind !== 'play' || game.practice) return; PL.attTot = (PL.attTot || 0) + 1; localStorage[attKey(PL.id)] = PL.attTot; showAtt(); }   // practice runs don't count
 function startPlay(o) {
   PL = o; PL.sx = o.startX || 0; PL.sy = o.startY || 0; PL.best = 0;
+  PL.attTot = o.kind === 'play' ? Math.max(+localStorage[attKey(o.id)] || 0, o.attBase || 0) : 0; showAtt();
   $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open'); $('#pfill').style.width = '0'; setPracUI();
   showLayer('play'); setTrack(null);
   game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null;
   const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
   game.cb = {
-    onSpawn: t => { if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
+    onSpawn: t => { bumpAttempts(); if (!lvAudio || !settings.music) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
     onDeath: pct => {
       lvAudio && lvAudio.pause(); sfx('die'); if (PL.practice) return;
       const ls = PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0, oldBest = Math.max(PL.best, PL.prevBest || 0, ls), fp = Math.floor(pct);
@@ -1417,7 +1422,7 @@ function pauseToggle() {
 async function stopPlay() {
   game.stop(); lvAudio && lvAudio.pause(); $('#recBox').classList.remove('show'); $('#pauseBox').classList.remove('open'); $('#winBox').classList.remove('open');
   const p = PL; PL = null;
-  if (p.kind === 'play' && !p.practice) { const b = Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0); if (me && b > 0) setDoc(doc(db, 'users', me.uid, 'progress', p.id), { best: b }, { merge: true }).catch(() => { }); }
+  if (p.kind === 'play') { const b = p.practice ? 0 : Math.max(+localStorage[bestKey(p.id)] || 0, p.best ? Math.floor(p.best) : 0), up = {}; if (b > 0) up.best = b; if (p.attTot) up.attempts = p.attTot; if (me && Object.keys(up).length) setDoc(doc(db, 'users', me.uid, 'progress', p.id), up, { merge: true }).catch(() => { }); }
   setTrack(p.kind === 'test' ? 'editor' : 'menu'); p.onExit && p.onExit();
 }
 function setPracUI() { $('#pracHud').style.display = PL?.practice ? 'flex' : 'none'; }
@@ -1450,7 +1455,7 @@ async function awardWin(id, fb, got) {
   const gemTotal = ok ? GEMS[d.stars] : 0, gemHave = psnap.exists() ? (psnap.data().gems || 0) : 0, gems = Math.max(0, gemTotal - gemHave);
   if (!first && !award && !addC.length && !gems) return { nothing: true, rated };
   const ds = award ? d.stars * STAR_SCALE : 0, upd = {};
-  if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; }
+  if (first) { upd.levelsBeaten = increment(1); P.levelsBeaten = (P.levelsBeaten || 0) + 1; if (P.beatByOk) { const dk = ok ? d.id : 'unrated'; upd['beatBy.' + dk] = increment(1); P.beatBy = P.beatBy || {}; P.beatBy[dk] = (P.beatBy[dk] || 0) + 1; } }
   if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.demon) { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
   if (gems) { upd.crystals = increment(gems); P.crystals = (P.crystals || 0) + gems; }
   if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
@@ -1458,6 +1463,17 @@ async function awardWin(id, fb, got) {
   await setDoc(pr, gemTotal ? { best: 100, gems: Math.max(gemTotal, gemHave) } : { best: 100 }, { merge: true });
   if (Object.keys(upd).length) await updateDoc(doc(db, 'users', me.uid), upd);
   return { first, ok, ds, gems, gemTotal, addC: addC.length, rated };
+}
+// one-time: builds the per-difficulty beaten counts for accounts made before they were tracked
+let bfBusy = false;
+async function backfillBeat() {
+  if (!me || !P || P.beatByOk || bfBusy) return; bfBusy = true;
+  try {
+    const u0 = (await getDoc(doc(db, 'users', me.uid))).data() || {}; if (u0.beatByOk) { P.beatByOk = true; P.beatBy = u0.beatBy || {}; return; }
+    const ids = (await getDocs(collection(db, 'users', me.uid, 'beaten'))).docs.map(d => d.id), by = {};
+    for (let i = 0; i < ids.length; i += 20) await Promise.all(ids.slice(i, i + 20).map(async id => { let k = 'unrated'; try { const sn = await getDoc(doc(db, 'levels', id)); if (sn.exists() && sn.data().status === 'rated') { const d = dOf(sn.data()); if (d) k = d.id; } } catch { } by[k] = (by[k] || 0) + 1; }));
+    await updateDoc(doc(db, 'users', me.uid), { beatBy: by, beatByOk: true }); P.beatBy = by; P.beatByOk = true;
+  } catch (e) { console.warn('beatBy backfill', e); } finally { bfBusy = false; }
 }
 // wins made while Anonymous are carried over to the account created afterwards
 async function transferAnon() {
@@ -1518,7 +1534,11 @@ async function showProfile(uid) {
   let isF = false; if (me && uid !== me.uid) { try { isF = (await getDoc(doc(db, 'friends', me.uid, 'list', uid))).exists(); } catch { } }
   const acts = me && uid !== me.uid ? (isF ? `<button class="btn blue sm" data-act="dm" data-uid="${uid}" data-name="${esc(u.username)}">💬 Message</button>` : `<button class="btn green sm" data-act="addfriend" data-name="${esc(u.username)}">➕ Add friend</button>`) : '';
   const ban = isMod() && u.username !== MOD ? `<button class="btn red sm" data-act="ban" data-uid="${uid}" data-name="${esc(u.username)}">Ban account</button>` : '';
-  modal(`<h2>${nameHTML(u.username)}</h2><div class="row"><img src="${userIcon(u, 96)}" width="96" height="96"><div class="muted" style="font-size:16px">⭐ ${fmt(u.stars)} stars<br>🪙 ${fmt(u.starCoins)} star coins<br>😈 ${fmt(u.demons)} demons<br>👍 ${fmt(u.netLikes)} net likes<br>✅ ${fmt(u.levelsBeaten)} levels beaten<br>👁 ${fmt(u.totalViews)} total views</div></div><div class="row" style="margin:12px 0">${acts}${ban}</div><h3>Levels</h3><div class="list">${ls.map(lvlCard).join('') || '<p class="muted">No published levels.</p>'}</div>`, true);
+  const pc1 = PRIMARY[u.c1 || 0], pc2 = SECONDARY[u.c2 || 0], psk = u.skin || 0;
+  const pic = [['Cube', skinURL(psk, pc1, pc2, 44)], ['Ship', shipURL(u.ship || 0, psk, pc1, pc2, 44)], ['Ball', ballURL(u.ball || 0, pc1, pc2, 44)], ['UFO', ufoURL(u.ufo || 0, psk, pc1, pc2, 44)], ['Wave', waveURL(u.wave || 0, pc1, pc2, 44)], ['Robot', robotURL(u.robot || 0, pc1, pc2, 44)], ['Spider', spiderURL(u.spider || 0, pc1, pc2, 44)]];
+  const bb = u.beatBy || {}, hasB = !!u.beatByOk;
+  const brk = [...DIFFS.map(d => [d.id, d.name, false]), ['unrated', 'UNRATED', true]].map(([id, n, un]) => `<div title="${n}"><img src="${diffURL(un ? 'easy' : id, 48)}" width="48" height="48" style="${un ? 'filter:grayscale(1) brightness(.6)' : ''}"><b>${hasB ? fmt(bb[id] || 0) : '–'}</b></div>`).join('');
+  modal(`<h2>${nameHTML(u.username)}</h2><div class="row" style="align-items:flex-start"><img src="${userIcon(u, 96)}" width="96" height="96"><div style="flex:1"><div class="picons">${pic.map(([n, src]) => `<div title="${n}"><img src="${src}" width="44" height="44"><small>${n}</small></div>`).join('')}</div><button class="btn blue sm" data-act="beatbreak">✅ ${fmt(u.levelsBeaten)} levels beaten ▾</button></div></div><div id="beatBrk" class="brk" style="display:none">${brk}</div><div class="muted" style="font-size:16px;margin-top:8px">⭐ ${fmt(u.stars)} stars · 🪙 ${fmt(u.starCoins)} star coins · 😈 ${fmt(u.demons)} demons<br>👍 ${fmt(u.netLikes)} net likes · 👁 ${fmt(u.totalViews)} total views</div><div class="row" style="margin:12px 0">${acts}${ban}</div><h3>Levels</h3><div class="list">${ls.map(lvlCard).join('') || '<p class="muted">No published levels.</p>'}</div>`, true);
 }
 async function addFriend(name) {
   if (!me) return toast('Log in first', 'err'); name = (name || '').trim(); if (!name) return;
@@ -1560,7 +1580,7 @@ function openDM(uid, name) {
 /* ================= editor: slots ================= */
 let slots = [];
 const skey = () => `dash_levels_${me ? me.uid : 'anon'}`;
-function loadSlots() { try { slots = JSON.parse(localStorage[skey()] || '[]'); } catch { slots = []; } slots.forEach(l => { if (l) { l.name = String(l.name || '').slice(0, 18); l.desc = String(l.desc || '').slice(0, 200); } }); while (slots.length < SLOTS) slots.push(null); slots.length = SLOTS; }
+function loadSlots() { try { slots = JSON.parse(localStorage[skey()] || '[]'); } catch { slots = []; } slots.forEach(l => { if (l) { l.name = String(l.name || '').slice(0, 18); l.desc = String(l.desc || '').slice(0, 200); } }); while (slots.length && !slots[slots.length - 1]) slots.pop(); }
 let pushT = {};
 function saveSlots(i) {
   localStorage[skey()] = JSON.stringify(slots);
@@ -1576,15 +1596,63 @@ async function pullDrafts() {
 const hash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return h.toString(36) + s.length; };
 const sigOf = objs => hash(objs.map(o => JSON.stringify(o)).join('|'));
 const newLevel = name => ({ name, desc: '', objs: [], bg: '#2b5fd9', ground: '#173a94', songName: '', verified: '', pub: null, updated: Date.now() });
+let EDPG = 0;
+const edRefresh = () => cur === 'draft' ? views.draft(curP) : views.editor();
 views.editor = () => {
   if (!me) { return page('Editor', '<div class="card"><h3>Log in to create levels</h3><p class="muted">Anonymous players can view and play levels. Open the Account menu to log in or sign up.</p><button class="btn green" data-act="go" data-v="account">Account</button></div>'); }
-  const cards = slots.map((l, i) => {
-    if (!l) return `<div class="card" style="text-align:center"><b>Slot ${i + 1}</b><div class="muted" style="margin:10px 0">Empty</div><button class="btn green sm" data-act="slotnew" data-i="${i}">＋ New level</button></div>`;
-    const ok = l.verified === sigOf(l.objs), pub = !!l.pub;
-    return `<div class="card"><b>${esc(l.name)}</b> <span class="muted">· ${l.objs.length} objects</span><div class="muted">${pub ? '🌐 Published (locked)' : ok ? '✔ Verified' : 'Not verified'}${l.songName ? ' · 🎵 ' + esc(l.songName) : ''}</div><div class="muted" style="min-height:20px">${esc(l.desc)}</div><div class="row" style="margin-top:8px">${pub ? `<button class="btn blue sm" data-act="openlvl" data-id="${l.pub}">View</button>` : `<button class="btn orange sm" data-act="slotedit" data-i="${i}" title="Edit">🔧</button><button class="btn sm" data-act="slotrename" data-i="${i}">Rename</button><button class="btn sm" data-act="slotdesc" data-i="${i}">Description</button><button class="btn green sm" data-act="slotpub" data-i="${i}" ${ok ? '' : 'disabled'}>⬆ Upload</button>`}<button class="btn sm" data-act="slotcopy" data-i="${i}">Copy</button><button class="btn red sm" data-act="slotdel" data-i="${i}">Delete</button></div></div>`;
+  const idx = slots.map((l, i) => l ? i : -1).filter(i => i >= 0).sort((a, b) => (slots[b].updated || 0) - (slots[a].updated || 0));
+  const pages = Math.max(1, Math.ceil(idx.length / 10)); EDPG = Math.max(0, Math.min(EDPG, pages - 1));
+  const rows = idx.slice(EDPG * 10, EDPG * 10 + 10).map(i => {
+    const l = slots[i], ok = l.verified === sigOf(l.objs), pub = !!l.pub;
+    return `<div class="lvl" data-act="draftopen" data-i="${i}"><img src="${diffURL('easy', 56)}" style="filter:grayscale(1) brightness(.6)"><div><h3>${esc(l.name)}</h3><div class="muted">${l.objs.length} objects · ${pub ? '🌐 Published' : ok ? '✔ Verified' : 'Not verified'}${l.songName ? ' · 🎵 ' + esc(l.songName) : ''}</div></div></div>`;
   }).join('');
-  page('Level Editor', `<p class="muted">20 level slots. Beat your level from 0-100% in the editor to unlock Upload. Published levels can't be edited, but you can copy them.</p><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${cards}</div>`);
+  page('Level Editor', `<div class="row" style="margin-bottom:12px"><button class="round" data-act="slotnew" title="New level" style="font-size:30px;line-height:1">＋</button><span class="muted">New level · click a level to open it. Beat it from 0-100% to unlock Upload.</span></div>${idx.length ? `<div class="list">${rows}</div>` : '<p class="muted">No levels yet - press ＋ to make one.</p>'}<div class="pager"><button class="btn sm" data-act="edpg" data-pg="${EDPG - 1}" ${EDPG <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${EDPG + 1} / ${pages}</b><button class="btn sm" data-act="edpg" data-pg="${EDPG + 1}" ${EDPG >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>`);
 };
+views.draft = ({ i }) => {
+  const l = slots[i]; if (!me || !l) return page('Level', '<p class="muted">Level not found.</p>');
+  const ok = l.verified === sigOf(l.objs), pub = !!l.pub;
+  page(esc(l.name), `<div class="lp"><div class="lp-main">
+    <h1>${esc(l.name)}</h1><div>by <b style="color:#8fe9ff">${nameHTML(P.username)}</b> · <span class="muted">${l.objs.length} objects</span></div>
+    <div class="row" style="justify-content:center"><img src="${diffURL('easy', 56)}" width="56" style="filter:grayscale(1) brightness(.6)"><b>${pub ? 'Published' : 'Unrated · ' + (ok ? '✔ Verified' : 'Not verified')}</b></div>
+    <p class="muted" style="max-width:480px">${esc(l.desc || 'No description')}</p>
+    <div class="row" style="justify-content:center"><button class="playbtn" data-act="draftplay" data-i="${i}" title="Play">▶</button>${pub ? '' : `<button class="playbtn wrench" data-act="slotedit" data-i="${i}" title="Edit">🔧</button>`}</div>
+    <div class="row" style="justify-content:center"><button class="btn sm" data-act="slotrename" data-i="${i}">Rename</button><button class="btn sm" data-act="slotdesc" data-i="${i}">Description</button>${pub ? `<button class="btn blue sm" data-act="openlvl" data-id="${l.pub}">View online</button>` : `<button class="btn green sm" data-act="slotpub" data-i="${i}" ${ok ? '' : 'disabled'}>⬆ Upload</button>`}<button class="btn sm" data-act="slotcopy" data-i="${i}">Copy</button></div>
+    <div class="row" style="justify-content:center"><button class="btn sm blue" data-act="importlvl" data-i="${i}">⬇ Import</button><button class="btn sm blue" data-act="exportlvl" data-i="${i}">⬆ Export</button><button class="btn red sm" data-act="slotdel" data-i="${i}" title="Delete level">🗑</button></div>
+    <div class="votes"><button class="round" disabled title="Locked until posted">👍</button><span>🔒</span><button class="round down" disabled title="Locked until posted">👎</button></div>
+    <div class="muted">${l.songName ? '🎵 ' + esc(l.songName) : 'No song'}</div>
+  </div><div class="side"><h3 style="margin:0 0 8px">Comments 🔒</h3><div class="comments"><p class="muted">Comments and likes unlock once this level is posted.</p></div><input disabled placeholder="Locked until posted"><button class="btn green sm" disabled>Post</button></div></div>`);
+};
+function draftPlay(i) {
+  const lv = slots[i]; if (!lv) return;
+  if (!lv.objs.some(o => o.t === 'trig_end')) return toast('Add an End Trigger first (Triggers tab)', 'err');
+  ed.slot = i; ed.lv = lv; ed.posMode = false; ed.spawn = null; saveSlots(i);
+  idbGet(`draft:${me.uid}:${i}`).then(b => startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs, grs: lv.grs, startMode: lv.startMode, startSpeed: lv.startSpeed }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: 0, startY: 0, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { showLayer('view'); views.draft({ i }); } }));
+}
+function exportLevel(i) {
+  const l = slots[i]; if (!l) return;
+  const o = { dashLevel: 1, name: l.name, desc: l.desc, bg: l.bg, ground: l.ground, bgs: l.bgs, grs: l.grs, startMode: l.startMode, startSpeed: l.startSpeed, songSpeed: l.songSpeed, songOff: l.songOff, objs: l.objs };
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(o)], { type: 'application/json' })); a.download = (l.name.replace(/[^\w\- ]+/g, '').trim() || 'level') + '.dashlevel.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Level exported (the song file is not included)', 'ok');
+}
+function importLevel(i) {
+  const l = slots[i]; if (!l) return; if (l.pub) return toast("Published levels can't be changed", 'err');
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return; if (f.size > 900000) return toast('File too big', 'err');
+    let o; try { o = JSON.parse(await f.text()); } catch { return toast('Not a valid level file', 'err'); }
+    if (!o || !Array.isArray(o.objs)) return toast('Not a valid level file', 'err');
+    const objs = o.objs.filter(q => q && typeof q.t === 'string' && OBJ[q.t] && Number.isFinite(q.x) && Number.isFinite(q.y)).map(q => { const c = {}; for (const [k, v] of Object.entries(q)) if (['number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length <= 40)) c[k] = v; return c; });
+    if (!objs.length) return toast('No objects found in that file', 'err');
+    if (l.objs.length && !confirm(`Replace this level's ${l.objs.length} objects with ${objs.length} imported objects?`)) return;
+    const hex = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+    l.objs = objs; if (typeof o.name === 'string' && o.name.trim()) l.name = o.name.trim().slice(0, 18); if (typeof o.desc === 'string') l.desc = o.desc.slice(0, 200);
+    if (hex(o.bg)) l.bg = o.bg; if (hex(o.ground)) l.ground = o.ground;
+    if (BGS.some(b => b[0] === o.bgs)) l.bgs = o.bgs; if (GRS.some(b => b[0] === o.grs)) l.grs = o.grs;
+    if (['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider'].includes(o.startMode)) l.startMode = o.startMode; if ([.8, 1, 1.3, 1.6].includes(o.startSpeed)) l.startSpeed = o.startSpeed;
+    l.verified = ''; l.updated = Date.now(); saveSlots(i); toast(`Imported ${objs.length} objects - beat it to verify`, 'ok'); edRefresh();
+  };
+  inp.click();
+}
 
 /* ================= editor: canvas ================= */
 const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null };
@@ -1755,7 +1823,7 @@ function edPlay(here) {
     startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs, grs: lv.grs, startMode: lv.startMode, startSpeed: lv.startSpeed }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
   });
 }
-async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
+async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); edRefresh(); renderFooter(); }
 function edSettings() {
   stopPreview(); const lv = ed.lv;
   modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave'],['robot','Robot'],['spider','Spider']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
@@ -1807,15 +1875,21 @@ const actions = {
   resume: pauseToggle, restart: () => { $('#winBox').classList.remove('open'); $('#pauseBox').classList.remove('open'); game.start({ x: PL.sx, y: PL.sy, practice: PL.practice }); },
   exitplay: () => stopPlay(),
   // editor slots
-  slotnew: d => { if (!me) return; const i = +d.i; slots[i] = newLevel('Level ' + (i + 1)); saveSlots(i); openEditor(i); },
+  slotnew: () => { if (!me) return; const f = slots.findIndex(x => !x), i = f < 0 ? slots.length : f; slots[i] = newLevel('Level ' + (i + 1)); saveSlots(i); go('draft', { i }); },
+  draftopen: d => go('draft', { i: +d.i }),
+  draftplay: d => draftPlay(+d.i),
+  edpg: d => { EDPG = Math.max(0, +d.pg); views.editor(); },
+  importlvl: d => importLevel(+d.i),
+  exportlvl: d => exportLevel(+d.i),
   slotedit: d => openEditor(+d.i),
-  slotrename: d => { const l = slots[+d.i], n = prompt('Level name', l.name); if (n && n.trim()) { l.name = n.trim().slice(0, 18); l.updated = Date.now(); saveSlots(+d.i); views.editor(); } },
-  slotdesc: d => { const l = slots[+d.i], n = prompt('Description', l.desc); if (n !== null) { l.desc = n.slice(0, 200); l.updated = Date.now(); saveSlots(+d.i); views.editor(); } },
-  slotdel: async d => { const i = +d.i; if (!confirm('Delete this level slot? (Published copies stay on the servers.)')) return; slots[i] = null; saveSlots(); idbDel(`draft:${me.uid}:${i}`); deleteDoc(doc(db, 'users', me.uid, 'drafts', 's' + i)).catch(() => { }); views.editor(); },
+  beatbreak: () => { const e = $('#beatBrk'); if (e) e.style.display = e.style.display === 'none' ? 'grid' : 'none'; },
+  slotrename: d => { const l = slots[+d.i], n = prompt('Level name', l.name); if (n && n.trim()) { l.name = n.trim().slice(0, 18); l.updated = Date.now(); saveSlots(+d.i); edRefresh(); } },
+  slotdesc: d => { const l = slots[+d.i], n = prompt('Description', l.desc); if (n !== null) { l.desc = n.slice(0, 200); l.updated = Date.now(); saveSlots(+d.i); edRefresh(); } },
+  slotdel: async d => { const i = +d.i; if (!confirm('Delete this level slot? (Published copies stay on the servers.)')) return; slots[i] = null; while (slots.length && !slots[slots.length - 1]) slots.pop(); saveSlots(); idbDel(`draft:${me.uid}:${i}`); deleteDoc(doc(db, 'users', me.uid, 'drafts', 's' + i)).catch(() => { }); if (cur === 'draft') back(); else views.editor(); },
   slotcopy: async d => {
-    const i = +d.i, f = slots.findIndex(x => !x); if (f < 0) return toast('No free slots', 'err');
+    const i = +d.i, f0 = slots.findIndex(x => !x), f = f0 < 0 ? slots.length : f0;
     const c = JSON.parse(JSON.stringify(slots[i])); c.name = (c.name.slice(0, 13) + ' copy').slice(0, 18); c.pub = null; c.verified = ''; c.updated = Date.now(); slots[f] = c; saveSlots(f);
-    const b = await idbGet(`draft:${me.uid}:${i}`); if (b) idbSet(`draft:${me.uid}:${f}`, b); toast('Copied to slot ' + (f + 1), 'ok'); views.editor();
+    const b = await idbGet(`draft:${me.uid}:${i}`); if (b) idbSet(`draft:${me.uid}:${f}`, b); toast('Copied!', 'ok'); edRefresh();
   },
   slotpub: async d => { await publish(+d.i); },
   // editor
@@ -1881,7 +1955,7 @@ async function publish(i) {
         }
       } catch (e) { await delCol(['levels', r.id, 'songChunks']).catch(() => { }); await deleteDoc(r).catch(() => { }); throw 'Song upload failed (' + errMsg(e) + '). Level was not published - did you update the Firestore rules?'; }
     }
-    lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); views.editor();
+    lv.pub = r.id; saveSlots(i); refreshMyStats(); toast('Published! Vortarium has been pinged to rate it.', 'ok'); edRefresh();
   } catch (e) { console.error(e); toast('Publish failed: ' + errMsg(e), 'err'); }
 }
 async function banUser(uid, name) {
