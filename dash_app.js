@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { getFirestore, runTransaction, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { getStorage, ref as sref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-storage.js";
 // dash_firebase.js - Firebase setup for DASH
 
@@ -510,7 +510,9 @@ class Game {
       else this.acts.push({ key, k: 'col', list: (this.groups[t.tg] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
     } else if (t.t === 'trig_move') {
       const b = this.gOff[t.tg] || { x: 0, y: 0 };
-      this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], t0: this.time, dur });
+      this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], pe: 0, t0: this.time, dur });
+      // follow triggers: for the trigger's duration the group tracks the player. "Follow X" = moves up/down with the player, "Follow Y" = moves right with the player, both = follows like a camera
+      if (!instant && (t.fx || t.fy)) this.acts.push({ k: 'fol', g: t.tg, vert: !!t.fx, horz: !!t.fy, lx: this.p.x, ly: this.p.y, t0: this.time, dur: Math.max(.05, t.dur || 0) });
     } else if (t.t === 'trig_zoom') {
       this.acts = this.acts.filter(a => a.k !== 'zoom'); this.acts.push({ k: 'zoom', from: this.zoom, to: Math.max(.2, t.zoom || 1), t0: this.time, dur });
     } else if (t.t === 'trig_toggle') {
@@ -526,7 +528,8 @@ class Game {
       if (a.k === 'bg') this.bg = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'gr') this.ground = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'col') { const h = rgb2hex(lerpC([0, 0, 0], a.to, 1)); for (const [o, f] of a.list) o.col = pr >= 1 ? h : rgb2hex(lerpC(f, a.to, pr)); }
-      else if (a.k === 'mv') { const e = ease(pr); this.gOff[a.g] = { x: a.b.x + a.d[0] * e, y: a.b.y + a.d[1] * e }; }
+      else if (a.k === 'mv') { const e = ease(pr), g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }); g.x += a.d[0] * (e - (a.pe || 0)); g.y += a.d[1] * (e - (a.pe || 0)); a.pe = e; }
+      else if (a.k === 'fol') { const g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }), dx = this.p.x - a.lx, dy = this.p.y - a.ly; a.lx = this.p.x; a.ly = this.p.y; if (a.horz) g.x += dx / U; if (a.vert) g.y += dy / U; }
       else if (a.k === 'zoom') this.zoom = a.from + (a.to - a.from) * ease(pr);
       else if (a.k === 'al') for (const [o, f] of a.list) o.alp = f + (a.to - f) * pr;
       if (pr >= 1) this.acts.splice(i, 1);
@@ -737,7 +740,7 @@ function toast(msg, kind = '') {
 }
 let modalClose = null;
 function modal(html, wide) { $('#modalBody').innerHTML = html; $('#modalBox').classList.toggle('wide', !!wide); $('#modal').classList.add('open'); }
-function closeModal() { try { prevA && prevA.pause(); prevA = null; } catch { } $('#modal').classList.remove('open'); if (modalClose) { modalClose(); modalClose = null; } }
+function closeModal() { stopPreview(); $('#modal').classList.remove('open'); if (modalClose) { modalClose(); modalClose = null; } }
 async function batchDelete(refs) { for (let i = 0; i < refs.length; i += 400) { const b = writeBatch(db); refs.slice(i, i + 400).forEach(r => b.delete(r)); await b.commit(); } }
 async function delCol(path) { const s = await getDocs(collection(db, ...path)); await batchDelete(s.docs.map(d => d.ref)); }
 
@@ -750,13 +753,14 @@ const idbDel = async k => { try { const d = await idb(); d.transaction('songs', 
 /* ================= audio ================= */
 const A = { menu: new Audio('dash_music.mp3'), editor: new Audio('dash_editor.mp3'), die: new Audio('dash_die.mp3'), win: new Audio('dash_win.mp3') };
 A.menu.loop = A.editor.loop = true;
-let track = null, unlocked = false;
+let track = null, unlocked = false, previewing = false;
 function applyAudio() {
   for (const k of ['menu', 'editor']) {
     A[k].volume = settings.vol;
-    if (settings.music && unlocked && track === k) A[k].play().catch(() => { }); else A[k].pause();
+    if (settings.music && unlocked && track === k && !(k === 'editor' && previewing)) A[k].play().catch(() => { }); else A[k].pause();
   }
 }
+function stopPreview() { try { prevA && prevA.pause(); } catch { } prevA = null; if (previewing) { previewing = false; applyAudio(); } }
 function setTrack(t) { if (track === t) return; track = t; applyAudio(); }
 function sfx(k) { if (!settings.sfx) return; const a = A[k].cloneNode(); a.volume = settings.vol; a.play().catch(() => { }); }
 const unlock = () => { unlocked = true; applyAudio(); };
@@ -921,9 +925,10 @@ const svg = p => `<i class="bb-ico"><svg viewBox="0 0 24 24" fill="#fff">${p}</s
 const ICO = { tools: svg('<rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><rect x="8" y="3" width="8" height="8" rx="2"/>'), star: svg('<polygon points="12,2 15,9 22,9.5 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9.5 9,9"/>'), plus: svg('<circle cx="12" cy="12" r="10"/><path d="M12 7v10M7 12h10" stroke="#1450d0" stroke-width="3"/>'), trophy: svg('<path d="M7 3h10v6a5 5 0 01-10 0zM4 4h3v4H4zM17 4h3v4h-3zM11 14h2v4h3v3H8v-3h3z"/>') };
 views.community = () => {
   const mb = isMod() && modPending ? `<em class="badge">${modPending}</em>` : '', rb = reqs.length ? `<em class="badge">${reqs.length}</em>` : '';
-  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor">${ICO.tools}Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars">${ICO.star}Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new">${ICO.plus}New Levels${mb}</button><button class="big-btn red" data-act="go" data-v="lb">${ICO.trophy}Leaderboards &amp; Friends${rb}</button><button class="big-btn purple" data-act="go" data-v="shop">${ICO.gem}Shop</button></div>`);
+  page('Community', `<div class="grid menu4"><button class="big-btn green" data-act="go" data-v="editor">${ICO.tools}Editor</button><button class="big-btn orange" data-act="go" data-v="levels" data-kind="stars">${ICO.star}Stars</button><button class="big-btn blue" data-act="go" data-v="levels" data-kind="new">${ICO.plus}New Levels${mb}</button><button class="big-btn blue" data-act="go" data-v="search">${ICO.search}Search</button><button class="big-btn red" data-act="go" data-v="lb">${ICO.trophy}Leaderboards &amp; Friends${rb}</button><button class="big-btn purple" data-act="go" data-v="shop">${ICO.gem}Shop</button></div>`);
 };
 
+ICO.search = svg('<circle cx="10" cy="10" r="6.5" fill="none" stroke="#fff" stroke-width="3"/><path d="M15 15l7 7" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>');
 ICO.gem = svg('<path d="M6 3h12l4 6-10 13L2 9z"/><path d="M2 9h20M9 3l3 6 3-6M12 9v13" stroke="#6a1fd0" stroke-width="1.2" fill="none"/>');
 
 /* ================= shop ================= */
@@ -998,6 +1003,31 @@ function renderLevels(kind, pg) {
   page(kind === 'stars' ? 'Stars - Rated Levels' : 'New Levels', body + `<div class="pager"><button class="btn sm" data-act="pg" data-kind="${kind}" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="pg" data-kind="${kind}" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>`);
 }
 
+/* ---- search ---- */
+const SRCH = { q: '', status: 'all', diff: 'any', pg: 0, res: [], cache: null, loading: false };
+async function searchPool(status) {
+  const c = SRCH.cache; if (!c || Date.now() - c.t > 120000) SRCH.cache = { t: Date.now(), rated: null, unrated: null };
+  const need = status === 'rated' ? ['rated'] : status === 'unrated' ? ['unrated'] : ['rated', 'unrated'];
+  for (const k of need) if (!SRCH.cache[k]) SRCH.cache[k] = await fetchLevels(k === 'rated' ? 'stars' : 'new');
+  return need.flatMap(k => SRCH.cache[k]);
+}
+views.search = async () => { SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); };
+async function runSearch() {
+  const q = SRCH.q.trim().toLowerCase(); let a = await searchPool(SRCH.diff !== 'any' ? 'rated' : SRCH.status);
+  if (SRCH.diff !== 'any') a = a.filter(l => l.diff === SRCH.diff);
+  if (q) a = a.filter(l => (l.title || '').toLowerCase().includes(q) || (l.authorName || '').toLowerCase().includes(q));
+  a.forEach(l => { LV[l.id] = l; }); SRCH.res = a.slice().sort((x, y) => (y.created?.seconds || 0) - (x.created?.seconds || 0)); SRCH.pg = 0;
+}
+function renderSearch() {
+  const a = SRCH.res, pages = Math.max(1, Math.ceil(a.length / 10)), pg = Math.min(SRCH.pg, pages - 1), opt = (v, n, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${n}</option>`;
+  const ctl = `<div class="card"><div class="row"><input id="sq" maxlength="40" placeholder="Search by level name or creator…" value="${esc(SRCH.q)}" style="flex:1;min-width:200px;margin:0"><button class="btn green sm" data-act="dosearch">🔍 Search</button></div><div class="row" style="margin-top:8px"><label style="flex:1">Status<select id="sstat">${opt('all', 'Rated & unrated', SRCH.status)}${opt('rated', 'Rated only', SRCH.status)}${opt('unrated', 'Unrated only', SRCH.status)}</select></label><label style="flex:1">Rating<select id="sdiff">${opt('any', 'Any', SRCH.diff)}${DIFFS.map(d => opt(d.id, `${d.name} (⭐${d.stars})`, SRCH.diff)).join('')}</select></label></div></div>`;
+  const body = SRCH.loading ? '<p class="muted">Searching…</p>' : a.length ? `<p class="muted">${a.length} level${a.length === 1 ? '' : 's'} found</p><div class="list">${a.slice(pg * 10, pg * 10 + 10).map(lvlCard).join('')}</div><div class="pager"><button class="btn sm" data-act="srchpg" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="srchpg" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>` : '<p class="muted">No levels match.</p>';
+  page('Search Levels', ctl + body);
+}
+async function doSearch() { SRCH.q = val('sq'); SRCH.status = val('sstat'); SRCH.diff = val('sdiff'); SRCH.loading = true; renderSearch(); try { await runSearch(); } catch (e) { toast(errMsg(e), 'err'); } SRCH.loading = false; renderSearch(); const i = $('#sq'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'sq') doSearch(); });
+document.addEventListener('change', e => { if (e.target.id === 'sstat' || e.target.id === 'sdiff') doSearch(); });
+
 /* ---- level page ---- */
 const bestKey = id => 'dash_best_' + id;
 async function getBest(id) {
@@ -1035,15 +1065,27 @@ views.level = async ({ id }) => {
     <div class="row" style="justify-content:center">${isMod() ? `<button class="btn orange sm" data-act="ratemenu" data-id="${id}">⭐ Rate</button>` : ''}${isMod() || mine ? `<button class="btn red sm" data-act="takedown" data-id="${id}">Take down</button>` : ''}</div>
   </div><div class="side"><h3 style="margin:0 0 8px">Comments</h3><div class="comments">${cmHtml}</div>${me ? `<input id="cmt" maxlength="200" placeholder="Write a comment…"><button class="btn green sm" data-act="comment" data-id="${id}">Post</button>` : '<p class="muted">Log in to comment.</p>'}</div></div>`);
 };
+const voteLock = {}, voteLast = {};
 async function vote(id, v) {
   if (!me) return toast('Log in to like or dislike', 'err');
-  const lr = doc(db, 'levels', id), vr = doc(db, 'levels', id, 'votes', me.uid);
-  const [vs, ls] = await Promise.all([getDoc(vr), getDoc(lr)]); if (!ls.exists()) return;
-  const old = vs.exists() ? vs.data().v : 0, nv = old === v ? 0 : v, b = writeBatch(db);
-  nv === 0 ? b.delete(vr) : b.set(vr, { v: nv });
-  b.update(lr, { likes: increment((nv === 1 ? 1 : 0) - (old === 1 ? 1 : 0)), dislikes: increment((nv === -1 ? 1 : 0) - (old === -1 ? 1 : 0)) });
-  b.update(doc(db, 'users', ls.data().authorId), { netLikes: increment(nv - old) });
-  await b.commit(); if (ls.data().authorId === me.uid) refreshMyStats(); views.level({ id });
+  if (voteLock[id]) return;
+  if (Date.now() - (voteLast[id] || 0) < 2500) return toast('Slow down a little!', 'err');
+  voteLock[id] = true; voteLast[id] = Date.now();
+  const lr = doc(db, 'levels', id), vr = doc(db, 'levels', id, 'votes', me.uid); let author = null;
+  try {
+    // transaction: re-reads this account's saved vote on every click, so one account can only ever hold one like OR one dislike
+    await runTransaction(db, async tx => {
+      const vs = await tx.get(vr), ls = await tx.get(lr); if (!ls.exists()) throw 'This level no longer exists';
+      author = ls.data().authorId;
+      const old = vs.exists() ? (vs.data().v || 0) : 0, nv = old === v ? 0 : v;
+      tx.set(vr, { v: nv, t: serverTimestamp() });
+      tx.update(lr, { likes: increment((nv === 1 ? 1 : 0) - (old === 1 ? 1 : 0)), dislikes: increment((nv === -1 ? 1 : 0) - (old === -1 ? 1 : 0)) });
+      if (nv !== old) tx.update(doc(db, 'users', author), { netLikes: increment(nv - old) });
+    });
+    if (author === me.uid) refreshMyStats();
+  } catch (e) { console.error(e); toast('Vote failed: ' + errMsg(e), 'err'); }
+  finally { voteLock[id] = false; }
+  views.level({ id });
 }
 async function takeDown(id) {
   const s = await getDoc(doc(db, 'levels', id)); if (!s.exists()) return; const lv = s.data();
@@ -1088,7 +1130,9 @@ async function fetchSong(id, lv) {
   if (lv.songUrl) { try { const r = await fetch(lv.songUrl); if (!r.ok) throw 0; const b = await r.blob(); await idbSet('level:' + id, b); return b; } catch { const o = { url: lv.songUrl }; await idbSet('level:' + id, o); return o; } }
   return null;
 }
+let dlT = 0;
 async function downloadSong(id) {
+  if (Date.now() - dlT < 3000) return; dlT = Date.now();
   toast('Downloading song…'); try { await fetchSong(id, LV[id]); } catch (e) { return toast(errMsg(e), 'err'); }
   if (me) updateDoc(doc(db, 'users', me.uid), { songs: arrayUnion(id) }).catch(() => { });
   toast('Song saved', 'ok'); views.level({ id });
@@ -1103,8 +1147,11 @@ async function syncSongs() {
 /* ================= playing ================= */
 const game = new Game($('#gameCanvas'));
 let PL = null, lvAudio = null, prevA = null;
+let playT = 0;
 async function playPublished(id, practice = false) {
-  const lv = LV[id]; updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1;
+  if (Date.now() - playT < 2000) return; playT = Date.now();   // click cooldown
+  const lv = LV[id], vk = 'dash_view_' + (me ? me.uid : 'anon') + '_' + id;   // a play only counts as a view once per 10 min per account/device
+  if (Date.now() - (+localStorage[vk] || 0) > 600000) { localStorage[vk] = Date.now(); updateDoc(doc(db, 'levels', id), { views: increment(1) }).catch(() => { }); lv.views = (lv.views || 0) + 1; }
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
   const prog = await getProgress(id), prevBest = prog.best, dd = DIFFS.find(x => x.id === lv.diff);
@@ -1283,7 +1330,7 @@ function openDM(uid, name) {
 /* ================= editor: slots ================= */
 let slots = [];
 const skey = () => `dash_levels_${me ? me.uid : 'anon'}`;
-function loadSlots() { try { slots = JSON.parse(localStorage[skey()] || '[]'); } catch { slots = []; } while (slots.length < SLOTS) slots.push(null); slots.length = SLOTS; }
+function loadSlots() { try { slots = JSON.parse(localStorage[skey()] || '[]'); } catch { slots = []; } slots.forEach(l => { if (l) { l.name = String(l.name || '').slice(0, 18); l.desc = String(l.desc || '').slice(0, 200); } }); while (slots.length < SLOTS) slots.push(null); slots.length = SLOTS; }
 let pushT = {};
 function saveSlots(i) {
   localStorage[skey()] = JSON.stringify(slots);
@@ -1325,11 +1372,33 @@ function openEditor(i) {
 }
 function renderEdUI() {
   document.querySelectorAll('#edModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ed.mode));
-  const cats = [...new Set(Object.values(OBJ).map(o => o.cat))];
+  const cats = [...new Set(Object.values(OBJ).map(o => o.cat))]; cats.push('edit');
   $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
-  $('#edItems').innerHTML = Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
+  $('#edItems').innerHTML = ed.tab === 'edit' ? EDPANEL() : Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
   const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
+}
+const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? 2 : 1;
+function EDPANEL() {
+  const arrows = (n, k) => `<div class="eg"><b>Move ${n}</b><div class="row2"><button class="btn sm" data-act="edhalf" data-dx="${-k}" data-dy="0">◀</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${k}">▲</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${-k}">▼</button><button class="btn sm" data-act="edhalf" data-dx="${k}" data-dy="0">▶</button></div></div>`;
+  return `<div class="eg"><b>Rotate 90°</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="ccw">↺ Left</button><button class="btn sm" data-act="edxf" data-k="cw">↻ Right</button></div></div><div class="eg"><b>Mirror</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="mx">⇋ X axis</button><button class="btn sm" data-act="edxf" data-k="my">⇅ Y axis</button></div></div>` + arrows('½', .5) + arrows('1', 1) + arrows('5', 5) + arrows('1/10', .1) + `<div class="eg"><b>Tip</b><span class="muted" style="font-size:13px;max-width:190px">Use Edit mode to select objects (Shift = multi-select). Rotate/mirror act on the whole selection.</span></div>`;
+}
+function edXform(kind) {
+  if (!ed.sels.length) return toast('Select something first (Edit mode)', 'err');
+  snap(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const o of ed.sels) { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + 1); y1 = Math.max(y1, o.y + oh(o)); }
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  for (const o of ed.sels) {
+    const h = oh(o), ox = o.x + .5 - cx, oy = o.y + h / 2 - cy, r = ((o.r || 0) % 4 + 4) % 4, sl = !!OBJ[o.t].slope;
+    const [nx, ny] = kind === 'cw' ? [oy, -ox] : kind === 'ccw' ? [-oy, ox] : kind === 'mx' ? [-ox, oy] : [ox, -oy];
+    o.x = r3(cx + nx - .5); o.y = r3(cy + ny - h / 2);
+    if (kind === 'cw') o.r = (r + 1) % 4; else if (kind === 'ccw') o.r = (r + 3) % 4;
+    else if (kind === 'mx') o.r = sl ? r ^ 1 : (r & 1 ? (4 - r) % 4 : r);
+    else { o.r = sl ? 3 - r : (r & 1 ? r : (r + 2) % 4); if (DASH[o.t] && o.a) o.a = -o.a; }
+  }
+  const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)), sx = Math.max(0, -mx), sy = Math.max(0, -my);
+  if (sx || sy) ed.sels.forEach(o => { o.x = r3(o.x + sx); o.y = r3(o.y + sy); });
+  changed(); renderProps();
 }
 const snap = () => { const s = JSON.stringify(ed.lv.objs); if (ed.hist[ed.hist.length - 1] !== s) { ed.hist.push(s); if (ed.hist.length > 60) ed.hist.shift(); } };
 let asT = null;
@@ -1346,7 +1415,7 @@ function place(cx, cy) {
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 };
   if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
   if (t === 'trig_color') Object.assign(o, { tg: 1, col: '#ff5252', dur: 1 });
-  if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1 });
+  if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
   if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
   if (t === 'trig_toggle') Object.assign(o, { tg: 1, on: false });
   if (t === 'trig_alpha') Object.assign(o, { tg: 1, pc: 50, dur: 1 });
@@ -1361,7 +1430,7 @@ function renderProps() {
   if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
-  else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
+  else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label><label>Follow player X<input type="checkbox" data-p="fx" ${o.fx ? 'checked' : ''}> moves up/down with the player</label><label>Follow player Y<input type="checkbox" data-p="fy" ${o.fy ? 'checked' : ''}> moves right with the player</label>`;
   else if (o.t === 'trig_zoom') h += `<label>Zoom (1 = default)<input type="number" step=".1" min=".2" max="4" data-p="zoom" value="${o.zoom ?? 1}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
@@ -1423,7 +1492,7 @@ function edDraw() {
     else if (e.shiftKey) ed.camX += e.deltaY / ed.z; else { ed.camY -= e.deltaY / ed.z; ed.camX += e.deltaX / ed.z; }
   }, { passive: false });
 })();
-function edRotate(d = 1) { if (ed.sels.length) { snap(); ed.sels.forEach(o => o.r = (((o.r || 0) + d) % 4 + 4) % 4); changed(); } else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
+function edRotate(d = 1) { if (ed.sels.length) edXform(d > 0 ? 'cw' : 'ccw'); else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
 function edDelSel() { if (!ed.sels.length) return; snap(); const s = new Set(ed.sels); ed.lv.objs = ed.lv.objs.filter(o => !s.has(o)); ed.sels = []; ed.sel = null; renderProps(); changed(); }
 function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); }
 function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0, Math.floor(ed.wx / U)), by = Math.max(0, Math.floor(ed.wy / U)); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.clip.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x + bx, y: o.y + by })); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); }
@@ -1458,8 +1527,8 @@ function edPlay(here) {
 }
 async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); views.editor(); renderFooter(); }
 function edSettings() {
-  const lv = ed.lv;
-  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="30" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
+  stopPreview(); const lv = ed.lv;
+  modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
 }
 
 /* ================= actions (click delegation) ================= */
@@ -1479,7 +1548,7 @@ const actions = {
     const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
-  pg: d => renderLevels(d.kind, +d.pg),
+  pg: d => renderLevels(d.kind, +d.pg), dosearch: doSearch, srchpg: d => { SRCH.pg = Math.max(0, +d.pg); renderSearch(); },
   playlvl: d => playPublished(d.id),
   practicelvl: d => playPublished(d.id, true),
   shoppg: d => views.shop({ pg: +d.pg }),
@@ -1510,12 +1579,12 @@ const actions = {
   // editor slots
   slotnew: d => { if (!me) return; const i = +d.i; slots[i] = newLevel('Level ' + (i + 1)); saveSlots(i); openEditor(i); },
   slotedit: d => openEditor(+d.i),
-  slotrename: d => { const l = slots[+d.i], n = prompt('Level name', l.name); if (n && n.trim()) { l.name = n.trim().slice(0, 30); l.updated = Date.now(); saveSlots(+d.i); views.editor(); } },
+  slotrename: d => { const l = slots[+d.i], n = prompt('Level name', l.name); if (n && n.trim()) { l.name = n.trim().slice(0, 18); l.updated = Date.now(); saveSlots(+d.i); views.editor(); } },
   slotdesc: d => { const l = slots[+d.i], n = prompt('Description', l.desc); if (n !== null) { l.desc = n.slice(0, 200); l.updated = Date.now(); saveSlots(+d.i); views.editor(); } },
   slotdel: async d => { const i = +d.i; if (!confirm('Delete this level slot? (Published copies stay on the servers.)')) return; slots[i] = null; saveSlots(); idbDel(`draft:${me.uid}:${i}`); deleteDoc(doc(db, 'users', me.uid, 'drafts', 's' + i)).catch(() => { }); views.editor(); },
   slotcopy: async d => {
     const i = +d.i, f = slots.findIndex(x => !x); if (f < 0) return toast('No free slots', 'err');
-    const c = JSON.parse(JSON.stringify(slots[i])); c.name = (c.name + ' copy').slice(0, 30); c.pub = null; c.verified = ''; c.updated = Date.now(); slots[f] = c; saveSlots(f);
+    const c = JSON.parse(JSON.stringify(slots[i])); c.name = (c.name.slice(0, 13) + ' copy').slice(0, 18); c.pub = null; c.verified = ''; c.updated = Date.now(); slots[f] = c; saveSlots(f);
     const b = await idbGet(`draft:${me.uid}:${i}`); if (b) idbSet(`draft:${me.uid}:${f}`, b); toast('Copied to slot ' + (f + 1), 'ok'); views.editor();
   },
   slotpub: async d => { await publish(+d.i); },
@@ -1524,10 +1593,18 @@ const actions = {
   edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; ed.sels = []; renderProps(); renderEdUI(); },
   edrot: () => edRotate(1), edsettings: edSettings,
   eddel: edDelSel,
-  edhalf: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { o.x = Math.max(0, o.x + +d.dx); o.y = Math.max(0, o.y + +d.dy); }); changed(); renderProps(); },
+  edhalf: d => { if (!ed.sels.length) return; snap(); const dx = Math.max(+d.dx, -Math.min(...ed.sels.map(o => o.x))), dy = Math.max(+d.dy, -Math.min(...ed.sels.map(o => o.y))); ed.sels.forEach(o => { o.x = r3(o.x + dx); o.y = r3(o.y + dy); }); changed(); renderProps(); },
+  edxf: d => edXform(d.k),
   edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.5, Math.min(2, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
-  songprev: async () => { if (prevA) { prevA.pause(); prevA = null; return; } const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err'); prevA = new Audio(URL.createObjectURL(b)); prevA.volume = settings.vol; prevA.playbackRate = ed.lv.songSpeed || 1; prevA.currentTime = (ed.lv.songOff || 0) / 1000; prevA.play().catch(() => { }); setTimeout(() => { prevA && prevA.pause(); prevA = null; }, 10000); },
-  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 30) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
+  songprev: async () => {
+    if (prevA) return stopPreview();
+    const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err');
+    const a = new Audio(URL.createObjectURL(b)); prevA = a; a.volume = settings.vol; a.playbackRate = ed.lv.songSpeed || 1; a.currentTime = (ed.lv.songOff || 0) / 1000;
+    const done = () => { if (prevA === a) stopPreview(); };
+    a.addEventListener('ended', done); a.addEventListener('pause', done); a.addEventListener('error', done);
+    previewing = true; applyAudio(); a.play().catch(done);
+  },
+  edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 18) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
@@ -1559,7 +1636,7 @@ async function publish(i) {
     if (data.length > 900000) throw 'Level is too big to upload';
     const sb = await idbGet(`draft:${me.uid}:${i}`), has = sb instanceof Blob && sb.size > 0, parts = has ? Math.ceil(sb.size / SONG_CHUNK) : 0;
     const r = doc(collection(db, 'levels')); toast('Uploading level…');
-    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name, desc: lv.desc, data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length, coins: lv.objs.filter(o => o.t === 'coin').length, len: Math.round(lenSecs(lv.objs, lv.startSpeed) * 10) / 10 });
+    await setDoc(r, { authorId: me.uid, authorName: P.username, title: lv.name.slice(0, 18), desc: (lv.desc || '').slice(0, 200), data, status: 'unrated', diff: null, stars: 0, views: 0, likes: 0, dislikes: 0, created: serverTimestamp(), songUrl: null, songName: has ? lv.songName : null, songParts: parts, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0, count: lv.objs.length, coins: lv.objs.filter(o => o.t === 'coin').length, len: Math.round(lenSecs(lv.objs, lv.startSpeed) * 10) / 10 });
     if (has) {
       try {
         for (let k = 0; k < parts; k += 3) {

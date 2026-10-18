@@ -7,6 +7,14 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function uname() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username; }
     function isMod() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && uname() == 'Vortarium'; }
+    function votePath(id) { return /databases/$(database)/documents/levels/$(id)/votes/$(request.auth.uid); }
+    function vOld(id) { return exists(votePath(id)) ? get(votePath(id)).data.v : 0; }
+    function vNew(id) { return existsAfter(votePath(id)) ? getAfter(votePath(id)).data.v : 0; }
+    // likes/dislikes may only change by exactly what this account's own vote doc changed by (written in the same batch/transaction)
+    function voteDeltaOk(id) {
+      return request.resource.data.likes - resource.data.likes == (vNew(id) == 1 ? 1 : 0) - (vOld(id) == 1 ? 1 : 0)
+        && request.resource.data.dislikes - resource.data.dislikes == (vNew(id) == -1 ? 1 : 0) - (vOld(id) == -1 ? 1 : 0);
+    }
     function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
 
     match /usernames/{n} {
@@ -31,9 +39,12 @@ service cloud.firestore {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.authorId == request.auth.uid && request.resource.data.status == 'unrated'
         && request.resource.data.data is string && request.resource.data.data.size() < 900000
-        && request.resource.data.title is string && request.resource.data.title.size() <= 30
+        && request.resource.data.title is string && request.resource.data.title.size() <= 18
+        && (!('desc' in request.resource.data) || request.resource.data.desc.size() <= 200)
         && request.resource.data.likes == 0 && request.resource.data.dislikes == 0 && request.resource.data.views == 0;
-      allow update: if only(['views', 'likes', 'dislikes']) || isMod();
+      allow update: if isMod()
+        || (only(['views']) && request.resource.data.views == resource.data.views + 1)
+        || (signedIn() && only(['likes', 'dislikes']) && voteDeltaOk(id));
       allow delete: if isMod() || (signedIn() && resource.data.authorId == request.auth.uid);
       match /comments/{cid} {
         allow read: if true;
@@ -49,7 +60,12 @@ service cloud.firestore {
       }
       match /votes/{vid} {
         allow read: if signedIn() && (vid == request.auth.uid || isMod());
-        allow write: if signedIn() && vid == request.auth.uid;
+        // one vote doc per account; value must be -1/0/1 and can only be changed every 2+ seconds
+        allow create: if signedIn() && vid == request.auth.uid && request.resource.data.keys().hasOnly(['v', 't'])
+          && request.resource.data.v in [-1, 0, 1] && request.resource.data.t == request.time;
+        allow update: if signedIn() && vid == request.auth.uid && request.resource.data.keys().hasOnly(['v', 't'])
+          && request.resource.data.v in [-1, 0, 1] && request.resource.data.t == request.time
+          && (!('t' in resource.data) || request.time > resource.data.t + duration.value(2, 's'));
         allow delete: if isMod() || (signedIn() && get(/databases/$(database)/documents/levels/$(id)).data.authorId == request.auth.uid);
       }
     }
