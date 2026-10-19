@@ -831,7 +831,7 @@ class Game {
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 351; p.vy += (tv - p.vy) * Math.min(1, 9.1 * dt); p.vy = Math.max(-377, Math.min(377, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 351 : -300) * gr; p.vy += (tv - p.vy) * Math.min(1, (this.held ? 9.1 : 7.8) * dt); p.vy = Math.max(-377, Math.min(377, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
