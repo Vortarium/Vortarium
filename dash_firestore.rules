@@ -17,6 +17,9 @@ service cloud.firestore {
     }
     function only(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
 
+    // lets the moderator find everyone who beat a level (needed to re-rate / unrate it for all of them)
+    match /{path=**}/beaten/{id} { allow read: if isMod(); }
+
     match /usernames/{n} {
       allow read: if true;
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid && n == n.lower();

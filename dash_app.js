@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 import { getAnalytics, isSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, deleteUser } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
-import { getFirestore, runTransaction, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+import { getFirestore, runTransaction, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, addDoc, onSnapshot, serverTimestamp, increment, writeBatch, arrayUnion, collectionGroup } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 import { getStorage, ref as sref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-storage.js";
 // dash_firebase.js - Firebase setup for DASH
 
@@ -111,7 +111,12 @@ function dOf(l) { let id = l && l.diff; if (!id) return null; if (id === 'insane
 const IN = 7.5;                                          // inner hitbox inset (cube 30 -> inner 15, centered)
 const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].ex < x) lo = m + 1; else hi = m; } return lo; };
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
-const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+// ---- new looks (same hitboxes as the originals: only the artwork differs) ----
+const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thick Tiles', 'Ghost Tiles', 'Tile Ring', 'Diagonal', 'Diagonal Flip', 'Pyramid', 'Pyramid Flip', 'Ghost Pyramid', 'Inset Frame', 'Deep Inset', 'Ghost Frame', 'Solid', 'Hollow', 'Bricks', 'Ghost Bricks', 'Big Bricks', 'Studs', 'Split', 'Slats', 'Panels', 'Corner Cut'];
+BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks 2', solid: true, bs: 10 + i, bv: 0 });
+const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
+['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'spikes 2', hz: { ...OBJ[bid].hz, lk } }));
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
 const PH = 3;   // portals are 3 cells tall
@@ -454,21 +459,14 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   if (o.sc && o.sc !== 1) { const sy = t.startsWith('port') ? y - cs / 2 : y + cs / 2; c.translate(x + cs / 2, sy); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -sy); }
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
   const A0 = c.globalAlpha;   // base alpha (fade-in x alpha trigger); effects below multiply it instead of resetting to 1
-  if (OBJ[t].hz && t !== 'spike') hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
+  if (OBJ[t].hz) hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
   else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
   else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
-  else if (t === 'block') {
-    c.fillStyle = col; c.fillRect(x, y, cs, cs); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, cs - lw, cs - lw);
-    c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = lw * .6; c.strokeRect(x + cs * .22, y + cs * .22, cs * .56, cs * .56);
-  } else if (t === 'half' || t === 'slope') {
-    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = lw;
-    if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.strokeRect(-cs / 2 + lw / 2, lw / 2, cs - lw, cs / 2 - lw); }
-    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.stroke(); c.strokeStyle = 'rgba(255,255,255,.22)'; c.beginPath(); c.moveTo(-cs * .1, cs * .38); c.lineTo(cs * .38, cs * .38); c.lineTo(cs * .38, -cs * .1); c.closePath(); c.stroke(); }
-  } else if (t === 'spike') {
-    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
-    c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(0, -cs / 2); c.lineTo(cs / 2, cs / 2); c.closePath();
-    c.fillStyle = col; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-    c.beginPath(); c.moveTo(-cs * .2, cs * .42); c.lineTo(0, -cs * .12); c.lineTo(cs * .2, cs * .42); c.strokeStyle = 'rgba(255,255,255,.25)'; c.stroke();
+  else if (t === 'block') blockDraw(c, 0, x, y, cs, col, lw);
+  else if (t === 'half' || t === 'slope') {
+    c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col;
+    if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(-cs / 2, 0, cs, cs * .12); c.beginPath(); c.rect(-cs / 2 + lw * .3, lw * .3, cs - lw * .6, cs / 2 - lw * .6); glow(c, lw); }
+    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.22)'; c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, 0); c.closePath(); c.fill(); c.restore(); glow(c, lw); }
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
     c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
@@ -531,28 +529,95 @@ function drawGround(c, W, H, gy, s, camX, col, st = 'tiles') {
   c.restore();
   c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(0, gy - 2 * s, W, 3 * s);
 }
-function blockDraw(c, b, x, y, s, col, lw) {
-  c.fillStyle = col; c.fillRect(x, y, s, s); c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + lw / 2, y + lw / 2, s - lw, s - lw);
-  c.fillStyle = 'rgba(255,255,255,.25)'; c.strokeStyle = 'rgba(255,255,255,.3)';
-  if (b === 1) c.strokeRect(x + s * .2, y + s * .2, s * .6, s * .6);
-  else if (b === 2) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + s, y + s); c.moveTo(x + s, y); c.lineTo(x, y + s); c.stroke(); }
-  else if (b === 3) for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(x + s * (.3 + .4 * (i & 1)), y + s * (.3 + .4 * (i >> 1)), s * .07, 0, 7); c.fill(); }
-  else if (b === 4) for (let i = 1; i < 4; i++) c.fillRect(x, y + s * i / 4 - s * .03, s, s * .06);
-  else if (b === 5) { c.fillRect(x, y, s / 2, s / 2); c.fillRect(x + s / 2, y + s / 2, s / 2, s / 2); }
-  else if (b === 6) { c.fillRect(x, y, s, s * .18); c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(x, y + s * .82, s, s * .18); }
-  else if (b === 7) c.fillRect(x, y, s, s * .35);
-  else if (b === 8) { c.lineWidth = s * .16; c.strokeRect(x + s * .15, y + s * .15, s * .7, s * .7); }
-  else if (b === 9) { c.beginPath(); c.moveTo(x + s / 2, y + s * .15); c.lineTo(x + s * .85, y + s / 2); c.lineTo(x + s / 2, y + s * .85); c.lineTo(x + s * .15, y + s / 2); c.closePath(); c.stroke(); }
+// thin white glow outline on the current path: a soft halo kept INSIDE the shape (so it never smears over neighbours) + a hairline
+function glow(c, lw, k = 1) {
+  c.save(); c.clip(); c.lineJoin = 'round'; c.strokeStyle = '#fff'; const a = c.globalAlpha;
+  c.globalAlpha = a * .13 * k; c.lineWidth = lw * 4.6; c.stroke();
+  c.globalAlpha = a * .3 * k; c.lineWidth = lw * 2.2; c.stroke();
+  c.restore(); c.lineWidth = lw * .6; c.strokeStyle = '#fff'; c.stroke();
 }
+const mixHex = (h, t, to = 255) => { const n = parseInt(h.slice(1), 16), f = v => Math.round(v + (to - v) * t); return '#' + [n >> 16, (n >> 8) & 255, n & 255].map(v => f(v).toString(16).padStart(2, '0')).join(''); };
+function blockDraw(c, b, x, y, s, col, lw) {
+  const A0 = c.globalAlpha, K = a => `rgba(0,0,0,${a})`, Wt = a => `rgba(255,255,255,${a})`;
+  c.save(); c.beginPath(); c.rect(x, y, s, s); c.clip();
+  const body = (al = 1) => { c.globalAlpha = A0 * al; c.fillStyle = col; c.fillRect(x, y, s, s); c.globalAlpha = A0; };
+  const R = (px, py, pw, ph, f, al = 1) => { c.globalAlpha = A0 * al; c.fillStyle = f; c.fillRect(x + px * s, y + py * s, pw * s, ph * s); c.globalAlpha = A0; };
+  const T = (pts, f, al = 1) => { c.globalAlpha = A0 * al; c.fillStyle = f; c.beginPath(); for (let i = 0; i < pts.length; i += 2) c[i ? 'lineTo' : 'moveTo'](x + pts[i] * s, y + pts[i + 1] * s); c.closePath(); c.fill(); c.globalAlpha = A0; };
+  const G = (x0, y0, x1, y1, a0, a1, rgb = '0,0,0') => { const g = c.createLinearGradient(x + x0 * s, y + y0 * s, x + x1 * s, y + y1 * s); g.addColorStop(0, `rgba(${rgb},${a0})`); g.addColorStop(1, `rgba(${rgb},${a1})`); c.fillStyle = g; c.fillRect(x, y, s, s); };
+  const L = (...p) => { c.beginPath(); for (let i = 0; i < p.length; i += 2) c[i ? 'lineTo' : 'moveTo'](x + p[i] * s, y + p[i + 1] * s); c.stroke(); };
+  const hl = lw * .55; c.lineWidth = hl; c.strokeStyle = Wt(.3); c.fillStyle = Wt(.25);
+  const grid = (g, fn) => { const cw = (1 - 4 * g) / 3; for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) fn(g + i * (cw + g), g + j * (cw + g), cw, i, j); };
+  const brick = (rows, gap, ghost) => { const rh = 1 / rows; for (let j = 0; j < rows; j++) { const bw = rows === 2 ? .66 : .5, off = j & 1 ? -bw / 2 : 0; for (let i = 0; i < 4; i++) { const bx = off + i * bw; if (bx >= 1 || bx + bw <= 0) continue; const dim = ghost ? ((i + j * 2) % 3 === 0 ? .3 : 1) : ((i * 5 + j * 3) % 7 === 0 ? .35 : 1); R(Math.max(0, bx) + .03, j * rh + .03, Math.min(1, bx + bw) - Math.max(0, bx) - .06, rh - .06, col, dim); R(Math.max(0, bx) + .03, j * rh + .03, Math.min(1, bx + bw) - Math.max(0, bx) - .06, (rh - .06) * .35, Wt(.14), dim); } } };
+  switch (b) {
+    case 0: body(); G(0, 0, 0, 1, .16, 0, '255,255,255'); break;
+    case 1: body(); R(.2, .2, .6, .6, K(.18)); c.strokeRect(x + s * .2, y + s * .2, s * .6, s * .6); break;
+    case 2: body(); L(0, 0, 1, 1); L(1, 0, 0, 1); break;
+    case 3: body(); for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(x + s * (.3 + .4 * (i & 1)), y + s * (.3 + .4 * (i >> 1)), s * .07, 0, 7); c.fill(); } break;
+    case 4: body(); for (let i = 1; i < 4; i++) R(0, i / 4 - .03, 1, .06, Wt(.25)); break;
+    case 5: body(); R(0, 0, .5, .5, Wt(.2)); R(.5, .5, .5, .5, Wt(.2)); break;
+    case 6: body(); R(0, 0, 1, .18, Wt(.25)); R(0, .82, 1, .18, K(.25)); break;
+    case 7: body(); R(0, 0, 1, .35, Wt(.22)); break;
+    case 8: body(); c.lineWidth = s * .14; c.strokeRect(x + s * .15, y + s * .15, s * .7, s * .7); break;
+    case 9: body(); c.beginPath(); c.moveTo(x + s / 2, y + s * .15); c.lineTo(x + s * .85, y + s / 2); c.lineTo(x + s / 2, y + s * .85); c.lineTo(x + s * .15, y + s / 2); c.closePath(); c.stroke(); break;
+    case 10: body(); G(0, 0, 0, 1, .62, 0); break;                                   // gradient
+    case 11: body(); G(0, 0, 0, 1, .28, .5, '0,0,0'); G(0, 0, 0, .5, .22, 0, '255,255,255'); break;
+    case 12: body(); G(0, 0, 1, 0, .6, 0); break;
+    case 13: body(.4); T([0, 0, .7, 0, 0, .7], Wt(.14)); T([1, 1, .3, 1, 1, .3], Wt(.07)); break;   // glass
+    case 14: body(); R(0, 0, 1, 1, K(.3)); grid(.035, (px, py, w) => R(px, py, w, w, col)); grid(.035, (px, py, w) => R(px, py, w, w * .4, Wt(.1))); break;
+    case 15: body(); R(0, 0, 1, 1, K(.45)); grid(.075, (px, py, w) => R(px, py, w, w, Wt(.17))); break;
+    case 16: grid(.04, (px, py, w, i, j) => { R(px, py, w, w, col, (i + j) & 1 ? .32 : .9); }); break;   // semi-transparent checker of tiles
+    case 17: body(); R(.33, .33, .34, .34, K(.7)); R(.33, .33, .34, .34, Wt(.05)); L(.33, .33, .67, .33, .67, .67, .33, .67, .33, .33); R(0, 0, 1, .33, Wt(.08)); break;
+    case 18: body(); T([0, 0, 1, 0, 0, 1], K(.38)); T([1, 1, 1, 0, 0, 1], Wt(.1)); L(1, 0, 0, 1); break;
+    case 19: body(); T([0, 0, 1, 0, 1, 1], K(.38)); T([0, 0, 0, 1, 1, 1], Wt(.1)); L(0, 0, 1, 1); break;
+    case 20: body(); T([0, 0, 1, 0, .5, .5], K(.36)); T([0, 0, .5, .5, 0, 1], K(.16)); T([1, 0, 1, 1, .5, .5], Wt(.06)); T([0, 1, 1, 1, .5, .5], Wt(.22)); L(0, 0, 1, 1); L(1, 0, 0, 1); break;
+    case 21: body(); T([0, 0, 1, 0, .5, .5], Wt(.22)); T([0, 0, .5, .5, 0, 1], Wt(.06)); T([1, 0, 1, 1, .5, .5], K(.16)); T([0, 1, 1, 1, .5, .5], K(.36)); L(0, 0, 1, 1); L(1, 0, 0, 1); break;
+    case 22: T([0, 0, 1, 0, .5, .5], col); T([0, 1, 1, 1, .5, .5], col); T([0, 0, .5, .5, 0, 1], col, .28); T([1, 0, 1, 1, .5, .5], col, .28); T([0, 1, 1, 1, .5, .5], Wt(.18)); T([0, 0, 1, 0, .5, .5], K(.3)); L(0, 0, 1, 1); L(1, 0, 0, 1); break;
+    case 23: body(); R(0, 0, 1, 1, Wt(.16)); R(.18, .18, .64, .64, col); R(.18, .18, .64, .64, K(.34)); c.strokeRect(x + s * .18, y + s * .18, s * .64, s * .64); break;
+    case 24: body(); R(0, 0, 1, 1, Wt(.2)); R(.14, .14, .72, .72, col); R(.14, .14, .72, .72, Wt(.1)); R(.3, .3, .4, .4, col); R(.3, .3, .4, .4, K(.45)); c.strokeRect(x + s * .14, y + s * .14, s * .72, s * .72); c.strokeRect(x + s * .3, y + s * .3, s * .4, s * .4); break;
+    case 25: R(0, 0, 1, .2, col); R(0, .8, 1, .2, col); R(0, .2, .2, .6, col); R(.8, .2, .2, .6, col); R(0, 0, 1, .2, Wt(.14)); c.strokeRect(x + s * .2, y + s * .2, s * .6, s * .6); R(.2, .2, .6, .6, col, .12); break;
+    case 26: body(); break;
+    case 27: body(.12); break;
+    case 28: R(0, 0, 1, 1, K(.45)); brick(3, 0, false); break;
+    case 29: brick(3, 0, true); break;
+    case 30: R(0, 0, 1, 1, K(.45)); brick(2, 0, false); break;
+    case 31: body(); c.fillStyle = Wt(.4); [[.16, .16], [.84, .16], [.16, .84], [.84, .84]].forEach(([px, py]) => { c.beginPath(); c.arc(x + s * px, y + s * py, s * .07, 0, 7); c.fill(); }); R(.3, .3, .4, .4, K(.25)); c.strokeRect(x + s * .3, y + s * .3, s * .4, s * .4); break;
+    case 32: body(); R(0, 0, .5, 1, K(.34)); R(.5, 0, .5, 1, Wt(.08)); L(.5, 0, .5, 1); break;
+    case 33: for (let i = 0; i < 4; i++) { R(i * .25 + .025, 0, .2, 1, col, i & 1 ? .4 : .95); R(i * .25 + .025, 0, .06, 1, Wt(.14), i & 1 ? .4 : .95); } break;
+    case 34: R(0, 0, 1, 1, K(.4)); [[0, 0], [.5, 0], [0, .5], [.5, .5]].forEach(([px, py]) => { R(px + .04, py + .04, .42, .42, col); R(px + .04, py + .04, .42, .14, Wt(.12)); }); break;
+    case 35: T([1, 0, 1, 1, 0, 1], col); T([0, 0, 1, 0, 0, 1], col, .28); T([1, 0, 1, 1, 0, 1], Wt(.1)); L(1, 0, 0, 1); break;
+  }
+  c.restore();
+  c.beginPath(); c.rect(x + lw * .3, y + lw * .3, s - lw * .6, s - lw * .6); glow(c, lw);
+}
+// one spike segment (base on y0, spans x0..x0+w, height hh), drawn in the look lk. The hitbox only ever depends on a/b/n so every look is a pure re-skin.
+function spikePath(c, lk, x0, y0, w, hh) {
+  c.beginPath();
+  if (lk === 'jag') { const P = [[0, 0], [.14, .5], [.24, .34], [.4, .8], [.5, 1], [.62, .6], [.74, .78], [.88, .36], [1, 0]]; P.forEach(([u, v], i) => c[i ? 'lineTo' : 'moveTo'](x0 + u * w, y0 - v * hh)); }
+  else if (lk === 'hill') { c.moveTo(x0, y0); for (let i = 0; i <= 28; i++) { const u = i / 28, e = Math.pow(Math.sin(Math.PI * u), .6), v = e * (.62 + .38 * Math.sin(u * Math.PI * 3.2 + .8)); c.lineTo(x0 + u * w, y0 - Math.max(0, v) * hh); } c.lineTo(x0 + w, y0); }
+  else if (lk === 'saw') { const k = Math.max(1, Math.round(w / (OBJ_S * .34))), tw = w / k; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { c.lineTo(x0 + (i + 1) * tw, y0 - hh); c.lineTo(x0 + (i + 1) * tw, y0); } }
+  else if (lk === 'ramp') { const k = Math.max(2, Math.round(w / (OBJ_S * .28))), tw = w / k, yb = u => y0 - hh * .4 * u; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { const u1 = (i + 1) / k; c.lineTo(x0 + i * tw, yb(i / k)); c.lineTo(x0 + (i + 1) * tw, yb(u1) - hh * .6); c.lineTo(x0 + (i + 1) * tw, yb(u1)); } c.lineTo(x0 + w, y0); }
+  else { c.moveTo(x0, y0); c.lineTo(x0 + w / 2, y0 - hh); c.lineTo(x0 + w, y0); }
+  c.closePath();
+}
+let OBJ_S = 30;
 function hzDraw(c, h, o, x, y, s, col, lw, time) {
-  c.translate(x + s / 2, y + s / 2); c.fillStyle = col; c.strokeStyle = '#fff'; c.lineWidth = lw;
+  c.translate(x + s / 2, y + s / 2); c.lineWidth = lw; const A0 = c.globalAlpha, lk = h.lk || 'tri'; OBJ_S = s;
   if (h.k === 't') {
     c.rotate((o.r || 0) * Math.PI / 2); const n = h.n, w = s * h.a / n, hh = s * h.b;
-    for (let i = 0; i < n; i++) { const x0 = -s * h.a / 2 + i * w; c.beginPath(); c.moveTo(x0, s / 2); c.lineTo(x0 + w / 2, s / 2 - hh); c.lineTo(x0 + w, s / 2); c.closePath(); c.fill(); c.stroke(); }
+    for (let i = 0; i < n; i++) {
+      const x0 = -s * h.a / 2 + i * w, y0 = s / 2; spikePath(c, lk, x0, y0, w, hh);
+      if (lk === 'grad') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, col); g.addColorStop(1, mixHex(col, .6, 255) + '10'); c.fillStyle = g; c.fill(); }
+      else if (lk === 'white') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, mixHex(col, .1, 120)); g.addColorStop(1, '#ffffff'); c.fillStyle = g; c.fill(); }
+      else if (lk === 'ghost') { c.globalAlpha = A0 * .4; c.fillStyle = col; c.fill(); c.globalAlpha = A0; }
+      else if (lk === 'hill') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, col); g.addColorStop(1, mixHex(col, .35, 255)); c.fillStyle = g; c.fill(); }
+      else { c.fillStyle = col; c.fill(); if (lk === 'tri') { c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.moveTo(x0 + w / 2, y0 - hh); c.lineTo(x0 + w, y0); c.lineTo(x0 + w / 2, y0); c.closePath(); c.fill(); c.restore(); } }
+      spikePath(c, lk, x0, y0, w, hh); glow(c, lw);
+      if (lk === 'ghost') { c.save(); c.globalAlpha = A0 * .55; c.lineWidth = lw * .5; spikePath(c, 'tri', x0 + w * .27, y0 - hh * .05, w * .46, hh * .46); c.stroke(); c.restore(); }
+    }
   } else {
     c.rotate(time * 4 + (o.r || 0)); const R = s * h.a, N = h.b; c.beginPath();
     for (let i = 0; i < N * 2; i++) { const an = i * Math.PI / N, rr = i & 1 ? R * .72 : R; c[i ? 'lineTo' : 'moveTo'](Math.cos(an) * rr, Math.sin(an) * rr); }
-    c.closePath(); c.fill(); c.stroke(); c.beginPath(); c.arc(0, 0, R * .22, 0, 7); c.fillStyle = '#fff'; c.fill();
+    c.closePath(); c.fillStyle = col; c.fill(); glow(c, lw); c.beginPath(); c.arc(0, 0, R * .22, 0, 7); c.fillStyle = '#fff'; c.fill();
   }
 }
 function decor(c, k, s, col) {
@@ -1298,7 +1363,7 @@ views.level = async ({ id }) => {
     <div class="pb"><i style="width:${best}%"></i><b>Best: ${best}%</b></div>
     <div class="votes"><button class="round ${my === 1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="1">👍</button><span>${fmt((lv.likes || 0) - (lv.dislikes || 0))}</span><button class="round down ${my === -1 ? 'on' : ''}" data-act="vote" data-id="${id}" data-v="-1">👎</button></div>
     <div class="muted">👁 ${fmt(lv.views)} views · 🎯 ${fmt(attN)} attempts</div>${dl}
-    <div class="row" style="justify-content:center">${isMod() ? `<button class="btn orange sm" data-act="ratemenu" data-id="${id}">⭐ Rate</button>` : ''}${isMod() || mine ? `<button class="btn red sm" data-act="takedown" data-id="${id}">Take down</button>` : ''}</div>
+    <div class="row" style="justify-content:center">${isMod() ? `<button class="btn orange sm" data-act="ratemenu" data-id="${id}">⭐ Rate</button>` : ''}${isMod() && lv.status === 'rated' ? `<button class="btn sm" data-act="unrate" data-id="${id}">Unrate</button>` : ''}${isMod() || mine ? `<button class="btn red sm" data-act="takedown" data-id="${id}">Take down</button>` : ''}</div>
   </div><div class="side"><h3 style="margin:0 0 8px">Comments</h3><div class="comments">${cmHtml}</div>${me ? `<input id="cmt" maxlength="200" placeholder="Write a comment…"><button class="btn green sm" data-act="comment" data-id="${id}">Post</button>` : '<p class="muted">Log in to comment.</p>'}</div></div>`);
 };
 const voteLock = {}, voteLast = {};
@@ -1343,15 +1408,46 @@ async function awardAuthor(id, L, d) {
   if (!starred) { upd.stars = increment(d.stars * STAR_SCALE); if (d.demon) upd.demons = increment(1); }
   if (gems) upd.crystals = increment(gems);
   if (addC.length) upd.starCoins = increment(addC.length);
-  await setDoc(br, { t: serverTimestamp(), starred: true, level: id, coins: [...prevC, ...addC] }, { merge: true });
+  await setDoc(br, { t: serverTimestamp(), starred: true, rd: d.id, level: id, coins: [...prevC, ...addC] }, { merge: true });
   await setDoc(pr, { best: 100, gems: Math.max(gemTotal, gemHave) }, { merge: true });
   if (Object.keys(upd).length) await updateDoc(doc(db, 'users', uid), upd);
   if (me && uid === me.uid) { BEATEN.add(id); localStorage[bestKey(id)] = 100; refreshProfile(); }
+}
+// Everyone who has beaten a level follows its rating: stars, demon count and the difficulty face on their profile.
+// unrated -> they lose the stars and the profile counter moves to UNRATED; re-rated -> stars/counter move to the new difficulty.
+// (gems and star coins are kept)
+async function reconcileBeaters(id, oldD, newD) {
+  const snap = await getDocs(query(collectionGroup(db, 'beaten'), where('level', '==', id)));
+  const jobs = snap.docs.map(bd => async () => {
+    const uid = bd.ref.parent.parent.id, b = bd.data(), had = !!b.starred;
+    const oldId = had ? (DIFFS.find(x => x.id === b.rd) ? b.rd : (oldD && oldD.id)) : null, od = oldId ? DIFFS.find(x => x.id === oldId) : null;
+    const fromK = od ? od.id : 'unrated', toK = newD ? newD.id : 'unrated';
+    const ds = (newD ? newD.stars * STAR_SCALE : 0) - (od ? od.stars * STAR_SCALE : 0), dm = (newD && newD.demon ? 1 : 0) - (od && od.demon ? 1 : 0);
+    if (!ds && !dm && fromK === toK && had === !!newD) return 0;
+    const us = await getDoc(doc(db, 'users', uid)); if (!us.exists()) return 0;
+    const upd = {};
+    if (ds) upd.stars = increment(ds);
+    if (dm) upd.demons = increment(dm);
+    if (us.data().beatByOk && fromK !== toK) { upd['beatBy.' + fromK] = increment(-1); upd['beatBy.' + toK] = increment(1); }
+    if (Object.keys(upd).length) await updateDoc(doc(db, 'users', uid), upd);
+    await setDoc(bd.ref, { starred: !!newD, rd: newD ? newD.id : null }, { merge: true });
+    return 1;
+  });
+  let n = 0; for (let i = 0; i < jobs.length; i += 10) n += (await Promise.all(jobs.slice(i, i + 10).map(j => j()))).reduce((a, b) => a + b, 0);
+  return n;
+}
+async function unrateLevel(id) {
+  const ls = await getDoc(doc(db, 'levels', id)); if (!ls.exists()) return; const L = ls.data(), oldD = dOf(L); if (!oldD) return toast('Already unrated', 'err');
+  await updateDoc(doc(db, 'levels', id), { status: 'unrated', diff: null, stars: 0 });
+  let n = 0; try { n = await reconcileBeaters(id, oldD, null); } catch (e) { console.warn(e); toast('Unrated, but could not update players who beat it: ' + errMsg(e), 'err'); }
+  if (me) { await loadBeaten(); refreshProfile(); }
+  toast(`Unrated · ${n} player${n === 1 ? '' : 's'} lost the stars`, 'ok'); views.level({ id });
 }
 async function rateLevel(id, diff) {
   const d = DIFFS.find(x => x.id === diff);
   const ls = await getDoc(doc(db, 'levels', id)), L = ls.exists() ? ls.data() : null;
   await updateDoc(doc(db, 'levels', id), { status: 'rated', diff, stars: d.stars * STAR_SCALE });
+  if (L) { try { await reconcileBeaters(id, L.status === 'rated' ? dOf(L) : null, d); } catch (e) { console.warn(e); toast('Rated, but could not update players who already beat it: ' + errMsg(e), 'err'); } }
   if (L) { try { await awardAuthor(id, L, d); } catch (e) { console.warn(e); toast('Rated, but could not credit the author: ' + errMsg(e), 'err'); } }
   closeModal(); toast(`Rated ${d.name}`, 'ok'); views.level({ id });
 }
@@ -1470,7 +1566,7 @@ async function awardWin(id, fb, got) {
   if (award) { upd.stars = increment(ds); P.stars = (P.stars || 0) + ds; if (d.demon) { upd.demons = increment(1); P.demons = (P.demons || 0) + 1; } }
   if (gems) { upd.crystals = increment(gems); P.crystals = (P.crystals || 0) + gems; }
   if (addC.length) { upd.starCoins = increment(addC.length); P.starCoins = (P.starCoins || 0) + addC.length; }
-  await setDoc(br, { t: serverTimestamp(), starred: starred || ok, level: id, coins: [...prevC, ...addC] }, { merge: true });
+  await setDoc(br, { t: serverTimestamp(), starred: starred || ok, ...(ok ? { rd: d.id } : {}), level: id, coins: [...prevC, ...addC] }, { merge: true });
   await setDoc(pr, gemTotal ? { best: 100, gems: Math.max(gemTotal, gemHave) } : { best: 100 }, { merge: true });
   if (Object.keys(upd).length) await updateDoc(doc(db, 'users', me.uid), upd);
   return { first, ok, ds, gems, gemTotal, addC: addC.length, rated };
@@ -1874,6 +1970,7 @@ const actions = {
   },
   delcm: async d => { await deleteDoc(doc(db, 'levels', d.id, 'comments', d.cid)); views.level({ id: d.id }); },
   dlsong: d => downloadSong(d.id),
+  unrate: async d => { if (!confirm('Unrate this level? Everyone who beat it loses its stars and it shows as UNRATED on their profile.')) return; await unrateLevel(d.id); },
   takedown: async d => { if (!confirm('Take this level off the servers? All its stats will be cleared.')) return; await takeDown(d.id); toast('Level removed', 'ok'); refreshMyStats(); back(); },
   ratemenu: d => modal(`<h2>Rate level</h2><div class="rate-grid">${DIFFS.map(x => `<button data-act="rate" data-id="${d.id}" data-d="${x.id}"><img src="${diffURL(x.id, 62)}">${x.name}<br>⭐ ${x.stars}</button>`).join('')}</div>`),
   rate: d => rateLevel(d.id, d.d),
