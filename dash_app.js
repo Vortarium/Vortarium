@@ -113,9 +113,11 @@ const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (l
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
 // ---- new looks (same hitboxes as the originals: only the artwork differs) ----
 const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thick Tiles', 'Ghost Tiles', 'Tile Ring', 'Diagonal', 'Diagonal Flip', 'Pyramid', 'Pyramid Flip', 'Ghost Pyramid', 'Inset Frame', 'Deep Inset', 'Ghost Frame', 'Solid', 'Hollow', 'Bricks', 'Ghost Bricks', 'Big Bricks', 'Studs', 'Split', 'Slats', 'Panels', 'Corner Cut'];
-BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks 2', solid: true, bs: 10 + i, bv: 0 });
-const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
-['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'spikes 2', hz: { ...OBJ[bid].hz, lk } }));
+BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
+const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth']];
+['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
+// ramp spikes: a row of spikes standing on a true 45-degree diagonal (n spikes, q = spike height in cells). Their hitbox is a diagonal staircase of small boxes, not a rectangle.
+[['Ramp Spikes', 3, .36], ['Ramp Big Spikes', 2, .5], ['Ramp Mini Spikes', 6, .2], ['Ramp Tiny Spikes', 8, .14]].forEach(([n, c, q], i) => OBJ['rs' + i] = { name: n, cat: 'hazards', hz: { k: 'r', n: c, q } });
 const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
@@ -466,7 +468,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   else if (t === 'half' || t === 'slope') {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col;
     if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(-cs / 2, 0, cs, cs * .12); c.beginPath(); c.rect(-cs / 2 + lw * .3, lw * .3, cs - lw * .6, cs / 2 - lw * .6); glow(c, lw); }
-    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.22)'; c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, 0); c.closePath(); c.fill(); c.restore(); glow(c, lw); }
+    else { c.strokeStyle = '#fff'; c.lineWidth = lw; c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.stroke(); c.strokeStyle = 'rgba(255,255,255,.22)'; c.beginPath(); c.moveTo(-cs * .1, cs * .38); c.lineTo(cs * .38, cs * .38); c.lineTo(cs * .38, -cs * .1); c.closePath(); c.stroke(); }
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
     c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
@@ -595,7 +597,6 @@ function spikePath(c, lk, x0, y0, w, hh) {
   if (lk === 'jag') { const P = [[0, 0], [.14, .5], [.24, .34], [.4, .8], [.5, 1], [.62, .6], [.74, .78], [.88, .36], [1, 0]]; P.forEach(([u, v], i) => c[i ? 'lineTo' : 'moveTo'](x0 + u * w, y0 - v * hh)); }
   else if (lk === 'hill') { c.moveTo(x0, y0); for (let i = 0; i <= 28; i++) { const u = i / 28, e = Math.pow(Math.sin(Math.PI * u), .6), v = e * (.62 + .38 * Math.sin(u * Math.PI * 3.2 + .8)); c.lineTo(x0 + u * w, y0 - Math.max(0, v) * hh); } c.lineTo(x0 + w, y0); }
   else if (lk === 'saw') { const k = Math.max(1, Math.round(w / (OBJ_S * .34))), tw = w / k; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { c.lineTo(x0 + (i + 1) * tw, y0 - hh); c.lineTo(x0 + (i + 1) * tw, y0); } }
-  else if (lk === 'ramp') { const k = Math.max(2, Math.round(w / (OBJ_S * .28))), tw = w / k, yb = u => y0 - hh * .4 * u; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { const u1 = (i + 1) / k; c.lineTo(x0 + i * tw, yb(i / k)); c.lineTo(x0 + (i + 1) * tw, yb(u1) - hh * .6); c.lineTo(x0 + (i + 1) * tw, yb(u1)); } c.lineTo(x0 + w, y0); }
   else { c.moveTo(x0, y0); c.lineTo(x0 + w / 2, y0 - hh); c.lineTo(x0 + w, y0); }
   c.closePath();
 }
@@ -613,6 +614,15 @@ function hzDraw(c, h, o, x, y, s, col, lw, time) {
       else { c.fillStyle = col; c.fill(); if (lk === 'tri') { c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.moveTo(x0 + w / 2, y0 - hh); c.lineTo(x0 + w, y0); c.lineTo(x0 + w / 2, y0); c.closePath(); c.fill(); c.restore(); } }
       spikePath(c, lk, x0, y0, w, hh); glow(c, lw);
       if (lk === 'ghost') { c.save(); c.globalAlpha = A0 * .55; c.lineWidth = lw * .5; spikePath(c, 'tri', x0 + w * .27, y0 - hh * .05, w * .46, hh * .46); c.stroke(); c.restore(); }
+    }
+  } else if (h.k === 'r') {
+    c.rotate((o.r || 0) * Math.PI / 2); const n = h.n, tw = s * Math.SQRT2 / n, th = s * h.q, q = Math.SQRT1_2;
+    for (let i = 0; i < n; i++) {
+      const ax = -s / 2 + q * i * tw, ay = s / 2 - q * i * tw, bx = ax + q * tw, by = ay - q * tw, mx = (ax + bx) / 2 - q * th, my = (ay + by) / 2 - q * th;
+      const path = () => { c.beginPath(); c.moveTo(ax, ay); c.lineTo(mx, my); c.lineTo(bx, by); c.closePath(); };
+      path(); c.fillStyle = col; c.fill();
+      c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.moveTo(mx, my); c.lineTo(bx, by); c.lineTo((ax + bx) / 2, (ay + by) / 2); c.closePath(); c.fill(); c.restore();
+      path(); glow(c, lw);
     }
   } else {
     c.rotate(time * 4 + (o.r || 0)); const R = s * h.a, N = h.b; c.beginPath();
@@ -664,7 +674,7 @@ const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 const SPR = new Map();
 function drawCached(c, o, x, y, cs, col, time, fast) {
   const d = OBJ[o.t];
-  if (!fast || !(d.solid || (d.hz && d.hz.k === 't')) || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
+  if (!fast || !(d.solid || (d.hz && d.hz.k !== 's')) || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
   const key = o.t + '|' + col + '|' + (o.r || 0) + '|' + cs.toFixed(1);
   let s = SPR.get(key);
   if (!s) {
@@ -714,7 +724,15 @@ class Game {
   }
   prep(o) {
     o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
-    if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b * .75).map(v => 15 + (v - 15) * sc); } }
+    if (h && h.k === 'r') {   // 45-degree row of spikes: base line (0,0)->(30,30), spikes lean to the upper-left
+      const L = U * Math.SQRT2, tw = L / h.n, th = U * h.q, e = Math.max(2, Math.min(5, .2 * Math.min(tw, th * 1.4))), bx = [];
+      for (let i = 0; i < h.n; i++) {
+        const t = (i + .5) * tw / Math.SQRT2; let cx = t - th * .3 / Math.SQRT2, cy = t + th * .3 / Math.SQRT2;
+        for (let k = 0; k < (o.r || 0); k++) { const dx = cx - 15, dy = cy - 15; cx = 15 + dy; cy = 15 - dx; }
+        bx.push([15 + (cx - e - 15) * sc, 15 + (cy - e - 15) * sc, 15 + (cx + e - 15) * sc, 15 + (cy + e - 15) * sc]);
+      }
+      o.hbs = bx;
+    } else if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b * .75).map(v => 15 + (v - 15) * sc); } }
     if (o.t.startsWith('port')) { const b = rotRect(o.r || 0, 5, 0, 25, PH * U, 15, PH * U / 2); o.qb = [15 + (b[0] - 15) * sc, PH * U / 2 + (b[1] - PH * U / 2) * sc, 15 + (b[2] - 15) * sc, PH * U / 2 + (b[3] - PH * U / 2) * sc]; }
     if (PADS.includes(o.t)) o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc);
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
@@ -831,7 +849,7 @@ class Game {
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 9.1 * dt);   // was 7: 30% sharper rise/fall p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
@@ -877,6 +895,7 @@ class Game {
       }
     } else if (OBJ[t].hz) {
       if (o.hr) { const i = this.priIn(), dx = Math.max(p.x + i, Math.min(x + 15, p.x + 30 - i)) - (x + 15), dy = Math.max(p.y + i, Math.min(y + 15, p.y + 30 - i)) - (y + 15); if (dx * dx + dy * dy < o.hr * o.hr) this.die(); }
+      else if (o.hbs) { const pi = this.priIn(); for (const h of o.hbs) if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], pi)) { this.die(); break; } }
       else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
       const sc = o.sc || 1, dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < (26 * sc) ** 2;
