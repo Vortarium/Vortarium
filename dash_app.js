@@ -113,9 +113,9 @@ const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (l
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
 // ---- new looks (same hitboxes as the originals: only the artwork differs) ----
 const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thick Tiles', 'Ghost Tiles', 'Tile Ring', 'Diagonal', 'Diagonal Flip', 'Pyramid', 'Pyramid Flip', 'Ghost Pyramid', 'Inset Frame', 'Deep Inset', 'Ghost Frame', 'Solid', 'Hollow', 'Bricks', 'Ghost Bricks', 'Big Bricks', 'Studs', 'Split', 'Slats', 'Panels', 'Corner Cut'];
-BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks 2', solid: true, bs: 10 + i, bv: 0 });
+BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
 const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
-['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'spikes 2', hz: { ...OBJ[bid].hz, lk } }));
+['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
 const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
@@ -466,7 +466,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   else if (t === 'half' || t === 'slope') {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col;
     if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(-cs / 2, 0, cs, cs * .12); c.beginPath(); c.rect(-cs / 2 + lw * .3, lw * .3, cs - lw * .6, cs / 2 - lw * .6); glow(c, lw); }
-    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.22)'; c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, 0); c.closePath(); c.fill(); c.restore(); glow(c, lw); }
+    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = lw * .6; c.stroke(); }
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
     c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
@@ -595,7 +595,7 @@ function spikePath(c, lk, x0, y0, w, hh) {
   if (lk === 'jag') { const P = [[0, 0], [.14, .5], [.24, .34], [.4, .8], [.5, 1], [.62, .6], [.74, .78], [.88, .36], [1, 0]]; P.forEach(([u, v], i) => c[i ? 'lineTo' : 'moveTo'](x0 + u * w, y0 - v * hh)); }
   else if (lk === 'hill') { c.moveTo(x0, y0); for (let i = 0; i <= 28; i++) { const u = i / 28, e = Math.pow(Math.sin(Math.PI * u), .6), v = e * (.62 + .38 * Math.sin(u * Math.PI * 3.2 + .8)); c.lineTo(x0 + u * w, y0 - Math.max(0, v) * hh); } c.lineTo(x0 + w, y0); }
   else if (lk === 'saw') { const k = Math.max(1, Math.round(w / (OBJ_S * .34))), tw = w / k; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { c.lineTo(x0 + (i + 1) * tw, y0 - hh); c.lineTo(x0 + (i + 1) * tw, y0); } }
-  else if (lk === 'ramp') { const k = Math.max(2, Math.round(w / (OBJ_S * .28))), tw = w / k, yb = u => y0 - hh * .4 * u; c.moveTo(x0, y0); for (let i = 0; i < k; i++) { const u1 = (i + 1) / k; c.lineTo(x0 + i * tw, yb(i / k)); c.lineTo(x0 + (i + 1) * tw, yb(u1) - hh * .6); c.lineTo(x0 + (i + 1) * tw, yb(u1)); } c.lineTo(x0 + w, y0); }
+  else if (lk === 'ramp') { const L = Math.min(w, hh); c.moveTo(x0 + w - L, y0); c.lineTo(x0 + w, y0 - L); c.lineTo(x0 + w, y0); }   // right wedge: the slanted edge rises at exactly 45 deg
   else { c.moveTo(x0, y0); c.lineTo(x0 + w / 2, y0 - hh); c.lineTo(x0 + w, y0); }
   c.closePath();
 }
@@ -831,7 +831,7 @@ class Game {
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 351; p.vy += (tv - p.vy) * Math.min(1, 9.1 * dt); p.vy = Math.max(-377, Math.min(377, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
