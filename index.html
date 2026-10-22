@@ -1123,18 +1123,35 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
-            { v: '2.2.1', date: '10/17/2026',
-              desc: 'A big Dash update with bugfixes, reworked designs and a pile of new features.',
+            { v: '2.2.3', date: '10/21/2026',
+              desc: 'Dash runs smoother on lower end devices, gets friends and new achievements, and Splendid switches to an ELO rating system.',
               bullets: [
-                'Dash bugfixes across the menus, physics and level editor',
-                'Reworked designs, including brand new difficulty faces',
-                'New shop in the Community tab with a daily rotating stock of icons and colors to buy with gems',
-                'New search bar that finds levels by name, creator, rating and level length',
-                'New 10-star rating system: Easy up to Insane, plus five demon tiers (Easy, Medium, Hard, Insane and Extreme Demon) that each pay 250 gems',
-                'New gamemodes: Robot and Spider, with their own icons to unlock',
-                'New triggers: zoom, toggle and alpha',
-                'New mechanics: reverse portals that flip the screen, practice mode with checkpoints, and gem rewards for beating rated levels',
-                'Editor quality of life: a + button that fills in the next unused group ID'
+                'Dash: fixed screen tearing and flickering lines on lower end 60 FPS devices, with smoother movement and automatic quality settings that adapt to your device',
+                'Dash: new achievements for liking other people\'s levels and for dying a certain number of times, which pay out gems',
+                'Dash: new Friends Board next to the Global leaderboard that ranks you and your friends',
+                'Dash: a notification icon now shows in front of the Leaderboards & Friends and Friends tabs when someone adds you',
+                'Splendid: the leaderboard now always shows your own spot as a 6th slot with your real position when you are outside the top 5',
+                'Splendid: win rate replaced with ELO. Everyone starts at 100, each game only moves you a few points, beating stronger players pays more, and bot wins pay less the higher you climb',
+                'Splendid: everyone\'s ELO was recalculated from their existing record and the leaderboard re-ranked automatically',
+                'Splendid: bots now play mostly at random and no longer read your mana or counter your moves'
+            ]},
+            { v: '2.2.2', date: '10/19/2026',
+              desc: 'Lots of bug fixes and game changes for Dash.',
+              bullets: [
+                'Dash: many bug fixes across the game, the editor and the community pages',
+                'Dash: 10 star difficulty ratings with new faces, reverse portals, and new robot and spider gamemodes',
+                'Dash: attempts now show on the level page, and levels no longer need an End Trigger',
+                'Dash: new editor tools including redo, rotatable portals and pads, and a button that fills in the next free group ID',
+                'Dash: reworked block and spike designs, and the ship now feels lighter and more responsive',
+                'Dash: unrating or re-rating a level now correctly adjusts everyone\'s stars and difficulty counters'
+            ]},
+            { v: '2.2.1', date: '10/17/2026', bullets: [
+                'Dash bug fixes',
+                'Reworked block and spike designs',
+                'New shop',
+                'New search bar',
+                'New triggers and gamemodes',
+                'New mechanics'
             ]},
             { v: '2.2.0', date: '10/17/2026',
               desc: 'Dash is out, a new project: a rhythm platformer with a full level editor and online community.',
@@ -1146,6 +1163,9 @@
                 'Like, dislike and comment on levels, and add friends to send direct messages',
                 'Account system with sign up and log in, plus 36 cube skins and 20 colors to unlock through achievements',
                 'Dash added at #2 on the Popular list'
+            ]},
+            { v: '2.1.4', date: '10/16/2026', bullets: [
+                'Slither.io and Paper.io bug fixes'
             ]},
             { v: '2.1.3', date: '10/16/2026', bullets: [
                 'Splendid balancing and bugfixes',

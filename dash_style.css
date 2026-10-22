@@ -210,3 +210,17 @@ label{display:block;font-size:14px;color:#9fd4ff}
 .playbtn.wrench{background:linear-gradient(#ffc04a,#e5780a);font-size:56px}
 .picons{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.picons div{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border:2px solid #000;border-radius:10px;padding:3px 5px}.picons small{font-size:11px;color:#cfe4ff}
 .brk{grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;margin:10px 0}.brk div{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.25);border:2px solid #000;border-radius:10px;padding:6px}.brk b{font-size:20px}
+
+/* low-end device friendliness: nothing animates or blurs behind the game canvas while playing / editing */
+body.fs #bgfx,body.fs #bgfx:before,body.fs #bgfx:after{animation:none!important}
+body.fs #bgfx{display:none}
+#play{contain:strict;transform:translateZ(0)}
+#gameCanvas{image-rendering:auto;backface-visibility:hidden}
+body.fs .card,body.fs #edTop,body.fs #edBottom,body.fs #edProps{backdrop-filter:none}
+@media (prefers-reduced-motion:reduce){#bgfx:before,#bgfx:after,.logo span{animation:none!important}}
+
+.nlab{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.nbadge{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 6px;border-radius:13px;background:#ff2b2b;border:3px solid #000;font:normal 15px "Lilita One",sans-serif;color:#fff;font-style:normal;box-shadow:0 0 0 2px rgba(255,255,255,.35);animation:nping 1.6s ease-in-out infinite}
+@keyframes nping{50%{transform:scale(1.12)}}
+.lb.me{outline:3px solid #ffd93d;background:rgba(255,217,61,.15)}
+body.fs .nbadge{animation:none}
