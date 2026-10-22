@@ -24,6 +24,7 @@ const storage = getStorage(app);
 
 /* ===== ENGINE ===== */
 // dash_game.js - DASH engine: constants, icon drawing, object drawing, physics + renderer
+const COY = .1;   // coyote time in seconds (about 5 frames at 60fps)
 const U = 30, BASE = 311, STEP = 1 / 240, G = 3250, JUMP = 640, VMAX = 950;
 const PRIMARY = ['#7dff2a', '#ff3b3b', '#ff9a1f', '#ffe81f', '#1fd1ff', '#2f6bff', '#a43bff', '#ff4fd8', '#ffffff', '#3a3a4c', '#00ffa2', '#c0ff00', '#ff0080'];
 const SECONDARY = ['#1fffe0', '#e8f1ff', '#ffd21f', '#ff6a3d', '#ff2f6d', '#7a4dff', '#3a8bff', '#2bd45a', '#111118', '#b0b0c0', '#ffa8e8', '#00a8ff', '#8cff00'];
@@ -56,6 +57,9 @@ const OBJ = {
   trig_color: { name: 'Color Trigger', cat: 'triggers', trig: true },
   trig_move: { name: 'Move Trigger', cat: 'triggers', trig: true },
   trig_end: { name: 'End Trigger', cat: 'triggers', trig: true },
+  trig_pulse: { name: 'Pulse Trigger', cat: 'triggers', trig: true },
+  zone_d: { name: 'D Block', cat: 'triggers', zone: true },
+  zone_s: { name: 'S Block', cat: 'triggers', zone: true },
   orb_b: { name: 'Blue Orb (gravity)', cat: 'orbs' },
   port_gd: { name: 'Gravity Down Portal', cat: 'portals' },
   port_gu: { name: 'Gravity Up Portal', cat: 'portals' }
@@ -85,8 +89,8 @@ const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', po
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
-const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8' };
-const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP' };
+const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8', trig_pulse: '#ffffff', zone_d: '#e0408f', zone_s: '#1fb5a8' };
+const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP', trig_pulse: 'PUL', zone_d: 'D', zone_s: 'S' };
 OBJ.spike.hz = { k: 't', a: 1, b: 1, n: 1 };
 ['Plain','Inset','Cross','Dots','Stripes','Checker','Bevel','Slab','Frame','Diamond'].forEach((n, i) => [0, 1].forEach(v => { if (i + v) OBJ['blk' + (i + v * 10)] = { name: n + (v ? ' Dark' : ''), cat: 'blocks', solid: true, bs: i, bv: v }; }));
 OBJ.block.solid = true;
@@ -489,8 +493,8 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
     c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i & 1 ? cs * .08 : cs * .2; c[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } c.closePath(); c.fillStyle = f2; c.fill();
-  } else if (ed && OBJ[t].trig) {
-    const cl = t === 'trig_color' ? (o.col || '#ff5252') : TRC[t];
+  } else if (ed && (OBJ[t].trig || OBJ[t].zone)) {
+    const cl = t === 'trig_color' || t === 'trig_pulse' ? (o.col || '#ff5252') : TRC[t];
     c.fillStyle = cl; c.globalAlpha = .85; c.fillRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84); c.globalAlpha = 1;
     c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84);
     c.fillStyle = '#fff'; c.font = `bold ${cs * .34}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -514,7 +518,7 @@ function polyBox(poly, ox, oy, bx0, by0, bx1, by1) {
   const P = poly.map(([a, b]) => [a + ox, b + oy]);
   if (Math.max(...P.map(q => q[0])) <= bx0 || Math.min(...P.map(q => q[0])) >= bx1 || Math.max(...P.map(q => q[1])) <= by0 || Math.min(...P.map(q => q[1])) >= by1) return false;
   const B = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]];
-  for (let i = 0; i < 2; i++) { const a = P[i], b = P[i + 1], nx = -(b[1] - a[1]), ny = b[0] - a[0];
+  for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], nx = -(b[1] - a[1]), ny = b[0] - a[0];
     let p0 = 1e9, p1 = -1e9, q0 = 1e9, q1 = -1e9; for (const q of P) { const d = q[0] * nx + q[1] * ny; p0 = Math.min(p0, d); p1 = Math.max(p1, d); } for (const q of B) { const d = q[0] * nx + q[1] * ny; q0 = Math.min(q0, d); q1 = Math.max(q1, d); }
     if (p1 <= q0 || q1 <= p0) return false; }
   return true;
@@ -696,7 +700,7 @@ class Game {
   constructor(cv) {
     this.cv = cv; this.c = cv.getContext('2d', { alpha: false }); this.practice = false; this.cps = []; this.cpT = 0; this.cb = {}; this.running = false; this.paused = false;
     this.held = false; this.edgeT = 0; this.skin = { id: 0, c1: PRIMARY[0], c2: SECONDARY[0] };
-    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) { this.edgeT = .05; this.holdUsed = false; } this.held = true; } else { this.held = false; this.holdUsed = false; } };
+    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) { this.edgeT = .1; this.orbT = .13; this.holdUsed = false; } this.held = true; } else { this.held = false; this.holdUsed = false; } };
     cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true); });
     addEventListener('pointerup', () => press(false)); addEventListener('pointercancel', () => press(false));
     addEventListener('keydown', e => {
@@ -724,7 +728,8 @@ class Game {
     objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); });
     // hitboxes are built lazily in prep() the first time an object comes into range
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
-    const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin;
+    const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
+    this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: wave can't be hurt by blocks / slopes inside them. S blocks: end a dash.
     this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
@@ -736,6 +741,8 @@ class Game {
   prep(o) {
     o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
     if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65, hh = 13 * h.b * .75; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, hh).map(v => 15 + (v - 15) * sc);
+      { const th = ((o.r || 0) * 90 + (o.r45 ? 45 : 0)) * Math.PI / 180, c_ = Math.cos(th), s_ = Math.sin(th), W = 30 * h.a, w = W / h.n, H2 = 30 * h.b; o.tp = [];   // the visible triangle(s), used against the wave
+        for (let i = 0; i < h.n; i++) { const x0 = 15 - W / 2 + i * w; o.tp.push([[x0, 0], [x0 + w, 0], [x0 + w / 2, H2]].map(([px, py]) => { const dx = px - 15, dy = py - 15; return [15 + (dx * c_ + dy * s_) * sc, 15 + (-dx * s_ + dy * c_) * sc]; })); } }
       if (o.r45) { const th = ((o.r || 0) * 90 + 45) * Math.PI / 180, cs_ = Math.cos(th), sn = Math.sin(th); o.hp = [[15 - hw, 0], [15 + hw, 0], [15 + hw, hh], [15 - hw, hh]].map(([px, py]) => { const dx = px - 15, dy = py - 15; return [15 + (dx * cs_ + dy * sn) * sc, 15 + (-dx * sn + dy * cs_) * sc]; }); } } }
     if (o.t.startsWith('port')) { const b = o.r45 ? rotRectD(((o.r || 0) * 90 + 45), 5, 0, 25, PH * U, 15, PH * U / 2) : rotRect(o.r || 0, 5, 0, 25, PH * U, 15, PH * U / 2); o.qb = [15 + (b[0] - 15) * sc, PH * U / 2 + (b[1] - PH * U / 2) * sc, 15 + (b[2] - 15) * sc, PH * U / 2 + (b[3] - PH * U / 2) * sc]; }
     if (PADS.includes(o.t)) o.pb = (o.r45 ? rotRectD(((o.r || 0) * 90 + 45), 3, 0, 27, 10) : rotRect(o.r || 0, 3, 0, 27, 10)).map(v => 15 + (v - 15) * sc);
@@ -755,7 +762,7 @@ class Game {
   pause() { this.paused = true; }
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
-    this.pv = null;
+    this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
     this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
     this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
@@ -776,6 +783,8 @@ class Game {
       if (tgt === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
       else if (tgt === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
       else this.acts.push({ key, k: 'col', list: (this.groups[tgt] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
+    } else if (t.t === 'trig_pulse') {
+      if (!instant) { this.acts = this.acts.filter(a => a.k !== 'pulse'); this.acts.push({ k: 'pulse', to: t.tcol || t.col || '#ffffff', t0: this.time, dur: Math.max(.05, t.dur || .5) }); }
     } else if (t.t === 'trig_move') {
       const b = this.gOff[t.tg] || { x: 0, y: 0 };
       this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], pe: 0, t0: this.time, dur });
@@ -798,6 +807,7 @@ class Game {
       else if (a.k === 'col') { const h = rgb2hex(lerpC([0, 0, 0], a.to, 1)); for (const [o, f] of a.list) o.col = pr >= 1 ? h : rgb2hex(lerpC(f, a.to, pr)); }
       else if (a.k === 'mv') { const e = ease(pr), g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }); g.x += a.d[0] * (e - (a.pe || 0)); g.y += a.d[1] * (e - (a.pe || 0)); a.pe = e; }
       else if (a.k === 'fol') { const g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }), dx = this.p.x - a.lx, dy = this.p.y - a.ly; a.lx = this.p.x; a.ly = this.p.y; if (a.horz) g.x += dx / U; if (a.vert) g.y += dy / U; }
+      else if (a.k === 'pulse') this.pulse = { col: a.to, a: 1 - pr };
       else if (a.k === 'zoom') this.zoom = a.from + (a.to - a.from) * ease(pr);
       else if (a.k === 'al') for (const [o, f] of a.list) o.alp = f + (a.to - f) * pr;
       if (pr >= 1) this.acts.splice(i, 1);
@@ -810,7 +820,7 @@ class Game {
       gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
   }
   restore(k) {
-    this.pv = null;
+    this.pv = null; this.cyT = 0;
     for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
     for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
@@ -832,9 +842,11 @@ class Game {
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
   hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { const m = this.mode; return m === 'wave' ? 11 : m === 'ship' ? 4 : 3; }   // wave box is 8x8 now (was ~10.5), ship 22x22, everything else 24x24
+  priIn() { const m = this.mode; return m === 'wave' ? 12.5 : m === 'ship' ? 4 : 3; }   // wave box is 5x5 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
-  secIn() { return this.priIn(); }   // one hitbox decides walls, blocks and spikes alike
+  secIn() { return this.priIn(); }
+  // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
+  sbx() { const m = this.mode; return m === 'wave' ? [2, 4.2, 4.2, 4.2, 4.2] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; }   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -843,24 +855,29 @@ class Game {
       this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.respawn(); return;
     }
     if (this.autoEnd && p.x >= this.endX) { this.win(); return; }
-    this.time += dt; this.edgeT -= dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
+    this.time += dt; this.edgeT -= dt; this.orbT = (this.orbT || 0) - dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
     this.runActs();
+    {   // zones
+      const p_ = this.p; this.inD = false;
+      if (this.mode === 'wave' && this.ZD.length) { const sb = this.sbx(); for (let i = lb(this.ZD, p_.x - 40); i < this.ZD.length && this.ZD[i].ex < p_.x + 40; i++) { const z = this.ZD[i]; if (!z.off && p_.x + sb[0] < z.ex + 30 && p_.x + 30 - sb[0] > z.ex && p_.y + sb[1] < z.ey + 30 && p_.y + 30 - sb[2] > z.ey) { this.inD = true; break; } } }
+      if (p_.dash && this.ZS.length) for (let i = lb(this.ZS, p_.x - 40); i < this.ZS.length && this.ZS[i].ex < p_.x + 40; i++) { const z = this.ZS[i]; if (!z.off && p_.x + 3 < z.ex + 30 && p_.x + 27 > z.ex && p_.y + 3 < z.ey + 30 && p_.y + 27 > z.ey) { this.endDash(); break; } }
+    }
     { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
-    if (this.mode === 'cube' && this.held && !this.holdUsed && p.grounded) { p.vy = JUMP * this.gr; p.grounded = false; this.jumps++; }
-    if (this.mode === 'robot' && this.held && !this.holdUsed && p.grounded) { p.vy = 441 * this.gr; p.grounded = false; p.rb = .3; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
+    if (this.mode === 'cube' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = JUMP * this.gr; p.grounded = false; this.cyT = 0; this.jumps++; }   // coyote time: still counts as on the ground for a few frames after running off an edge
+    if (this.mode === 'robot' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = 441 * this.gr; p.grounded = false; p.rb = .3; this.cyT = 0; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
     const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
-      else if (this.mode === 'ball' && edge && wasG) { this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
-      else if (this.mode === 'spider' && edge && wasG) this.spiderJump();
+      else if (this.mode === 'ball' && edge && (wasG || this.cyT > 0)) { this.cyT = 0; this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
+      else if (this.mode === 'spider' && edge && (wasG || this.cyT > 0)) { this.cyT = 0; this.spiderJump(); }
       const gm = this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
-    if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
+    { const fb = this.sbx()[3]; if (p.y <= -fb) { p.y = -fb; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; } }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
     while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
@@ -868,6 +885,7 @@ class Game {
     for (const o of this.D) {
       if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 160) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
     }
+    this.cyT = p.grounded ? COY : (this.cyT || 0) - dt;   // refill while standing, drain while airborne
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
@@ -882,43 +900,42 @@ class Game {
     if (OBJ[t].slope) return this.slope(o, x, y);
     if (OBJ[t].solid) {
       const sb = o.sb, bx = x + sb[0], by = y + sb[1], bw = sb[2] - sb[0], bh = sb[3] - sb[1];
-      if (this.hitI(p, bx, by, bw, bh, this.priIn())) {
-        // primary hitbox touched: only the 15x15 inner hitbox decides deaths, and it also forgives corner clips
-        const inner = this.hitI(p, bx, by, bw, bh, this.secIn()), tol = Math.max(4, this.secIn()), m = this.mode, gr = this.gr, above = false, below = false;   // inner = secondary box touches the wall (kills); a primary-only brush is forgiven   // strict physical hitbox: any overlap that isn't a landing (or a ufo/ship ceiling slide) kills; wave dies on any touch
-        if (m === 'wave') { if (inner) this.die(); }
+      const [ss, ib, it, fl, fc] = this.sbx();
+      if (p.x + ss < bx + bw && p.x + 30 - ss > bx && p.y + ib < by + bh && p.y + 30 - it > by) {
+        // one box (matching the artwork) decides everything: land / slide on top, ceiling-slide underneath, otherwise it's a wall hit and you die
+        const tol = Math.max(4, ib), tolT = Math.max(4, it), m = this.mode, gr = this.gr;
+        if (m === 'wave') { if (!this.inD) this.die(); }
         else if (m === 'ship' || m === 'ufo') {
-          if (prevB >= by + bh - tol || (!inner && above)) { p.y = by + bh; if (p.vy < 0) p.vy = 0; }
-          else if (prevB + 30 <= by + tol || (!inner && below)) { p.y = by - 30; if (p.vy > 0) p.vy = 0; }
-          else if (inner) this.die();
+          if (prevB >= by + bh - tol) { p.y = by + bh - fl; if (p.vy < 0) p.vy = 0; }
+          else if (prevB + 30 <= by + fc + tolT) { p.y = by - 30 + fc; if (p.vy > 0) p.vy = 0; }
+          else this.die();
         } else {
-          const land = gr > 0 ? (p.vy <= 0 && (prevB >= by + bh - tol || (!inner && above))) : (p.vy >= 0 && (prevB + 30 <= by + tol || (!inner && below)));
+          const land = gr > 0 ? (p.vy <= 0 && prevB >= by + bh - tol) : (p.vy >= 0 && prevB + 30 <= by + tolT);
           if (land) { p.y = gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
-          else if (!inner) {
-            if (gr > 0 && p.vy > 0 && below) { p.y = by - 30; p.vy = 0; }
-            else if (gr < 0 && p.vy < 0 && above) { p.y = by + bh; p.vy = 0; }
-          } else this.die();
+          else this.die();
         }
       }
     } else if (OBJ[t].hz) {
       if (o.hr) { const i = this.priIn(), dx = Math.max(p.x + i, Math.min(x + 15, p.x + 30 - i)) - (x + 15), dy = Math.max(p.y + i, Math.min(y + 15, p.y + 30 - i)) - (y + 15); if (dx * dx + dy * dy < o.hr * o.hr) this.die(); }
+      else if (this.mode === 'wave' && o.tp) { const i = this.priIn(); for (const tr of o.tp) if (polyBox(tr, x, y, p.x + i, p.y + i, p.x + 30 - i, p.y + 30 - i)) { this.die(); break; } }
       else if (o.hp) { const i = this.priIn(); if (polyBox(o.hp, x, y, p.x + i, p.y + i, p.x + 30 - i, p.y + 30 - i)) this.die(); }
       else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
-      const hf = 15 * (o.sc || 1), on = this.hit(p, x + 15 - hf, y + 15 - hf, 2 * hf, 2 * hf);   // the orb's hitbox is exactly its 1x1 grid cell
-      if (on && !o.used && (edge || (this.held && !this.holdUsed))) {
-        o.used = true; p.grounded = false; p.rb = 0; this.edgeT = 0; this.holdUsed = true; this.jumps++;
+      const hf = 15 * (o.sc || 1), pi = 3, on = p.x + pi < x + 15 + hf && p.x + 30 - pi > x + 15 - hf && p.y + pi < y + 15 + hf && p.y + 30 - pi > y + 15 - hf;   // the orb's hitbox is exactly its 1x1 grid cell
+      if (on && !o.used && this.orbT > 0) {
+        o.used = true; p.grounded = false; this.cyT = 0; p.rb = 0; this.edgeT = 0; this.orbT = 0; this.holdUsed = true; this.jumps++;
         if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
         else if (DASH[t]) { const an = (o.a || 0) * Math.PI / 180; p.dash = { vy: Math.sin(an) * BASE * this.speed * this.gr, t: 0, flip: t === 'orb_db' }; p.vy = p.dash.vy; }
         else p.vy = PHYS[t] * this.gr;
       }
     } else if (PADS.includes(t)) {
       const b = o.pb, on = this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1]);
-      if (on && !o.used) { o.used = true; p.grounded = false; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr * (t !== 'pad_b' && ((o.r || 0) & 3) === 2 ? -1 : 1); }   // a pad turned upside down (rotated 180) launches the other way
+      if (on && !o.used) { o.used = true; p.grounded = false; this.cyT = 0; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr * (t !== 'pad_b' && ((o.r || 0) & 3) === 2 ? -1 : 1); }   // a pad turned upside down (rotated 180) launches the other way
       else if (!on) o.used = false;
     } else if (t.startsWith('port')) {
       const b = o.qb; if (!this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])) return;
       if (SPEEDS[t]) this.speed = SPEEDS[t];
-      else if (t === 'port_gd' || t === 'port_gu') this.gr = t === 'port_gu' ? -1 : 1;
+      else if (t === 'port_gd' || t === 'port_gu') { this.gr = t === 'port_gu' ? -1 : 1; this.cyT = 0; }
       else if (MODEP[t]) this.mode = PMODE[t];
       else if (REVP[t]) this.mir = t === 'port_mb' ? 1 : 0;
     }
@@ -944,7 +961,8 @@ class Game {
   slope(o, x, y) {
     const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
     if (m === 'wave') {   // wave uses a half-size (15x15, centered) hitbox
-      const wi = this.priIn(), x0 = p.x + wi, x1 = p.x + 30 - wi, y0 = p.y + wi, y1 = p.y + 30 - wi;
+      if (this.inD) return;   // inside a D block the wave passes through slopes
+      const sb_ = this.sbx(), x0 = p.x + sb_[0], x1 = p.x + 30 - sb_[0], y0 = p.y + sb_[1], y1 = p.y + 30 - sb_[2];
       if (!(x1 > x && x0 < x + 30) || y0 >= y + 30 || y1 <= y) return;
       const c = v => Math.max(0, Math.min(30, v)), sy = xl => y + (k ? 30 - xl : xl);
       if (floor ? sy(c(k ? x0 - x : x1 - x)) > y0 : y1 > sy(c(k ? x1 - x : x0 - x))) this.die();
@@ -997,6 +1015,7 @@ class Game {
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35));
     c.fillStyle = g; c.fillRect(0, 0, W, H);
     drawBG(c, W, H, s, cxp / s, this.level.bgs, lq);
+    if (this.pulse && this.pulse.a > .01) { c.globalAlpha = this.pulse.a; c.fillStyle = this.pulse.col; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }   // pulse trigger flash
     const gy = Y(0);
     if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, this.level.grs, lq);
 
@@ -1121,25 +1140,28 @@ const ACH = (() => {
 const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin', robot: 'Robot skin', spider: 'Spider skin' };
 const rwTxt = a => a.rw ? rwName(a.rw) : `+${a.gem} gems`;
 const rwName = r => RWN[r.k] ? `${RWN[r.k]} #${r.i + 1}` : r.k === 'p' ? `Primary color #${r.i + 1}` : `Secondary color #${r.i + 1}`;
+const isEarned = a => !!me && !!P && (achVal(a) >= a.n || (P.achEarned || []).includes(a.name));   // once earned, always earned (stats dropping later never takes it back)
 const achVal = a => a.stat === 'deaths' ? (P?.deaths || 0) + deathBuf : a.stat === 'crystals' ? Math.max(P?.crystals || 0, P?.maxCrystals || 0) : (P?.[a.stat] || 0);   // crystals can be spent, so use the highest amount ever held
 function trackMaxCrystals() { if (me && P && (P.crystals || 0) > (P.maxCrystals || 0)) { P.maxCrystals = P.crystals; updateDoc(doc(db, 'users', me.uid), { maxCrystals: P.crystals }).catch(() => { }); } }
 function unlocked_() {
   const u = { skin: new Set([0]), ship: new Set([0]), ball: new Set([0]), ufo: new Set([0]), wave: new Set([0]), robot: new Set([0]), spider: new Set([0]), p: new Set([0]), s: new Set([0]) };
-  if (me && P) ACH.forEach(a => { if (a.rw && achVal(a) >= a.n) u[a.rw.k].add(a.rw.i); });
+  if (me && P) ACH.forEach(a => { if (a.rw && isEarned(a)) u[a.rw.k].add(a.rw.i); });
   if (me && P) (P.bought || []).forEach(k => { const [t, i] = k.split(':'); if (t === 'col') { u.p.add(+i); u.s.add(+i); } else if (u[t]) u[t].add(+i); });
   return u;
 }
-let payingAch = false, deathBuf = 0;
+let payingAch = false, savingEarn = false, deathBuf = 0;
 function flushDeaths() { if (!deathBuf || !me || !P) return; const n = deathBuf; deathBuf = 0; P.deaths = (P.deaths || 0) + n; updateDoc(doc(db, 'users', me.uid), { deaths: increment(n) }).catch(() => { deathBuf += n; P.deaths -= n; }); }
 addEventListener('pagehide', flushDeaths); document.addEventListener('visibilitychange', () => { if (document.hidden) flushDeaths(); });
 function countDeath() { if (!me || !P) return; deathBuf++; if (deathBuf >= 10) flushDeaths(); checkAch(); }
 function checkAch() {
   if (!me || !P) return; trackMaxCrystals(); const key = 'dash_ach_' + me.uid; const seen = new Set(JSON.parse(localStorage[key] || '[]'));
-  const first = !localStorage[key]; const now = ACH.filter(a => achVal(a) >= a.n).map(a => a.name);
+  const first = !localStorage[key]; const now = ACH.filter(isEarned).map(a => a.name);
+  { const have = new Set(P.achEarned || []), add = ACH.filter(a => achVal(a) >= a.n && !have.has(a.name)).map(a => a.name);
+    if (add.length && !savingEarn) { savingEarn = true; P.achEarned = [...have, ...add]; updateDoc(doc(db, 'users', me.uid), { achEarned: arrayUnion(...add) }).catch(() => { P.achEarned = [...have]; }).finally(() => { savingEarn = false; }); } }
   if (!first) now.filter(n => !seen.has(n)).forEach(n => { const a = ACH.find(x => x.name === n); toast(`🏆 Achievement: ${a.name} - ${a.rw ? 'unlocked ' + rwName(a.rw) : 'earned ' + a.gem + ' gems'}`, 'ok'); });
   localStorage[key] = JSON.stringify(now);
   // gem rewards are paid exactly once per achievement (tracked on the account)
-  const got = new Set(P.achPaid || []), due = ACH.filter(a => a.gem && achVal(a) >= a.n && !got.has(a.name));
+  const got = new Set(P.achPaid || []), due = ACH.filter(a => a.gem && isEarned(a) && !got.has(a.name));
   if (due.length && !payingAch) {
     payingAch = true; const sum = due.reduce((t, a) => t + a.gem, 0), names = due.map(a => a.name);
     P.achPaid = [...got, ...names]; P.crystals = (P.crystals || 0) + sum;
@@ -1261,7 +1283,7 @@ views.cosmetics = ({ tab = 'cube' } = {}) => {
   else if (tab === 'robot') body = `<div class="skgrid">${grid('robot', 40, rbt, i => robotURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'spider') body = `<div class="skgrid">${grid('spider', 40, spd, i => spiderURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'colors') body = `<h3>Primary</h3><div class="swatches">${sw('p', PRIMARY, c1)}</div><h3>Secondary</h3><div class="swatches">${sw('s', SECONDARY, c2)}</div>`;
-  else body = ACH.map(a => { const v = achVal(a), done = !!me && v >= a.n; return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwTxt(a)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
+  else body = ACH.map(a => { const v = achVal(a), done = isEarned(a); return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwTxt(a)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
   const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
   page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${robotURL(rbt, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${spiderURL(spd, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
 };
@@ -1889,10 +1911,11 @@ function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
   if (t === 'coin' && lv.objs.filter(o => o.t === 'coin').length >= 3 && !lv.objs.some(o => o.t === 'coin' && o.x === cx && o.y === cy)) return toast('Max 3 star coins per level', 'err');
   if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot && (o.r45 || 0) === (no45({ t }) ? 0 : ed.rot45))) return;
-  if (!OBJ[t].trig && !OBJ[t].deco) lv.objs = lv.objs.filter(o => OBJ[o.t].trig || OBJ[o.t].deco || !(o.x === cx && o.y === cy));
+  if (!OBJ[t].trig && !OBJ[t].deco && !OBJ[t].zone) lv.objs = lv.objs.filter(o => !(o.t === t && o.x === cx && o.y === cy));   // blocks / hazards can now be stacked: only the same object type gets replaced
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 }; if (ed.rot45 && !no45(o)) o.r45 = 1;
   if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
+  if (t === 'trig_pulse') Object.assign(o, { col: '#ffffff', dur: .5 });
   if (t === 'trig_color') { const pv = [...lv.objs].reverse().find(q => q.t === 'trig_color'); Object.assign(o, { tg: pv ? pv.tg : 0, col: '#ff5252', dur: pv ? pv.dur : 1 }); }
   if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
   if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
@@ -1900,7 +1923,7 @@ function place(cx, cy) {
   if (t === 'trig_alpha') Object.assign(o, { tg: 1, pc: 50, dur: 1 });
   if (OBJ[t].trig) o.touch = false;
   if (DASH[t]) o.a = 0;
-  lv.objs.push(o); if (t === 'trig_color') { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
+  lv.objs.push(o); if (t === 'trig_color' || t === 'trig_pulse' || OBJ[t].zone) { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
 }
 function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !under(o, wx, wy)); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
@@ -1913,8 +1936,12 @@ function renderProps() {
   else if (o.t === 'trig_zoom') h += `<label>Zoom (1 = default)<input type="number" step=".1" min=".2" max="4" data-p="zoom" value="${o.zoom ?? 1}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
+  else if (o.t === 'trig_pulse') h += `<label>Pulse color<input type="color" data-p="col" value="${o.col || '#ffffff'}"></label><label>Fade out time (s)<input type="number" step=".1" min=".05" data-p="dur" value="${o.dur ?? .5}"></label><p class="muted">Flashes the background with this color, then fades it out.</p>`;
+  else if (o.t === 'zone_d') h += '<p class="muted">Place on top of blocks or slopes: the wave takes no damage from the blocks and slopes inside it (spikes still hurt). Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
+  else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
+  if (OBJ[o.t].zone) { el.innerHTML = h; return; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.1 - 5)<input type="number" min=".1" max="5" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
   h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
@@ -1971,7 +1998,7 @@ function edDraw() {
     else if (e.shiftKey) ed.camX += e.deltaY / ed.z; else { ed.camY -= e.deltaY / ed.z; ed.camX += e.deltaX / ed.z; }
   }, { passive: false });
 })();
-const no45 = o => OBJ[o.t].solid || OBJ[o.t].trig || OBJ[o.t].coin;   // solid blocks stay on the 90-degree grid
+const no45 = o => OBJ[o.t].solid || OBJ[o.t].trig || OBJ[o.t].coin || OBJ[o.t].zone;   // solid blocks stay on the 90-degree grid
 function edRot45() {
   if (ed.sels.length) { const ok = ed.sels.filter(o => !no45(o)); if (!ok.length) return toast('Blocks and triggers can only turn in 90 degree steps', 'err'); snap(); ok.forEach(o => { const e = (((o.r || 0) * 2 + (o.r45 ? 1 : 0)) + 1) % 8; o.r = e >> 1; o.r45 = e & 1; if (!o.r45) delete o.r45; }); changed(); renderProps(); }
   else { const e = (ed.rot * 2 + ed.rot45 + 1) % 8; ed.rot = e >> 1; ed.rot45 = e & 1; }

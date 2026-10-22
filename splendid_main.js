@@ -57,29 +57,29 @@ const ICONS={
  wither:[star(24,25,21,9),'M19 20l10 11M29 20L19 31']};
 const MM=10,MG=10;   /* max mana, max golden hearts */
 const FAM=[
-['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8]}],
+['Strike','ATTACK','strike',{cost:[1,3,5,7],dmg:[2,4,6,8],mb:[0,1,2,3]}],
 ['Pierce','ATTACK','pierce',{cost:[1,3,6,9],dmg:[2,3,4,6],pdot:[1,1,2,3]}],
 ['Crush','ATTACK','crush',{cost:[2,5,8,10],dmg:[4,6,8,10]}],
-['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,5,6],heal:[1,2,2,3]}],
-['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[2,3,5,7]}],
-['Renewal','HEAL','renewal',{cost:[2,3,5,7],heal:[2,3,3,4],rn:[[1,1],[1,1],[2,1],[2,1]]}],
-['Resolve','HEAL','resolve',{cost:[2,4,7,9],th:[12,9,6,3],big:[4,5,7,9],small:[2,3,4,5]}],
-['Crimson','HEAL','crimson',{cost:[1,3,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
+['Leech','ATTACK','leech',{cost:[2,4,7,10],dmg:[2,3,6,6],heal:[1,2,2,3]}],
+['Mend','HEAL','mend',{cost:[1,2,4,6],heal:[1,2,4,6]}],
+['Renewal','HEAL','renewal',{cost:[3,4,6,8],heal:[2,3,3,4],rn:[[1,1],[1,1],[2,1],[2,1]]}],
+['Resolve','HEAL','resolve',{cost:[3,5,8,10],th:[12,9,6,3],big:[4,5,7,9],small:[2,3,4,5]}],
+['Crimson','HEAL','crimson',{cost:[2,4,7,10],heal:[1,2,4,5],red:[1,2,3,5]}],
 ['Focus','MANA HEAL','focus',{cost:0,mana:[1,2,3,4]}],
 ['Reserve','MANA HEAL','reserve',{cost:0,mana:[2,3,4,5],dl:[1,2,3,4]}],
 ['Exchange','MANA HEAL','exchange',{cost:0,hpl:[1,2,3,4],mana:[2,3,4,5]}],
 ['Offering','MANA HEAL','offering',{cost:0,mana:[1,2,3,4],disc:[1,2,2,9]}],
-['Cloud','SPELL','cloud',{cost:[3,5,7,10],cd:[1,2,9,9],steal:[0,0,0,1]}],
-['Shield','SPELL','shield',{cost:[1,2,4,7],shield:1,back:[0,1,2,4]}],
-['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[2,4,6,8]}],
-['Mana Break','SPELL','mbreak',{cost:[1,2,3,5],mb:[2,3,5,99]}]];
+['Cloud','SPELL','cloud',{cost:[2,4,6,9],cd:[1,2,9,9],steal:[0,0,0,1]}],
+['Shield','SPELL','shield',{cost:[2,3,4,7],shield:1,back:[0,1,2,4]}],
+['Vampirism','SPELL','vamp',{cost:[3,5,8,10],vamp:[3,5,7,9]}],
+['Mana Break','SPELL','mbreak',{cost:[0,1,2,4],mb:[2,3,5,99]}]];
 /* Shield, Crimson's reduction and Vampirism only work against the attack in the SAME round they are played. Nothing carries over. (CARRY=true brings the old 'wait for the next attack' behaviour back.) */
 const CARRY=false;
 const NXT=CARRY?'the next':"this turn's";
 const CARDS=[];
 FAM.forEach(([name,type,ic,p])=>{for(let r=0;r<4;r++){const c={id:CARDS.length+1,name,type,ic,r,nd:RAR[r].node};for(const k in p)c[k]=Array.isArray(p[k])?p[k][r]:p[k];CARDS.push(c)}});
 /* bonus abilities: global passives (never in your hand), each costs double nodes. ids 65-68 */
-[['Mana Claim','mclaim'],['Lifeblood','life'],['Gold Heart','gheart'],['Wither','wither']].forEach(([name,k],r)=>CARDS.push({id:65+r,name,type:'BONUS',ic:k,r,cost:0,bonus:k,nd:RAR[r].node*2}));
+/* bonus abilities were removed from the game */
 const BN={mclaim:65,life:66,gheart:67,wither:68};
 const bonusOf=ids=>({mclaim:ids.includes(65),life:ids.includes(66),gheart:ids.includes(67),wither:ids.includes(68)});
 const nodes=d=>d.reduce((a,id)=>a+CARDS[id-1].nd,0);
@@ -134,7 +134,8 @@ $('#bOut').onclick=()=>{statsOff();signOut(auth)};
 onAuthStateChanged(auth,u=>{if(signing)return;if(u)boot(u);else{user=null;U=null;show('s-auth')}});
 async function loadU(){const r=doc(db,'splendid_users',user.uid);let s=await getDoc(r);
  if(!s.exists()){await setDoc(r,{name:user.displayName||'Player',wins:0,losses:0,ties:0,streak:0,best:0,matches:0,rate:0,elo:100,time:0,deck:[]});s=await getDoc(r)}
- U=s.data();U.deck=U.deck||[];
+ U=s.data();U.deck=(U.deck||[]).filter(id=>id>=1&&id<=CARDS.length);
+ if((s.data().deck||[]).length!==U.deck.length)updateDoc(r,{deck:U.deck}).catch(()=>{});   /* old decks lose their bonus abilities */
  if(U.elo===undefined||U.elo===null){U.elo=estElo(U);updateDoc(r,{elo:U.elo}).catch(()=>{})}   /* one-time retroactive rating from the existing record */
  if(U.rate===undefined&&(U.matches||0)>0){U.rate=Math.round((U.wins||0)/U.matches*100);updateDoc(r,{rate:U.rate}).catch(()=>{})}}
 async function boot(u){user=u;await loadU();$('#meName').textContent=U.name;show('s-menu');goTab('play');renderDeck();updateLock()}
@@ -164,8 +165,6 @@ function renderDeck(){const g=$('#dgrid'),st=g.scrollTop;g.innerHTML='';
   const row=el('div','fam');row.append(el('div','fl',f[0].toUpperCase()));
   for(let r=0;r<4;r++)row.append(cell(CARDS[fi*4+r]));
   g.append(row)});
- {const h=el('div','sech','<i></i>BONUS ABILITIES<i></i>');h.style.setProperty('--sc',TL.BONUS);g.append(h);
-  const row=el('div','fam');row.append(el('div','fl','STARS'));CARDS.filter(c=>c.bonus).forEach(c=>row.append(cell(c)));g.append(row)}
  g.scrollTop=st;const n=nodes(U.deck);$('#nodeTxt').textContent=`NODES ${n} / ${MAXN}  -  ${U.deck.length} CARDS`;$('#nodeBar').style.width=Math.min(100,n/MAXN*100)+'%';
  const p=$('#dpanel');p.innerHTML='';
  if(!dSel){p.innerHTML='<p style="margin:auto;opacity:.6">Select a card to inspect it.<br>Use the circle on a card to add it to your deck.</p>';return}
