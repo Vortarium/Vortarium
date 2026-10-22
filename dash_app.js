@@ -120,12 +120,16 @@ const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thi
 BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
 const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
 ['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
-const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.base) return defColor(d.base); if (d.nx) return d.dc; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
 const PH = 3;   // portals are 3 cells tall
 const topRows = objs => objs.reduce((m, o) => OBJ[o.t].trig ? m : Math.max(m, o.y + (o.t.startsWith('port') ? PH : 1)), 0);
 // the level ends at the placed End Trigger; without one it ends 3 blocks after the right edge of the farthest object
+[['Black Square', 'sq'], ['Black Triangle', 'tri'], ['Black Spike Shape', 'tri2']].forEach(([n, k]) => OBJ['fx_' + k] = { name: n, cat: 'decor', deco: true, nx: k, dc: '#000000' });
+[['Small Glow Ball', .45], ['Medium Glow Ball', .9], ['Large Glow Ball', 1.6]].forEach(([n, r], i) => OBJ['fx_gb' + i] = { name: n, cat: 'decor', deco: true, nx: 'gb', gr: r, glow: true, dc: '#4fc3ff' });
+OBJ.fx_gl = { name: 'Glow Line', cat: 'decor', deco: true, nx: 'gl', glow: true, dc: '#ff5cf2' };
+Object.keys(OBJ).filter(k => OBJ[k].solid).forEach(k => OBJ['fd_' + k] = { name: 'Faded ' + OBJ[k].name, cat: 'decor', deco: true, base: k });   // see-through copy of every block, no hitbox
 const endCell = objs => { const e = objs.find(o => o.t === 'trig_end'); if (e) return e.x; let m = -1; for (const o of objs) if (o.x > m) m = o.x; return Math.max(0, m) + 1 + 3; };
 const hex2rgb = h => { h = h.replace('#', ''); if (h.length === 3) h = [...h].map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
 const rgb2hex = c => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
@@ -457,13 +461,33 @@ function diffURL(id, size = 64) {
 }
 
 // ---------- object drawing (x,y = top-left of the cell on screen, cs = cell px) ----------
+function drawNx(c, d, cs, col, time) {   // origin = cell centre
+  const k = d.nx, h = cs / 2;
+  if (k === 'sq') { c.fillStyle = col; c.fillRect(-h - .4, -h - .4, cs + .8, cs + .8); }
+  else if (k === 'tri') { c.fillStyle = col; c.beginPath(); c.moveTo(-h - .4, h + .4); c.lineTo(h + .4, h + .4); c.lineTo(h + .4, -h - .4); c.closePath(); c.fill(); }
+  else if (k === 'tri2') { c.fillStyle = col; c.beginPath(); c.moveTo(-h - .4, h + .4); c.lineTo(h + .4, h + .4); c.lineTo(0, -h); c.closePath(); c.fill(); }
+  else {
+    const [r, g, b] = hex2rgb(col), A = c.globalAlpha, pul = .92 + .08 * Math.sin(time * 3); c.globalCompositeOperation = 'lighter';
+    if (k === 'gb') {
+      const R = d.gr * cs * pul, gr = c.createRadialGradient(0, 0, 0, 0, 0, R);
+      gr.addColorStop(0, `rgba(${Math.min(255, r + 90)},${Math.min(255, g + 90)},${Math.min(255, b + 90)},${.95 * A})`); gr.addColorStop(.3, `rgba(${r},${g},${b},${.55 * A})`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      c.fillStyle = gr; c.beginPath(); c.arc(0, 0, R, 0, 7); c.fill();
+    } else {   // line
+      c.lineCap = 'round'; const seg = (w, a, col2) => { c.globalAlpha = A * a; c.strokeStyle = col2; c.lineWidth = w; c.beginPath(); c.moveTo(-h, 0); c.lineTo(h, 0); c.stroke(); };
+      const rg = `rgb(${r},${g},${b})`; seg(cs * .55, .10, rg); seg(cs * .34, .2, rg); seg(cs * .18, .45, rg); seg(Math.max(1, cs * .07), .95, `rgb(${Math.min(255, r + 130)},${Math.min(255, g + 130)},${Math.min(255, b + 130)})`);
+    }
+    c.globalAlpha = A; c.globalCompositeOperation = 'source-over';
+  }
+}
 function drawObj(c, o, x, y, cs, col, ed, time = 0) {
+  if (OBJ[o.t].base) { c.save(); c.globalAlpha *= .4; drawObj(c, { ...o, t: OBJ[o.t].base }, x, y, cs, col, ed, time); c.restore(); return; }   // faded block: the real block drawn see-through
   const t = o.t, r = (o.r || 0) + (o.r45 ? .5 : 0), lw = Math.max(1, cs * .07);
   c.save(); c.lineJoin = 'round';
   if (o.sc && o.sc !== 1) { const sy = t.startsWith('port') ? y - cs / 2 : y + cs / 2; c.translate(x + cs / 2, sy); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -sy); }
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
   const A0 = c.globalAlpha;   // base alpha (fade-in x alpha trigger); effects below multiply it instead of resetting to 1
   if (OBJ[t].hz) hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
+  else if (OBJ[t].deco && OBJ[t].nx) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); drawNx(c, OBJ[t], cs, col, time); }
   else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
   else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
   else if (t === 'block') blockDraw(c, 0, x, y, cs, col, lw);
@@ -730,7 +754,7 @@ class Game {
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
     this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: wave can't be hurt by blocks / slopes inside them. S blocks: end a dash.
-    this.DEC = objs.filter(o => OBJ[o.t].deco); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
+    this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
@@ -840,13 +864,13 @@ class Game {
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
-  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
+  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 11.25; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { const m = this.mode; return m === 'wave' ? 12.5 : m === 'ship' ? 4 : 3; }   // wave box is 5x5 now (was ~10.5), ship 22x22, everything else 24x24
+  priIn() { const m = this.mode; return m === 'wave' ? 13.75 : m === 'ship' ? 4 : 3; }   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
   secIn() { return this.priIn(); }
   // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
-  sbx() { const m = this.mode; return m === 'wave' ? [2, 4.2, 4.2, 4.2, 4.2] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; }   // one hitbox decides walls, blocks and spikes alike
+  sbx() { const m = this.mode; return m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; }   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -1027,13 +1051,14 @@ class Game {
     const DEC = this.DEC; for (let i = lb(DEC, lx); i < DEC.length && DEC[i].ex < rx; i++) { const o = DEC[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const x = X(o.ex); if (x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + U), cs, fa, fast); }
     for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const y = Y(o.ey + U); if (y > H + cs * 4 || y < -cs * 9) continue; this.dr(c, o, X(o.ex), y, cs, fa, fast); }
     for (const o of this.D) { if (o.off) continue; const gg = this.gOff[o.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0, x = X(o.ex + gx), fa = (re - (o.ex + gx)) / FADE; if (fa > 0 && x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + gyy + U), cs, fa, false); }
+    { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa; drawObj(c, o, x, Y(o.ey + U), cs, o.col, false, this.time); c.globalAlpha = 1; } }
     for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
-    if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 6 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
-    if (!p.dead) { c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 24 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 3 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
+    if (!p.dead) { c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 12 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
     c.restore();
   }
 }
@@ -1940,7 +1965,7 @@ function renderProps() {
   else if (o.t === 'zone_d') h += '<p class="muted">Place on top of blocks or slopes: the wave takes no damage from the blocks and slopes inside it (spikes still hurt). Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
-  else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
+  else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || defColor(o.t)}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
   if (OBJ[o.t].zone) { el.innerHTML = h; return; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.1 - 5)<input type="number" min=".1" max="5" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
@@ -1960,7 +1985,7 @@ function edDraw() {
   const ky = Y((topRows(lv.objs) + 10) * U);
   if (ky > 0) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.setLineDash([10, 6]); c.beginPath(); c.moveTo(0, ky); c.lineTo(W, ky); c.stroke(); c.setLineDash([]); c.fillStyle = '#ff4040'; c.font = 'bold 12px sans-serif'; c.textAlign = 'left'; c.fillText('KILL LINE (10 above tallest object)', 8, ky - 4); }
   c.globalAlpha = .5; c.save(); c.translate(X(15), Y(15)); drawIcon(c, P?.skin || 0, PRIMARY[P?.c1 || 0], SECONDARY[P?.c2 || 0], cs); c.restore(); c.globalAlpha = 1;
-  for (const o of lv.objs) { const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 4 || sx > W + cs * 3 || sy < -cs * 4 || sy > H + cs * 3) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }
+  for (const pass of [0, 1, 2]) for (const o of lv.objs) { const od = OBJ[o.t], ps = od.glow ? 2 : od.deco ? 0 : 1; if (ps !== pass) continue; const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 4 || sx > W + cs * 3 || sy < -cs * 4 || sy > H + cs * 3) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }   // same layering as the game: decor, then objects, then glow on top
   c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) { const b = objBox(o); c.strokeRect(X(b.x * U) - 2, Y((b.y + b.h) * U) - 2, b.w * cs + 4, b.h * cs + 4); }
   if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
   if (ed.spawn && ed.posMode) { const sx = X(ed.spawn.x * U), sy = Y(ed.spawn.y * U + U); c.fillStyle = 'rgba(53,255,106,.35)'; c.fillRect(sx, sy, cs, cs); c.strokeStyle = '#35ff6a'; c.lineWidth = 3; c.strokeRect(sx, sy, cs, cs); c.fillStyle = '#35ff6a'; c.beginPath(); c.moveTo(sx + cs / 2, sy - cs * .45); c.lineTo(sx + cs * .75, sy - cs * .15); c.lineTo(sx + cs / 2, sy + cs * .15); c.lineTo(sx + cs * .25, sy - cs * .15); c.closePath(); c.fill(); }
