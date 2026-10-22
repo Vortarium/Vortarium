@@ -182,14 +182,14 @@ let statsF='elo',statsUnsub=null,statsDocs=[],statsReady=false;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 /* ---- ELO: everyone starts at 100. Each game moves you only a few points. Beating someone rated above you pays more, beating someone below pays less,
    and losing to someone below you costs more. Bots sit at a fixed rating, so the higher you climb the less a bot win is worth. A short win streak adds a small bonus. ---- */
-const ELO0=100,ELOK=8,ELOD=200,BOT_ELO=100,r1=v=>Math.round(v*10)/10;
+const ELO0=100,ELOK=8,ELOD=200,BOT_ELO=100,r1=v=>Math.round(v);
 function eloDelta(me,opp,res,streak){if(res==='tie')return 0;const E=1/(1+Math.pow(10,(opp-me)/ELOD));
  return res==='win'?r1(ELOK*(1-E)*(1+Math.min(.5,.1*(streak||0)))):-r1(ELOK*E)}
 /* retroactive rating for accounts that have no ELO yet: replay their record (wins and losses spread evenly through their games) against bot-level opposition */
 function estElo(x){const W=x.wins||0,L=x.losses||0,n=Math.min(W+L,5000);let e=ELO0,st=0;
  for(let i=0;i<n;i++){const w=Math.floor((i+1)*W/(W+L))>Math.floor(i*W/(W+L));const d=eloDelta(e,BOT_ELO,w?'win':'loss',st);e=Math.max(0,r1(e+d));st=w?st+1:0}
  return e}
-const eloOf=x=>x.elo!==undefined&&x.elo!==null?x.elo:estElo(x);
+const eloOf=x=>x.elo!==undefined&&x.elo!==null?Math.round(x.elo):estElo(x);
 const rateOf=x=>{const g=(x.wins||0)+(x.losses||0);return g?Math.round((x.wins||0)/g*100):0};   /* ties do not count for or against the win rate */
 const statsOff=()=>{if(statsUnsub){statsUnsub();statsUnsub=null}};
 function drawStats(){const f=statsF,bd=$('#board');$$('.sub button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));

@@ -113,9 +113,9 @@ const lb = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (l
 const BGS = [['stripes','Stripes'],['dots','Dots'],['tri','Triangles'],['circles','Circles'],['grid','Grid'],['waves','Waves'],['none','Plain']];
 // ---- new looks (same hitboxes as the originals: only the artwork differs) ----
 const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thick Tiles', 'Ghost Tiles', 'Tile Ring', 'Diagonal', 'Diagonal Flip', 'Pyramid', 'Pyramid Flip', 'Ghost Pyramid', 'Inset Frame', 'Deep Inset', 'Ghost Frame', 'Solid', 'Hollow', 'Bricks', 'Ghost Bricks', 'Big Bricks', 'Studs', 'Split', 'Slats', 'Panels', 'Corner Cut'];
-BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks 2', solid: true, bs: 10 + i, bv: 0 });
+BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
 const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
-['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'spikes 2', hz: { ...OBJ[bid].hz, lk } }));
+['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
 const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
@@ -454,7 +454,7 @@ function diffURL(id, size = 64) {
 
 // ---------- object drawing (x,y = top-left of the cell on screen, cs = cell px) ----------
 function drawObj(c, o, x, y, cs, col, ed, time = 0) {
-  const t = o.t, r = o.r || 0, lw = Math.max(1, cs * .07);
+  const t = o.t, r = (o.r || 0) + (o.r45 ? .5 : 0), lw = Math.max(1, cs * .07);
   c.save(); c.lineJoin = 'round';
   if (o.sc && o.sc !== 1) { const sy = t.startsWith('port') ? y - cs / 2 : y + cs / 2; c.translate(x + cs / 2, sy); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -sy); }
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
@@ -466,7 +466,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   else if (t === 'half' || t === 'slope') {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col;
     if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(-cs / 2, 0, cs, cs * .12); c.beginPath(); c.rect(-cs / 2 + lw * .3, lw * .3, cs - lw * .6, cs / 2 - lw * .6); glow(c, lw); }
-    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); c.save(); c.clip(); c.fillStyle = 'rgba(0,0,0,.22)'; c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, 0); c.closePath(); c.fill(); c.restore(); glow(c, lw); }
+    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); glow(c, lw); }   // plain 45-45-90 right triangle filling the cell's lower-right half
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
     c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
@@ -503,6 +503,21 @@ function rotRect(r, x0, y0, x1, y1, cx = 15, cy = 15) {
   let pts = [[x0, y0], [x1, y1]];
   for (let i = 0; i < r; i++) pts = pts.map(([x, y]) => { const dx = x - cx, dy = y - cy; return [cx + dy, cy - dx]; });
   return [Math.min(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][0], pts[1][0]), Math.max(pts[0][1], pts[1][1])];
+}
+function rotRectD(deg, x0, y0, x1, y1, cx = 15, cy = 15) {   // bounding box of a rect turned clockwise by any angle
+  const th = deg * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th), xs = [], ys = [];
+  for (const [px, py] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) { const dx = px - cx, dy = py - cy; xs.push(cx + dx * cs + dy * sn); ys.push(cy - dx * sn + dy * cs); }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+// convex quad (cell coords, placed at ox,oy) against an axis-aligned box: separating axis test
+function polyBox(poly, ox, oy, bx0, by0, bx1, by1) {
+  const P = poly.map(([a, b]) => [a + ox, b + oy]);
+  if (Math.max(...P.map(q => q[0])) <= bx0 || Math.min(...P.map(q => q[0])) >= bx1 || Math.max(...P.map(q => q[1])) <= by0 || Math.min(...P.map(q => q[1])) >= by1) return false;
+  const B = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]];
+  for (let i = 0; i < 2; i++) { const a = P[i], b = P[i + 1], nx = -(b[1] - a[1]), ny = b[0] - a[0];
+    let p0 = 1e9, p1 = -1e9, q0 = 1e9, q1 = -1e9; for (const q of P) { const d = q[0] * nx + q[1] * ny; p0 = Math.min(p0, d); p1 = Math.max(p1, d); } for (const q of B) { const d = q[0] * nx + q[1] * ny; q0 = Math.min(q0, d); q1 = Math.max(q1, d); }
+    if (p1 <= q0 || q1 <= p0) return false; }
+  return true;
 }
 function drawBG(c, W, H, s, camX, st = 'stripes', lq = false) {
   c.fillStyle = 'rgba(255,255,255,.06)'; c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2 * s;
@@ -603,7 +618,7 @@ let OBJ_S = 30;
 function hzDraw(c, h, o, x, y, s, col, lw, time) {
   c.translate(x + s / 2, y + s / 2); c.lineWidth = lw; const A0 = c.globalAlpha, lk = h.lk || 'tri'; OBJ_S = s;
   if (h.k === 't') {
-    c.rotate((o.r || 0) * Math.PI / 2); const n = h.n, w = s * h.a / n, hh = s * h.b;
+    c.rotate(((o.r || 0) + (o.r45 ? .5 : 0)) * Math.PI / 2); const n = h.n, w = s * h.a / n, hh = s * h.b;
     for (let i = 0; i < n; i++) {
       const x0 = -s * h.a / 2 + i * w, y0 = s / 2; spikePath(c, lk, x0, y0, w, hh);
       if (lk === 'grad') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, col); g.addColorStop(1, mixHex(col, .6, 255) + '10'); c.fillStyle = g; c.fill(); }
@@ -665,12 +680,12 @@ const SPR = new Map();
 function drawCached(c, o, x, y, cs, col, time, fast) {
   const d = OBJ[o.t];
   if (!fast || !(d.solid || (d.hz && d.hz.k === 't')) || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
-  const key = o.t + '|' + col + '|' + (o.r || 0) + '|' + cs.toFixed(1);
+  const key = o.t + '|' + col + '|' + (o.r || 0) + '|' + (o.r45 || 0) + '|' + cs.toFixed(1);
   let s = SPR.get(key);
   if (!s) {
     if (SPR.size > 600) SPR.clear();
     const n = Math.ceil(cs) + 6; s = document.createElement('canvas'); s.width = s.height = n;
-    drawObj(s.getContext('2d'), { t: o.t, r: o.r || 0 }, 3, 3, cs, col, false, 0); SPR.set(key, s);
+    drawObj(s.getContext('2d'), { t: o.t, r: o.r || 0, r45: o.r45 || 0 }, 3, 3, cs, col, false, 0); SPR.set(key, s);
   }
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
   c.drawImage(s, x - 3, y - 3);
@@ -720,9 +735,10 @@ class Game {
   }
   prep(o) {
     o.pp = true; const d = OBJ[o.t], h = d.hz, sc = o.sc || 1;
-    if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, 13 * h.b * .75).map(v => 15 + (v - 15) * sc); } }
-    if (o.t.startsWith('port')) { const b = rotRect(o.r || 0, 5, 0, 25, PH * U, 15, PH * U / 2); o.qb = [15 + (b[0] - 15) * sc, PH * U / 2 + (b[1] - PH * U / 2) * sc, 15 + (b[2] - 15) * sc, PH * U / 2 + (b[3] - PH * U / 2) * sc]; }
-    if (PADS.includes(o.t)) o.pb = rotRect(o.r || 0, 3, 0, 27, 10).map(v => 15 + (v - 15) * sc);
+    if (h) { if (h.k === 's') o.hr = h.a * U * .55 * sc; else { const hw = (h.n > 1 ? 10 : 5 * h.a) * .65, hh = 13 * h.b * .75; o.hb = rotRect(o.r || 0, 15 - hw, 0, 15 + hw, hh).map(v => 15 + (v - 15) * sc);
+      if (o.r45) { const th = ((o.r || 0) * 90 + 45) * Math.PI / 180, cs_ = Math.cos(th), sn = Math.sin(th); o.hp = [[15 - hw, 0], [15 + hw, 0], [15 + hw, hh], [15 - hw, hh]].map(([px, py]) => { const dx = px - 15, dy = py - 15; return [15 + (dx * cs_ + dy * sn) * sc, 15 + (-dx * sn + dy * cs_) * sc]; }); } } }
+    if (o.t.startsWith('port')) { const b = o.r45 ? rotRectD(((o.r || 0) * 90 + 45), 5, 0, 25, PH * U, 15, PH * U / 2) : rotRect(o.r || 0, 5, 0, 25, PH * U, 15, PH * U / 2); o.qb = [15 + (b[0] - 15) * sc, PH * U / 2 + (b[1] - PH * U / 2) * sc, 15 + (b[2] - 15) * sc, PH * U / 2 + (b[3] - PH * U / 2) * sc]; }
+    if (PADS.includes(o.t)) o.pb = (o.r45 ? rotRectD(((o.r || 0) * 90 + 45), 3, 0, 27, 10) : rotRect(o.r || 0, 3, 0, 27, 10)).map(v => 15 + (v - 15) * sc);
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
   }
   timeAtX(x) {
@@ -746,7 +762,7 @@ class Game {
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
     this.speed = this.level.startSpeed || 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
-    this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 70); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
+    this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 130); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
     while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
     this.runActs();
     if (!first) this.attempts++;
@@ -800,7 +816,7 @@ class Game {
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
     this.gr = k.gr; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
-    this.si = lb(this.S, this.p.x - 70); this.tI = lb(this.TT, this.p.x - 40);
+    this.si = lb(this.S, this.p.x - 130); this.tI = lb(this.TT, this.p.x - 40);
     this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
   }
   addCP() { if (!this.practice || this.p.dead || this.won) return; this.cps.push({ x: this.p.x, y: this.p.y, s: this.snap() }); if (this.cps.length > 60) this.cps.shift(); this.cpT = 0; }
@@ -816,9 +832,9 @@ class Game {
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
   hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 7.5; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { return this.mode === 'wave' ? (30 - 15 * .7) / 2 : 0; }
+  priIn() { const m = this.mode; return m === 'wave' ? 11 : m === 'ship' ? 4 : 3; }   // wave box is 8x8 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
-  secIn() { const m = this.mode; return m === 'wave' ? this.priIn() : m === 'cube' ? (30 - 22 * .7) / 2 : m === 'ship' ? (30 - 22 * .5) / 2 : 4; }
+  secIn() { return this.priIn(); }   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -847,10 +863,10 @@ class Game {
     if (p.y <= 0) { p.y = 0; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
-    while (this.si < S.length && S[this.si].ex < p.x - 70) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
-    for (let i = this.si; i < S.length && S[i].ex < p.x + 70; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
+    while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
+    for (let i = this.si; i < S.length && S[i].ex < p.x + 130; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
     for (const o of this.D) {
-      if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 100) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
+      if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 160) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
     }
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
@@ -885,9 +901,10 @@ class Game {
       }
     } else if (OBJ[t].hz) {
       if (o.hr) { const i = this.priIn(), dx = Math.max(p.x + i, Math.min(x + 15, p.x + 30 - i)) - (x + 15), dy = Math.max(p.y + i, Math.min(y + 15, p.y + 30 - i)) - (y + 15); if (dx * dx + dy * dy < o.hr * o.hr) this.die(); }
+      else if (o.hp) { const i = this.priIn(); if (polyBox(o.hp, x, y, p.x + i, p.y + i, p.x + 30 - i, p.y + 30 - i)) this.die(); }
       else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
-      const sc = o.sc || 1, dx = p.x + 15 - (x + 15), dy = p.y + 15 - (y + 15), on = dx * dx + dy * dy < (26 * sc) ** 2;
+      const hf = 15 * (o.sc || 1), on = this.hit(p, x + 15 - hf, y + 15 - hf, 2 * hf, 2 * hf);   // the orb's hitbox is exactly its 1x1 grid cell
       if (on && !o.used && (edge || (this.held && !this.holdUsed))) {
         o.used = true; p.grounded = false; p.rb = 0; this.edgeT = 0; this.holdUsed = true; this.jumps++;
         if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
@@ -916,7 +933,7 @@ class Game {
       if (up) { if (y >= p.y + 30 - 2) { const t = y - 30; if (best === null || t < best) best = t; } }
       else if (y + h <= p.y + 2) { const t = y + h; if (best === null || t > best) best = t; }
     };
-    const S = this.S; for (let i = lb(S, p.x - 70); i < S.length && S[i].ex < p.x + 70; i++) test(S[i], 0, 0);
+    const S = this.S; for (let i = lb(S, p.x - 130); i < S.length && S[i].ex < p.x + 130; i++) test(S[i], 0, 0);
     for (const o of this.D) { const g = this.gOff[o.g]; test(o, g ? g.x * U : 0, g ? g.y * U : 0); }
     if (!up && best === null) best = 0;
     if (best === null) return;
@@ -927,7 +944,7 @@ class Game {
   slope(o, x, y) {
     const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
     if (m === 'wave') {   // wave uses a half-size (15x15, centered) hitbox
-      const x0 = p.x + 9.75, x1 = p.x + 20.25, y0 = p.y + 9.75, y1 = p.y + 20.25;
+      const wi = this.priIn(), x0 = p.x + wi, x1 = p.x + 30 - wi, y0 = p.y + wi, y1 = p.y + 30 - wi;
       if (!(x1 > x && x0 < x + 30) || y0 >= y + 30 || y1 <= y) return;
       const c = v => Math.max(0, Math.min(30, v)), sy = xl => y + (k ? 30 - xl : xl);
       if (floor ? sy(c(k ? x0 - x : x1 - x)) > y0 : y1 > sy(c(k ? x1 - x : x0 - x))) this.die();
@@ -984,12 +1001,12 @@ class Game {
     if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, this.level.grs, lq);
 
     if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }
-    const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 60;
+    const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 200;
     while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
-    const rx = this.camX + W / s + 60;
+    const rx = this.camX + W / s + 200;
     const re = this.camX + W / s, fast = !this.acts.some(a => a.k === 'zoom'), FADE = 150;   // objects fade in over 150 units as they enter on the right
-    const DEC = this.DEC; for (let i = lb(DEC, lx); i < DEC.length && DEC[i].ex < rx; i++) { const o = DEC[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const x = X(o.ex); if (x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + U), cs, fa, fast); }
-    for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const y = Y(o.ey + U); if (y > H + cs || y < -cs * 3) continue; this.dr(c, o, X(o.ex), y, cs, fa, fast); }
+    const DEC = this.DEC; for (let i = lb(DEC, lx); i < DEC.length && DEC[i].ex < rx; i++) { const o = DEC[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const x = X(o.ex); if (x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + U), cs, fa, fast); }
+    for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const y = Y(o.ey + U); if (y > H + cs * 4 || y < -cs * 9) continue; this.dr(c, o, X(o.ex), y, cs, fa, fast); }
     for (const o of this.D) { if (o.off) continue; const gg = this.gOff[o.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0, x = X(o.ex + gx), fa = (re - (o.ex + gx)) / FADE; if (fa > 0 && x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + gyy + U), cs, fa, false); }
     for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
@@ -1396,7 +1413,7 @@ views.level = async ({ id }) => {
   page(esc(lv.title), `<div class="lp"><div class="lp-main">
     <h1>${esc(lv.title)}${beatMark(id)}</h1><div>by <b style="color:#8fe9ff;cursor:pointer" data-act="profile" data-uid="${lv.authorId}">${nameHTML(lv.authorName)}</b></div>
     <div class="row" style="justify-content:center"><img src="${d ? diffURL(d.id, 56) : diffURL('easy', 56)}" width="56" style="${d ? '' : 'filter:grayscale(1) brightness(.6)'}"><b>${d ? d.name + ' · ⭐ ' + d.stars : 'Unrated'}</b> ${lenTag(lv)}</div>
-    <p class="muted" style="max-width:480px">${esc(lv.desc || 'No description')}</p>
+    ${descBox(lv.desc)}
     <button class="playbtn" data-act="playlvl" data-id="${id}">▶</button>
     <div><button class="btn sm orange" data-act="practicelvl" data-id="${id}">⚑ Practice mode</button></div>
     <div class="pb"><i style="width:${best}%"></i><b>Best: ${best}%</b></div>
@@ -1405,6 +1422,9 @@ views.level = async ({ id }) => {
     <div class="row" style="justify-content:center">${isMod() ? `<button class="btn orange sm" data-act="ratemenu" data-id="${id}">⭐ Rate</button>` : ''}${isMod() && lv.status === 'rated' ? `<button class="btn sm" data-act="unrate" data-id="${id}">Unrate</button>` : ''}${isMod() || mine ? `<button class="btn red sm" data-act="takedown" data-id="${id}">Take down</button>` : ''}</div>
   </div><div class="side"><h3 style="margin:0 0 8px">Comments</h3><div class="comments">${cmHtml}</div>${me ? `<input id="cmt" maxlength="200" placeholder="Write a comment…"><button class="btn green sm" data-act="comment" data-id="${id}">Post</button>` : '<p class="muted">Log in to comment.</p>'}</div></div>`);
 };
+// level descriptions: kept in their own scrollable box; line breaks, **bold**, *italic* and "- " bullets are formatted
+const fmtDesc = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[\s(])\*(?!\s)(.+?)\*(?=[\s.,!?)]|$)/g, '$1<i>$2</i>').replace(/^[-•] /gm, '• ');
+const descBox = t => `<div class="descbox"><div class="dh">Description</div><div class="db ${t ? '' : 'none'}">${t ? fmtDesc(t) : 'No description'}</div></div>`;
 const voteLock = {}, voteLast = {};
 async function vote(id, v) {
   if (!me) return toast('Log in to like or dislike', 'err');
@@ -1774,7 +1794,7 @@ views.draft = ({ i }) => {
   page(esc(l.name), `<div class="lp"><div class="lp-main">
     <h1>${esc(l.name)}</h1><div>by <b style="color:#8fe9ff">${nameHTML(P.username)}</b> · <span class="muted">${l.objs.length} objects</span></div>
     <div class="row" style="justify-content:center"><img src="${diffURL('easy', 56)}" width="56" style="filter:grayscale(1) brightness(.6)"><b>${pub ? 'Published' : 'Unrated · ' + (ok ? '✔ Verified' : 'Not verified')}</b></div>
-    <p class="muted" style="max-width:480px">${esc(l.desc || 'No description')}</p>
+    ${descBox(l.desc)}
     <div class="row" style="justify-content:center"><button class="playbtn" data-act="draftplay" data-i="${i}" title="Play">▶</button>${pub ? '' : `<button class="playbtn wrench" data-act="slotedit" data-i="${i}" title="Edit">🔧</button>`}</div>
     <div class="row" style="justify-content:center"><button class="btn sm" data-act="slotrename" data-i="${i}">Rename</button><button class="btn sm" data-act="slotdesc" data-i="${i}">Description</button>${pub ? `<button class="btn blue sm" data-act="openlvl" data-id="${l.pub}">View online</button>` : `<button class="btn green sm" data-act="slotpub" data-i="${i}" ${ok ? '' : 'disabled'}>⬆ Upload</button>`}<button class="btn sm" data-act="slotcopy" data-i="${i}">Copy</button></div>
     <div class="row" style="justify-content:center"><button class="btn sm blue" data-act="importlvl" data-i="${i}">⬇ Import</button><button class="btn sm blue" data-act="exportlvl" data-i="${i}">⬆ Export</button><button class="btn red sm" data-act="slotdel" data-i="${i}" title="Delete level">🗑</button></div>
@@ -1814,7 +1834,7 @@ function importLevel(i) {
 }
 
 /* ================= editor: canvas ================= */
-const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null };
+const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, rot45: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null };
 const iconCache = {};
 function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
@@ -1830,14 +1850,14 @@ function openEditor(i) {
 function renderEdUI() {
   document.querySelectorAll('#edModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ed.mode));
   const cats = [...new Set(Object.values(OBJ).map(o => o.cat))]; cats.push('edit');
-  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
+  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edrot45" title="Rotate 45 degrees (R)">⟳ 45°</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
   $('#edItems').innerHTML = ed.tab === 'edit' ? EDPANEL() : Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
   const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
 }
 const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? PH : 1;
 // bounding box in cells (portals are 3 tall; rotated 90/270 they lie flat: 3 wide, 1 tall, centred on the same spot)
-const objBox = o => { if (!o.t.startsWith('port') || ((o.r || 0) & 1) === 0) return { x: o.x, y: o.y, w: 1, h: oh(o) }; return { x: o.x - 1, y: o.y + 1, w: 3, h: 1 }; };
+const objBox = o => { if (o.t.startsWith('port') && o.r45) return { x: o.x - 1, y: o.y, w: 3, h: 3 }; if (!o.t.startsWith('port') || ((o.r || 0) & 1) === 0) return { x: o.x, y: o.y, w: 1, h: oh(o) }; return { x: o.x - 1, y: o.y + 1, w: 3, h: 1 }; };
 function EDPANEL() {
   const arrows = (n, k) => `<div class="eg"><b>Move ${n}</b><div class="row2"><button class="btn sm" data-act="edhalf" data-dx="${-k}" data-dy="0">◀</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${k}">▲</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="${-k}">▼</button><button class="btn sm" data-act="edhalf" data-dx="${k}" data-dy="0">▶</button></div></div>`;
   return `<div class="eg"><b>Rotate 90°</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="ccw">↺ Left</button><button class="btn sm" data-act="edxf" data-k="cw">↻ Right</button></div></div><div class="eg"><b>Mirror</b><div class="row2"><button class="btn sm" data-act="edxf" data-k="mx">⇋ X axis</button><button class="btn sm" data-act="edxf" data-k="my">⇅ Y axis</button></div></div>` + arrows('½', .5) + arrows('1', 1) + arrows('5', 5) + arrows('1/10', .1) + `<div class="eg"><b>Tip</b><span class="muted" style="font-size:13px;max-width:190px">Use Edit mode to select objects (Shift = multi-select). Rotate/mirror act on the whole selection.</span></div>`;
@@ -1868,10 +1888,10 @@ function pick(wx, wy) { const os = ed.lv.objs; for (let i = os.length - 1; i >= 
 function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
   if (t === 'coin' && lv.objs.filter(o => o.t === 'coin').length >= 3 && !lv.objs.some(o => o.t === 'coin' && o.x === cx && o.y === cy)) return toast('Max 3 star coins per level', 'err');
-  if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot)) return;
+  if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot && (o.r45 || 0) === (no45({ t }) ? 0 : ed.rot45))) return;
   if (!OBJ[t].trig && !OBJ[t].deco) lv.objs = lv.objs.filter(o => OBJ[o.t].trig || OBJ[o.t].deco || !(o.x === cx && o.y === cy));
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
-  const o = { t, x: cx, y: cy, r: ed.rot, g: 0 };
+  const o = { t, x: cx, y: cy, r: ed.rot, g: 0 }; if (ed.rot45 && !no45(o)) o.r45 = 1;
   if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
   if (t === 'trig_color') { const pv = [...lv.objs].reverse().find(q => q.t === 'trig_color'); Object.assign(o, { tg: pv ? pv.tg : 0, col: '#ff5252', dur: pv ? pv.dur : 1 }); }
   if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
@@ -1886,7 +1906,7 @@ function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.fi
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
 function renderProps() {
   const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
-  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
+  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
   let h = `<h3>${OBJ[o.t].name}</h3>`;
   if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label><label>Follow player X<input type="checkbox" data-p="fx" ${o.fx ? 'checked' : ''}> moves up/down with the player</label><label>Follow player Y<input type="checkbox" data-p="fy" ${o.fy ? 'checked' : ''}> moves right with the player</label>`;
@@ -1896,8 +1916,8 @@ function renderProps() {
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || '#0d0d22'}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
-  else if (!OBJ[o.t].slope) h += `<label>Scale (0.5 - 2)<input type="number" min=".5" max="2" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
-  h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
+  else if (!OBJ[o.t].slope) h += `<label>Scale (0.1 - 5)<input type="number" min=".1" max="5" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
+  h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
 }
 function edDraw() {
   if (!ed.on) return; requestAnimationFrame(edDraw);
@@ -1917,7 +1937,7 @@ function edDraw() {
   c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) { const b = objBox(o); c.strokeRect(X(b.x * U) - 2, Y((b.y + b.h) * U) - 2, b.w * cs + 4, b.h * cs + 4); }
   if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
   if (ed.spawn && ed.posMode) { const sx = X(ed.spawn.x * U), sy = Y(ed.spawn.y * U + U); c.fillStyle = 'rgba(53,255,106,.35)'; c.fillRect(sx, sy, cs, cs); c.strokeStyle = '#35ff6a'; c.lineWidth = 3; c.strokeRect(sx, sy, cs, cs); c.fillStyle = '#35ff6a'; c.beginPath(); c.moveTo(sx + cs / 2, sy - cs * .45); c.lineTo(sx + cs * .75, sy - cs * .15); c.lineTo(sx + cs / 2, sy + cs * .15); c.lineTo(sx + cs * .25, sy - cs * .15); c.closePath(); c.fill(); }
-  if (ed.mode === 'build' && !ed.posMode) { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
+  if (ed.mode === 'build' && !ed.posMode) { const cx = Math.floor(ed.wx / U), cy = Math.floor(ed.wy / U); if (cx >= 0 && cy >= 0) { c.globalAlpha = .5; drawObj(c, { t: ed.tool, r: ed.rot, r45: no45({ t: ed.tool }) ? 0 : ed.rot45 }, X(cx * U), Y(cy * U + U), cs, defColor(ed.tool), true, now); c.globalAlpha = 1; } }
 }
 (() => {
   const cv = $('#editCanvas');
@@ -1951,6 +1971,11 @@ function edDraw() {
     else if (e.shiftKey) ed.camX += e.deltaY / ed.z; else { ed.camY -= e.deltaY / ed.z; ed.camX += e.deltaX / ed.z; }
   }, { passive: false });
 })();
+const no45 = o => OBJ[o.t].solid || OBJ[o.t].trig || OBJ[o.t].coin;   // solid blocks stay on the 90-degree grid
+function edRot45() {
+  if (ed.sels.length) { const ok = ed.sels.filter(o => !no45(o)); if (!ok.length) return toast('Blocks and triggers can only turn in 90 degree steps', 'err'); snap(); ok.forEach(o => { const e = (((o.r || 0) * 2 + (o.r45 ? 1 : 0)) + 1) % 8; o.r = e >> 1; o.r45 = e & 1; if (!o.r45) delete o.r45; }); changed(); renderProps(); }
+  else { const e = (ed.rot * 2 + ed.rot45 + 1) % 8; ed.rot = e >> 1; ed.rot45 = e & 1; }
+}
 function edRotate(d = 1) { if (ed.sels.length) edXform(d > 0 ? 'cw' : 'ccw'); else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
 function edDelSel() { if (!ed.sels.length) return; snap(); const s = new Set(ed.sels); ed.lv.objs = ed.lv.objs.filter(o => !s.has(o)); ed.sels = []; ed.sel = null; renderProps(); changed(); }
 function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); }
@@ -1958,7 +1983,7 @@ function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0,
 addEventListener('keydown', e => {
   if (!ed.on || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || $('#modal').classList.contains('open')) return;
   const k = e.key.toLowerCase(), st = 60 / ed.z;
-  if (k === 'q') edRotate(-1); else if (k === 'e') edRotate(1);
+  if (k === 'q') edRotate(-1); else if (k === 'e') edRotate(1); else if (k === 'r' && !e.ctrlKey && !e.metaKey) edRot45();
   else if ((e.ctrlKey || e.metaKey) && k === 'c') edCopy(); else if ((e.ctrlKey || e.metaKey) && k === 'v') edPaste(); else if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? edRedo() : edUndo(); } else if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); edRedo(); }
   else if (k === 'delete' || k === 'backspace') edDelSel();
   else if (e.altKey && k.startsWith('arrow')) { e.preventDefault(); actions.edhalf({ dx: k === 'arrowleft' ? -.5 : k === 'arrowright' ? .5 : 0, dy: k === 'arrowup' ? .5 : k === 'arrowdown' ? -.5 : 0 }); }
@@ -1976,7 +2001,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'songspd') { ed.lv.songSpeed = +e.target.value; saveSlots(ed.slot); return; }
   if (e.target.id === 'songoff') { ed.lv.songOff = Math.max(0, +e.target.value || 0); saveSlots(ed.slot); return; }
   const p = e.target.dataset?.p, tg = ed.sel ? [ed.sel] : ed.sels; if (!p || !tg.length) return;
-  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; o[p] = p === 'sc' ? Math.max(.5, Math.min(2, v || 1)) : v; }); changed();
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; o[p] = p === 'sc' ? Math.max(.1, Math.min(5, v || 1)) : v; }); changed();
 });
 function edPlay(here) {
   const lv = ed.lv;
@@ -2048,7 +2073,8 @@ const actions = {
   slotedit: d => openEditor(+d.i),
   beatbreak: () => { const e = $('#beatBrk'); if (e) e.style.display = e.style.display === 'none' ? 'grid' : 'none'; },
   slotrename: d => { const l = slots[+d.i], n = prompt('Level name', l.name); if (n && n.trim()) { l.name = n.trim().slice(0, 18); l.updated = Date.now(); saveSlots(+d.i); edRefresh(); } },
-  slotdesc: d => { const l = slots[+d.i], n = prompt('Description', l.desc); if (n !== null) { l.desc = n.slice(0, 200); l.updated = Date.now(); saveSlots(+d.i); edRefresh(); } },
+  slotdesc: d => { const l = slots[+d.i]; modal(`<h2>Description</h2><textarea id="slotDescTa" maxlength="200" rows="5" style="width:100%" placeholder="Describe your level (line breaks, **bold**, *italic* and - bullets work)">${esc(l.desc)}</textarea><div class="row" style="margin-top:10px"><button class="btn green" data-act="slotdescsave" data-i="${d.i}">Save</button></div>`); },
+  slotdescsave: d => { const l = slots[+d.i]; l.desc = ($('#slotDescTa').value || '').slice(0, 200); l.updated = Date.now(); saveSlots(+d.i); closeModal(); edRefresh(); },
   slotdel: async d => { const i = +d.i; if (!confirm('Delete this level slot? (Published copies stay on the servers.)')) return; slots[i] = null; while (slots.length && !slots[slots.length - 1]) slots.pop(); saveSlots(); idbDel(`draft:${me.uid}:${i}`); deleteDoc(doc(db, 'users', me.uid, 'drafts', 's' + i)).catch(() => { }); if (cur === 'draft') back(); else views.editor(); },
   slotcopy: async d => {
     const i = +d.i, f0 = slots.findIndex(x => !x), f = f0 < 0 ? slots.length : f0;
@@ -2059,11 +2085,11 @@ const actions = {
   // editor
   edback: edBack, edmode: d => { ed.mode = d.m; ed.drag = null; renderEdUI(); }, edundo: edUndo, edredo: edRedo, edplay: () => edPlay(false), edpos: () => { ed.posMode = !ed.posMode; ed.drag = null; if (ed.posMode) toast('Click any cell to set the spawn position'); renderEdUI(); },
   edtab: d => { ed.tab = d.c; renderEdUI(); }, edtool: d => { ed.tool = d.t; ed.mode = 'build'; ed.sel = null; ed.sels = []; renderProps(); renderEdUI(); },
-  edrot: () => edRotate(1), edsettings: edSettings,
+  edrot: () => edRotate(1), edrot45: edRot45, edsettings: edSettings,
   eddel: edDelSel,
   edhalf: d => { if (!ed.sels.length) return; snap(); const dx = Math.max(+d.dx, -Math.min(...ed.sels.map(o => o.x))), dy = Math.max(+d.dy, -Math.min(...ed.sels.map(o => o.y))); ed.sels.forEach(o => { o.x = r3(o.x + dx); o.y = r3(o.y + dy); }); changed(); renderProps(); },
   edxf: d => edXform(d.k),
-  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.5, Math.min(2, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
+  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.1, Math.min(5, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
   songprev: async () => {
     if (prevA) return stopPreview();
     const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err');
