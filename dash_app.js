@@ -86,6 +86,15 @@ const REVP = { port_mf: 1, port_mb: 1 };   // reverse portals: flip the whole sc
 Object.assign(PORT_COL, { port_robot: '#dfe3f2', port_spider: '#a24bff', port_mf: '#4dffb0', port_mb: '#ff5d6e' });
 const PMODE = { port_cube: 'cube', port_ship: 'ship', port_ball: 'ball', port_ufo: 'ufo', port_wave: 'wave', port_robot: 'robot', port_spider: 'spider' };
 const PLET = { port_cube: 'C', port_ship: 'S', port_ball: 'B', port_ufo: 'U', port_wave: 'W', port_robot: 'R', port_spider: 'SP' };
+// size portals: Big = the default size, Mini = every gamemode 1.5x smaller (with tougher physics, see Game.step). The wave itself is now drawn / hitboxed 1.5x bigger than before, so the mini wave is exactly the old wave size.
+const SZP = { port_big: 1, port_mini: 1 }, MINI = 1 / 1.5, WAVE_BIG = 1.5, WAVE_MINI_K = Math.tan(60 * Math.PI / 180);   // mini wave climbs / dives at 60 degrees (the big wave stays at 45)
+Object.assign(OBJ, {
+  port_big: { name: 'Big Portal', cat: 'portals' }, port_mini: { name: 'Mini Portal', cat: 'portals' },
+  slope2: { name: 'Tall Slope (1x2)', cat: 'blocks', solid: true, slope: true, tall: true },   // 1 wide, 2 tall: ~63 degrees, made for the mini wave's 60 degree path
+  slope_s: { name: 'Slide Slope', cat: 'blocks', solid: true, slope: true, slide: true },       // the wave slides along it instead of dying
+  slope2_s: { name: 'Tall Slide Slope (1x2)', cat: 'blocks', solid: true, slope: true, tall: true, slide: true }
+});
+Object.assign(PORT_COL, { port_big: '#9aa8ff', port_mini: '#e8ff3d' });
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
@@ -120,11 +129,11 @@ const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thi
 BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
 const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
 ['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
-const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.base) return defColor(d.base); if (d.nx) return d.dc; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.base) return defColor(d.base); if (d.nx) return d.dc; if (d.slide) return '#0b2434'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
 const PH = 3;   // portals are 3 cells tall
-const topRows = objs => objs.reduce((m, o) => OBJ[o.t].trig ? m : Math.max(m, o.y + (o.t.startsWith('port') ? PH : 1)), 0);
+const topRows = objs => objs.reduce((m, o) => OBJ[o.t].trig ? m : Math.max(m, o.y + (o.t.startsWith('port') ? PH : OBJ[o.t].tall ? 2 : 1)), 0);
 // the level ends at the placed End Trigger; without one it ends 3 blocks after the right edge of the farthest object
 [['Black Square', 'sq'], ['Black Triangle', 'tri'], ['Black Spike Shape', 'tri2']].forEach(([n, k]) => OBJ['fx_' + k] = { name: n, cat: 'decor', deco: true, nx: k, dc: '#000000' });
 [['Small Glow Ball', .45], ['Medium Glow Ball', .9], ['Large Glow Ball', 1.6]].forEach(([n, r], i) => OBJ['fx_gb' + i] = { name: n, cat: 'decor', deco: true, nx: 'gb', gr: r, glow: true, dc: '#4fc3ff' });
@@ -491,10 +500,16 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
   else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
   else if (t === 'block') blockDraw(c, 0, x, y, cs, col, lw);
-  else if (t === 'half' || t === 'slope') {
+  else if (t === 'half' || OBJ[t].slope) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.fillStyle = col;
     if (t === 'half') { c.fillRect(-cs / 2, 0, cs, cs / 2); c.fillStyle = 'rgba(255,255,255,.14)'; c.fillRect(-cs / 2, 0, cs, cs * .12); c.beginPath(); c.rect(-cs / 2 + lw * .3, lw * .3, cs - lw * .6, cs / 2 - lw * .6); glow(c, lw); }
-    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); glow(c, lw); }   // plain 45-45-90 right triangle filling the cell's lower-right half
+    else if (OBJ[t].tall) {   // 1 wide x 2 tall right triangle: the anchor cell plus the cell above it. r = which corner is filled (0 lower-right, 1 lower-left, 2 upper-left, 3 upper-right); it never lies on its side
+      c.rotate(-r * Math.PI / 2); const L = -cs / 2, R = cs / 2, B = cs / 2, T = -cs * 1.5, ri = Math.round(r) & 3;
+      const V = [[[L, B], [R, B], [R, T]], [[L, B], [R, B], [L, T]], [[L, T], [R, T], [L, B]], [[L, T], [R, T], [R, B]]][ri];
+      c.beginPath(); c.moveTo(...V[0]); c.lineTo(...V[1]); c.lineTo(...V[2]); c.closePath(); c.fill(); glow(c, lw);
+      if (OBJ[t].slide) { const [a, b] = [[0, 2], [2, 1], [1, 2], [0, 2]][ri]; c.beginPath(); c.moveTo(...V[a]); c.lineTo(...V[b]); c.strokeStyle = '#2fe6ff'; c.lineWidth = lw * 2; c.lineCap = 'round'; c.stroke(); }
+    }
+    else { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.closePath(); c.fill(); glow(c, lw); if (OBJ[t].slide) { c.beginPath(); c.moveTo(-cs / 2, cs / 2); c.lineTo(cs / 2, -cs / 2); c.strokeStyle = '#2fe6ff'; c.lineWidth = lw * 2; c.lineCap = 'round'; c.stroke(); } }   // plain 45-45-90 right triangle filling the cell's lower-right half (slide slopes get a cyan glide edge along the hypotenuse)
   } else if (ORBS.includes(t)) {
     const cl = ORBCOL[t], cx = x + cs / 2, cy = y + cs / 2, pu = 1 + Math.sin(time * 6) * .07;
     c.beginPath(); c.arc(cx, cy, cs * .46 * pu, 0, 7); c.strokeStyle = cl; c.globalAlpha = A0 * .55; c.lineWidth = lw; c.stroke(); c.globalAlpha = A0;
@@ -505,14 +520,15 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = PADCOL[t]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t]) {
+  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t] || SZP[t]) {
     const cl = PORT_COL[t], pcx = x + cs / 2, pcy = y - cs / 2;   // centre of the 3-cell stack
     c.translate(pcx, pcy); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.ellipse(0, 0, cs * .34, cs * PH / 2, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = A0 * .22; c.fill(); c.globalAlpha = A0;
     c.strokeStyle = cl; c.lineWidth = lw * 1.6; c.stroke();
     c.rotate(-r * Math.PI / 2);
-    c.fillStyle = '#fff'; c.font = `bold ${cs * .5}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), 0, 0);
+    c.fillStyle = '#fff'; c.font = `bold ${cs * (SZP[t] ? .36 : .5)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (SZP[t]) { const mini = t === 'port_mini', q = cs * (mini ? .16 : .3); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = lw; c.beginPath(); c.rect(-q / 2, -q / 2 - cs * .3, q, q); mini ? c.stroke() : c.fill(); c.beginPath(); c.rect(-q / 2, -q / 2 + cs * .3, q, q); mini ? c.stroke() : c.fill(); c.fillText(mini ? 'MINI' : 'BIG', 0, 0); }
+    else c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), 0, 0);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
@@ -707,7 +723,7 @@ const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 const SPR = new Map();
 function drawCached(c, o, x, y, cs, col, time, fast) {
   const d = OBJ[o.t];
-  if (!fast || !(d.solid || (d.hz && d.hz.k === 't')) || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
+  if (!fast || !(d.solid || (d.hz && d.hz.k === 't')) || d.tall || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
   const key = o.t + '|' + col + '|' + (o.r || 0) + '|' + (o.r45 || 0) + '|' + cs.toFixed(1);
   let s = SPR.get(key);
   if (!s) {
@@ -754,7 +770,7 @@ class Game {
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
     this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: wave can't be hurt by blocks / slopes inside them. S blocks: end a dash.
-    this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]);
+    this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
@@ -788,7 +804,7 @@ class Game {
   reset(first) {
     this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
     this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
-    this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.gOff = {}; this.acts = []; this.parts = [];
+    this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
@@ -840,7 +856,7 @@ class Game {
   snap() {
     const p = this.p, os = [];
     for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col]);
-    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
+    return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mini: !!this.mini, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
       gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
   }
   restore(k) {
@@ -848,7 +864,7 @@ class Game {
     for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
     for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
-    this.gr = k.gr; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
+    this.gr = k.gr; this.mini = !!k.mini; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
     this.si = lb(this.S, this.p.x - 130); this.tI = lb(this.TT, this.p.x - 40);
     this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
@@ -864,13 +880,15 @@ class Game {
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
-  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 11.25; return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
+  sz() { return this.mode === 'wave' ? (this.mini ? 1 : WAVE_BIG) : (this.mini ? MINI : 1); }   // player scale: wave is 1.5x its old size (mini wave = the old size), everything else 1 (mini = 1/1.5)
+  ins(v) { return 15 - (15 - v) * this.sz(); }   // an inset measured on the old 30x30 box, rescaled around the box centre
+  hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 11.25; inset = this.ins(inset); return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { const m = this.mode; return m === 'wave' ? 13.75 : m === 'ship' ? 4 : 3; }   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
+  priIn() { const m = this.mode; return this.ins(m === 'wave' ? 13.75 : m === 'ship' ? 4 : 3); }   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
   secIn() { return this.priIn(); }
   // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
-  sbx() { const m = this.mode; return m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; }   // one hitbox decides walls, blocks and spikes alike
+  sbx() { const m = this.mode, b = m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; return this.sz() === 1 ? b : b.map(v => this.ins(v)); }   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -891,16 +909,17 @@ class Game {
     }
     { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
+    const mi = this.mini;
     if (this.mode === 'cube' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = JUMP * this.gr; p.grounded = false; this.cyT = 0; this.jumps++; }   // coyote time: still counts as on the ground for a few frames after running off an edge
-    if (this.mode === 'robot' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = 441 * this.gr; p.grounded = false; p.rb = .3; this.cyT = 0; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
+    if (this.mode === 'robot' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = (mi ? 372 : 441) * this.gr; p.grounded = false; p.rb = .3; this.cyT = 0; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
-    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * 270; p.vy += (tv - p.vy) * Math.min(1, 7 * dt); p.vy = Math.max(-290, Math.min(290, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed; } else if (!p.dash) {
+    const gr = this.gr; p.x += BASE * this.speed * dt; if (this.mode === 'ship') { const tv = (this.held ? 1 : -1) * gr * (mi ? 350 : 270), vm = mi ? 375 : 290; p.vy += (tv - p.vy) * Math.min(1, (mi ? 9.5 : 7) * dt); p.vy = Math.max(-vm, Math.min(vm, p.vy)); } else if (this.mode === 'wave') { p.vy = (this.held ? 1 : -1) * gr * BASE * this.speed * (mi ? WAVE_MINI_K : 1); } else if (!p.dash) {
       if (this.mode === 'ufo' && edge) { p.vy = 400 * gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'ball' && edge && (wasG || this.cyT > 0)) { this.cyT = 0; this.gr = -this.gr; p.vy = -200 * this.gr; this.edgeT = 0; this.jumps++; }
       else if (this.mode === 'spider' && edge && (wasG || this.cyT > 0)) { this.cyT = 0; this.spiderJump(); }
-      const gm = this.mode === 'ufo' ? .55 : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
+      const gm = this.mode === 'ufo' ? (mi ? .7 : .55) : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) * (mi ? 1.15 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     { const fb = this.sbx()[3]; if (p.y <= -fb) { p.y = -fb; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; } }
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
@@ -935,7 +954,7 @@ class Game {
           else this.die();
         } else {
           const land = gr > 0 ? (p.vy <= 0 && prevB >= by + bh - tol) : (p.vy >= 0 && prevB + 30 <= by + tolT);
-          if (land) { p.y = gr > 0 ? by + bh : by - 30; p.vy = 0; p.grounded = true; }
+          if (land) { p.y = gr > 0 ? by + bh - fl : by - 30 + fc; p.vy = 0; p.grounded = true; }
           else this.die();
         }
       }
@@ -945,7 +964,7 @@ class Game {
       else if (o.hp) { const i = this.priIn(); if (polyBox(o.hp, x, y, p.x + i, p.y + i, p.x + 30 - i, p.y + 30 - i)) this.die(); }
       else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
-      const hf = 15 * (o.sc || 1), pi = 3, on = p.x + pi < x + 15 + hf && p.x + 30 - pi > x + 15 - hf && p.y + pi < y + 15 + hf && p.y + 30 - pi > y + 15 - hf;   // the orb's hitbox is exactly its 1x1 grid cell
+      const hf = 15 * (o.sc || 1), pi = this.mode === 'wave' ? 3 : this.ins(3), on = p.x + pi < x + 15 + hf && p.x + 30 - pi > x + 15 - hf && p.y + pi < y + 15 + hf && p.y + 30 - pi > y + 15 - hf;   // the orb's hitbox is exactly its 1x1 grid cell
       if (on && !o.used && this.orbT > 0) {
         o.used = true; p.grounded = false; this.cyT = 0; p.rb = 0; this.edgeT = 0; this.orbT = 0; this.holdUsed = true; this.jumps++;
         if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
@@ -962,6 +981,7 @@ class Game {
       else if (t === 'port_gd' || t === 'port_gu') { this.gr = t === 'port_gu' ? -1 : 1; this.cyT = 0; }
       else if (MODEP[t]) this.mode = PMODE[t];
       else if (REVP[t]) this.mir = t === 'port_mb' ? 1 : 0;
+      else if (SZP[t]) this.mini = t === 'port_mini';
     }
   }
   // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
@@ -969,39 +989,40 @@ class Game {
     const p = this.p, up = this.gr > 0; let best = null;
     const test = (o, gx, gy) => {
       if (o.off) return; const d = OBJ[o.t]; if (!d.solid) return; if (!o.pp) this.prep(o);
-      const sb = d.slope ? [0, 0, 30, 30] : o.sb, x = o.ex + gx + sb[0], y = o.ey + gy + sb[1], w = sb[2] - sb[0], h = sb[3] - sb[1];
+      const sb = d.slope ? [0, 0, 30, d.tall ? 60 : 30] : o.sb, x = o.ex + gx + sb[0], y = o.ey + gy + sb[1], w = sb[2] - sb[0], h = sb[3] - sb[1];
       if (!(p.x + 30 > x && p.x < x + w)) return;
-      if (up) { if (y >= p.y + 30 - 2) { const t = y - 30; if (best === null || t < best) best = t; } }
-      else if (y + h <= p.y + 2) { const t = y + h; if (best === null || t > best) best = t; }
+      const sb2 = this.sbx(); if (up) { if (y >= p.y + 30 - 2) { const t = y - 30 + sb2[4]; if (best === null || t < best) best = t; } }
+      else if (y + h <= p.y + 2) { const t = y + h - sb2[3]; if (best === null || t > best) best = t; }
     };
     const S = this.S; for (let i = lb(S, p.x - 130); i < S.length && S[i].ex < p.x + 130; i++) test(S[i], 0, 0);
     for (const o of this.D) { const g = this.gOff[o.g]; test(o, g ? g.x * U : 0, g ? g.y * U : 0); }
-    if (!up && best === null) best = 0;
+    if (!up && best === null) best = -this.sbx()[3];
     if (best === null) return;
     const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
     for (let i = 0; i < 10; i++) this.parts.push({ x: p.x + 15, y: from + (best - from) * i / 9 + 15, vx: -60 - Math.random() * 80, vy: (Math.random() - .5) * 60, life: .3, col: this.skin.c1, s: 3 + Math.random() * 3 });
   }
   endDash() { const d = this.p.dash; this.p.dash = null; if (d && d.flip) { this.gr = -this.gr; this.p.vy = 0; } }
   slope(o, x, y) {
-    const p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
-    if (m === 'wave') {   // wave uses a half-size (15x15, centered) hitbox
+    const d = OBJ[o.t], H = d.tall ? 60 : 30, p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
+    const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? H * (1 - xl / 30) : H * xl / 30);   // surface height at local x (0..30); the 1x2 slope is twice as steep
+    if (m === 'wave') {   // the wave uses its own small centred hitbox
       if (this.inD) return;   // inside a D block the wave passes through slopes
       const sb_ = this.sbx(), x0 = p.x + sb_[0], x1 = p.x + 30 - sb_[0], y0 = p.y + sb_[1], y1 = p.y + 30 - sb_[2];
-      if (!(x1 > x && x0 < x + 30) || y0 >= y + 30 || y1 <= y) return;
-      const c = v => Math.max(0, Math.min(30, v)), sy = xl => y + (k ? 30 - xl : xl);
-      if (floor ? sy(c(k ? x0 - x : x1 - x)) > y0 : y1 > sy(c(k ? x1 - x : x0 - x))) this.die();
+      if (!(x1 > x && x0 < x + 30) || y0 >= y + H || y1 <= y) return;
+      if (floor) { const h = sf(cl(k ? x0 - x : x1 - x)), depth = h - y0; if (depth <= 0) return; if (d.slide && depth <= 14) p.y = h - sb_[1]; else this.die(); }   // slide slopes: the wave glides along the surface instead of dying
+      else { const h = sf(cl(k ? x1 - x : x0 - x)), depth = y1 - h; if (depth <= 0) return; if (d.slide && depth <= 14) p.y = h - 30 + sb_[2]; else this.die(); }
       return;
     }
-    if (!(p.x + 30 > x && p.x < x + 30) || p.y >= y + 30 || p.y + 30 <= y) return;
-    const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? 30 - xl : xl);
+    const e = (30 - 30 * this.sz()) / 2, xl = p.x + e, xr = p.x + 30 - e, yb = p.y + e, yt = p.y + 30 - e;   // visible box (smaller than 30 when mini)
+    if (!(xr > x && xl < x + 30) || yb >= y + H || yt <= y) return;
     if (floor) {
-      const h = sf(cl(k ? p.x - x : p.x + 30 - x)), depth = h - p.y; if (depth <= 0) return; if (m === 'wave') return this.die();
-      if (slide) { if (depth <= 14) { p.y = h; if (p.vy < 0) p.vy = 0; } else this.die(); }
-      else if (gr > 0 && depth <= 14) { if (p.vy <= 0) { p.y = h; p.vy = 0; p.grounded = true; } } else this.die();
+      const h = sf(cl(k ? xl - x : xr - x)), depth = h - yb; if (depth <= 0) return;
+      if (slide) { if (depth <= 14) { p.y = h - e; if (p.vy < 0) p.vy = 0; } else this.die(); }
+      else if (gr > 0 && depth <= 14) { if (p.vy <= 0) { p.y = h - e; p.vy = 0; p.grounded = true; } } else this.die();
     } else {
-      const h = sf(cl(k ? p.x + 30 - x : p.x - x)), depth = p.y + 30 - h; if (depth <= 0) return; if (m === 'wave') return this.die();
-      if (slide) { if (depth <= 14) { p.y = h - 30; if (p.vy > 0) p.vy = 0; } else this.die(); }
-      else if (gr < 0 && depth <= 14) { if (p.vy >= 0) { p.y = h - 30; p.vy = 0; p.grounded = true; } } else this.die();
+      const h = sf(cl(k ? xr - x : xl - x)), depth = yt - h; if (depth <= 0) return;
+      if (slide) { if (depth <= 14) { p.y = h - 30 + e; if (p.vy > 0) p.vy = 0; } else this.die(); }
+      else if (gr < 0 && depth <= 14) { if (p.vy >= 0) { p.y = h - 30 + e; p.vy = 0; p.grounded = true; } } else this.die();
     }
   }
   win() { this.won = true; this.p.grounded = true; this.cb.onWin && this.cb.onWin(); }
@@ -1057,8 +1078,8 @@ class Game {
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
-    if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 3 * s; c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
-    if (!p.dead) { c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 12 * s); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s); c.restore(); }
+    if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 3 * s * this.sz(); c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
+    if (!p.dead) { const zf = this.mode === 'wave' ? 1 : this.sz(); c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s * zf); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 12 * s * this.sz()); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s * zf); c.restore(); }
     c.restore();
   }
 }
@@ -1887,7 +1908,7 @@ function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
   const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
   const o = { t, r: 0, col: t === 'trig_color' ? '#ff5252' : undefined };
-  if (t.startsWith('port')) drawObj(c, o, 24, 44, 16, '#000', true); else drawObj(c, o, 10, 10, 44, defColor(t), true);
+  if (t.startsWith('port')) drawObj(c, o, 24, 44, 16, '#000', true); else if (OBJ[t].tall) drawObj(c, o, 19, 34, 26, defColor(t), true); else drawObj(c, o, 10, 10, 44, defColor(t), true);
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
@@ -1902,7 +1923,7 @@ function renderEdUI() {
   const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
   const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
 }
-const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? PH : 1;
+const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? PH : OBJ[o.t].tall ? 2 : 1;
 // bounding box in cells (portals are 3 tall; rotated 90/270 they lie flat: 3 wide, 1 tall, centred on the same spot)
 const objBox = o => { if (o.t.startsWith('port') && o.r45) return { x: o.x - 1, y: o.y, w: 3, h: 3 }; if (!o.t.startsWith('port') || ((o.r || 0) & 1) === 0) return { x: o.x, y: o.y, w: 1, h: oh(o) }; return { x: o.x - 1, y: o.y + 1, w: 3, h: 1 }; };
 function EDPANEL() {
@@ -1939,7 +1960,7 @@ function place(cx, cy) {
   if (!OBJ[t].trig && !OBJ[t].deco && !OBJ[t].zone) lv.objs = lv.objs.filter(o => !(o.t === t && o.x === cx && o.y === cy));   // blocks / hazards can now be stacked: only the same object type gets replaced
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 }; if (ed.rot45 && !no45(o)) o.r45 = 1;
-  if (t === 'block' || t === 'spike' || t === 'half' || t === 'slope') o.c = '#0d0d22';
+  if (t === 'block' || t === 'spike' || t === 'half' || (OBJ[t].slope && !OBJ[t].slide)) o.c = '#0d0d22';
   if (t === 'trig_pulse') Object.assign(o, { col: '#ffffff', dur: .5 });
   if (t === 'trig_color') { const pv = [...lv.objs].reverse().find(q => q.t === 'trig_color'); Object.assign(o, { tg: pv ? pv.tg : 0, col: '#ff5252', dur: pv ? pv.dur : 1 }); }
   if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
