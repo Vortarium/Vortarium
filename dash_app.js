@@ -24,6 +24,9 @@ const storage = getStorage(app);
 
 /* ===== ENGINE ===== */
 // dash_game.js - DASH engine: constants, icon drawing, object drawing, physics + renderer
+// LDM = Low Definition Mode (Settings > LDM): a per-device switch that reloads the game and strips the visuals down (no decor / glow / background patterns, flat blocks, half-res canvas) while keeping every hitbox and the gameplay identical
+const LDM = (() => { try { return localStorage.dash_ldm === '1'; } catch (e) { return false; } })();
+if (LDM) document.documentElement.classList.add('ldm');
 const COY = .1;   // coyote time in seconds (about 5 frames at 60fps)
 const U = 30, BASE = 311, STEP = 1 / 240, G = 3250, JUMP = 640, VMAX = 950;
 const PRIMARY = ['#7dff2a', '#ff3b3b', '#ff9a1f', '#ffe81f', '#1fd1ff', '#2f6bff', '#a43bff', '#ff4fd8', '#ffffff', '#3a3a4c', '#00ffa2', '#c0ff00', '#ff0080'];
@@ -590,6 +593,7 @@ function drawGround(c, W, H, gy, s, camX, col, st = 'tiles', lq = false) {
 }
 // thin white glow outline on the current path: a soft halo kept INSIDE the shape (so it never smears over neighbours) + a hairline
 function glow(c, lw, k = 1) {
+  if (LDM) { c.lineJoin = 'round'; c.lineWidth = lw * .6; c.strokeStyle = '#fff'; c.stroke(); return; }   // LDM: just the thin outline, no clipped glow passes
   c.save(); c.clip(); c.lineJoin = 'round'; c.strokeStyle = '#fff'; const a = c.globalAlpha;
   c.globalAlpha = a * .13 * k; c.lineWidth = lw * 4.6; c.stroke();
   c.globalAlpha = a * .3 * k; c.lineWidth = lw * 2.2; c.stroke();
@@ -597,6 +601,7 @@ function glow(c, lw, k = 1) {
 }
 const mixHex = (h, t, to = 255) => { const n = parseInt(h.slice(1), 16), f = v => Math.round(v + (to - v) * t); return '#' + [n >> 16, (n >> 8) & 255, n & 255].map(v => f(v).toString(16).padStart(2, '0')).join(''); };
 function blockDraw(c, b, x, y, s, col, lw) {
+  if (LDM) { c.fillStyle = col; c.fillRect(x, y, s, s); c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = Math.max(1, lw * .7); c.strokeRect(x + lw * .35, y + lw * .35, s - lw * .7, s - lw * .7); return; }   // LDM: flat tile
   const A0 = c.globalAlpha, K = a => `rgba(0,0,0,${a})`, Wt = a => `rgba(255,255,255,${a})`;
   c.save(); c.beginPath(); c.rect(x, y, s, s); c.clip();
   const body = (al = 1) => { c.globalAlpha = A0 * al; c.fillStyle = col; c.fillRect(x, y, s, s); c.globalAlpha = A0; };
@@ -665,6 +670,7 @@ function hzDraw(c, h, o, x, y, s, col, lw, time) {
     c.rotate(((o.r || 0) + (o.r45 ? .5 : 0)) * Math.PI / 2); const n = h.n, w = s * h.a / n, hh = s * h.b;
     for (let i = 0; i < n; i++) {
       const x0 = -s * h.a / 2 + i * w, y0 = s / 2; spikePath(c, lk, x0, y0, w, hh);
+      if (LDM) { c.fillStyle = col; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw * .6; c.stroke(); continue; }   // LDM: flat fill + outline (no gradients / clips)
       if (lk === 'grad') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, col); g.addColorStop(1, mixHex(col, .6, 255) + '10'); c.fillStyle = g; c.fill(); }
       else if (lk === 'white') { const g = c.createLinearGradient(0, y0, 0, y0 - hh); g.addColorStop(0, mixHex(col, .1, 120)); g.addColorStop(1, '#ffffff'); c.fillStyle = g; c.fill(); }
       else if (lk === 'ghost') { c.globalAlpha = A0 * .4; c.fillStyle = col; c.fill(); c.globalAlpha = A0; }
@@ -674,7 +680,7 @@ function hzDraw(c, h, o, x, y, s, col, lw, time) {
       if (lk === 'ghost') { c.save(); c.globalAlpha = A0 * .55; c.lineWidth = lw * .5; spikePath(c, 'tri', x0 + w * .27, y0 - hh * .05, w * .46, hh * .46); c.stroke(); c.restore(); }
     }
   } else {
-    c.rotate(time * 4 + (o.r || 0)); const R = s * h.a, N = h.b; c.beginPath();
+    c.rotate(time * 4 + (o.r || 0)); const R = s * h.a, N = LDM ? Math.min(h.b, 6) : h.b; c.beginPath();
     for (let i = 0; i < N * 2; i++) { const an = i * Math.PI / N, rr = i & 1 ? R * .72 : R; c[i ? 'lineTo' : 'moveTo'](Math.cos(an) * rr, Math.sin(an) * rr); }
     c.closePath(); c.fillStyle = col; c.fill(); glow(c, lw); c.beginPath(); c.arc(0, 0, R * .22, 0, 7); c.fillStyle = '#fff'; c.fill();
   }
@@ -719,22 +725,53 @@ function decor(c, k, s, col) {
   }
 }
 const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-// pre-rendered sprites for static solids/spikes (big FPS win on levels with hundreds of objects)
-const SPR = new Map();
+// pre-rendered sprites: every object that doesn't change shape is drawn once into a small canvas and then only blitted (big FPS win on levels with thousands of objects, decor, glows, saws, orbs and portals)
+// - saws are cached upright and rotated while blitting, orbs / glow balls are cached and pulsed by scaling, so nothing animated is re-drawn from vector paths every frame
+// - the cache is a bounded FIFO, and a per-frame "miss budget" stops colour-trigger fades (a new colour every frame) from filling it: past the budget objects are simply drawn directly
+const SPR = new Map(); let SPR_MISS = 0; const sprFrame = () => { SPR_MISS = 0; };
+function sprRect(o, cs) {   // [x0, y0, x1, y1] of the sprite, relative to the top-left corner of the object's anchor cell (y grows downward)
+  const t = o.t, d0 = OBJ[t], d = d0.base ? OBJ[d0.base] : d0, m = Math.ceil(cs * .3) + 3;
+  if (t.startsWith('port')) { const h = Math.ceil(cs * 1.5) + 4; return [Math.floor(cs / 2 - h), Math.floor(-cs / 2 - h), Math.ceil(cs / 2 + h), Math.ceil(-cs / 2 + h)]; }
+  if (d.tall) return [-m, -cs - m, cs + m, cs + m];
+  if (d.hz && d.hz.k === 's') { const h = Math.ceil(cs * d.hz.a) + 4; return [Math.floor(cs / 2 - h), Math.floor(cs / 2 - h), Math.ceil(cs / 2 + h), Math.ceil(cs / 2 + h)]; }
+  if (d.glow) { const h = Math.ceil(cs * (d.nx === 'gb' ? d.gr * 1.05 : .95)) + 4; return [Math.floor(cs / 2 - h), Math.floor(cs / 2 - h), Math.ceil(cs / 2 + h), Math.ceil(cs / 2 + h)]; }
+  if (d.deco) { const q = Math.ceil(cs * .6); return [-q, -q, cs + q, cs + q]; }
+  if (ORBS.includes(t)) return [-m, -m, cs + m, cs + m];
+  return [-m, -m, cs + m, cs + m];
+}
 function drawCached(c, o, x, y, cs, col, time, fast) {
-  const d = OBJ[o.t];
-  if (!fast || !(d.solid || (d.hz && d.hz.k === 't')) || d.tall || (o.sc && o.sc !== 1) || cs < 4) return drawObj(c, o, x, y, cs, col, false, time);
-  const key = o.t + '|' + col + '|' + (o.r || 0) + '|' + (o.r45 || 0) + '|' + cs.toFixed(1);
-  let s = SPR.get(key);
-  if (!s) {
-    if (SPR.size > 600) SPR.clear();
-    const n = Math.ceil(cs) + 6; s = document.createElement('canvas'); s.width = s.height = n;
-    drawObj(s.getContext('2d'), { t: o.t, r: o.r || 0, r45: o.r45 || 0 }, 3, 3, cs, col, false, 0); SPR.set(key, s);
+  const t = o.t, d = OBJ[t];
+  if (!fast || cs < 4 || (o.sc && o.sc !== 1) || d.coin || d.trig || d.zone) return drawObj(c, o, x, y, cs, col, false, time);
+  const key = t + '|' + col + '|' + (o.r || 0) + '|' + (o.r45 || 0) + '|' + (o.a || 0) + '|' + cs.toFixed(1);
+  let e = SPR.get(key);
+  if (!e) {
+    if (SPR_MISS++ > 48) return drawObj(c, o, x, y, cs, col, false, time);   // miss budget spent this frame: draw directly, don't pollute the cache
+    if (SPR.size >= 1400) SPR.delete(SPR.keys().next().value);
+    const r = sprRect(o, cs), cv = document.createElement('canvas'); cv.width = Math.max(1, r[2] - r[0]); cv.height = Math.max(1, r[3] - r[1]);
+    drawObj(cv.getContext('2d'), { t, r: o.r || 0, r45: o.r45 || 0, a: o.a || 0 }, -r[0], -r[1], cs, col, false, 0);
+    e = { cv, r }; SPR.set(key, e);
   }
-  if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
-  c.drawImage(s, x - 3, y - 3);
+  const A = c.globalAlpha; if (o.alp != null && o.alp !== 1) c.globalAlpha = A * o.alp;
+  const s = e.cv, r = e.r, base = d.base ? OBJ[d.base] : d;
+  if (base.hz && base.hz.k === 's') { c.save(); c.translate(x + cs / 2, y + cs / 2); c.rotate(time * 4); c.drawImage(s, r[0] - cs / 2, r[1] - cs / 2); c.restore(); }   // saw: upright sprite, spun while blitting
+  else if (d.glow) { c.globalCompositeOperation = 'lighter'; if (d.nx === 'gb' && !LDM) { const k = (.92 + .08 * Math.sin(time * 3)) / .92; c.save(); c.translate(x + cs / 2, y + cs / 2); c.scale(k, k); c.drawImage(s, r[0] - cs / 2, r[1] - cs / 2); c.restore(); } else c.drawImage(s, x + r[0], y + r[1]); c.globalCompositeOperation = 'source-over'; }
+  else if (ORBS.includes(t) && !LDM) { const k = 1 + Math.sin(time * 6) * .07; c.save(); c.translate(x + cs / 2, y + cs / 2); c.scale(k, k); c.drawImage(s, r[0] - cs / 2, r[1] - cs / 2); c.restore(); }
+  else c.drawImage(s, x + r[0], y + r[1]);
+  c.globalAlpha = A;
 }
 
+// ---- static chunks: objects that never change (no colour / alpha / toggle trigger on their group, not animated, not scaled) are pre-rendered into big tiles of 6x6 cells and blitted,
+// so the per-frame cost of the static part of a level is a handful of drawImage calls instead of one per object. Tiles are padded so overflowing art never gets cut, and a bounded pixel budget evicts the oldest.
+const CH = new Map(); let CH_PX = 0; const CHW = 6 * U, CHP = 1.5 * U, CH_BUDGET = 16e6;
+const chunkable = o => { const d = OBJ[o.t], b = d.base ? OBJ[d.base] : d; return !(o.sc && o.sc !== 1) && !b.glow && !d.coin && !d.trig && !d.zone && !ORBS.includes(o.t) && !(b.hz && b.hz.k === 's'); };
+function chunkClear() { CH.clear(); CH_PX = 0; }
+function makeLayer(list, dynG) {   // split a sorted object list into static (baked into tiles) and dynamic (drawn one by one) parts. Only DENSE tiles (20+ static objects) are baked: a sparse tile would cost more to blit than its few sprites
+  const L = { stat: [], dyn: [], cells: new Map() }, cand = new Map(), key = o => Math.floor(o.ex / CHW) + ',' + Math.floor(o.ey / CHW);
+  for (const o of list) if (chunkable(o) && !(o.g && dynG.has(o.g))) { const k = key(o); let a = cand.get(k); if (!a) cand.set(k, a = []); a.push(o); }
+  for (const [k, a] of cand) if (a.length >= 20) L.cells.set(k, a);
+  for (const o of list) { if (chunkable(o) && !(o.g && dynG.has(o.g)) && L.cells.has(key(o))) L.stat.push(o); else L.dyn.push(o); }
+  return L;
+}
 // ---------- the game ----------
 class Game {
   constructor(cv) {
@@ -755,7 +792,8 @@ class Game {
   }
   resize() {
     if (!this.q && this.q !== 0) this.q = +localStorage.dash_q || 0;   // remembered quality tier for this device (0 full, 1 lite, 2 low-res)
-    const d = this.rs || (this.rs = Math.max(.6, Math.min(this.q ? 1 : 1.5, devicePixelRatio || 1) * (this.q >= 2 ? .75 : 1)));
+    if (LDM) { this.q = 2; this.cv.style.imageRendering = 'pixelated'; }   // LDM: always lowest tier, half-resolution canvas stretched with hard pixels
+    const d = this.rs || (this.rs = LDM ? .5 : Math.max(.6, Math.min(this.q ? 1 : 1.5, devicePixelRatio || 1) * (this.q >= 2 ? .75 : 1)));
     const w = Math.max(1, Math.round(this.cv.clientWidth * d)), h = Math.max(1, Math.round(this.cv.clientHeight * d));
     if (this.cv.width !== w) this.cv.width = w; if (this.cv.height !== h) this.cv.height = h;   // only touch the size when it really changes (resetting it blanks the canvas for a frame)
   }
@@ -770,9 +808,15 @@ class Game {
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
     this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: wave can't be hurt by blocks / slopes inside them. S blocks: end a dash.
-    this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
+    this.DEC = LDM ? [] : objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
+    this.DG = []; { const m = new Map(); for (const o of this.D) { let G = m.get(o.g); if (!G) { G = { g: o.g, list: [], x0: 1e9, x1: -1e9 }; m.set(o.g, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group: a whole group far from the player / camera is skipped with one check
+    const dynG = new Set(); for (const o of objs) if ((o.t === 'trig_color' && Number(o.tg) > 0) || o.t === 'trig_alpha' || o.t === 'trig_toggle') dynG.add(o.tg);   // groups a trigger recolours / fades / toggles: those objects are never baked into tiles
+    chunkClear();
+    this.SR = this.S;   // render list. LDM: blocks completely buried in other blocks (all 4 neighbours solid) are never drawn
+    if (LDM) { const full = new Set(), isFull = o => { const d = OBJ[o.t]; return d.solid && !d.slope && !d.half && (!o.sc || o.sc === 1) && Number.isInteger(o.x) && Number.isInteger(o.y); }; for (const o of this.S) if (isFull(o)) full.add(o.x + ',' + o.y); this.SR = this.S.filter(o => !(isFull(o) && full.has((o.x - 1) + ',' + o.y) && full.has((o.x + 1) + ',' + o.y) && full.has(o.x + ',' + (o.y - 1)) && full.has(o.x + ',' + (o.y + 1)))); }
+    this.LS = makeLayer(this.SR, dynG); this.LD = makeLayer(this.DEC, dynG);
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
     this.ports = objs.filter(o => SPEEDS[o.t]); this.rports = objs.filter(o => REVP[o.t]);
     const end = tr.find(o => o.t === 'trig_end'); this.autoEnd = !end; this.endX = end ? end.ex : (objs.length ? objs.reduce((m, o) => Math.max(m, o.ex), 0) : 0) + U + 3 * U;   // no End Trigger placed: level ends 3 blocks past the farthest object
@@ -839,9 +883,10 @@ class Game {
       this.acts.push({ key, k: 'al', list: (this.groups[t.tg] || []).map(o => [o, o.alp]), to: (t.pc ?? 100) / 100, t0: this.time, dur });
     }
   }
-  runActs() {
+  runActs(m = 0) {   // m: 1 = only the actions that touch physics (move / follow), run every 240Hz step; 2 = only the visual ones (colour, alpha, bg, ground, pulse, zoom), run once per drawn frame; 0 = everything
     for (let i = this.acts.length - 1; i >= 0; i--) {
-      const a = this.acts[i], pr = a.dur > 0 ? Math.min(1, (this.time - a.t0) / a.dur) : 1;
+      const a = this.acts[i]; if (m && (m === 1) !== (a.k === 'mv' || a.k === 'fol')) continue;
+      const pr = a.dur > 0 ? Math.min(1, (this.time - a.t0) / a.dur) : 1;
       if (a.k === 'bg') this.bg = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'gr') this.ground = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'col') { const h = rgb2hex(lerpC([0, 0, 0], a.to, 1)); for (const [o, f] of a.list) o.col = pr >= 1 ? h : rgb2hex(lerpC(f, a.to, pr)); }
@@ -876,7 +921,7 @@ class Game {
   }
   die() {
     const p = this.p; p.dead = true; p.deadT = .7;
-    for (let i = 0, N = this.lq ? 10 : 22; i < N; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: p.x + 15, y: p.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? this.skin.c1 : this.skin.c2, s: 3 + Math.random() * 5 }); }
+    for (let i = 0, N = LDM ? 5 : this.lq ? 10 : 22; i < N; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: p.x + 15, y: p.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? this.skin.c1 : this.skin.c2, s: 3 + Math.random() * 5 }); }
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
@@ -884,7 +929,7 @@ class Game {
   ins(v) { return 15 - (15 - v) * this.sz(); }   // an inset measured on the old 30x30 box, rescaled around the box centre
   hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 11.25; inset = this.ins(inset); return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { const m = this.mode; return this.ins(m === 'wave' ? 13.75 : m === 'ship' ? 4 : 3); }   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
+  priIn() { const m = this.mode; return m === 'wave' ? 15 - 1.25 * this.sz() * .5 : this.ins(m === 'ship' ? 4 : 3); }   // wave: spike / saw box is half the size it was (1.875 units at the big size)   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
   secIn() { return this.priIn(); }
   // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
@@ -901,7 +946,7 @@ class Game {
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
-    this.runActs();
+    this.runActs(1);
     {   // zones
       const p_ = this.p; this.inD = false;
       if (this.mode === 'wave' && this.ZD.length) { const sb = this.sbx(); for (let i = lb(this.ZD, p_.x - 40); i < this.ZD.length && this.ZD[i].ex < p_.x + 40; i++) { const z = this.ZD[i]; if (!z.off && p_.x + sb[0] < z.ex + 30 && p_.x + 30 - sb[0] > z.ex && p_.y + sb[1] < z.ey + 30 && p_.y + 30 - sb[2] > z.ey) { this.inD = true; break; } } }
@@ -925,14 +970,15 @@ class Game {
     const S = this.S;
     while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
     for (let i = this.si; i < S.length && S[i].ex < p.x + 130; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
-    for (const o of this.D) {
-      if (o.off) continue; const g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (Math.abs(o.ex + gx - p.x) > 160) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return;
+    for (const G of this.DG) {
+      const g = this.gOff[G.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (G.x1 + gx < p.x - 160 || G.x0 + gx > p.x + 160) continue;
+      for (const o of G.list) { if (o.off) continue; if (Math.abs(o.ex + gx - p.x) > 160) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return; }
     }
     this.cyT = p.grounded ? COY : (this.cyT || 0) - dt;   // refill while standing, drain while airborne
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
-    if (!p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
+    if (!LDM && !p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
     if (this.parts.length > 60) this.parts = this.parts.filter(q => q.life > 0);
   }
@@ -1032,6 +1078,7 @@ class Game {
     this.ft = (this.ft || .0167) * .96 + dt * .04;   // smoothed frame time: if the device can't hold ~60fps, step down the quality (never back up mid-session, so it doesn't flicker between modes)
     if (ts - (this.rsT || 0) > 2000 && this.fcount > 90) {
       if (this.ft > .0195 && (this.q || 0) < 2) { this.setQ((this.q || 0) + 1); this.rsT = ts; this.ft = .0167; this.fcount = 0; }
+      else if (!LDM && this.ft > .0215 && (this.q || 0) >= 2 && !this.ldmHint && this.fcount > 240) { this.ldmHint = 1; toast('Still laggy? Turn on LDM (Low Definition Mode) in Settings'); }
     }
     this.fcount = (this.fcount || 0) + 1;
     if (!this.paused && !this.won) {
@@ -1046,6 +1093,7 @@ class Game {
   }
   dr(c, o, x, y, cs, fa, fast) { c.globalAlpha = fa < 1 ? fa : 1; drawCached(c, o, x, y, cs, o.col, this.time, fast); c.globalAlpha = 1; }
   render(dt) {
+    this.runActs(2); sprFrame();
     const c = this.c, W = this.cv.width, H = this.cv.height, p = this.p, zs = this.acts.some(a => a.k === 'zoom');
     let s = H / 330 * (this.zoom || 1); if (!zs) s = Math.max(1, Math.round(s * U)) / U;   // while the zoom is static, one block is a whole number of pixels so neighbouring blocks never leave seams / flickering lines
     // draw the player between the last two physics steps so motion stays smooth when the display (60Hz) and the 240Hz physics step don't line up
@@ -1057,22 +1105,43 @@ class Game {
     const X = x => x * s - cxp, Y = y => H - (y * s - cyp), lq = (this.q || 0) >= 1; this.lq = lq;
     const mt = this.mir ? -1 : 1; this.mf += (mt - this.mf) * Math.min(1, 9 * dt); if (Math.abs(mt - this.mf) < .003) this.mf = mt;
     c.fillStyle = this.bg; c.fillRect(0, 0, W, H); c.save(); if (this.mf !== 1) { c.translate(W / 2, 0); c.scale(this.mf, 1); c.translate(-W / 2, 0); }
-    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35));
-    c.fillStyle = g; c.fillRect(0, 0, W, H);
-    drawBG(c, W, H, s, cxp / s, this.level.bgs, lq);
-    if (this.pulse && this.pulse.a > .01) { c.globalAlpha = this.pulse.a; c.fillStyle = this.pulse.col; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }   // pulse trigger flash
+    if (!LDM) { const gk = this.bg + '|' + H; if (this.bgK !== gk) { const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, this.bg); g.addColorStop(1, shade(this.bg, -.35)); this.bgG = g; this.bgK = gk; } }   // gradient only rebuilt when the colour / height changes
+    c.fillStyle = LDM ? this.bg : this.bgG; c.fillRect(0, 0, W, H);
+    if (!LDM) drawBG(c, W, H, s, cxp / s, this.level.bgs, lq);
+    if (!LDM && this.pulse && this.pulse.a > .01) { c.globalAlpha = this.pulse.a; c.fillStyle = this.pulse.col; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }   // pulse trigger flash
     const gy = Y(0);
-    if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, this.level.grs, lq);
+    if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, LDM ? 'plain' : this.level.grs, lq);
 
     if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }
-    const cs = U * s, S = this.S; let lo = 0, hi = S.length; const lx = this.camX - 200;
+    const cs = U * s, S = this.SR; let lo = 0, hi = S.length; const lx = this.camX - (LDM ? 90 : 200);
     while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
-    const rx = this.camX + W / s + 200;
-    const re = this.camX + W / s, fast = !this.acts.some(a => a.k === 'zoom'), FADE = 150;   // objects fade in over 150 units as they enter on the right
-    const DEC = this.DEC; for (let i = lb(DEC, lx); i < DEC.length && DEC[i].ex < rx; i++) { const o = DEC[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const x = X(o.ex); if (x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + U), cs, fa, fast); }
-    for (let i = lo; i < S.length && S[i].ex < rx; i++) { const o = S[i]; if (o.off) continue; const fa = (re - o.ex) / FADE; if (fa <= 0) continue; const y = Y(o.ey + U); if (y > H + cs * 4 || y < -cs * 9) continue; this.dr(c, o, X(o.ex), y, cs, fa, fast); }
-    for (const o of this.D) { if (o.off) continue; const gg = this.gOff[o.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0, x = X(o.ex + gx), fa = (re - (o.ex + gx)) / FADE; if (fa > 0 && x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + gyy + U), cs, fa, false); }
-    { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa; drawObj(c, o, x, Y(o.ey + U), cs, o.col, false, this.time); c.globalAlpha = 1; } }
+    const rx = this.camX + W / s + (LDM ? 90 : 200);
+    const re = this.camX + W / s, fast = !this.acts.some(a => a.k === 'zoom'), FADE = LDM ? 1 : 150;   // objects fade in over 150 units as they enter on the right
+    const xClip = re - FADE, drawOne = (o, fa) => { if (o.off) return; const y = Y(o.ey + U); if (y > H + cs * 6 || y < -cs * 9) return; const x = X(o.ex); if (x < -cs * 6 || x > W + cs * 4) return; this.dr(c, o, x, y, cs, fa, fast); };
+    const layer = (L, tag) => {   // tiles for the static part (not while zooming: the scale changes every frame), then the dynamic / fading-in objects one by one
+      let from = lb(L.stat, lx);
+      if (fast) {
+        const cxp0 = Math.floor((this.camX - CHP - 1) / CHW), cxp1 = Math.floor((re + 200) / CHW), cy0 = Math.max(0, Math.floor((cyp / s - CHP - 1) / CHW)), cy1 = Math.floor(((H + cyp) / s + CHP) / CHW);
+        c.save(); c.beginPath(); c.rect(-W, -H, X(xClip) + W, H * 3); c.clip(); let built = 0;
+        for (let cx = cxp0; cx <= cxp1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
+          const list = L.cells.get(cx + ',' + cy); if (!list) continue;
+          const key = tag + cx + ',' + cy + '|' + s.toFixed(4), ox = cx * CHW - CHP, oyT = cy * CHW + CHW + CHP; let e = CH.get(key);
+          if (e) { CH.delete(key); CH.set(key, e); }
+          else if (built < 3) {
+            built++; const w = Math.ceil((CHW + 2 * CHP) * s), h = w, cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d');
+            for (const o of list) drawCached(g, o, (o.ex - ox) * s, (oyT - o.ey - U) * s, cs, o.col, 0, true);
+            e = { cv, px: w * h }; CH.set(key, e); CH_PX += e.px; while (CH_PX > CH_BUDGET && CH.size > 1) { const k0 = CH.keys().next().value, v = CH.get(k0); CH.delete(k0); CH_PX -= v.px; }
+          } else { for (const o of list) if (o.ex < xClip - 2 * U) drawOne(o, 1); continue; }   // over the build budget this frame: draw the tile's objects one by one
+          c.drawImage(e.cv, X(ox), Y(oyT));
+        }
+        c.restore(); from = lb(L.stat, xClip - 2 * U);   // objects near the right edge fade in individually
+      }
+      for (let i = from; i < L.stat.length && L.stat[i].ex < rx; i++) { const o = L.stat[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); }
+      for (let i = lb(L.dyn, lx); i < L.dyn.length && L.dyn[i].ex < rx; i++) { const o = L.dyn[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); }
+    };
+    layer(this.LD, 'd'); layer(this.LS, 's');
+    for (const G of this.DG) { const gg = this.gOff[G.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0; if (X(G.x1 + gx) < -cs * 2 || X(G.x0 + gx) > W + cs) continue; for (const o of G.list) { if (o.off) continue; const x = X(o.ex + gx), fa = (re - (o.ex + gx)) / FADE; if (fa > 0 && x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + gyy + U), cs, fa, fast); } }
+    { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa; drawCached(c, o, x, Y(o.ey + U), cs, o.col, this.time, fast); c.globalAlpha = 1; } }
     for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
@@ -1303,7 +1372,7 @@ let reqReady = false;
 function stopListeners() { reqUnsub && reqUnsub(); modUnsub && modUnsub(); reqUnsub = modUnsub = null; reqs = []; modPending = 0; reqReady = false; }
 
 /* ================= account / settings ================= */
-const settingsHTML = () => `<div class="card"><div class="row"><button class="btn ${settings.music ? 'green' : 'red'}" data-act="tog" data-k="music">Music: ${settings.music ? 'ON' : 'OFF'}</button><button class="btn ${settings.sfx ? 'green' : 'red'}" data-act="tog" data-k="sfx">SFX: ${settings.sfx ? 'ON' : 'OFF'}</button></div><label style="margin-top:12px">Volume<input type="range" min="0" max="1" step=".05" value="${settings.vol}" id="volr"></label></div>`;
+const settingsHTML = () => `<div class="card"><div class="row"><button class="btn ${settings.music ? 'green' : 'red'}" data-act="tog" data-k="music">Music: ${settings.music ? 'ON' : 'OFF'}</button><button class="btn ${settings.sfx ? 'green' : 'red'}" data-act="tog" data-k="sfx">SFX: ${settings.sfx ? 'ON' : 'OFF'}</button></div><label style="margin-top:12px">Volume<input type="range" min="0" max="1" step=".05" value="${settings.vol}" id="volr"></label></div><div class="card"><div class="row"><button class="btn ${LDM ? 'green' : 'red'}" data-act="ldm">LDM (Low Definition Mode): ${LDM ? 'ON' : 'OFF'}</button></div><p class="muted">For slow devices. Reloads the game, then hides decor / glows / backgrounds, draws flat blocks and spikes, culls buried blocks and renders at half resolution. Hitboxes and gameplay stay exactly the same. This setting is saved on this device only.</p></div>`;
 views.account = ({ tab = 'account' } = {}) => {
   const tabs = `<div class="tabs"><button class="${tab === 'account' ? 'on' : ''}" data-act="acctab" data-t="account">Account</button><button class="${tab === 'settings' ? 'on' : ''}" data-act="acctab" data-t="settings">Settings</button></div>`;
   let body;
@@ -2100,6 +2169,7 @@ const actions = {
   signup: async () => { await signUp(val('au'), val('ap')); toast('Welcome to DASH!', 'ok'); },
   logout: async () => { await signOut(auth); toast('Logged out'); },
   myprofile: () => me && showProfile(me.uid),
+  ldm: () => { try { localStorage.dash_ldm = LDM ? '0' : '1'; } catch (e) { } location.reload(); },
   tog: d => { settings[d.k] = !settings[d.k]; saveSettings(); views.account({ tab: 'settings' }); },
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;

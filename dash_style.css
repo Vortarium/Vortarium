@@ -229,3 +229,6 @@ body.fs .nbadge{animation:none}
 .descbox .dh{background:#12257f;border-bottom:3px solid #000;padding:5px 14px;font-size:15px;letter-spacing:.5px;color:#8fe9ff}
 .descbox .db{padding:10px 14px;max-height:130px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:17px;line-height:1.35}
 .descbox .db.none{color:#8a97c8;font-style:italic}
+
+/* LDM (Low Definition Mode): drop the expensive CSS effects too */
+html.ldm *, html.ldm *::before, html.ldm *::after { box-shadow: none !important; text-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; filter: none !important; transition: none !important; }
