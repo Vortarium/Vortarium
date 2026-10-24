@@ -114,6 +114,12 @@ const TXF = ['400 {s}px "Lilita One",sans-serif', '800 {s}px "Nunito",sans-serif
 try { if (document.fonts) TXF.forEach(f => document.fonts.load(f.replace('{s}', '24'), 'Aa')); } catch { }
 OBJ.dtext = { name: 'Aa Text', cat: 'decor', deco: true, text: true };
 OBJ.trig_rot = { name: 'Rotate Trigger', cat: 'triggers', trig: true };
+OBJ.trig_spawn = { name: 'Spawn Trigger', cat: 'triggers', trig: true }; TRC.trig_spawn = '#ffd23f'; TRL.trig_spawn = 'SPN';
+const gsOf = o => (o.gs && o.gs.length) ? o.gs : (o.g ? [o.g] : []);   // every group ID of an object (old levels only have the single .g)
+const defZ = t => OBJ[t] && OBJ[t].deco ? 3 : 5;   // layer (1 = far back ... 8 = far front): decor sits at 3, everything else at 5
+const zOf = o => (o.z >= 1 && o.z <= 8) ? (o.z | 0) : defZ(o.t);
+const zCustom = o => o.z >= 1 && o.z <= 8 && (o.z | 0) !== defZ(o.t);
+const normHex = v => { if (typeof v !== 'string') return null; let h = v.trim().replace(/^#/, ''); if (/^[0-9a-f]{3}$/i.test(h)) h = [...h].map(ch => ch + ch).join(''); return /^[0-9a-f]{6}$/i.test(h) ? '#' + h.toLowerCase() : null; };
 ['Flower','Tulip','Bush','Tree','Grass','Cloud','Big Cloud','Brick','Mini Bricks','Mini Spike','Mini Spike Row','Star','Moon','Sun','Dots','Ring','Diamond','Crystal','Vine','Mushroom','Leaf','Pebbles','Fence','Lamp','Arrow','Cross','Wave','Zigzag','Heart','Pillar']
  .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
 function hsl(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''); }
@@ -544,11 +550,12 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(cx, cy); c.scale(.55 + .45 * sq, 1); c.beginPath(); c.arc(0, 0, cs * .36, 0, 7); c.fillStyle = f; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
     c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i & 1 ? cs * .08 : cs * .2; c[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } c.closePath(); c.fillStyle = f2; c.fill();
   } else if (ed && (OBJ[t].trig || OBJ[t].zone)) {
-    const cl = t === 'trig_color' || t === 'trig_pulse' ? (o.col || '#ff5252') : TRC[t];
+    const cl = t === 'trig_color' || t === 'trig_pulse' ? (normHex(o.col) || '#8a94b8') : TRC[t];
     c.fillStyle = cl; c.globalAlpha = .85; c.fillRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84); c.globalAlpha = 1;
     c.strokeStyle = '#fff'; c.lineWidth = lw; c.strokeRect(x + cs * .08, y + cs * .08, cs * .84, cs * .84);
     c.fillStyle = '#fff'; c.font = `bold ${cs * .34}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(TRL[t], x + cs / 2, y + cs / 2); if (o.touch) { c.fillStyle = '#000'; c.fillRect(x + cs * .08, y + cs * .08, cs * .22, cs * .22); c.fillStyle = '#fff'; c.font = `bold ${cs * .2}px sans-serif`; c.fillText('T', x + cs * .19, y + cs * .19); }
+    if (o.so) { c.fillStyle = '#000'; c.fillRect(x + cs * .7, y + cs * .08, cs * .22, cs * .22); c.fillStyle = '#ffd23f'; c.font = `bold ${cs * .2}px sans-serif`; c.fillText('S', x + cs * .81, y + cs * .19); }
   }
   c.restore();
 }
@@ -770,13 +777,13 @@ function drawCached(c, o, x, y, cs, col, time, fast) {
 // ---- static chunks: objects that never change (no colour / alpha / toggle trigger on their group, not animated, not scaled) are pre-rendered into big tiles of 6x6 cells and blitted,
 // so the per-frame cost of the static part of a level is a handful of drawImage calls instead of one per object. Tiles are padded so overflowing art never gets cut, and a bounded pixel budget evicts the oldest.
 const CH = new Map(); let CH_PX = 0; const CHW = 6 * U, CHP = 1.5 * U, CH_BUDGET = 16e6;
-const chunkable = o => { const d = OBJ[o.t], b = d.base ? OBJ[d.base] : d; return !(o.sc && o.sc !== 1) && !b.glow && !d.coin && !d.trig && !d.zone && !d.text && !ORBS.includes(o.t) && !(b.hz && b.hz.k === 's'); };
+const chunkable = o => { const d = OBJ[o.t], b = d.base ? OBJ[d.base] : d; return !(o.sc && o.sc !== 1) && !o.pcol && !(o.op < 1) && !b.glow && !d.coin && !d.trig && !d.zone && !d.text && !ORBS.includes(o.t) && !(b.hz && b.hz.k === 's'); };
 function chunkClear() { CH.clear(); CH_PX = 0; }
 function makeLayer(list, dynG) {   // split a sorted object list into static (baked into tiles) and dynamic (drawn one by one) parts. Only DENSE tiles (20+ static objects) are baked: a sparse tile would cost more to blit than its few sprites
   const L = { stat: [], dyn: [], cells: new Map() }, cand = new Map(), key = o => Math.floor(o.ex / CHW) + ',' + Math.floor(o.ey / CHW);
-  for (const o of list) if (chunkable(o) && !(o.g && dynG.has(o.g))) { const k = key(o); let a = cand.get(k); if (!a) cand.set(k, a = []); a.push(o); }
+  for (const o of list) if (chunkable(o) && !o.gl.some(g => dynG.has(g))) { const k = key(o); let a = cand.get(k); if (!a) cand.set(k, a = []); a.push(o); }
   for (const [k, a] of cand) if (a.length >= 20) L.cells.set(k, a);
-  for (const o of list) { if (chunkable(o) && !(o.g && dynG.has(o.g)) && L.cells.has(key(o))) L.stat.push(o); else L.dyn.push(o); }
+  for (const o of list) { if (chunkable(o) && !o.gl.some(g => dynG.has(g)) && L.cells.has(key(o))) L.stat.push(o); else L.dyn.push(o); }
   return L;
 }
 // ---------- the game ----------
@@ -810,22 +817,24 @@ class Game {
     let cn = 0; const objs = (level.objs || []).map(o => ({ ...o, ci: o.t === 'coin' ? cn++ : -1, gold: !!level.rated, ex: o.x * U, ey: o.y * U, tcol: o.col, col0: o.c || defColor(o.t), col: o.c || defColor(o.t), used: false, alp: 1, off: false, got: false, tf: false }));
     objs.sort((a, b) => a.ex - b.ex);
     this.groups = {};
-    objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); });
+    objs.forEach(o => { o.gl = gsOf(o); for (const g of o.gl) (this.groups[g] = this.groups[g] || []).push(o); });
     // hitboxes are built lazily in prep() the first time an object comes into range
     const mv = new Set(objs.filter(o => o.t === 'trig_move' || o.t === 'trig_rot').map(o => o.tg)), rg = new Set(objs.filter(o => o.t === 'trig_rot').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
+    const isMv = o => o.gl.some(g => mv.has(g)), zc = o => zCustom(o);
     this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: the wave slides along blocks / slopes inside them instead of dying (still solid). S blocks: end a dash.
-    this.DEC = LDM ? [] : objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow && !(o.g && mv.has(o.g))); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow && !(o.g && mv.has(o.g))); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
-    this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
-    this.D = objs.filter(o => (solid(o) || OBJ[o.t].deco) && o.g && mv.has(o.g)); this.Dset = new Set(this.D);   // decor in a moved / rotated group follows it too
-    this.DG = []; { const m = new Map(); for (const o of this.D) { let G = m.get(o.g); if (!G) { G = { g: o.g, list: [], x0: 1e9, x1: -1e9, rot: rg.has(o.g) }; m.set(o.g, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group: a whole group far from the player / camera is skipped with one check
+    this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow && (!LDM || OBJ[o.t].text) && !o.inv && !isMv(o) && !zc(o)); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow && !o.inv && !isMv(o) && !zc(o)); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t] && !o.nt); this.szp = objs.filter(o => SZP[o.t] && !o.nt);
+    this.S = objs.filter(o => solid(o) && !o.nt && !isMv(o));   // collision list: no-touch objects are left out (they are still drawn)
+    this.D = objs.filter(o => (solid(o) || OBJ[o.t].deco) && isMv(o)); this.Dset = new Set(this.D);   // decor in a moved / rotated group follows it too
+    this.DG = []; { const m = new Map(); for (const o of this.D) { const gl = o.gl.filter(g => mv.has(g)), k = gl.join(','); let G = m.get(k); if (!G) { G = { gl, list: [], x0: 1e9, x1: -1e9, rot: gl.some(g => rg.has(g)) }; m.set(k, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group set: a whole group far from the player / camera is skipped with one check: a whole group far from the player / camera is skipped with one check
     const dynG = new Set(); for (const o of objs) if ((o.t === 'trig_color' && Number(o.tg) > 0) || o.t === 'trig_alpha' || o.t === 'trig_toggle') dynG.add(o.tg);   // groups a trigger recolours / fades / toggles: those objects are never baked into tiles
     chunkClear();
-    this.SR = this.S;   // render list. LDM: blocks completely buried in other blocks (all 4 neighbours solid) are never drawn
-    if (LDM) { const full = new Set(), isFull = o => { const d = OBJ[o.t]; return d.solid && !d.slope && !d.half && (!o.sc || o.sc === 1) && Number.isInteger(o.x) && Number.isInteger(o.y); }; for (const o of this.S) if (isFull(o)) full.add(o.x + ',' + o.y); this.SR = this.S.filter(o => !(isFull(o) && full.has((o.x - 1) + ',' + o.y) && full.has((o.x + 1) + ',' + o.y) && full.has(o.x + ',' + (o.y - 1)) && full.has(o.x + ',' + (o.y + 1)))); }
+    this.SR = objs.filter(o => solid(o) && !o.inv && !isMv(o) && !zc(o));   // render list. LDM: blocks completely buried in other blocks (all 4 neighbours solid) are never drawn
+    if (LDM) { const full = new Set(), isFull = o => { const d = OBJ[o.t]; return d.solid && !d.slope && !d.half && (!o.sc || o.sc === 1) && Number.isInteger(o.x) && Number.isInteger(o.y); }; for (const o of this.SR) if (isFull(o)) full.add(o.x + ',' + o.y); this.SR = this.SR.filter(o => !(isFull(o) && full.has((o.x - 1) + ',' + o.y) && full.has((o.x + 1) + ',' + o.y) && full.has(o.x + ',' + (o.y - 1)) && full.has(o.x + ',' + (o.y + 1)))); }
     this.LS = makeLayer(this.SR, dynG); this.LD = makeLayer(this.DEC, dynG);
-    const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch); this.TT = tr.filter(o => o.touch); this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
-    this.ports = objs.filter(o => SPEEDS[o.t]); this.rports = objs.filter(o => REVP[o.t]);
+    this.ZB = {}; for (const o of objs) { if (!zc(o) || o.inv || isMv(o)) continue; const d = OBJ[o.t]; if (d.trig || d.zone || d.coin || (LDM && d.deco && !d.text)) continue; (this.ZB[o.z | 0] = this.ZB[o.z | 0] || []).push(o); }   // objects on a custom layer (Z order), sorted by x like everything else
+    const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch && !o.so); this.TT = tr.filter(o => o.touch && !o.so);   // spawn ordered triggers never fire on their own this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
+    this.ports = objs.filter(o => SPEEDS[o.t] && !o.nt); this.rports = objs.filter(o => REVP[o.t] && !o.nt);
     const end = tr.find(o => o.t === 'trig_end'); this.autoEnd = !end; this.endX = end ? end.ex : (objs.length ? objs.reduce((m, o) => Math.max(m, o.ex), 0) : 0) + U + 3 * U;   // no End Trigger placed: level ends 3 blocks past the farthest object
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
@@ -862,7 +871,7 @@ class Game {
   pause() { this.paused = true; }
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
-    this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
+    this.sq = []; this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
     this.objs.forEach(o => { this.clrRot(o); o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
     this.gr = 1; this.swT = 0; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
@@ -875,16 +884,19 @@ class Game {
     if (!first) this.attempts++;
     this.cb.onSpawn && this.cb.onSpawn(this.time);
   }
+  go(o) { let x = 0, y = 0; for (const g of o.gl) { const q = this.gOff[g]; if (q) { x += q.x; y += q.y; } } return [x * U, y * U]; }   // summed offset of every moving group an object (or a moving set) belongs to
   fire(t, instant) {
     const dur = instant ? 0 : (t.dur || 0);
+    if (t.t !== 'trig_color' && t.t !== 'trig_pulse' && t.t !== 'trig_zoom' && t.t !== 'trig_spawn' && t.t !== 'trig_end' && !(t.tg > 0)) return;   // blank target = does nothing
     if (t.t === 'trig_color') {
+      if (t.tg === undefined || t.tg === null || t.tg === '') return; const tcl = normHex(t.tcol || t.col); if (!tcl) return;
       const tgt = Number(t.tg) || 0, key = tgt === 0 ? 'bg' : tgt === -1 ? 'gr' : 'c' + tgt; this.acts = this.acts.filter(a => a.key !== key);
-      const to = hex2rgb(t.tcol || t.col || '#ff5252');
+      const to = hex2rgb(tcl);
       if (tgt === 0) this.acts.push({ key, k: 'bg', from: hex2rgb(this.bg), to, t0: this.time, dur });
       else if (tgt === -1) this.acts.push({ key, k: 'gr', from: hex2rgb(this.ground), to, t0: this.time, dur });
       else this.acts.push({ key, k: 'col', list: (this.groups[tgt] || []).map(o => [o, hex2rgb(o.col)]), to, t0: this.time, dur });
     } else if (t.t === 'trig_pulse') {
-      if (!instant) { this.acts = this.acts.filter(a => a.k !== 'pulse'); this.acts.push({ k: 'pulse', to: t.tcol || t.col || '#ffffff', t0: this.time, dur: Math.max(.05, t.dur || .5) }); }
+      if (!instant && normHex(t.tcol || t.col)) { this.acts = this.acts.filter(a => a.k !== 'pulse'); this.acts.push({ k: 'pulse', to: normHex(t.tcol || t.col), t0: this.time, dur: Math.max(.05, t.dur || .5) }); }
     } else if (t.t === 'trig_move') {
       const b = this.gOff[t.tg] || { x: 0, y: 0 };
       this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], pe: 0, t0: this.time, dur });
@@ -894,10 +906,15 @@ class Game {
       // rotate trigger: the target group orbits the centre of the centre group (and turns with it) by `deg` degrees over `dur` seconds. + = clockwise, - = anticlockwise
       const mem = (this.groups[t.tg] || []).filter(o => this.Dset.has(o)); if (!mem.length) return;
       const cen = (this.groups[t.cg] || []).length ? this.groups[t.cg] : mem;
-      const cpos = o => { const g = this.gOff[o.g]; return [o.ex + 15 + (g ? g.x * U : 0) + (o.rx || 0), o.ey + 15 + (g ? g.y * U : 0) + (o.ry || 0)]; };
+      const cpos = o => { const [gx, gy] = this.go(o); return [o.ex + 15 + gx + (o.rx || 0), o.ey + 15 + gy + (o.ry || 0)]; };
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const o of cen) { const [a, b] = cpos(o); x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b); }
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, key = 'r' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
-      this.acts.push({ key, k: 'rot', list: mem.map(o => { const [a, b] = cpos(o); return { o, dx: a - cx, dy: b - cy, a0: o.ra || 0 }; }), cx, cy, deg: Number(t.deg ?? 360) || 0, t0: this.time, dur });
+      this.acts.push({ key, k: 'rot', list: mem.map(o => { const [a, b] = cpos(o); return { o, dx: a - cx, dy: b - cy, a0: o.ra || 0 }; }), cx, cy, deg: Number(t.deg) || 0, t0: this.time, dur });
+    } else if (t.t === 'trig_spawn') {
+      // spawn trigger: after `dl` seconds every spawn ordered trigger in the listed groups fires
+      const dl = Math.max(0, Number(t.dl) || 0), ids = t.sgs || [];
+      if (instant) { this._sd = (this._sd || 0) + 1; if (this._sd < 16) for (const g of ids) for (const q of (this.groups[g] || [])) if (q.so && OBJ[q.t].trig && q.t !== 'trig_end' && !q.off) this.fire(q, true); this._sd--; }
+      else for (const g of ids) for (const q of (this.groups[g] || [])) if (q.so && OBJ[q.t].trig && this.sq.length < 3000) this.sq.push({ q, at: this.time + dl });
     } else if (t.t === 'trig_zoom') {
       this.acts = this.acts.filter(a => a.k !== 'zoom'); this.acts.push({ k: 'zoom', from: this.zoom, to: Math.max(.2, t.zoom || 1), t0: this.time, dur });
     } else if (t.t === 'trig_toggle') {
@@ -917,8 +934,8 @@ class Game {
       else if (a.k === 'mv') { const e = ease(pr), g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }); g.x += a.d[0] * (e - (a.pe || 0)); g.y += a.d[1] * (e - (a.pe || 0)); a.pe = e; }
       else if (a.k === 'fol') { const g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }), dx = this.p.x - a.lx, dy = this.p.y - a.ly; a.lx = this.p.x; a.ly = this.p.y; if (a.horz) g.x += dx / U; if (a.vert) g.y += dy / U; }
       else if (a.k === 'rot') {
-        const e = ease(pr), an = a.deg * e * Math.PI / 180, cs_ = Math.cos(an), sn = Math.sin(an);
-        for (const q of a.list) { const o = q.o, g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; o.rx = a.cx + q.dx * cs_ + q.dy * sn - 15 - o.ex - gx; o.ry = a.cy - q.dx * sn + q.dy * cs_ - 15 - o.ey - gy; o.ra = q.a0 + a.deg * e; if (OBJ[o.t].hz) this.rotHz(o); }
+        const e = pr, an = a.deg * e * Math.PI / 180, cs_ = Math.cos(an), sn = Math.sin(an);
+        for (const q of a.list) { const o = q.o, [gx, gy] = this.go(o); o.rx = a.cx + q.dx * cs_ + q.dy * sn - 15 - o.ex - gx; o.ry = a.cy - q.dx * sn + q.dy * cs_ - 15 - o.ey - gy; o.ra = q.a0 + a.deg * e; if (OBJ[o.t].hz) this.rotHz(o); }
       }
       else if (a.k === 'pulse') this.pulse = { col: a.to, a: 1 - pr };
       else if (a.k === 'zoom') this.zoom = a.from + (a.to - a.from) * ease(pr);
@@ -930,7 +947,7 @@ class Game {
     const p = this.p, os = [];
     for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0 || o.ra || o.rx || o.ry) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col, o.ra || 0, o.rx || 0, o.ry || 0]);
     return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mini: !!this.mini, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
-      gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
+      gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], sq: this.sq.map(e => ({ ...e })), os };
   }
   restore(k) {
     this.pv = null; this.cyT = 0;
@@ -938,7 +955,7 @@ class Game {
     for (const [o, u, g, t, off, al, col, ra, rx, ry] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; if (ra || rx || ry) { o.ra = ra || 0; o.rx = rx || 0; o.ry = ry || 0; if (o.ra) this.rotHz(o); } }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
     this.gr = k.gr; this.mini = !!k.mini; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
-    this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
+    this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins); this.sq = (k.sq || []).map(e => ({ ...e }));
     this.si = lb(this.S, this.p.x - 130); this.tI = lb(this.TT, this.p.x - 40);
     this.holdUsed = false; this.swT = 0; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
   }
@@ -971,6 +988,7 @@ class Game {
     }
     if (this.autoEnd && p.x >= this.endX) { this.win(); return; }
     this.time += dt; this.edgeT -= dt; this.orbT = (this.orbT || 0) - dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
+    if (this.sq.length) { let n = 0; for (let i = 0; i < this.sq.length && n < 300;) { const e = this.sq[i]; if (e.at <= this.time) { this.sq.splice(i, 1); n++; if (e.q.off) continue; if (e.q.t === 'trig_end') { this.win(); return; } this.fire(e.q); } else i++; } }   // spawn queue
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
@@ -1000,8 +1018,8 @@ class Game {
     while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
     for (let i = this.si; i < S.length && S[i].ex < p.x + 130; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
     for (const G of this.DG) {
-      const g = this.gOff[G.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (!G.rot && (G.x1 + gx < p.x - 160 || G.x0 + gx > p.x + 160)) continue;
-      for (const o of G.list) { if (o.off || OBJ[o.t].deco) continue; const ox = gx + (o.rx || 0), oy = gy + (o.ry || 0); if (Math.abs(o.ex + ox - p.x) > 160) continue; this.inter(o, ox, oy, prevB, edge); if (p.dead) return; }
+      const [gx, gy] = this.go(G); if (!G.rot && (G.x1 + gx < p.x - 160 || G.x0 + gx > p.x + 160)) continue;
+      for (const o of G.list) { if (o.off || o.nt || OBJ[o.t].deco) continue; const ox = gx + (o.rx || 0), oy = gy + (o.ry || 0); if (Math.abs(o.ex + ox - p.x) > 160) continue; this.inter(o, ox, oy, prevB, edge); if (p.dead) return; }
     }
     this.cyT = p.grounded ? COY : (this.cyT || 0) - dt;   // refill while standing, drain while airborne
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) p.rot = Math.round(p.rot / 90) * 90;   // landing on a block / the floor: instantly show the face you land on, no rolling
@@ -1076,7 +1094,7 @@ class Game {
       else if (y + h <= p.y + 2) { const t = y + h - sb2[3]; if (best === null || t > best) best = t; }
     };
     const S = this.S; for (let i = lb(S, p.x - 130); i < S.length && S[i].ex < p.x + 130; i++) test(S[i], 0, 0);
-    for (const o of this.D) { const g = this.gOff[o.g]; test(o, (g ? g.x * U : 0) + (o.rx || 0), (g ? g.y * U : 0) + (o.ry || 0)); }
+    for (const o of this.D) { if (o.nt) continue; const [gx, gy] = this.go(o); test(o, gx + (o.rx || 0), gy + (o.ry || 0)); }
     if (!up && best === null) best = -this.sbx()[3];
     if (best === null) return;
     const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
@@ -1126,7 +1144,8 @@ class Game {
     this.cb.onFrame && this.cb.onFrame(this.pct(), this.attempts);
     this.raf = requestAnimationFrame(t => this.frame(t));
   }
-  dr(c, o, x, y, cs, fa, fast) { c.globalAlpha = fa < 1 ? fa : 1; drawCached(c, o, x, y, cs, o.col, this.time, fast); c.globalAlpha = 1; }
+  oc(o) { return o.pcol === 1 ? this.skin.c1 : o.pcol === 2 ? this.skin.c2 : o.col; }   // player colors: whoever plays sees their own
+  dr(c, o, x, y, cs, fa, fast) { c.globalAlpha = (fa < 1 ? fa : 1) * (o.op != null ? o.op : 1); drawCached(c, o, x, y, cs, this.oc(o), this.time, fast); c.globalAlpha = 1; }
   render(dt) {
     this.runActs(2); sprFrame();
     const c = this.c, W = this.cv.width, H = this.cv.height, p = this.p, zs = this.acts.some(a => a.k === 'zoom');
@@ -1173,10 +1192,11 @@ class Game {
       for (let i = from; i < L.stat.length && L.stat[i].ex < rx; i++) { const o = L.stat[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); }
       for (let i = lb(L.dyn, lx); i < L.dyn.length && L.dyn[i].ex < rx; i++) { const o = L.dyn[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); }
     };
-    layer(this.LD, 'd'); layer(this.LS, 's');
-    for (const G of this.DG) { const gg = this.gOff[G.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0; if (!G.rot && (X(G.x1 + gx) < -cs * 2 || X(G.x0 + gx) > W + cs)) continue; for (const o of G.list) { if (o.off) continue; const ox = o.ex + gx + (o.rx || 0), x = X(ox), fa = (re - ox) / FADE; if (fa > 0 && x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + gyy + (o.ry || 0) + U), cs, fa, fast); } }
-    { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa; drawCached(c, o, x, Y(o.ey + U), cs, o.col, this.time, fast); c.globalAlpha = 1; } }
-    for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
+    const zpass = (z0, z1) => { for (let z = z0; z <= z1; z++) { const L = this.ZB[z]; if (!L) continue; for (let i = lb(L, lx); i < L.length && L[i].ex < rx; i++) { const o = L[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); } } };
+    const drawDG = pre => { for (const G of this.DG) { const [gx, gyy] = this.go(G); if (!G.rot && (X(G.x1 + gx) < -cs * 2 || X(G.x0 + gx) > W + cs)) continue; for (const o of G.list) { if (o.off || o.inv || (LDM && OBJ[o.t].deco && !OBJ[o.t].text) || !!(o.z && o.z < 5) !== pre) continue; const ox = o.ex + gx + (o.rx || 0), x = X(ox), fa = (re - ox) / FADE; if (fa > 0 && x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + gyy + (o.ry || 0) + U), cs, fa, fast); } } };
+    zpass(1, 2); layer(this.LD, 'd'); zpass(3, 4); drawDG(true); layer(this.LS, 's'); drawDG(false); zpass(5, 8);   // Z order: layers 1-2 behind decor, 3-4 between decor and blocks, 5-8 in front of blocks
+    { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa * (o.op != null ? o.op : 1); drawCached(c, o, x, Y(o.ey + U), cs, this.oc(o), this.time, fast); c.globalAlpha = 1; } }
+    for (const o of this.COIN) if (!o.got && !o.off && !o.inv) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
@@ -1996,7 +2016,7 @@ function importLevel(i) {
     const f = inp.files[0]; if (!f) return; if (f.size > 900000) return toast('File too big', 'err');
     let o; try { o = JSON.parse(await f.text()); } catch { return toast('Not a valid level file', 'err'); }
     if (!o || !Array.isArray(o.objs)) return toast('Not a valid level file', 'err');
-    const objs = o.objs.filter(q => q && typeof q.t === 'string' && OBJ[q.t] && Number.isFinite(q.x) && Number.isFinite(q.y)).map(q => { const c = {}; for (const [k, v] of Object.entries(q)) if (['number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length <= 40)) c[k] = v; return c; });
+    const objs = o.objs.filter(q => q && typeof q.t === 'string' && OBJ[q.t] && Number.isFinite(q.x) && Number.isFinite(q.y)).map(q => { const c = {}; for (const [k, v] of Object.entries(q)) if (['number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length <= 40) || (Array.isArray(v) && v.length <= 20 && v.every(n => Number.isFinite(n)))) c[k] = v; return c; });
     if (!objs.length) return toast('No objects found in that file', 'err');
     if (l.objs.length && !confirm(`Replace this level's ${l.objs.length} objects with ${objs.length} imported objects?`)) return;
     const hex = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
@@ -2010,7 +2030,7 @@ function importLevel(i) {
 }
 
 /* ================= editor: canvas ================= */
-const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, rot45: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null };
+const ed = { on: false, slot: -1, lv: null, camX: -90, camY: -80, z: 1, mode: 'build', tool: 'block', rot: 0, rot45: 0, sel: null, sels: [], clip: [], hist: [], mx: 300, my: 300, wx: 0, wy: 0, drag: null, tab: 'blocks', posMode: false, spawn: null, layer: 0, panel: null, cyc: null };
 const iconCache = {};
 function objIcon(t) {
   if (iconCache[t]) return iconCache[t];
@@ -2020,16 +2040,16 @@ function objIcon(t) {
   return iconCache[t] = cv.toDataURL();
 }
 function openEditor(i) {
-  ed.slot = i; ed.lv = slots[i]; ed.camX = -300; ed.camY = -80; ed.z = 1; ed.sel = null; ed.sels = []; ed.hist = []; ed.redo = []; ed.mode = 'build'; ed.posMode = false; ed.spawn = null; ed.on = true;
-  showLayer('edit'); setTrack('editor'); renderEdUI(); renderProps(); edDraw();
+  ed.slot = i; ed.lv = slots[i]; ed.z = 1; ed.layer = 0; ed.panel = null; ed.sel = null; ed.sels = []; ed.hist = []; ed.redo = []; ed.mode = 'build'; ed.posMode = false; ed.spawn = null; ed.on = true;
+  showLayer('edit'); setTrack('editor'); renderEdUI(); edCenter(); renderProps(); edDraw();
 }
 function renderEdUI() {
   document.querySelectorAll('#edModes button').forEach(b => b.classList.toggle('on', b.dataset.m === ed.mode));
   const cats = [...new Set(Object.values(OBJ).map(o => o.cat))]; cats.push('edit');
-  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edrot45" title="Rotate 45 degrees (R)">⟳ 45°</button><button data-act="edcopy">Copy</button><button data-act="edpaste">Paste</button>`;
+  $('#edTabs').innerHTML = cats.map(c => `<button class="${c === ed.tab ? 'on' : ''}" data-act="edtab" data-c="${c}">${c}</button>`).join('') + `<button data-act="edrotl">↺ Q</button><button data-act="edrotr">↻ E</button><button data-act="edrot45" title="Rotate 45 degrees (R)">⟳ 45°</button>`;
   $('#edItems').innerHTML = ed.tab === 'edit' ? EDPANEL() : Object.entries(OBJ).filter(([, o]) => o.cat === ed.tab).map(([t, o]) => `<button class="it ${t === ed.tool ? 'on' : ''}" data-act="edtool" data-t="${t}"><img src="${objIcon(t)}">${o.name}</button>`).join('');
   const pb = $('#edPosBtn'); if (pb) { pb.textContent = '📍 Play at position: ' + (ed.posMode ? 'ON' : 'OFF'); pb.classList.toggle('green', ed.posMode); }
-  const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`;
+  const ok = ed.lv && ed.lv.verified === sigOf(ed.lv.objs); $('#edStatus').textContent = `${ed.lv.name} · ${ed.lv.objs.length} obj · ${ok ? '✔ Verified' : 'Not verified'}`; sideState();
 }
 const r3 = v => Math.round(v * 1000) / 1000, oh = o => o.t.startsWith('port') ? PH : OBJ[o.t].tall ? 2 : 1;
 // bounding box in cells (portals are 3 tall; rotated 90/270 they lie flat: 3 wide, 1 tall, centred on the same spot)
@@ -2060,50 +2080,140 @@ let asT = null;
 function changed() { if (!ed.keepRedo) ed.redo = []; ed.lv.updated = Date.now(); clearTimeout(asT); asT = setTimeout(() => saveSlots(ed.slot), 800); renderEdUI(); }
 function s2w(e) { const cv = $('#editCanvas'), H = cv.clientHeight; ed.mx = e.offsetX; ed.my = e.offsetY; ed.wx = e.offsetX / ed.z + ed.camX; ed.wy = (H - e.offsetY) / ed.z + ed.camY; return [ed.wx, ed.wy]; }
 const under = (o, wx, wy) => { const px = wx / U, py = wy / U, b = objBox(o); return px >= b.x && px < b.x + b.w && py >= b.y && py < b.y + b.h; };
-function pick(wx, wy) { const os = ed.lv.objs; for (let i = os.length - 1; i >= 0; i--) if (under(os[i], wx, wy)) return os[i]; return null; }
+function picks(wx, wy) { return ed.lv.objs.map((o, i) => [o, i]).filter(([o]) => under(o, wx, wy) && inLayer(o)).sort((a, b) => zOf(b[0]) - zOf(a[0]) || b[1] - a[1]).map(x => x[0]); }   // everything under the cursor, front-most first
+function pick(wx, wy) { return picks(wx, wy)[0] || null; }
 function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
   if (t === 'coin' && lv.objs.filter(o => o.t === 'coin').length >= 3 && !lv.objs.some(o => o.t === 'coin' && o.x === cx && o.y === cy)) return toast('Max 3 star coins per level', 'err');
   if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot && (o.r45 || 0) === (no45({ t }) ? 0 : ed.rot45))) return;
   if (!OBJ[t].trig && !OBJ[t].deco && !OBJ[t].zone) lv.objs = lv.objs.filter(o => !(o.t === t && o.x === cx && o.y === cy));   // blocks / hazards can now be stacked: only the same object type gets replaced
   if (t === 'trig_end') lv.objs = lv.objs.filter(o => o.t !== 'trig_end');
-  const o = { t, x: cx, y: cy, r: ed.rot, g: 0 }; if (ed.rot45 && !no45(o)) o.r45 = 1;
+  const o = { t, x: cx, y: cy, r: ed.rot }; if (ed.rot45 && !no45(o)) o.r45 = 1;
   if (t === 'block' || t === 'spike' || t === 'half' || (OBJ[t].slope && !OBJ[t].slide)) o.c = '#0d0d22';
-  if (t === 'trig_pulse') Object.assign(o, { col: '#ffffff', dur: .5 });
-  if (t === 'trig_color') { const pv = [...lv.objs].reverse().find(q => q.t === 'trig_color'); Object.assign(o, { tg: pv ? pv.tg : 0, col: '#ff5252', dur: pv ? pv.dur : 1 }); }
-  if (t === 'trig_move') Object.assign(o, { tg: 1, dx: 5, dy: 0, dur: 1, fx: false, fy: false });
-  if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
-  if (t === 'trig_toggle') Object.assign(o, { tg: 1, on: false });
-  if (t === 'trig_alpha') Object.assign(o, { tg: 1, pc: 50, dur: 1 });
-  if (t === 'trig_rot') Object.assign(o, { tg: 1, cg: 2, deg: 360, dur: 1 });
   if (t === 'dtext') Object.assign(o, { txt: 'Text', fn: '0' });
-  if (OBJ[t].trig) o.touch = false;
+  if (ed.layer && isDraw(o) && !OBJ[t].coin && ed.layer !== defZ(t)) o.z = ed.layer;   // placing while viewing a layer puts the object on it
   if (DASH[t]) o.a = 0;
-  lv.objs.push(o); if (t === 'trig_color' || t === 'trig_pulse' || t === 'dtext' || OBJ[t].zone) { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
+  lv.objs.push(o); if (OBJ[t].trig || t === 'dtext' || OBJ[t].zone) { ed.sel = o; ed.sels = [o]; ed.panel = 'object'; renderProps(); } changed();
 }
-function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !under(o, wx, wy)); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
+function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !(under(o, wx, wy) && inLayer(o))); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
-function renderProps() {
-  const el = $('#edProps'), o = ed.sel; if (!ed.sels.length) return el.classList.remove('open'); el.classList.add('open');
-  if (!o) { el.innerHTML = `<h3>${ed.sels.length} selected</h3><label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${ed.sels[0].g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Color<input type="color" data-p="c" value="${ed.sels[0].c || '#0d0d22'}"></label><div class="row"><button class="btn sm" data-act="edrotl">↺ Left</button><button class="btn sm" data-act="edrotr">↻ Right</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm" data-act="edcopy">Copy</button><button class="btn sm red" data-act="eddel">Delete</button></div><div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>`; return; }
-  let h = `<h3>${OBJ[o.t].name}</h3>`;
-  if (o.t === 'trig_color') h += `<label>Target group (0 = background, -1 = ground)<input type="number" data-p="tg" value="${o.tg}"></label><label>Color<input type="color" data-p="col" value="${o.col}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
-  else if (o.t === 'trig_move') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Move X (blocks)<input type="number" data-p="dx" value="${o.dx}"></label><label>Move Y (blocks)<input type="number" data-p="dy" value="${o.dy}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label><label>Follow player X<input type="checkbox" data-p="fx" ${o.fx ? 'checked' : ''}> moves up/down with the player</label><label>Follow player Y<input type="checkbox" data-p="fy" ${o.fy ? 'checked' : ''}> moves right with the player</label>`;
-  else if (o.t === 'trig_zoom') h += `<label>Zoom (1 = default)<input type="number" step=".1" min=".2" max="4" data-p="zoom" value="${o.zoom ?? 1}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
-  else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
-  else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
-  else if (o.t === 'trig_rot') h += `<label>Group to rotate<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Rotate around the centre of group<input type="number" min="1" data-p="cg" value="${o.cg ?? 2}"></label><label>Degrees (negative = anticlockwise)<input type="number" step="15" data-p="deg" value="${o.deg ?? 360}"></label><label>Time (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur ?? 1}"></label><p class="muted">360 in 1s = one full turn around the centre group per second. The group's blocks keep a square hitbox; spikes turn with it.</p>`;
-  else if (o.t === 'trig_pulse') h += `<label>Pulse color<input type="color" data-p="col" value="${o.col || '#ffffff'}"></label><label>Fade out time (s)<input type="number" step=".1" min=".05" data-p="dur" value="${o.dur ?? .5}"></label><p class="muted">Flashes the background with this color, then fades it out.</p>`;
-  else if (o.t === 'zone_d') h += '<p class="muted">Place above (or below) blocks or slopes: the blocks stay solid, but the wave slides along their top / underside like ground instead of dying. Hitting the side of a block or a spike still kills. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
-  else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
-  else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
-  else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || defColor(o.t)}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
-  if (OBJ[o.t].text) h += `<label>Description (the text shown)<input type="text" maxlength="40" data-p="txt" value="${esc(o.txt ?? '')}"></label><label>Font<select data-p="fn">${TXN.map((n, i) => `<option value="${i}" ${(+o.fn || 0) === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
-  if (OBJ[o.t].zone) { el.innerHTML = h; return; }
-  if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
-  else if (!OBJ[o.t].slope) h += `<label>Scale (0.1 - 5)<input type="number" min=".1" max="5" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
-  h += `<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm red" data-act="eddel">Delete</button></div>` + HALF; el.innerHTML = h;
+// ---------- editor side panel: Copy / Paste / Copy Paste / Edit Group / Edit Object / Edit Color + layer viewer ----------
+const inLayer = o => !ed.layer || zOf(o) === ed.layer;
+const isDraw = o => { const d = OBJ[o.t]; return !d.trig && !d.zone; };
+const canColor = o => { const d = OBJ[o.t]; return !!(d.solid || d.hz || d.deco || o.t === 'trig_color' || o.t === 'trig_pulse'); };
+const colField = o => (o.t === 'trig_color' || o.t === 'trig_pulse') ? 'col' : 'c';
+const colNow = o => normHex(o[colField(o)]) || (OBJ[o.t].trig ? '#ffffff' : defColor(o.t));
+const grayOf = hx => { const [r, g, b] = hex2rgb(hx), l = r * .3 + g * .59 + b * .11; return rgb2hex([l, l, l]); };
+const hsv2rgb = (h, s, v) => { const f = n => { const k = (n + h / 60) % 6; return (v - v * s * Math.max(0, Math.min(k, 4 - k, 1))) * 255; }; return [f(5), f(3), f(1)]; };
+const hsv2hex = (h, s, v) => rgb2hex(hsv2rgb(h, s, v));
+const hex2hsv = hx => { const [r, g, b] = hex2rgb(hx).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0; if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return { h: h * 60, s: mx ? d / mx : 0, v: mx }; };
+function parseHSV(str) {   // "200 80 100", "200,80,100", "hsv(200, 80%, 100%)" ... (s and v as 0-100, or 0-1 when written with decimals)
+  const m = String(str).match(/-?\d*\.?\d+/g); if (!m || m.length < 3) return null; let [h, s, v] = m.slice(0, 3).map(Number);
+  if (s <= 1 && v <= 1 && String(str).includes('.') && !String(str).includes('%')) { s *= 100; v *= 100; }
+  return { h: ((h % 360) + 360) % 360, s: Math.max(0, Math.min(100, s)) / 100, v: Math.max(0, Math.min(100, v)) / 100 };
 }
+function sideState() {
+  const has = ed.sels.length > 0, set = (id, on) => { const b = $(id); if (b) b.disabled = !on; };
+  set('#sbCopy', has); set('#sbPaste', ed.clip.length > 0); set('#sbCP', has); set('#sbGrp', has); set('#sbObj', has); set('#sbCol', ed.sels.some(isDraw) || ed.sels.some(canColor));
+  for (const [id, k] of [['#sbGrp', 'group'], ['#sbObj', 'object'], ['#sbCol', 'color']]) { const b = $(id); if (b) b.classList.toggle('on', ed.panel === k); }
+  const n = $('#edLayerN'); if (n) n.textContent = ed.layer ? ed.layer : 'ALL';
+}
+function edCenter() {   // camera on the start position and the ground, so building can begin right on the floor
+  const cv = $('#editCanvas'), W = cv.clientWidth || innerWidth, bh = ($('#edBottom') || {}).offsetHeight || 150;
+  ed.camX = U / 2 - W / 2 / ed.z; ed.camY = -(bh + 70) / ed.z;
+}
+function edCopyPaste() {   // paste an exact copy of the selection right on top of itself
+  if (!ed.sels.length) return; snap(); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length;
+  const n = ed.sels.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).map(o => JSON.parse(JSON.stringify(o))); if (!n.length) return;
+  ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed();
+}
+const bank = (ids, k, ph) => `<div class="bank">${ids.map(g => `<span class="tag" data-act="edtagrm" data-k="${k}" data-g="${g}" title="Click to remove">${g}<b>✕</b></span>`).join('') || '<em class="muted">none yet</em>'}</div><span class="gp"><input id="${k}In" type="number" min="1" max="9999" placeholder="${ph}"><button class="btn sm green" data-act="edtagadd" data-k="${k}">Add</button></span>`;
+function renderProps() {
+  const el = $('#edProps'); if (!ed.sels.length) ed.panel = null;
+  sideState();
+  if (!ed.panel) { el.classList.remove('open'); return; }
+  el.classList.add('open'); (ed.panel === 'group' ? panelGroup : ed.panel === 'object' ? panelObject : panelColor)(el);
+}
+function panelGroup(el) {
+  const sels = ed.sels, ids = [...new Set(sels.flatMap(gsOf))].sort((a, b) => a - b), zs = sels.filter(isDraw);
+  let h = `<h3>Edit Group${sels.length > 1 ? ' · ' + sels.length + ' objects' : ''}</h3><label>Group IDs</label><p class="muted">Type a number and press Enter to add it. Click a tag to remove it.</p>${bank(ids, 'g', 'Group ID, Enter')}<div class="row"><button class="btn sm" data-act="edgrp" title="Add the next unused group ID">+ next unused ID</button></div>`;
+  if (zs.length) { const cur = new Set(zs.map(zOf)); h += `<label>Layer (Z order): 1 = far back, 8 = far front</label><div class="zrow">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button class="${cur.size === 1 && cur.has(n) ? 'on' : ''}" data-act="edz" data-z="${n}">${n}</button>`).join('')}</div>`; }
+  el.innerHTML = h;
+}
+function panelObject(el) {
+  const num = (lab, p, v, at, ph) => `<label>${lab}<input type="number" ${at || ''} data-p="${p}" value="${v ?? ''}" placeholder="${ph || ''}"></label>`;
+  const chk = (lab, p, v) => `<label class="ck"><input type="checkbox" data-p="${p}" ${v ? 'checked' : ''}> ${lab}</label>`;
+  const hex = (lab, p, v) => `<label>${lab}<input type="text" maxlength="7" data-p="${p}" value="${esc(v || '')}" placeholder="#rrggbb"></label>`;
+  const ROT = '<div class="row"><button class="btn sm" data-act="edrotl">↺</button><button class="btn sm" data-act="edrotr">↻</button><button class="btn sm" data-act="edrot45">⟳ 45°</button><button class="btn sm red" data-act="eddel">Delete</button></div>';
+  const n = ed.sels.length, o = ed.sel;
+  if (n > 1 || !o) { const all = k => ed.sels.every(q => q[k]); el.innerHTML = `<h3>Edit Object · ${n} selected</h3>` + chk('No touch (no hitbox, the player passes through)', 'nt', all('nt')) + chk('Invisible (hitbox stays, just not shown in game)', 'inv', all('inv')) + ROT + HALF; return; }
+  const d = OBJ[o.t]; let h = `<h3>${d.name}</h3>`;
+  if (o.t === 'trig_color') h += num('Target group', 'tg', o.tg, 'step="1"', '0 = background, -1 = ground') + hex('Color (hex)', 'col', o.col) + num('Duration (s)', 'dur', o.dur, 'step=".1" min="0"');
+  else if (o.t === 'trig_move') h += num('Target group', 'tg', o.tg, 'min="1"') + num('Move X (blocks)', 'dx', o.dx) + num('Move Y (blocks)', 'dy', o.dy) + num('Duration (s)', 'dur', o.dur, 'step=".1" min="0"') + chk('Follow player X (moves up/down with the player)', 'fx', o.fx) + chk('Follow player Y (moves right with the player)', 'fy', o.fy);
+  else if (o.t === 'trig_zoom') h += num('Zoom', 'zoom', o.zoom, 'step=".1" min=".2" max="4"', '1 = default') + num('Duration (s)', 'dur', o.dur, 'step=".1" min="0"');
+  else if (o.t === 'trig_toggle') h += num('Target group', 'tg', o.tg, 'min="1"') + chk('Turn the group ON (unticked = turn it OFF)', 'on', o.on);
+  else if (o.t === 'trig_alpha') h += num('Target group', 'tg', o.tg, 'min="1"') + num('Opacity (%)', 'pc', o.pc, 'min="0" max="100"', '100') + num('Duration (s)', 'dur', o.dur, 'step=".1" min="0"');
+  else if (o.t === 'trig_rot') h += num('Group to rotate', 'tg', o.tg, 'min="1"') + num('Rotate around the centre of group', 'cg', o.cg, 'min="1"', 'blank = its own centre') + num('Degrees (negative = anticlockwise)', 'deg', o.deg, 'step="15"', '360 = one full turn') + num('Time (s)', 'dur', o.dur, 'step=".1" min="0"') + '<p class="muted">Turns at a constant speed (degrees / time): no fade in or out.</p>';
+  else if (o.t === 'trig_pulse') h += hex('Pulse color (hex)', 'col', o.col) + num('Fade out time (s)', 'dur', o.dur, 'step=".1" min=".05"');
+  else if (o.t === 'trig_spawn') h += '<label>Spawn these groups</label>' + bank(o.sgs || [], 's', 'Group ID, Enter') + num('Delay before spawning (s)', 'dl', o.dl, 'step=".1" min="0"', '0') + '<p class="muted">Fires every Spawn ordered trigger that is in one of these groups.</p>';
+  else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
+  else if (o.t === 'zone_d') h += '<p class="muted">Place above (or below) blocks or slopes: the blocks stay solid, but the wave slides along their top / underside like ground instead of dying. Invisible in play.</p>';
+  else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p>';
+  else {
+    if (DASH[o.t]) h += num('Dash angle (-75..75)', 'a', o.a, 'min="-75" max="75" step="15"', '0');
+    if (d.text) h += `<label>Text<input type="text" maxlength="40" data-p="txt" value="${esc(o.txt ?? '')}"></label><label>Font<select data-p="fn">${TXN.map((nm, i) => `<option value="${i}" ${(+o.fn || 0) === i ? 'selected' : ''}>${nm}</option>`).join('')}</select></label>`;
+    if (!d.slope) h += num('Scale (0.1 - 5)', 'sc', o.sc, 'min=".1" max="5" step=".1"', '1');
+    if (!d.coin) h += chk('No touch (no hitbox, the player passes through)', 'nt', o.nt) + chk('Invisible (hitbox stays, just not shown in game)', 'inv', o.inv);
+  }
+  if (d.zone) { el.innerHTML = h + '<div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>'; return; }
+  if (d.trig) h += chk('Touch trigger (only fires when touched)', 'touch', o.touch) + chk('Spawn ordered (only fires when a Spawn Trigger spawns its group)', 'so', o.so) + '<label>Own groups (for toggles / spawning)</label>' + bank(gsOf(o), 'g', 'Group ID, Enter');
+  el.innerHTML = h + ROT + HALF;
+}
+function panelColor(el) {
+  const cs = ed.sels.filter(canColor), ds = ed.sels.filter(isDraw);
+  ed.hsv = hex2hsv(cs.length ? colNow(cs[0]) : '#ffffff');
+  const pm = cs.length && cs.every(o => o.pcol === cs[0].pcol) ? (cs[0].pcol || 0) : -1;
+  let h = '<h3>Edit Color</h3>';
+  if (cs.length) h += `<div class="wheelbox"><canvas id="colWheel" width="150" height="150"></canvas></div><label>Brightness<input type="range" id="colV" min="0" max="100"></label><label>HEX<input type="text" id="colHex" maxlength="9" placeholder="#rrggbb"></label><label>HSV (paste H S V, or hsv(h, s%, v%))<input type="text" id="colHsv" placeholder="200 80 100"></label><label>Color source</label><div class="zrow wide" id="colModes">${['Custom', 'Primary', 'Secondary'].map((nm, i) => `<button class="${pm === i ? 'on' : ''}" data-act="edcolmode" data-m="${i}">${nm}</button>`).join('')}</div><p class="muted">Primary / Secondary uses the colors of whoever is playing, so it looks different for every player.</p>`;
+  if (ds.length) { const op = Math.round((ds[0].op ?? 1) * 100); h += `<label>Opacity <b id="colOpV">${op}%</b><input type="range" id="colOp" min="0" max="100" value="${op}"></label>`; }
+  el.innerHTML = h; if (cs.length) syncColor();
+}
+function syncColor() {
+  const q = ed.hsv, hx = hsv2hex(q.h, q.s, q.v), set = (id, v) => { const e = $(id); if (e && document.activeElement !== e) e.value = v; };
+  set('#colHex', hx); set('#colHsv', `${Math.round(q.h)} ${Math.round(q.s * 100)} ${Math.round(q.v * 100)}`); set('#colV', Math.round(q.v * 100)); drawWheel();
+}
+function drawWheel() {
+  const cv = $('#colWheel'); if (!cv) return; const c = cv.getContext('2d'), n = cv.width, R = n / 2, img = c.createImageData(n, n), v = ed.hsv.v;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const dx = (x + .5 - R) / R, dy = (y + .5 - R) / R, d = Math.hypot(dx, dy), i = (y * n + x) * 4; if (d > 1) continue;
+    const [r, g, b] = hsv2rgb((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, d, v); img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b; img.data[i + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+  const a = ed.hsv.h * Math.PI / 180, mx = R + Math.cos(a) * ed.hsv.s * R, my = R + Math.sin(a) * ed.hsv.s * R;
+  c.lineWidth = 3; c.strokeStyle = '#000'; c.beginPath(); c.arc(mx, my, 7, 0, 7); c.stroke(); c.lineWidth = 2; c.strokeStyle = '#fff'; c.beginPath(); c.arc(mx, my, 7, 0, 7); c.stroke();
+}
+function colApply() {
+  const hx = hsv2hex(ed.hsv.h, ed.hsv.s, ed.hsv.v); let had = false;
+  ed.sels.forEach(o => { if (canColor(o)) { o[colField(o)] = hx; if (o.pcol) { delete o.pcol; had = true; } } });   // picking a color = a custom color again
+  if (had) document.querySelectorAll('#colModes button').forEach(b => b.classList.toggle('on', b.dataset.m === '0'));
+  changed(); syncColor();
+}
+function colInput(e) {   // inputs of the Edit Color panel; true when handled
+  const id = e.target.id;
+  if (id === 'colV') { ed.hsv.v = +e.target.value / 100; colApply(); return true; }
+  if (id === 'colHex') { const h = normHex(e.target.value); if (h) { ed.hsv = hex2hsv(h); colApply(); } return true; }
+  if (id === 'colHsv') { const q = parseHSV(e.target.value); if (q) { ed.hsv = q; colApply(); } return true; }
+  if (id === 'colOp') { const v = +e.target.value; ed.sels.forEach(o => { if (!isDraw(o)) return; if (v >= 100) delete o.op; else o.op = v / 100; }); const l = $('#colOpV'); if (l) l.textContent = v + '%'; changed(); return true; }
+  return false;
+}
+function wheelPick(e) {
+  const r = e.target.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 2 - 1, y = (e.clientY - r.top) / r.height * 2 - 1;
+  ed.hsv.h = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; ed.hsv.s = Math.min(1, Math.hypot(x, y)); colApply();
+}
+document.addEventListener('pointerdown', e => { if (e.target.id === 'colWheel') { e.target.setPointerCapture(e.pointerId); snap(); ed.wheel = e.target; wheelPick(e); } });
+document.addEventListener('pointermove', e => { if (ed.wheel) wheelPick({ target: ed.wheel, clientX: e.clientX, clientY: e.clientY }); });
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { ed.wheel = null; }));
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'gIn' || e.target.id === 'sIn')) { e.preventDefault(); actions.edtagadd({ k: e.target.id[0] }); } });
 function edDraw() {
   if (!ed.on) return; requestAnimationFrame(edDraw);
   const cv = $('#editCanvas'), d = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
@@ -2118,7 +2228,15 @@ function edDraw() {
   const ky = Y((topRows(lv.objs) + 10) * U);
   if (ky > 0) { c.strokeStyle = '#ff4040'; c.lineWidth = 2; c.setLineDash([10, 6]); c.beginPath(); c.moveTo(0, ky); c.lineTo(W, ky); c.stroke(); c.setLineDash([]); c.fillStyle = '#ff4040'; c.font = 'bold 12px sans-serif'; c.textAlign = 'left'; c.fillText('KILL LINE (10 above tallest object)', 8, ky - 4); }
   c.globalAlpha = .5; c.save(); c.translate(X(15), Y(15)); drawIcon(c, P?.skin || 0, PRIMARY[P?.c1 || 0], SECONDARY[P?.c2 || 0], cs); c.restore(); c.globalAlpha = 1;
-  for (const pass of [0, 1, 2]) for (const o of lv.objs) { const od = OBJ[o.t], ps = od.glow ? 2 : od.deco ? 0 : 1; if (ps !== pass) continue; const sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 4 || sx > W + cs * 3 || sy < -cs * 4 || sy > H + cs * 3) continue; drawObj(c, o, sx, sy, cs, o.c || defColor(o.t), true, now); }   // same layering as the game: decor, then objects, then glow on top
+  {   // objects are drawn by layer (1 = back ... 8 = front); inside a layer: decor, then objects, then glow
+    const bk = Array.from({ length: 24 }, () => []), pc1 = PRIMARY[P?.c1 || 0], pc2 = SECONDARY[P?.c2 || 0];
+    for (const o of lv.objs) { const od = OBJ[o.t], ps = od.glow ? 2 : od.deco ? 0 : 1, sx = X(o.x * U), sy = Y(o.y * U + U); if (sx < -cs * 4 || sx > W + cs * 3 || sy < -cs * 4 || sy > H + cs * 3) continue; bk[(zOf(o) - 1) * 3 + ps].push([o, sx, sy]); }
+    for (const L of bk) for (const [o, sx, sy] of L) {
+      let col = o.pcol === 1 ? pc1 : o.pcol === 2 ? pc2 : (o.c || defColor(o.t)), al = o.op != null ? Math.max(.2, o.op) : 1;
+      if (o.inv) al *= .45; if (ed.layer && zOf(o) !== ed.layer) { al *= .25; col = grayOf(col); }
+      c.globalAlpha = al; drawObj(c, o, sx, sy, cs, col, true, now); c.globalAlpha = 1;
+    }
+  }
   c.strokeStyle = '#ffe36b'; c.lineWidth = 3; for (const o of ed.sels) { const b = objBox(o); c.strokeRect(X(b.x * U) - 2, Y((b.y + b.h) * U) - 2, b.w * cs + 4, b.h * cs + 4); }
   if (ed.drag && ed.drag.k === 'box' && ed.drag.x1 != null) { const d = ed.drag; c.fillStyle = 'rgba(255,227,107,.18)'; c.fillRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); c.strokeRect(X(d.x0), Y(d.y0), X(d.x1) - X(d.x0), Y(d.y1) - Y(d.y0)); }
   if (ed.spawn && ed.posMode) { const sx = X(ed.spawn.x * U), sy = Y(ed.spawn.y * U + U); c.fillStyle = 'rgba(53,255,106,.35)'; c.fillRect(sx, sy, cs, cs); c.strokeStyle = '#35ff6a'; c.lineWidth = 3; c.strokeRect(sx, sy, cs, cs); c.fillStyle = '#35ff6a'; c.beginPath(); c.moveTo(sx + cs / 2, sy - cs * .45); c.lineTo(sx + cs * .75, sy - cs * .15); c.lineTo(sx + cs / 2, sy + cs * .15); c.lineTo(sx + cs * .25, sy - cs * .15); c.closePath(); c.fill(); }
@@ -2138,7 +2256,7 @@ function edDraw() {
     else {
       const o = pick(wx, wy);
       if (e.shiftKey) { if (!o) ed.drag = { k: 'box', x0: wx, y0: wy }; else { const i = ed.sels.indexOf(o); i < 0 ? ed.sels.push(o) : ed.sels.splice(i, 1); } }
-      else { if (!o) ed.sels = []; else if (!ed.sels.includes(o)) ed.sels = [o]; ed.drag = o ? { k: 'move', cx, cy } : null; }
+      else { const st = picks(wx, wy); ed.cyc = null; if (!o) { ed.sels = []; ed.drag = null; } else { if (ed.sels.length === 1 && st.length > 1 && st.includes(ed.sels[0])) ed.cyc = st; else if (!st.some(q => ed.sels.includes(q))) ed.sels = [o]; ed.drag = { k: 'move', cx, cy }; } }   // clicking a stack again (without dragging) selects the object underneath, then loops
       ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps();
     }
   });
@@ -2147,9 +2265,9 @@ function edDraw() {
     if (dr.k === 'pan') { ed.camX -= (e.clientX - dr.x) / ed.z; ed.camY += (e.clientY - dr.y) / ed.z; dr.x = e.clientX; dr.y = e.clientY; }
     else if (dr.k === 'paint') place(cx, cy); else if (dr.k === 'del') delAt(wx, wy);
     else if (dr.k === 'box') { dr.x1 = wx; dr.y1 = wy; }
-    else if (dr.k === 'move' && ed.sels.length && (cx !== dr.cx || cy !== dr.cy)) { const dx = cx - dr.cx, dy = cy - dr.cy; ed.sels.forEach(o => { o.x = Math.max(0, o.x + dx); o.y = Math.max(0, o.y + dy); }); dr.cx = cx; dr.cy = cy; changed(); renderProps(); }
+    else if (dr.k === 'move' && ed.sels.length && (cx !== dr.cx || cy !== dr.cy)) { const dx = cx - dr.cx, dy = cy - dr.cy; ed.sels.forEach(o => { o.x = Math.max(0, o.x + dx); o.y = Math.max(0, o.y + dy); }); dr.cx = cx; dr.cy = cy; ed.cyc = null; changed(); renderProps(); }
   });
-  const up = () => { const d = ed.drag; if (d && d.k === 'box' && d.x1 != null) { const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1); ed.lv.objs.filter(o => { const b = objBox(o); return (b.x + b.w) * U > x0 && b.x * U < x1 && (b.y + b.h) * U > y0 && b.y * U < y1; }).forEach(o => ed.sels.includes(o) || ed.sels.push(o)); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); } ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  const up = () => { const d = ed.drag; if (d && d.k === 'move' && ed.cyc) { const i = ed.cyc.indexOf(ed.sels[0]); ed.sels = [ed.cyc[(i + 1) % ed.cyc.length]]; ed.sel = ed.sels[0]; renderProps(); } ed.cyc = null; if (d && d.k === 'box' && d.x1 != null) { const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1); ed.lv.objs.filter(o => { const b = objBox(o); return inLayer(o) && (b.x + b.w) * U > x0 && b.x * U < x1 && (b.y + b.h) * U > y0 && b.y * U < y1; }).forEach(o => ed.sels.includes(o) || ed.sels.push(o)); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); } ed.drag = null; }; cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', e => {
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) { const f = e.deltaY < 0 ? 1.1 : .9, bx = e.offsetX / ed.z + ed.camX; ed.z = Math.max(.4, Math.min(2.5, ed.z * f)); ed.camX = bx - e.offsetX / ed.z; }
@@ -2163,7 +2281,7 @@ function edRot45() {
 }
 function edRotate(d = 1) { if (ed.sels.length) edXform(d > 0 ? 'cw' : 'ccw'); else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
 function edDelSel() { if (!ed.sels.length) return; snap(); const s = new Set(ed.sels); ed.lv.objs = ed.lv.objs.filter(o => !s.has(o)); ed.sels = []; ed.sel = null; renderProps(); changed(); }
-function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); }
+function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); sideState(); }
 function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0, Math.floor(ed.wx / U)), by = Math.max(0, Math.floor(ed.wy / U)); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.clip.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x + bx, y: o.y + by })); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); }
 addEventListener('keydown', e => {
   if (!ed.on || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || $('#modal').classList.contains('open')) return;
@@ -2180,13 +2298,15 @@ addEventListener('keydown', e => {
 function edHistDone() { ed.sel = null; ed.sels = []; renderProps(); ed.keepRedo = true; changed(); ed.keepRedo = false; }
 function edUndo() { if (!ed.hist.length) return; (ed.redo = ed.redo || []).push(JSON.stringify(ed.lv.objs)); ed.lv.objs = JSON.parse(ed.hist.pop()); edHistDone(); }
 function edRedo() { if (!ed.redo || !ed.redo.length) return; ed.hist.push(JSON.stringify(ed.lv.objs)); ed.lv.objs = JSON.parse(ed.redo.pop()); edHistDone(); }
-document.addEventListener('focusin', e => { if (e.target.dataset?.p && ed.on) snap(); });
+document.addEventListener('focusin', e => { if ((e.target.dataset?.p || /^col/.test(e.target.id || '')) && ed.on) snap(); });
 document.addEventListener('input', e => {
   if (e.target.id === 'volr') { settings.vol = +e.target.value; saveSettings(); return; }
   if (e.target.id === 'songspd') { ed.lv.songSpeed = +e.target.value; saveSlots(ed.slot); return; }
   if (e.target.id === 'songoff') { ed.lv.songOff = Math.max(0, +e.target.value || 0); saveSlots(ed.slot); return; }
+  if (colInput(e)) return;
   const p = e.target.dataset?.p, tg = ed.sel ? [ed.sel] : ed.sels; if (!p || !tg.length) return;
-  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (+e.target.value || 0) : e.target.value; tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; o[p] = p === 'sc' ? Math.max(.1, Math.min(5, v || 1)) : v; }); changed();
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? (e.target.value === '' ? undefined : (+e.target.value || 0)) : e.target.value;   // a blank box clears the value (nothing is preset)
+  tg.forEach(o => { if (p === 'c' && !(OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco)) return; const nv = p === 'sc' && v !== undefined ? Math.max(.1, Math.min(5, v || 1)) : v; if (nv === undefined || nv === false || nv === '') delete o[p]; else o[p] = nv; }); changed();
 });
 function edPlay(here) {
   const lv = ed.lv;
@@ -2275,7 +2395,24 @@ const actions = {
   eddel: edDelSel,
   edhalf: d => { if (!ed.sels.length) return; snap(); const dx = Math.max(+d.dx, -Math.min(...ed.sels.map(o => o.x))), dy = Math.max(+d.dy, -Math.min(...ed.sels.map(o => o.y))); ed.sels.forEach(o => { o.x = r3(o.x + dx); o.y = r3(o.y + dy); }); changed(); renderProps(); },
   edxf: d => edXform(d.k),
-  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.1, Math.min(5, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste,
+  edscale: d => { if (!ed.sels.length) return; snap(); ed.sels.forEach(o => { if (!OBJ[o.t].trig && !OBJ[o.t].slope) o.sc = Math.max(.1, Math.min(5, Math.round(((o.sc || 1) + +d.f) * 10) / 10)); }); changed(); renderProps(); }, edrotl: () => edRotate(-1), edrotr: () => edRotate(1), edcopy: edCopy, edpaste: edPaste, edcpaste: edCopyPaste,
+  edpanel: d => { if (!ed.sels.length) return; ed.panel = ed.panel === d.k ? null : d.k; renderProps(); },
+  edlay: d => { ed.layer = Math.max(0, Math.min(8, ed.layer + (+d.d))); ed.sels = ed.sels.filter(inLayer); ed.sel = ed.sels.length === 1 ? ed.sels[0] : null; renderProps(); },
+  edz: d => { snap(); const n = +d.z; ed.sels.forEach(o => { if (!isDraw(o)) return; if (n === defZ(o.t)) delete o.z; else o.z = n; }); changed(); renderProps(); },
+  edcolmode: d => { snap(); const m = +d.m; ed.sels.forEach(o => { if (!canColor(o)) return; if (m) o.pcol = m; else delete o.pcol; }); changed(); renderProps(); },
+  edtagadd: d => {
+    const inp = $('#' + d.k + 'In'), v = Math.floor(+(inp && inp.value)); if (!(v >= 1 && v <= 9999)) { if (inp) inp.focus(); return; }
+    snap();
+    if (d.k === 's') { const o = ed.sel; if (!o) return; const l = (o.sgs || []).slice(); if (!l.includes(v) && l.length < 20) l.push(v); o.sgs = l; }
+    else ed.sels.forEach(o => { const l = gsOf(o).slice(); if (!l.includes(v) && l.length < 20) l.push(v); o.gs = l; delete o.g; });
+    changed(); renderProps(); const n = $('#' + d.k + 'In'); if (n) n.focus();
+  },
+  edtagrm: d => {
+    const v = +d.g; snap();
+    if (d.k === 's') { const o = ed.sel; if (!o) return; const l = (o.sgs || []).filter(x => x !== v); if (l.length) o.sgs = l; else delete o.sgs; }
+    else ed.sels.forEach(o => { const l = gsOf(o).filter(x => x !== v); if (l.length) o.gs = l; else delete o.gs; delete o.g; });
+    changed(); renderProps();
+  },
   songprev: async () => {
     if (prevA) return stopPreview();
     const b = await idbGet(`draft:${me.uid}:${ed.slot}`); if (!(b instanceof Blob)) return toast('No song file', 'err');
@@ -2287,8 +2424,8 @@ const actions = {
   edsave: () => { const lv = ed.lv; lv.name = val('lvName').trim().slice(0, 18) || lv.name; lv.desc = val('lvDesc').slice(0, 200); lv.bg = val('lvBg'); lv.bgs = val('lvBgs') || 'stripes'; lv.ground = val('lvGr'); { const sm = val('lvSm') || 'cube', ss = +val('lvSs') || 1; if (sm !== (lv.startMode || 'cube') || ss !== (lv.startSpeed || 1)) lv.verified = ''; lv.startMode = sm; lv.startSpeed = ss; lv.grs = val('lvGrs') || 'tiles'; } lv.updated = Date.now(); saveSlots(ed.slot); closeModal(); renderEdUI(); },
   edgrp: () => {   // put the smallest group ID nobody in this level uses yet on the selection
     const tg = ed.sel ? [ed.sel] : ed.sels; if (!tg.length) return; snap();
-    const used = new Set(ed.lv.objs.map(o => o.g | 0)); let n = 1; while (used.has(n)) n++;
-    tg.forEach(o => { o.g = n; }); changed(); renderProps();
+    const used = new Set(); ed.lv.objs.forEach(o => gsOf(o).forEach(g => used.add(g))); let n = 1; while (used.has(n)) n++;
+    tg.forEach(o => { const l = gsOf(o).slice(); if (l.length < 20) l.push(n); o.gs = l; delete o.g; }); changed(); renderProps();
   },
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
