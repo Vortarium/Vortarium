@@ -49,18 +49,16 @@
     <button class="btn sm" id="edPosBtn" data-act="edpos">📍 Play at position: OFF</button>
     <span id="edStatus"></span>
   </div>
-  <div id="edSide">
-    <div class="edbtns">
-      <button class="btn sm" id="sbCopy" data-act="edcopy" disabled>Copy</button>
-      <button class="btn sm" id="sbPaste" data-act="edpaste" disabled>Paste</button>
-      <button class="btn sm" id="sbCP" data-act="edcpaste" disabled>Copy Paste</button>
-      <button class="btn sm" id="sbGrp" data-act="edpanel" data-k="group" disabled>Edit Group</button>
-      <button class="btn sm" id="sbObj" data-act="edpanel" data-k="object" disabled>Edit Object</button>
-      <button class="btn sm" id="sbCol" data-act="edpanel" data-k="color" disabled>Edit Color</button>
-    </div>
-    <div id="edLayer"><button data-act="edlay" data-d="-1" title="Previous layer">◀</button><span id="edLayerN">ALL</span><button data-act="edlay" data-d="1" title="Next layer">▶</button></div>
-  </div>
   <div id="edProps"></div>
+  <div id="edSelBtns">
+    <button class="btn sm" id="eb_copy" data-act="edcopy" disabled>Copy</button>
+    <button class="btn sm" id="eb_paste" data-act="edpaste" disabled>Paste</button>
+    <button class="btn sm" id="eb_cp" data-act="edcp" disabled title="Duplicate exactly on top of itself">Copy Paste</button>
+    <button class="btn sm" id="eb_group" data-act="edpanel" data-pn="group" disabled>Edit Group</button>
+    <button class="btn sm" id="eb_obj" data-act="edpanel" data-pn="obj" disabled>Edit Object</button>
+    <button class="btn sm" id="eb_color" data-act="edpanel" data-pn="color" disabled>Edit Color</button>
+    <div class="zrow"><button class="round" data-act="edzl" title="Previous Z layer">◀</button><b id="edZn">ALL</b><button class="round" data-act="edzr" title="Next Z layer">▶</button></div>
+  </div>
   <div id="edBottom"><div id="edTabs"></div><div id="edItems"></div></div>
 </section>
 
