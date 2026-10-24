@@ -864,7 +864,7 @@ class Game {
   reset(first) {
     this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
     this.objs.forEach(o => { this.clrRot(o); o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
-    this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
+    this.gr = 1; this.swT = 0; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
@@ -940,7 +940,7 @@ class Game {
     this.gr = k.gr; this.mini = !!k.mini; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
     this.si = lb(this.S, this.p.x - 130); this.tI = lb(this.TT, this.p.x - 40);
-    this.holdUsed = false; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
+    this.holdUsed = false; this.swT = 0; this.edgeT = 0; this.parts = []; this.trail = []; this.cpT = 0; this.runActs();
   }
   addCP() { if (!this.practice || this.p.dead || this.won) return; this.cps.push({ x: this.p.x, y: this.p.y, s: this.snap() }); if (this.cps.length > 60) this.cps.shift(); this.cpT = 0; }
   respawn() {
@@ -985,6 +985,7 @@ class Game {
     const mi = this.mini;
     if (this.mode === 'cube' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = JUMP * this.gr; p.grounded = false; this.cyT = 0; this.jumps++; }   // coyote time: still counts as on the ground for a few frames after running off an edge
     if (this.mode === 'robot' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = (mi ? 372 : 441) * this.gr; p.grounded = false; p.rb = .3; this.cyT = 0; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
+    if (this.swT > 0) this.swT -= dt;   // short grace after a portal changes the hitbox
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
     p.grounded = false;
     if (p.dash && (!this.held || this.mode === 'ship' || this.mode === 'wave')) this.endDash(); if (p.dash) { p.dash.t += dt; p.vy = p.dash.vy; }
@@ -1020,7 +1021,7 @@ class Game {
       const [ss, ib, it, fl, fc] = this.sbx();
       if (p.x + ss < bx + bw && p.x + 30 - ss > bx && p.y + ib < by + bh && p.y + 30 - it > by) {
         // one box (matching the artwork) decides everything: land / slide on top, ceiling-slide underneath, otherwise it's a wall hit and you die
-        const tol = Math.max(4, ib), tolT = Math.max(4, it), m = this.mode, gr = this.gr;
+        const gk = this.swT > 0 ? 12 : 0, tol = Math.max(4, ib) + gk, tolT = Math.max(4, it) + gk, m = this.mode, gr = this.gr;   // gk: right after a portal the player is lifted onto the block instead of dying
         if (m === 'wave') {
           if (this.inD) {   // D block: the block stays solid, but its top / underside work like the ground / ceiling for the wave
             if (prevB >= by + bh - tol) p.y = by + bh - fl;
@@ -1033,7 +1034,7 @@ class Game {
           else if (prevB + 30 <= by + fc + tolT) { p.y = by - 30 + fc; if (p.vy > 0) p.vy = 0; }
           else this.die();
         } else {
-          const land = gr > 0 ? (p.vy <= 0 && prevB >= by + bh - tol) : (p.vy >= 0 && prevB + 30 <= by + tolT);
+          const land = gr > 0 ? ((gk || p.vy <= 0) && prevB >= by + bh - tol) : ((gk || p.vy >= 0) && prevB + 30 <= by + tolT);
           if (land) { p.y = gr > 0 ? by + bh - fl : by - 30 + fc; p.vy = 0; p.grounded = true; }
           else this.die();
         }
@@ -1058,10 +1059,10 @@ class Game {
     } else if (t.startsWith('port')) {
       const b = o.qb; if (!this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])) return;
       if (SPEEDS[t]) this.speed = SPEEDS[t];
-      else if (t === 'port_gd' || t === 'port_gu') { this.gr = t === 'port_gu' ? -1 : 1; this.cyT = 0; }
-      else if (MODEP[t]) this.mode = PMODE[t];
+      else if (t === 'port_gd' || t === 'port_gu') { const ng = t === 'port_gu' ? -1 : 1; if (ng !== this.gr) this.swT = .15; this.gr = ng; this.cyT = 0; }
+      else if (MODEP[t]) { if (this.mode !== PMODE[t]) { this.mode = PMODE[t]; p.rot = 0; this.swT = .15; } }   // new mode starts upright: no spinning back from the cube's accumulated roll
       else if (REVP[t]) this.mir = t === 'port_mb' ? 1 : 0;
-      else if (SZP[t]) this.mini = t === 'port_mini';
+      else if (SZP[t]) { const nm = t === 'port_mini'; if (nm !== !!this.mini) this.swT = .15; this.mini = nm; }
     }
   }
   // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
