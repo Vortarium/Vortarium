@@ -807,7 +807,7 @@ class Game {
     // hitboxes are built lazily in prep() the first time an object comes into range
     const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
-    this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: wave can't be hurt by blocks / slopes inside them. S blocks: end a dash.
+    this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: the wave slides along blocks / slopes inside them instead of dying (still solid). S blocks: end a dash.
     this.DEC = LDM ? [] : objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
     this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
@@ -929,11 +929,11 @@ class Game {
   ins(v) { return 15 - (15 - v) * this.sz(); }   // an inset measured on the old 30x30 box, rescaled around the box centre
   hit(p, x, y, w, h, inset = 0) { if (this.mode === 'wave') inset += 11.25; inset = this.ins(inset); return p.x + inset < x + w && p.x + 30 - inset > x && p.y + inset < y + h && p.y + 30 - inset > y; }   // pads / orbs / portals / triggers
   // PRIMARY hitbox = the player's physical outline (wave: 15x15 box, 30% smaller): it is what kills on spikes and saws and what lands on blocks
-  priIn() { const m = this.mode; return m === 'wave' ? 15 - 1.25 * this.sz() * .5 : this.ins(m === 'ship' ? 4 : 3); }   // wave: spike / saw box is half the size it was (1.875 units at the big size)   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
+  priIn() { const m = this.mode; return m === 'wave' ? 15 - 1.25 * this.sz() * .25 : this.ins(m === 'ship' ? 4 : 3); }   // wave kill box is now half of what it was   // wave: spike / saw box is half the size it was (1.875 units at the big size)   // wave spike box is 2.5x2.5 now (was ~10.5), ship 22x22, everything else 24x24
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
   secIn() { return this.priIn(); }
   // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
-  sbx() { const m = this.mode, b = m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; return this.sz() === 1 ? b : b.map(v => this.ins(v)); }   // one hitbox decides walls, blocks and spikes alike
+  sbx() { const m = this.mode, b = m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; const r = this.sz() === 1 ? b : b.map(v => this.ins(v)); return m === 'wave' ? r.map((v, i) => i < 3 ? 7.5 + v / 2 : v) : r; }   // wave: side/bottom/top insets halve the box (2x smaller); the flush values [3],[4] keep the visual resting position   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -993,7 +993,13 @@ class Game {
       if (p.x + ss < bx + bw && p.x + 30 - ss > bx && p.y + ib < by + bh && p.y + 30 - it > by) {
         // one box (matching the artwork) decides everything: land / slide on top, ceiling-slide underneath, otherwise it's a wall hit and you die
         const tol = Math.max(4, ib), tolT = Math.max(4, it), m = this.mode, gr = this.gr;
-        if (m === 'wave') { if (!this.inD) this.die(); }
+        if (m === 'wave') {
+          if (this.inD) {   // D block: the block stays solid, but its top / underside work like the ground / ceiling for the wave
+            if (prevB >= by + bh - tol) p.y = by + bh - fl;
+            else if (prevB + 30 <= by + fc + tolT) p.y = by - 30 + fc;
+            else this.die();
+          } else this.die();
+        }
         else if (m === 'ship' || m === 'ufo') {
           if (prevB >= by + bh - tol) { p.y = by + bh - fl; if (p.vy < 0) p.vy = 0; }
           else if (prevB + 30 <= by + fc + tolT) { p.y = by - 30 + fc; if (p.vy > 0) p.vy = 0; }
@@ -1052,11 +1058,11 @@ class Game {
     const d = OBJ[o.t], H = d.tall ? 60 : 30, p = this.p, r = (o.r || 0) & 3, k = r & 1, floor = r < 2, m = this.mode, gr = this.gr, slide = m === 'ship' || m === 'ufo';
     const cl = v => Math.max(0, Math.min(30, v)), sf = xl => y + (k ? H * (1 - xl / 30) : H * xl / 30);   // surface height at local x (0..30); the 1x2 slope is twice as steep
     if (m === 'wave') {   // the wave uses its own small centred hitbox
-      if (this.inD) return;   // inside a D block the wave passes through slopes
+      const sl = d.slide || this.inD;   // inside a D block every slope behaves like a slide slope
       const sb_ = this.sbx(), x0 = p.x + sb_[0], x1 = p.x + 30 - sb_[0], y0 = p.y + sb_[1], y1 = p.y + 30 - sb_[2];
       if (!(x1 > x && x0 < x + 30) || y0 >= y + H || y1 <= y) return;
-      if (floor) { const h = sf(cl(k ? x0 - x : x1 - x)), depth = h - y0; if (depth <= 0) return; if (d.slide && depth <= 14) p.y = h - sb_[1]; else this.die(); }   // slide slopes: the wave glides along the surface instead of dying
-      else { const h = sf(cl(k ? x1 - x : x0 - x)), depth = y1 - h; if (depth <= 0) return; if (d.slide && depth <= 14) p.y = h - 30 + sb_[2]; else this.die(); }
+      if (floor) { const h = sf(cl(k ? x0 - x : x1 - x)), depth = h - y0; if (depth <= 0) return; if (sl && depth <= 14) p.y = h - sb_[3]; else this.die(); }   // slide slopes: the wave glides along the surface instead of dying
+      else { const h = sf(cl(k ? x1 - x : x0 - x)), depth = y1 - h; if (depth <= 0) return; if (sl && depth <= 14) p.y = h - 30 + sb_[4]; else this.die(); }
       return;
     }
     const e = (30 - 30 * this.sz()) / 2, xl = p.x + e, xr = p.x + 30 - e, yb = p.y + e, yt = p.y + 30 - e;   // visible box (smaller than 30 when mini)
@@ -2052,7 +2058,7 @@ function renderProps() {
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_pulse') h += `<label>Pulse color<input type="color" data-p="col" value="${o.col || '#ffffff'}"></label><label>Fade out time (s)<input type="number" step=".1" min=".05" data-p="dur" value="${o.dur ?? .5}"></label><p class="muted">Flashes the background with this color, then fades it out.</p>`;
-  else if (o.t === 'zone_d') h += '<p class="muted">Place on top of blocks or slopes: the wave takes no damage from the blocks and slopes inside it (spikes still hurt). Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
+  else if (o.t === 'zone_d') h += '<p class="muted">Place above (or below) blocks or slopes: the blocks stay solid, but the wave slides along their top / underside like ground instead of dying. Hitting a block's side or a spike still kills. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || defColor(o.t)}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
