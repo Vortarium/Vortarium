@@ -101,14 +101,19 @@ Object.assign(PORT_COL, { port_big: '#9aa8ff', port_mini: '#e8ff3d' });
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
-const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8', trig_pulse: '#ffffff', zone_d: '#e0408f', zone_s: '#1fb5a8' };
-const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP', trig_pulse: 'PUL', zone_d: 'D', zone_s: 'S' };
+const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8', trig_pulse: '#ffffff', trig_rot: '#ff7a2f', zone_d: '#e0408f', zone_s: '#1fb5a8' };
+const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP', trig_pulse: 'PUL', trig_rot: 'ROT', zone_d: 'D', zone_s: 'S' };
 OBJ.spike.hz = { k: 't', a: 1, b: 1, n: 1 };
 ['Plain','Inset','Cross','Dots','Stripes','Checker','Bevel','Slab','Frame','Diamond'].forEach((n, i) => [0, 1].forEach(v => { if (i + v) OBJ['blk' + (i + v * 10)] = { name: n + (v ? ' Dark' : ''), cat: 'blocks', solid: true, bs: i, bv: v }; }));
 OBJ.block.solid = true;
 [['Half Spike','t',1,.5,1],['Thin Spike','t',.5,1,1],['Wide Spike','t',1,.7,1],['Double Spike','t',1,1,2],['Triple Spike','t',1,1,3],['Mini Spikes','t',1,.5,3],['Quad Mini','t',1,.4,4],['Needle','t',.3,1,1],['Fang','t',.7,1,1],
  ['Mini Saw','s',.22,6],['Small Saw','s',.35,8],['Saw','s',.5,8],['Big Saw','s',.75,10],['Large Saw','s',1,12],['Huge Saw','s',1.5,14],['Star Saw','s',.5,5],['Blade Saw','s',.6,3],['Gear','s',.5,12],['Spiky Ball','s',.4,16]]
  .forEach(([n, k, a, b, c], i) => OBJ['hz' + i] = { name: n, cat: 'hazards', hz: k === 't' ? { k, a, b, n: c } : { k, a, b } });
+const TXN = ['Bubble', 'Clean', 'Comic', 'Pixel', 'Techno', 'Script', 'Marker', 'Spooky'];   // the 8 fonts of the Aa text decor
+const TXF = ['400 {s}px "Lilita One",sans-serif', '800 {s}px "Nunito",sans-serif', '400 {s}px "Bangers",cursive', '400 {s}px "Press Start 2P",monospace', '700 {s}px "Orbitron",sans-serif', '400 {s}px "Pacifico",cursive', '400 {s}px "Permanent Marker",cursive', '400 {s}px "Creepster",cursive'];
+try { if (document.fonts) TXF.forEach(f => document.fonts.load(f.replace('{s}', '24'), 'Aa')); } catch { }
+OBJ.dtext = { name: 'Aa Text', cat: 'decor', deco: true, text: true };
+OBJ.trig_rot = { name: 'Rotate Trigger', cat: 'triggers', trig: true };
 ['Flower','Tulip','Bush','Tree','Grass','Cloud','Big Cloud','Brick','Mini Bricks','Mini Spike','Mini Spike Row','Star','Moon','Sun','Dots','Ring','Diamond','Crystal','Vine','Mushroom','Leaf','Pebbles','Fence','Lamp','Arrow','Cross','Wave','Zigzag','Heart','Pillar']
  .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
 function hsl(h, s, l) { s /= 100; l /= 100; const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l), f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))); return '#' + [f(0), f(8), f(4)].map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join(''); }
@@ -132,7 +137,7 @@ const BLK2 = ['Gradient', 'Gradient Up', 'Fade Side', 'Glass', 'Tiles 3x3', 'Thi
 BLK2.forEach((n, i) => OBJ['bx' + i] = { name: n, cat: 'blocks', solid: true, bs: 10 + i, bv: 0 });
 const SPK_LOOKS = [['grad', 'Gradient'], ['white', 'White'], ['ghost', 'Ghost'], ['jag', 'Jagged'], ['hill', 'Hills'], ['saw', 'Sawtooth'], ['ramp', 'Ramp']];
 ['spike', 'hz0', 'hz2', 'hz4', 'hz5', 'hz7'].forEach(bid => SPK_LOOKS.forEach(([lk, ln]) => OBJ['sk_' + lk + '_' + bid] = { name: ln + ' ' + OBJ[bid].name, cat: 'hazards', hz: { ...OBJ[bid].hz, lk } }));
-const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.base) return defColor(d.base); if (d.nx) return d.dc; if (d.slide) return '#0b2434'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
+const defColor = t => { const d = OBJ[t]; if (!d) return '#ffffff'; if (d.base) return defColor(d.base); if (d.text) return '#ffffff'; if (d.nx) return d.dc; if (d.slide) return '#0b2434'; if (d.deco) return hsl(d.di * 47 % 360, 65, 68); if (d.hz && d.hz.lk === 'white') return '#e8edff'; if (d.hz && d.hz.lk === 'ghost') return '#6e7bb0'; if (t === 'block' || d.hz || d.half || d.slope) return '#0d0d22'; if (d.bs !== undefined) return d.bv ? '#27276a' : '#0d0d22'; return '#ffffff'; };
 const PHYS = { orb_y: JUMP, orb_p: 450, pad_y: 900, pad_p: 620, orb_r: 900, pad_r: 1100, pad_b: 350 };
 
 const PH = 3;   // portals are 3 cells tall
@@ -496,9 +501,11 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
   const t = o.t, r = (o.r || 0) + (o.r45 ? .5 : 0), lw = Math.max(1, cs * .07);
   c.save(); c.lineJoin = 'round';
   if (o.sc && o.sc !== 1) { const sy = t.startsWith('port') ? y - cs / 2 : y + cs / 2; c.translate(x + cs / 2, sy); c.scale(o.sc, o.sc); c.translate(-(x + cs / 2), -sy); }
+  if (o.ra) { c.translate(x + cs / 2, y + cs / 2); c.rotate(o.ra * Math.PI / 180); c.translate(-(x + cs / 2), -(y + cs / 2)); }   // rotate trigger: extra turn around the object's own centre
   if (o.alp != null && o.alp !== 1) c.globalAlpha *= o.alp;
   const A0 = c.globalAlpha;   // base alpha (fade-in x alpha trigger); effects below multiply it instead of resetting to 1
   if (OBJ[t].hz) hzDraw(c, OBJ[t].hz, o, x, y, cs, col, lw, time);
+  else if (OBJ[t].text) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.font = TXF[(+o.fn || 0) % TXF.length].replace('{s}', (cs * .7).toFixed(1)); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = col; c.fillText(o.txt ?? 'Aa', 0, 0); }
   else if (OBJ[t].deco && OBJ[t].nx) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); drawNx(c, OBJ[t], cs, col, time); }
   else if (OBJ[t].deco) { c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2); c.translate(-cs / 2, -cs / 2); decor(c, OBJ[t].dk, cs, col); }
   else if (OBJ[t].bs !== undefined) blockDraw(c, OBJ[t].bs, x, y, cs, col, lw);
@@ -741,7 +748,7 @@ function sprRect(o, cs) {   // [x0, y0, x1, y1] of the sprite, relative to the t
 }
 function drawCached(c, o, x, y, cs, col, time, fast) {
   const t = o.t, d = OBJ[t];
-  if (!fast || cs < 4 || (o.sc && o.sc !== 1) || d.coin || d.trig || d.zone) return drawObj(c, o, x, y, cs, col, false, time);
+  if (!fast || cs < 4 || (o.sc && o.sc !== 1) || d.coin || d.trig || d.zone || d.text || o.ra) return drawObj(c, o, x, y, cs, col, false, time);
   const key = t + '|' + col + '|' + (o.r || 0) + '|' + (o.r45 || 0) + '|' + (o.a || 0) + '|' + cs.toFixed(1);
   let e = SPR.get(key);
   if (!e) {
@@ -763,7 +770,7 @@ function drawCached(c, o, x, y, cs, col, time, fast) {
 // ---- static chunks: objects that never change (no colour / alpha / toggle trigger on their group, not animated, not scaled) are pre-rendered into big tiles of 6x6 cells and blitted,
 // so the per-frame cost of the static part of a level is a handful of drawImage calls instead of one per object. Tiles are padded so overflowing art never gets cut, and a bounded pixel budget evicts the oldest.
 const CH = new Map(); let CH_PX = 0; const CHW = 6 * U, CHP = 1.5 * U, CH_BUDGET = 16e6;
-const chunkable = o => { const d = OBJ[o.t], b = d.base ? OBJ[d.base] : d; return !(o.sc && o.sc !== 1) && !b.glow && !d.coin && !d.trig && !d.zone && !ORBS.includes(o.t) && !(b.hz && b.hz.k === 's'); };
+const chunkable = o => { const d = OBJ[o.t], b = d.base ? OBJ[d.base] : d; return !(o.sc && o.sc !== 1) && !b.glow && !d.coin && !d.trig && !d.zone && !d.text && !ORBS.includes(o.t) && !(b.hz && b.hz.k === 's'); };
 function chunkClear() { CH.clear(); CH_PX = 0; }
 function makeLayer(list, dynG) {   // split a sorted object list into static (baked into tiles) and dynamic (drawn one by one) parts. Only DENSE tiles (20+ static objects) are baked: a sparse tile would cost more to blit than its few sprites
   const L = { stat: [], dyn: [], cells: new Map() }, cand = new Map(), key = o => Math.floor(o.ex / CHW) + ',' + Math.floor(o.ey / CHW);
@@ -805,13 +812,13 @@ class Game {
     this.groups = {};
     objs.forEach(o => { if (o.g) (this.groups[o.g] = this.groups[o.g] || []).push(o); });
     // hitboxes are built lazily in prep() the first time an object comes into range
-    const mv = new Set(objs.filter(o => o.t === 'trig_move').map(o => o.tg));
+    const mv = new Set(objs.filter(o => o.t === 'trig_move' || o.t === 'trig_rot').map(o => o.tg)), rg = new Set(objs.filter(o => o.t === 'trig_rot').map(o => o.tg));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
     this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: the wave slides along blocks / slopes inside them instead of dying (still solid). S blocks: end a dash.
-    this.DEC = LDM ? [] : objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
+    this.DEC = LDM ? [] : objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow && !(o.g && mv.has(o.g))); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow && !(o.g && mv.has(o.g))); this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t]); this.szp = objs.filter(o => SZP[o.t]);
     this.S = objs.filter(o => solid(o) && !(o.g && mv.has(o.g)));
-    this.D = objs.filter(o => solid(o) && o.g && mv.has(o.g));
-    this.DG = []; { const m = new Map(); for (const o of this.D) { let G = m.get(o.g); if (!G) { G = { g: o.g, list: [], x0: 1e9, x1: -1e9 }; m.set(o.g, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group: a whole group far from the player / camera is skipped with one check
+    this.D = objs.filter(o => (solid(o) || OBJ[o.t].deco) && o.g && mv.has(o.g)); this.Dset = new Set(this.D);   // decor in a moved / rotated group follows it too
+    this.DG = []; { const m = new Map(); for (const o of this.D) { let G = m.get(o.g); if (!G) { G = { g: o.g, list: [], x0: 1e9, x1: -1e9, rot: rg.has(o.g) }; m.set(o.g, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group: a whole group far from the player / camera is skipped with one check
     const dynG = new Set(); for (const o of objs) if ((o.t === 'trig_color' && Number(o.tg) > 0) || o.t === 'trig_alpha' || o.t === 'trig_toggle') dynG.add(o.tg);   // groups a trigger recolours / fades / toggles: those objects are never baked into tiles
     chunkClear();
     this.SR = this.S;   // render list. LDM: blocks completely buried in other blocks (all 4 neighbours solid) are never drawn
@@ -832,6 +839,15 @@ class Game {
     if (PADS.includes(o.t)) o.pb = (o.r45 ? rotRectD(((o.r || 0) * 90 + 45), 3, 0, 27, 10) : rotRect(o.r || 0, 3, 0, 27, 10)).map(v => 15 + (v - 15) * sc);
     if (d.solid && !d.slope) { const r = d.half ? rotRect(o.r || 0, 0, 0, 30, 15) : [0, 0, 30, 30]; o.sb = r.map(v => 15 + (v - 15) * sc); }
   }
+  clrRot(o) { if (o.ra || o.rx || o.ry) { if (o.ra && OBJ[o.t].hz) { o.pp = false; o.hp = null; o.tp = null; } o.ra = 0; o.rx = 0; o.ry = 0; } }
+  rotHz(o) {   // spikes follow a rotate trigger: rebuild their kill shapes at the current angle
+    const h = OBJ[o.t].hz; if (!h || h.k === 's') return; if (!o.pp) this.prep(o);
+    const sc = o.sc || 1, th = ((o.r || 0) * 90 + (o.r45 ? 45 : 0) + (o.ra || 0)) * Math.PI / 180, c_ = Math.cos(th), s_ = Math.sin(th);
+    const hw = (h.n > 1 ? 10 : 5 * h.a) * .65, hh = 13 * h.b * .75, W = 30 * h.a, w = W / h.n, H2 = 30 * h.b;
+    const tf = ([px, py]) => { const dx = px - 15, dy = py - 15; return [15 + (dx * c_ + dy * s_) * sc, 15 + (-dx * s_ + dy * c_) * sc]; };
+    o.hp = [[15 - hw, 0], [15 + hw, 0], [15 + hw, hh], [15 - hw, hh]].map(tf);
+    o.tp = []; for (let i = 0; i < h.n; i++) { const x0 = 15 - W / 2 + i * w; o.tp.push([[x0, 0], [x0 + w, 0], [x0 + w / 2, H2]].map(tf)); }
+  }
   timeAtX(x) {
     let t = 0, x0 = 0, sp = this.level.startSpeed || 1;
     for (const p of this.ports) { if (p.ex >= x) break; t += (p.ex - x0) / (BASE * sp); x0 = p.ex; sp = SPEEDS[p.t]; }
@@ -847,7 +863,7 @@ class Game {
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
     this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
-    this.objs.forEach(o => { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
+    this.objs.forEach(o => { this.clrRot(o); o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
     this.gr = 1; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
@@ -874,6 +890,14 @@ class Game {
       this.acts.push({ k: 'mv', g: t.tg, b: { ...b }, d: [t.dx || 0, t.dy || 0], pe: 0, t0: this.time, dur });
       // follow triggers: for the trigger's duration the group tracks the player. "Follow X" = moves up/down with the player, "Follow Y" = moves right with the player, both = follows like a camera
       if (!instant && (t.fx || t.fy)) this.acts.push({ k: 'fol', g: t.tg, vert: !!t.fx, horz: !!t.fy, lx: this.p.x, ly: this.p.y, t0: this.time, dur: Math.max(.05, t.dur || 0) });
+    } else if (t.t === 'trig_rot') {
+      // rotate trigger: the target group orbits the centre of the centre group (and turns with it) by `deg` degrees over `dur` seconds. + = clockwise, - = anticlockwise
+      const mem = (this.groups[t.tg] || []).filter(o => this.Dset.has(o)); if (!mem.length) return;
+      const cen = (this.groups[t.cg] || []).length ? this.groups[t.cg] : mem;
+      const cpos = o => { const g = this.gOff[o.g]; return [o.ex + 15 + (g ? g.x * U : 0) + (o.rx || 0), o.ey + 15 + (g ? g.y * U : 0) + (o.ry || 0)]; };
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const o of cen) { const [a, b] = cpos(o); x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b); }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, key = 'r' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
+      this.acts.push({ key, k: 'rot', list: mem.map(o => { const [a, b] = cpos(o); return { o, dx: a - cx, dy: b - cy, a0: o.ra || 0 }; }), cx, cy, deg: Number(t.deg ?? 360) || 0, t0: this.time, dur });
     } else if (t.t === 'trig_zoom') {
       this.acts = this.acts.filter(a => a.k !== 'zoom'); this.acts.push({ k: 'zoom', from: this.zoom, to: Math.max(.2, t.zoom || 1), t0: this.time, dur });
     } else if (t.t === 'trig_toggle') {
@@ -885,13 +909,17 @@ class Game {
   }
   runActs(m = 0) {   // m: 1 = only the actions that touch physics (move / follow), run every 240Hz step; 2 = only the visual ones (colour, alpha, bg, ground, pulse, zoom), run once per drawn frame; 0 = everything
     for (let i = this.acts.length - 1; i >= 0; i--) {
-      const a = this.acts[i]; if (m && (m === 1) !== (a.k === 'mv' || a.k === 'fol')) continue;
+      const a = this.acts[i]; if (m && (m === 1) !== (a.k === 'mv' || a.k === 'fol' || a.k === 'rot')) continue;
       const pr = a.dur > 0 ? Math.min(1, (this.time - a.t0) / a.dur) : 1;
       if (a.k === 'bg') this.bg = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'gr') this.ground = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'col') { const h = rgb2hex(lerpC([0, 0, 0], a.to, 1)); for (const [o, f] of a.list) o.col = pr >= 1 ? h : rgb2hex(lerpC(f, a.to, pr)); }
       else if (a.k === 'mv') { const e = ease(pr), g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }); g.x += a.d[0] * (e - (a.pe || 0)); g.y += a.d[1] * (e - (a.pe || 0)); a.pe = e; }
       else if (a.k === 'fol') { const g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }), dx = this.p.x - a.lx, dy = this.p.y - a.ly; a.lx = this.p.x; a.ly = this.p.y; if (a.horz) g.x += dx / U; if (a.vert) g.y += dy / U; }
+      else if (a.k === 'rot') {
+        const e = ease(pr), an = a.deg * e * Math.PI / 180, cs_ = Math.cos(an), sn = Math.sin(an);
+        for (const q of a.list) { const o = q.o, g = this.gOff[o.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; o.rx = a.cx + q.dx * cs_ + q.dy * sn - 15 - o.ex - gx; o.ry = a.cy - q.dx * sn + q.dy * cs_ - 15 - o.ey - gy; o.ra = q.a0 + a.deg * e; if (OBJ[o.t].hz) this.rotHz(o); }
+      }
       else if (a.k === 'pulse') this.pulse = { col: a.to, a: 1 - pr };
       else if (a.k === 'zoom') this.zoom = a.from + (a.to - a.from) * ease(pr);
       else if (a.k === 'al') for (const [o, f] of a.list) o.alp = f + (a.to - f) * pr;
@@ -900,14 +928,14 @@ class Game {
   }
   snap() {
     const p = this.p, os = [];
-    for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col]);
+    for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0 || o.ra || o.rx || o.ry) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col, o.ra || 0, o.rx || 0, o.ry || 0]);
     return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mini: !!this.mini, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
       gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
   }
   restore(k) {
     this.pv = null; this.cyT = 0;
-    for (const o of this.objs) { o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
-    for (const [o, u, g, t, off, al, col] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; }
+    for (const o of this.objs) { this.clrRot(o); o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
+    for (const [o, u, g, t, off, al, col, ra, rx, ry] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; if (ra || rx || ry) { o.ra = ra || 0; o.rx = rx || 0; o.ry = ry || 0; if (o.ra) this.rotHz(o); } }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
     this.gr = k.gr; this.mini = !!k.mini; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
@@ -971,11 +999,11 @@ class Game {
     while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
     for (let i = this.si; i < S.length && S[i].ex < p.x + 130; i++) { this.inter(S[i], 0, 0, prevB, edge); if (p.dead) return; }
     for (const G of this.DG) {
-      const g = this.gOff[G.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (G.x1 + gx < p.x - 160 || G.x0 + gx > p.x + 160) continue;
-      for (const o of G.list) { if (o.off) continue; if (Math.abs(o.ex + gx - p.x) > 160) continue; this.inter(o, gx, gy, prevB, edge); if (p.dead) return; }
+      const g = this.gOff[G.g], gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; if (!G.rot && (G.x1 + gx < p.x - 160 || G.x0 + gx > p.x + 160)) continue;
+      for (const o of G.list) { if (o.off || OBJ[o.t].deco) continue; const ox = gx + (o.rx || 0), oy = gy + (o.ry || 0); if (Math.abs(o.ex + ox - p.x) > 160) continue; this.inter(o, ox, oy, prevB, edge); if (p.dead) return; }
     }
     this.cyT = p.grounded ? COY : (this.cyT || 0) - dt;   // refill while standing, drain while airborne
-    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) { const t = Math.round(p.rot / 90) * 90; p.rot += (t - p.rot) * Math.min(1, 30 * dt); }
+    if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) p.rot = Math.round(p.rot / 90) * 90;   // landing on a block / the floor: instantly show the face you land on, no rolling
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
     if (!LDM && !p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
@@ -1047,7 +1075,7 @@ class Game {
       else if (y + h <= p.y + 2) { const t = y + h - sb2[3]; if (best === null || t > best) best = t; }
     };
     const S = this.S; for (let i = lb(S, p.x - 130); i < S.length && S[i].ex < p.x + 130; i++) test(S[i], 0, 0);
-    for (const o of this.D) { const g = this.gOff[o.g]; test(o, g ? g.x * U : 0, g ? g.y * U : 0); }
+    for (const o of this.D) { const g = this.gOff[o.g]; test(o, (g ? g.x * U : 0) + (o.rx || 0), (g ? g.y * U : 0) + (o.ry || 0)); }
     if (!up && best === null) best = -this.sbx()[3];
     if (best === null) return;
     const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
@@ -1118,7 +1146,6 @@ class Game {
     const gy = Y(0);
     if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, LDM ? 'plain' : this.level.grs, lq);
 
-    if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }
     const cs = U * s, S = this.SR; let lo = 0, hi = S.length; const lx = this.camX - (LDM ? 90 : 200);
     while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
     const rx = this.camX + W / s + (LDM ? 90 : 200);
@@ -1146,7 +1173,7 @@ class Game {
       for (let i = lb(L.dyn, lx); i < L.dyn.length && L.dyn[i].ex < rx; i++) { const o = L.dyn[i], fa = (re - o.ex) / FADE; if (fa > 0) drawOne(o, fa); }
     };
     layer(this.LD, 'd'); layer(this.LS, 's');
-    for (const G of this.DG) { const gg = this.gOff[G.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0; if (X(G.x1 + gx) < -cs * 2 || X(G.x0 + gx) > W + cs) continue; for (const o of G.list) { if (o.off) continue; const x = X(o.ex + gx), fa = (re - (o.ex + gx)) / FADE; if (fa > 0 && x > -cs * 2 && x < W + cs) this.dr(c, o, x, Y(o.ey + gyy + U), cs, fa, fast); } }
+    for (const G of this.DG) { const gg = this.gOff[G.g], gx = gg ? gg.x * U : 0, gyy = gg ? gg.y * U : 0; if (!G.rot && (X(G.x1 + gx) < -cs * 2 || X(G.x0 + gx) > W + cs)) continue; for (const o of G.list) { if (o.off) continue; const ox = o.ex + gx + (o.rx || 0), x = X(ox), fa = (re - ox) / FADE; if (fa > 0 && x > -cs * 6 && x < W + cs * 4) this.dr(c, o, x, Y(o.ey + gyy + (o.ry || 0) + U), cs, fa, fast); } }
     { const G_ = this.GLW; for (let i = lb(G_, lx); i < G_.length && G_[i].ex < rx; i++) { const o = G_[i]; if (o.off) continue; const x = X(o.ex), fa = Math.min(1, (re - o.ex) / FADE); if (fa <= 0 || x < -cs * 8 || x > W + cs * 6) continue; c.globalAlpha = fa; drawCached(c, o, x, Y(o.ey + U), cs, o.col, this.time, fast); c.globalAlpha = 1; } }
     for (const o of this.COIN) if (!o.got && !o.off) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
@@ -1155,6 +1182,7 @@ class Game {
     c.globalAlpha = 1;
     if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 3 * s * this.sz(); c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
     if (!p.dead) { const zf = this.mode === 'wave' ? 1 : this.sz(); c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s * zf); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 12 * s * this.sz()); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s * zf); c.restore(); }
+    if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }   // drawn last: always in front of every object and the player
     c.restore();
   }
 }
@@ -2042,9 +2070,11 @@ function place(cx, cy) {
   if (t === 'trig_zoom') Object.assign(o, { zoom: 1.5, dur: 1 });
   if (t === 'trig_toggle') Object.assign(o, { tg: 1, on: false });
   if (t === 'trig_alpha') Object.assign(o, { tg: 1, pc: 50, dur: 1 });
+  if (t === 'trig_rot') Object.assign(o, { tg: 1, cg: 2, deg: 360, dur: 1 });
+  if (t === 'dtext') Object.assign(o, { txt: 'Text', fn: '0' });
   if (OBJ[t].trig) o.touch = false;
   if (DASH[t]) o.a = 0;
-  lv.objs.push(o); if (t === 'trig_color' || t === 'trig_pulse' || OBJ[t].zone) { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
+  lv.objs.push(o); if (t === 'trig_color' || t === 'trig_pulse' || t === 'dtext' || OBJ[t].zone) { ed.sel = o; ed.sels = [o]; renderProps(); } changed();
 }
 function delAt(wx, wy) { const n = ed.lv.objs.length; ed.lv.objs = ed.lv.objs.filter(o => !under(o, wx, wy)); if (ed.sel && !ed.lv.objs.includes(ed.sel)) { ed.sel = null; renderProps(); } if (n !== ed.lv.objs.length) changed(); }
 const HALF = '<div class="row"><button class="btn sm" data-act="edhalf" data-dx="-.5" data-dy="0">◀½</button><button class="btn sm" data-act="edhalf" data-dx=".5" data-dy="0">½▶</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy=".5">▲½</button><button class="btn sm" data-act="edhalf" data-dx="0" data-dy="-.5">▼½</button><button class="btn sm" data-act="edscale" data-f="-.1">⤡ −</button><button class="btn sm" data-act="edscale" data-f=".1">⤢ +</button></div>';
@@ -2057,11 +2087,13 @@ function renderProps() {
   else if (o.t === 'trig_zoom') h += `<label>Zoom (1 = default)<input type="number" step=".1" min=".2" max="4" data-p="zoom" value="${o.zoom ?? 1}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
   else if (o.t === 'trig_toggle') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Enable group<input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> ${o.on ? 'ON' : 'OFF'}</label>`;
   else if (o.t === 'trig_alpha') h += `<label>Target group<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Opacity (%)<input type="number" min="0" max="100" data-p="pc" value="${o.pc ?? 100}"></label><label>Duration (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur}"></label>`;
+  else if (o.t === 'trig_rot') h += `<label>Group to rotate<input type="number" min="1" data-p="tg" value="${o.tg}"></label><label>Rotate around the centre of group<input type="number" min="1" data-p="cg" value="${o.cg ?? 2}"></label><label>Degrees (negative = anticlockwise)<input type="number" step="15" data-p="deg" value="${o.deg ?? 360}"></label><label>Time (s)<input type="number" step=".1" min="0" data-p="dur" value="${o.dur ?? 1}"></label><p class="muted">360 in 1s = one full turn around the centre group per second. The group's blocks keep a square hitbox; spikes turn with it.</p>`;
   else if (o.t === 'trig_pulse') h += `<label>Pulse color<input type="color" data-p="col" value="${o.col || '#ffffff'}"></label><label>Fade out time (s)<input type="number" step=".1" min=".05" data-p="dur" value="${o.dur ?? .5}"></label><p class="muted">Flashes the background with this color, then fades it out.</p>`;
   else if (o.t === 'zone_d') h += '<p class="muted">Place above (or below) blocks or slopes: the blocks stay solid, but the wave slides along their top / underside like ground instead of dying. Hitting the side of a block or a spike still kills. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'zone_s') h += '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (o.t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else { h += `<label>Group (0 = none)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label>`; if (OBJ[o.t].solid || OBJ[o.t].hz || OBJ[o.t].deco) h += `<label>Color<input type="color" data-p="c" value="${o.c || defColor(o.t)}"></label>`; if (DASH[o.t]) h += `<label>Dash angle (-75..75)<input type="number" min="-75" max="75" step="15" data-p="a" value="${o.a || 0}"></label>`; }
+  if (OBJ[o.t].text) h += `<label>Description (the text shown)<input type="text" maxlength="40" data-p="txt" value="${esc(o.txt ?? '')}"></label><label>Font<select data-p="fn">${TXN.map((n, i) => `<option value="${i}" ${(+o.fn || 0) === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
   if (OBJ[o.t].zone) { el.innerHTML = h; return; }
   if (OBJ[o.t].trig) h += `<label>Own group (for toggles)<span class="gp"><input type="number" min="0" data-p="g" value="${o.g || 0}"><button class="btn sm green" data-act="edgrp" title="Use the next unused group ID">+</button></span></label><label>Touch trigger<input type="checkbox" data-p="touch" ${o.touch ? 'checked' : ''}> only when touched</label>`;
   else if (!OBJ[o.t].slope) h += `<label>Scale (0.1 - 5)<input type="number" min=".1" max="5" step=".1" data-p="sc" value="${o.sc || 1}"></label>`;
