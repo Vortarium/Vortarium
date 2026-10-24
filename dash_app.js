@@ -1004,7 +1004,7 @@ class Game {
     { const TT = this.TT; while (this.tI < TT.length && TT[this.tI].ex < p.x - 40) this.tI++; for (let i = this.tI; i < TT.length && TT[i].ex < p.x + 40; i++) { const t = TT[i]; if (!t.tf && !t.off && this.hit(p, t.ex, t.ey, U, U)) { t.tf = true; if (t.t === 'trig_end') { this.win(); return; } this.fire(t); } } }
     for (const o of this.COIN) if (!o.got && !o.off && !o.nt) { const sc = o.sc || 1, dx = p.x + 15 - (o.ex + 15), dy = p.y + 15 - (o.ey + 15); if (dx * dx + dy * dy < (24 * sc) ** 2) { o.got = true; this.coinSet.add(o.ci); this.cb.onCoin && this.cb.onCoin(this.coinSet.size, this.coinTotal); } }
     const mi = this.mini;
-    if (this.mode === 'cube' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = JUMP * this.gr; p.grounded = false; this.cyT = 0; this.jumps++; }   // coyote time: still counts as on the ground for a few frames after running off an edge
+    if (this.mode === 'cube' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = JUMP * (mi ? Math.sqrt(MINI) : 1) * this.gr; p.grounded = false; this.cyT = 0; this.jumps++; }   // mini cube: jump height scales with its size (height ~ v^2). coyote time: still counts as on the ground for a few frames after running off an edge
     if (this.mode === 'robot' && this.held && !this.holdUsed && (p.grounded || this.cyT > 0)) { p.vy = (mi ? 372 : 441) * this.gr; p.grounded = false; p.rb = .3; this.cyT = 0; this.jumps++; }   // robot: tap = small hop, hold = charges a much higher jump
     if (this.swT > 0) this.swT -= dt;   // short grace after a portal changes the hitbox
     const edge = this.edgeT > 0, prevB = p.y, wasG = p.grounded;
@@ -1754,7 +1754,7 @@ function startPlay(o) {
   showLayer('play'); setTrack(null);
   game.skin = { id: P?.skin || 0, ship: P?.ship || 0, ball: P?.ball || 0, ufo: P?.ufo || 0, wave: P?.wave || 0, robot: P?.robot || 0, spider: P?.spider || 0, c1: PRIMARY[P?.c1 || 0], c2: SECONDARY[P?.c2 || 0] };
   game.load(o.level); lvAudio = o.songUrl ? new Audio(o.songUrl) : null; if (lvAudio) { const a = lvAudio; a.addEventListener('play', () => { if (a !== lvAudio) a.pause(); }); }   // safety net: an old level's song never plays over a new one
-  const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1;
+  const pf = $('#pfill'), pp = $('#ppct'); let fw = -1, fpc = -1; const fe = $('#fpsBox'); let fN = 0, fT = performance.now();
   game.cb = {
     onSpawn: t => { bumpAttempts(); cancelFade(); if (!lvAudio || !settings.music || game.won) return; lvAudio.volume = settings.vol; const go = () => { try { const sp = PL.songSpeed || 1; lvAudio.playbackRate = sp; lvAudio.currentTime = (PL.songOff || 0) / 1000 + t * sp; } catch { } lvAudio.play().catch(() => { }); }; lvAudio.readyState >= 1 ? go() : lvAudio.addEventListener('loadedmetadata', go, { once: true }); },
     onDeath: pct => {
@@ -1767,7 +1767,7 @@ function startPlay(o) {
       if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
     },
     onWin: () => { winSongFade(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
-    onFrame: pct => { const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
+    onFrame: pct => { fN++; { const n = performance.now(); if (n - fT >= 500) { fe.textContent = 'fps: ' + Math.round(fN * 1000 / (n - fT)); fN = 0; fT = n; } }  const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
     onPause: pauseToggle
   };
   game.start({ x: PL.sx, y: PL.sy, practice: PL.practice });

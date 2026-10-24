@@ -28,6 +28,7 @@
 <section id="play" class="layer">
   <canvas id="gameCanvas"></canvas>
   <div id="hud"><div id="pbar"><div id="pfill"></div></div><span id="ppct">0%</span><button class="round" id="pauseBtn">❚❚</button></div>
+  <div id="fpsBox">fps: 0</div>
   <div id="recBox"></div>
   <div id="pracHud" onmousedown="event.preventDefault()"><button class="btn sm green" data-act="pracadd" tabindex="-1">◆ Checkpoint (Z)</button><button class="btn sm red" data-act="pracdel" tabindex="-1">◇ Remove last (X)</button><span class="prtag">PRACTICE</span></div>
   <div id="pauseBox" class="overlay"><div class="panel"><h2>Paused</h2><p id="pauseBest" class="muted" style="margin:0;font-size:18px"></p><button class="btn green" data-act="resume">Resume</button><button class="btn orange" data-act="restart">Restart</button><button class="btn blue" id="pracBtn" data-act="pracmode">Practice: OFF</button><button class="btn red" data-act="exitplay">Exit</button></div></div>

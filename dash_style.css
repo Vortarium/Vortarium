@@ -252,3 +252,5 @@ html.ldm *, html.ldm *::before, html.ldm *::after { box-shadow: none !important;
 .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg2{display:flex;gap:4px;margin:4px 0}.seg2 button{flex:1;padding:5px 2px;font:normal 12px "Lilita One";color:#fff;background:#243a90;border:2px solid #000;border-radius:8px;cursor:pointer}.seg2 button.on{background:#3ddc4a}
 #cwheel{display:block;margin:4px auto 8px;width:150px;height:150px;border-radius:50%;cursor:crosshair;touch-action:none}
+
+#fpsBox{position:absolute;top:4px;left:6px;font:700 11px Nunito,monospace;color:#fff;opacity:.75;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:4}
