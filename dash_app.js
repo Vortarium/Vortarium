@@ -833,7 +833,8 @@ class Game {
     if (LDM) { const full = new Set(), isFull = o => { const d = OBJ[o.t]; return d.solid && !d.slope && !d.half && (!o.sc || o.sc === 1) && Number.isInteger(o.x) && Number.isInteger(o.y); }; for (const o of this.SR) if (isFull(o)) full.add(o.x + ',' + o.y); this.SR = this.SR.filter(o => !(isFull(o) && full.has((o.x - 1) + ',' + o.y) && full.has((o.x + 1) + ',' + o.y) && full.has(o.x + ',' + (o.y - 1)) && full.has(o.x + ',' + (o.y + 1)))); }
     this.LS = makeLayer(this.SR, dynG); this.LD = makeLayer(this.DEC, dynG);
     this.ZB = {}; for (const o of objs) { if (!zc(o) || o.inv || isMv(o)) continue; const d = OBJ[o.t]; if (d.trig || d.zone || d.coin || (LDM && d.deco && !d.text)) continue; (this.ZB[o.z | 0] = this.ZB[o.z | 0] || []).push(o); }   // objects on a custom layer (Z order), sorted by x like everything else
-    const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch && !o.so); this.TT = tr.filter(o => o.touch && !o.so);   // spawn ordered triggers never fire on their own this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
+    const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch && !o.so); this.TT = tr.filter(o => o.touch && !o.so);   // spawn ordered triggers never fire on their own
+    this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
     this.ports = objs.filter(o => SPEEDS[o.t] && !o.nt); this.rports = objs.filter(o => REVP[o.t] && !o.nt);
     const end = tr.find(o => o.t === 'trig_end'); this.autoEnd = !end; this.endX = end ? end.ex : (objs.length ? objs.reduce((m, o) => Math.max(m, o.ex), 0) : 0) + U + 3 * U;   // no End Trigger placed: level ends 3 blocks past the farthest object
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
@@ -1134,6 +1135,7 @@ class Game {
       else if (!LDM && this.ft > .0215 && (this.q || 0) >= 2 && !this.ldmHint && this.fcount > 240) { this.ldmHint = 1; toast('Still laggy? Turn on LDM (Low Definition Mode) in Settings'); }
     }
     this.fcount = (this.fcount || 0) + 1;
+    try {   // a single bad frame must never kill the loop (that is what froze the game): log it and keep going
     if (!this.paused && !this.won) {
       this.acc += dt; let n = 0;
       while (this.acc >= STEP && n++ < 40) { const p = this.p, v = this.pv || (this.pv = { x: 0, y: 0 }); v.x = p.x; v.y = p.y; this.step(STEP); this.acc -= STEP; }
@@ -1142,7 +1144,8 @@ class Game {
     }
     this.render(dt);
     this.cb.onFrame && this.cb.onFrame(this.pct(), this.attempts);
-    this.raf = requestAnimationFrame(t => this.frame(t));
+    } catch (e) { console.error('DASH frame error', e); }
+    if (this.running) this.raf = requestAnimationFrame(t => this.frame(t));
   }
   oc(o) { return o.pcol === 1 ? this.skin.c1 : o.pcol === 2 ? this.skin.c2 : o.col; }   // player colors: whoever plays sees their own
   dr(c, o, x, y, cs, fa, fast) { c.globalAlpha = (fa < 1 ? fa : 1) * (o.op != null ? o.op : 1); drawCached(c, o, x, y, cs, this.oc(o), this.time, fast); c.globalAlpha = 1; }
