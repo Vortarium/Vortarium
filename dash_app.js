@@ -961,7 +961,7 @@ class Game {
   // SECONDARY hitbox = smaller inner box that decides deaths against walls/blocks (22x22 base; cube -30%, ship -50%; wave has just its one box)
   secIn() { return this.priIn(); }
   // solid box insets [side, bottom, top, floorFlush, ceilFlush]: measured from the real artwork so ship / ufo / wave visibly touch the ground and blocks
-  sbx() { const m = this.mode, b = m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, 3, 3, 0, 0]; const r = this.sz() === 1 ? b : b.map(v => this.ins(v)); return m === 'wave' ? r.map((v, i) => i < 3 ? 7.5 + v / 2 : v) : r; }   // wave: side/bottom/top insets halve the box (2x smaller); the flush values [3],[4] keep the visual resting position   // one hitbox decides walls, blocks and spikes alike
+  sbx() { const m = this.mode, b = m === 'wave' ? [8.4, 9.6, 9.6, 9.6, 9.6] : m === 'ship' ? [4, 6.3, 1.4, 6.3, 1.4] : m === 'ufo' ? [3, 2.1, 1.5, 2.1, 1.5] : [3, this.gr > 0 ? 0 : 3, this.gr > 0 ? 3 : 0, 0, 0]; const r = this.sz() === 1 ? b : b.map(v => this.ins(v)); return m === 'wave' ? r.map((v, i) => i < 3 ? 7.5 + v / 2 : v) : r; }   // wave: side/bottom/top insets halve the box (2x smaller); the flush values [3],[4] keep the visual resting position   // one hitbox decides walls, blocks and spikes alike
   hitI(p, x, y, w, h, i) { return p.x + i < x + w && p.x + 30 - i > x && p.y + i < y + h && p.y + 30 - i > y; }
   step(dt) {
     const p = this.p; if (this.won) return;
@@ -1561,11 +1561,13 @@ const bestKey = id => 'dash_best_' + id;
 async function getBest(id) {
   let b = +localStorage[bestKey(id)] || 0;
   if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) b = Math.max(b, s.data().best || 0); } catch { } }
+  if (isBeaten(id)) b = 100;   // a beaten level is always 100%
   return b;
 }
 async function getProgress(id) {
   let best = +localStorage[bestKey(id)] || 0, gems = 0, attempts = 0;
   if (me) { try { const s = await getDoc(doc(db, 'users', me.uid, 'progress', id)); if (s.exists()) { best = Math.max(best, s.data().best || 0); gems = s.data().gems || 0; attempts = s.data().attempts || 0; } } catch { } }
+  if (isBeaten(id)) best = 100;
   return { best, gems, attempts };
 }
 views.level = async ({ id }) => {
@@ -1739,6 +1741,7 @@ function startPlay(o) {
       const ls = PL.kind === 'play' ? (+localStorage[bestKey(PL.id)] || 0) : 0, oldBest = Math.max(PL.best, PL.prevBest || 0, ls), fp = Math.floor(pct);
       if (fp >= 1 && fp > Math.floor(oldBest)) newRecord(fp);
       PL.best = Math.max(PL.best, pct);
+      if (PL.kind === 'play' && me && fp > Math.floor(oldBest)) setDoc(doc(db, 'users', me.uid, 'progress', PL.id), { best: fp }, { merge: true }).catch(() => { });   // new best % is saved to the account immediately
       if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
     },
     onWin: () => { winSongFade(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
@@ -1836,6 +1839,7 @@ async function onWon() {
     p.lv0.verified = sigOf(p.lv0.objs); saveSlots(ed.slot); toast('✔ Level verified! You can now upload it.', 'ok'); return;
   }
   localStorage[bestKey(p.id)] = 100; p.best = 100; BEATEN.add(p.id);
+  if (me) setDoc(doc(db, 'users', me.uid, 'progress', p.id), { best: 100 }, { merge: true }).catch(() => { });   // 100% goes to the account right away, not only when you leave the level
   if (!me || !P) { recordAnonWin(p.id, got); toast('Beaten as Anonymous - sign up and it will carry over to your new account!'); return; }
   try {
     const r = await awardWin(p.id, p.lv, got); if (!r) return;
