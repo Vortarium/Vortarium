@@ -85,7 +85,15 @@ form input:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
   width: 230px; flex: none; height: 100%;
   background: #fff; border-left: 3px solid var(--ink);
   display: flex; flex-direction: column; z-index: 5;
-  order: 2;
+  order: 2; position: relative;
+}
+#sidebar.drop-delete { background: #ffe0e6; }
+#sidebar.drop-delete::after {
+  content: "🗑️ Drop to remove"; position: absolute; inset: 8px;
+  display: grid; place-items: center; text-align: center;
+  font-family: "Caveat", cursive; font-size: 30px; color: #d6336c;
+  border: 3px dashed #d6336c; border-radius: 16px;
+  background: rgba(255, 224, 230, .92); pointer-events: none; z-index: 6;
 }
 .side-head {
   display: flex; align-items: center; justify-content: space-between;

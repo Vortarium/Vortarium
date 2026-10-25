@@ -15,24 +15,38 @@ import {
 
 // ---------- config ----------
 // ---------- AI access ----------
-// The AI key is stored in scrambled pieces and put back together only when the game runs.
-const _p = [
-  [2,"8M2xvrA="],
-  [5,"ibKOvg=="],
-  [4,"iLyLuA=="],
-  [7,"soK1qQ=="],
-  [10,"iqm6mw=="],
-  [6,"4beQpamB"],
-  [9,"v6eKspKR"],
-  [1,"jOX0iw=="],
-  [0,"7OGd99s="],
-  [3,"oPOBhqSf"],
-  [8,"t96ohsE="]
+// Two AI keys, each stored in scrambled pieces and only put back together while the game runs.
+const _KEYS = [
+  { s: 173, p: [
+      [2,"8M2xvrA="],
+      [5,"ibKOvg=="],
+      [4,"iLyLuA=="],
+      [7,"soK1qQ=="],
+      [10,"iqm6mw=="],
+      [6,"4beQpamB"],
+      [9,"v6eKspKR"],
+      [1,"jOX0iw=="],
+      [0,"7OGd99s="],
+      [3,"oPOBhqSf"],
+      [8,"t96ohsE="]
+  ] },
+  { s: 91, p: [
+      [1,"AF06JVg="],
+      [5,"KLj87ek="],
+      [6,"3f76w/k="],
+      [9,"o9XV1p/N"],
+      [4,"MUs549zB"],
+      [2,"IlsYBRs9"],
+      [7,"v+7d7w=="],
+      [0,"Gg9PJQ=="],
+      [3,"REoGM04="],
+      [10,"/sM="],
+      [8,"9u7s09s="]
+  ] }
 ];
-const _s = 173;
-function _k() {
-  return _p.slice().sort((a, b) => a[0] - b[0]).map(([i, t]) =>
-    [...atob(t)].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ ((_s + i * 7 + j * 3) & 255))).join("")
+function _k(o) {
+  return o.p.slice().sort((a, b) => a[0] - b[0]).map(([i, t]) =>
+    [...atob(t)].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ ((o.s + i * 7 + j * 3) & 255))).join("")
   ).join("");
 }
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
@@ -279,13 +293,16 @@ function makeDraggable(node) {
     const br = board.getBoundingClientRect();
     node.style.left = ev.clientX - br.left - offX + "px";
     node.style.top = ev.clientY - br.top - offY + "px";
-    const t = itemUnder(ev.clientX, ev.clientY, node);
+    const overSidebar = ev.clientX > $("sidebar").getBoundingClientRect().left;
+    $("sidebar").classList.toggle("drop-delete", overSidebar);
+    const t = overSidebar ? null : itemUnder(ev.clientX, ev.clientY, node);
     if (t !== target) { target?.classList.remove("target"); target = t; target?.classList.add("target"); }
   });
 
   const end = async (ev) => {
     if (!node.classList.contains("dragging")) return;
     node.classList.remove("dragging");
+    $("sidebar").classList.remove("drop-delete");
     target?.classList.remove("target");
     const t = target; target = null;
 
@@ -383,6 +400,37 @@ async function getResult(a, b) {
   return out;
 }
 
+// --- key failover -------------------------------------------------
+// If a key is out of quota (429/401/403) or the AI takes longer than 5 seconds,
+// that key is "benched" for a while and the other key takes over (and back again later).
+const FAST_LIMIT_MS = 5000;
+const PATIENT_LIMIT_MS = 20000;       // used only when BOTH keys are benched
+const KEY_COOLDOWN_MS = 10 * 60 * 1000;
+const keyUntil = _KEYS.map(() => 0);
+let activeKey = 0;
+try {
+  const saved = JSON.parse(localStorage.getItem("jewelfish_keys") || "[]");
+  saved.forEach((t, i) => { if (i < keyUntil.length && Number(t) > Date.now()) keyUntil[i] = Number(t); });
+} catch (e) { /* ignore */ }
+
+function benchKey(i) {
+  keyUntil[i] = Date.now() + KEY_COOLDOWN_MS;
+  activeKey = (i + 1) % _KEYS.length;
+  try { localStorage.setItem("jewelfish_keys", JSON.stringify(keyUntil)); } catch (e) { /* ignore */ }
+  console.warn("Jewelfish: AI key " + (i + 1) + " benched, switching to key " + (activeKey + 1));
+}
+function pickKey() {
+  const now = Date.now();
+  for (let o = 0; o < _KEYS.length; o++) {
+    const i = (activeKey + o) % _KEYS.length;
+    if (keyUntil[i] <= now) { activeKey = i; return i; }
+  }
+  let best = 0;                        // all benched: use the one that frees up soonest
+  keyUntil.forEach((t, i) => { if (t < keyUntil[best]) best = i; });
+  activeKey = best;
+  return best;
+}
+
 async function askGemini(a, b) {
   const prompt =
 `You are the engine of an Infinite Craft style game. Combine two things and reply with what they make.
@@ -395,41 +443,53 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
-  const key = encodeURIComponent(_k());
-  const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  // Express-mode keys use the Vertex endpoint, AI Studio keys use the other one.
-  const isExpress = _k().slice(0, 2) === String.fromCharCode(65, 81);
-  const urls = isExpress ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
-  let urlIdx = 0;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
   });
 
-  // Keep trying until the AI answers, so the item stays in its "thinking" state.
   let lastErr = new Error("no answer");
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const idx = pickKey();
+    const allBenched = keyUntil.every((t) => t > Date.now());
+    const limit = allBenched ? PATIENT_LIMIT_MS : FAST_LIMIT_MS;
+
+    const k = _k(_KEYS[idx]);
+    const enc = encodeURIComponent(k);
+    const isExpress = k.slice(0, 2) === String.fromCharCode(65, 81);
+    const url = isExpress
+      ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${enc}`
+      : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${enc}`;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), limit);
     try {
-      const res = await fetch(urls[urlIdx], { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: ctrl.signal });
+      clearTimeout(timer);
       if (!res.ok) {
         const t = await res.text();
-        const err = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
-        if ([400, 401, 403, 404].includes(res.status) && urlIdx < urls.length - 1) { urlIdx++; lastErr = err; continue; }
-        if ([429, 500, 502, 503, 504].includes(res.status)) { lastErr = err; await sleep(900 * (attempt + 1)); continue; }
-        throw err;
+        lastErr = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
+        if ([429, 401, 403].includes(res.status)) { benchKey(idx); continue; }   // out of quota / bad key
+        if ([500, 502, 503, 504].includes(res.status)) { await sleep(700 * (attempt + 1)); continue; }
+        throw lastErr;                                                          // 400/404: our request is wrong
       }
       const data = await res.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];
       const m = parts.map((p) => p.text || "").join("").match(/\{[\s\S]*\}/);
-      if (!m) throw new Error("AI gave no answer");
+      if (!m) { lastErr = new Error("AI gave no answer"); continue; }
       const parsed = JSON.parse(m[0]);
       const n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
       const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
-      if (!n) throw new Error("AI gave an empty name");
+      if (!n) { lastErr = new Error("AI gave an empty name"); continue; }
       return { n, e };
     } catch (err) {
-      if (err.message.startsWith("Gemini 4")) throw err;
+      clearTimeout(timer);
+      if (err.name === "AbortError") {
+        lastErr = new Error("AI took too long");
+        if (!allBenched) benchKey(idx);        // slower than 5s = this key is probably full
+        continue;
+      }
+      if (String(err.message).startsWith("Gemini 4")) throw err;
       lastErr = err;
       await sleep(600 * (attempt + 1));
     }
