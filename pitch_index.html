@@ -332,7 +332,8 @@ const INSTR={grand:{label:'Grand Piano'},
   choir:{label:'Choir',file:'Choir.sf2'}};
 let curInst='grand';try{const v=localStorage.getItem('instrument');if(v&&INSTR[v])curInst=v;}catch(e){}
 const instSF={},instP={},instErr={};
-const activeSF=()=>(curInst!=='grand'&&instSF[curInst])||sf;
+let instOver=null;                       // temporary per-note instrument (used by the 8D audio game)
+const activeSF=()=>{const k=instOver||curInst;return (k!=='grand'&&instSF[k])||sf;};
 function instLoad(key){
   const I=INSTR[key];if(!I||!I.file)return Promise.resolve(true);
   if(instSF[key])return Promise.resolve(true);
@@ -1347,24 +1348,25 @@ function spHat(dst,t,v=1,open=false){
   const g=ctx.createGain(),len=open?.16:.045;g.gain.setValueAtTime(.2*v,t);g.gain.exponentialRampToValueAtTime(.001,t+len);
   n.connect(hp);hp.connect(g);g.connect(dst);n.start(t,Math.random()*.2);n.stop(t+len+.03);
 }
-/* plays the song through an orbiting HRTF panner. Returns {T,endAz}. */
-function spOrbit(startAz,dir,sweep){
+/* plays the song through an orbiting HRTF panner. azAt(u) gives the azimuth (radians, clockwise from front) at u=0..1 of the song; dur is the length in seconds.
+   Two different instruments are mixed: iA plays chords + bass, iB plays the melody. Returns {T}. */
+function spOrbit(azAt,dur,iA,iB){
   initAudio();
   const now=ctx.currentTime,t0=now+.25;
   const minor=Math.random()<.4,sc=minor?SC_MIN:SC_MAJ,root=rpick([48,50,52,53,55,57]);
-  const bpm=rpick([100,108,116,124]),step=60/bpm/2,N=Math.floor(4.95/step),T=N*step;
+  const bpm=rpick([100,108,116,124]),step=60/bpm/2,N=Math.floor(dur/step),T=N*step;
   const dn=d=>root+sc[((d%7)+7)%7]+12*Math.floor(d/7);
-  const prog=rpick([[0,4,5,3],[0,5,3,4],[5,3,0,4],[0,3,4,4],[0,2,3,4]]);
+  const PROGS=[[0,4,5,3],[0,5,3,4],[5,3,0,4],[0,3,4,4],[0,2,3,4],[0,3,5,4]];
+  const progs=Array.from({length:Math.ceil(N/16)+1},()=>rpick(PROGS));        // a new progression every 2 bars so longer songs keep moving
   // signal chain: in -> lowpass (closes when behind) -> HRTF panner -> out -> master
   const inp=ctx.createGain(),lp=ctx.createBiquadFilter(),p=ctx.createPanner(),out=ctx.createGain();
   lp.type='lowpass';lp.Q.value=.6;
   p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=1;p.rolloffFactor=0;
   out.gain.value=1.25;inp.connect(lp);lp.connect(p);p.connect(out);out.connect(master);
   SPN.in=inp;
-  const azAt=u=>startAz+dir*sweep*u;
   const cutAt=az=>2000*Math.pow(9,(Math.cos(az)+1)/2);       // behind ≈ 2 kHz, front ≈ 18 kHz
   const gainAt=az=>.78+.3*(Math.cos(az)+1)/2;
-  const K=240,X=new Float32Array(K),Z=new Float32Array(K),C=new Float32Array(K),G=new Float32Array(K);
+  const K=Math.max(240,Math.round(T*60)),X=new Float32Array(K),Z=new Float32Array(K),C=new Float32Array(K),G=new Float32Array(K);
   for(let k=0;k<K;k++){const az=azAt(k/(K-1));X[k]=Math.sin(az);Z[k]=-Math.cos(az);C[k]=cutAt(az);G[k]=gainAt(az);}
   if(p.positionX){
     p.positionY.value=0;
@@ -1386,18 +1388,20 @@ function spOrbit(startAz,dir,sweep){
   try{
     let m=rpick([0,2,4]);
     for(let i=0;i<N;i++){
-      const w=.25+i*step,d=prog[Math.floor(i/4)%prog.length];
+      const w=.25+i*step,prog=progs[Math.floor(i/16)],d=prog[Math.floor(i/4)%prog.length];
       if(i%4===0){
+        instOver=iA;
         [0,2,4].forEach((o,j)=>playPiano(dn(d+o)+12,step*3.7,.55,w+j*.012));
         playPiano(dn(d)-12,step*3.6,.8,w);
       }
       const onBeat=i%2===0;
       if(Math.random()<(onBeat?.75:.5)){
         m+=rpick([-2,-1,-1,0,1,1,2]);m=Math.max(-2,Math.min(9,m));
+        instOver=iB;
         playPiano(dn(m)+12,step*rpick([1.2,1.8,2.4]),.5+.25*Math.random(),w);
       }
     }
-  }finally{master=mS;reverb=rS;}
+  }finally{master=mS;reverb=rS;instOver=null;}
   for(let i=0;i<N;i++){
     const t=t0+i*step,pos=i%8;
     if(pos===0||pos===4||(pos===7&&Math.random()<.35)||(pos===3&&Math.random()<.3))spKick(inp,t);
@@ -1405,17 +1409,55 @@ function spOrbit(startAz,dir,sweep){
     else if(i>=N-2&&Math.random()<.7)spSnare(inp,t,.6);
     spHat(inp,t,pos%2===0?1:.55,pos===7&&Math.random()<.5);
   }
-  return {T,endAz:azAt(1)};
+  return {T};
+}
+/* choose two different instruments at random (whatever is loadable), independent of the one picked on the Piano page */
+async function spPickPair(){
+  const keys=Object.keys(INSTR).sort(()=>Math.random()-.5),got=[];
+  for(const k of keys){
+    if(got.length===2)break;
+    if(instErr[k])continue;
+    if(await instLoad(k))got.push(k);
+  }
+  for(const k of ['grand',...keys]){if(got.length>=2)break;if(!got.includes(k)&&(k==='grand'||instSF[k]))got.push(k);}
+  while(got.length<2)got.push('grand');
+  return got;
+}
+/* orbit path: early rounds spin one way at a steady pace; later rounds reverse direction partway (smoothly) AND speed up / slow down, and the song grows from 5 s to 10 s */
+function spPath(round){
+  const turns=round<4?0:round<7?1:round<9?2:3;
+  let base,az0;
+  if(turns===0){
+    const a0=rnd(0,Math.PI*2),dir=Math.random()<.5?1:-1,sw=rnd(2.4,5.6);
+    base=u=>a0+dir*sw*u;az0=a0;
+  }else{
+    const segs=turns+1,pts=[rnd(0,Math.PI*2)];let dir=Math.random()<.5?1:-1;
+    for(let i=0;i<segs;i++){pts.push(pts[i]+dir*rnd(1.2,3.3));dir=-dir;}
+    base=u=>{if(u>=1)return pts[segs];const x=Math.max(0,u)*segs,i=Math.floor(x),v=x-i,e=v*v*(3-2*v);return pts[i]+(pts[i+1]-pts[i])*e;};
+    az0=pts[0];
+  }
+  // speed variation: the sound's pace is 1+amp·(wobble), always positive, so it only ever slows/speeds, never stalls or runs backwards in time
+  const amp=round<2?0:Math.min(.88,.2+.1*(round-2));
+  let azAt=base;
+  if(amp>0){
+    const f1=rnd(1,2.2),f2=rnd(2.5,4.5),p1=rnd(0,6.28),p2=rnd(0,6.28),M=600,W=new Float32Array(M+1);
+    for(let i=0;i<M;i++){const u=(i+.5)/M;W[i+1]=W[i]+1+amp*(.65*Math.sin(2*Math.PI*f1*u+p1)+.35*Math.sin(2*Math.PI*f2*u+p2));}
+    for(let i=0;i<=M;i++)W[i]/=W[M];                      // warp(0)=0, warp(1)=1
+    const warp=u=>{if(u<=0)return 0;if(u>=1)return 1;const x=u*M,i=Math.floor(x);return W[i]+(W[i+1]-W[i])*(x-i);};
+    azAt=u=>base(warp(u));
+  }
+  return {azAt,az0,turns,amp};
 }
 const dirName=a=>['front','front-right','right','back-right','back','back-left','left','front-left'][Math.round(((a%360)+360)%360/45)%8];
 function gSpatial(){
   S.title='8D audio';S.max=10;
   S.start=()=>{
-    S.az0=rnd(0,Math.PI*2);S.dir=Math.random()<.5?1:-1;S.sweep=rnd(2.4,5.6);   // orbit 140°–320°
-    S.endAz=S.az0+S.dir*S.sweep;S.done=false;S.heard=false;S.drag=false;S.guess=null;
+    S.path=spPath(S.round);S.dur=5+5*Math.min(1,S.round/9);
+    S.az0=S.path.az0;S.endAz=S.path.azAt(1);S.done=false;S.heard=false;S.drag=false;S.guess=null;
     const pos=(a,r=40)=>`left:${50+r*Math.sin(a)}%;top:${50-r*Math.cos(a)}%`;
+    const tip=(S.path.turns?'It may change direction':'It spins around you')+(S.path.amp>0?(S.path.turns?', and it':' and')+' speeds up and slows down along the way.':(S.path.turns?' on the way.':'.'));
     M.innerHTML=header('8D audio')+`<div class="stage">
-      <div class="hint" id="hm">Headphones on. The song starts at <b>A</b>, then orbits around you and stops somewhere. Press Ready, then drag the dot around the ring to where it stopped.</div>
+      <div class="hint" id="hm">Headphones on. The song (about ${Math.round(S.dur)} s) starts at <b>A</b> and orbits you. ${tip} Press Ready, then drag the dot around the ring to where it stopped.</div>
       <div class="joy" id="joy"><div class="ring"></div><span class="jl f">FRONT</span><span class="jl b">BACK</span><span class="jl l">L</span><span class="jl r">R</span><div class="head"></div>
         <div class="pa" style="${pos(S.az0)}">A</div><div class="puck" id="puck"></div></div>
       <div class="row" style="margin-top:0"><button class="btn acc" id="rdy">Ready</button><button class="btn ghost" id="lock" disabled>Lock in</button></div>
@@ -1430,21 +1472,23 @@ function gSpatial(){
     joy.addEventListener('pointerdown',e=>{if(!S.heard||S.done)return;joy.setPointerCapture(e.pointerId);S.drag=true;setPuck(e.clientX,e.clientY);});
     joy.addEventListener('pointermove',e=>{if(S.drag&&!S.done)setPuck(e.clientX,e.clientY);});
     ['pointerup','pointercancel'].forEach(ev=>joy.addEventListener(ev,()=>{S.drag=false;}));
-    $('rdy').onclick=()=>{
-      if(S.heard||$('rdy').disabled)return;$('rdy').disabled=true;$('hm').textContent='Listen… follow it from A.';
-      initAudio();pianoReady().then(()=>{
-        const o=spOrbit(S.az0,S.dir,S.sweep);
-        later(o.T*1000+900,()=>{S.heard=true;$('hm').textContent='Where did it stop? Drag the dot around the ring, then lock in.';});
-      });
+    $('rdy').onclick=async()=>{
+      if(S.heard||$('rdy').disabled)return;$('rdy').disabled=true;$('hm').textContent='Loading instruments…';
+      initAudio();await pianoReady();
+      const tk=seqId,pair=await spPickPair();if(tk!==seqId)return;
+      S.mix=pair;$('hm').textContent='Listen… follow it from A.';
+      const o=spOrbit(S.path.azAt,S.dur,pair[0],pair[1]);
+      later(o.T*1000+900,()=>{S.heard=true;$('hm').textContent='Where did it stop? Drag the dot around the ring, then lock in.';});
     };
     $('lock').onclick=()=>{
       if(S.guess===null||S.done)return;S.done=true;$('lock').disabled=true;
-      const err=Math.abs(((S.guess-S.endAz)*180/Math.PI+540)%360-180);
+      const dd=(S.guess-S.endAz)*180/Math.PI,err=Math.abs((((dd+180)%360)+360)%360-180);   // shortest way round, always 0–180°
       const pts=Math.round(10*Math.max(0,1-err/100));
       S.score+=pts;$('sc').textContent=S.score;
       const src=document.createElement('div');src.className='src';src.textContent='♪';
       src.setAttribute('style',pos(S.endAz));joy.appendChild(src);
-      $('hm').textContent=`It stopped at the ${dirName(S.endAz*180/Math.PI)} · you were ${Math.round(err)}° off`;
+      const mix=(S.mix||[]).map(k=>INSTR[k].label).join(' + ');
+      $('hm').textContent=`It stopped at the ${dirName(S.endAz*180/Math.PI)} · you were ${Math.round(err)}° off`+(mix?` · ${mix}`:'');
       $('res').innerHTML=`<div class="pts ${pts>=7?'g':pts>=4?'a':'b'}">+${pts}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     };
