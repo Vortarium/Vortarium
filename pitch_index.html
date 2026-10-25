@@ -57,6 +57,12 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 .wk:hover{background:#f1e3ff;}
 .bk{position:absolute;top:0;width:3.2%;height:62%;background:#1b1b1e;border:1px solid #333;border-radius:0 0 6px 6px;cursor:pointer;z-index:2;transition:background .1s}
 .bk:hover{background:#3a3a40}
+.kn{position:absolute;left:0;right:0;bottom:5px;text-align:center;font-size:clamp(6px,1.1vw,11px);font-weight:700;font-style:normal;color:#6b6b75;pointer-events:none;line-height:1}
+.bk .kn{color:#a0a0aa}
+.nonames .kn,.nonames .nm{display:none}
+.pbtn{background:none;font-family:inherit;cursor:pointer}
+.pbtn:hover{border-color:var(--mut)}
+.pw .kl,.pb .kl,.pw .kn2,.pb .kn2{display:block;font-style:normal;line-height:1.15}
 .wk.good,.wk.good:hover{background:var(--good)}.bk.good,.bk.good:hover{background:var(--good)}
 .wk.bad,.wk.bad:hover{background:var(--bad)}.bk.bad,.bk.bad:hover{background:var(--bad)}
 .wk.near,.wk.near:hover{background:#ffe27a}.bk.near,.bk.near:hover{background:#c9a400}
@@ -89,8 +95,8 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 label.btn{display:inline-block}
 .pv{position:relative;width:100%}.pv canvas{display:block}
 .pk{position:relative;user-select:none;-webkit-user-select:none;touch-action:none;height:clamp(150px,15vw,260px);width:100%}
-.pw{position:absolute;top:0;height:100%;background:#f4f4f5;border:1px solid #0a0a0b;border-radius:0 0 6px 6px;cursor:pointer;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:clamp(6px,.75vw,10px);font-weight:700;color:#8a8a93;box-sizing:border-box;overflow:hidden}
-.pb{position:absolute;top:0;height:62%;background:#1b1b1e;border:1px solid #333;border-radius:0 0 4px 4px;cursor:pointer;z-index:2;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;font-size:clamp(5px,.65vw,9px);font-weight:700;color:#8a8a93;box-sizing:border-box;overflow:hidden}
+.pw{position:absolute;top:0;height:100%;background:#f4f4f5;border:1px solid #0a0a0b;border-radius:0 0 6px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:6px;font-size:clamp(6px,.75vw,10px);font-weight:700;color:#8a8a93;box-sizing:border-box;overflow:hidden}
+.pb{position:absolute;top:0;height:62%;background:#1b1b1e;border:1px solid #333;border-radius:0 0 4px 4px;cursor:pointer;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:5px;font-size:clamp(5px,.65vw,9px);font-weight:700;color:#8a8a93;box-sizing:border-box;overflow:hidden}
 .pw.win{background:#ead8ff;color:#5a1a99}.pb.win{background:#4a2275;color:#fff;border-color:#6b35a8}
 .pw.au{background:#5ad1ff;color:#000}.pb.au{background:#2f8fd1;color:#fff;border-color:#5ad1ff}
 .pw.dn,.pb.dn{background:var(--acc);color:#000}
@@ -209,6 +215,14 @@ main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:a
 <script>
 /* ============ AUDIO ============ */
 const NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+let NN=true;try{const v=localStorage.getItem('notenames');if(v!==null)NN=v==='1';}catch(e){}
+function applyNN(){
+  document.body.classList.toggle('nonames',!NN);
+  document.querySelectorAll('.nnbtn').forEach(b=>{b.textContent='Note names '+(NN?'on':'off');b.classList.toggle('on',NN);});
+  if(typeof PV!=='undefined'&&PV.on&&typeof pvUpdate==='function')pvUpdate();
+}
+function setNN(v){NN=!!v;try{localStorage.setItem('notenames',NN?'1':'0')}catch(e){}applyNN();}
+function bindNN(){document.querySelectorAll('.nnbtn').forEach(b=>b.onclick=()=>{setNN(!NN);b.blur();});applyNN();}
 const mf=m=>440*Math.pow(2,(m-69)/12);
 let revWet=null,revLong=null,revLongWet=null,ctx,master,reverb,samples={},sampleMode=false,sf=null,sfP=null,salP=null,voices=[];
 
@@ -570,10 +584,10 @@ function buildPiano(onKey){
   for(let m=LOW;m<=HIGH;m++){NAMES[m%12].includes('#')?blacks.push(m):whites.push(m);}
   const W=whites.length;
   let h=`<div class="pianoWrap"><div class="piano" id="piano">`;
-  whites.forEach(m=>h+=`<div class="wk" data-m="${m}"></div>`);
+  whites.forEach(m=>h+=`<div class="wk" data-m="${m}"><i class="kn">${label(m)}</i></div>`);
   blacks.forEach(m=>{
     const wi=whites.filter(w=>w<m).length; // white keys to the left
-    h+=`<div class="bk" data-m="${m}" style="left:calc(${wi/W*100}% - 1.6%)"></div>`;
+    h+=`<div class="bk" data-m="${m}" style="left:calc(${wi/W*100}% - 1.6%)"><i class="kn">${label(m)}</i></div>`;
   });
   return h+`</div></div>`;
 }
@@ -590,8 +604,10 @@ function gNote(){
     M.innerHTML=header('Name the note')+`<div class="stage">
       <div class="big" id="bigm">♪</div>
       <div class="hint" id="hm">Which key was it? Exact = 100. Close misses earn half of the usual points.</div>
+      <div class="row" style="justify-content:center;margin:6px 0"><button class="pill pbtn nnbtn"></button></div>
       ${buildPiano()}
       <div class="result" id="res"></div></div>`;
+    bindNN();
     bindPiano((m,el)=>{
       if(S.done)return;S.done=true;
       const d=Math.abs(m-S.target);
@@ -1492,6 +1508,11 @@ function sgDraw(g,W,H){
       const y=top+1,h=Math.max(3,bot-top-2);
       g.fillStyle=f[2]?'#2f8fd1':'#5ad1ff';
       g.beginPath();if(g.roundRect)g.roundRect(x,y,w,h,Math.min(4,w/2));else g.rect(x,y,w,h);g.fill();
+      if(NN&&h>=9){
+        const nm=label(n.m),fs=Math.min(10,w/(nm.length*.62));
+        if(fs>=5.5){g.font='700 '+fs+'px system-ui,sans-serif';g.textAlign='center';g.textBaseline='bottom';
+          g.fillStyle=f[2]?'#fff':'#04222e';g.fillText(nm,x+w/2,y+h-1.5);}
+      }
       if(n.t<=pos&&pos<n.t+n.d)cnt[n.m]=1;
     }
     const bt='♩ '+Math.round(PS.song.bpm)+' BPM';   // average tempo (some files change tempo hundreds of times)
@@ -1516,10 +1537,10 @@ function openPiano(){
   for(let m=PLOW;m<=PHIGH;m++)(NAMES[m%12].includes('#')?blacks:whites).push(m);
   const WF=1/NWHITE,BF=WF*.6,wi={};whites.forEach((m,i)=>wi[m]=i);
   let keys='';
-  whites.forEach(m=>{PV.cx[m]=[(wi[m]+.5)*WF,WF*.78,false];keys+=`<div class="pw" data-m="${m}" style="left:${wi[m]*WF*100}%;width:${WF*100}%"></div>`;});
-  blacks.forEach(m=>{const x=(wi[m-1]+1)*WF;PV.cx[m]=[x,BF*.8,true];keys+=`<div class="pb" data-m="${m}" style="left:${(x-BF/2)*100}%;width:${BF*100}%"></div>`;});
+  whites.forEach(m=>{PV.cx[m]=[(wi[m]+.5)*WF,WF*.78,false];keys+=`<div class="pw" data-m="${m}" style="left:${wi[m]*WF*100}%;width:${WF*100}%"><i class="kl"></i><i class="kn2 nm">${label(m)}</i></div>`;});
+  blacks.forEach(m=>{const x=(wi[m-1]+1)*WF;PV.cx[m]=[x,BF*.8,true];keys+=`<div class="pb" data-m="${m}" style="left:${(x-BF/2)*100}%;width:${BF*100}%"><i class="kl"></i><i class="kn2 nm">${label(m)}</i></div>`;});
   M.innerHTML=`<div class="pvpad"><div class="top"><span>Piano · 88 keys</span><button class="btn ghost sm" onclick="menu()">Menu</button></div>
-    <div class="pvstat"><span class="pill" id="pvo"></span><span class="pill" id="pvs"></span>
+    <div class="pvstat"><span class="pill" id="pvo"></span><button class="pill pbtn" id="pvs" title="Sustain pedal (S key)"></button><button class="pill pbtn nnbtn" id="pvnm"></button>
       <select class="sel" id="pvkey" aria-label="Key">${TONICS.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
       <select class="sel" id="pvmode" aria-label="Scale"><option value="maj">Major</option><option value="min">Minor</option></select>
       <span class="pvn" id="pvn"></span></div>
@@ -1557,6 +1578,8 @@ function openPiano(){
   const chg=()=>{pvPref={t:+ks.value,minor:md.value==='min'};try{localStorage.setItem('pvscale',JSON.stringify(pvPref))}catch(e){}pvUpdate();ks.blur();md.blur();};
   ks.onchange=md.onchange=chg;
   $('sgplay').onclick=sgToggle;
+  $('pvs').onclick=e=>{PV.sus=!PV.sus;if(!PV.sus)pvSusOff();pvUpdate();e.currentTarget.blur();};
+  bindNN();
   $('sgsel').onchange=()=>{sgReset();$('sgsel').blur();};
   $('sgfile').onchange=async e=>{
     const fs=[...e.target.files];e.target.value='';
@@ -1593,7 +1616,7 @@ function pvUpdate(){
   for(const m in PV.els){
     const el=PV.els[m],i=map[m],inWin=i!==undefined;
     el.classList.toggle('win',inWin);
-    el.textContent=inWin?KEYLBL[i]:(m%12===0?'C'+(Math.floor(m/12)-1):'');
+    el.firstChild.textContent=inWin?KEYLBL[i]:(!NN&&m%12===0?'C'+(Math.floor(m/12)-1):'');
   }
 }
 function pvOn(id,m,when=0){
