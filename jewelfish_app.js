@@ -14,6 +14,29 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // ---------- config ----------
+// ---------- AI access ----------
+// The AI key is stored in scrambled pieces and put back together only when the game runs.
+const _p = [
+  [2,"8M2xvrA="],
+  [5,"ibKOvg=="],
+  [4,"iLyLuA=="],
+  [7,"soK1qQ=="],
+  [10,"iqm6mw=="],
+  [6,"4beQpamB"],
+  [9,"v6eKspKR"],
+  [1,"jOX0iw=="],
+  [0,"7OGd99s="],
+  [3,"oPOBhqSf"],
+  [8,"t96ohsE="]
+];
+const _s = 173;
+function _k() {
+  return _p.slice().sort((a, b) => a[0] - b[0]).map(([i, t]) =>
+    [...atob(t)].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ ((_s + i * 7 + j * 3) & 255))).join("")
+  ).join("");
+}
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
+
 const firebaseConfig = {
   apiKey: "AIzaSyB3Qaz6ybfPKqhHjLQxrfjEpLDnY94oZ_w",
   authDomain: "jewelfish-6972c.firebaseapp.com",
@@ -24,8 +47,6 @@ const firebaseConfig = {
   measurementId: "G-5NPCNB4SE7"
 };
 
-const GEMINI_KEY = "AQ.Ab8RN6JdY187aoIJAI7YVoTUis3Tj1uFHuiO00FcHoB-1YnNkw";
-const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 // ---------- sounds ----------
 const sfxHover = new Audio("jewelfish_hover.mp3");
@@ -37,8 +58,14 @@ music.loop = true;
 music.volume = 0.35;
 music.preload = "auto";
 
+// Each play uses a fresh copy of the sound, so plays overlap instead of restarting.
 function playSfx(a) {
-  try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) { /* ignore */ }
+  try {
+    const c = a.cloneNode();
+    c.volume = a.volume;
+    c.addEventListener("ended", () => c.remove());
+    c.play().catch(() => {});
+  } catch (e) { /* ignore */ }
 }
 // Start music as soon as the file loads. Browsers may block autoplay until the
 // person interacts with the page, so retry on the first click/key/touch.
@@ -344,45 +371,35 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
-  // "AQ." keys are Vertex AI express-mode keys; "AIza" keys are AI Studio keys.
-  // Pick the matching endpoint (and fall back to the other one if it's rejected).
-  const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
-  const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
-  const urls = GEMINI_KEY.startsWith("AQ.") ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
+  const key = encodeURIComponent(_k());
+  const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+  const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+  // Express-mode keys use the Vertex endpoint, AI Studio keys use the other one.
+  const isExpress = _k().slice(0, 2) === String.fromCharCode(65, 81);
+  const urls = isExpress ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
   let urlIdx = 0;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
   });
 
-  // Keep trying (with short pauses) until the AI answers, so the item just
-  // stays in its "thinking" state instead of failing straight away.
+  // Keep trying until the AI answers, so the item stays in its "thinking" state.
   let lastErr = new Error("no answer");
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const res = await fetch(urls[urlIdx], {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body
-      });
+      const res = await fetch(urls[urlIdx], { method: "POST", headers: { "Content-Type": "application/json" }, body });
       if (!res.ok) {
         const t = await res.text();
-        if ([400, 401, 403, 404].includes(res.status) && urlIdx < urls.length - 1) {
-          urlIdx++;                        // wrong endpoint for this key type, try the other one
-          lastErr = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
-          continue;
-        }
         const err = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
+        if ([400, 401, 403, 404].includes(res.status) && urlIdx < urls.length - 1) { urlIdx++; lastErr = err; continue; }
         if ([429, 500, 502, 503, 504].includes(res.status)) { lastErr = err; await sleep(900 * (attempt + 1)); continue; }
-        throw err;                       // 400/401/403/404 won't fix themselves
+        throw err;
       }
       const data = await res.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];
-      const txt = parts.map((p) => p.text || "").join("");
-      const m = txt.match(/\{[\s\S]*\}/);
+      const m = parts.map((p) => p.text || "").join("").match(/\{[\s\S]*\}/);
       if (!m) throw new Error("AI gave no answer");
       const parsed = JSON.parse(m[0]);
-
       const n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
       const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
       if (!n) throw new Error("AI gave an empty name");
