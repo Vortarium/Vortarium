@@ -1,111 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Jewelfish</title>
-<link rel="icon" href="jewelfish_logo.png">
-<link rel="stylesheet" href="jewelfish_style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Patrick+Hand&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="jewelfish_style.css" />
 </head>
 <body>
-<svg style="display:none"><symbol id="logo" viewBox="0 0 64 64"><path d="M6 32 L22 14 L46 14 L58 32 L46 50 L22 50 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M22 14 L30 32 L22 50 M46 14 L30 32 L46 50 M6 32 H30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="48" cy="29" r="2.5" fill="currentColor"/><path d="M58 32 L63 24 M58 32 L63 40" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol></svg>
 
-<section id="title" class="screen active">
-  <svg class="biglogo"><use href="#logo"/></svg>
-  <h1>Jewelfish</h1><p>cut. color. shine.</p>
-  <button class="btn primary" data-go="auth">Get started</button>
-</section>
-
+<!-- LOGIN / SIGNUP -->
 <section id="auth" class="screen">
-  <div class="card">
-    <svg class="smlogo"><use href="#logo"/></svg>
-    <h2 id="authTitle">Sign in</h2>
-    <input id="user" placeholder="Username" autocomplete="username">
-    <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
-    <div id="authErr" class="err"></div>
-    <button class="btn primary" id="authGo">Sign in</button>
-    <button class="link" id="authSwap">Create an account</button>
+  <div class="card auth-card">
+    <h1 class="logo">🐟 Jewelfish 💎</h1>
+    <p class="tagline">Mix things. Discover everything.</p>
+
+    <div class="tabs">
+      <button id="tabLogin" class="tab active" type="button">Log in</button>
+      <button id="tabSignup" class="tab" type="button">Sign up</button>
+    </div>
+
+    <form id="authForm" autocomplete="on">
+      <label>Username
+        <input id="username" type="text" maxlength="16" autocomplete="username" required placeholder="coolfish_42" />
+      </label>
+      <label>Password
+        <input id="password" type="password" minlength="6" autocomplete="current-password" required placeholder="••••••" />
+      </label>
+      <p id="authError" class="error"></p>
+      <button id="authSubmit" class="btn big" type="submit">Log in</button>
+    </form>
+
+    <p class="desc">
+      There are a total of <b id="totalCount">0</b> new discoveries that exist,
+      updating live. Can you find the next one?
+    </p>
   </div>
 </section>
 
-<section id="hub" class="screen">
-  <header class="hubbar"><svg class="smlogo"><use href="#logo"/></svg><b>Jewelfish</b><span id="who"></span><button class="btn" id="logout">Sign out</button></header>
-  <div class="hubbody"><div class="hubhead"><h2>Projects</h2><button class="btn primary" id="newProj">+ New project</button></div><div id="projList" class="grid"></div></div>
-</section>
+<!-- GAME -->
+<section id="game" class="screen hidden">
+  <aside id="sidebar">
+    <div class="side-head">
+      <span id="whoami" class="whoami"></span>
+      <button id="logoutBtn" class="mini" type="button" title="Log out">⎋</button>
+    </div>
+    <div id="elementList"></div>
+  </aside>
 
-<section id="editor" class="screen">
-  <header class="menubar">
-    <svg class="smlogo"><use href="#logo"/></svg>
-    <div class="menu"><button class="mbtn">File ▾</button>
-      <div class="drop">
-        <button id="mSave">Save <kbd>Ctrl+S</kbd></button>
-        <button id="mLoad">Load another project…</button>
-        <button id="mTitle">Rename project…</button>
-        <hr><button id="mExpHQ">Download — highest quality</button>
-        <button id="mExpSm">Download — compressed (&lt;10 MB)</button>
-        <hr><button id="mHub">Back to projects</button>
-      </div></div>
-    <input id="projTitle" class="titlein" value="Untitled">
-    <span id="saveState"></span>
-    <div class="spacer"></div>
-    <label class="sm">Ratio <select id="ratio">
-      <option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option><option value="4:3">4:3</option><option value="4:5">4:5</option><option value="21:9">21:9</option><option value="2:3">2:3</option><option value="custom">Custom…</option></select></label>
-    <button class="btn primary sm" id="mSave2">Save</button>
-  </header>
+  <main id="board">
+    <div id="boardHint">Click an element on the left, then drag one onto another to mix! ✏️</div>
+    <button id="trophyBtn" class="btn round" type="button" title="Leaderboard">🏆</button>
+    <button id="clearBtn" class="btn" type="button">Clear</button>
+    <div id="toast" class="toast hidden"></div>
+  </main>
 
-  <div class="work">
-    <nav class="side">
-      <div class="tabs">
-        <button class="tab active" data-tab="media">Media</button><button class="tab" data-tab="text">Text</button><button class="tab" data-tab="shapes">Shapes</button><button class="tab" data-tab="stickers">Stickers</button>
-        <button class="tab" data-tab="trans">Motion</button><button class="tab" data-tab="fx">Looks</button><button class="tab" data-tab="sound">Sound</button>
+  <div id="lbModal" class="modal hidden">
+    <div class="card lb-card">
+      <button id="lbClose" class="mini close" type="button">✕</button>
+      <h2>🏆 Top Discoverers</h2>
+      <ol id="lbList"></ol>
+      <div id="lbYou" class="lb-you hidden">
+        <div class="dots">⋯</div>
+        <div class="lb-row me" id="lbYouRow"></div>
       </div>
-      <div class="pane active" id="pane-media">
-        <label class="btn up">+ Upload media<input id="upload" type="file" accept="image/*,video/*,audio/*" multiple hidden></label>
-        <div id="bank" class="bank"></div>
-        <small>Click to add at playhead, or drag onto the timeline.</small>
-      </div>
-      <div class="pane" id="pane-shapes"></div><div class="pane" id="pane-stickers"></div><div class="pane" id="pane-sound"></div>
-      <div class="pane" id="pane-text">
-        <input id="fontSearch" placeholder="Search fonts…">
-        <div id="fontList" class="fontlist"></div>
-        <button class="btn primary" id="addText">Add text</button>
-        <label class="btn up">Upload font (.ttf/.otf/.woff)<input id="fontUp" type="file" accept=".ttf,.otf,.woff,.woff2" hidden></label>
-      </div>
-      <div class="pane" id="pane-trans">
-        <button class="preset" data-add="fadein">Fade in (selected clip)</button>
-        <button class="preset" data-add="fadeout">Fade out (selected clip)</button>
-        <button class="preset" data-add="flash:#ffffff">White flash</button>
-        <button class="preset" data-add="flash:#000000">Dip to black</button>
-        <button class="preset" data-add="flash:#ff3b6b">Pink flash</button>
-        <button class="preset" data-add="flash:#3be8ff">Cyan flash</button>
-      </div>
-      <div class="pane" id="pane-fx">
-        <button class="preset" data-fx="none">None</button><button class="preset" data-fx="bw">Black &amp; white</button>
-        <button class="preset" data-fx="sepia">Sepia</button><button class="preset" data-fx="vivid">Vivid</button>
-        <button class="preset" data-fx="cool">Cool</button><button class="preset" data-fx="warm">Warm</button>
-        <button class="preset" data-fx="blur">Soft blur</button><button class="preset" data-fx="noir">Noir</button>
-        <small>Applies to the selected clip.</small>
-      </div>
-    </nav>
-
-    <main class="center">
-      <div class="stage" id="stage"><canvas id="cv"></canvas></div>
-      <div class="transport">
-        <button id="toStart" title="Go to start">⏮</button><button id="play" title="Space">▶</button>
-        <span id="time">0:00.00 / 0:00.00</span><div class="spacer"></div>
-        <button id="undo" title="Undo (Ctrl+Z)">↶</button><button id="redo" title="Redo (Ctrl+Y)">↷</button><button id="dup" title="Duplicate (Ctrl+D)">⧉</button>
-        <button id="split" title="Split at playhead (S)">✂ Split</button>
-        <button id="del" title="Delete (Del)">Delete</button>
-        <label class="sm">Zoom <input id="zoom" type="range" min="10" max="300" value="60"></label>
-        <button id="full" title="Fullscreen">⛶</button>
-      </div>
-    </main>
-
-    <aside class="insp" id="insp"><div class="empty">Select a clip to edit it.</div></aside>
+    </div>
   </div>
-
-  <div class="timeline" id="tl"><div class="tlscroll" id="tlscroll"><div class="ruler" id="ruler"></div><div id="tracks"></div><div class="playhead" id="ph"></div></div></div>
-  <div id="toast"></div>
 </section>
 
 <script type="module" src="jewelfish_app.js"></script>
