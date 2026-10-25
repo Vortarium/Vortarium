@@ -210,7 +210,7 @@ main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:a
 /* ============ AUDIO ============ */
 const NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const mf=m=>440*Math.pow(2,(m-69)/12);
-let ctx,master,reverb,samples={},sampleMode=false,sf=null,sfP=null,salP=null,voices=[];
+let revWet=null,revLong=null,revLongWet=null,ctx,master,reverb,samples={},sampleMode=false,sf=null,sfP=null,salP=null,voices=[];
 
 /*SF2START*/
 function parseSF2(buf){
@@ -311,6 +311,14 @@ function initAudio(){
   for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2);}
   reverb=ctx.createConvolver(); reverb.buffer=ir;
   const rg=ctx.createGain(); rg.gain.value=.16; reverb.connect(rg); rg.connect(comp);
+  revWet=rg;
+  // second, longer tail that only opens up when sustain is on (feeds off the first reverb)
+  const llen=ctx.sampleRate*3.6, lir=ctx.createBuffer(2,llen,ctx.sampleRate);
+  for(let c=0;c<2;c++){const d=lir.getChannelData(c);for(let i=0;i<llen;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/llen,2.6);}
+  const lc=ctx.createConvolver(); lc.buffer=lir;
+  revLong=ctx.createGain(); revLong.gain.value=0;
+  revLongWet=ctx.createGain(); revLongWet.gain.value=.5;
+  reverb.connect(revLong); revLong.connect(lc); lc.connect(revLongWet); revLongWet.connect(comp);
   salP=loadSF2Auto().then(ok=>ok?null:loadSamples());
 }
 
@@ -1306,7 +1314,7 @@ function pvScaleText(){
   return nm[pvPref.t]+(pvPref.minor?' minor':' major')+' · '+iv.map(i=>nm[(pvPref.t+i)%12]).join(' ');
 }
 
-const PRESET_FILES=['Rasputin','Moonlight','Moonlight3','Bohemian','Tetris','Lune','Canon','Carol','Wham'];
+const PRESET_FILES=['Rasputin','Moonlight','Moonlight3','Bohemian','Tetris','Lune','Canon','Carol','Wham','Africa','Pirates','Storms','Elise','Yiruma','ABBA'];
 const MIDI_EXTS=['.mid','.midi','.MID','.MIDI',''];
 let SONGS=null,LOADED=[],songsP=null;
 const prettyName=f=>{let n=f.split('/').pop();try{n=decodeURIComponent(n)}catch(e){}return n.replace(/\.midi?$/i,'').replace(/[_]+/g,' ').trim();};
@@ -1426,12 +1434,30 @@ function sgStart(){
   PS.timer=setInterval(sgTick,40);sgTick();
   $('sgplay').textContent='⏸ Pause';
 }
+/* sustain on: wetter + longer reverb tail */
+function susWet(){
+  if(!ctx||!revWet)return;
+  const on=!!(PV&&PV.on&&PV.sus),t=ctx.currentTime;
+  revWet.gain.setTargetAtTime(on?.34:.16,t,.12);
+  revLong.gain.setTargetAtTime(on?1:0,t,.2);
+}
+/* sustain on: each note rings on into the next one (legato, pedal-like overlap) */
+function susDur(n){
+  const S=PS.song;
+  if(!S.on){const a=[];let last=-1;S.notes.forEach(x=>{if(x.t-last>.03){a.push(x.t);last=x.t;}});S.on=a;}
+  const A=S.on;let lo=0,hi=A.length;
+  while(lo<hi){const mid=(lo+hi)>>1;if(A[mid]<n.t+.03)lo=mid+1;else hi=mid;}
+  const gap=lo<A.length?A[lo]-n.t:n.d+1.5;
+  return Math.max(n.d*1.25+.25,Math.min(gap+.4,6));
+}
 function sgTick(){
   if(!PS.playing||!PS.song)return;
-  const pos=ctx.currentTime-PS.base,N=PS.song.notes;
+  susWet();
+  const pos=ctx.currentTime-PS.base,N=PS.song.notes,sus=PV.sus;
   while(PS.i<N.length&&N[PS.i].t<pos+.3){
     const n=N[PS.i++],w=n.t-pos;if(w<-.05)continue;
-    PS.hs.push({h:playPiano(n.m,Math.max(.12,n.d),.3+.6*(n.v/127),Math.max(0,w)),end:n.t+n.d+.7});
+    const d=sus?susDur(n):n.d;
+    PS.hs.push({h:playPiano(n.m,Math.max(.12,d),.3+.6*(n.v/127),Math.max(0,w)),end:n.t+d+.7});
   }
   if(PS.hs.length>64)PS.hs=PS.hs.filter(x=>x.end>pos);
   if(pos>PS.song.dur+1){sgHalt();PS.pos=-PS.song.lead;PS.vlo=0;$('sgplay').textContent='▶ Play';}
@@ -1562,7 +1588,7 @@ function pvUpdate(){
   const off=pvOff0(),map={};
   for(let i=0;i<12;i++)map[pvScaleNote(i)]=i;
   $('pvo').textContent='Octave '+(4+off)+(off>0?' ↑':off<0?' ↓':'');$('pvo').classList.toggle('on',off!==0);
-  $('pvs').textContent='Sustain '+(PV.sus?'on':'off');$('pvs').classList.toggle('on',PV.sus);
+  $('pvs').textContent='Sustain '+(PV.sus?'on':'off');$('pvs').classList.toggle('on',PV.sus);susWet();
   $('pvsc').textContent=pvScaleText();
   for(const m in PV.els){
     const el=PV.els[m],i=map[m],inWin=i!==undefined;
@@ -1586,7 +1612,7 @@ function pvSusOff(){PV.sustained.forEach(pvRelease);PV.sustained=[];}
 function pvStop(){
   const app=document.getElementById('app');if(app)app.classList.remove('wide');
   if(!PV.on)return;
-  PV.on=false;cancelAnimationFrame(PV.raf);PV.sus=false;
+  PV.on=false;cancelAnimationFrame(PV.raf);PV.sus=false;susWet();
   if(PV.ro)PV.ro.disconnect();removeEventListener('resize',PV.fit);
   Object.keys(PV.held).forEach(pvOff);pvSusOff();sgHalt();
 }
