@@ -344,7 +344,12 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  // "AQ." keys are Vertex AI express-mode keys; "AIza" keys are AI Studio keys.
+  // Pick the matching endpoint (and fall back to the other one if it's rejected).
+  const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
+  const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
+  const urls = GEMINI_KEY.startsWith("AQ.") ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
+  let urlIdx = 0;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
@@ -355,13 +360,18 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
   let lastErr = new Error("no answer");
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const res = await fetch(url, {
+      const res = await fetch(urls[urlIdx], {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
+        headers: { "Content-Type": "application/json" },
         body
       });
       if (!res.ok) {
         const t = await res.text();
+        if ([400, 401, 403, 404].includes(res.status) && urlIdx < urls.length - 1) {
+          urlIdx++;                        // wrong endpoint for this key type, try the other one
+          lastErr = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
+          continue;
+        }
         const err = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
         if ([429, 500, 502, 503, 504].includes(res.status)) { lastErr = err; await sleep(900 * (attempt + 1)); continue; }
         throw err;                       // 400/401/403/404 won't fix themselves
