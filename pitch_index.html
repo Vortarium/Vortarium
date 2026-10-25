@@ -116,6 +116,62 @@ label.btn{display:inline-block}
 .tl .t{bottom:8px;height:24px;background:var(--acc)}
 .tl .t.x{background:var(--bad)}
 .tl .g{top:0;bottom:0;width:1px;background:var(--line)}
+
+/* ===== full-screen layout, bigger everything ===== */
+body{display:block}
+#app{position:relative;z-index:1;max-width:none;min-height:100vh;padding:34px clamp(24px,5vw,90px) 80px}
+#app.wide{padding:28px 0 40px}
+#app.wide header{max-width:none;margin:0 0 32px;padding:0 clamp(24px,5vw,90px)}
+.pvpad{max-width:none;margin:0;padding:0 clamp(24px,5vw,90px)}
+header{margin-bottom:48px}
+.logo{font-size:40px}
+.status{font-size:14px}
+h1{font-size:clamp(46px,8vw,92px)}
+.sub{font-size:20px;margin:14px 0 40px}
+main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:auto}
+.top{font-size:16px}
+.bar{height:5px;margin-bottom:52px}
+.big{font-size:clamp(56px,13vw,140px)}
+.hint{font-size:18px;margin:16px 0 36px}
+.btn:not(.sm){font-size:18px;padding:17px 36px}
+.pts{font-size:34px}.res-sub{font-size:16px}
+.nb{padding:20px 0;font-size:22px}
+.grid{max-width:680px;gap:10px}
+.seg button{padding:14px 24px;font-size:17px}
+/* menu: grid of game boxes */
+.cards{grid-template-columns:repeat(3,1fr);gap:20px}
+.card{flex-direction:column;align-items:flex-start;justify-content:space-between;gap:16px;min-height:210px;padding:28px;border-radius:24px;background:rgba(20,20,22,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.card:hover{transform:translateY(-4px) scale(1.01);box-shadow:0 10px 40px rgba(188,77,255,.18)}
+.card .n{font-size:16px;width:auto}
+.card h3{font-size:27px;margin-bottom:8px}
+.card p{font-size:16px;line-height:1.45}
+.card .best{margin:auto 0 0}.card .best:empty{display:none}
+@media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.cards{grid-template-columns:1fr}.logo{font-size:32px}}
+.sheet{position:relative;height:210px;background:rgba(20,20,22,.82);border:1px solid var(--line);border-radius:18px;margin:14px auto 0;max-width:1100px;overflow:hidden;user-select:none}
+.sl{position:absolute;left:3%;right:3%;height:2px;background:#4a4a52}
+.sb{position:absolute;top:10%;bottom:14%;width:2px;background:#6a6a74}
+.sn{position:absolute;bottom:3%;transform:translateX(-50%);font-size:12px;color:var(--mut)}
+.rl{position:absolute;left:.8%;transform:translateY(-50%);font-size:11px;color:var(--mut);font-weight:700}
+.nt{position:absolute;width:24px;height:24px;transform:translate(-50%,-50%);display:grid;place-items:center;border-radius:50%;background:#f4f4f5;color:#000;font-size:13px;font-weight:800;transition:background .1s,color .1s}
+.nt.hh{background:transparent;color:#f4f4f5;font-size:28px;line-height:1;border-radius:0}
+.nt.g1{background:var(--good);color:#000}.nt.g2{background:#ffe27a;color:#000}.nt.g3{background:#ff9f43;color:#000}.nt.miss{background:var(--bad);color:#000}
+.nt.hh.g1{background:transparent;color:var(--good)}.nt.hh.g2{background:transparent;color:#ffe27a}.nt.hh.g3{background:transparent;color:#ff9f43}.nt.hh.miss{background:transparent;color:var(--bad)}
+.ph{position:absolute;top:6%;bottom:10%;width:3px;left:6%;background:var(--acc);box-shadow:0 0 14px var(--acc);border-radius:2px;display:none}
+.pads{display:flex;gap:14px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+.pad{width:150px;height:110px;border-radius:22px;border:2px solid var(--line);background:var(--card);color:var(--fg);font:inherit;font-weight:800;font-size:30px;cursor:pointer;user-select:none;touch-action:manipulation;transition:.08s}
+.pad small{display:block;font-size:12px;color:var(--mut);margin-top:4px;font-weight:600}
+.pad.hit{background:var(--acc);color:#000;transform:scale(.97)}.pad.bad{background:var(--bad);color:#000}
+.pad:disabled{opacity:.3;cursor:default}
+.joy{position:relative;width:min(400px,80vw);aspect-ratio:1;margin:6px auto 22px;border-radius:50%;border:2px solid var(--line);background:rgba(20,20,22,.6);touch-action:none;cursor:crosshair}
+.joy .ring{position:absolute;inset:25%;border:1px dashed var(--line);border-radius:50%}
+.jl{position:absolute;font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.1em}
+.jl.f{top:10px;left:50%;transform:translateX(-50%)}.jl.b{bottom:10px;left:50%;transform:translateX(-50%)}.jl.l{left:12px;top:50%;transform:translateY(-50%)}.jl.r{right:12px;top:50%;transform:translateY(-50%)}
+.head{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);border-radius:50%;background:var(--card);border:2px solid var(--mut)}
+.head::before{content:'';position:absolute;top:-10px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-bottom:9px solid var(--mut);border-top:0}
+.puck{position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%);border-radius:50%;background:var(--acc);box-shadow:0 0 22px var(--acc);opacity:.35;pointer-events:none}
+.puck.set{opacity:1}
+.src{position:absolute;width:30px;height:30px;transform:translate(-50%,-50%);border-radius:50%;background:var(--good);box-shadow:0 0 22px var(--good);pointer-events:none;display:grid;place-items:center;color:#000;font-weight:800;font-size:13px}
 </style>
 </head>
 <body>
@@ -336,8 +392,8 @@ function playPiano(midi,dur=2.2,vel=.8,when=0){
   ns.connect(bp); bp.connect(ng); ng.connect(out); ns.start(t);
   return mkHandle(out);
 }
-const CHORDS={maj:[0,4,7],min:[0,3,7],aug:[0,4,8],sus2:[0,2,7],sus4:[0,5,7]};
-const CHORD_NAMES={maj:'major',min:'minor',aug:'augmented',sus2:'sus2',sus4:'sus4'};
+const CHORDS={maj:[0,4,7],min:[0,3,7],aug:[0,4,8],dim:[0,3,6]};
+const CHORD_NAMES={maj:'major',min:'minor',aug:'augmented',dim:'diminished'};
 const chordIv=q=>CHORDS[q]||CHORDS.maj;
 function playChord(root,q,dur=1.7){
   chordIv(q).forEach((i,k)=>playPiano(root+i,dur,.72,k*.03));
@@ -406,18 +462,20 @@ function menu(){
   <div class="cards">
    <button class="card" onclick="startGame('match')"><span class="n">01</span><div><h3>Match the tone</h3><p>Hear a pitch once. Slide until yours matches.</p></div><span class="best">${b('match')}</span></button>
    <button class="card" onclick="startGame('note')"><span class="n">02</span><div><h3>Name the note</h3><p>A piano note plays 3 times. Find the key.</p></div><span class="best">${b('note')}</span></button>
-   <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality: major, minor, augmented or suspended.</p></div><span class="best">${b('chord')}</span></button>
+   <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality: major, minor, augmented or diminished.</p></div><span class="best">${b('chord')}</span></button>
    <button class="card" onclick="openPiano()"><span class="n">04</span><div><h3>Piano</h3><p>All 88 keys. Slide, play chords, pick a key, or play a MIDI song.</p></div></button>
    <button class="card" onclick="startGame('hl')"><span class="n">05</span><div><h3>Higher or lower</h3><p>Two notes. Is the second higher, lower, or the same?</p></div><span class="best">${b('hl')}</span></button>
    <button class="card" onclick="startGame('odd')"><span class="n">06</span><div><h3>Odd one out</h3><p>Five buttons play a note. Four match, one is a little flat or sharp. Find it.</p></div><span class="best">${b('odd')}</span></button>
    <button class="card" onclick="startGame('rhythm')"><span class="n">07</span><div><h3>Rhythm</h3><p>Hear a percussion pattern, then tap it back. Scored on timing.</p></div><span class="best">${b('rhythm')}</span></button>
+   <button class="card" onclick="startGame('drums')"><span class="n">08</span><div><h3>Drums</h3><p>Read a strip of sheet music after a count-in and play it exactly: two hands and a kick.</p></div><span class="best">${b('drums')}</span></button>
+   <button class="card" onclick="startGame('spatial')"><span class="n">09</span><div><h3>8D audio</h3><p>Headphones on. A rhythm plays around your head, shrinking to one note. Drag the dot to where it came from.</p></div><span class="best">${b('spatial')}</span></button>
   </div>`;
 }
 function startGame(k){
   initAudio();
   pvStop();
-  S={key:k,round:0,score:0,rounds:({hl:20,odd:10,rhythm:10})[k]||5};
-  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm})[k]();
+  S={key:k,round:0,score:0,rounds:({hl:20,odd:10,rhythm:10,drums:10,spatial:10})[k]||5};
+  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm,drums:gDrums,spatial:gSpatial})[k]();
 }
 
 /* ============ GAME 1: MATCH THE TONE ============ */
@@ -527,13 +585,13 @@ function gNote(){
 function gChord(){
   S.title='Name the chord';S.max=100;
   S.start=()=>{
-    S.root=ri(0,11);S.q=Object.keys(CHORDS)[ri(0,4)];S.done=false;S.gr=null;S.gm=null;
+    S.root=ri(0,11);S.q=Object.keys(CHORDS)[ri(0,3)];S.done=false;S.gr=null;S.gm=null;
     M.innerHTML=header('Name the chord')+`<div class="stage">
       <div class="big" id="bigm">♪</div>
       <div class="hint" id="hm">Pick the root and the quality. 50 pts each.</div>
       <div style="height:6px"></div>
       <div class="grid" id="grid">${NAMES.map((n,i)=>`<button class="nb" data-r="${i}">${n}</button>`).join('')}</div>
-      <div class="seg" id="seg"><button data-q="maj">Major</button><button data-q="min">Minor</button><button data-q="aug">Augmented</button><button data-q="sus2">Sus2</button><button data-q="sus4">Sus4</button></div>
+      <div class="seg" id="seg"><button data-q="maj">Major</button><button data-q="min">Minor</button><button data-q="aug">Augmented</button><button data-q="dim">Diminished</button></div>
       <div class="row" style="margin-top:14px"><button class="btn acc" id="sub" disabled>Lock in</button></div>
       <div class="result" id="res"></div></div>`;
     const upd=()=>{$('sub').disabled=S.gr===null||S.gm===null;};
@@ -691,7 +749,8 @@ function drumKeys(){
   };
   const main=pickK([38,37,56,76],[]),low=pickK([36,45,77,35],[main]);
   const tick=pickK([42,75,44,37],[main,low]),tap=pickK([39,76,56,40],[main,low,tick]);
-  return {main,low,tick,tap};
+  const kick=pickK([36,35],[]),snare=pickK([38,40,37],[kick]),hat=pickK([42,44,46],[kick,snare]),met=pickK([75,76,77,56],[kick,snare,hat]);
+  return {main,low,tick,tap,kick,snare,hat,met};
 }
 function synthHit(key,t,vel){
   const g=ctx.createGain();g.connect(master);
@@ -756,17 +815,31 @@ function genPattern(r){
   return {ev,label};
 }
 
-// Match each pattern hit to the closest unused tap. Perfect within ~40 ms, fading to 0 at ~240 ms. Extra taps cost up to half.
-function scoreRhythm(ev,taps){
-  const used=new Set(),diffs=[],hit=[];let sum=0;
-  ev.forEach(e=>{
-    const tt=e.t*SPB;let bi=-1,bd=9;
-    taps.forEach((tp,i)=>{if(used.has(i))return;const d=Math.abs(tp-tt);if(d<bd){bd=d;bi=i;}});
-    if(bi>=0&&bd<=.3){used.add(bi);const dt=taps[bi]-tt;diffs.push(dt);sum+=Math.max(0,Math.min(1,1-(Math.abs(dt)-.04)/.2));}
+// Judging: Timing (60%) how close each hit is - 100 ms off is ~45% for that hit, not zero.
+// Steadiness (25%) how even your offsets are (a steady player who is consistently a bit late keeps this).
+// Cleanliness (15%) hit every note, no extra / wrong-key taps.
+function hitScore(d){d=Math.abs(d);if(d<=.03)return 1;if(d<=.1)return 1-.55*(d-.03)/.07;if(d<=.2)return .45-.35*(d-.1)/.1;if(d<=.3)return .1*(1-(d-.2)/.1);return 0;}
+function judge(ev,taps,spb){            // ev: {t in beats, key?}  taps: {t in seconds, key?}
+  const used=new Set(),match=[];
+  ev.forEach((e,ei)=>{
+    const tt=e.t*spb;let bi=-1,bd=9;
+    taps.forEach((tp,i)=>{if(used.has(i)||(e.key&&tp.key!==e.key))return;const d=Math.abs(tp.t-tt);if(d<bd){bd=d;bi=i;}});
+    if(bi>=0&&bd<=.3){used.add(bi);match[ei]={i:bi,dt:taps[bi].t-tt};}
   });
-  const extra=taps.length-used.size,n=ev.length;
-  const acc=sum/n*(1-Math.min(.5,.5*extra/n));
-  return {pts:Math.round(acc*100),used,diffs,extra,matched:diffs.length};
+  const n=ev.length,ms=match.filter(Boolean),m=ms.length,extra=taps.length-used.size;
+  const timing=ms.reduce((a,x)=>a+hitScore(x.dt),0)/n;
+  let steady=0,sd=0,avg=0;
+  if(m)avg=ms.reduce((a,x)=>a+x.dt,0)/m;
+  if(m>=2){sd=Math.sqrt(ms.reduce((a,x)=>a+(x.dt-avg)*(x.dt-avg),0)/m);steady=Math.max(0,1-sd/.1)*(m/n);}
+  else if(m===1&&n===1)steady=1;
+  const clean=(m/n)*(1-Math.min(1,extra/n));
+  const pts=Math.round(60*timing+25*steady+15*clean);
+  return {pts,timing,steady,clean,match,used,extra,m,n,avgMs:avg*1000,sdMs:sd*1000};
+}
+const rateOf=p=>p>=92?'Perfect':p>=80?'Great':p>=65?'Good':p>=50?'Okay':'Keep practicing';
+const pc100=x=>Math.round(x*100)+'%';
+function breakdown(r){
+  return `Timing ${pc100(r.timing)} · Steadiness ${pc100(r.steady)} · Clean ${pc100(r.clean)}<br>${r.m}/${r.n} hits${r.extra?` · ${r.extra} extra`:''}${r.m?` · avg ${Math.abs(Math.round(r.avgMs))} ms ${r.avgMs<0?'early':'late'}`:''}`;
 }
 
 function gRhythm(){
@@ -828,18 +901,16 @@ function rhTap(ts){
 }
 function rhFinish(){
   S.phase='idle';S.done=true;rhBtns();
-  const r=scoreRhythm(S.ev,S.taps),pts=r.pts;
+  const r=judge(S.ev.map(e=>({t:e.t})),S.taps.map(t=>({t})),SPB),pts=r.pts;
   S.score+=pts;$('sc').textContent=S.score;
-  const rating=pts>=95?'Perfect':pts>=85?'Great':pts>=70?'Good':pts>=50?'Okay':'Keep practicing';
-  const avg=r.diffs.length?r.diffs.reduce((a,b)=>a+b,0)/r.diffs.length*1000:0;
   const total=BARB*SPB,X=t=>(4+92*Math.max(0,Math.min(1,t/total)))+'%';
   const tl=`<div class="tl">${[1,2,3].map(b=>`<i class="g" style="left:${X(b*SPB)}"></i>`).join('')}
     ${S.ev.map(e=>`<i class="p" style="left:${X(e.t*SPB)}"></i>`).join('')}
     ${S.taps.map((t,i)=>`<i class="t${r.used.has(i)?'':' x'}" style="left:${X(t)}"></i>`).join('')}</div>`;
   $('bigm').textContent=pts+'%';
-  $('hm').textContent=`${rating} · ${S.label}`;
-  $('res').innerHTML=`<div class="pts ${pts>=70?'g':pts>=50?'a':'b'}">+${pts}</div>
-    <div class="res-sub">${r.matched}/${S.ev.length} hits${r.extra?` · ${r.extra} extra tap${r.extra>1?'s':''}`:''}${r.matched?` · avg ${Math.abs(Math.round(avg))} ms ${avg<0?'early':'late'}`:''}</div>
+  $('hm').textContent=`${rateOf(pts)} · ${S.label}`;
+  $('res').innerHTML=`<div class="pts ${pts>=65?'g':pts>=50?'a':'b'}">+${pts}</div>
+    <div class="res-sub">${breakdown(r)}</div>
     ${tl}<div class="res-sub">white = the rhythm · purple = your taps${r.extra?' · red = extra':''}</div>
     <div class="row"><button class="btn ghost" id="rl2">Hear it again</button><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
   $('rl2').onclick=()=>{ // replay the answer (no scoring effect)
@@ -852,6 +923,190 @@ addEventListener('keydown',e=>{
   e.preventDefault();if(!e.repeat)rhTap(e.timeStamp);
 });
 addEventListener('keyup',e=>{if(e.code==='Space'&&S.key==='rhythm'&&$('tap'))e.preventDefault();});
+
+/* ============ GAME 8: DRUMS (read the strip, play it) ============ */
+const DR_BPM=70,DSPB=60/DR_BPM;
+// one character per grid slot: . rest, R right hand (J), L left hand (F), K kick (Space), A=K+R, B=L+R, C=K+L, D=K+L+R
+const DK={R:['R'],L:['L'],K:['K'],A:['K','R'],B:['L','R'],C:['K','L'],D:['K','L','R']};
+const DRUM_STAGES=[
+  {n:'Steady snare',tip:'Left hand (F) on every beat.',g:16,mode:'g',bars:['L...L...L...L...','L...L...L...L...']},
+  {n:'Kick and snare',tip:'Space is the kick, F is the snare.',g:16,mode:'g',bars:['K...L...K...L...','K...L...K...L...']},
+  {n:'Hi-hat eighths',tip:'Right hand (J) on every eighth note.',g:16,mode:'g',bars:['R.R.R.R.R.R.R.R.','R.R.R.R.R.R.R.R.']},
+  {n:'Basic rock beat',tip:'Hat with J, snare with F on 2 and 4, kick on 1 and 3. Stack them.',g:16,mode:'g',bars:['A.R.B.R.A.R.B.R.','A.R.B.R.A.R.B.R.']},
+  {n:'Syncopated kick',tip:'Same hands, but the kick moves around.',g:16,mode:'g',bars:['A.R.B.R.R.A.B.R.','A.R.B.RKA.R.B.R.']},
+  {n:'Sixteenth hats',tip:'Right hand plays four notes per beat. Keep it even.',g:16,mode:'s2',bars:['ARRRBRRRARRRBRRR','ARRRBRRRARRRBRRR']},
+  {n:'Paradiddle',tip:'Sticking is written on the notes: J = R, F = L.',g:16,mode:'s',bars:['R.L.R.R.L.R.L.L.','R.L.R.R.L.R.L.L.']},
+  {n:'Triplet strokes',tip:'Three notes per beat, alternating hands.',g:12,mode:'s',bars:['RLRLRLRLRLRL','RLRLRLRLRLRL']},
+  {n:'Sixteenth paradiddles',tip:'Fast sticking. Stay relaxed and even.',g:16,mode:'s',bars:['RLRRLRLLRLRRLRLL','RLRRLRLLRLRRLRLL']},
+  {n:'Funk groove',tip:'Sixteenth hats with moving kicks and a backbeat snare.',g:16,mode:'g',bars:['ARRRBRRKRRARBRRR','ARRKBRRRRKARBRRR']}
+];
+function drParse(st){
+  const ev=[];
+  st.bars.forEach((bar,bi)=>[...bar].forEach((ch,si)=>{if(ch==='.')return;DK[ch].forEach(key=>ev.push({t:bi*4+si*4/st.g,key}));}));
+  return ev;
+}
+function gDrums(){
+  S.title='Drums';S.max=100;
+  S.start=()=>{
+    const st=DRUM_STAGES[S.round];
+    S.st=st;S.ev=drParse(st);S.total=st.bars.length*4;S.phase='idle';S.done=false;S.taps=[];S.live=new Set();
+    const stick=st.mode==='s',L=3,Wd=90,X=t=>6+Wd*t/S.total;
+    const rows=stick?{R:55,L:55,K:55}:{R:26,L:52,K:78};
+    let h='';
+    if(stick)h+=`<div class="sl" style="top:55%"></div>`;
+    else [['HH',26],['SD',52],['BD',78]].forEach(([l,y])=>{h+=`<div class="sl" style="top:${y}%"></div><span class="rl" style="top:${y}%">${l}</span>`;});
+    for(let b=0;b<=st.bars.length;b++)h+=`<div class="sb" style="left:${6+Wd*b/st.bars.length}%"></div>`;
+    for(let i=0;i<S.total;i++)h+=`<span class="sn" style="left:${X(i)}%">${i%4+1}</span>`;
+    S.ev.forEach((e,i)=>{
+      const isHat=!stick&&e.key==='R';
+      h+=`<span class="nt${isHat?' hh':''}" data-i="${i}" style="left:${X(e.t)}%;top:${rows[e.key]}%">${isHat?'×':stick?e.key:''}</span>`;
+    });
+    h+=`<div class="ph" id="ph"></div>`;
+    M.innerHTML=header('Drums')+`<div class="stage">
+      <div class="hint" id="hm"><b>Stage ${S.round+1}: ${esc(st.n)}</b> · ${esc(st.tip)}</div>
+      <div class="big" id="bigm" style="font-size:clamp(56px,10vw,100px)">♪</div>
+      <div class="sheet" id="sheet">${h}</div>
+      <div class="pads"><button class="pad" data-k="L" disabled>L<small>F</small></button><button class="pad" data-k="R" disabled>R<small>J</small></button><button class="pad" data-k="K" disabled${stick?' style="visibility:hidden"':''}>Kick<small>Space</small></button></div>
+      <div class="row"><button class="btn acc" id="dgo">▶ Start (4 count-in)</button></div>
+      <div class="result" id="res"></div>
+      <div class="pvhelp" id="pcs"></div></div>`;
+    $('dgo').onclick=drStart;
+    document.querySelectorAll('.pad').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();drTap(b.dataset.k,e.timeStamp);}));
+    pcStatus();loadPercAuto().then(pcStatus);
+  };
+  S.start();
+}
+function drSound(key){
+  const K=S.keys;
+  if(S.st.mode==='s')return {k:K.snare,v:key==='R'?.9:.8};
+  return {k:key==='K'?K.kick:key==='L'?K.snare:K.hat,v:.9};
+}
+function drStart(){
+  if(S.phase!=='idle'||S.done)return;
+  initAudio();$('dgo').disabled=true;
+  loadPercAuto().then(()=>{
+    if(S.phase!=='idle'||!$('sheet'))return;
+    cancelSeq();pcStatus();
+    const K=S.keys=drumKeys(),lat=(ctx.outputLatency||0)+(ctx.baseLatency||0);
+    const a0=ctx.currentTime+.25,bar=a0+4*DSPB;
+    for(let k=0;k<4;k++)playPerc(K.met,a0+k*DSPB,k===0?.8:.6);                         // count-in
+    for(let b=0;b<S.total;b++)playPerc(K.met,bar+b*DSPB,b%4===0?.55:.35);              // metronome keeps going
+    S.perfBar=performance.now()+(bar-ctx.currentTime)*1000+lat*1000;
+    S.taps=[];S.live=new Set();S.phase='run';
+    document.querySelectorAll('.pad').forEach(b=>b.disabled=false);
+    for(let k=0;k<4;k++)later(250+k*DSPB*1000,()=>{$('bigm').textContent=k+1;});
+    later(250+4*DSPB*1000,()=>{$('bigm').textContent='Go!';$('ph').style.display='block';drLoop();});
+    later(250+(4+S.total)*DSPB*1000+450,drFinish);
+  });
+}
+function drLoop(){
+  const ph=$('ph');if(!ph||S.phase!=='run')return;
+  const u=(performance.now()-S.perfBar)/1000/(S.total*DSPB);
+  ph.style.left=(6+90*Math.max(0,Math.min(1,u)))+'%';
+  requestAnimationFrame(drLoop);
+}
+function drTap(key,ts){
+  if(S.phase!=='run'||!ctx)return;
+  const rel=(ts-S.perfBar)/1000;
+  if(rel<-.3||rel>S.total*DSPB+.4)return;
+  S.taps.push({t:rel,key});
+  const snd=drSound(key);playPerc(snd.k,ctx.currentTime,snd.v);
+  // live colouring of the closest unplayed note for this key
+  let bi=-1,bd=.3;
+  S.ev.forEach((e,i)=>{if(e.key!==key||S.live.has(i))return;const d=Math.abs(rel-e.t*DSPB);if(d<bd){bd=d;bi=i;}});
+  const pad=document.querySelector(`.pad[data-k="${key}"]`);
+  if(bi>=0){S.live.add(bi);const n=document.querySelector(`.nt[data-i="${bi}"]`);if(n)n.classList.add(bd<=.06?'g1':bd<=.12?'g2':'g3');}
+  if(pad){pad.classList.add(bi>=0?'hit':'bad');setTimeout(()=>pad.classList.remove('hit','bad'),90);}
+}
+function drFinish(){
+  if(S.phase!=='run')return;
+  S.phase='done';S.done=true;
+  document.querySelectorAll('.pad').forEach(b=>b.disabled=true);
+  const r=judge(S.ev,S.taps,DSPB),pts=r.pts;
+  S.score+=pts;$('sc').textContent=S.score;
+  S.ev.forEach((e,i)=>{
+    const n=document.querySelector(`.nt[data-i="${i}"]`);if(!n)return;
+    n.classList.remove('g1','g2','g3','miss');
+    const m=r.match[i];n.classList.add(!m?'miss':Math.abs(m.dt)<=.06?'g1':Math.abs(m.dt)<=.12?'g2':'g3');
+  });
+  $('ph').style.display='none';
+  $('bigm').textContent=pts+'%';
+  $('hm').innerHTML=`<b>${rateOf(pts)}</b> · ${esc(S.st.n)}`;
+  $('res').innerHTML=`<div class="pts ${pts>=65?'g':pts>=50?'a':'b'}">+${pts}</div>
+    <div class="res-sub">${breakdown(r)}</div>
+    <div class="res-sub">green ≤ 60 ms · yellow ≤ 120 ms · orange later · red = missed or wrong hand</div>
+    <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+}
+const DR_KEYS={KeyF:'L',KeyJ:'R',Space:'K'};
+addEventListener('keydown',e=>{
+  if(S.key!=='drums'||!$('sheet')||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=DR_KEYS[e.code];if(!k)return;
+  e.preventDefault();if(!e.repeat)drTap(k,e.timeStamp);
+});
+addEventListener('keyup',e=>{if(S.key==='drums'&&$('sheet')&&e.code==='Space')e.preventDefault();});
+
+/* ============ GAME 9: 8D AUDIO ============ */
+const SP_NOTES=[12,10,8,7,6,5,4,3,2,1];     // the rhythm gets shorter every round, ending on a single note
+function spPlay(az,n,f0){                   // returns total length in seconds
+  initAudio();
+  const p=ctx.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=1;p.rolloffFactor=0;
+  const x=Math.sin(az),z=-Math.cos(az);                       // listener faces -Z; azimuth is clockwise from the front
+  if(p.positionX){p.positionX.value=x;p.positionY.value=0;p.positionZ.value=z;}else p.setPosition(x,0,z);
+  const out=ctx.createGain();out.gain.value=1.1;p.connect(out);out.connect(master);
+  let t=ctx.currentTime+.2;const t0=t;
+  for(let i=0;i<n;i++){
+    const d=.14;
+    const env=ctx.createGain();env.gain.setValueAtTime(0,t);env.gain.linearRampToValueAtTime(.6,t+.006);env.gain.exponentialRampToValueAtTime(.001,t+d);
+    env.connect(p);
+    const o=ctx.createOscillator();o.type='sawtooth';o.frequency.value=f0*(i%3===2?1.5:1);o.connect(env);o.start(t);o.stop(t+d+.02);
+    const nb=ctx.createBuffer(1,Math.floor(ctx.sampleRate*d),ctx.sampleRate),dd=nb.getChannelData(0);
+    for(let k=0;k<dd.length;k++)dd[k]=(Math.random()*2-1)*(1-k/dd.length);
+    const ns=ctx.createBufferSource();ns.buffer=nb;const ng=ctx.createGain();ng.gain.value=.5;ns.connect(ng);ng.connect(env);ns.start(t);
+    t+=rpick([.17,.17,.25,.34]);
+  }
+  return t-t0;
+}
+const dirName=a=>['front','front-right','right','back-right','back','back-left','left','front-left'][Math.round(((a%360)+360)%360/45)%8];
+function gSpatial(){
+  S.title='8D audio';S.max=10;
+  S.start=()=>{
+    S.n=SP_NOTES[S.round];S.az=rnd(0,Math.PI*2);S.done=false;S.heard=false;S.drag=false;S.guess=null;
+    M.innerHTML=header('8D audio')+`<div class="stage">
+      <div class="hint" id="hm">Headphones on. Press Ready. The sound plays once. Then drag the dot to where it came from.</div>
+      <div class="joy" id="joy"><div class="ring"></div><span class="jl f">FRONT</span><span class="jl b">BACK</span><span class="jl l">L</span><span class="jl r">R</span><div class="head"></div><div class="puck" id="puck"></div></div>
+      <div class="row" style="margin-top:0"><button class="btn acc" id="rdy">Ready</button><button class="btn ghost" id="lock" disabled>Lock in</button></div>
+      <div class="result" id="res"></div></div>`;
+    const joy=$('joy'),puck=$('puck');
+    const setPuck=(cx,cy)=>{
+      const r=joy.getBoundingClientRect(),R=r.width/2;
+      let dx=cx-(r.left+R),dy=cy-(r.top+R);const d=Math.hypot(dx,dy);
+      if(d>R*.92){dx*=R*.92/d;dy*=R*.92/d;}
+      puck.style.left=(50+dx/r.width*100)+'%';puck.style.top=(50+dy/r.height*100)+'%';puck.classList.add('set');
+      S.guess=Math.hypot(dx,dy)>R*.12?{dx,dy}:null;$('lock').disabled=!S.guess;
+    };
+    joy.addEventListener('pointerdown',e=>{if(!S.heard||S.done)return;joy.setPointerCapture(e.pointerId);S.drag=true;setPuck(e.clientX,e.clientY);});
+    joy.addEventListener('pointermove',e=>{if(S.drag&&!S.done)setPuck(e.clientX,e.clientY);});
+    ['pointerup','pointercancel'].forEach(ev=>joy.addEventListener(ev,()=>{S.drag=false;}));
+    $('rdy').onclick=()=>{
+      if(S.heard||$('rdy').disabled)return;$('rdy').disabled=true;$('hm').textContent='Listen…';
+      const dur=spPlay(S.az,S.n,rpick([262,330,392,440]));
+      later(dur*1000+450,()=>{S.heard=true;$('hm').textContent='Drag the dot to where you think it came from, then lock in.';});
+    };
+    $('lock').onclick=()=>{
+      if(!S.guess||S.done)return;S.done=true;$('lock').disabled=true;
+      const ga=Math.atan2(S.guess.dx,-S.guess.dy);
+      let err=Math.abs(((ga-S.az)*180/Math.PI+540)%360-180);
+      const pts=Math.round(10*Math.max(0,1-err/100));
+      S.score+=pts;$('sc').textContent=S.score;
+      const src=document.createElement('div');src.className='src';src.textContent='♪';
+      src.style.left=(50+40*Math.sin(S.az))+'%';src.style.top=(50-40*Math.cos(S.az))+'%';joy.appendChild(src);
+      $('hm').textContent=`It came from the ${dirName(S.az*180/Math.PI)} · you were ${Math.round(err)}° off${S.n>1?'':' (a single note!)'}`;
+      $('res').innerHTML=`<div class="pts ${pts>=7?'g':pts>=4?'a':'b'}">+${pts}</div>
+        <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+    };
+  };
+  S.start();
+}
 
 /* ============ VIRTUAL PIANO (88 keys) ============ */
 const PLOW=21,PHIGH=108,PH=190,BARH=300,BARSPEED=140,SONGSPEED=150,NWHITE=52;
@@ -1341,9 +1596,69 @@ function trRun(swap){
   requestAnimationFrame(step);
 }
 // switching games, opening the piano, or going home now plays a transition
-function withTr(fn){return function(...a){if(TR.busy)return;try{cancelSeq();}catch(e){}trRun(()=>fn.apply(null,a));};}
+function withTr(fn,snd){return function(...a){if(TR.busy)return;try{cancelSeq();}catch(e){}if(snd)try{snd();}catch(e){}trRun(()=>fn.apply(null,a));};}
+// opening a game: fast major-chord arpeggio. Going back: a high note, then a low one.
+function sfxIn(){initAudio();pianoReady().then(()=>{const r=ri(55,64);[0,4,7,12,16].forEach((n,i)=>setTimeout(()=>playPiano(r+n,.45,.7),i*55));});}
+function sfxBack(){initAudio();pianoReady().then(()=>{playPiano(88,.3,.7);setTimeout(()=>playPiano(45,.5,.85),170);});}
 const _menu=menu;
-menu=withTr(menu);startGame=withTr(startGame);openPiano=withTr(openPiano);
+menu=withTr(menu,sfxBack);startGame=withTr(startGame,sfxIn);openPiano=withTr(openPiano,sfxIn);
+
+
+/* ============ MOVING BACKGROUND (reacts to the cursor) ============ */
+(function(){
+  const c=document.createElement('canvas');c.id='bg';
+  c.style.cssText='position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none';
+  document.body.prepend(c);
+  const g=c.getContext('2d'),calm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W=0,H=0;
+  const fit=()=>{const d=Math.min(1.5,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=W*d;c.height=H*d;g.setTransform(d,0,0,d,0,0);};
+  fit();addEventListener('resize',fit);
+  const st={mx:.5,my:.5,sx:.5,sy:.5,en:0,t:0,lx:0,ly:0,clr:false},ps=[],pulses=[];
+  for(let i=0;i<64;i++)ps.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,vx:rnd(-.35,.35),vy:rnd(-.35,.35),r:rnd(7,30),k:i%4,a:Math.random()*6.28,va:rnd(-.012,.012),o:rnd(-55,55),z:rnd(.3,1)});
+  addEventListener('pointermove',e=>{
+    st.en=Math.min(1.6,st.en+Math.hypot(e.clientX-st.lx,e.clientY-st.ly)/90);
+    st.lx=e.clientX;st.ly=e.clientY;st.mx=e.clientX/innerWidth;st.my=e.clientY/innerHeight;
+  });
+  addEventListener('pointerdown',e=>pulses.push({x:e.clientX,y:e.clientY,r:6,a:.7}));
+  function frame(){
+    requestAnimationFrame(frame);
+    if(document.hidden)return;
+    const app=document.getElementById('app');
+    if(app&&app.classList.contains('wide')){if(!st.clr){g.clearRect(0,0,W,H);st.clr=true;}return;}   // keep the piano page fast
+    st.clr=false;
+    st.sx+=(st.mx-st.sx)*.06;st.sy+=(st.my-st.sy)*.06;st.en*=.95;st.t+=.016;
+    const hue=(250+st.sx*140+Math.sin(st.t*.4)*18)%360;        // left = violet/blue, right = warm
+    const spd=(calm?.25:1)*(.35+(1-st.sy)*1.1+st.en*1.6);     // higher up = faster, wiggling the mouse = faster
+    const cx=st.sx*W,cy=st.sy*H;
+    g.clearRect(0,0,W,H);
+    const gl=g.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*.45);
+    gl.addColorStop(0,`hsla(${hue},90%,55%,.16)`);gl.addColorStop(1,`hsla(${hue},90%,55%,0)`);
+    g.fillStyle=gl;g.fillRect(0,0,W,H);
+    g.lineWidth=1.6;
+    for(const p of ps){
+      const dx=p.x-cx,dy=p.y-cy,d=Math.hypot(dx,dy)||1;
+      if(d<260){const f=(1-d/260)*.9*(1+st.en);p.vx+=dx/d*f*.06;p.vy+=dy/d*f*.06;}
+      p.vx*=.992;p.vy*=.992;
+      if(Math.abs(p.vx)+Math.abs(p.vy)<.25){p.vx+=rnd(-.02,.02);p.vy+=rnd(-.02,.02);}
+      p.x+=p.vx*spd*p.z*2;p.y+=p.vy*spd*p.z*2;p.a+=p.va*spd;
+      if(p.x<-40)p.x=W+40;if(p.x>W+40)p.x=-40;if(p.y<-40)p.y=H+40;if(p.y>H+40)p.y=-40;
+      const X=p.x+(st.sx-.5)*-70*p.z,Y=p.y+(st.sy-.5)*-70*p.z,col=`hsla(${(hue+p.o+360)%360},85%,66%,${.16+.26*p.z})`;
+      g.strokeStyle=col;g.fillStyle=col;g.beginPath();
+      if(p.k===0)g.arc(X,Y,p.r,0,6.283);
+      else if(p.k===1){g.arc(X,Y,p.r*.3,0,6.283);g.fill();continue;}
+      else if(p.k===2){const l=p.r*1.4;g.moveTo(X-Math.cos(p.a)*l,Y-Math.sin(p.a)*l);g.lineTo(X+Math.cos(p.a)*l,Y+Math.sin(p.a)*l);}
+      else{for(let i=0;i<3;i++){const a=p.a+i*2.094;g.lineTo(X+Math.cos(a)*p.r,Y+Math.sin(a)*p.r);}g.closePath();}
+      g.stroke();
+    }
+    for(let i=pulses.length-1;i>=0;i--){
+      const q=pulses[i];q.r+=7;q.a-=.018;
+      if(q.a<=0){pulses.splice(i,1);continue;}
+      g.strokeStyle=`hsla(${hue},90%,70%,${q.a})`;g.lineWidth=2.5;g.beginPath();g.arc(q.x,q.y,q.r,0,6.283);g.stroke();
+    }
+    g.strokeStyle=`hsla(${hue},90%,75%,.5)`;g.lineWidth=1.5;g.beginPath();g.arc(cx,cy,14+st.en*26,0,6.283);g.stroke();   // cursor ring
+  }
+  frame();
+})();
 
 $('sff').addEventListener('change',e=>{if(e.target.files[0])loadSF2File(e.target.files[0]);e.target.value='';});
 $('dfl').addEventListener('click',useDefaultSF);
