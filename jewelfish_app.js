@@ -15,26 +15,21 @@ import {
 
 // ---------- config ----------
 // ---------- AI access ----------
-// The AI key is stored in scrambled pieces and put back together only when the game runs.
-const _p = [
-  [2,"8M2xvrA="],
-  [5,"ibKOvg=="],
-  [4,"iLyLuA=="],
-  [7,"soK1qQ=="],
-  [10,"iqm6mw=="],
-  [6,"4beQpamB"],
-  [9,"v6eKspKR"],
-  [1,"jOX0iw=="],
-  [0,"7OGd99s="],
-  [3,"oPOBhqSf"],
-  [8,"t96ohsE="]
-];
-const _s = 173;
-function _k() {
-  return _p.slice().sort((a, b) => a[0] - b[0]).map(([i, t]) =>
-    [...atob(t)].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ ((_s + i * 7 + j * 3) & 255))).join("")
-  ).join("");
+// Keys are tried in order. If one is slow (over 5 seconds) or fails, the next one is used,
+// and after the last one it loops back to the top.
+// They are stored scrambled (reversed, split, shuffled and XORed) and rebuilt only when the game runs.
+const _G = [
+  [151, [[7,"U7aF5vg="],[2,"wN+NlJI="],[10,"bnIA+6ut"],[0,"8Nfcww=="],[1,"3vn9taA="],[9,"cUEv"],[11,"RVVx8w=="],[5,"Mk2v"],[8,"M5b2"],[4,"1uzHEQ=="],[3,"kPL1"],[12,"JWvTkeo="],[6,"Ny3+"]]],
+  [89, [[3,"5IuH"],[0,"CFg3DxQ="],[7,"A3524JXJ"],[11,"/Gs8dA=="],[2,"BpPF"],[4,"vZ2t3c6k"],[10,"vw5x"],[1,"OzYg+g=="],[8,"dXtpkoY="],[9,"7a0zbQ=="],[5,"T1IxEiT7"],[6,"TRMpBQ=="]]],
+]; 
+function _dk([seed, parts]) {
+  return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
+    [...atob(t)].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ ((seed + i * 13 + j * 7 + i * j * 3) ^ (i * 31)) & 255)).join("")
+  ).join("").split("").reverse().join("");
 }
+const API_KEYS = _G.map(_dk);
+const KEY_TIMEOUT_MS = 5000;
+let keyIdx = 0; // stays on the last working key between mixes
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const firebaseConfig = {
@@ -166,7 +161,9 @@ $("authForm").addEventListener("submit", async (ev) => {
       "auth/weak-password": "Password needs at least 6 characters.",
       "auth/too-many-requests": "Too many tries. Wait a bit!"
     };
-    err.textContent = map[e.code] || "Something went wrong. Try again.";
+    err.textContent = map[e.code] || (e.code === "auth/network-request-failed"
+      ? "Can't connect right now. Check your internet and try again."
+      : "Something went wrong. Please wait a bit and try again.");
   }
   $("authSubmit").disabled = false;
 });
@@ -331,7 +328,7 @@ async function combine(dragged, target) {
     dragged.classList.remove("busy"); target.classList.remove("busy");
     dragged.classList.add("shake");
     setTimeout(() => dragged.classList.remove("shake"), 450);
-    toast("Mixing failed: " + String(e.message || e).slice(0, 120), 5000);
+    toast(friendlyError(e), 5000);
   }
 }
 
@@ -395,30 +392,27 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
-  const key = encodeURIComponent(_k());
-  const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-  // Express-mode keys use the Vertex endpoint, AI Studio keys use the other one.
-  const isExpress = _k().slice(0, 2) === String.fromCharCode(65, 81);
-  const urls = isExpress ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
-  let urlIdx = 0;
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
   });
 
-  // Keep trying until the AI answers, so the item stays in its "thinking" state.
-  let lastErr = new Error("no answer");
-  for (let attempt = 0; attempt < 5; attempt++) {
+  const tryKey = async (rawKey) => {
+    const key = encodeURIComponent(rawKey);
+    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+    const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+    // Express-mode keys (start with "AQ") use the Vertex endpoint, AI Studio keys use the other one.
+    const urls = rawKey.startsWith("AQ") ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), KEY_TIMEOUT_MS);
     try {
-      const res = await fetch(urls[urlIdx], { method: "POST", headers: { "Content-Type": "application/json" }, body });
-      if (!res.ok) {
-        const t = await res.text();
-        const err = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
-        if ([400, 401, 403, 404].includes(res.status) && urlIdx < urls.length - 1) { urlIdx++; lastErr = err; continue; }
-        if ([429, 500, 502, 503, 504].includes(res.status)) { lastErr = err; await sleep(900 * (attempt + 1)); continue; }
-        throw err;
+      let res = null;
+      for (const url of urls) {
+        res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: ctrl.signal });
+        if (res.ok) break;
+        if (![400, 401, 403, 404].includes(res.status)) break; // only switch endpoint on key/endpoint errors
       }
+      if (!res.ok) throw new Error(`Gemini ${res.status}`);
       const data = await res.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];
       const m = parts.map((p) => p.text || "").join("").match(/\{[\s\S]*\}/);
@@ -428,13 +422,23 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
       const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
       if (!n) throw new Error("AI gave an empty name");
       return { n, e };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Slow or failing? Move to the next key, wrapping back to the first, for up to 3 rounds.
+  const maxAttempts = API_KEYS.length * 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await tryKey(API_KEYS[keyIdx % API_KEYS.length]);
     } catch (err) {
-      if (err.message.startsWith("Gemini 4")) throw err;
-      lastErr = err;
-      await sleep(600 * (attempt + 1));
+      console.warn(`AI key #${keyIdx % API_KEYS.length + 1} failed:`, err);
+      keyIdx = (keyIdx + 1) % API_KEYS.length;
+      await sleep(250);
     }
   }
-  throw lastErr;
+  throw new Error("The mixer is busy right now. Please wait a bit and try again.");
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -483,13 +487,22 @@ $("trophyBtn").onclick = async () => {
     }
   } catch (e) {
     console.error(e);
-    list.innerHTML = "<li>Couldn't load the leaderboard.</li>";
+    list.innerHTML = "<li>Couldn't load the leaderboard. Please wait a bit and try again.</li>";
   }
 };
 $("lbClose").onclick = () => $("lbModal").classList.add("hidden");
 $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $("lbModal").classList.add("hidden"); });
 
 // ---------- helpers ----------
+// Turn any technical error into something a player can understand.
+function friendlyError(e) {
+  const msg = String((e && e.message) || e || "");
+  const code = String((e && e.code) || "");
+  if (code === "permission-denied" || code.startsWith("auth/"))
+    return "You may have been logged out. Try logging in again, then mix again.";
+  if (msg.includes("busy right now")) return msg;
+  return "That didn't load. Please wait a bit and try again.";
+}
 function toast(msg, ms = 2200) {
   const t = $("toast");
   t.textContent = msg; t.classList.remove("hidden");
