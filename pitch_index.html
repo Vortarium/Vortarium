@@ -172,6 +172,10 @@ main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:a
 .pad:disabled{opacity:.3;cursor:default}
 .joy{position:relative;width:min(400px,80vw);aspect-ratio:1;margin:6px auto 22px;border-radius:50%;border:2px solid var(--line);background:rgba(20,20,22,.6);touch-action:none;cursor:crosshair}
 .joy .ring{position:absolute;inset:10%;border:4px solid #2a2a2f;border-radius:50%;pointer-events:none}
+.ppad{flex:1;height:120px;border-radius:18px;background:var(--card);border:2px solid var(--acc);color:var(--fg);font:inherit;font-weight:800;font-size:38px;cursor:pointer;touch-action:none;user-select:none;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:background .06s}
+.ppad small{font-size:11px;letter-spacing:.14em;color:var(--mut);font-weight:700}
+.ppad.r{border-color:#5ad1ff}
+.ppad.hit{background:var(--acc);color:#000}.ppad.r.hit{background:#5ad1ff}.ppad.hit small{color:#000}
 .pa{position:absolute;width:28px;height:28px;transform:translate(-50%,-50%);border-radius:50%;background:#fff;color:#000;font-weight:800;font-size:13px;display:grid;place-items:center;pointer-events:none;box-shadow:0 0 14px rgba(255,255,255,.5)}
 .jl{position:absolute;font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.1em}
 .jl.f{top:10px;left:50%;transform:translateX(-50%)}.jl.b{bottom:10px;left:50%;transform:translateX(-50%)}.jl.l{left:12px;top:50%;transform:translateY(-50%)}.jl.r{right:12px;top:50%;transform:translateY(-50%)}
@@ -286,6 +290,14 @@ const idbGet=k=>idbReq('readonly',o=>o.get(k));
 const idbSet=(k,v)=>idbReq('readwrite',o=>o.put(v,k));
 const idbDel=k=>idbReq('readwrite',o=>o.delete(k));
 const SF_FILE='1_Giga_piano.sf2';
+async function fetchSF(name){            // tries name.sf2 and name.SF2 (and the other casings of the extension)
+  const base=name.replace(/\.sf[23]$/i,''),seen=new Set();
+  for(const ext of ['.sf2','.SF2','.Sf2','.sf3','.SF3']){
+    const n=base+ext;if(seen.has(n))continue;seen.add(n);
+    try{const r=await fetch(n);if(r.ok)return {r,name:n};}catch(e){}
+  }
+  return null;
+}
 let sfSrc='',sfCustom=false;
 
 // Load order: file you picked manually -> 1_Giga_piano.sf2 from this page's directory -> Salamander online -> synth
@@ -294,7 +306,7 @@ function loadSF2Auto(){
   sfP=(async()=>{
     try{const c=await idbGet('custom');if(c&&c.buf){sf=parseSF2(c.buf);sfSrc=c.name;sfCustom=true;setStatus();return true;}}catch(e){}
     sfCustom=false;
-    try{const r=await fetch(SF_FILE);if(r.ok){sf=parseSF2(await r.arrayBuffer());sfSrc=SF_FILE;setStatus();return true;}}catch(e){}
+    try{const f=await fetchSF(SF_FILE);if(f){sf=parseSF2(await f.r.arrayBuffer());sfSrc=f.name;setStatus();return true;}}catch(e){}
     return false;
   })();
   return sfP;
@@ -327,7 +339,7 @@ function instLoad(key){
   if(instP[key])return instP[key];
   instP[key]=(async()=>{
     try{const c=await idbGet('inst:'+key);if(c&&c.buf){instSF[key]=parseSF2(c.buf);instErr[key]=false;setStatus();return true;}}catch(e){}
-    try{const r=await fetch(I.file);if(r.ok){instSF[key]=parseSF2(await r.arrayBuffer());instErr[key]=false;setStatus();return true;}}catch(e){}
+    try{const f=await fetchSF(I.file);if(f){instSF[key]=parseSF2(await f.r.arrayBuffer());instErr[key]=false;setStatus();return true;}}catch(e){}
     instErr[key]=true;instP[key]=null;setStatus();return false;
   })();
   return instP[key];
@@ -494,7 +506,7 @@ function playArp(root,q){
 
 /* ----- timed sequences (cancelled whenever the round ends / menu opens) ----- */
 let timers=[],seqId=0;
-function cancelSeq(){try{spStop();}catch(e){}try{clearInterval(SPN.iv);if(SPN.in){SPN.in.gain.cancelScheduledValues(0);SPN.in.gain.setTargetAtTime(0,ctx.currentTime,.03);SPN.in=null;}}catch(e){}seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
+function cancelSeq(){try{spStop();}catch(e){}try{if(POLY.out){POLY.out.gain.setTargetAtTime(0,ctx.currentTime,.02);POLY.out=null;}}catch(e){}try{clearInterval(SPN.iv);if(SPN.in){SPN.in.gain.cancelScheduledValues(0);SPN.in.gain.setTargetAtTime(0,ctx.currentTime,.03);SPN.in=null;}}catch(e){}seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
 function later(ms,fn){const id=seqId;timers.push(setTimeout(()=>{if(id===seqId)fn();},ms));}
 function seq(steps){ // steps: [[ms,fn],...] — waits for the piano to be ready first
   cancelSeq();const id=seqId;
@@ -560,13 +572,14 @@ function menu(){
    <button class="card" onclick="startGame('spatial')"><span class="n">08</span><div><h3>8D audio</h3><p>Headphones on. A short song starts at point A and orbits your head. Drag the dot around the ring to where it stopped.</p></div><span class="best">${b('spatial')}</span></button>
    <button class="card" onclick="startGame('hold')"><span class="n">09</span><div><h3>Hold it</h3><p>Hold the button down for exactly the time you are given. Five rounds, scored to the millisecond.</p></div><span class="best">${b('hold')}</span></button>
    <button class="card" onclick="startGame('song')"><span class="n">10</span><div><h3>Song Guesser</h3><p>Hear a tiny clip of a hit song from ${PL_RAW.length} playlists (${SONG_LIST.length} songs). Each skip costs points. Type to find the title.</p></div><span class="best">${b('song')}</span></button>
+   <button class="card" onclick="startGame('poly')"><span class="n">11</span><div><h3>Polyrhythm</h3><p>Left hand (S) and right hand (K) play different beat counts over one cycle, like 3:2. Five stages from simple to tricky, scored on accuracy and timing.</p></div><span class="best">${b('poly')}</span></button>
   </div>`;
 }
 function startGame(k){
   initAudio();
   pvStop();
   S={key:k,round:0,score:0,rounds:({hl:20,odd:10,rhythm:10,spatial:10,hold:5})[k]||5};
-  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm,spatial:gSpatial,hold:gHold,song:gSong})[k]();
+  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm,spatial:gSpatial,hold:gHold,song:gSong,poly:gPoly})[k]();
 }
 
 /* ============ GAME 1: MATCH THE TONE ============ */
@@ -808,7 +821,7 @@ function loadPercAuto(){
   if(pcP)return pcP;
   pcP=(async()=>{
     try{const c=await idbGet('perc');if(c&&c.buf){pc=parseSF2(c.buf);pcSrc=c.name;pcKeysCache=null;return true;}}catch(e){}
-    try{const r=await fetch(PC_FILE);if(r.ok){pc=parseSF2(await r.arrayBuffer());pcSrc=PC_FILE;pcKeysCache=null;return true;}}catch(e){}
+    try{const f=await fetchSF(PC_FILE);if(f){pc=parseSF2(await f.r.arrayBuffer());pcSrc=f.name;pcKeysCache=null;return true;}}catch(e){}
     return false;
   })();
   return pcP;
@@ -1434,6 +1447,134 @@ function gSpatial(){
       $('hm').textContent=`It stopped at the ${dirName(S.endAz*180/Math.PI)} · you were ${Math.round(err)}° off`;
       $('res').innerHTML=`<div class="pts ${pts>=7?'g':pts>=4?'a':'b'}">+${pts}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+    };
+  };
+  S.start();
+}
+
+/* ============ GAME 11: POLYRHYTHM ============ */
+/* a:b = left hand (S) plays a evenly spaced notes while right hand (K) plays b notes over the same cycle. */
+const POLY={out:null};
+const POLY_STAGES=[
+  [[1,2],[2,1],[4,2],[2,4],[4,8],[8,4],[6,3],[3,6],[5,10],[10,5]],   // 1: simple, even multiples
+  [[2,3],[3,2]],                                                       // 2: the classic
+  [[3,4],[4,3],[2,5],[5,2]],                                           // 3
+  [[4,5],[5,4],[5,3],[3,5]],                                           // 4
+  [[7,3],[3,7],[5,6],[6,5],[7,4],[4,7]]                                // 5: nothing over 10
+];
+function polyVoice(kind,t,dst){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  const P={L:['triangle',300,.9,.14],R:['triangle',620,.8,.12],C:['square',1100,.12,.05],CA:['square',1700,.16,.07],D:['sine',95,.5,.22]}[kind];
+  o.type=P[0];o.frequency.setValueAtTime(P[1],t);
+  if(kind==='L'||kind==='R')o.frequency.exponentialRampToValueAtTime(P[1]*.7,t+P[3]);
+  g.gain.setValueAtTime(P[2],t);g.gain.exponentialRampToValueAtTime(.001,t+P[3]);
+  o.connect(g);g.connect(dst);o.start(t);o.stop(t+P[3]+.03);
+}
+function polyCycle(a,b){return Math.max(2.6,Math.max(a,b)*.3);}
+/* counts off (in the same grid: max(a,b) pulses per cycle), then optionally plays the pattern. returns audio-clock times */
+function polySchedule(a,b,cycles,withPattern){
+  initAudio();
+  if(POLY.out){try{POLY.out.gain.setTargetAtTime(0,ctx.currentTime,.02);}catch(e){}}
+  const out=ctx.createGain();out.gain.value=.9;out.connect(master);POLY.out=out;
+  const C=polyCycle(a,b),m=Math.max(a,b),nc=Math.max(1,Math.ceil(4/m)),t0=ctx.currentTime+.3,step=C/m;
+  for(let i=0;i<nc*m;i++)polyVoice(i%m===0?'CA':'C',t0+i*step,out);
+  const ps=t0+nc*C;
+  for(let c=0;c<cycles;c++)polyVoice('D',ps+c*C,out);
+  if(withPattern){
+    for(let k=0;k<a*cycles;k++)polyVoice('L',ps+k*C/a,out);
+    for(let k=0;k<b*cycles;k++)polyVoice('R',ps+k*C/b,out);
+  }
+  return {t0,ps,C,end:ps+cycles*C};
+}
+function polyKey(e){
+  if(typeof S==='undefined'||!S||S.key!=='poly'||e.repeat||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.code==='KeyS'){e.preventDefault();polyTap('L');}
+  else if(e.code==='KeyK'){e.preventDefault();polyTap('R');}
+}
+addEventListener('keydown',polyKey);
+function polyTap(h){
+  if(!S||S.key!=='poly')return;
+  initAudio();
+  const el=$(h==='L'?'pl':'pr');
+  if(el){el.classList.add('hit');setTimeout(()=>el.classList.remove('hit'),90);}
+  if(S.phase==='done'||S.phase==='rec'||S.phase==='idle'||S.phase==='listen')polyVoice(h,ctx.currentTime,master);
+  if(S.phase==='rec'){S.taps[h].push(performance.now()-S.recT0);}
+}
+function polyScore(){
+  const [a,b]=S.ratio,C=polyCycle(a,b)*1000,cyc=S.cycles;
+  let E=0,hits=0,extra=0,prSum=0,errSum=0;const det={L:[],R:[]};
+  for(const h of ['L','R']){
+    const n=h==='L'?a:b,sp=C/n,W=Math.max(70,Math.min(sp*.45,210));
+    const taps=S.taps[h].filter(t=>t>=-300&&t<=C*cyc+500).sort((x,y)=>x-y),used=new Array(taps.length).fill(false);
+    for(let k=0;k<n*cyc;k++){
+      const ex=k*sp;let bi=-1,bd=1e9;
+      taps.forEach((t,i)=>{if(!used[i]&&Math.abs(t-ex)<bd){bd=Math.abs(t-ex);bi=i;}});
+      E++;
+      if(bi>=0&&bd<=W){used[bi]=true;hits++;errSum+=bd;prSum+=Math.max(0,1-Math.max(0,bd-25)/Math.max(40,W-25));det[h].push({ex,t:taps[bi],ok:true});}
+      else det[h].push({ex,t:null,ok:false});
+    }
+    taps.forEach((t,i)=>{if(!used[i]){extra++;det[h].push({ex:null,t,ok:false});}});
+  }
+  const acc=Math.max(0,(hits-.5*extra)/E),prec=prSum/E;
+  return {pts:Math.round(50*acc+50*Math.min(prec,acc)),hits,E,extra,avg:hits?Math.round(errSum/hits):null,det,C:C*cyc};
+}
+function polyTimeline(r){
+  const lo=-300,span=r.C+800,x=t=>Math.max(0,Math.min(100,(t-lo)/span*100));
+  const row=(h,label)=>`<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><b style="width:18px;color:var(--mut)">${label}</b>
+    <div style="position:relative;flex:1;height:22px;background:#161619;border-radius:8px;overflow:hidden">
+      ${r.det[h].filter(d=>d.ex!==null).map(d=>`<i style="position:absolute;left:${x(d.ex)}%;top:3px;width:3px;height:16px;background:#fff;opacity:.85"></i>`).join('')}
+      ${r.det[h].filter(d=>d.t!==null).map(d=>`<i style="position:absolute;left:calc(${x(d.t)}% - 5px);top:6px;width:10px;height:10px;border-radius:50%;background:${d.ok?'var(--good)':'var(--bad)'}"></i>`).join('')}
+    </div></div>`;
+  return `<div style="width:min(420px,92vw);margin:10px auto 0">${row('L','S')}${row('R','K')}<div class="hint" style="margin-top:2px">white = where the note belongs · dots = your taps (green hit, red miss or extra)</div></div>`;
+}
+function gPoly(){
+  S.title='Polyrhythm';S.max=100;
+  S.start=()=>{
+    const pool=POLY_STAGES[Math.min(S.round,POLY_STAGES.length-1)];
+    S.ratio=rpick(pool);S.cycles=2;S.phase='idle';S.scored=false;S.taps={L:[],R:[]};
+    const [a,b]=S.ratio;
+    const diag=(n,c)=>`<div style="position:relative;flex:1;height:18px;background:#161619;border-radius:8px">${Array.from({length:n},(_,k)=>`<i style="position:absolute;left:calc(${k/n*100}% + 6px);top:3px;width:12px;height:12px;border-radius:50%;background:${c}"></i>`).join('')}</div>`;
+    M.innerHTML=header('Polyrhythm')+`<div class="stage">
+      <div class="big" id="bigm">${a} : ${b}</div>
+      <div class="hint" id="hm">Left hand <b>(S)</b> plays ${a}, right hand <b>(K)</b> plays ${b}, evenly spread over the same cycle. Press Listen to hear it, then Play to try it.</div>
+      <div style="width:min(420px,92vw);margin:4px auto 10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px"><b style="width:18px;color:var(--mut)">S</b>${diag(a,'var(--acc)')}</div>
+        <div style="display:flex;align-items:center;gap:8px"><b style="width:18px;color:var(--mut)">K</b>${diag(b,'#5ad1ff')}</div>
+      </div>
+      <div style="display:flex;gap:12px;width:min(420px,92vw);margin:6px auto">
+        <button class="ppad" id="pl">S<small>LEFT</small></button><button class="ppad r" id="pr">K<small>RIGHT</small></button></div>
+      <div class="row"><button class="btn ghost" id="plisten">🔊 Listen</button><button class="btn acc" id="pplay">Play</button></div>
+      <div class="result" id="res"></div></div>`;
+    ['pl','pr'].forEach(id=>$(id).addEventListener('pointerdown',e=>{e.preventDefault();polyTap(id==='pl'?'L':'R');}));
+    const lock=on=>{$('plisten').disabled=on;$('pplay').disabled=on||!!S.scored;};
+    $('plisten').onclick=()=>{
+      if(S.phase==='listen'||S.phase==='rec')return;
+      cancelSeq();S.phase='listen';lock(true);$('hm').textContent='Count-off… then listen to both hands.';
+      pianoReady().then(()=>{
+        const o=polySchedule(a,b,S.cycles,true);
+        later((o.ps-ctx.currentTime)*1000,()=>{$('hm').textContent='Listen…';});
+        later((o.end-ctx.currentTime)*1000+500,()=>{S.phase='idle';lock(false);$('hm').textContent='Press Play when you are ready to try it, or Listen again.';});
+      });
+    };
+    $('pplay').onclick=()=>{
+      if(S.phase==='listen'||S.phase==='rec'||S.scored)return;
+      cancelSeq();S.phase='count';S.taps={L:[],R:[]};lock(true);$('res').innerHTML='';
+      $('hm').textContent='Count-off… start on the downbeat. S = left, K = right.';
+      pianoReady().then(()=>{
+        const o=polySchedule(a,b,S.cycles,false);
+        const lat=(ctx.outputLatency||ctx.baseLatency||0)*1000;
+        S.recT0=performance.now()+(o.ps-ctx.currentTime)*1000+lat;
+        S.phase='rec';                                   // taps before the downbeat are accepted down to −300 ms
+        later((o.ps-ctx.currentTime)*1000,()=>{$('hm').textContent='Go!';});
+        later((o.end-ctx.currentTime)*1000+550,()=>{
+          S.phase='done';S.scored=true;lock(false);
+          const r=polyScore();S.score+=r.pts;$('sc').textContent=S.score;
+          $('hm').textContent=`Notes ${r.hits}/${r.E} · extra taps ${r.extra}`+(r.avg!==null?` · average ${r.avg} ms off`:'');
+          
+          $('res').innerHTML=`<div class="pts ${r.pts>=75?'g':r.pts>=40?'a':'b'}">+${r.pts}</div>${polyTimeline(r)}
+            <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next stage'}</button></div>`;
+        });
+      });
     };
   };
   S.start();
