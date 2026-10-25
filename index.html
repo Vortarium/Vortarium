@@ -914,6 +914,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'jewelfish',       name: 'Jewelfish',        img: 'jewelfish.png',        date: 'OCT 2026',
+              blurb: 'A minimalist video editor in your browser. Cut, color grade, animate text and shapes, then export in full quality or under 10 MB.' },
             { prefix: 'pitch',           name: 'Pitch',            img: 'pitch.png',            date: 'OCT 2026',
               blurb: 'Train your ear with note, chord and pitch games, then play a full 88 key piano or watch MIDI songs play themselves.' },
             { prefix: 'dash',            name: 'Dash',             img: 'dash.png',             date: 'OCT 2026',
@@ -1125,6 +1127,17 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
+            { v: '2.4.0', date: '10/25/2026',
+              desc: 'Jewelfish is out, a new project: a video editor that runs in your browser.',
+              bullets: [
+                'New project: Jewelfish',
+                'Sign in, keep every project in your own hub, and save to the cloud whenever you press Save',
+                'Multi-track timeline with snapping, trimming, splitting, keyframes, fades and undo/redo',
+                'Color grading with 50 looks plus exposure, contrast, temperature, tint, vignette and more',
+                'Hundreds of text styles, shapes and stickers, plus countdowns, countups and scrolling credits',
+                'Sound controls like boost, pan, bass, treble and speed',
+                'Download in the highest quality or a compressed version under 10 MB for group chats'
+            ]},
             { v: '2.3.0', date: '10/24/2026',
               desc: 'Pitch is out, a new project: an ear training game with a full 88 key piano and songs that play themselves.',
               bullets: [
