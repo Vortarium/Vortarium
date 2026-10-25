@@ -24,9 +24,40 @@ const firebaseConfig = {
   measurementId: "G-5NPCNB4SE7"
 };
 
-const GEMINI_KEY = "AQ.Ab8RN6KCUPS0D9sp1lW6BwiI0Z_q3ioVvPvdjmF3G3UjN-6sQQ";
-// Change this if your model id is named differently (check Google AI Studio's model list).
+const GEMINI_KEY = "AQ.Ab8RN6JdY187aoIJAI7YVoTUis3Tj1uFHuiO00FcHoB-1YnNkw";
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
+
+// ---------- sounds ----------
+const sfxHover = new Audio("jewelfish_hover.mp3");
+sfxHover.volume = 0.5;
+const sfxDiscovery = new Audio("jewelfish_discovery.mp3");
+sfxDiscovery.volume = 0.8;
+const music = new Audio("jewelfish_music.mp3");
+music.loop = true;
+music.volume = 0.35;
+music.preload = "auto";
+
+function playSfx(a) {
+  try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) { /* ignore */ }
+}
+// Start music as soon as the file loads. Browsers may block autoplay until the
+// person interacts with the page, so retry on the first click/key/touch.
+function startMusic() {
+  music.play().then(removeMusicRetry).catch(() => {});
+}
+function removeMusicRetry() {
+  ["pointerdown", "keydown", "touchstart"].forEach((t) => window.removeEventListener(t, startMusic));
+}
+startMusic();
+["pointerdown", "keydown", "touchstart"].forEach((t) => window.addEventListener(t, startMusic));
+
+// hover sound on any button
+document.addEventListener("mouseover", (ev) => {
+  const btn = ev.target.closest && ev.target.closest("button");
+  if (!btn || btn.disabled) return;
+  if (ev.relatedTarget && btn.contains(ev.relatedTarget)) return;
+  playSfx(sfxHover);
+});
 
 const app = initializeApp(firebaseConfig);
 try { getAnalytics(app); } catch (e) { /* analytics is optional */ }
@@ -221,7 +252,7 @@ function makeDraggable(node) {
     const t = target; target = null;
 
     const sb = $("sidebar").getBoundingClientRect();
-    if (ev.clientX < sb.right) { node.remove(); return; }   // dropped on sidebar = delete
+    if (ev.clientX > sb.left) { node.remove(); return; }   // dropped on sidebar = delete
     if (t) await combine(node, t);
   };
   node.addEventListener("pointerup", end);
@@ -244,18 +275,25 @@ async function combine(dragged, target) {
   const x = parseFloat(target.style.left), y = parseFloat(target.style.top);
 
   dragged.classList.add("busy"); target.classList.add("busy");
+  const think = document.createElement("small");
+  think.className = "thinking";
+  think.textContent = "thinking";
+  target.appendChild(think);
   try {
     const { result, first } = await getResult(a, b);
     dragged.remove(); target.remove();
     spawn(result, x, y, first);
-    if (!inventory.has(keyOf(result.n))) addToInventory(result);
+    const isNewToMe = !inventory.has(keyOf(result.n));
+    if (isNewToMe) addToInventory(result);
+    if (first || isNewToMe) playSfx(sfxDiscovery);
     if (first) toast("✨ First discovery!");
   } catch (e) {
     console.error(e);
+    think.remove();
     dragged.classList.remove("busy"); target.classList.remove("busy");
     dragged.classList.add("shake");
     setTimeout(() => dragged.classList.remove("shake"), 450);
-    toast("The fish got confused. Try again!");
+    toast("Mixing failed: " + String(e.message || e).slice(0, 120), 5000);
   }
 }
 
@@ -306,33 +344,48 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: { name: { type: "STRING" }, emoji: { type: "STRING" } },
-          required: ["name", "emoji"]
-        }
-      }
-    })
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const body = JSON.stringify({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
   });
-  if (!res.ok) throw new Error("Gemini " + res.status);
-  const data = await res.json();
-  const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  const parsed = JSON.parse(txt);
 
-  let n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
-  let e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
-  if (!n) throw new Error("empty result");
-  return { n, e };
+  // Keep trying (with short pauses) until the AI answers, so the item just
+  // stays in its "thinking" state instead of failing straight away.
+  let lastErr = new Error("no answer");
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
+        body
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        const err = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
+        if ([429, 500, 502, 503, 504].includes(res.status)) { lastErr = err; await sleep(900 * (attempt + 1)); continue; }
+        throw err;                       // 400/401/403/404 won't fix themselves
+      }
+      const data = await res.json();
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const txt = parts.map((p) => p.text || "").join("");
+      const m = txt.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error("AI gave no answer");
+      const parsed = JSON.parse(m[0]);
+
+      const n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
+      const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
+      if (!n) throw new Error("AI gave an empty name");
+      return { n, e };
+    } catch (err) {
+      if (err.message.startsWith("Gemini 4")) throw err;
+      lastErr = err;
+      await sleep(600 * (attempt + 1));
+    }
+  }
+  throw lastErr;
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ==========================================================
 //  Clear button
@@ -386,11 +439,11 @@ $("lbClose").onclick = () => $("lbModal").classList.add("hidden");
 $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $("lbModal").classList.add("hidden"); });
 
 // ---------- helpers ----------
-function toast(msg) {
+function toast(msg, ms = 2200) {
   const t = $("toast");
   t.textContent = msg; t.classList.remove("hidden");
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.add("hidden"), 2200);
+  toast._t = setTimeout(() => t.classList.add("hidden"), ms);
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, Math.max(lo, hi))); }
 function esc(s) {

@@ -83,8 +83,9 @@ form input:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
 
 #sidebar {
   width: 230px; flex: none; height: 100%;
-  background: #fff; border-right: 3px solid var(--ink);
+  background: #fff; border-left: 3px solid var(--ink);
   display: flex; flex-direction: column; z-index: 5;
+  order: 2;
 }
 .side-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -140,6 +141,9 @@ form input:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
 .item.busy { animation: wobble .5s infinite; pointer-events: none; }
 .item.shake { animation: shake .4s; }
 .item small { font-size: 12px; color: #d6336c; line-height: 1; margin-top: 1px; }
+.item small.thinking { color: #2b6cb0; font-size: 14px; }
+.item small.thinking::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
 
 @keyframes pop { from { transform: scale(.3) rotate(8deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes wobble { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg) scale(1.05); } }
