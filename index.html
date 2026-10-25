@@ -891,7 +891,7 @@
 
         // 1) TRENDING BANNER — the big banner at the top.
         //    Put the `prefix` of any project below. Set to null to hide the banner.
-        const TRENDING = 'rpg';
+        const TRENDING = 'dash';
 
         //    Which part of the thumbnail stays in view on the wide banner
         //    (e.g. 'center', 'top', 'bottom', 'center 30%').
@@ -899,7 +899,7 @@
 
         // 2) POPULAR LEADERBOARD — the projects ranked right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
-        const POPULAR = ['rpg', 'dash', 'aetherium', 'breakout', 'splendid'];
+        const POPULAR = ['dash', 'splendid', 'rpg', 'pitch', 'aetherium'];
 
         // 3) Should popular projects ALSO show up again in the "All projects" list?
         const SHOW_POPULAR_IN_ALL = true;
@@ -914,6 +914,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'pitch',           name: 'Pitch',            img: 'pitch.png',            date: 'OCT 2026',
+              blurb: 'Train your ear with note, chord and pitch games, then play a full 88 key piano or watch MIDI songs play themselves.' },
             { prefix: 'dash',            name: 'Dash',             img: 'dash.png',             date: 'OCT 2026',
               blurb: 'A Geometry Dash-style rhythm platformer. Build levels, publish them online and climb the leaderboards.' },
             { prefix: 'splendid',        name: 'Splendid',         img: 'splendid.png',         date: 'OCT 2026',
@@ -1123,6 +1125,18 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
+            { v: '2.3.0', date: '10/24/2026',
+              desc: 'Pitch is out, a new project: an ear training game with a full 88 key piano and songs that play themselves.',
+              bullets: [
+                'New project: Pitch',
+                'Train your ear with four games: Match the tone, Name the note, Name the chord and Higher or lower',
+                'Name the note: close misses still earn points, but wrong guesses pay half, so one key off gives 46 instead of 92',
+                'Piano mode with all 88 keys across the whole screen, with chords from holding several keys and glissandos by sliding across the keys',
+                'Pick any key in major or minor, and Q W E R T Y U I O P [ ] play the notes of that scale going up',
+                'Song presets that play on the piano by themselves as falling notes, with the fall speed matching the song\'s tempo and the BPM shown',
+                'Load your own MIDI files to play them on the piano too',
+                'Pitch added at #4 on the Popular list, the Popular list was reordered, and Dash is now the Trending game'
+            ]},
             { v: '2.2.3', date: '10/21/2026',
               desc: 'Dash runs smoother on lower end devices, gets friends and new achievements, and Splendid switches to an ELO rating system.',
               bullets: [
@@ -1133,6 +1147,8 @@
                 'Dash: hitboxes reworked so one smaller hitbox per gamemode handles walls and spikes, with a much tighter wave hitbox and exact 1x1 orb hitboxes',
                 'Dash: the wave now dies on the visible spike shape with an even smaller hitbox, orbs only trigger on a fresh press, and earned achievements can never be lost',
                 'Dash: coyote time added, so you can still jump for a split second after running off an edge',
+                'Dash: the wave icon and its hitbox are now 2x smaller',
+                'Dash: new decor including see-through copies of every block, colorable black squares and triangles, small, medium and large glow balls, and glow lines',
                 'Dash: new Pulse Trigger that flashes the background in a color of your choice and fades it out over a set time',
                 'Dash: new D Blocks (stop the wave taking damage from blocks and slopes inside them) and S Blocks (cancel a dash) in the trigger tab, and blocks can now be stacked on each other',
                 'Dash: ship, UFO, ball and wave now visibly touch the ground and blocks with no gap of air, and orb clicks are more reliable',
