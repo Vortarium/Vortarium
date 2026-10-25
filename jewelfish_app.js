@@ -17,18 +17,17 @@ import {
 // ---------- AI access ----------
 // Two AI keys, each stored in scrambled pieces and only put back together while the game runs.
 const _KEYS = [
-  { s: 173, p: [
-      [2,"8M2xvrA="],
-      [5,"ibKOvg=="],
-      [4,"iLyLuA=="],
-      [7,"soK1qQ=="],
-      [10,"iqm6mw=="],
-      [6,"4beQpamB"],
-      [9,"v6eKspKR"],
-      [1,"jOX0iw=="],
-      [0,"7OGd99s="],
-      [3,"oPOBhqSf"],
-      [8,"t96ohsE="]
+  { s: 211, p: [
+      [5,"nsnEjmtP"],
+      [6,"s2F1Z3pF"],
+      [4,"loSUgKiX"],
+      [1,"iJPWqtY="],
+      [9,"a1x/"],
+      [7,"dn9VQmN7"],
+      [8,"UUZ0ew=="],
+      [2,"pLGdq4WI"],
+      [0,"kof3nb3a"],
+      [3,"gtiexbc="]
   ] },
   { s: 58, p: [
       [4,"ITcRFQs="],
