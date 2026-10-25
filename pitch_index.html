@@ -67,8 +67,8 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 .nb.sel{background:var(--acc);color:#000;border-color:var(--acc)}
 .nb.good{background:var(--good);color:#000;border-color:var(--good)}
 .nb.bad{background:var(--bad);color:#000;border-color:var(--bad)}
-.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin:18px 0 6px}
-.seg button{background:transparent;border:0;color:var(--mut);font:inherit;font-weight:700;padding:11px 26px;border-radius:999px;cursor:pointer}
+.seg{flex-wrap:wrap;justify-content:center;display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px;margin:18px 0 6px}
+.seg button{background:transparent;border:0;color:var(--mut);font:inherit;font-weight:700;padding:11px 18px;border-radius:999px;cursor:pointer}
 .seg button.sel{background:var(--fg);color:#000}
 .seg button.good{background:var(--good);color:#000}.seg button.bad{background:var(--bad);color:#000}
 .fin .big{color:var(--acc)}
@@ -317,12 +317,14 @@ function playPiano(midi,dur=2.2,vel=.8,when=0){
   ns.connect(bp); bp.connect(ng); ng.connect(out); ns.start(t);
   return mkHandle(out);
 }
-const chordIv=minor=>minor?[0,3,7]:[0,4,7];
-function playChord(root,minor,dur=1.7){
-  chordIv(minor).forEach((i,k)=>playPiano(root+i,dur,.72,k*.03));
+const CHORDS={maj:[0,4,7],min:[0,3,7],aug:[0,4,8],sus2:[0,2,7],sus4:[0,5,7]};
+const CHORD_NAMES={maj:'major',min:'minor',aug:'augmented',sus2:'sus2',sus4:'sus4'};
+const chordIv=q=>CHORDS[q]||CHORDS.maj;
+function playChord(root,q,dur=1.7){
+  chordIv(q).forEach((i,k)=>playPiano(root+i,dur,.72,k*.03));
 }
-function playArp(root,minor){
-  [...chordIv(minor),12].forEach((i,k,a)=>playPiano(root+i,k===a.length-1?1.8:.9,.75,k*.35));
+function playArp(root,q){
+  [...chordIv(q),12].forEach((i,k,a)=>playPiano(root+i,k===a.length-1?1.8:.9,.75,k*.35));
 }
 
 /* ----- timed sequences (cancelled whenever the round ends / menu opens) ----- */
@@ -385,7 +387,7 @@ function menu(){
   <div class="cards">
    <button class="card" onclick="startGame('match')"><span class="n">01</span><div><h3>Match the tone</h3><p>Hear a pitch once. Slide until yours matches.</p></div><span class="best">${b('match')}</span></button>
    <button class="card" onclick="startGame('note')"><span class="n">02</span><div><h3>Name the note</h3><p>A piano note plays 3 times. Find the key.</p></div><span class="best">${b('note')}</span></button>
-   <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality.</p></div><span class="best">${b('chord')}</span></button>
+   <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality: major, minor, augmented or suspended.</p></div><span class="best">${b('chord')}</span></button>
    <button class="card" onclick="openPiano()"><span class="n">04</span><div><h3>Piano</h3><p>All 88 keys. Slide, play chords, pick a key, or play a MIDI song.</p></div></button>
    <button class="card" onclick="startGame('hl')"><span class="n">05</span><div><h3>Higher or lower</h3><p>Two notes. Is the second higher, lower, or the same?</p></div><span class="best">${b('hl')}</span></button>
   </div>`;
@@ -393,7 +395,7 @@ function menu(){
 function startGame(k){
   initAudio();
   pvStop();
-  S={key:k,round:0,score:0,rounds:k==='hl'?10:5};
+  S={key:k,round:0,score:0,rounds:k==='hl'?20:5};
   ({match:gMatch,note:gNote,chord:gChord,hl:gHL})[k]();
 }
 
@@ -504,13 +506,13 @@ function gNote(){
 function gChord(){
   S.title='Name the chord';S.max=100;
   S.start=()=>{
-    S.root=ri(0,11);S.minor=Math.random()<.5;S.done=false;S.gr=null;S.gm=null;
+    S.root=ri(0,11);S.q=Object.keys(CHORDS)[ri(0,4)];S.done=false;S.gr=null;S.gm=null;
     M.innerHTML=header('Name the chord')+`<div class="stage">
       <div class="big" id="bigm">♪</div>
       <div class="hint" id="hm">Pick the root and the quality. 50 pts each.</div>
       <div style="height:6px"></div>
       <div class="grid" id="grid">${NAMES.map((n,i)=>`<button class="nb" data-r="${i}">${n}</button>`).join('')}</div>
-      <div class="seg" id="seg"><button data-q="maj">Major</button><button data-q="min">Minor</button></div>
+      <div class="seg" id="seg"><button data-q="maj">Major</button><button data-q="min">Minor</button><button data-q="aug">Augmented</button><button data-q="sus2">Sus2</button><button data-q="sus4">Sus4</button></div>
       <div class="row" style="margin-top:14px"><button class="btn acc" id="sub" disabled>Lock in</button></div>
       <div class="result" id="res"></div></div>`;
     const upd=()=>{$('sub').disabled=S.gr===null||S.gm===null;};
@@ -519,29 +521,29 @@ function gChord(){
       document.querySelectorAll('#grid .nb').forEach(x=>x.classList.toggle('sel',x===b));
       upd();});
     document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
-      if(S.done)return;S.gm=b.dataset.q==='min';
+      if(S.done)return;S.gm=b.dataset.q;
       document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('sel',x===b));upd();});
     $('sub').onclick=()=>{
       S.done=true;$('sub').disabled=true;cancelSeq();
-      const rOk=S.gr===S.root,qOk=S.gm===S.minor,pts=(rOk?50:0)+(qOk?50:0);
+      const rOk=S.gr===S.root,qOk=S.gm===S.q,pts=(rOk?50:0)+(qOk?50:0);
       S.score+=pts;$('sc').textContent=S.score;
       document.querySelectorAll('#grid .nb').forEach(b=>{
         const i=+b.dataset.r;b.classList.remove('sel');
         if(i===S.root)b.classList.add('good');else if(i===S.gr)b.classList.add('bad');});
       document.querySelectorAll('#seg button').forEach(b=>{
-        const isMin=b.dataset.q==='min';b.classList.remove('sel');
-        if(isMin===S.minor)b.classList.add('good');else if(isMin===S.gm)b.classList.add('bad');});
-      $('bigm').textContent=NAMES[S.root]+(S.minor?' minor':' major');
+        const q=b.dataset.q;b.classList.remove('sel');
+        if(q===S.q)b.classList.add('good');else if(q===S.gm)b.classList.add('bad');});
+      $('bigm').textContent=NAMES[S.root]+' '+CHORD_NAMES[S.q];
       $('hm').textContent='';
       $('res').innerHTML=`<div class="pts ${pts===100?'g':pts?'a':'b'}">+${pts}</div>
         <div class="res-sub">${rOk?'Root ✓':'Root ✗'} · ${qOk?'Quality ✓':'Quality ✗'}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     };
     seq([
-      [250,()=>playChord(48+S.root,S.minor)],
-      [2250,()=>playChord(48+S.root,S.minor)],
-      [4250,()=>playChord(48+S.root,S.minor)],
-      [6250,()=>playArp(48+S.root,S.minor)]
+      [250,()=>playChord(48+S.root,S.q)],
+      [2250,()=>playChord(48+S.root,S.q)],
+      [4250,()=>playChord(48+S.root,S.q)],
+      [6250,()=>playArp(48+S.root,S.q)]
     ]);
   };
   S.start();
@@ -549,11 +551,11 @@ function gChord(){
 
 
 /* ============ GAME 5: HIGHER OR LOWER ============ */
-const HL_CENTS=[100,60,36,22,13,8,5,3,2,1];   // 10 rounds, 100 cents apart down to 1 cent
+const HL_CENTS=Array.from({length:20},(_,i)=>Math.max(1,Math.round(100*Math.pow(.01,i/19))));   // 20 rounds, 100 cents apart down to 1 cent
 function gHL(){
   S.title='Higher or lower';S.max=10;
-  const pool=[1,2,3,4,5,6,7,8,9];S.same=new Set();     // two surprise "same" rounds
-  while(S.same.size<2)S.same.add(pool[ri(0,pool.length-1)]);
+  const pool=Array.from({length:19},(_,i)=>i+1);S.same=new Set();     // four surprise "same" rounds
+  while(S.same.size<4)S.same.add(pool[ri(0,pool.length-1)]);
   S.start=()=>{
     const cents=S.same.has(S.round)?0:HL_CENTS[S.round];
     S.dir=cents===0?0:(Math.random()<.5?1:-1);
@@ -624,6 +626,7 @@ function discoverSongs(){
   })();
   return songsP;
 }
+const songKey=n=>n.replace(/\.midi?$/i,'').toLowerCase().replace(/[_\s]+/g,' ').trim();
 const songList=()=>(SONGS||[]).concat(LOADED);
 
 /* ---- tiny MIDI parser: every non-drum channel becomes notes {m,t,d,v} in seconds ---- */
@@ -681,7 +684,7 @@ async function sgLoad(e){
   let buf=e.buf;
   if(!buf){
     let why='';
-    if(location.protocol==='file:')why=' This page was opened as a file:// address, and browsers block loading other files that way. Run a local server in this folder instead (for example "python -m http.server") and open http://localhost:8000.';
+    if(location.protocol==='file:')why=' This page was opened as a file:// address, and browsers block loading other files that way. Use the "pick folder" button to choose the folder with your songs, or run a local server in it (for example "python -m http.server") and open http://localhost:8000.';
     else{
       let found=false;
       for(const u of [e.url].concat(e.alts||[])){
@@ -796,6 +799,7 @@ function openPiano(){
       <button class="btn acc sm" id="sgplay" disabled>▶ Play</button>
       <span class="pill" id="sgbpm"></span>
       <label class="btn ghost sm">load .mid<input id="sgfile" type="file" accept=".mid,.midi" multiple hidden></label>
+      <label class="btn ghost sm">pick folder<input id="sgdir" type="file" webkitdirectory hidden></label>
       <span class="sgt" id="sgt"></span></div>
     <div class="sgbar"><i id="sgp"></i></div></div>
     <div class="pv" id="pvbox"><canvas id="pvc"></canvas><div class="pk" id="pvk">${keys}</div></div>
@@ -830,6 +834,17 @@ function openPiano(){
     for(const f of fs)LOADED.push({name:prettyName(f.name),buf:await f.arrayBuffer()});
     if(!PV.on||!fs.length)return;
     sgReset();sgFill(String(songList().length-fs.length));
+  };
+ $('sgdir').onchange=async e=>{
+    const fs=[...e.target.files].filter(f=>/\.midi?$/i.test(f.name));e.target.value='';
+    if(!fs.length){$('sgt').textContent='No .mid files in that folder';return;}
+    await discoverSongs();
+    for(const f of fs){
+      const buf=await f.arrayBuffer(),k=songKey(f.name),hit=songList().find(x=>songKey(x.name)===k);
+      if(hit){hit.buf=buf;hit.song=null;}else LOADED.push({name:prettyName(f.name),buf});
+    }
+    if(!PV.on)return;
+    sgReset();sgFill('');$('sgt').textContent=fs.length+' song'+(fs.length>1?'s':'')+' ready';
   };
   discoverSongs().then(()=>{if(PV.on){sgFill('');}});
   const wr=document.scrollingElement;if(wr)wr.scrollLeft=0;
@@ -937,10 +952,133 @@ addEventListener('pointermove',e=>{
 ['pointerup','pointercancel'].forEach(t=>addEventListener(t,e=>{if(PV.on){const id='p'+e.pointerId;delete PV.ptr[id];delete PV.lp[id];pvOff(id);}}));
 addEventListener('blur',()=>{if(PV.on){PV.mod={};Object.keys(PV.held).forEach(pvOff);}});
 
+/* ============ SCREEN TRANSITIONS ============ */
+const TR={busy:false,last:-1};
+const TR_PAL=[['#bc4dff','#ff6bf1','#5ad1ff','#4ade80'],['#ff5d5d','#ffe27a','#ff6bf1','#bc4dff'],['#5ad1ff','#4ade80','#ffe27a','#f4f4f5'],['#bc4dff','#5ad1ff','#f4f4f5','#ff5d5d']];
+const clamp01=x=>x<0?0:x>1?1:x;
+const eo=t=>1-Math.pow(1-t,3),ei=t=>t*t,eio=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const bounce=t=>{const n=7.5625,d=2.75;if(t<1/d)return n*t*t;if(t<2/d)return n*(t-=1.5/d)*t+.75;if(t<2.5/d)return n*(t-=2.25/d)*t+.9375;return n*(t-=2.625/d)*t+.984375;};
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+// every effect is draw(g,p): p 0..0.5 covers the screen, p 0.5..1 uncovers it again
+
+// colour bars drop from the top like curtains, then fall away off the bottom
+function trCurtains(W,H,pal){
+  const n=Math.max(10,Math.round(W/46)),w=W/n,cols=[];
+  for(let i=0;i<n;i++)cols.push({d:Math.random()*.5,e:Math.random()*.5,c:pick(pal)});
+  return (g,p)=>cols.forEach((c,i)=>{
+    let y0=0,y1=H;
+    if(p<.5)y1=H*eo(clamp01((p*2-c.d)/(1-c.d)));else y0=H*ei(clamp01(((p-.5)*2-c.e)/(1-c.e)));
+    if(y1-y0<=0)return;
+    g.fillStyle=c.c;g.fillRect(i*w-.5,y0,w+1,y1-y0);
+    if(p<.5&&y1<H-1){g.beginPath();g.arc(i*w+w/2,y1,w/2+.5,0,Math.PI*2);g.fill();}
+  });
+}
+// glossy balls rain down and bounce into a pile that fills the screen, then drop out the bottom
+function trBalls(W,H,pal){
+  const s=Math.max(60,Math.min(W,H)/6.5),nc=Math.ceil(W/s)+1,nr=Math.ceil(H/s)+1,R=s*.9,balls=[];
+  for(let r=0;r<nr;r++)for(let c=0;c<nc;c++)balls.push({x:c*s+(Math.random()-.5)*s*.12,y:r*s+(Math.random()-.5)*s*.12,
+    d:(1-r/nr)*.35+Math.random()*.15,e:(r/nr)*.3+Math.random()*.2,c:pick(pal)});
+  return (g,p)=>balls.forEach(b=>{
+    let y;
+    if(p<.5){const q=clamp01((p*2-b.d)/(1-b.d));if(q<=0)return;y=-R+(b.y+R)*bounce(q);}
+    else{const r=clamp01(((p-.5)*2-b.e)/(1-b.e));y=b.y+(H-b.y+2*R)*ei(r);if(y-R>H)return;}
+    g.fillStyle=b.c;g.beginPath();g.arc(b.x,y,R,0,Math.PI*2);g.fill();
+    g.fillStyle='rgba(255,255,255,.22)';g.beginPath();g.arc(b.x-R*.3,y-R*.3,R*.28,0,Math.PI*2);g.fill();
+  });
+}
+// pixel blocks pop in as a diagonal wave with static, then pop out the opposite way
+function trPixels(W,H,pal){
+  const px=Math.max(28,Math.min(W,H)/15),nx=Math.ceil(W/px),ny=Math.ceil(H/px),flip=Math.random()<.5,cells=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+    const dg=(x/nx+y/ny)/2;
+    cells.push({x,y,o:.55*(flip?1-dg:dg)+.35*Math.random(),o2:.55*(flip?dg:1-dg)+.35*Math.random(),c:pick(pal)});
+  }
+  return (g,p)=>cells.forEach(c=>{
+    const s=p<.5?clamp01((p*2-c.o)/.09):1-clamp01(((p-.5)*2-c.o2)/.09);
+    if(s<=0)return;
+    const sz=px*s;g.fillStyle=c.c;g.fillRect(c.x*px+(px-sz)/2,c.y*px+(px-sz)/2,sz+(s>=1?1:0),sz+(s>=1?1:0));
+  });
+}
+// concentric colour ripples spread from a point, then a hole opens out of the middle
+function trRings(W,H,pal){
+  const cx=W*(.25+Math.random()*.5),cy=H*(.25+Math.random()*.5),R=Math.hypot(Math.max(cx,W-cx),Math.max(cy,H-cy))+4,K=3,cs=pal.slice(0,3);
+  return (g,p)=>{
+    for(let k=0;k<K;k++){
+      let rin=0,rout=R;
+      if(p<.5){const dl=k*.14;rout=R*eo(clamp01((p*2-dl)/(1-dl)));}
+      else{const dl=(K-1-k)*.14;rin=R*ei(clamp01(((p-.5)*2-dl)/(1-dl)));}
+      if(rout<=rin)continue;
+      g.fillStyle=cs[k];g.beginPath();g.arc(cx,cy,rout,0,Math.PI*2);
+      if(rin>0){g.moveTo(cx+rin,cy);g.arc(cx,cy,rin,0,Math.PI*2,true);}
+      g.fill('evenodd');
+    }
+  };
+}
+// slanted bands slide in from alternating sides, then keep going out the far side
+function trStripes(W,H,pal){
+  const L=Math.hypot(W,H),n=9,bh=L/n,ang=(Math.random()<.5?-1:1)*.38,bands=[];
+  for(let i=0;i<n;i++)bands.push({d:Math.random()*.4,e:Math.random()*.4,dir:i%2?1:-1,c:pal[i%pal.length]});
+  return (g,p)=>{
+    g.save();g.translate(W/2,H/2);g.rotate(ang);
+    bands.forEach((b,i)=>{
+      let off;
+      if(p<.5)off=-b.dir*L*(1-eo(clamp01((p*2-b.d)/(1-b.d))));
+      else off=b.dir*L*ei(clamp01(((p-.5)*2-b.e)/(1-b.e)));
+      g.fillStyle=b.c;g.fillRect(-L/2+off,-L/2+i*bh-.5,L,bh+1);
+    });
+    g.restore();
+  };
+}
+// layered colour waves rise over the screen, then drain upward and away
+function trWave(W,H,pal){
+  const K=3,cs=pal.slice(0,3),ph=Math.random()*6,amp=Math.max(30,H*.06),fr=2+Math.random()*2;
+  const ed=(x,base,t)=>base+amp*Math.sin(x/W*fr*6.2832+ph+t*8);
+  return (g,p)=>{
+    for(let k=0;k<K;k++){
+      g.fillStyle=cs[k];g.beginPath();
+      if(p<.5){
+        const dl=k*.12,base=(H+2*amp)*(1-eio(clamp01((p*2-dl)/(1-dl))))-amp;
+        if(base>H+amp)continue;
+        g.moveTo(0,H+10);for(let x=0;x<=W+8;x+=8)g.lineTo(x,ed(x,base,p));g.lineTo(W,H+10);
+      }else{
+        const dl=(K-1-k)*.12,base=(H+2*amp)*(1-eio(clamp01(((p-.5)*2-dl)/(1-dl))))-amp;
+        if(base<-amp*2)continue;
+        g.moveTo(0,-10);g.lineTo(W,-10);for(let x=W;x>=-8;x-=8)g.lineTo(x,ed(x,base,p));
+      }
+      g.closePath();g.fill();
+    }
+  };
+}
+const TR_FX=[trCurtains,trBalls,trPixels,trRings,trStripes,trWave];
+function trRun(swap){
+  if(TR.busy)return;TR.busy=true;
+  let cv=document.getElementById('trc');
+  if(!cv){cv=document.createElement('canvas');cv.id='trc';cv.style.cssText='position:fixed;inset:0;width:100%;height:100%;z-index:9999;pointer-events:none;display:none';document.body.appendChild(cv);}
+  const dpr=Math.min(2,window.devicePixelRatio||1),W=innerWidth,H=innerHeight;
+  cv.width=W*dpr;cv.height=H*dpr;cv.style.display='block';cv.style.pointerEvents='auto';
+  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);
+  let k;do{k=Math.floor(Math.random()*TR_FX.length);}while(k===TR.last);TR.last=k;
+  const pal=pick(TR_PAL).slice().sort(()=>Math.random()-.5),draw=TR_FX[k](W,H,pal);
+  const DUR=matchMedia('(prefers-reduced-motion: reduce)').matches?1:1150,t0=performance.now();let swapped=false;
+  const step=now=>{
+    const p=Math.min(1,(now-t0)/DUR);
+    g.clearRect(0,0,W,H);
+    if(p>=.5&&!swapped){swapped=true;try{swap();}catch(e){console.error(e);}}
+    draw(g,p);
+    if(p<1)requestAnimationFrame(step);
+    else{cv.style.display='none';cv.style.pointerEvents='none';TR.busy=false;}
+  };
+  requestAnimationFrame(step);
+}
+// switching games, opening the piano, or going home now plays a transition
+function withTr(fn){return function(...a){if(TR.busy)return;try{cancelSeq();}catch(e){}trRun(()=>fn.apply(null,a));};}
+const _menu=menu;
+menu=withTr(menu);startGame=withTr(startGame);openPiano=withTr(openPiano);
+
 $('sff').addEventListener('change',e=>{if(e.target.files[0])loadSF2File(e.target.files[0]);e.target.value='';});
 $('dfl').addEventListener('click',useDefaultSF);
 loadSF2Auto().then(()=>setStatus());
-menu();
+_menu();
 addEventListener('pointerdown',()=>{if(!ctx){initAudio();}},{once:true});
 </script>
 </body>
