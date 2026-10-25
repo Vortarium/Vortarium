@@ -406,16 +406,17 @@ const FAST_LIMIT_MS = 5000;
 const PATIENT_LIMIT_MS = 20000;       // used only when BOTH keys are benched
 const KEY_COOLDOWN_MS = 10 * 60 * 1000;
 const keyUntil = _KEYS.map(() => 0);
+const epIdx = _KEYS.map(() => 0);     // 0 = Gemini API endpoint, 1 = Vertex endpoint (per key)
 let activeKey = 0;
 try {
-  const saved = JSON.parse(localStorage.getItem("jewelfish_keys") || "[]");
+  const saved = JSON.parse(localStorage.getItem("jewelfish_keys2") || "[]");
   saved.forEach((t, i) => { if (i < keyUntil.length && Number(t) > Date.now()) keyUntil[i] = Number(t); });
 } catch (e) { /* ignore */ }
 
 function benchKey(i) {
   keyUntil[i] = Date.now() + KEY_COOLDOWN_MS;
   activeKey = (i + 1) % _KEYS.length;
-  try { localStorage.setItem("jewelfish_keys", JSON.stringify(keyUntil)); } catch (e) { /* ignore */ }
+  try { localStorage.setItem("jewelfish_keys2", JSON.stringify(keyUntil)); } catch (e) { /* ignore */ }
   console.warn("Jewelfish: AI key " + (i + 1) + " benched, switching to key " + (activeKey + 1));
 }
 function pickKey() {
@@ -455,10 +456,9 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
 
     const k = _k(_KEYS[idx]);
     const enc = encodeURIComponent(k);
-    const isExpress = k.slice(0, 2) === String.fromCharCode(65, 81);
-    const url = isExpress
-      ? `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${enc}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${enc}`;
+    const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${enc}`;
+    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${enc}`;
+    const url = epIdx[idx] === 0 ? studioUrl : vertexUrl;
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), limit);
@@ -468,7 +468,9 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
       if (!res.ok) {
         const t = await res.text();
         lastErr = new Error(`Gemini ${res.status}: ${t.slice(0, 160)}`);
-        if ([429, 401, 403].includes(res.status)) { benchKey(idx); continue; }   // out of quota / bad key
+        // rejected by this endpoint: try the key's other Google endpoint once before blaming the key
+        if ([401, 403, 404].includes(res.status) && epIdx[idx] === 0) { epIdx[idx] = 1; continue; }
+        if ([429, 401, 403, 404].includes(res.status)) { epIdx[idx] = 0; benchKey(idx); continue; }   // out of quota / bad key
         if ([500, 502, 503, 504].includes(res.status)) { await sleep(700 * (attempt + 1)); continue; }
         throw lastErr;                                                          // 400/404: our request is wrong
       }
