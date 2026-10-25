@@ -13,6 +13,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Elements: one permanent record per result that has ever been discovered.
+    match /elements/{key} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['n', 'e', 'by', 'uid', 'created'])
+        && request.resource.data.n is string && request.resource.data.n.size() > 0 && request.resource.data.n.size() <= 40
+        && request.resource.data.e is string && request.resource.data.e.size() > 0 && request.resource.data.e.size() <= 16;
+      allow update, delete: if false;
+    }
+
     // Global discovery counter: public read (login page shows it), +1 steps only.
     match /meta/stats {
       allow read: if true;

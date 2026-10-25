@@ -207,12 +207,22 @@ onAuthStateChanged(auth, async (user) => {
 //  Sidebar
 // ==========================================================
 function renderSidebar() {
+  $("searchBox").value = "";
   elementList.innerHTML = "";
   inventory.forEach((el) => elementList.appendChild(makeSidebarBtn(el)));
 }
+// Search: hide sidebar buttons that don't match what's typed
+function applyFilter() {
+  const q = $("searchBox").value.trim().toLowerCase();
+  elementList.querySelectorAll(".el").forEach((b) => {
+    b.classList.toggle("hidden", q !== "" && !b.dataset.k.includes(q));
+  });
+}
+$("searchBox").addEventListener("input", applyFilter);
 function makeSidebarBtn(el) {
   const b = document.createElement("button");
   b.className = "el"; b.type = "button";
+  b.dataset.k = keyOf(el.n);
   b.textContent = `${el.e} ${el.n}`;
   b.onclick = () => spawn(el);
   return b;
@@ -222,6 +232,7 @@ function addToInventory(el) {
   if (inventory.has(k)) return;
   inventory.set(k, el);
   elementList.appendChild(makeSidebarBtn(el));
+  applyFilter();
   elementList.scrollTop = elementList.scrollHeight;
   setDoc(doc(db, "users", me.uid), { elements: arrayUnion({ n: el.n, e: el.e }) }, { merge: true })
     .catch(() => {});
@@ -341,17 +352,30 @@ async function getResult(a, b) {
 
   const ai = await askGemini(a, b);
 
-  // Save forever. If someone beat us to it, use their result so everyone matches.
+  // Save the recipe forever (every route to a result is kept). If someone beat us
+  // to this exact recipe, use theirs so everyone matches.
+  // A "discovery" only counts when the RESULT itself has never existed before.
+  const elRef = doc(db, "elements", keyOf(ai.n).replace(/\//g, "∕").slice(0, 400));
   const out = await runTransaction(db, async (tx) => {
     const existing = await tx.get(ref);
     if (existing.exists()) return { result: { n: existing.data().n, e: existing.data().e }, first: false };
+
+    const elSnap = await tx.get(elRef);
+    const startEl = START.find((s) => keyOf(s.n) === keyOf(ai.n));
+    const isNewElement = !elSnap.exists() && !startEl;
+    // use the official name/emoji if this result already exists
+    const result = elSnap.exists() ? { n: elSnap.data().n, e: elSnap.data().e } : (startEl || ai);
+
     tx.set(ref, {
-      a: a.n, b: b.n, n: ai.n, e: ai.e,
+      a: a.n, b: b.n, n: result.n, e: result.e,
       by: me.username, uid: me.uid, created: serverTimestamp()
     });
-    tx.set(doc(db, "meta", "stats"), { total: increment(1) }, { merge: true });
-    tx.update(doc(db, "users", me.uid), { discoveries: increment(1) });
-    return { result: ai, first: true };
+    if (isNewElement) {
+      tx.set(elRef, { n: result.n, e: result.e, by: me.username, uid: me.uid, created: serverTimestamp() });
+      tx.set(doc(db, "meta", "stats"), { total: increment(1) }, { merge: true });
+      tx.update(doc(db, "users", me.uid), { discoveries: increment(1) });
+    }
+    return { result, first: isNewElement };
   });
 
   if (out.first) me.discoveries += 1;
