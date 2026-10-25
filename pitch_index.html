@@ -97,6 +97,25 @@ label.btn{display:inline-block}
 .pvhelp{color:var(--mut);font-size:13px;line-height:1.6;margin-top:14px}
 .pvhelp b{color:var(--fg)}
 @media(max-width:520px){.grid{grid-template-columns:repeat(4,1fr)}}
+.odd{position:relative;width:min(380px,100%);aspect-ratio:1;margin:8px auto 0}
+.ob{position:absolute;width:22%;aspect-ratio:1;transform:translate(-50%,-50%);border:0;border-radius:50%;font:inherit;font-size:clamp(20px,6vw,30px);font-weight:800;color:#000;cursor:pointer;transition:.12s}
+.ob:hover{transform:translate(-50%,-50%) scale(1.07)}
+.ob.dim{opacity:.4}
+.ob.lit{opacity:1;transform:translate(-50%,-50%) scale(1.18);box-shadow:0 0 28px 6px var(--c)}
+.ob.good{box-shadow:0 0 0 5px var(--bg),0 0 0 8px #fff}
+.ob.bad{opacity:.35}
+.odd .listen{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.odd .listen:hover{transform:translate(-50%,-50%) scale(1.03)}
+.tap{display:block;margin:22px auto 0;width:min(300px,80%);height:130px;border-radius:26px;border:2px solid var(--line);background:var(--card);color:var(--mut);font:inherit;font-weight:800;font-size:26px;cursor:default;transition:.08s;user-select:none;touch-action:manipulation}
+.tap small{display:block;font-size:12px;font-weight:600;margin-top:4px}
+.tap.on{border-color:var(--acc);color:var(--fg);cursor:pointer}
+.tap.on:active,.tap.hit{background:var(--acc);color:#000;transform:scale(.97)}
+.tl{position:relative;height:72px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin:18px auto 0;max-width:560px;overflow:hidden}
+.tl i{position:absolute;width:3px;border-radius:2px}
+.tl .p{top:8px;height:24px;background:var(--fg)}
+.tl .t{bottom:8px;height:24px;background:var(--acc)}
+.tl .t.x{background:var(--bad)}
+.tl .g{top:0;bottom:0;width:1px;background:var(--line)}
 </style>
 </head>
 <body>
@@ -390,13 +409,15 @@ function menu(){
    <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality: major, minor, augmented or suspended.</p></div><span class="best">${b('chord')}</span></button>
    <button class="card" onclick="openPiano()"><span class="n">04</span><div><h3>Piano</h3><p>All 88 keys. Slide, play chords, pick a key, or play a MIDI song.</p></div></button>
    <button class="card" onclick="startGame('hl')"><span class="n">05</span><div><h3>Higher or lower</h3><p>Two notes. Is the second higher, lower, or the same?</p></div><span class="best">${b('hl')}</span></button>
+   <button class="card" onclick="startGame('odd')"><span class="n">06</span><div><h3>Odd one out</h3><p>Five buttons play a note. Four match, one is a little flat or sharp. Find it.</p></div><span class="best">${b('odd')}</span></button>
+   <button class="card" onclick="startGame('rhythm')"><span class="n">07</span><div><h3>Rhythm</h3><p>Hear a percussion pattern, then tap it back. Scored on timing.</p></div><span class="best">${b('rhythm')}</span></button>
   </div>`;
 }
 function startGame(k){
   initAudio();
   pvStop();
-  S={key:k,round:0,score:0,rounds:k==='hl'?20:5};
-  ({match:gMatch,note:gNote,chord:gChord,hl:gHL})[k]();
+  S={key:k,round:0,score:0,rounds:({hl:20,odd:10,rhythm:10})[k]||5};
+  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm})[k]();
 }
 
 /* ============ GAME 1: MATCH THE TONE ============ */
@@ -551,7 +572,7 @@ function gChord(){
 
 
 /* ============ GAME 5: HIGHER OR LOWER ============ */
-const HL_CENTS=Array.from({length:20},(_,i)=>Math.max(1,Math.round(100*Math.pow(.01,i/19))));   // 20 rounds, 100 cents apart down to 1 cent
+const HL_CENTS=Array.from({length:20},(_,i)=>Math.round(100-i*99/19));   // 20 rounds, a constant step from 100 cents down to 1 cent
 function gHL(){
   S.title='Higher or lower';S.max=10;
   const pool=Array.from({length:19},(_,i)=>i+1);S.same=new Set();     // four surprise "same" rounds
@@ -582,6 +603,255 @@ function gHL(){
   };
   S.start();
 }
+
+/* ============ GAME 6: ODD ONE OUT ============ */
+const ODD_CENTS=Array.from({length:10},(_,i)=>50-i*5);   // 10 rounds: 50, 45, 40 ... 5 cents off
+const OD_COL=[['Red','#ff5d5d'],['Yellow','#ffe27a'],['Green','#4ade80'],['Blue','#5ad1ff'],['Purple','#bc4dff']];
+function gOdd(){
+  S.title='Odd one out';S.max=10;
+  S.start=()=>{
+    S.cents=ODD_CENTS[S.round];S.odd=ri(0,4);S.sign=Math.random()<.5?1:-1;
+    S.base=ri(52,72);S.done=false;S.heard=false;S.busy=false;
+    const pitch=i=>S.base+(i===S.odd?S.sign*S.cents/100:0);
+    const btns=OD_COL.map(([nm,c],i)=>{
+      const a=(-90+72*i)*Math.PI/180;
+      return `<button class="ob dim" data-i="${i}" aria-label="${nm}" style="left:${50+37*Math.cos(a)}%;top:${50+37*Math.sin(a)}%;background:${c};--c:${c}">${i+1}</button>`;
+    }).join('');
+    M.innerHTML=header('Odd one out')+`<div class="stage">
+      <div class="hint" id="hm">Four buttons play the same pitch. One is off. Press Listen, then pick it.</div>
+      <div class="odd" id="odd">${btns}<button class="btn acc listen" id="lis">Listen</button></div>
+      <div class="result" id="res"></div></div>`;
+    const all=[...document.querySelectorAll('#odd .ob')];
+    $('lis').onclick=()=>{
+      if(S.busy||S.done)return;S.busy=true;$('lis').disabled=true;
+      const steps=[];
+      all.forEach((b,i)=>{
+        steps.push([i*900,()=>{playPiano(pitch(i),.75,.8);b.classList.add('lit');}]);
+        steps.push([i*900+750,()=>b.classList.remove('lit')]);
+      });
+      steps.push([4*900+800,()=>{S.busy=false;S.heard=true;$('lis').disabled=S.done;$('lis').textContent='Listen again';all.forEach(b=>b.classList.remove('dim'));}]);
+      seq(steps);
+    };
+    all.forEach(b=>b.onclick=()=>{
+      if(!S.heard||S.busy||S.done)return;S.done=true;$('lis').disabled=true;
+      const i=+b.dataset.i,ok=i===S.odd,pts=ok?10:0;
+      S.score+=pts;$('sc').textContent=S.score;
+      all.forEach((x,j)=>{if(j===S.odd)x.classList.add('good');else if(x===b)x.classList.add('bad');else x.classList.add('dim');});
+      $('hm').textContent=`${OD_COL[S.odd][0]} (${S.odd+1}) was ${S.cents} cent${S.cents>1?'s':''} ${S.sign>0?'sharp':'flat'}`;
+      $('res').innerHTML=`<div class="pts ${ok?'g':'b'}">+${pts}</div>
+        <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+    });
+  };
+  S.start();
+}
+
+/* ============ GAME 7: RHYTHM ============ */
+const BPM=80,SPB=60/BPM,BARB=4;            // one 4-beat bar per round
+let pc=null,pcP=null,pcSrc='',pcKeysCache=null;
+const PC_FILE='Percussion.sf2';
+function loadPercAuto(){
+  if(pcP)return pcP;
+  pcP=(async()=>{
+    try{const c=await idbGet('perc');if(c&&c.buf){pc=parseSF2(c.buf);pcSrc=c.name;pcKeysCache=null;return true;}}catch(e){}
+    try{const r=await fetch(PC_FILE);if(r.ok){pc=parseSF2(await r.arrayBuffer());pcSrc=PC_FILE;pcKeysCache=null;return true;}}catch(e){}
+    return false;
+  })();
+  return pcP;
+}
+async function loadPercFile(file){
+  try{
+    const b=await file.arrayBuffer();pc=parseSF2(b);pcSrc=file.name;pcKeysCache=null;pcP=Promise.resolve(true);
+    try{await idbSet('perc',{buf:b,name:file.name})}catch(e){}
+  }catch(e){alert('Could not read that soundfont: '+e.message);}
+  pcStatus();
+}
+function pcStatus(){
+  const el=$('pcs');if(!el)return;
+  el.innerHTML=pc?`percussion: ${pcSrc}`:`${PC_FILE} not found next to this page, so synth sounds are used. <label class="ld">load ${PC_FILE}<input id="pcf" type="file" accept=".sf2" hidden></label>`;
+  const f=$('pcf');if(f)f.onchange=e=>{if(e.target.files[0])loadPercFile(e.target.files[0]);};
+}
+function percKeys(){
+  if(pcKeysCache)return pcKeysCache;
+  const set=new Set();pc.regions.forEach(r=>{for(let k=r.kLo;k<=r.kHi;k++)set.add(k);});
+  return pcKeysCache=[...set].sort((a,b)=>a-b);
+}
+function percBuf(sid){
+  if(pc.cache[sid])return pc.cache[sid];
+  const h=pc.shdr[sid],n=h.end-h.start,b=ctx.createBuffer(1,n,h.rate),d=b.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=pc.pcm[h.start+i]/32768;
+  return pc.cache[sid]=b;
+}
+function drumKeys(){
+  const c=pc?percKeys():null;
+  const pickK=(cands,avoid)=>{
+    if(!c)return cands.find(k=>!avoid.includes(k));
+    const a=cands.find(k=>c.includes(k)&&!avoid.includes(k));
+    if(a!==undefined)return a;
+    const b=c.find(k=>!avoid.includes(k));return b!==undefined?b:c[0];
+  };
+  const main=pickK([38,37,56,76],[]),low=pickK([36,45,77,35],[main]);
+  const tick=pickK([42,75,44,37],[main,low]),tap=pickK([39,76,56,40],[main,low,tick]);
+  return {main,low,tick,tap};
+}
+function synthHit(key,t,vel){
+  const g=ctx.createGain();g.connect(master);
+  if(key<41){
+    const o=ctx.createOscillator();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(45,t+.12);
+    g.gain.setValueAtTime(.9*vel,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);
+    o.connect(g);o.start(t);o.stop(t+.25);
+  }else{
+    const n=Math.floor(ctx.sampleRate*.12),b=ctx.createBuffer(1,n,ctx.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=ctx.createBufferSource();s.buffer=b;
+    const f=ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=900+((key*37)%1800);
+    s.connect(f);f.connect(g);g.gain.value=.8*vel;s.start(t);
+  }
+}
+function playPerc(key,t,vel=.85){
+  if(!pc)return synthHit(key,t,vel);
+  const vi=Math.max(1,Math.round(vel*127));
+  let rs=pc.regions.filter(r=>key>=r.kLo&&key<=r.kHi&&vi>=r.vLo&&vi<=r.vHi);
+  if(!rs.length)return synthHit(key,t,vel);
+  rs=rs.filter(r=>r.vLo===rs[0].vLo&&r.vHi===rs[0].vHi);
+  const env=ctx.createGain();env.gain.value=.5+.5*vel;env.connect(master);
+  rs.forEach(r=>{
+    const src=ctx.createBufferSource();src.buffer=percBuf(r.sid);
+    src.playbackRate.value=Math.pow(2,((key-r.root)*r.scale+r.tune)/1200);
+    let node=src;
+    const g=ctx.createGain();g.gain.value=Math.pow(10,-r.att/200);node.connect(g);node=g;
+    if(ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=r.pan;node.connect(p);node=p;}
+    node.connect(env);src.start(t);src.stop(t+3);
+  });
+}
+
+const rpick=a=>a[ri(0,a.length-1)];
+const shufflePick=(a,n)=>a.slice().sort(()=>Math.random()-.5).slice(0,n);
+// Pattern = events {t: beat position inside the bar, l: 0 main sound / 1 low sound}. Gets harder each round.
+function genPattern(r){
+  const E=(ts,l=0)=>ts.map(t=>({t,l}));
+  const grid=(step,n)=>{const all=[];for(let t=step;t<BARB-1e-9;t+=step)all.push(+t.toFixed(4));return [0,...shufflePick(all,n-1)];};
+  let ev,label;
+  switch(r){
+    case 0:ev=E([0,1,2,3]);label='Steady quarter notes';break;
+    case 1:ev=E([0,...shufflePick([1,2,3],ri(1,2))]);label='Quarter notes with rests';break;
+    case 2:ev=E([0,...shufflePick([1,2,3],2),...shufflePick([.5,1.5,2.5,3.5],2)]);label='Eighth-note off-beats';break;
+    case 3:ev=E(grid(.5,ri(6,7)));label='Eighth-note groove';break;
+    case 4:ev=E(grid(.25,ri(5,6)));label='Syncopation';break;
+    case 5:ev=E(grid(.25,ri(7,8)));label='Sixteenth notes';break;
+    case 6:ev=E(grid(1/3,ri(6,7)));label='Triplets';break;
+    case 7:{
+      let ts,anyT;
+      do{ts=[];anyT=false;
+        for(let b=0;b<4;b++){const T=Math.random()<.5;anyT=anyT||T;
+          (T?[0,1/3,2/3]:[0,.5]).forEach((x,i)=>{if(i===0||Math.random()<.75)ts.push(+(b+x).toFixed(4));});}
+      }while(ts.length<6||!anyT);
+      ev=E(ts);label='Triplets mixed with straight notes';break;}
+    default:{
+      const [p,q]=rpick(r===8?[[3,4],[3,2]]:[[5,4],[5,3],[7,4]]);
+      ev=[...E(Array.from({length:p},(_,k)=>+(k*BARB/p).toFixed(4))),...E(Array.from({length:q},(_,k)=>+(k*BARB/q).toFixed(4)),1)];
+      label=`Polyrhythm ${p}:${q}`;}
+  }
+  ev.sort((a,b)=>a.t-b.t||a.l-b.l);
+  ev=ev.filter((e,i)=>!i||e.t-ev[i-1].t>1e-6);
+  return {ev,label};
+}
+
+// Match each pattern hit to the closest unused tap. Perfect within ~40 ms, fading to 0 at ~240 ms. Extra taps cost up to half.
+function scoreRhythm(ev,taps){
+  const used=new Set(),diffs=[],hit=[];let sum=0;
+  ev.forEach(e=>{
+    const tt=e.t*SPB;let bi=-1,bd=9;
+    taps.forEach((tp,i)=>{if(used.has(i))return;const d=Math.abs(tp-tt);if(d<bd){bd=d;bi=i;}});
+    if(bi>=0&&bd<=.3){used.add(bi);const dt=taps[bi]-tt;diffs.push(dt);sum+=Math.max(0,Math.min(1,1-(Math.abs(dt)-.04)/.2));}
+  });
+  const extra=taps.length-used.size,n=ev.length;
+  const acc=sum/n*(1-Math.min(.5,.5*extra/n));
+  return {pts:Math.round(acc*100),used,diffs,extra,matched:diffs.length};
+}
+
+function gRhythm(){
+  S.title='Rhythm';S.max=100;
+  S.start=()=>{
+    const {ev,label}=genPattern(S.round);
+    S.ev=ev;S.label=label;S.phase='idle';S.done=false;S.heard=false;S.taps=[];
+    M.innerHTML=header('Rhythm')+`<div class="stage">
+      <div class="big" id="bigm">♪</div>
+      <div class="hint" id="hm">Press Listen, then Record and tap the pattern back.</div>
+      <div class="row" style="margin-top:0"><button class="btn acc" id="rl">▶ Listen</button><button class="btn ghost" id="rr" disabled>● Record</button></div>
+      <button class="tap" id="tap" disabled>TAP<small>or press Space</small></button>
+      <div class="result" id="res"></div>
+      <div class="pvhelp" id="pcs"></div></div>`;
+    $('rl').onclick=()=>rhRun('listen');
+    $('rr').onclick=()=>rhRun('rec');
+    $('tap').addEventListener('pointerdown',e=>{e.preventDefault();rhTap(e.timeStamp);});
+    pcStatus();loadPercAuto().then(pcStatus);
+    rhBtns();
+  };
+  S.start();
+}
+function rhBtns(){
+  if(!$('rl'))return;
+  const busy=S.phase==='listen'||S.phase==='rec';
+  $('rl').disabled=busy||S.done;
+  $('rr').disabled=busy||S.done||!S.heard;
+  $('tap').disabled=S.phase!=='rec';
+  $('tap').classList.toggle('on',S.phase==='rec');
+}
+function rhRun(mode){
+  if(S.phase==='listen'||S.phase==='rec'||S.done)return;
+  initAudio();
+  loadPercAuto().then(()=>{
+    if(S.phase==='listen'||S.phase==='rec'||S.done||!$('rl'))return;
+    cancelSeq();
+    pcStatus();
+    const K=S.keys=drumKeys(),lat=(ctx.outputLatency||0)+(ctx.baseLatency||0);
+    const a0=ctx.currentTime+.2,bar=a0+4*SPB;
+    for(let k=0;k<4;k++)playPerc(K.tick,a0+k*SPB,k===0?.75:.55);               // count-in
+    if(mode==='listen')S.ev.forEach(e=>playPerc(e.l?K.low:K.main,bar+e.t*SPB,.9));
+    S.perfBar=performance.now()+(bar-ctx.currentTime)*1000+lat*1000;           // when the downbeat is heard, in performance.now() time
+    S.taps=[];S.phase=mode;rhBtns();
+    $('res').innerHTML='';
+    $('hm').textContent=mode==='listen'?'Listen…':'Get ready…';
+    for(let k=0;k<4;k++)later(200+k*SPB*1000,()=>{$('bigm').textContent=k+1;});
+    later(200+4*SPB*1000,()=>{$('bigm').textContent=mode==='listen'?'♪':'Tap!';$('hm').textContent=mode==='listen'?'Listen to the pattern':'Your turn';});
+    if(mode==='listen')later(200+8*SPB*1000+300,()=>{S.phase='idle';S.heard=true;$('bigm').textContent='♪';$('hm').textContent='Listen again, or press Record when ready.';rhBtns();});
+    else later(200+8*SPB*1000+500,rhFinish);
+  });
+}
+function rhTap(ts){
+  if(S.phase!=='rec'||!ctx)return;
+  const rel=(ts-S.perfBar)/1000;
+  if(rel<-.3||rel>BARB*SPB+.5)return;
+  S.taps.push(rel);
+  playPerc(S.keys.tap,ctx.currentTime,.9);
+  const t=$('tap');if(t){t.classList.add('hit');setTimeout(()=>t.classList.remove('hit'),80);}
+}
+function rhFinish(){
+  S.phase='idle';S.done=true;rhBtns();
+  const r=scoreRhythm(S.ev,S.taps),pts=r.pts;
+  S.score+=pts;$('sc').textContent=S.score;
+  const rating=pts>=95?'Perfect':pts>=85?'Great':pts>=70?'Good':pts>=50?'Okay':'Keep practicing';
+  const avg=r.diffs.length?r.diffs.reduce((a,b)=>a+b,0)/r.diffs.length*1000:0;
+  const total=BARB*SPB,X=t=>(4+92*Math.max(0,Math.min(1,t/total)))+'%';
+  const tl=`<div class="tl">${[1,2,3].map(b=>`<i class="g" style="left:${X(b*SPB)}"></i>`).join('')}
+    ${S.ev.map(e=>`<i class="p" style="left:${X(e.t*SPB)}"></i>`).join('')}
+    ${S.taps.map((t,i)=>`<i class="t${r.used.has(i)?'':' x'}" style="left:${X(t)}"></i>`).join('')}</div>`;
+  $('bigm').textContent=pts+'%';
+  $('hm').textContent=`${rating} · ${S.label}`;
+  $('res').innerHTML=`<div class="pts ${pts>=70?'g':pts>=50?'a':'b'}">+${pts}</div>
+    <div class="res-sub">${r.matched}/${S.ev.length} hits${r.extra?` · ${r.extra} extra tap${r.extra>1?'s':''}`:''}${r.matched?` · avg ${Math.abs(Math.round(avg))} ms ${avg<0?'early':'late'}`:''}</div>
+    ${tl}<div class="res-sub">white = the rhythm · purple = your taps${r.extra?' · red = extra':''}</div>
+    <div class="row"><button class="btn ghost" id="rl2">Hear it again</button><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+  $('rl2').onclick=()=>{ // replay the answer (no scoring effect)
+    initAudio();cancelSeq();const K=S.keys,t0=ctx.currentTime+.15;
+    S.ev.forEach(e=>playPerc(e.l?K.low:K.main,t0+e.t*SPB,.9));
+  };
+}
+addEventListener('keydown',e=>{
+  if(e.code!=='Space'||S.key!=='rhythm'||!$('tap'))return;
+  e.preventDefault();if(!e.repeat)rhTap(e.timeStamp);
+});
+addEventListener('keyup',e=>{if(e.code==='Space'&&S.key==='rhythm'&&$('tap'))e.preventDefault();});
 
 /* ============ VIRTUAL PIANO (88 keys) ============ */
 const PLOW=21,PHIGH=108,PH=190,BARH=300,BARSPEED=140,SONGSPEED=150,NWHITE=52;
