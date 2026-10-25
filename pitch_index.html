@@ -180,6 +180,21 @@ main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:a
 .holdb.live{border-color:var(--line)}
 .hring{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(160,140,255,.45);pointer-events:none;animation:hr 2.1s ease-out forwards}
 @keyframes hr{from{transform:scale(1);opacity:.7}to{transform:scale(1.7);opacity:0}}
+
+.gswrap{position:relative;max-width:560px;margin:26px auto 0}
+.gsin{width:100%;background:var(--card);border:1px solid var(--line);color:var(--fg);border-radius:16px;padding:16px 20px;font:inherit;font-size:20px;outline:0}
+.gsin:focus{border-color:var(--acc)}
+.gsul{position:absolute;left:0;right:0;top:100%;margin-top:6px;background:rgba(20,20,22,.96);border:1px solid var(--line);border-radius:16px;overflow:hidden;z-index:5;text-align:left}
+.gsul:empty{display:none}
+.gsi{padding:12px 20px;cursor:pointer;font-size:17px}.gsi span{color:var(--mut);font-size:14px;margin-left:6px}
+.gsi.on,.gsi:hover{background:rgba(188,77,255,.2)}.gsi.none{color:var(--mut);cursor:default}
+
+.pbar{position:relative;height:22px;max-width:720px;margin:26px auto 0;background:var(--card);border:1px solid var(--line);border-radius:11px;cursor:pointer;overflow:hidden}
+.pbar .un{position:absolute;left:0;top:0;bottom:0;background:rgba(188,77,255,.2)}
+.pbar #pfill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc)}
+.pbar .tk{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--bg)}
+.pl{display:flex;max-width:720px;margin:6px auto 22px;font-size:12px;font-weight:700}
+.pl span{flex:1;text-align:right}
 </style>
 </head>
 <body>
@@ -412,7 +427,7 @@ function playArp(root,q){
 
 /* ----- timed sequences (cancelled whenever the round ends / menu opens) ----- */
 let timers=[],seqId=0;
-function cancelSeq(){seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
+function cancelSeq(){try{spStop();}catch(e){}seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
 function later(ms,fn){const id=seqId;timers.push(setTimeout(()=>{if(id===seqId)fn();},ms));}
 function seq(steps){ // steps: [[ms,fn],...] — waits for the piano to be ready first
   cancelSeq();const id=seqId;
@@ -473,17 +488,18 @@ function menu(){
    <button class="card" onclick="startGame('chord')"><span class="n">03</span><div><h3>Name the chord</h3><p>Played 3 times, then arpeggiated. Root and quality: major, minor, augmented or diminished.</p></div><span class="best">${b('chord')}</span></button>
    <button class="card" onclick="openPiano()"><span class="n">04</span><div><h3>Piano</h3><p>All 88 keys. Slide, play chords, pick a key, or play a MIDI song.</p></div></button>
    <button class="card" onclick="startGame('hl')"><span class="n">05</span><div><h3>Higher or lower</h3><p>Two notes. Is the second higher, lower, or the same?</p></div><span class="best">${b('hl')}</span></button>
-   <button class="card" onclick="startGame('odd')"><span class="n">06</span><div><h3>Odd one out</h3><p>Five buttons play a note. Four match, one is a little flat or sharp. Find it.</p></div><span class="best">${b('odd')}</span></button>
+   <button class="card" onclick="startGame('odd')"><span class="n">06</span><div><h3>Odd one out</h3><p>Five buttons play a note. Four match, one is a little flat or sharp. Find it fast: out of 1000.</p></div><span class="best">${b('odd')}</span></button>
    <button class="card" onclick="startGame('rhythm')"><span class="n">07</span><div><h3>Rhythm</h3><p>Hear a percussion pattern, then tap it back. Scored on timing.</p></div><span class="best">${b('rhythm')}</span></button>
    <button class="card" onclick="startGame('spatial')"><span class="n">08</span><div><h3>8D audio</h3><p>Headphones on. A rhythm plays around your head, shrinking to one note. Drag the dot to where it came from.</p></div><span class="best">${b('spatial')}</span></button>
    <button class="card" onclick="startGame('hold')"><span class="n">09</span><div><h3>Hold it</h3><p>Hold the button down for exactly the time you are given. Five rounds, scored to the millisecond.</p></div><span class="best">${b('hold')}</span></button>
+   <button class="card" onclick="startGame('song')"><span class="n">10</span><div><h3>Song Guesser</h3><p>Hear a tiny clip of one of the 100 greatest songs ever. Each skip costs points. Type to find the title.</p></div><span class="best">${b('song')}</span></button>
   </div>`;
 }
 function startGame(k){
   initAudio();
   pvStop();
   S={key:k,round:0,score:0,rounds:({hl:20,odd:10,rhythm:10,spatial:10,hold:5})[k]||5};
-  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm,spatial:gSpatial,hold:gHold})[k]();
+  ({match:gMatch,note:gNote,chord:gChord,hl:gHL,odd:gOdd,rhythm:gRhythm,spatial:gSpatial,hold:gHold,song:gSong})[k]();
 }
 
 /* ============ GAME 1: MATCH THE TONE ============ */
@@ -674,9 +690,9 @@ function gHL(){
 const ODD_CENTS=Array.from({length:10},(_,i)=>50-i*5);   // 10 rounds: 50, 45, 40 ... 5 cents off
 const OD_COL=[['Red','#ff5d5d'],['Yellow','#ffe27a'],['Green','#4ade80'],['Blue','#5ad1ff'],['Purple','#bc4dff']];
 function gOdd(){
-  S.title='Odd one out';S.max=10;
+  S.title='Odd one out';S.max=100;
   S.start=()=>{
-    S.cents=ODD_CENTS[S.round];S.odd=ri(0,4);S.sign=Math.random()<.5?1:-1;
+    S.cents=ODD_CENTS[S.round];let od;do{od=ri(0,4);}while(od===S.lastOdd);S.odd=S.lastOdd=od;S.sign=Math.random()<.5?1:-1;
     S.base=ri(52,72);S.done=false;S.heard=false;S.busy=false;
     const pitch=i=>S.base+(i===S.odd?S.sign*S.cents/100:0);
     const btns=OD_COL.map(([nm,c],i)=>{
@@ -684,7 +700,7 @@ function gOdd(){
       return `<button class="ob dim" data-i="${i}" aria-label="${nm}" style="left:${50+37*Math.cos(a)}%;top:${50+37*Math.sin(a)}%;background:${c};--c:${c}">${i+1}</button>`;
     }).join('');
     M.innerHTML=header('Odd one out')+`<div class="stage">
-      <div class="hint" id="hm">Four buttons play the same pitch. One is off. Press Listen, then pick it.</div>
+      <div class="hint" id="hm">Four buttons play the same pitch. One is off. Press Listen, then pick it. Faster answers earn more (up to 100).</div>
       <div class="odd" id="odd">${btns}<button class="btn acc listen" id="lis">Listen</button></div>
       <div class="result" id="res"></div></div>`;
     const all=[...document.querySelectorAll('#odd .ob')];
@@ -695,15 +711,15 @@ function gOdd(){
         steps.push([i*900,()=>{playPiano(pitch(i),.75,.8);b.classList.add('lit');}]);
         steps.push([i*900+750,()=>b.classList.remove('lit')]);
       });
-      steps.push([4*900+800,()=>{S.busy=false;S.heard=true;$('lis').disabled=S.done;$('lis').textContent='Listen again';all.forEach(b=>b.classList.remove('dim'));}]);
+      steps.push([4*900+800,()=>{S.busy=false;S.heard=true;$('lis').disabled=S.done;$('lis').textContent='Listen again';all.forEach(b=>b.classList.remove('dim'));S.tH=performance.now();}]);
       seq(steps);
     };
     all.forEach(b=>b.onclick=()=>{
       if(!S.heard||S.busy||S.done)return;S.done=true;$('lis').disabled=true;
-      const i=+b.dataset.i,ok=i===S.odd,pts=ok?10:0;
+      const i=+b.dataset.i,ok=i===S.odd,tt=(performance.now()-S.tH)/1000,pts=ok?Math.round(100*(.4+.6*Math.exp(-tt/8))):0;
       S.score+=pts;$('sc').textContent=S.score;
       all.forEach((x,j)=>{if(j===S.odd)x.classList.add('good');else if(x===b)x.classList.add('bad');else x.classList.add('dim');});
-      $('hm').textContent=`${OD_COL[S.odd][0]} (${S.odd+1}) was ${S.cents} cent${S.cents>1?'s':''} ${S.sign>0?'sharp':'flat'}`;
+      $('hm').textContent=`${OD_COL[S.odd][0]} (${S.odd+1}) was ${S.cents} cent${S.cents>1?'s':''} ${S.sign>0?'sharp':'flat'} · ${tt.toFixed(1)} s to answer`;
       $('res').innerHTML=`<div class="pts ${ok?'g':'b'}">+${pts}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     });
@@ -1018,6 +1034,198 @@ addEventListener('pointerup',e=>holdUp(e.timeStamp));
 addEventListener('pointercancel',e=>holdUp(e.timeStamp));
 addEventListener('keydown',e=>{if(e.code!=='Space'||S.key!=='hold'||!$('hb'))return;e.preventDefault();if(!e.repeat)holdDown(e.timeStamp);});
 addEventListener('keyup',e=>{if(e.code!=='Space'||S.key!=='hold'||!$('hb'))return;e.preventDefault();holdUp(e.timeStamp);});
+
+/* ============ GAME 10: SONG GUESSER ============ */
+// The first 100 songs of the Spotify playlist "Top 10,000 Songs of All Time" (Acclaimed Music), as "Title~Artist".
+const SONG_LIST=("Like a Rolling Stone~Bob Dylan|Smells Like Teen Spirit~Nirvana|A Day In The Life~The Beatles|Good Vibrations~The Beach Boys|Johnny B Goode~Chuck Berry|Respect~Aretha Franklin|Be My Baby~The Ronettes|What's Going On~Marvin Gaye|I Heard It Through The Grapevine~Marvin Gaye|(I Can't Get No) Satisfaction~The Rolling Stones|Billie Jean~Michael Jackson|Heartbreak Hotel~Elvis Presley|Born to Run~Bruce Springsteen|My Generation~The Who|Love Will Tear Us Apart~Joy Division|God Only Knows~The Beach Boys|(Sittin' On) the Dock of the Bay~Otis Redding|Hey Ya!~Outkast|Anarchy In The UK~Sex Pistols|Paper Planes~M.I.A.|London Calling~The Clash|Sympathy For The Devil~The Rolling Stones|Strawberry Fields Forever~The Beatles|Tutti Frutti~Little Richard|Stairway To Heaven~Led Zeppelin|The Message~Grandmaster Flash & The Furious Five|What'd I Say~Ray Charles|Imagine~John Lennon|A Change Is Gonna Come~Sam Cooke|Heroes~David Bowie|When Doves Cry~Prince|Superstition~Stevie Wonder|Common People~Pulp|Gimme Shelter~The Rolling Stones|Strange Fruit~Billie Holiday|You Really Got Me~The Kinks|Crazy In Love~Beyoncé|Seven Nation Army~The White Stripes|Losing My Religion~R.E.M.|God Save The Queen~Sex Pistols|Bohemian Rhapsody~Queen|Blue Monday~New Order|Purple Haze~Jimi Hendrix|Louie Louie~Kingsmen|I Want You Back~The Jackson 5|Crazy~Gnarls Barkley|You've Lost That Lovin' Feelin'~The Righteous Brothers|Hey Jude~The Beatles|Waterloo Sunset~The Kinks|Take Me Out~Franz Ferdinand|Get Ur Freak On~Missy Elliott|That'll Be the Day~Buddy Holly|Light My Fire~The Doors|I Feel Love~Donna Summer|There Is a Light That Never Goes Out~The Smiths|Space Oddity~David Bowie|Stand By Me~Ben E. King|Mr. Tambourine Man~The Byrds|Bitter Sweet Symphony~The Verve|(We're Gonna) Rock Around The Clock~Bill Haley|Layla~Derek & The Dominos|River Deep - Mountain High~Ike & Tina Turner|Unfinished Sympathy~Massive Attack|Loser~Beck|Fight The Power~Public Enemy|Once in a Lifetime~Talking Heads|Paranoid Android~Radiohead|Whole Lotta Love~Led Zeppelin|Alright~Kendrick Lamar|House of the Rising Sun~The Animals|Walk on the Wild Side~Lou Reed|Hotel California~Eagles|99 Problems~JAY-Z|Dancing On My Own~Robyn|Formation~Beyoncé|Let's Stay Together~Al Green|Jumpin' Jack Flash~The Rolling Stones|All My Friends~LCD Soundsystem|California Dreamin'~The Mamas & The Papas|Blitzkrieg Bop~Ramones|Dancing In The Street~Martha Reeves|Hound Dog~Elvis Presley|Oblivion~Grimes|I Want To Hold Your Hand~The Beatles|All Along the Watchtower~Jimi Hendrix|Nothing Compares 2 U~Sinéad O'Connor|How Soon Is Now?~The Smiths|Sweet Child O' Mine~Guns N' Roses|For What It's Worth~Buffalo Springfield|The Weight~The Band|Runaway~Kanye West|Ghost Town~The Specials|Royals~Lorde|Get Lucky~Daft Punk|Suspicious Minds~Elvis Presley|Life On Mars?~David Bowie|Reach Out I'll Be There~Four Tops|That's All Right~Elvis Presley|Get Up (I Feel Like Being a) Sex Machine~James Brown|Wonderwall~Oasis").split('|').map(x=>x.split('~'));
+const SONG_PTS=[200,170,140,110,80,60,40,20],SONG_DUR=[.1,.2,.5,1,2,3,5,10];
+const normS=t=>t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+const SONG_N=SONG_LIST.map(([t,a])=>normS(t+' '+a));
+/* Spotify embed, hidden in the background. Track ids are looked up once per song (iTunes search -> Odesli) and cached in localStorage. */
+const SP={c:null,api:null,tok:0,active:false,ready:null};
+function spApi(){
+  if(SP.api)return SP.api;
+  SP.api=new Promise((res,rej)=>{
+    window.onSpotifyIframeApiReady=api=>res(api);
+    const sc=document.createElement('script');sc.src='https://open.spotify.com/embed/iframe-api/v1';sc.async=true;
+    sc.onerror=()=>{SP.api=null;rej(new Error('Spotify API blocked'));};document.body.appendChild(sc);
+    setTimeout(()=>{SP.api=null;rej(new Error('Spotify API timeout'));},12000);
+  });
+  return SP.api;
+}
+async function spLoad(id){
+  const api=await spApi(),uri='spotify:track:'+id;
+  return new Promise((res,rej)=>{
+    SP.ready=res;const to=setTimeout(()=>rej(new Error('embed timeout')),9000),done=()=>{clearTimeout(to);res();};SP.ready=done;
+    if(SP.c){SP.c.loadUri(uri);return;}
+    let el=document.getElementById('spembed');
+    if(!el){el=document.createElement('div');el.style.cssText='position:fixed;right:0;bottom:0;width:300px;height:80px;opacity:.01;pointer-events:none;z-index:-1;overflow:hidden';const inner=document.createElement('div');el.id='spembed';el.appendChild(inner);document.body.appendChild(el);}
+    api.createController(el.firstChild,{uri,width:300,height:80},c=>{
+      SP.c=c;
+      c.addListener('ready',()=>{if(SP.ready)SP.ready();});
+      c.addListener('playback_update',e=>{if(SP.onUp)SP.onUp(e.data);});
+    });
+  });
+}
+function spStop(){SP.tok++;clearTimeout(SP.pt);if(SP.src){try{SP.src.stop();}catch(e){}SP.src=null;}if(SP.c&&SP.active){try{SP.c.pause();}catch(e){}}SP.active=false;}
+function spClip(off,dur){                    // play dur seconds from off; the clock starts when the embed reports it is really playing
+  spStop();const tk=SP.tok;SP.active=true;S.t0=null;S.cd=dur;
+  if(S.mode==='it')return itClip(off,dur,tk);
+  SP.onUp=d=>{
+    if(tk!==SP.tok||d.isPaused||S.t0)return;
+    S.t0=performance.now();
+    SP.pt=setTimeout(()=>{if(tk===SP.tok){try{SP.c.pause();}catch(e){}SP.active=false;S.t0=-1;}},dur*1000);
+  };
+  try{SP.c.seek(off);SP.c.play();}catch(e){}
+  SP.pt=setTimeout(()=>{if(tk===SP.tok&&!S.t0){try{SP.c.pause();}catch(e){}SP.active=false;}},4000);
+}
+const IT={},IT_B={};
+async function itInfo(i){                       // Apple search: gives a link for song.link and a 30 s preview file
+  if(IT[i])return IT[i];
+  const [t,a]=SONG_LIST[i],nt=normS(t),na=normS(a).split(' ')[0];
+  const r=await fetch('https://itunes.apple.com/search?media=music&entity=song&limit=10&term='+encodeURIComponent(t+' '+a));
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const rs=(await r.json()).results||[];
+  const hit=rs.find(x=>normS(x.trackName).indexOf(nt.slice(0,8))===0&&normS(x.artistName).includes(na))||rs.find(x=>x.previewUrl&&normS(x.artistName).includes(na));
+  if(!hit)throw new Error('song not found');
+  return IT[i]=hit;
+}
+async function itBuf(i){
+  if(IT_B[i])return IT_B[i];
+  initAudio();const h=await itInfo(i);
+  if(!h.previewUrl)throw new Error('no preview file');
+  const r=await fetch(h.previewUrl);if(!r.ok)throw new Error('preview HTTP '+r.status);
+  return IT_B[i]=await ctx.decodeAudioData(await r.arrayBuffer());
+}
+function itClip(off,dur,tk){
+  initAudio();const buf=IT_B[S.idx];if(!buf)return;
+  const o=Math.max(0,Math.min(off,buf.duration-dur-.2)),n=ctx.currentTime+.03,src=ctx.createBufferSource(),env=ctx.createGain();
+  src.buffer=buf;env.gain.setValueAtTime(0,n);env.gain.linearRampToValueAtTime(.9,n+.003);env.gain.setValueAtTime(.9,n+dur-.01);env.gain.linearRampToValueAtTime(0,n+dur);
+  src.connect(env);env.connect(master);src.start(n,o);src.stop(n+dur+.02);SP.src=src;
+  S.t0=performance.now()+30;
+  SP.pt=setTimeout(()=>{if(tk===SP.tok){S.t0=-1;SP.active=false;SP.src=null;}},dur*1000+70);
+}
+async function spResolve(i){
+  let c=null;try{c=localStorage.getItem('sp2_'+i);}catch(e){}
+  if(c)return c;
+  const h=await itInfo(i),ac=new AbortController(),to=setTimeout(()=>ac.abort(),7000);
+  try{
+    const o=await fetch('https://api.song.link/v1-alpha.1/links?userCountry=US&url='+encodeURIComponent(h.trackViewUrl),{signal:ac.signal});
+    if(!o.ok)throw new Error('HTTP '+o.status);
+    const oj=await o.json(),sp=oj.linksByPlatform&&oj.linksByPlatform.spotify,m=sp&&/track\/([A-Za-z0-9]+)/.exec(sp.url||'');
+    if(!m)throw new Error('no Spotify id');
+    try{localStorage.setItem('sp2_'+i,m[1]);}catch(e){}
+    return m[1];
+  }finally{clearTimeout(to);}
+}
+async function spPick(used){
+  for(let n=0;n<6;n++){
+    let i;do{i=ri(0,SONG_LIST.length-1);}while(used.has(i));
+    try{await itInfo(i);}catch(e){S.err='Apple search: '+e.message;continue;}
+    let id=null;
+    if(!SP.bad){try{id=await spResolve(i);}catch(e){S.err='Spotify id lookup: '+(e.name==='AbortError'?'timed out':e.message);}}
+    return {idx:i,id};
+  }
+  return null;
+}
+async function songReady(c){                    // Spotify embed first; if anything fails, play Apple's 30 s preview instead
+  if(c.id&&!SP.bad){try{await spLoad(c.id);return 'sp';}catch(e){S.err='Spotify embed: '+e.message;SP.bad=true;}}
+  await itBuf(c.idx);return 'it';
+}
+function gSong(){
+  S.title='Song Guesser';S.max=200;S.used=new Set();S.pre=null;
+  S.start=()=>{
+    const rt=S.rt=(S.rt||0)+1;S.stage=0;S.done=false;S.wrong=[];S.cur=false;
+    M.innerHTML=header('Song Guesser')+`<div class="stage">
+      <div class="big" id="bigm" style="font-size:clamp(40px,7vw,80px)">Loading…</div>
+      <div class="hint" id="hm">Finding a song and loading the Spotify player in the background.</div>
+      <div class="pbar" id="pbar" title="Click to replay"></div><div class="pl" id="pl"></div>
+      <div class="row"><button class="btn acc" id="gsp" disabled>▶ Play</button><button class="btn ghost" id="gsn" disabled>Skip ▸ longer clip</button></div>
+      <div class="gswrap"><input class="gsin" id="gsin" placeholder="Type the title or the artist…" autocomplete="off" disabled><div class="gsul" id="gsul"></div></div>
+      <div class="res-sub" id="gsw"></div>
+      <div class="result" id="res"></div></div>`;
+    const ok=()=>S.key==='song'&&S.rt===rt;
+    gsShow();
+    (async()=>{
+      let c=S.pre?await S.pre:null,mode=null;S.pre=null;
+      for(let n=0;n<3&&!mode&&ok();n++){
+        if(!c)c=await spPick(S.used);
+        if(!c)break;
+        try{mode=await songReady(c);}catch(e){S.err='Preview: '+e.message;S.used.add(c.idx);c=null;}
+      }
+      if(!ok())return;
+      if(!mode)c=null;else S.mode=mode;
+      if(!c){$('bigm').textContent='No clip';$('hm').innerHTML='Could not load a song. '+esc(S.err||'')+'<br>This game needs an internet connection.';$('gsp').style.display='none';$('gsn').style.display='none';$('res').innerHTML='<div class="row"><button class="btn ghost" onclick="menu()">Menu</button></div>';return;}
+      S.used.add(c.idx);S.idx=c.idx;S.cur=true;S.off=rnd(2,19);
+      $('bigm').textContent='?';$('hm').textContent='Press Play. Each skip unlocks a longer clip but is worth fewer points.';
+      $('gsin').disabled=false;$('gsp').disabled=false;$('gsn').disabled=false;
+      if(S.round+1<S.rounds)S.pre=spPick(S.used);      // look up the next song while this one is being played
+    })();
+    $('gsp').onclick=()=>{if(!S.done&&S.cur)gsPlay();};
+    $('pbar').onclick=()=>{if(!S.done&&S.cur)gsPlay();};
+    $('gsn').onclick=()=>{if(!S.done&&S.cur)gsNext();};
+    const inp=()=>$('gsin');
+    const list=()=>{
+      const q=normS(inp().value).split(' ').filter(Boolean),ul=$('gsul');
+      if(!q.length||S.done){ul.innerHTML='';S.sug=[];return;}
+      const m=[];SONG_N.forEach((n,i)=>{if(q.every(w=>n.includes(w)))m.push([i,n.indexOf(q[0])]);});
+      m.sort((a,b)=>a[1]-b[1]);S.sug=m.slice(0,6).map(x=>x[0]);S.hi=0;
+      ul.innerHTML=S.sug.length?S.sug.map((i,k)=>`<div class="gsi${k?'':' on'}" data-i="${i}"><b>${esc(SONG_LIST[i][0])}</b> <span>${esc(SONG_LIST[i][1])}</span></div>`).join(''):'<div class="gsi none">No match</div>';
+      ul.querySelectorAll('.gsi[data-i]').forEach(el=>el.onpointerdown=e=>{e.preventDefault();gsGuess(+el.dataset.i);});
+    };
+    inp().addEventListener('input',list);
+    inp().addEventListener('keydown',e=>{
+      if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!(S.sug||[]).length)return;S.hi=(S.hi+(e.key==='ArrowDown'?1:S.sug.length-1))%S.sug.length;document.querySelectorAll('#gsul .gsi').forEach((el,k)=>el.classList.toggle('on',k===S.hi));}
+      else if(e.key==='Enter'){e.preventDefault();if((S.sug||[]).length)gsGuess(S.sug[S.hi]);}
+    });
+  };
+  S.start();
+}
+function gsShow(){
+  const bar=$('pbar');if(!bar)return;
+  const n=SONG_DUR.length;
+  bar.innerHTML=`<div class="un" style="width:${(S.stage+1)/n*100}%"></div><i id="pfill"></i>`+SONG_DUR.map((d,i)=>`<b class="tk" style="left:${(i+1)/n*100}%"></b>`).join('');
+  $('pl').innerHTML=SONG_DUR.map((d,i)=>`<span style="color:${i<=S.stage?'var(--fg)':'var(--mut)'}">${d}s</span>`).join('');
+  const w=$('gsw');if(w)w.innerHTML=S.wrong.map(i=>'✗ '+esc(SONG_LIST[i][0])+' – '+esc(SONG_LIST[i][1])).join('<br>');
+  $('gsn').style.display=S.stage>=n-1?'none':'';
+  if(S.cur&&!S.done)$('hm').textContent=`Clip ${S.stage+1} of ${n} (${SONG_DUR[S.stage]} s) · a correct guess now earns ${SONG_PTS[S.stage]}`;
+}
+function gsAnim(tk){                           // fill the bar piecewise: every tick is one equal slot, however short the clip
+  const f=$('pfill');if(!f||S.animTk!==tk)return;
+  const n=SONG_DUR.length;let frac=0;
+  if(S.t0>0||S.t0===-1){
+    const t=S.t0===-1?S.cd:Math.min(S.cd,(performance.now()-S.t0)/1000);
+    let k=0;while(k<n-1&&t>SONG_DUR[k]+1e-9)k++;
+    const prev=k?SONG_DUR[k-1]:0;frac=(k+Math.min(1,(t-prev)/(SONG_DUR[k]-prev)))/n;
+  }
+  f.style.width=frac*100+'%';
+  if(S.t0!==-1)requestAnimationFrame(()=>gsAnim(tk));
+}
+function gsPlay(){spClip(S.off,SONG_DUR[S.stage]);const tk=S.animTk=(S.animTk||0)+1;const f=$('pfill');if(f)f.style.width='0';gsAnim(tk);}
+function gsNext(){
+  if(S.stage>=SONG_DUR.length-1){gsReveal(false);return;}
+  S.stage++;gsShow();gsPlay();
+}
+function gsGuess(i){
+  if(S.done||!S.cur)return;
+  if(i===S.idx)return gsReveal(true);
+  if(!S.wrong.includes(i))S.wrong.push(i);
+  $('gsin').value='';$('gsul').innerHTML='';S.sug=[];
+  if(S.stage>=SONG_DUR.length-1)return gsReveal(false);
+  gsNext();
+}
+function gsReveal(win){
+  S.done=true;const pts=win?SONG_PTS[S.stage]:0;
+  S.score+=pts;$('sc').textContent=S.score;
+  const [t,a]=SONG_LIST[S.idx];
+  spStop();S.animTk++;
+  $('gsin').disabled=true;$('gsul').innerHTML='';$('gsn').style.display='none';$('gsp').style.display='none';
+  $('bigm').textContent=t;
+  $('hm').textContent=a+(win?` · guessed on clip ${S.stage+1} (${SONG_DUR[S.stage]} s)`:' · not guessed');
+  $('res').innerHTML=`<div class="pts ${win?(pts>=110?'g':'a'):'b'}">+${pts}</div>
+    <div class="row"><button class="btn ghost" id="gsr">Hear it</button><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
+  $('gsr').onclick=()=>{spClip(S.off,10);};
+}
 
 /* ============ GAME 8: 8D AUDIO ============ */
 const SP_NOTES=[12,10,8,7,6,5,4,3,2,1];     // the rhythm gets shorter every round, ending on a single note
@@ -1589,7 +1797,96 @@ function trClock(W,H,pal){
     g.fillStyle=w.c;g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,R,from-.004,to+.004);g.closePath();g.fill();
   });
 }
-const TR_FX=[trCurtains,trBalls,trPixels,trRings,trStripes,trWave,trDoors,trDiamonds,trChecker,trRows,trClock];
+function annulus(g,W,H,cx,cy,rin,rout){g.beginPath();g.rect(0,0,W,H);if(rout>0){g.moveTo(cx+rout,cy);g.arc(cx,cy,rout,0,Math.PI*2,true);}g.fill('evenodd');}
+// a round hole closes down to a point, then opens again
+function trIris(W,H,pal){
+  const R=Math.hypot(W,H)/2+4,cx=W/2,cy=H/2;
+  return (g,p)=>{const r=p<.5?R*(1-eo(p*2)):R*eo((p-.5)*2),b=Math.min(90,r);
+    g.fillStyle=pal[1];annulus(g,W,H,cx,cy,0,r+b);g.fillStyle=pal[0];annulus(g,W,H,cx,cy,0,r);};
+}
+// a zigzag-edged wall sweeps across, then leaves the same way
+function trZig(W,H,pal){
+  const n=12,bh=H/n,tooth=Math.max(30,W/16);
+  const poly=(g,xf,right)=>{g.beginPath();if(!right){g.moveTo(0,0);for(let i=0;i<=n;i++)g.lineTo(xf-(i%2?tooth:0),i*bh);g.lineTo(0,H);}else{g.moveTo(W,0);for(let i=0;i<=n;i++)g.lineTo(xf+(i%2?tooth:0),i*bh);g.lineTo(W,H);}g.closePath();g.fill();};
+  return (g,p)=>{
+    if(p<.5){const x=-tooth+(W+tooth*2)*eo(p*2);g.fillStyle=pal[1];poly(g,x-45,false);g.fillStyle=pal[0];poly(g,x,false);}
+    else{const x=-tooth+(W+tooth*2)*ei((p-.5)*2);g.fillStyle=pal[1];poly(g,x+45,true);g.fillStyle=pal[0];poly(g,x,true);}
+  };
+}
+// dots swirl outward along a spiral, then vanish along it
+function trSpiral(W,H,pal){
+  const px=Math.max(46,Math.min(W,H)/9),nx=Math.ceil(W/px)+1,ny=Math.ceil(H/px)+1,cells=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){const dx=x*px-W/2,dy=y*px-H/2;cells.push({x:x*px,y:y*px,k:Math.hypot(dx,dy)+(Math.atan2(dy,dx)+Math.PI)/6.2832*px*3});}
+  const mx=Math.max(...cells.map(c=>c.k));cells.forEach((c,i)=>{c.d=c.k/mx;c.c=pal[i%pal.length];});
+  return (g,p)=>cells.forEach(c=>{
+    const s=p<.5?clamp01((p*2-c.d*.6)/.4):1-clamp01(((p-.5)*2-c.d*.6)/.4);
+    if(s<=0)return;g.fillStyle=c.c;g.beginPath();g.arc(c.x,c.y,px*.78*s,0,6.2832);g.fill();
+  });
+}
+// nested rectangles grow from the middle, then shrink back into it
+function trNest(W,H,pal){
+  const K=6;
+  return (g,p)=>{for(let k=0;k<K;k++){
+    let q;if(p<.5){const dl=k*.09;q=eo(clamp01((p*2-dl)/(1-dl)));}else{const dl=(K-1-k)*.09;q=1-ei(clamp01(((p-.5)*2-dl)/(1-dl)));}
+    if(q<=0)continue;g.fillStyle=pal[k%pal.length];g.fillRect(W/2-W*q/2-.5,H/2-H*q/2-.5,W*q+1,H*q+1);}};
+}
+// vertical slats flip open in a wave from left to right
+function trSlats(W,H,pal){
+  const n=16,w=W/n;
+  return (g,p)=>{for(let i=0;i<n;i++){const d=i/n*.5;
+    const s=p<.5?clamp01((p*2-d)/.5):1-clamp01(((p-.5)*2-d)/.5);if(s<=0)continue;
+    g.fillStyle=pal[i%pal.length];const z=w*s+(s>=1?1:0);g.fillRect(i*w+(w-z)/2,0,z,H);}};
+}
+// soft bubbles bloom everywhere and then pop
+function trBubbles(W,H,pal){
+  const px=Math.max(W,H)/7,nx=Math.ceil(W/px)+1,ny=Math.ceil(H/px)+1,bs=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++)bs.push({x:x*px+(Math.random()-.5)*px*.5,y:y*px+(Math.random()-.5)*px*.5,d:Math.random()*.5,e:Math.random()*.5,c:pick(pal)});
+  return (g,p)=>bs.forEach(b=>{
+    const s=p<.5?eo(clamp01((p*2-b.d)/(1-b.d))):1-ei(clamp01(((p-.5)*2-b.e)/(1-b.e)));if(s<=0)return;
+    g.fillStyle=b.c;g.globalAlpha=.95;g.beginPath();g.arc(b.x,b.y,px*1.4*s,0,6.2832);g.fill();g.globalAlpha=1;
+  });
+}
+// a field of triangles pops in and out
+function trTris(W,H,pal){
+  const px=Math.max(50,Math.min(W,H)/9),nx=Math.ceil(W/px),ny=Math.ceil(H/px),ts=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){const X=x*px,Y=y*px;
+    ts.push({pts:[[X,Y],[X+px,Y],[X,Y+px]],o:Math.random()*.55,o2:Math.random()*.55,c:pick(pal)});
+    ts.push({pts:[[X+px,Y+px],[X+px,Y],[X,Y+px]],o:Math.random()*.55,o2:Math.random()*.55,c:pick(pal)});}
+  return (g,p)=>ts.forEach(t=>{
+    const s=p<.5?clamp01((p*2-t.o)/.4):1-clamp01(((p-.5)*2-t.o2)/.4);if(s<=0)return;
+    const cx=(t.pts[0][0]+t.pts[1][0]+t.pts[2][0])/3,cy=(t.pts[0][1]+t.pts[1][1]+t.pts[2][1])/3,k=s*1.04;
+    g.fillStyle=t.c;g.beginPath();t.pts.forEach(([x,y],i)=>{const X=cx+(x-cx)*k,Y=cy+(y-cy)*k;i?g.lineTo(X,Y):g.moveTo(X,Y);});g.closePath();g.fill();
+  });
+}
+// a slanted beam of light wipes the screen, then wipes it clean
+function trBeam(W,H,pal){
+  const L=Math.hypot(W,H),ang=(Math.random()<.5?-1:1)*.5;
+  return (g,p)=>{g.save();g.translate(W/2,H/2);g.rotate(ang);
+    if(p<.5){const e=-L/2+L*eo(p*2);g.fillStyle=pal[0];g.fillRect(-L/2,-L/2,e+L/2,L);g.fillStyle=pal[1];g.fillRect(e-55,-L/2,55,L);}
+    else{const e=-L/2+L*ei((p-.5)*2);g.fillStyle=pal[0];g.fillRect(e,-L/2,L/2-e,L);g.fillStyle=pal[1];g.fillRect(e,-L/2,55,L);}
+    g.restore();};
+}
+// rays burst out from the centre like a sunburst, then retract outward
+function trBurst(W,H,pal){
+  const n=28,sp=Math.PI*2/n,R=Math.hypot(W,H)/2+4,cx=W/2,cy=H/2,rs=[];
+  for(let i=0;i<n;i++)rs.push({d:Math.random()*.4,e:Math.random()*.4,c:pal[i%pal.length]});
+  return (g,p)=>rs.forEach((r,i)=>{
+    let rin=0,rout=R;
+    if(p<.5)rout=R*eo(clamp01((p*2-r.d)/(1-r.d)));else rin=R*ei(clamp01(((p-.5)*2-r.e)/(1-r.e)));
+    if(rout<=rin)return;const a0=i*sp-.003,a1=(i+1)*sp+.003;
+    g.fillStyle=r.c;g.beginPath();g.arc(cx,cy,rout,a0,a1);g.arc(cx,cy,rin,a1,a0,true);g.closePath();g.fill();
+  });
+}
+// plus signs swell until they fuse into a wall, then thin away
+function trCross(W,H,pal){
+  const px=Math.max(50,Math.min(W,H)/9),nx=Math.ceil(W/px),ny=Math.ceil(H/px),cs=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++)cs.push({x:x*px,y:y*px,d:(x/nx+y/ny)/2*.45+Math.random()*.15,c:pal[(x+y)%pal.length]});
+  return (g,p)=>cs.forEach(c=>{
+    const s=p<.5?clamp01((p*2-c.d)/.4):1-clamp01(((p-.5)*2-(.6-c.d))/.4);if(s<=0)return;
+    const t=px*s+(s>=1?1:0);g.fillStyle=c.c;g.fillRect(c.x,c.y+(px-t)/2,px+(s>=1?1:0),t);g.fillRect(c.x+(px-t)/2,c.y,t,px+(s>=1?1:0));
+  });
+}
+const TR_FX=[trCurtains,trBalls,trPixels,trRings,trStripes,trWave,trDoors,trDiamonds,trChecker,trRows,trClock,trIris,trZig,trSpiral,trNest,trSlats,trBubbles,trTris,trBeam,trBurst,trCross];
 function trRun(swap){
   if(TR.busy)return;TR.busy=true;
   let cv=document.getElementById('trc');
