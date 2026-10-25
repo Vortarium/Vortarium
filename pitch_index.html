@@ -59,7 +59,8 @@ input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;bac
 .bk:hover{background:#3a3a40}
 .kn{position:absolute;left:0;right:0;bottom:5px;text-align:center;font-size:clamp(6px,1.1vw,11px);font-weight:700;font-style:normal;color:#6b6b75;pointer-events:none;line-height:1}
 .bk .kn{color:#a0a0aa}
-.nonames .kn,.nonames .nm{display:none}
+body.nonames .kn,body.nonames .nm{display:none!important}
+.pb .nm{writing-mode:vertical-rl;transform:rotate(180deg);font-size:clamp(5px,.7vw,9px);margin-top:1px}
 .pbtn{background:none;font-family:inherit;cursor:pointer}
 .pbtn:hover{border-color:var(--mut)}
 .pw .kl,.pb .kl,.pw .kn2,.pb .kn2{display:block;font-style:normal;line-height:1.15}
@@ -170,7 +171,8 @@ main>.top,main>.bar,main>.stage{max-width:1100px;margin-left:auto;margin-right:a
 .pad.hit{background:var(--acc);color:#000;transform:scale(.97)}.pad.bad{background:var(--bad);color:#000}
 .pad:disabled{opacity:.3;cursor:default}
 .joy{position:relative;width:min(400px,80vw);aspect-ratio:1;margin:6px auto 22px;border-radius:50%;border:2px solid var(--line);background:rgba(20,20,22,.6);touch-action:none;cursor:crosshair}
-.joy .ring{position:absolute;inset:25%;border:1px dashed var(--line);border-radius:50%}
+.joy .ring{position:absolute;inset:10%;border:4px solid #2a2a2f;border-radius:50%;pointer-events:none}
+.pa{position:absolute;width:28px;height:28px;transform:translate(-50%,-50%);border-radius:50%;background:#fff;color:#000;font-weight:800;font-size:13px;display:grid;place-items:center;pointer-events:none;box-shadow:0 0 14px rgba(255,255,255,.5)}
 .jl{position:absolute;font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.1em}
 .jl.f{top:10px;left:50%;transform:translateX(-50%)}.jl.b{bottom:10px;left:50%;transform:translateX(-50%)}.jl.l{left:12px;top:50%;transform:translateY(-50%)}.jl.r{right:12px;top:50%;transform:translateY(-50%)}
 .head{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);border-radius:50%;background:var(--card);border:2px solid var(--mut)}
@@ -238,7 +240,7 @@ function parseSF2(buf){
   const rec=(k,size,fn)=>{const [o,s]=ch[k],r=[];for(let i=0;i+size<=s;i+=size)r.push(fn(o+i));return r;};
   const [so,ss]=ch.smpl;
   const pcm=(so%2)?new Int16Array(buf.slice(so,so+ss)):new Int16Array(buf,so,ss>>1);
-  const shdr=rec('shdr',46,o=>({start:dv.getUint32(o+20,true),end:dv.getUint32(o+24,true),rate:dv.getUint32(o+36,true),pitch:u8[o+40],corr:dv.getInt8(o+41)}));
+  const shdr=rec('shdr',46,o=>({start:dv.getUint32(o+20,true),end:dv.getUint32(o+24,true),rate:dv.getUint32(o+36,true),ls:dv.getUint32(o+28,true),le:dv.getUint32(o+32,true),pitch:u8[o+40],corr:dv.getInt8(o+41)}));
   const gl=k=>rec(k,4,o=>({op:dv.getUint16(o,true),v:dv.getInt16(o+2,true),lo:u8[o+2],hi:u8[o+3]}));
   const pgen=gl('pgen'),igen=gl('igen');
   const pbag=rec('pbag',4,o=>dv.getUint16(o,true)),ibag=rec('ibag',4,o=>dv.getUint16(o,true));
@@ -265,18 +267,18 @@ function parseSF2(buf){
       let root=get(58,-1);if(root<0)root=(h.pitch===255?60:h.pitch);
       regions.push({sid,kLo:kr?kr.lo:0,kHi:kr?kr.hi:127,vLo,vHi,root,
         scale:get(56,100),tune:get(51,0)*100+get(52,0)+h.corr,
-        pan:Math.max(-1,Math.min(1,get(17,0)/500)),fc:get(8,13500),att:Math.max(0,get(48,0))});
+        pan:Math.max(-1,Math.min(1,get(17,0)/500)),fc:get(8,13500),att:Math.max(0,get(48,0)),loop:(get(54,0)&1)?1:0,atk:Math.min(3,Math.pow(2,get(34,-12000)/1200))});
     });
   });
   return {pcm,shdr,regions,cache:{}};
 }
 /*SF2END*/
 
-function sfBuf(sid){
-  if(sf.cache[sid])return sf.cache[sid];
-  const h=sf.shdr[sid],n=h.end-h.start,buf=ctx.createBuffer(1,n,h.rate),d=buf.getChannelData(0);
-  for(let i=0;i<n;i++)d[i]=sf.pcm[h.start+i]/32768;
-  return sf.cache[sid]=buf;
+function sfBuf(sid,F=sf){
+  if(F.cache[sid])return F.cache[sid];
+  const h=F.shdr[sid],n=h.end-h.start,buf=ctx.createBuffer(1,n,h.rate),d=buf.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=F.pcm[h.start+i]/32768;
+  return F.cache[sid]=buf;
 }
 const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('pitch-sf',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
 const idbReq=async(mode,fn)=>{const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('f',mode),q=fn(t.objectStore('f'));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);});};
@@ -310,9 +312,47 @@ async function useDefaultSF(){
   if(!ok&&ctx&&!sampleMode)await loadSamples();
   setStatus();
 }
+const INSTR={grand:{label:'Grand Piano'},
+  panflute:{label:'Pan Flute',file:'PanFlute.sf2'},
+  atmosphere:{label:'Atmosphere Synth',file:'Atmosphere.sf2'},
+  guitar:{label:'Guitar',file:'Guitar.sf2'},
+  orchestra:{label:'Orchestra',file:'Strings.sf2'},
+  choir:{label:'Choir',file:'Choir.sf2'}};
+let curInst='grand';try{const v=localStorage.getItem('instrument');if(v&&INSTR[v])curInst=v;}catch(e){}
+const instSF={},instP={},instErr={};
+const activeSF=()=>(curInst!=='grand'&&instSF[curInst])||sf;
+function instLoad(key){
+  const I=INSTR[key];if(!I||!I.file)return Promise.resolve(true);
+  if(instSF[key])return Promise.resolve(true);
+  if(instP[key])return instP[key];
+  instP[key]=(async()=>{
+    try{const c=await idbGet('inst:'+key);if(c&&c.buf){instSF[key]=parseSF2(c.buf);instErr[key]=false;setStatus();return true;}}catch(e){}
+    try{const r=await fetch(I.file);if(r.ok){instSF[key]=parseSF2(await r.arrayBuffer());instErr[key]=false;setStatus();return true;}}catch(e){}
+    instErr[key]=true;instP[key]=null;setStatus();return false;
+  })();
+  return instP[key];
+}
+async function instFile(key,file){
+  try{const b=await file.arrayBuffer();instSF[key]=parseSF2(b);instErr[key]=false;instP[key]=Promise.resolve(true);
+    try{await idbSet('inst:'+key,{buf:b,name:file.name})}catch(e){}
+  }catch(e){alert('Could not read that soundfont: '+e.message);}
+  setStatus();instUI();
+}
+async function setInstrument(key){
+  if(!INSTR[key])key='grand';
+  curInst=key;try{localStorage.setItem('instrument',key)}catch(e){}
+  setStatus();instUI();
+  await instLoad(key);setStatus();instUI();
+}
+function instUI(){
+  const sel=document.getElementById('pvinst');if(sel&&sel.value!==curInst)sel.value=curInst;
+  const l=document.getElementById('instld');
+  if(l){const miss=curInst!=='grand'&&instErr[curInst];l.style.display=miss?'inline-flex':'none';
+    if(miss)l.firstChild.textContent='load '+INSTR[curInst].file;}
+}
 function pianoReady(){
   initAudio();
-  return loadSF2Auto().then(ok=>ok?true:salP);
+  return loadSF2Auto().then(ok=>ok?true:salP).then(()=>instLoad(curInst));
 }
 
 function initAudio(){
@@ -353,6 +393,7 @@ function setStatus(){
   const d=document.getElementById('dot'),t=document.getElementById('stxt');
   document.getElementById('dfl').style.display=sfCustom?'inline':'none';
   if(sf){d.className='dot ok';t.textContent='piano: '+sfSrc;}
+  if(curInst!=='grand'){const n=INSTR[curInst].label;t.textContent=(sf?t.textContent+' · ':'')+'instrument: '+n+(instSF[curInst]?'':instErr[curInst]?' ('+INSTR[curInst].file+' not found, using piano)':' (loading…)');}
   else if(sampleMode){d.className='dot ok';t.textContent='piano: sampled grand (no sf2 found)';}
   else{d.className='dot synth';t.textContent='piano: synth (no sf2 found)';}
 }
@@ -366,18 +407,21 @@ function fadeVoices(){
 }
 
 function mkHandle(env){return {release(r=.35){if(!ctx)return;const n=ctx.currentTime;try{env.gain.cancelScheduledValues(n);env.gain.setValueAtTime(Math.max(env.gain.value,.0005),n);env.gain.exponentialRampToValueAtTime(.0005,n+r);}catch(e){}}};}
-function playSF(midi,dur,vel,t){
+function playSF(midi,dur,vel,t,F=sf){
   const mk=Math.round(midi);
   const vi=Math.max(1,Math.round(vel*127));
-  let rs=sf.regions.filter(r=>mk>=r.kLo&&mk<=r.kHi&&vi>=r.vLo&&vi<=r.vHi);
+  let rs=F.regions.filter(r=>mk>=r.kLo&&mk<=r.kHi&&vi>=r.vLo&&vi<=r.vHi);
   if(!rs.length)return null;
   rs=rs.filter(r=>r.vLo===rs[0].vLo&&r.vHi===rs[0].vHi); // layers overlap at their edges: use one
   const env=ctx.createGain(),peak=.5+.5*vel;
-  env.gain.setValueAtTime(peak,t);env.gain.setValueAtTime(peak,t+dur);
+  const atk=F===sf?0:Math.min(dur*.6,Math.max(.012,F.regions.length?(rs[0].atk>.02?rs[0].atk:.012):.012));
+  if(atk>.013){env.gain.setValueAtTime(.0001,t);env.gain.linearRampToValueAtTime(peak,t+atk);}else env.gain.setValueAtTime(peak,t);
+  env.gain.setValueAtTime(peak,t+dur);
   env.gain.exponentialRampToValueAtTime(.001,t+dur+.5);
   env.connect(master);env.connect(reverb);
   rs.forEach(r=>{
-    const src=ctx.createBufferSource();src.buffer=sfBuf(r.sid);
+    const src=ctx.createBufferSource();src.buffer=sfBuf(r.sid,F);
+    if(r.loop){const h=F.shdr[r.sid];if(h.le>h.ls+8){src.loop=true;src.loopStart=(h.ls-h.start)/h.rate;src.loopEnd=(h.le-h.start)/h.rate;}}
     src.playbackRate.value=Math.pow(2,((midi-r.root)*r.scale+r.tune)/1200);
     let node=src;
     if(r.fc<13500){const lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=Math.min(20000,8.176*Math.pow(2,r.fc/1200));lp.Q.value=.7;node.connect(lp);node=lp;}
@@ -392,7 +436,8 @@ function playSF(midi,dur,vel,t){
 function playPiano(midi,dur=2.2,vel=.8,when=0){
   initAudio();
   const t=ctx.currentTime+when+.01;
-  if(sf){const e=playSF(midi,dur,vel,t);if(e)return mkHandle(e);}
+  const F=activeSF();
+  if(F){const e=playSF(midi,dur,vel,t,F);if(e)return mkHandle(e);}
   if(sampleMode){
     const keys=Object.keys(samples).map(Number);
     const near=keys.reduce((a,b)=>Math.abs(b-midi)<Math.abs(a-midi)?b:a);
@@ -449,7 +494,7 @@ function playArp(root,q){
 
 /* ----- timed sequences (cancelled whenever the round ends / menu opens) ----- */
 let timers=[],seqId=0;
-function cancelSeq(){try{spStop();}catch(e){}seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
+function cancelSeq(){try{spStop();}catch(e){}try{clearInterval(SPN.iv);if(SPN.in){SPN.in.gain.cancelScheduledValues(0);SPN.in.gain.setTargetAtTime(0,ctx.currentTime,.03);SPN.in=null;}}catch(e){}seqId++;timers.forEach(clearTimeout);timers=[];stopHeld();fadeVoices();}
 function later(ms,fn){const id=seqId;timers.push(setTimeout(()=>{if(id===seqId)fn();},ms));}
 function seq(steps){ // steps: [[ms,fn],...] — waits for the piano to be ready first
   cancelSeq();const id=seqId;
@@ -512,7 +557,7 @@ function menu(){
    <button class="card" onclick="startGame('hl')"><span class="n">05</span><div><h3>Higher or lower</h3><p>Two notes. Is the second higher, lower, or the same?</p></div><span class="best">${b('hl')}</span></button>
    <button class="card" onclick="startGame('odd')"><span class="n">06</span><div><h3>Odd one out</h3><p>Five buttons play a note. Four match, one is a little flat or sharp. Find it fast: out of 1000.</p></div><span class="best">${b('odd')}</span></button>
    <button class="card" onclick="startGame('rhythm')"><span class="n">07</span><div><h3>Rhythm</h3><p>Hear a percussion pattern, then tap it back. Scored on timing.</p></div><span class="best">${b('rhythm')}</span></button>
-   <button class="card" onclick="startGame('spatial')"><span class="n">08</span><div><h3>8D audio</h3><p>Headphones on. A rhythm plays around your head, shrinking to one note. Drag the dot to where it came from.</p></div><span class="best">${b('spatial')}</span></button>
+   <button class="card" onclick="startGame('spatial')"><span class="n">08</span><div><h3>8D audio</h3><p>Headphones on. A short song starts at point A and orbits your head. Drag the dot around the ring to where it stopped.</p></div><span class="best">${b('spatial')}</span></button>
    <button class="card" onclick="startGame('hold')"><span class="n">09</span><div><h3>Hold it</h3><p>Hold the button down for exactly the time you are given. Five rounds, scored to the millisecond.</p></div><span class="best">${b('hold')}</span></button>
    <button class="card" onclick="startGame('song')"><span class="n">10</span><div><h3>Song Guesser</h3><p>Hear a tiny clip of a hit song from ${PL_RAW.length} playlists (${SONG_LIST.length} songs). Each skip costs points. Type to find the title.</p></div><span class="best">${b('song')}</span></button>
   </div>`;
@@ -604,7 +649,7 @@ function gNote(){
     M.innerHTML=header('Name the note')+`<div class="stage">
       <div class="big" id="bigm">♪</div>
       <div class="hint" id="hm">Which key was it? Exact = 100. Close misses earn half of the usual points.</div>
-      <div class="row" style="justify-content:center;margin:6px 0"><button class="pill pbtn nnbtn"></button></div>
+      <div class="row" style="justify-content:center;margin:6px 0"><button class="btn ghost sm" id="again">↻ Hear again</button><button class="pill pbtn nnbtn"></button></div>
       ${buildPiano()}
       <div class="result" id="res"></div></div>`;
     bindNN();
@@ -624,7 +669,9 @@ function gNote(){
       $('res').innerHTML=`<div class="pts ${pts===100?'g':pts?'a':'b'}">+${pts}</div><div class="res-sub">${msg}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     });
-    seq([0,1700,3400].map(ms=>[ms+250,()=>playPiano(S.target,1.4,.8)]));
+    const play=()=>seq([0,1700,3400].map(ms=>[ms+250,()=>playPiano(S.target,1.4,.8)]));
+    $('again').onclick=()=>{cancelSeq();play();$('again').blur();};
+    play();
   };
   S.start();
 }
@@ -640,7 +687,7 @@ function gChord(){
       <div style="height:6px"></div>
       <div class="grid" id="grid">${NAMES.map((n,i)=>`<button class="nb" data-r="${i}">${n}</button>`).join('')}</div>
       <div class="seg" id="seg"><button data-q="maj">Major</button><button data-q="min">Minor</button><button data-q="aug">Augmented</button><button data-q="dim">Diminished</button></div>
-      <div class="row" style="margin-top:14px"><button class="btn acc" id="sub" disabled>Lock in</button></div>
+      <div class="row" style="margin-top:14px"><button class="btn acc" id="sub" disabled>Lock in</button><button class="btn ghost" id="again">↻ Hear again</button></div>
       <div class="result" id="res"></div></div>`;
     const upd=()=>{$('sub').disabled=S.gr===null||S.gm===null;};
     document.querySelectorAll('#grid .nb').forEach(b=>b.onclick=()=>{
@@ -666,12 +713,14 @@ function gChord(){
         <div class="res-sub">${rOk?'Root ✓':'Root ✗'} · ${qOk?'Quality ✓':'Quality ✗'}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     };
-    seq([
+    const play=()=>seq([
       [250,()=>playChord(48+S.root,S.q)],
       [2250,()=>playChord(48+S.root,S.q)],
       [4250,()=>playChord(48+S.root,S.q)],
       [6250,()=>playArp(48+S.root,S.q)]
     ]);
+    $('again').onclick=()=>{cancelSeq();play();$('again').blur();};
+    play();
   };
   S.start();
 }
@@ -1256,53 +1305,133 @@ function gsReveal(win){
 }
 
 /* ============ GAME 8: 8D AUDIO ============ */
-const SP_NOTES=[12,10,8,7,6,5,4,3,2,1];     // the rhythm gets shorter every round, ending on a single note
-function spPlay(az,n,root){                 // piano notes through an HRTF panner; returns total length in seconds
+/* A ~5 second randomised mini-song (chords, bass, melody, kick/snare/hats) starts at point A and orbits the listener.
+   The player drags a dot around the ring to where it stopped. Back is made obvious by a low-pass that closes as the sound moves behind you. */
+const SPN={in:null,iv:0,noise:null};
+function spNoise(){
+  if(SPN.noise&&SPN.noise.sampleRate===ctx.sampleRate)return SPN.noise;
+  const b=ctx.createBuffer(1,Math.floor(ctx.sampleRate*.5),ctx.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  return SPN.noise=b;
+}
+function spKick(dst,t){
+  const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';
+  o.frequency.setValueAtTime(130,t);o.frequency.exponentialRampToValueAtTime(42,t+.14);
+  g.gain.setValueAtTime(.95,t);g.gain.exponentialRampToValueAtTime(.001,t+.28);
+  o.connect(g);g.connect(dst);o.start(t);o.stop(t+.3);
+}
+function spSnare(dst,t,v=1){
+  const n=ctx.createBufferSource();n.buffer=spNoise();
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=1400;
+  const g=ctx.createGain();g.gain.setValueAtTime(.55*v,t);g.gain.exponentialRampToValueAtTime(.001,t+.17);
+  n.connect(hp);hp.connect(g);g.connect(dst);n.start(t,Math.random()*.2);n.stop(t+.2);
+  const o=ctx.createOscillator(),og=ctx.createGain();o.type='triangle';o.frequency.setValueAtTime(210,t);o.frequency.exponentialRampToValueAtTime(150,t+.08);
+  og.gain.setValueAtTime(.35*v,t);og.gain.exponentialRampToValueAtTime(.001,t+.1);o.connect(og);og.connect(dst);o.start(t);o.stop(t+.12);
+}
+function spHat(dst,t,v=1,open=false){
+  const n=ctx.createBufferSource();n.buffer=spNoise();
+  const hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=7500;
+  const g=ctx.createGain(),len=open?.16:.045;g.gain.setValueAtTime(.2*v,t);g.gain.exponentialRampToValueAtTime(.001,t+len);
+  n.connect(hp);hp.connect(g);g.connect(dst);n.start(t,Math.random()*.2);n.stop(t+len+.03);
+}
+/* plays the song through an orbiting HRTF panner. Returns {T,endAz}. */
+function spOrbit(startAz,dir,sweep){
   initAudio();
-  const p=ctx.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=1;p.rolloffFactor=0;
-  const x=Math.sin(az),z=-Math.cos(az);                       // listener faces -Z; azimuth is clockwise from the front
-  if(p.positionX){p.positionX.value=x;p.positionY.value=0;p.positionZ.value=z;}else p.setPosition(x,0,z);
-  const out=ctx.createGain();out.gain.value=1.3;p.connect(out);out.connect(master);
-  const mS=master,rS=reverb;master=p;reverb=ctx.createGain();   // route the piano voices through the panner for these calls only
-  let t=.2;const t0=t,sc=[0,4,7,12,7,4];
-  try{for(let i=0;i<n;i++){playPiano(root+sc[i%sc.length],.35,.85,t);t+=rpick([.2,.2,.3,.4]);}}
-  finally{master=mS;reverb=rS;}
-  return t-t0;
+  const now=ctx.currentTime,t0=now+.25;
+  const minor=Math.random()<.4,sc=minor?SC_MIN:SC_MAJ,root=rpick([48,50,52,53,55,57]);
+  const bpm=rpick([100,108,116,124]),step=60/bpm/2,N=Math.floor(4.95/step),T=N*step;
+  const dn=d=>root+sc[((d%7)+7)%7]+12*Math.floor(d/7);
+  const prog=rpick([[0,4,5,3],[0,5,3,4],[5,3,0,4],[0,3,4,4],[0,2,3,4]]);
+  // signal chain: in -> lowpass (closes when behind) -> HRTF panner -> out -> master
+  const inp=ctx.createGain(),lp=ctx.createBiquadFilter(),p=ctx.createPanner(),out=ctx.createGain();
+  lp.type='lowpass';lp.Q.value=.6;
+  p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=1;p.rolloffFactor=0;
+  out.gain.value=1.25;inp.connect(lp);lp.connect(p);p.connect(out);out.connect(master);
+  SPN.in=inp;
+  const azAt=u=>startAz+dir*sweep*u;
+  const cutAt=az=>2000*Math.pow(9,(Math.cos(az)+1)/2);       // behind ≈ 2 kHz, front ≈ 18 kHz
+  const gainAt=az=>.78+.3*(Math.cos(az)+1)/2;
+  const K=240,X=new Float32Array(K),Z=new Float32Array(K),C=new Float32Array(K),G=new Float32Array(K);
+  for(let k=0;k<K;k++){const az=azAt(k/(K-1));X[k]=Math.sin(az);Z[k]=-Math.cos(az);C[k]=cutAt(az);G[k]=gainAt(az);}
+  if(p.positionX){
+    p.positionY.value=0;
+    p.positionX.setValueAtTime(X[0],now);p.positionZ.setValueAtTime(Z[0],now);
+    lp.frequency.setValueAtTime(C[0],now);inp.gain.setValueAtTime(G[0],now);
+    p.positionX.setValueCurveAtTime(X,t0,T);p.positionZ.setValueCurveAtTime(Z,t0,T);
+    lp.frequency.setValueCurveAtTime(C,t0,T);inp.gain.setValueCurveAtTime(G,t0,T);
+  }else{
+    p.setPosition(X[0],0,Z[0]);lp.frequency.value=C[0];
+    clearInterval(SPN.iv);
+    SPN.iv=setInterval(()=>{
+      const u=Math.min(1,Math.max(0,(ctx.currentTime-t0)/T)),az=azAt(u);
+      p.setPosition(Math.sin(az),0,-Math.cos(az));lp.frequency.value=cutAt(az);inp.gain.value=gainAt(az);
+      if(u>=1)clearInterval(SPN.iv);
+    },30);
+  }
+  // route piano voices through the chain for these calls only
+  const mS=master,rS=reverb;master=inp;reverb=ctx.createGain();
+  try{
+    let m=rpick([0,2,4]);
+    for(let i=0;i<N;i++){
+      const w=.25+i*step,d=prog[Math.floor(i/4)%prog.length];
+      if(i%4===0){
+        [0,2,4].forEach((o,j)=>playPiano(dn(d+o)+12,step*3.7,.55,w+j*.012));
+        playPiano(dn(d)-12,step*3.6,.8,w);
+      }
+      const onBeat=i%2===0;
+      if(Math.random()<(onBeat?.75:.5)){
+        m+=rpick([-2,-1,-1,0,1,1,2]);m=Math.max(-2,Math.min(9,m));
+        playPiano(dn(m)+12,step*rpick([1.2,1.8,2.4]),.5+.25*Math.random(),w);
+      }
+    }
+  }finally{master=mS;reverb=rS;}
+  for(let i=0;i<N;i++){
+    const t=t0+i*step,pos=i%8;
+    if(pos===0||pos===4||(pos===7&&Math.random()<.35)||(pos===3&&Math.random()<.3))spKick(inp,t);
+    if(pos===2||pos===6)spSnare(inp,t,1);
+    else if(i>=N-2&&Math.random()<.7)spSnare(inp,t,.6);
+    spHat(inp,t,pos%2===0?1:.55,pos===7&&Math.random()<.5);
+  }
+  return {T,endAz:azAt(1)};
 }
 const dirName=a=>['front','front-right','right','back-right','back','back-left','left','front-left'][Math.round(((a%360)+360)%360/45)%8];
 function gSpatial(){
   S.title='8D audio';S.max=10;
   S.start=()=>{
-    S.n=SP_NOTES[S.round];S.az=rnd(0,Math.PI*2);S.done=false;S.heard=false;S.drag=false;S.guess=null;
+    S.az0=rnd(0,Math.PI*2);S.dir=Math.random()<.5?1:-1;S.sweep=rnd(2.4,5.6);   // orbit 140°–320°
+    S.endAz=S.az0+S.dir*S.sweep;S.done=false;S.heard=false;S.drag=false;S.guess=null;
+    const pos=(a,r=40)=>`left:${50+r*Math.sin(a)}%;top:${50-r*Math.cos(a)}%`;
     M.innerHTML=header('8D audio')+`<div class="stage">
-      <div class="hint" id="hm">Headphones on. Press Ready. The sound plays once. Then drag the dot to where it came from.</div>
-      <div class="joy" id="joy"><div class="ring"></div><span class="jl f">FRONT</span><span class="jl b">BACK</span><span class="jl l">L</span><span class="jl r">R</span><div class="head"></div><div class="puck" id="puck"></div></div>
+      <div class="hint" id="hm">Headphones on. The song starts at <b>A</b>, then orbits around you and stops somewhere. Press Ready, then drag the dot around the ring to where it stopped.</div>
+      <div class="joy" id="joy"><div class="ring"></div><span class="jl f">FRONT</span><span class="jl b">BACK</span><span class="jl l">L</span><span class="jl r">R</span><div class="head"></div>
+        <div class="pa" style="${pos(S.az0)}">A</div><div class="puck" id="puck"></div></div>
       <div class="row" style="margin-top:0"><button class="btn acc" id="rdy">Ready</button><button class="btn ghost" id="lock" disabled>Lock in</button></div>
       <div class="result" id="res"></div></div>`;
     const joy=$('joy'),puck=$('puck');
     const setPuck=(cx,cy)=>{
       const r=joy.getBoundingClientRect(),R=r.width/2;
-      let dx=cx-(r.left+R),dy=cy-(r.top+R);const d=Math.hypot(dx,dy);
-      if(d>R*.92){dx*=R*.92/d;dy*=R*.92/d;}
-      puck.style.left=(50+dx/r.width*100)+'%';puck.style.top=(50+dy/r.height*100)+'%';puck.classList.add('set');
-      S.guess=Math.hypot(dx,dy)>R*.12?{dx,dy}:null;$('lock').disabled=!S.guess;
+      const dx=cx-(r.left+R),dy=cy-(r.top+R);if(Math.hypot(dx,dy)<4)return;
+      const a=Math.atan2(dx,-dy);S.guess=a;
+      puck.style.left=(50+40*Math.sin(a))+'%';puck.style.top=(50-40*Math.cos(a))+'%';puck.classList.add('set');$('lock').disabled=false;
     };
     joy.addEventListener('pointerdown',e=>{if(!S.heard||S.done)return;joy.setPointerCapture(e.pointerId);S.drag=true;setPuck(e.clientX,e.clientY);});
     joy.addEventListener('pointermove',e=>{if(S.drag&&!S.done)setPuck(e.clientX,e.clientY);});
     ['pointerup','pointercancel'].forEach(ev=>joy.addEventListener(ev,()=>{S.drag=false;}));
     $('rdy').onclick=()=>{
-      if(S.heard||$('rdy').disabled)return;$('rdy').disabled=true;$('hm').textContent='Listen…';
-      initAudio();pianoReady().then(()=>{const dur=spPlay(S.az,S.n,rpick([55,57,60,62,64]));later(dur*1000+450,()=>{S.heard=true;$('hm').textContent='Drag the dot to where you think it came from, then lock in.';});});
+      if(S.heard||$('rdy').disabled)return;$('rdy').disabled=true;$('hm').textContent='Listen… follow it from A.';
+      initAudio();pianoReady().then(()=>{
+        const o=spOrbit(S.az0,S.dir,S.sweep);
+        later(o.T*1000+900,()=>{S.heard=true;$('hm').textContent='Where did it stop? Drag the dot around the ring, then lock in.';});
+      });
     };
     $('lock').onclick=()=>{
-      if(!S.guess||S.done)return;S.done=true;$('lock').disabled=true;
-      const ga=Math.atan2(S.guess.dx,-S.guess.dy);
-      let err=Math.abs(((ga-S.az)*180/Math.PI+540)%360-180);
+      if(S.guess===null||S.done)return;S.done=true;$('lock').disabled=true;
+      const err=Math.abs(((S.guess-S.endAz)*180/Math.PI+540)%360-180);
       const pts=Math.round(10*Math.max(0,1-err/100));
       S.score+=pts;$('sc').textContent=S.score;
       const src=document.createElement('div');src.className='src';src.textContent='♪';
-      src.style.left=(50+40*Math.sin(S.az))+'%';src.style.top=(50-40*Math.cos(S.az))+'%';joy.appendChild(src);
-      $('hm').textContent=`It came from the ${dirName(S.az*180/Math.PI)} · you were ${Math.round(err)}° off${S.n>1?'':' (a single note!)'}`;
+      src.setAttribute('style',pos(S.endAz));joy.appendChild(src);
+      $('hm').textContent=`It stopped at the ${dirName(S.endAz*180/Math.PI)} · you were ${Math.round(err)}° off`;
       $('res').innerHTML=`<div class="pts ${pts>=7?'g':pts>=4?'a':'b'}">+${pts}</div>
         <div class="row"><button class="btn acc" onclick="nextOrEnd()">${S.round+1>=S.rounds?'Finish':'Next'}</button></div>`;
     };
@@ -1508,10 +1637,10 @@ function sgDraw(g,W,H){
       const y=top+1,h=Math.max(3,bot-top-2);
       g.fillStyle=f[2]?'#2f8fd1':'#5ad1ff';
       g.beginPath();if(g.roundRect)g.roundRect(x,y,w,h,Math.min(4,w/2));else g.rect(x,y,w,h);g.fill();
-      if(NN&&h>=9){
-        const nm=label(n.m),fs=Math.min(10,w/(nm.length*.62));
-        if(fs>=5.5){g.font='700 '+fs+'px system-ui,sans-serif';g.textAlign='center';g.textBaseline='bottom';
-          g.fillStyle=f[2]?'#fff':'#04222e';g.fillText(nm,x+w/2,y+h-1.5);}
+      if(NN){
+        const nm=label(n.m),fs=Math.max(5,Math.min(10,w/(nm.length*.62)));
+        g.font='700 '+fs+'px system-ui,sans-serif';g.textAlign='center';g.textBaseline='bottom';
+        g.fillStyle=f[2]?'#fff':'#04222e';g.fillText(nm,x+w/2,Math.max(y+fs+1,y+h-1.5));
       }
       if(n.t<=pos&&pos<n.t+n.d)cnt[n.m]=1;
     }
@@ -1543,6 +1672,8 @@ function openPiano(){
     <div class="pvstat"><span class="pill" id="pvo"></span><button class="pill pbtn" id="pvs" title="Sustain pedal (S key)"></button><button class="pill pbtn nnbtn" id="pvnm"></button>
       <select class="sel" id="pvkey" aria-label="Key">${TONICS.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
       <select class="sel" id="pvmode" aria-label="Scale"><option value="maj">Major</option><option value="min">Minor</option></select>
+      <select class="sel" id="pvinst" aria-label="Instrument">${Object.keys(INSTR).map(k=>`<option value="${k}">${INSTR[k].label}</option>`).join('')}</select>
+      <label class="btn ghost sm" id="instld" style="display:none">load<input id="instf" type="file" accept=".sf2,.sf3" hidden></label>
       <span class="pvn" id="pvn"></span></div>
     <div class="pvscale" id="pvsc"></div>
     <div class="songbar"><select class="sel" id="sgsel" aria-label="MIDI song"><option value="">Looking for MIDI files…</option></select>
@@ -1578,6 +1709,10 @@ function openPiano(){
   const chg=()=>{pvPref={t:+ks.value,minor:md.value==='min'};try{localStorage.setItem('pvscale',JSON.stringify(pvPref))}catch(e){}pvUpdate();ks.blur();md.blur();};
   ks.onchange=md.onchange=chg;
   $('sgplay').onclick=sgToggle;
+  $('pvinst').value=curInst;
+  $('pvinst').onchange=()=>{setInstrument($('pvinst').value);$('pvinst').blur();};
+  $('instf').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)instFile(curInst,f);};
+  instUI();
   $('pvs').onclick=e=>{PV.sus=!PV.sus;if(!PV.sus)pvSusOff();pvUpdate();e.currentTarget.blur();};
   bindNN();
   $('sgsel').onchange=()=>{sgReset();$('sgsel').blur();};
@@ -1616,7 +1751,7 @@ function pvUpdate(){
   for(const m in PV.els){
     const el=PV.els[m],i=map[m],inWin=i!==undefined;
     el.classList.toggle('win',inWin);
-    el.firstChild.textContent=inWin?KEYLBL[i]:(!NN&&m%12===0?'C'+(Math.floor(m/12)-1):'');
+    el.firstChild.textContent=inWin?KEYLBL[i]:'';
   }
 }
 function pvOn(id,m,when=0){
@@ -1629,6 +1764,7 @@ function pvRelease(v){if(v.h)v.h.release(.4);if(!v.bar.t1)v.bar.t1=nowS();}
 function pvOff(id){
   const v=PV.held[id];if(!v)return;delete PV.held[id];
   if(!Object.values(PV.held).some(x=>x.m===v.m))PV.els[v.m].classList.remove('dn');
+  if(!v.bar.t1)v.bar.t1=nowS();                 // the drawn bar always ends at key-up
   if(PV.sus)PV.sustained.push(v);else pvRelease(v);
 }
 function pvSusOff(){PV.sustained.forEach(pvRelease);PV.sustained=[];}
@@ -2027,7 +2163,7 @@ menu=withTr(menu,sfxBack);startGame=withTr(startGame,sfxIn);openPiano=withTr(ope
 
 $('sff').addEventListener('change',e=>{if(e.target.files[0])loadSF2File(e.target.files[0]);e.target.value='';});
 $('dfl').addEventListener('click',useDefaultSF);
-loadSF2Auto().then(()=>setStatus());
+loadSF2Auto().then(()=>setStatus());instLoad(curInst);
 _menu();
 addEventListener('pointerdown',()=>{if(!ctx){initAudio();}},{once:true});
 </script>
