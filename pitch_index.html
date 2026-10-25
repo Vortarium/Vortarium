@@ -863,8 +863,8 @@ function drumKeys(){
   const kick=pickK([36,35],[]),snare=pickK([38,40,37],[kick]),hat=pickK([42,44,46],[kick,snare]),met=pickK([75,76,77,56],[kick,snare,hat]);
   return {main,low,tick,tap,kick,snare,hat,met};
 }
-function synthHit(key,t,vel){
-  const g=ctx.createGain();g.connect(master);
+function synthHit(key,t,vel,dst=master){
+  const g=ctx.createGain();g.connect(dst);
   if(key<41){
     const o=ctx.createOscillator();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(45,t+.12);
     g.gain.setValueAtTime(.9*vel,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);
@@ -877,13 +877,13 @@ function synthHit(key,t,vel){
     s.connect(f);f.connect(g);g.gain.value=.8*vel;s.start(t);
   }
 }
-function playPerc(key,t,vel=.85){
-  if(!pc)return synthHit(key,t,vel);
+function playPerc(key,t,vel=.85,dst=master){
+  if(!pc)return synthHit(key,t,vel,dst);
   const vi=Math.max(1,Math.round(vel*127));
   let rs=pc.regions.filter(r=>key>=r.kLo&&key<=r.kHi&&vi>=r.vLo&&vi<=r.vHi);
-  if(!rs.length)return synthHit(key,t,vel);
+  if(!rs.length)return synthHit(key,t,vel,dst);
   rs=rs.filter(r=>r.vLo===rs[0].vLo&&r.vHi===rs[0].vHi);
-  const env=ctx.createGain();env.gain.value=.5+.5*vel;env.connect(master);
+  const env=ctx.createGain();env.gain.value=.5+.5*vel;env.connect(dst);
   rs.forEach(r=>{
     const src=ctx.createBufferSource();src.buffer=percBuf(r.sid);
     src.playbackRate.value=Math.pow(2,((key-r.root)*r.scale+r.tune)/1200);
@@ -1507,12 +1507,9 @@ const POLY_STAGES=[
   [[7,3],[3,7],[5,6],[6,5],[7,4],[4,7]]                                // 5: nothing over 10
 ];
 function polyVoice(kind,t,dst){
-  const o=ctx.createOscillator(),g=ctx.createGain();
-  const P={L:['triangle',300,.9,.14],R:['triangle',620,.8,.12],C:['square',1100,.12,.05],CA:['square',1700,.16,.07],D:['sine',95,.5,.22]}[kind];
-  o.type=P[0];o.frequency.setValueAtTime(P[1],t);
-  if(kind==='L'||kind==='R')o.frequency.exponentialRampToValueAtTime(P[1]*.7,t+P[3]);
-  g.gain.setValueAtTime(P[2],t);g.gain.exponentialRampToValueAtTime(.001,t+P[3]);
-  o.connect(g);g.connect(dst);o.start(t);o.stop(t+P[3]+.03);
+  const K=drumKeys();
+  const m={L:[K.main,.9],R:[K.low,.9],C:[K.tick,.55],CA:[K.tick,.8],D:[K.kick,.85]}[kind];
+  playPerc(m[0],t,m[1],dst||master);
 }
 function polyCycle(a,b){return Math.max(2.6,Math.max(a,b)*.3);}
 /* counts off (in the same grid: max(a,b) pulses per cycle), then optionally plays the pattern. returns audio-clock times */
@@ -1594,7 +1591,7 @@ function gPoly(){
     $('plisten').onclick=()=>{
       if(S.phase==='listen'||S.phase==='rec')return;
       cancelSeq();S.phase='listen';lock(true);$('hm').textContent='Count-off… then listen to both hands.';
-      pianoReady().then(()=>{
+      Promise.all([pianoReady(),loadPercAuto()]).then(()=>{
         const o=polySchedule(a,b,S.cycles,true);
         later((o.ps-ctx.currentTime)*1000,()=>{$('hm').textContent='Listen…';});
         later((o.end-ctx.currentTime)*1000+500,()=>{S.phase='idle';lock(false);$('hm').textContent='Press Play when you are ready to try it, or Listen again.';});
@@ -1604,7 +1601,7 @@ function gPoly(){
       if(S.phase==='listen'||S.phase==='rec'||S.scored)return;
       cancelSeq();S.phase='count';S.taps={L:[],R:[]};lock(true);$('res').innerHTML='';
       $('hm').textContent='Count-off… start on the downbeat. S = left, K = right.';
-      pianoReady().then(()=>{
+      Promise.all([pianoReady(),loadPercAuto()]).then(()=>{
         const o=polySchedule(a,b,S.cycles,false);
         const lat=(ctx.outputLatency||ctx.baseLatency||0)*1000;
         S.recT0=performance.now()+(o.ps-ctx.currentTime)*1000+lat;
