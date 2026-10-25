@@ -55,7 +55,21 @@
 
   <main id="board">
     <div id="boardHint">Click an element on the left, then drag one onto another to mix! ✏️</div>
-    <button id="trophyBtn" class="btn round" type="button" title="Leaderboard">🏆</button>
+    <div id="topBar">
+      <button id="trophyBtn" class="btn round" type="button" title="Leaderboard">🏆</button>
+      <button id="diamondBtn" class="btn round diamond" type="button" title="Daily challenge">💎</button>
+      <div class="pill" id="streakPill" title="Daily streak"><span id="flame">🔥</span> <b id="streakNum">0</b></div>
+      <div class="pill" id="scorePill" title="Daily score">⭐ <b id="dailyScoreNum">0</b></div>
+    </div>
+    <div id="dailyPanel" class="daily-panel hidden">
+      <div class="dp-head">
+        <span id="dpTimer" class="dp-timer">⏱ 20:00</span>
+        <span id="dpScore">0 pts</span>
+        <button id="dpToggle" class="mini" type="button" title="Hide / show board">–</button>
+      </div>
+      <div id="dpGrid" class="dp-grid"></div>
+      <div id="dpFoot" class="dp-foot"></div>
+    </div>
     <button id="clearBtn" class="btn" type="button">Clear</button>
     <div id="toast" class="toast hidden"></div>
   </main>
@@ -63,11 +77,45 @@
   <div id="lbModal" class="modal hidden">
     <div class="card lb-card">
       <button id="lbClose" class="mini close" type="button">✕</button>
-      <h2>🏆 Top Discoverers</h2>
+      <div class="tabs lb-tabs">
+        <button id="lbTabDisc" class="tab active" type="button">💎 Discoveries</button>
+        <button id="lbTabDaily" class="tab" type="button">⭐ Daily</button>
+      </div>
+      <h2 id="lbTitle">🏆 Top Discoverers</h2>
       <ol id="lbList"></ol>
       <div id="lbYou" class="lb-you hidden">
         <div class="dots">⋯</div>
         <div class="lb-row me" id="lbYouRow"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dailyModal" class="modal hidden">
+    <div class="card daily-card">
+      <button id="dailyClose" class="mini close" type="button">✕</button>
+      <h2>💎 Daily Challenge</h2>
+
+      <div id="dailyIntro">
+        <p>One 5×5 bingo board of random things, the same for everyone, new every midnight.</p>
+        <ul class="rules">
+          <li>Your elements are swapped for the original 4 until you finish (they all come back!)</li>
+          <li>The <b>20:00</b> timer starts when you mix your first two elements</li>
+          <li>Each item found: <b>+1</b> · Bingo: <b>+3</b> · Each extra bingo: <b>+3+n</b></li>
+          <li>Clear the whole board: <b>+25</b> and the challenge ends early</li>
+        </ul>
+        <p id="dailyMsg" class="error"></p>
+        <button id="dailyAccept" class="btn big" type="button">Accept today's challenge</button>
+      </div>
+
+      <div id="dailyResult" class="hidden">
+        <div id="drTitle" class="dr-title"></div>
+        <ul id="drBreak" class="dr-break"></ul>
+        <div id="drScore" class="big-score">0</div>
+        <div id="drScoreLabel" class="dr-label">points earned</div>
+        <div class="charge"><div id="drFill" class="charge-fill"></div></div>
+        <div class="dr-bank">Daily Score bank: <b id="drBank">0</b> ⭐</div>
+        <div class="dr-streak"><span id="drFlame" class="flame-big">🔥</span><div id="drStreak"></div></div>
+        <button id="drDone" class="btn big hidden" type="button">Nice!</button>
       </div>
     </div>
   </div>

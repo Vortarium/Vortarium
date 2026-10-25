@@ -173,6 +173,7 @@ $("logoutBtn").onclick = () => signOut(auth);
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     me = null;
+    teardownDaily();
     gameScreen.classList.add("hidden");
     authScreen.classList.remove("hidden");
     return;
@@ -188,7 +189,11 @@ onAuthStateChanged(auth, async (user) => {
   };
   if (!snap.exists()) await setDoc(doc(db, "users", user.uid), { ...data, created: serverTimestamp() });
 
-  me = { uid: user.uid, username: data.username, discoveries: data.discoveries || 0 };
+  me = {
+    uid: user.uid, username: data.username, discoveries: data.discoveries || 0,
+    dailyScore: data.dailyScore || 0, streak: data.streak || 0,
+    lastDailyDate: data.lastDailyDate || "", lastDailyScore: data.lastDailyScore || 0
+  };
   inventory.clear();
   START.forEach((s) => inventory.set(keyOf(s.n), s));
   (data.elements || []).forEach((s) => inventory.set(keyOf(s.n), s));
@@ -198,6 +203,8 @@ onAuthStateChanged(auth, async (user) => {
   gameScreen.classList.remove("hidden");
   clearBoard();
   renderSidebar();
+  refreshDailyUI();
+  await resumeDaily();
 });
 
 // ==========================================================
@@ -224,13 +231,15 @@ function makeSidebarBtn(el) {
   b.onclick = () => spawn(el);
   return b;
 }
-function addToInventory(el) {
+function addToInventory(el, persist = true) {
   const k = keyOf(el.n);
   if (inventory.has(k)) return;
   inventory.set(k, el);
   elementList.appendChild(makeSidebarBtn(el));
   applyFilter();
   elementList.scrollTop = elementList.scrollHeight;
+  if (!persist) return; // daily mode: temporary elements are not saved to the account
+  if (daily.active && savedInventory) savedInventory.set(k, el);
   setDoc(doc(db, "users", me.uid), { elements: arrayUnion({ n: el.n, e: el.e }) }, { merge: true })
     .catch(() => {});
 }
@@ -319,9 +328,11 @@ async function combine(dragged, target) {
     dragged.remove(); target.remove();
     spawn(result, x, y, first);
     const isNewToMe = !inventory.has(keyOf(result.n));
-    if (isNewToMe) addToInventory(result);
+    // in daily mode new elements are temporary, except real first discoveries (those are credited to you for good)
+    if (isNewToMe) addToInventory(result, !daily.active || first);
     if (first || isNewToMe) playSfx(sfxDiscovery);
     if (first) toast("✨ First discovery!");
+    if (daily.active) dailyOnResult(result, first);
   } catch (e) {
     console.error(e);
     think.remove();
@@ -392,9 +403,20 @@ Rules:
 - Never include explanations.
 Reply as JSON: {"name": "...", "emoji": "..."}`;
 
+  return geminiJSON(prompt, {}, (parsed) => {
+    const n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
+    const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
+    if (!n) throw new Error("AI gave an empty name");
+    return { n, e };
+  });
+}
+
+// Shared Gemini caller: rotates keys on slow/failed answers. `shape` turns the parsed JSON into the
+// value you want (throw inside it to count as a failed attempt and try the next key).
+async function geminiJSON(prompt, { temperature = 0.7, maxOutputTokens = 1024 } = {}, shape = (x) => x) {
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" }
+    generationConfig: { temperature, maxOutputTokens, responseMimeType: "application/json" }
   });
 
   const tryKey = async (rawKey) => {
@@ -417,11 +439,7 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
       const parts = data?.candidates?.[0]?.content?.parts || [];
       const m = parts.map((p) => p.text || "").join("").match(/\{[\s\S]*\}/);
       if (!m) throw new Error("AI gave no answer");
-      const parsed = JSON.parse(m[0]);
-      const n = String(parsed.name || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
-      const e = [...String(parsed.emoji || "")].slice(0, 4).join("").trim() || "✨";
-      if (!n) throw new Error("AI gave an empty name");
-      return { n, e };
+      return shape(JSON.parse(m[0]));
     } finally {
       clearTimeout(timer);
     }
@@ -454,13 +472,25 @@ $("clearBtn").onclick = clearBoard;
 // ==========================================================
 //  Leaderboard
 // ==========================================================
-$("trophyBtn").onclick = async () => {
+const LB = {
+  disc:  { field: "discoveries", icon: "💎", title: "🏆 Top Discoverers",   empty: "No discoveries yet. Be the first!",  mine: () => me.discoveries },
+  daily: { field: "dailyScore",  icon: "⭐", title: "⭐ Top Daily Players", empty: "No daily scores yet. Be the first!", mine: () => me.dailyScore || 0 }
+};
+let lbTab = "disc", lbToken = 0;
+
+async function showLeaderboard(tab = lbTab) {
+  lbTab = tab;
+  const token = ++lbToken, cfg = LB[tab];
   $("lbModal").classList.remove("hidden");
+  $("lbTabDisc").classList.toggle("active", tab === "disc");
+  $("lbTabDaily").classList.toggle("active", tab === "daily");
+  $("lbTitle").textContent = cfg.title;
   const list = $("lbList");
   list.innerHTML = "<li>Loading…</li>";
   $("lbYou").classList.add("hidden");
   try {
-    const snap = await getDocs(query(collection(db, "users"), orderBy("discoveries", "desc"), limit(10)));
+    const snap = await getDocs(query(collection(db, "users"), orderBy(cfg.field, "desc"), limit(10)));
+    if (token !== lbToken) return; // player switched tabs meanwhile
     list.innerHTML = "";
     let inTop = false;
     snap.docs.forEach((d, i) => {
@@ -470,28 +500,376 @@ $("trophyBtn").onclick = async () => {
       const li = document.createElement("li");
       li.className = "lb-row" + (isMe ? " me" : i === 0 ? " gold" : "");
       li.innerHTML = `<span class="rank">${["🥇", "🥈", "🥉"][i] || "#" + (i + 1)}</span>
-        <span class="name">${esc(u.username)}</span><span class="score">${u.discoveries || 0} 💎</span>`;
+        <span class="name">${esc(u.username)}</span><span class="score">${u[cfg.field] || 0} ${cfg.icon}</span>`;
       list.appendChild(li);
     });
-    if (!snap.size) list.innerHTML = "<li>No discoveries yet. Be the first!</li>";
+    if (!snap.size) list.innerHTML = `<li>${cfg.empty}</li>`;
 
     if (!inTop) {
-      const mine = me.discoveries;
+      const mine = cfg.mine();
       const ahead = await getCountFromServer(
-        query(collection(db, "users"), where("discoveries", ">", mine))
+        query(collection(db, "users"), where(cfg.field, ">", mine))
       );
+      if (token !== lbToken) return;
       const rank = ahead.data().count + 1;
       $("lbYouRow").innerHTML = `<span class="rank">#${rank}</span>
-        <span class="name">${esc(me.username)}</span><span class="score">${mine} 💎</span>`;
+        <span class="name">${esc(me.username)}</span><span class="score">${mine} ${cfg.icon}</span>`;
       $("lbYou").classList.remove("hidden");
     }
   } catch (e) {
     console.error(e);
-    list.innerHTML = "<li>Couldn't load the leaderboard. Please wait a bit and try again.</li>";
+    if (token === lbToken) list.innerHTML = "<li>Couldn't load the leaderboard. Please wait a bit and try again.</li>";
   }
-};
+}
+$("trophyBtn").onclick = () => showLeaderboard("disc");
+$("lbTabDisc").onclick = () => showLeaderboard("disc");
+$("lbTabDaily").onclick = () => showLeaderboard("daily");
 $("lbClose").onclick = () => $("lbModal").classList.add("hidden");
 $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $("lbModal").classList.add("hidden"); });
+
+// ==========================================================
+//  Daily challenge
+//  - one shared 5x5 bingo board per calendar day (made by Gemini for whoever opens it first)
+//  - your elements are swapped for the original 4 until the challenge ends
+//  - 20 min clock starts on your first successful mix
+//  - 1 pt per item, bingo = 3 pts, each extra bingo = 3+n pts, whole board = +25
+// ==========================================================
+const DAILY_MS = 20 * 60 * 1000;
+const FALLBACK_ITEMS = ["Steam","Mud","Cloud","Lava","Rain","Sand","Glass","Plant","Tree","Ocean","Storm","Rainbow",
+  "Dust","Swamp","Volcano","Metal","Sun","Ice","Fog","Mountain","Lake","Smoke","Ash","Forest","River","Brick","Clay","Snow","Island","Wind"];
+const LINES = (() => {
+  const L = [];
+  for (let r = 0; r < 5; r++) L.push([0, 1, 2, 3, 4].map((c) => r * 5 + c));
+  for (let c = 0; c < 5; c++) L.push([0, 1, 2, 3, 4].map((r) => r * 5 + c));
+  L.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]);
+  return L;
+})();
+
+const daily = { active: false, date: null, items: [], found: new Set(), startAt: null, timer: null, finishing: false };
+let savedInventory = null;   // the player's real elements while a daily run is going
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const dateStr = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const yesterdayOf = (ds) => { const [y, m, d] = ds.split("-").map(Number); return dateStr(new Date(y, m - 1, d - 1)); };
+const lsKey = (date) => `jf_daily_${me.uid}_${date}`;
+const lsGet = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } };
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// ---------- scoring ----------
+const completedLines = () => LINES.filter((l) => l.every((i) => daily.found.has(keyOf(daily.items[i]))));
+function bingoPoints(b) { let p = 0; for (let k = 1; k <= b; k++) p += k === 1 ? 3 : 3 + (k - 1); return p; }
+function dailyBreakdown() {
+  const f = daily.found.size, b = completedLines().length;
+  const bp = bingoPoints(b), bonus = f === 25 ? 25 : 0;
+  return { f, b, bp, bonus, pts: f + bp + bonus };
+}
+
+// ---------- top bar (streak + daily score) ----------
+function streakNow() {
+  if (!me) return 0;
+  const t = dateStr();
+  return (me.lastDailyDate === t || me.lastDailyDate === yesterdayOf(t)) ? (me.streak || 0) : 0;
+}
+function refreshDailyUI() {
+  if (!me) return;
+  $("streakNum").textContent = streakNow();
+  $("flame").classList.toggle("lit", me.lastDailyDate === dateStr());
+  $("dailyScoreNum").textContent = (me.dailyScore || 0).toLocaleString();
+}
+setInterval(refreshDailyUI, 30000); // catches the midnight rollover
+
+// ---------- bingo board ----------
+function renderDailyBoard(newKey) {
+  const inLine = new Set(completedLines().flat());
+  $("dpGrid").innerHTML = daily.items.map((n, i) => {
+    const k = keyOf(n), f = daily.found.has(k);
+    return `<div class="dp-cell${f ? " found" : ""}${inLine.has(i) ? " bingo" : ""}${k === newKey ? " pop" : ""}">${esc(n)}</div>`;
+  }).join("");
+  const bd = dailyBreakdown();
+  $("dpScore").textContent = `${bd.pts} pts`;
+  $("dpFoot").textContent = daily.startAt
+    ? `${bd.f}/25 found · ${bd.b} bingo${bd.b === 1 ? "" : "s"}`
+    : "Mix two things to start the 20:00 clock!";
+}
+$("dpToggle").onclick = () => {
+  const hide = !$("dpGrid").classList.contains("hidden");
+  $("dpGrid").classList.toggle("hidden", hide);
+  $("dpFoot").classList.toggle("hidden", hide);
+  $("dpToggle").textContent = hide ? "+" : "–";
+};
+
+function tick() {
+  const left = daily.startAt ? Math.max(0, DAILY_MS - (Date.now() - daily.startAt)) : DAILY_MS;
+  const s = Math.ceil(left / 1000);
+  $("dpTimer").textContent = `⏱ ${Math.floor(s / 60)}:${pad2(s % 60)}`;
+  $("dpTimer").classList.toggle("low", !!daily.startAt && s <= 60);
+  if (daily.startAt && left <= 0) finishDaily();
+}
+function startTick() { clearInterval(daily.timer); daily.timer = setInterval(tick, 250); tick(); }
+
+function saveDailyLocal() {
+  if (!daily.active || !me) return;
+  const inv = [...inventory.values()].filter((el) => !START.some((s) => keyOf(s.n) === keyOf(el.n)));
+  lsSet(lsKey(daily.date), { date: daily.date, items: daily.items, found: [...daily.found], startAt: daily.startAt, inv });
+}
+
+// ---------- board creation (Gemini once per day, then shared via Firestore) ----------
+async function generateBoardItems(date) {
+  const prompt =
+`Make a bingo board for a crafting game like Infinite Craft. Players start with Earth, Air, Water and Fire and keep combining two things to make new things.
+Give exactly 25 DIFFERENT things players could plausibly craft in a few mixes.
+- Mix of easy (1-2 mixes), medium and a few harder ones.
+- Short common names, 1-2 words, Title Case, one per entry.
+- Wide variety: nature, weather, food, animals, tools, buildings, fantasy, science, everyday objects.
+- Do NOT include Earth, Air, Water or Fire.
+- Be creative and surprising; variety seed: ${date}-${Math.random().toString(36).slice(2, 8)}
+Reply as JSON: {"items": ["...", "..."]}`;
+  const blocked = new Set(START.map((s) => keyOf(s.n)));
+  const clean = (arr) => {
+    const seen = new Set(), out = [];
+    for (const raw of arr) {
+      const n = String(raw || "").replace(/[^\p{L}\p{N}\s'’&.\-]/gu, "").trim().slice(0, 40);
+      const k = keyOf(n);
+      if (n && !seen.has(k) && !blocked.has(k)) { seen.add(k); out.push(n); }
+    }
+    return out;
+  };
+  let items = [];
+  try {
+    items = await geminiJSON(prompt, { temperature: 1, maxOutputTokens: 2048 }, (p) => {
+      const c = clean(Array.isArray(p.items) ? p.items : []);
+      if (c.length < 15) throw new Error("AI board too short");
+      return c;
+    });
+  } catch (e) { console.warn("board generation failed", e); throw e; }
+  // top up if Gemini gave fewer than 25 unique entries
+  if (items.length < 25) items = clean([...items, ...shuffle(FALLBACK_ITEMS.slice())]);
+  return shuffle(items.slice(0, 25));
+}
+
+async function loadDailyBoard(date) {
+  const ref = doc(db, "daily", date);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return snap.data().items;
+  const items = await generateBoardItems(date);
+  // first writer wins so everyone gets the same board
+  return runTransaction(db, async (tx) => {
+    const ex = await tx.get(ref);
+    if (ex.exists()) return ex.data().items;
+    tx.set(ref, { date, items, by: me.username, uid: me.uid, created: serverTimestamp() });
+    return items;
+  });
+}
+
+// ---------- run lifecycle ----------
+function startDaily(date, items, resume) {
+  savedInventory = new Map(inventory);
+  Object.assign(daily, { active: true, date, items, finishing: false,
+    found: new Set(resume?.found || []), startAt: resume?.startAt || null });
+  inventory.clear();
+  START.forEach((s) => inventory.set(keyOf(s.n), s));
+  (resume?.inv || []).forEach((s) => inventory.set(keyOf(s.n), s));
+  renderSidebar();
+  clearBoard();
+  $("dailyPanel").classList.remove("hidden");
+  $("diamondBtn").classList.add("active");
+  renderDailyBoard();
+  if (daily.startAt) startTick(); else tick();
+  saveDailyLocal();
+}
+
+function dailyOnResult(result, first) {
+  if (!daily.startAt) { daily.startAt = Date.now(); startTick(); }
+  const k = keyOf(result.n);
+  const isItem = daily.items.some((x) => keyOf(x) === k);
+  if (isItem && !daily.found.has(k)) {
+    const before = dailyBreakdown();
+    daily.found.add(k);
+    const after = dailyBreakdown();
+    const gained = after.pts - before.pts;
+    const gotBingo = after.b > before.b;
+    renderDailyBoard(k);
+    saveDailyLocal();
+    toast(`${gotBingo ? "🎉 BINGO! " : "✅ "}${result.n} +${gained}${after.bonus && !before.bonus ? " (board cleared!)" : ""}${first ? " · ✨ first discovery!" : ""}`, 3000);
+    if (daily.found.size === 25) setTimeout(finishDaily, 700);
+  } else {
+    renderDailyBoard();
+    saveDailyLocal();
+  }
+}
+
+function teardownDaily() {
+  clearInterval(daily.timer);
+  daily.active = false; savedInventory = null;
+  $("dailyPanel").classList.add("hidden");
+  $("diamondBtn").classList.remove("active");
+  $("dailyModal").classList.add("hidden");
+}
+
+async function finishDaily() {
+  if (!daily.active || daily.finishing) return;
+  daily.finishing = true;
+  clearInterval(daily.timer);
+  const date = daily.date, bd = dailyBreakdown();
+  const res = { ...bd, date, cleared: bd.f === 25, oldBank: me.dailyScore || 0,
+    streakBefore: streakNow(), newStreak: me.lastDailyDate === yesterdayOf(date) ? (me.streak || 0) + 1 : 1 };
+
+  // bring the player's real elements back
+  inventory.clear();
+  savedInventory.forEach((v, k) => inventory.set(k, v));
+  teardownDaily();
+  clearBoard();
+  renderSidebar();
+
+  lsSet(lsKey(date), { date, finished: true, submitted: false, pts: bd.pts });
+  playResult(res);
+  for (let i = 0; i < 3; i++) {
+    try { await submitDaily(date, bd.pts); return; }
+    catch (e) { console.warn("daily save failed", e); await sleep(1200); }
+  }
+  toast("Couldn't save your score yet. It will retry next time you open the game.", 5000);
+}
+
+async function submitDaily(date, pts) {
+  if (me.lastDailyDate >= date) { lsSet(lsKey(date), { date, finished: true, submitted: true, pts }); return; }
+  const streak = me.lastDailyDate === yesterdayOf(date) ? (me.streak || 0) + 1 : 1;
+  try {
+    await setDoc(doc(db, "users", me.uid),
+      { dailyScore: increment(pts), streak, lastDailyDate: date, lastDailyScore: pts }, { merge: true });
+  } catch (e) {
+    if (e.code !== "permission-denied") throw e;
+    // denied means this day was already counted
+    const fresh = (await getDoc(doc(db, "users", me.uid))).data() || {};
+    me.dailyScore = fresh.dailyScore || 0; me.streak = fresh.streak || 0;
+    me.lastDailyDate = fresh.lastDailyDate || ""; me.lastDailyScore = fresh.lastDailyScore || 0;
+    lsSet(lsKey(date), { date, finished: true, submitted: true, pts });
+    refreshDailyUI();
+    return;
+  }
+  me.dailyScore = (me.dailyScore || 0) + pts;
+  me.streak = streak; me.lastDailyDate = date; me.lastDailyScore = pts;
+  lsSet(lsKey(date), { date, finished: true, submitted: true, pts });
+  refreshDailyUI();
+}
+
+// pick up a run (or an unsent score) left over from a refresh / closed tab
+async function resumeDaily() {
+  const prefix = `jf_daily_${me.uid}_`;
+  let keys = [];
+  try { keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix)); } catch (e) { return; }
+  const today = dateStr();
+  let resumed = false;
+  for (const k of keys) {
+    const st = lsGet(k);
+    if (!st) { try { localStorage.removeItem(k); } catch (e) {} continue; }
+    if (st.finished) {
+      if (!st.submitted) { try { await submitDaily(st.date, st.pts); } catch (e) { /* retry next time */ } }
+      else if (st.date !== today) { try { localStorage.removeItem(k); } catch (e) {} }
+      continue;
+    }
+    const stale = me.lastDailyDate >= st.date || (st.date !== today && !st.startAt);
+    if (stale || resumed || !Array.isArray(st.items) || st.items.length !== 25) { try { localStorage.removeItem(k); } catch (e) {} continue; }
+    resumed = true;
+    startDaily(st.date, st.items, st);
+    toast("Welcome back! Your daily challenge is still going 💎", 3000);
+    if (st.startAt && Date.now() - st.startAt >= DAILY_MS) await finishDaily();
+  }
+  refreshDailyUI();
+}
+
+// ---------- daily modal ----------
+const showDailyView = (v) => {
+  $("dailyIntro").classList.toggle("hidden", v !== "intro");
+  $("dailyResult").classList.toggle("hidden", v !== "result");
+};
+async function openDaily() {
+  if (daily.active) { toast("Daily challenge in progress! Fill that bingo board 💎", 3000); return; }
+  showDailyView("intro");
+  $("dailyModal").classList.remove("hidden");
+  const done = me.lastDailyDate === dateStr();
+  $("dailyAccept").classList.toggle("hidden", done);
+  $("dailyMsg").textContent = done
+    ? `Today's challenge is done: you scored ${me.lastDailyScore || 0} pts. A fresh board arrives at midnight! 🌙`
+    : "";
+}
+$("diamondBtn").onclick = openDaily;
+$("dailyClose").onclick = () => $("dailyModal").classList.add("hidden");
+$("dailyModal").addEventListener("click", (e) => { if (e.target.id === "dailyModal") $("dailyModal").classList.add("hidden"); });
+$("drDone").onclick = () => $("dailyModal").classList.add("hidden");
+
+$("dailyAccept").onclick = async () => {
+  const btn = $("dailyAccept"), msg = $("dailyMsg");
+  btn.disabled = true; msg.textContent = "Getting today's board…";
+  try {
+    const date = dateStr();
+    const fresh = (await getDoc(doc(db, "users", me.uid))).data() || {};
+    if (fresh.lastDailyDate === date) {
+      me.lastDailyDate = fresh.lastDailyDate; me.lastDailyScore = fresh.lastDailyScore || 0;
+      msg.textContent = `You already finished today's challenge (${me.lastDailyScore} pts). See you at midnight! 🌙`;
+      btn.classList.add("hidden"); refreshDailyUI(); return;
+    }
+    if (fresh.dailyStarted === date && !lsGet(lsKey(date))) {
+      msg.textContent = "You already started today's challenge, so it can't be restarted. Try again tomorrow!";
+      btn.classList.add("hidden"); return;
+    }
+    const items = await loadDailyBoard(date);
+    await setDoc(doc(db, "users", me.uid), { dailyStarted: date }, { merge: true });
+    $("dailyModal").classList.add("hidden");
+    msg.textContent = "";
+    startDaily(date, items);
+  } catch (e) {
+    console.error(e);
+    msg.textContent = friendlyError(e);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- result: charge up, bank it, light the flame ----------
+const tween = (ms, fn) => new Promise((res) => {
+  const t0 = performance.now();
+  (function f(t) {
+    const p = Math.min(1, (t - t0) / ms);
+    fn(1 - Math.pow(1 - p, 3));
+    p < 1 ? requestAnimationFrame(f) : res();
+  })(t0);
+});
+async function playResult(r) {
+  showDailyView("result");
+  $("dailyModal").classList.remove("hidden");
+  $("drTitle").textContent = r.cleared ? "🎉 BOARD CLEARED!" : "⏰ Time's up!";
+  const rows = [`Items found: ${r.f} × 1 = ${r.f}`, `Bingos: ${r.b} = +${r.bp}`];
+  if (r.cleared) rows.push("Full board bonus: +25");
+  $("drBreak").innerHTML = rows.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("drScore").textContent = "0";
+  $("drFill").style.width = "0%";
+  $("drBank").textContent = r.oldBank.toLocaleString();
+  $("drFlame").classList.remove("lit");
+  $("drStreak").textContent = r.streakBefore ? `${r.streakBefore}-day streak` : "No streak yet";
+  $("drDone").classList.add("hidden");
+  $("drScoreLabel").textContent = "points earned";
+
+  await sleep(500);
+  await tween(Math.min(3800, Math.max(900, 700 + r.pts * 45)), (e) => {
+    $("drScore").textContent = Math.round(r.pts * e);
+    $("drFill").style.width = (e * 100) + "%";
+  });
+  await sleep(450);
+  $("drScoreLabel").textContent = "banking it…";
+  await tween(1100, (e) => {
+    const moved = Math.round(r.pts * e);
+    $("drScore").textContent = r.pts - moved;
+    $("drBank").textContent = (r.oldBank + moved).toLocaleString();
+    $("drFill").style.width = ((1 - e) * 100) + "%";
+  });
+  $("drScoreLabel").textContent = "added to your Daily Score";
+  await sleep(300);
+  $("drFlame").classList.add("lit");
+  $("drStreak").textContent = `${r.newStreak}-day streak! 🔥`;
+  playSfx(sfxDiscovery);
+  $("drDone").classList.remove("hidden");
+}
 
 // ---------- helpers ----------
 // Turn any technical error into something a player can understand.
