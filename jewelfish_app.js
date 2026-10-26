@@ -568,8 +568,13 @@ $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $
 //  - 1 pt per item, bingo = 3 pts, each extra bingo = 3+n pts, whole board = +25
 // ==========================================================
 const DAILY_MS = 20 * 60 * 1000;
-const FALLBACK_ITEMS = ["Steam","Mud","Cloud","Lava","Rain","Sand","Glass","Plant","Tree","Ocean","Storm","Rainbow",
-  "Dust","Swamp","Volcano","Metal","Sun","Ice","Fog","Mountain","Lake","Smoke","Ash","Forest","River","Brick","Clay","Snow","Island","Wind"];
+const FALLBACK_ITEMS = ["Human","Lightbulb","Germany","Ruby","Dinosaur","Submarine","Pyramid","Violin","Astronaut","Samurai","Piano","Pizza",
+  "Vampire","Telescope","Dragon","Compass","Robot","Diamond","Japan","Library","Skeleton","Penguin","Rocket","Castle","Bacteria","Sword","Clock","Egypt","Wizard","Spaceship"];
+// Every board gets randomly drawn categories so the 25 things are truly different and niche, never the easy basics.
+const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone or mineral","a chemical element","a plant or flower","a fruit or vegetable",
+  "a dish or food","a drink","a musical instrument","a tool","a machine or invention","a vehicle","a building or landmark","a profession or job","a mythical creature","a fantasy item",
+  "a science concept","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a disease or medicine",
+  "a type of weather phenomenon","a famous profession like scientist or explorer","a geographic feature","a technology or gadget","a toy","a religion-neutral myth or legend figure","an art or craft","a currency or money thing","a container","a holiday or festival"];
 const LINES = (() => {
   const L = [];
   for (let r = 0; r < 5; r++) L.push([0, 1, 2, 3, 4].map((c) => r * 5 + c));
@@ -649,14 +654,17 @@ function saveDailyLocal() {
 
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
 async function generateBoardItems(date) {
+  const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
   const prompt =
-`Make a bingo board for a crafting game like Infinite Craft. Players start with Earth, Air, Water and Fire and keep combining two things to make new things.
-Give exactly 25 DIFFERENT things players could plausibly craft in a few mixes.
-- Mix of easy (1-2 mixes), medium and a few harder ones.
-- Short common names, 1-2 words, Title Case, one per entry.
-- Wide variety: nature, weather, food, animals, tools, buildings, fantasy, science, everyday objects.
+`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.
+Give exactly 25 DIFFERENT, NICHE and specific things. This is a hard challenge board, so they must take many mixes to reach.
+- They must NOT be basic or easy things reachable in 1-2 mixes. Avoid generic words like Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Tree, Ocean, Storm, Rainbow, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Forest, Clay, Brick, Dust, Metal.
+- Aim for specific, unique, interesting words like Human, Lightbulb, Germany, Ruby, Violin, Samurai, Submarine, Pyramid, Penguin, Bacteria.
+- One entry per line below, each matching its category, picked by you to be surprising and not the most obvious example:
+${themes.map((t, i) => `${i + 1}. ${t}`).join("\n")}
+- Short names, 1-2 words, Title Case.
 - Do NOT include Earth, Air, Water or Fire.
-- Be creative and surprising; variety seed: ${date}-${Math.random().toString(36).slice(2, 8)}
+- Variety seed (use it to pick unusual answers): ${date}-${Math.random().toString(36).slice(2, 10)}
 Reply as JSON: {"items": ["...", "..."]}`;
   const blocked = new Set(START.map((s) => keyOf(s.n)));
   const clean = (arr) => {
