@@ -15,12 +15,16 @@ import {
 
 // ---------- config ----------
 // ---------- AI access ----------
-// Keys are tried in order. If one is slow (over 5 seconds) or fails, the next one is used,
-// and after the last one it loops back to the top.
+// Keys are tried in order. If one is slow (over 3 seconds) or fails, the next one is used and the
+// game remembers the one that worked. After the last key it loops back to the first. Only a full
+// rotation back to the key it started on counts as failure.
 // They are stored scrambled (reversed, split, shuffled and XORed) and rebuilt only when the game runs.
 const _G = [
   [151, [[7,"U7aF5vg="],[2,"wN+NlJI="],[10,"bnIA+6ut"],[0,"8Nfcww=="],[1,"3vn9taA="],[9,"cUEv"],[11,"RVVx8w=="],[5,"Mk2v"],[8,"M5b2"],[4,"1uzHEQ=="],[3,"kPL1"],[12,"JWvTkeo="],[6,"Ny3+"]]],
   [89, [[3,"5IuH"],[0,"CFg3DxQ="],[7,"A3524JXJ"],[11,"/Gs8dA=="],[2,"BpPF"],[4,"vZ2t3c6k"],[10,"vw5x"],[1,"OzYg+g=="],[8,"dXtpkoY="],[9,"7a0zbQ=="],[5,"T1IxEiT7"],[6,"TRMpBQ=="]]],
+  [87, [[3,"YuQ="],[5,"b34PJC3Ht+SH"],[6,"ezIncg=="],[8,"PQ=="],[11,"w207PuHPyp09SRup0pUSKg=="],[2,"IAc="],[1,"SBRXq8M="],[9,"lQ=="],[10,"sKRwEg=="],[7,"CXty"],[4,"nYM="],[0,"FhRSWA=="]]],
+  [117, [[9,"sw=="],[10,"kw=="],[6,"NxIp"],[7,"VkW6pa4="],[5,"WHocWtHUwp3QoQ=="],[1,"/uo="],[8,"dEKiiZc="],[0,"AgbE3g=="],[12,"SxlS"],[2,"4vo="],[4,"n6XQ6eYxEyA="],[3,"prTR2NTb"],[11,"aRtA"]]],
+  [73, [[12,"w1wtU8uZ0g=="],[9,"270="],[6,"ZA=="],[0,"CB0bHSE0Sio="],[7,"SFx3Tw=="],[3,"SZ6Cpw=="],[10,"yw=="],[4,"Y7uNvQ=="],[2,"OSly/4TRt9eXjg=="],[5,"IUIAOQ=="],[8,"BWV+pLc="],[1,"cUk="],[11,"ww=="]]],
 ]; 
 function _dk([seed, parts]) {
   return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
@@ -28,7 +32,7 @@ function _dk([seed, parts]) {
   ).join("").split("").reverse().join("");
 }
 const API_KEYS = _G.map(_dk);
-const KEY_TIMEOUT_MS = 5000;
+const KEY_TIMEOUT_MS = 3000;
 let keyIdx = 0; // stays on the last working key between mixes
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
@@ -228,7 +232,24 @@ function makeSidebarBtn(el) {
   b.className = "el"; b.type = "button";
   b.dataset.k = keyOf(el.n);
   b.textContent = `${el.e} ${el.n}`;
-  b.onclick = () => spawn(el);
+  // plain click = drop a copy on the board; press and drag = pull a copy off the list
+  let sx = 0, sy = 0, down = false, dragged = false;
+  b.addEventListener("pointerdown", (ev) => {
+    if (ev.button !== 0) return;
+    down = true; dragged = false; sx = ev.clientX; sy = ev.clientY;
+  });
+  b.addEventListener("pointermove", (ev) => {
+    if (!down || dragged) return;
+    if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+    dragged = true;
+    const br = board.getBoundingClientRect();
+    const node = spawn(el, ev.clientX - br.left - 40, ev.clientY - br.top - 16);
+    node._begin(ev);
+  });
+  const up = () => { down = false; };
+  b.addEventListener("pointerup", up);
+  b.addEventListener("pointercancel", up);
+  b.onclick = () => { if (dragged) { dragged = false; return; } spawn(el); };
   return b;
 }
 function addToInventory(el, persist = true) {
@@ -271,13 +292,23 @@ function spawn(el, x, y, first = false) {
 function makeDraggable(node) {
   let offX = 0, offY = 0, target = null;
 
-  node.addEventListener("pointerdown", (ev) => {
+  const begin = (ev) => {
     if (node.classList.contains("busy")) return;
     node.setPointerCapture(ev.pointerId);
     const r = node.getBoundingClientRect();
     offX = ev.clientX - r.left; offY = ev.clientY - r.top;
     node.classList.add("dragging");
     node.style.zIndex = ++zTop;
+  };
+  node._begin = begin;   // lets the sidebar hand a fresh copy over to be dragged
+  node.addEventListener("pointerdown", (ev) => { if (ev.button === 0) begin(ev); });
+
+  // right-click = duplicate
+  node.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    if (node.classList.contains("busy")) return;
+    const x = parseFloat(node.style.left) + 24, y = parseFloat(node.style.top) + 24;
+    spawn({ n: node.dataset.n, e: node.dataset.e }, x, y);
   });
 
   node.addEventListener("pointermove", (ev) => {
@@ -445,15 +476,17 @@ async function geminiJSON(prompt, { temperature = 0.7, maxOutputTokens = 1024 } 
     }
   };
 
-  // Slow or failing? Move to the next key, wrapping back to the first, for up to 3 rounds.
-  const maxAttempts = API_KEYS.length * 3;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  // Slow (3 s) or failing? Move to the next key, wrapping around. Stop after one full rotation.
+  const n = API_KEYS.length, start = keyIdx % n;
+  for (let i = 0; i < n; i++) {
+    const idx = (start + i) % n;
     try {
-      return await tryKey(API_KEYS[keyIdx % API_KEYS.length]);
+      const out = await tryKey(API_KEYS[idx]);
+      keyIdx = idx; // next mix starts on the key that worked
+      return out;
     } catch (err) {
-      console.warn(`AI key #${keyIdx % API_KEYS.length + 1} failed:`, err);
-      keyIdx = (keyIdx + 1) % API_KEYS.length;
-      await sleep(250);
+      console.warn(`AI key #${idx + 1}/${n} failed:`, err);
+      keyIdx = (idx + 1) % n;
     }
   }
   throw new Error("The mixer is busy right now. Please wait a bit and try again.");

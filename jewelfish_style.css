@@ -122,7 +122,7 @@ form input:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
   background: var(--paper); border: 2.5px solid var(--ink);
   border-radius: var(--wobble); padding: 3px 11px;
   box-shadow: 2px 2px 0 var(--ink); white-space: nowrap;
-  user-select: none;
+  user-select: none; touch-action: pan-y;
 }
 .el:hover { background: var(--yellow); transform: rotate(-2deg); }
 .el:active { transform: translate(2px,2px); box-shadow: none; }
