@@ -363,7 +363,7 @@ async function combine(dragged, target) {
     const isNewToMe = !inventory.has(keyOf(result.n));
     // in daily mode new elements are temporary, except real first discoveries (those are credited to you for good)
     if (isNewToMe) addToInventory(result, !daily.active || first);
-    if (first) playSfx(sfxDiscovery);   // only real new discoveries, not just new-to-me elements
+    if (first || isNewToMe) playSfx(sfxDiscovery);
     if (first) toast("✨ First discovery!");
     if (daily.active) dailyOnResult(result, first);
   } catch (e) {
@@ -681,9 +681,9 @@ const DAILY_MS = 20 * 60 * 1000;
 const FALLBACK_ITEMS = ["Human","Lightbulb","Germany","Ruby","Dinosaur","Submarine","Pyramid","Violin","Astronaut","Samurai","Piano","Pizza",
   "Vampire","Telescope","Dragon","Compass","Robot","Diamond","Japan","Library","Skeleton","Penguin","Rocket","Castle","Bacteria","Sword","Clock","Egypt","Wizard","Spaceship"];
 // Every board gets randomly drawn categories so the 25 things are truly different and niche, never the easy basics.
-const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone","a common material","a plant or flower","a fruit or vegetable",
+const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone or mineral","a chemical element","a plant or flower","a fruit or vegetable",
   "a dish or food","a drink","a musical instrument","a tool","a machine or invention","a vehicle","a building or landmark","a profession or job","a mythical creature","a fantasy item",
-  "an everyday concept like sleep or time","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a school subject",
+  "a science concept","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a disease or medicine",
   "a type of weather phenomenon","a famous profession like scientist or explorer","a geographic feature","a technology or gadget","a toy","a religion-neutral myth or legend figure","an art or craft","a currency or money thing","a container","a holiday or festival"];
 const LINES = (() => {
   const L = [];
@@ -765,18 +765,16 @@ function saveDailyLocal() {
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
 async function generateBoardItems(date) {
   const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
-  const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
   const prompt =
-`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things. They only get 20 minutes, so the board must be achievable.
-Give exactly 25 DIFFERENT things, a balanced mix of difficulty:
-- About 8 easy (reachable in 2-4 mixes), about 12 medium (4-7 mixes), and at most 5 a little harder (7-10 mixes).
-- Everyday, well-known words anyone recognises, like Cow, Sky, Sleep, Juice, Math, Pizza, Doctor, Guitar, Moon, Egypt, Robot, Cake.
-- NOT the very basics (Steam, Mud, Cloud, Lava, Rain, Sand, Smoke, Ash, Ice, Fog, Wind, Sun, Mountain, Lake, River, Clay, Dust) and NOT obscure or technical things (no rare elements or minerals like Bismuth, no scientific jargon).
-- Use these categories for variety, one entry each, picking a familiar but not the most obvious example:
+`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.
+Give exactly 25 DIFFERENT, NICHE and specific things. This is a hard challenge board, so they must take many mixes to reach.
+- They must NOT be basic or easy things reachable in 1-2 mixes. Avoid generic words like Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Tree, Ocean, Storm, Rainbow, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Forest, Clay, Brick, Dust, Metal.
+- Aim for specific, unique, interesting words like Human, Lightbulb, Germany, Ruby, Violin, Samurai, Submarine, Pyramid, Penguin, Bacteria.
+- One entry per line below, each matching its category, picked by you to be surprising and not the most obvious example:
 ${themes.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 - Short names, 1-2 words, Title Case.
 - Do NOT include Earth, Air, Water or Fire.
-- Variety seed (use it to pick different answers each day): ${date}-${Math.random().toString(36).slice(2, 10)}
+- Variety seed (use it to pick unusual answers): ${date}-${Math.random().toString(36).slice(2, 10)}
 Reply as JSON: {"items": ["...", "..."]}`;
   const blocked = new Set(START.map((s) => keyOf(s.n)));
   const clean = (arr) => {
