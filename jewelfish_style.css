@@ -268,3 +268,18 @@ form input:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
   .dp-cell { font-size: 9px; }
   .big-score { font-size: 70px; }
 }
+
+/* ---------- dictionary ---------- */
+.btn.round.dict { background: var(--green); }
+.dict-count { text-align: center; margin: 0 0 8px; opacity: .7; font-size: 18px; }
+.dict-search {
+  width: 100%; font: inherit; font-size: 20px; padding: 6px 14px; margin-bottom: 10px;
+  border: 3px solid var(--ink); border-radius: var(--wobble2); background: var(--paper); outline: none;
+}
+.dict-search:focus { background: #fff; box-shadow: 3px 3px 0 var(--blue); }
+#dictList { list-style: none; margin: 0; padding: 0 4px 0 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--blue) var(--paper); }
+#dictList::-webkit-scrollbar { width: 14px; }
+#dictList::-webkit-scrollbar-track { background: var(--paper); border-left: 2px dashed var(--ink); }
+#dictList::-webkit-scrollbar-thumb { background: var(--blue); border: 3px solid var(--ink); border-radius: 10px; }
+#dictList li { padding: 4px 12px; margin-bottom: 6px; border: 2.5px solid var(--ink); border-radius: var(--wobble); background: var(--paper); }
+#dictList li.none { text-align: center; background: var(--yellow); }

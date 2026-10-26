@@ -258,7 +258,6 @@ function addToInventory(el, persist = true) {
   inventory.set(k, el);
   elementList.appendChild(makeSidebarBtn(el));
   applyFilter();
-  elementList.scrollTop = elementList.scrollHeight;
   if (!persist) return; // daily mode: temporary elements are not saved to the account
   if (daily.active && savedInventory) savedInventory.set(k, el);
   setDoc(doc(db, "users", me.uid), { elements: arrayUnion({ n: el.n, e: el.e }) }, { merge: true })
@@ -501,6 +500,42 @@ function clearBoard() {
   $("boardHint").classList.remove("hidden");
 }
 $("clearBtn").onclick = clearBoard;
+
+// ==========================================================
+//  Dictionary: every element anyone has discovered (names only, no recipes)
+// ==========================================================
+let dictItems = [], dictToken = 0;
+function renderDict() {
+  const q = $("dictSearch").value.trim().toLowerCase();
+  const rows = q ? dictItems.filter((x) => keyOf(x.n).includes(q)) : dictItems;
+  $("dictList").innerHTML = rows.length
+    ? rows.map((x) => `<li>${esc(x.e)} ${esc(x.n)}</li>`).join("")
+    : `<li class="none">This hasn't been discovered yet, maybe you can find it!</li>`;
+}
+async function openDict() {
+  const token = ++dictToken;
+  $("dictModal").classList.remove("hidden");
+  $("dictSearch").value = "";
+  $("dictList").innerHTML = "<li>Loading…</li>";
+  $("dictCount").textContent = "";
+  try {
+    const snap = await getDocs(collection(db, "elements"));
+    if (token !== dictToken) return;
+    const all = new Map();
+    START.forEach((s) => all.set(keyOf(s.n), { n: s.n, e: s.e }));
+    snap.docs.forEach((d) => { const v = d.data(); if (v.n) all.set(keyOf(v.n), { n: v.n, e: v.e || "✨" }); });
+    dictItems = [...all.values()].sort((a, b) => a.n.localeCompare(b.n));
+    $("dictCount").textContent = `${dictItems.length.toLocaleString()} elements discovered by everyone`;
+    renderDict();
+  } catch (e) {
+    console.error(e);
+    if (token === dictToken) $("dictList").innerHTML = "<li>Couldn't load the dictionary. Please wait a bit and try again.</li>";
+  }
+}
+$("dictBtn").onclick = openDict;
+$("dictSearch").addEventListener("input", renderDict);
+$("dictClose").onclick = () => $("dictModal").classList.add("hidden");
+$("dictModal").addEventListener("click", (e) => { if (e.target.id === "dictModal") $("dictModal").classList.add("hidden"); });
 
 // ==========================================================
 //  Leaderboard

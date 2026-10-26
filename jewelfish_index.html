@@ -58,6 +58,7 @@
     <div id="topBar">
       <button id="trophyBtn" class="btn round" type="button" title="Leaderboard">🏆</button>
       <button id="diamondBtn" class="btn round diamond" type="button" title="Daily challenge">💎</button>
+      <button id="dictBtn" class="btn round dict" type="button" title="Dictionary">📖</button>
       <div class="pill" id="streakPill" title="Daily streak"><span id="flame">🔥</span> <b id="streakNum">0</b></div>
       <div class="pill" id="scorePill" title="Daily score">⭐ <b id="dailyScoreNum">0</b></div>
     </div>
@@ -87,6 +88,16 @@
         <div class="dots">⋯</div>
         <div class="lb-row me" id="lbYouRow"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="dictModal" class="modal hidden">
+    <div class="card lb-card">
+      <button id="dictClose" class="mini close" type="button">✕</button>
+      <h2>📖 Dictionary</h2>
+      <p id="dictCount" class="dict-count"></p>
+      <input id="dictSearch" class="dict-search" type="search" placeholder="🔍 Search discovered elements…" autocomplete="off" spellcheck="false" />
+      <ul id="dictList"></ul>
     </div>
   </div>
 
