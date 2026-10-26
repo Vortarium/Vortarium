@@ -71,7 +71,12 @@
       <div id="dpGrid" class="dp-grid"></div>
       <div id="dpFoot" class="dp-foot"></div>
     </div>
-    <button id="clearBtn" class="btn" type="button">Clear</button>
+    <div id="bottomBar">
+      <button id="recipeBtn" class="btn round small recipe" type="button" title="Recipes">📜</button>
+      <button id="themeBtn" class="btn round small themebtn" type="button" title="Dark mode">🌙</button>
+      <button id="muteBtn" class="btn round small mutebtn" type="button" title="Mute music">🔊</button>
+      <button id="clearBtn" class="btn" type="button">Clear</button>
+    </div>
     <div id="toast" class="toast hidden"></div>
   </main>
 
@@ -88,6 +93,18 @@
         <div class="dots">⋯</div>
         <div class="lb-row me" id="lbYouRow"></div>
       </div>
+    </div>
+  </div>
+
+  <div id="recipeModal" class="modal hidden">
+    <div class="card lb-card">
+      <button id="rcClose" class="mini close" type="button">✕</button>
+      <h2>📜 Recipes</h2>
+      <button id="rcBack" class="mini rc-back hidden" type="button">← All elements</button>
+      <p id="rcHint" class="rc-hint"></p>
+      <input id="rcSearch" class="dict-search" type="search" placeholder="🔍 Search your elements…" autocomplete="off" spellcheck="false" />
+      <div id="rcTitle" class="rc-title hidden"></div>
+      <ul id="rcList"></ul>
     </div>
   </div>
 

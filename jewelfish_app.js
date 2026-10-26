@@ -50,6 +50,8 @@ const firebaseConfig = {
 // ---------- sounds ----------
 const sfxHover = new Audio("jewelfish_hover.mp3");
 sfxHover.volume = 0.5;
+const sfxMerge = new Audio("jewelfish_merge.mp3");
+sfxMerge.volume = 0.7;
 const sfxDiscovery = new Audio("jewelfish_discovery.mp3");
 sfxDiscovery.volume = 0.8;
 const music = new Audio("jewelfish_music.mp3");
@@ -348,6 +350,7 @@ async function combine(dragged, target) {
   const b = { n: target.dataset.n, e: target.dataset.e };
   const x = parseFloat(target.style.left), y = parseFloat(target.style.top);
 
+  playSfx(sfxMerge);   // every mix makes the merge sound
   dragged.classList.add("busy"); target.classList.add("busy");
   const think = document.createElement("small");
   think.className = "thinking";
@@ -500,6 +503,78 @@ function clearBoard() {
   $("boardHint").classList.remove("hidden");
 }
 $("clearBtn").onclick = clearBoard;
+
+// ==========================================================
+//  Theme (light/dark) and music mute
+// ==========================================================
+function applyTheme(dark, fade) {
+  if (fade) { document.body.classList.add("themefade"); setTimeout(() => document.body.classList.remove("themefade"), 650); }
+  document.body.classList.toggle("dark", dark);
+  $("themeBtn").textContent = dark ? "☀️" : "🌙";
+  $("themeBtn").title = dark ? "Light mode" : "Dark mode";
+  try { localStorage.setItem("jf_dark", dark ? "1" : "0"); } catch (e) { /* ignore */ }
+}
+$("themeBtn").onclick = () => applyTheme(!document.body.classList.contains("dark"), true);
+function applyMute(m) {
+  music.muted = m;
+  $("muteBtn").textContent = m ? "🔇" : "🔊";
+  $("muteBtn").title = m ? "Unmute music" : "Mute music";
+  try { localStorage.setItem("jf_mute", m ? "1" : "0"); } catch (e) { /* ignore */ }
+}
+$("muteBtn").onclick = () => applyMute(!music.muted);
+try {
+  applyTheme(localStorage.getItem("jf_dark") === "1", false);
+  applyMute(localStorage.getItem("jf_mute") === "1");
+} catch (e) { applyTheme(false, false); applyMute(false); }
+
+// ==========================================================
+//  Recipes: pick one of your elements, see every known way to make it
+// ==========================================================
+let rcToken = 0;
+const emojiOf = (name) => (inventory.get(keyOf(name)) || {}).e || "";
+function rcShowList() {
+  $("rcBack").classList.add("hidden"); $("rcTitle").classList.add("hidden");
+  $("rcSearch").classList.remove("hidden"); $("rcHint").textContent = "Click an element to see how it is made";
+  const q = $("rcSearch").value.trim().toLowerCase();
+  const rows = [...inventory.values()].filter((x) => !q || keyOf(x.n).includes(q));
+  const list = $("rcList"); list.innerHTML = "";
+  if (!rows.length) { list.innerHTML = `<li class="none">No elements match.</li>`; return; }
+  rows.forEach((x) => {
+    const li = document.createElement("li");
+    li.className = "pick"; li.textContent = `${x.e} ${x.n}`;
+    li.onclick = () => rcShowRecipes(x);
+    list.appendChild(li);
+  });
+}
+async function rcShowRecipes(el) {
+  const token = ++rcToken;
+  $("rcBack").classList.remove("hidden"); $("rcSearch").classList.add("hidden");
+  $("rcTitle").classList.remove("hidden"); $("rcTitle").textContent = `${el.e} ${el.n}`;
+  $("rcHint").textContent = "";
+  const list = $("rcList"); list.innerHTML = "<li>Loading…</li>";
+  try {
+    const snap = await getDocs(query(collection(db, "recipes"), where("n", "==", el.n), limit(100)));
+    if (token !== rcToken) return;
+    const seen = new Set(), rows = [];
+    snap.docs.forEach((d) => {
+      const r = d.data(), k = [keyOf(r.a), keyOf(r.b)].sort().join("+");
+      if (seen.has(k)) return; seen.add(k);
+      rows.push(`<li class="combo">${esc(emojiOf(r.a))} ${esc(r.a)} + ${esc(emojiOf(r.b))} ${esc(r.b)}</li>`);
+    });
+    const isStart = START.some((s) => keyOf(s.n) === keyOf(el.n));
+    if (isStart) rows.unshift(`<li class="none">Starting element, you begin with this one!</li>`);
+    list.innerHTML = rows.length ? rows.join("") : `<li class="none">No recipe found for this one.</li>`;
+    $("rcHint").textContent = snap.size > 1 ? `${rows.length} ways to make it` : "";
+  } catch (e) {
+    console.error(e);
+    if (token === rcToken) list.innerHTML = "<li>Couldn't load recipes. Please wait a bit and try again.</li>";
+  }
+}
+$("recipeBtn").onclick = () => { rcToken++; $("rcSearch").value = ""; $("recipeModal").classList.remove("hidden"); rcShowList(); };
+$("rcBack").onclick = () => { rcToken++; rcShowList(); };
+$("rcSearch").addEventListener("input", rcShowList);
+$("rcClose").onclick = () => $("recipeModal").classList.add("hidden");
+$("recipeModal").addEventListener("click", (e) => { if (e.target.id === "recipeModal") $("recipeModal").classList.add("hidden"); });
 
 // ==========================================================
 //  Dictionary: every element anyone has discovered (names only, no recipes)
