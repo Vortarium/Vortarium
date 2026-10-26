@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, runTransaction, increment,
-  arrayUnion, arrayRemove, updateDoc, deleteDoc, documentId, collection, query, orderBy, limit, getDocs, where,
+  arrayUnion, arrayRemove, updateDoc, deleteDoc, documentId, deleteField, collection, query, orderBy, limit, getDocs, where,
   getCountFromServer, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -191,9 +191,11 @@ $("authForm").addEventListener("submit", async (ev) => {
 });
 
 $("logoutBtn").onclick = async () => {
-  if (queue.active) {
+  if (queue.active && queue.playing) {
     if (!confirm("Log out mid-match? Leaving counts as a loss and your points from it are thrown away.")) return;
     try { await updateDoc(doc(db, "matches", queue.matchId), { status: "forfeit", loser: me.uid }); } catch (e) { /* ignore */ }
+  } else if (queue.active) {
+    try { await updateDoc(doc(db, "matches", queue.matchId), { status: "cancelled" }); } catch (e) { /* ignore */ }
   }
   signOut(auth);
 };
@@ -222,7 +224,9 @@ onAuthStateChanged(auth, async (user) => {
     uid: user.uid, username: data.username, discoveries: data.discoveries || 0,
     dailyScore: data.dailyScore || 0, streak: data.streak || 0,
     lastDailyDate: data.lastDailyDate || "", lastDailyScore: data.lastDailyScore || 0,
-    queueScore: data.queueScore || 0
+    queueScore: data.queueScore || 0,
+    dailyStatus: data.dailyStatus || "", dailyDate: data.dailyDate || "", dailyRun: data.dailyRun || null,
+    dailyStarted: data.dailyStarted || ""
   };
   inventory.clear();
   START.forEach((s) => inventory.set(keyOf(s.n), s));
@@ -857,15 +861,44 @@ function tick() {
 }
 function startTick() { clearInterval(daily.timer); daily.timer = setInterval(tick, 250); tick(); }
 
+// The daily is also kept on your account (dailyStatus: not_started / started / finished), so a refresh, a re-login
+// or another device all pick up exactly where you were. Started and not started both stay unlocked.
+function dailyStatusToday() {
+  const t = dateStr();
+  if (me.lastDailyDate === t || (me.dailyDate === t && me.dailyStatus === "finished")) return "finished";
+  if (daily.started || (me.dailyDate === t && me.dailyStatus === "started") || me.dailyStarted === t) return "started";
+  return "not_started";
+}
+function dailyRunData() {
+  const src = daily.active ? inventory : (daily.dailyInv || new Map());
+  return {
+    found: [...daily.found], startAt: daily.startAt || null, inside: !!daily.active,
+    inv: [...src.values()].filter((el) => !START.some((s) => keyOf(s.n) === keyOf(el.n))).map((el) => ({ n: el.n, e: el.e }))
+  };
+}
+let dailySyncT = null;
+function syncDailyRemote(now = false) {
+  if (!daily.started || !me) return;
+  clearTimeout(dailySyncT);
+  const go = () => {
+    if (!daily.started || !me) return;
+    updateDoc(doc(db, "users", me.uid), { dailyStatus: "started", dailyDate: daily.date, dailyRun: dailyRunData() }).catch(() => {});
+  };
+  if (now) go(); else dailySyncT = setTimeout(go, 1500);
+}
+window.addEventListener("pagehide", () => syncDailyRemote(true));
+document.addEventListener("visibilitychange", () => { if (document.hidden) syncDailyRemote(true); });
+
 function saveDailyLocal() {
   if (!daily.started || !me) return;
-  const inv = [...(daily.active ? inventory : (daily.dailyInv || new Map())).values()].filter((el) => !START.some((s) => keyOf(s.n) === keyOf(el.n)));
-  lsSet(lsKey(daily.date), { date: daily.date, items: daily.items, found: [...daily.found], startAt: daily.startAt, inv });
+  lsSet(lsKey(daily.date), { date: daily.date, items: daily.items, ...dailyRunData() });
+  syncDailyRemote();
 }
 
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
-// Daily boards sit between easy and medium: about 3 to 10 mixes per item, everyday well-known things.
-const DAILY_THEMES = ["a farm or pet animal","a wild animal","a bird","a sea creature","a fruit or vegetable","a simple food","a drink","a simple tool","a household object","a simple building or place","a plant or flower","a natural material","a type of weather","something in the sky","a landform or body of water","a simple vehicle","a toy","a piece of clothing","a body part","something found at the beach","something found in a kitchen","a sweet or snack","a simple machine or gadget","a metal or building material","a simple everyday idea (like Sleep or Home)"];
+// Daily boards: well-known words, but each takes roughly 6 to 15 mixes (think Stars, Garden, Library, not Cloud or Plant).
+const DAILY_THEMES = ["a famous kind of building or landmark","a musical instrument","a type of vehicle","a prepared dish or meal","a sport or game","a profession or job","a mythical or fantasy creature","something in space","a natural landmark or landscape","a place in a town or city","a place in nature","a tool or gadget with a few parts","a piece of furniture","a sight in the sky","a wild animal","a plant-based place or object (like Garden or Orchard)","a school or science object","a type of clothing or accessory","a kind of celebration or event","an everyday machine","something found at a harbor","a weapon or armor from stories","a book, story or art thing","a source of light or fire","a simple everyday idea (like Dream or Home)","a farm place","a kind of road or bridge","a toy or game piece","a measuring device","a sweet treat or baked good"];
+const HARD_FALLBACK = ["Stars","Garden","Rainbow","Castle","Bridge","Library","Lighthouse","Bicycle","Telescope","Volcano","Bakery","Compass","Windmill","Greenhouse","Waterfall","Sailboat","Pyramid","Campfire","Museum","Sunset","Meadow","Harbor","Lantern","Orchard","Clock","Canoe","Desert","Forest","Tower","Orchestra"];
 const EASY_FALLBACK = ["Steam","Mud","Cloud","Lava","Rain","Sand","Glass","Plant","Ocean","Storm","Smoke","Ash","Ice","Snow","Fog","Wind","Sun","Mountain","Lake","River","Island","Dust","Metal","Tree","Moon","Salt","Brick","Seed","Wave","Cactus"];
 async function generateBoardItems(seed, diff = "daily") {
   const themes = shuffle(DAILY_THEMES.slice()).slice(0, 25);
@@ -879,10 +912,10 @@ async function generateBoardItems(seed, diff = "daily") {
 - Use some of those, and also come up with other similarly easy things (nature, weather, materials, very simple everyday things).
 - Nothing obscure and nothing that needs a long chain of mixes.`,
     daily:
-`Give exactly 25 DIFFERENT, EVERYDAY things that most people know. This is a ROUGHLY 3 TO 10 MIXES board: each item should take about 3 to 10 combinations to reach from the four starting elements, so not instant, but never a long grind.
-- Good examples of the right difficulty: Glass, Tree, Brick, Bread, Boat, Egg, Fish, Cheese, House, Bird, Bridge, Flower, Salt.
-- Too easy, do NOT use (1 to 2 mixes): Steam, Mud, Cloud, Lava, Rain, Sand, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Dust.
-- Too hard, do NOT use: Computer, Robot, Piano, Doctor, Pirate, Dragon, Rocket, chemical elements, gemstones, rare minerals, scientific terms, obscure animals or historical figures.
+`Give exactly 25 DIFFERENT things that most people know. This is a MEDIUM-HARD board: each item should take roughly 6 to 15 mixes to reach from the four starting elements. Not instant, a real little puzzle.
+- Good examples of the right difficulty: Stars, Garden, Rainbow, Castle, Bridge, Library, Lighthouse, Bicycle, Telescope, Volcano, Bakery, Compass, Windmill, Orchestra.
+- Too easy, do NOT use: Steam, Mud, Cloud, Lava, Rain, Sand, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Moon, Mountain, Lake, River, Island, Dust, Plant, Tree, Seed, Glass, Brick, Bread, Egg, Fish, Cheese, House, Bird, Flower, Salt, Wave.
+- Too hard, do NOT use: Computer, Robot, Doctor, Pirate, Dragon, Rocket, chemical elements, gemstones, rare minerals, scientific terms, obscure animals or historical figures.
 - One entry per line below, each matching its category, a common well-known example:
 ${catLines}`
   };
@@ -906,7 +939,7 @@ ${catLines}`
     });
   } catch (e) { console.warn("board generation failed", e); throw e; }
   // top up if Gemini gave fewer than 25 unique entries
-  if (items.length < 25) items = clean([...items, ...shuffle((diff === "easy" ? EASY_FALLBACK : FALLBACK_ITEMS).slice())]);
+  if (items.length < 25) items = clean([...items, ...shuffle((diff === "easy" ? EASY_FALLBACK : HARD_FALLBACK).slice())]);
   return shuffle(items.slice(0, 25));
 }
 
@@ -963,7 +996,7 @@ function dailyOnResult(result, first) {
 }
 
 function teardownDaily() {
-  clearInterval(daily.timer);
+  clearInterval(daily.timer); clearTimeout(dailySyncT);
   daily.active = false; daily.started = false; daily.dailyInv = null; daily.dailyBoard = null; daily.realBoard = null;
   if (!queue.active) savedInventory = null;
   $("dailyPanel").classList.add("hidden");
@@ -995,34 +1028,40 @@ async function finishDaily() {
 }
 
 async function submitDaily(date, pts) {
-  if (me.lastDailyDate >= date) { lsSet(lsKey(date), { date, finished: true, submitted: true, pts }); return; }
+  const finishedFields = { dailyStatus: "finished", dailyDate: date, dailyRun: deleteField() };
+  const markFinished = () => { me.dailyStatus = "finished"; me.dailyDate = date; me.dailyRun = null; };
+  if (me.lastDailyDate >= date) {
+    updateDoc(doc(db, "users", me.uid), finishedFields).catch(() => {}); markFinished();
+    lsSet(lsKey(date), { date, finished: true, submitted: true, pts }); return;
+  }
   const streak = me.lastDailyDate === yesterdayOf(date) ? (me.streak || 0) + 1 : 1;
   try {
     await setDoc(doc(db, "users", me.uid),
-      { dailyScore: increment(pts), streak, lastDailyDate: date, lastDailyScore: pts }, { merge: true });
+      { dailyScore: increment(pts), streak, lastDailyDate: date, lastDailyScore: pts, ...finishedFields }, { merge: true });
   } catch (e) {
     if (e.code !== "permission-denied") throw e;
     // denied means this day was already counted
     const fresh = (await getDoc(doc(db, "users", me.uid))).data() || {};
     me.dailyScore = fresh.dailyScore || 0; me.streak = fresh.streak || 0;
     me.lastDailyDate = fresh.lastDailyDate || ""; me.lastDailyScore = fresh.lastDailyScore || 0;
+    updateDoc(doc(db, "users", me.uid), finishedFields).catch(() => {}); markFinished();
     lsSet(lsKey(date), { date, finished: true, submitted: true, pts });
     refreshDailyUI();
     return;
   }
   me.dailyScore = (me.dailyScore || 0) + pts;
-  me.streak = streak; me.lastDailyDate = date; me.lastDailyScore = pts;
+  me.streak = streak; me.lastDailyDate = date; me.lastDailyScore = pts; markFinished();
   lsSet(lsKey(date), { date, finished: true, submitted: true, pts });
   refreshDailyUI();
 }
 
-// pick up a run (or an unsent score) left over from a refresh / closed tab
+// pick up your daily after a refresh, a re-login or a different device (and any unsent score)
 async function resumeDaily() {
   const prefix = `jf_daily_${me.uid}_`;
   let keys = [];
-  try { keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix)); } catch (e) { return; }
+  try { keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix)); } catch (e) { keys = []; }
   const today = dateStr();
-  let resumed = false;
+  let local = null;
   for (const k of keys) {
     const st = lsGet(k);
     if (!st) { try { localStorage.removeItem(k); } catch (e) {} continue; }
@@ -1031,18 +1070,44 @@ async function resumeDaily() {
       else if (st.date !== today) { try { localStorage.removeItem(k); } catch (e) {} }
       continue;
     }
-    const stale = me.lastDailyDate >= st.date || (st.date !== today && !st.startAt);
-    if (stale || resumed || !Array.isArray(st.items) || st.items.length !== 25) { try { localStorage.removeItem(k); } catch (e) {} continue; }
-    resumed = true;
-    startDaily(st.date, st.items, st);
-    toast("Welcome back! Your daily challenge is still going 💎", 3000);
-    if (Date.now() >= dailyEndAt()) await finishDaily();
+    const stale = me.lastDailyDate >= st.date;
+    if (stale || !Array.isArray(st.items) || st.items.length !== 25) { try { localStorage.removeItem(k); } catch (e) {} continue; }
+    if (!local || st.date > local.date) local = st;
+  }
+  // the copy on your account
+  let remote = null;
+  if (me.dailyStatus === "started" && me.dailyDate && me.lastDailyDate < me.dailyDate)
+    remote = { ...(me.dailyRun || {}), date: me.dailyDate };
+  else if (me.dailyStarted === today && me.lastDailyDate !== today && !(me.dailyStatus === "finished" && me.dailyDate === today))
+    remote = { date: today, found: [], inv: [], startAt: null, inside: true };   // older save that never stored progress: unlock it
+  let best = null;
+  if (local && remote) best = local.date !== remote.date ? (local.date > remote.date ? local : remote)
+    : ((local.found || []).length >= (remote.found || []).length ? local : remote);
+  else best = local || remote;
+
+  if (best) {
+    try {
+      const items = (Array.isArray(best.items) && best.items.length === 25) ? best.items : await loadDailyBoard(best.date);
+      startDaily(best.date, items, best);
+      if (best.inside === false) switchOutDaily(true);
+      toast(best.inside === false ? "Your daily is still going. Tap 💎 to jump back in!" : "Welcome back! Your daily challenge is still going 💎", 3500);
+      if (Date.now() >= dailyEndAt()) await finishDaily();
+    } catch (e) { console.warn("couldn't restore daily", e); toast("Couldn't reload your daily yet. Refresh to try again.", 4000); }
+  }
+
+  // keep the account record honest: not_started / started / finished for today
+  if (!daily.started) {
+    const eff = dailyStatusToday();
+    if (eff !== "started" && !(me.dailyStatus === eff && me.dailyDate === today)) {
+      updateDoc(doc(db, "users", me.uid), { dailyStatus: eff, dailyDate: today, dailyRun: deleteField() }).catch(() => {});
+      me.dailyStatus = eff; me.dailyDate = today; me.dailyRun = null;
+    }
   }
   refreshDailyUI();
 }
 
 // ---------- switching out of / back into a started daily ----------
-function switchOutDaily() {
+function switchOutDaily(quiet) {
   if (board.querySelector(".item.busy")) { toast("Wait for the mix to finish first", 2000); return; }
   daily.dailyInv = new Map(inventory);
   daily.dailyBoard = snapshotBoard();
@@ -1052,7 +1117,7 @@ function switchOutDaily() {
   renderSidebar();
   $("dailyPanel").classList.add("hidden"); $("diamondBtn").classList.remove("active");
   saveDailyLocal();
-  toast("Back on your own board. Tap 💎 to return to the daily!", 3000);
+  if (!quiet) toast("Back on your own board. Tap 💎 to return to the daily!", 3000);
 }
 function switchInDaily() {
   if (board.querySelector(".item.busy")) { toast("Wait for the mix to finish first", 2000); return; }
@@ -1078,7 +1143,7 @@ async function openDaily() {
   if (daily.started) { daily.active ? switchOutDaily() : switchInDaily(); return; }   // 💎 toggles in and out once a daily is started
   showDailyView("intro");
   $("dailyModal").classList.remove("hidden");
-  const done = me.lastDailyDate === dateStr();
+  const done = dailyStatusToday() === "finished";
   $("dailyAccept").classList.toggle("hidden", done);
   $("dailyMsg").textContent = done
     ? `Today's challenge is done: you scored ${me.lastDailyScore || 0} pts. A fresh board arrives at midnight! 🌙`
@@ -1095,21 +1160,21 @@ $("dailyAccept").onclick = async () => {
   try {
     const date = dateStr();
     const fresh = (await getDoc(doc(db, "users", me.uid))).data() || {};
-    if (fresh.lastDailyDate === date) {
-      me.lastDailyDate = fresh.lastDailyDate; me.lastDailyScore = fresh.lastDailyScore || 0;
+    if (fresh.lastDailyDate === date || (fresh.dailyDate === date && fresh.dailyStatus === "finished")) {
+      me.lastDailyDate = fresh.lastDailyDate || me.lastDailyDate; me.lastDailyScore = fresh.lastDailyScore || 0;
       msg.textContent = `You already finished today's challenge (${me.lastDailyScore} pts). See you at midnight! 🌙`;
       btn.classList.add("hidden"); refreshDailyUI(); return;
     }
-    if (fresh.dailyStarted === date && !lsGet(lsKey(date))) {
-      msg.textContent = "You already started today's challenge, so it can't be restarted. Try again tomorrow!";
-      btn.classList.add("hidden"); return;
-    }
     const items = await loadDailyBoard(date);
-    await setDoc(doc(db, "users", me.uid), { dailyStarted: date }, { merge: true });
+    // started but not finished stays unlocked: pick it back up instead of locking you out
+    const wasStarted = (fresh.dailyDate === date && fresh.dailyStatus === "started") || fresh.dailyStarted === date;
+    const run = wasStarted && fresh.dailyDate === date && fresh.dailyRun ? fresh.dailyRun : { found: [], inv: [], startAt: null, inside: true };
+    if (!wasStarted) await updateDoc(doc(db, "users", me.uid), { dailyStatus: "started", dailyDate: date, dailyStarted: date, dailyRun: run });
+    me.dailyStatus = "started"; me.dailyDate = date; me.dailyRun = run;
     $("dailyModal").classList.add("hidden");
     msg.textContent = "";
     if (queue.waiting) leaveQueueWait();
-    startDaily(date, items);
+    startDaily(date, items, { ...run, date, inside: true });
   } catch (e) {
     console.error(e);
     msg.textContent = friendlyError(e);
@@ -1171,12 +1236,14 @@ async function playResult(r) {
 //  - no inactivity timer: players can take as long as they want
 //  - scoring matches the daily (1 per tile, bingos 3+n, whole board +25), banked into queueScore at the end
 // ==========================================================
-const QUEUE_DIFF = "easy";          // difficulty of the AI board
+const QUEUE_DIFF = "daily";         // Default mode: AI words at daily difficulty (Stars, Garden, not Cloud, Plant)
 const queue = {
-  waiting: false, starting: false, active: false, finishing: false, matching: false,
-  matchId: null, items: [], claims: new Map(), pending: new Set(),
+  waiting: false, starting: false, active: false, playing: false, startingPlay: false, finishing: false, matching: false,
+  matchId: null, players: [], items: [], claims: new Map(), pending: new Set(),
   oppUid: null, oppName: "", endReq: [], learned: 0, savedBoard: null,
-  unsubs: [], unsubMine: null, seenTimer: null
+  phase: "pick", mode: null, votes: {}, tiles: [], proposal: null, turn: null, ready: [], introDone: false, sel: null,
+  genStarted: false, editFor: "",
+  unsubs: [], unsubMine: null, seenTimer: null, introTimer: null
 };
 const qKey = () => `jf_q_${me.uid}`;
 const matchDoc = () => doc(db, "matches", queue.matchId);
@@ -1232,11 +1299,6 @@ async function tryMatch() {
     const first = w[0];
     if (!first || first.id === me.uid || !w.some((x) => x.id === me.uid)) return;
 
-    let items;
-    try { items = await generateBoardItems("queue-" + Date.now(), QUEUE_DIFF); }
-    catch (e) { items = shuffle(EASY_FALLBACK.slice()).slice(0, 25); }
-    if (!queue.waiting) return;
-
     const myRef = doc(db, "queue", me.uid), theirRef = doc(db, "queue", first.id);
     const mRef = doc(collection(db, "matches"));
     await runTransaction(db, async (tx) => {
@@ -1244,7 +1306,8 @@ async function tryMatch() {
       if (!t.exists() || t.data().matchId || !m.exists() || m.data().matchId) throw new Error("taken");
       tx.set(mRef, {
         players: [first.id, me.uid], names: { [first.id]: first.username, [me.uid]: me.username },
-        items, status: "active", endReq: [], loser: null, created: serverTimestamp()
+        status: "active", phase: "pick", mode: null, votes: {}, items: null, tiles: Array(25).fill(""),
+        proposal: null, turn: first.id, ready: [], endReq: [], loser: null, created: serverTimestamp()
       });
       tx.update(theirRef, { matchId: mRef.id });
       tx.update(myRef, { matchId: mRef.id });
@@ -1254,6 +1317,7 @@ async function tryMatch() {
   finally { queue.matching = false; }
 }
 
+// Found a match: show the "you vs them" screen, then the mode vote. Your elements are NOT touched until the game starts.
 async function beginMatch(matchId) {
   if (!queue.waiting || queue.starting || queue.active) return;
   queue.starting = true;
@@ -1264,26 +1328,24 @@ async function beginMatch(matchId) {
     const oppUid = m.players.find((p) => p !== me.uid);
     stopWaiting();
     deleteDoc(doc(db, "queue", me.uid)).catch(() => {});
-    for (let i = 0; i < 50 && board.querySelector(".item.busy"); i++) await sleep(100);   // let a mix in progress land first
-
-    savedInventory = new Map(inventory);
     Object.assign(queue, {
-      active: true, finishing: false, matchId, items: m.items, claims: new Map(), pending: new Set(),
-      oppUid, oppName: (m.names || {})[oppUid] || "Opponent", endReq: [], learned: 0,
-      savedBoard: snapshotBoard()
+      active: true, playing: false, startingPlay: false, finishing: false, matchId, players: m.players,
+      oppUid, oppName: (m.names || {})[oppUid] || "Opponent", items: [], claims: new Map(), pending: new Set(),
+      endReq: [], learned: 0, savedBoard: null, phase: m.phase || "pick", mode: null, votes: {},
+      tiles: Array(25).fill(""), proposal: null, turn: m.players[0], ready: [], introDone: false, sel: null,
+      genStarted: false, editFor: ""
     });
-    inventory.clear(); START.forEach((s) => inventory.set(keyOf(s.n), s));
-    renderSidebar(); clearBoard();
-    $("queueModal").classList.add("hidden");
-    $("queuePanel").classList.remove("hidden"); $("queueBtn").classList.add("active");
-    $("qpTitle").textContent = `⚔️ vs ${queue.oppName}`;
-    renderQueueBoard();
     lsSet(qKey(), { matchId });
-    queue.unsubs = [
-      onSnapshot(matchDoc(), onMatchSnap),
-      onSnapshot(collection(db, "matches", matchId, "claims"), onClaimsSnap)
-    ];
-    toast(`⚔️ Matched with ${queue.oppName}! You're back to the 4 basics`, 4000);
+    $("queueModal").classList.add("hidden");
+    $("vsMe").textContent = me.username; $("vsOpp").textContent = queue.oppName;
+    // replay the little transition animation
+    const head = $("matchModal").querySelector(".vs-head");
+    head.classList.remove("go"); void head.offsetWidth; head.classList.add("go");
+    $("matchModal").classList.remove("hidden");
+    renderLobby();
+    clearTimeout(queue.introTimer);
+    queue.introTimer = setTimeout(() => { queue.introDone = true; renderLobby(); }, 2400);
+    queue.unsubs = [onSnapshot(matchDoc(), onMatchSnap)];
   } catch (e) {
     console.error(e);
     queue.active = false;
@@ -1291,14 +1353,212 @@ async function beginMatch(matchId) {
   } finally { queue.starting = false; }
 }
 
+// deterministic shuffle so both players get the very same shuffled board
+function seededShuffle(arr, seedStr) {
+  let h = 1779033703 ^ seedStr.length;
+  for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  let a = h >>> 0;
+  const rnd = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+
+// ---------- lobby (mode vote, AI words or custom building) ----------
+function lobbyLogic() {
+  const ref = matchDoc();
+  if (queue.phase === "pick") {
+    const a = queue.votes[queue.players[0]], b = queue.votes[queue.players[1]];
+    if (a && a === b) updateDoc(ref, { mode: a, phase: a === "default" ? "gen" : "build", turn: queue.players[0] }).catch(() => {});
+  } else if (queue.phase === "gen") {
+    if (!queue.genStarted) {
+      queue.genStarted = true;
+      // the newer player makes the board; if they vanish, the other player takes over after 45 s
+      const delay = me.uid === queue.players[1] ? 0 : 45000;
+      setTimeout(() => { if (queue.active && !queue.playing && queue.phase === "gen") generateDefaultBoard(); }, delay);
+    }
+  } else if (queue.phase === "ready") {
+    if (queue.players.every((p) => queue.ready.includes(p)))
+      updateDoc(ref, { phase: "play", items: seededShuffle(queue.tiles, queue.matchId) }).catch(() => {});
+  }
+}
+
+async function generateDefaultBoard() {
+  const matchId = queue.matchId;
+  let items;
+  try { items = await generateBoardItems("queue-" + matchId, QUEUE_DIFF); }
+  catch (e) { items = shuffle(HARD_FALLBACK.slice()).slice(0, 25); }
+  if (!queue.active || queue.matchId !== matchId) return;
+  try {
+    const ref = doc(db, "matches", matchId);
+    await runTransaction(db, async (tx) => {
+      const d = (await tx.get(ref)).data();
+      if (!d || d.phase !== "gen" || d.items) return;     // someone else already did it
+      tx.update(ref, { items, phase: "play" });
+    });
+  } catch (e) { console.warn("default board write failed", e); }
+}
+
+const LOBBY_VIEWS = ["mIntro", "mPick", "mGen", "mBuild", "mReady"];
+function renderLobby() {
+  if (!queue.active || queue.playing) return;
+  LOBBY_VIEWS.forEach((id) => $(id).classList.add("hidden"));
+  $("mGrid").classList.add("hidden");
+  if (queue.phase === "pick") {
+    if (!queue.introDone) { $("mIntro").classList.remove("hidden"); return; }
+    $("mPick").classList.remove("hidden");
+    const my = queue.votes[me.uid], op = queue.votes[queue.oppUid], L = { default: "Default", custom: "Custom" };
+    $("modeDefault").classList.toggle("chosen", my === "default");
+    $("modeCustom").classList.toggle("chosen", my === "custom");
+    $("mVotes").textContent = !my
+      ? (op ? `${queue.oppName} picked ${L[op]}. What do you pick?` : "Pick a mode. You both need to choose the same one.")
+      : !op ? `You picked ${L[my]}. Waiting for ${queue.oppName}…`
+      : my === op ? "Starting…"
+      : `You picked ${L[my]} but ${queue.oppName} picked ${L[op]}. One of you needs to change!`;
+  } else if (queue.phase === "gen") {
+    $("mGen").classList.remove("hidden");
+  } else {
+    renderBuild();
+  }
+}
+
+function renderBuild() {
+  const ph = queue.phase, p = queue.proposal, meU = me.uid, opp = queue.oppName;
+  const myTurn = queue.turn === meU;
+  const canPick = ph === "build" && myTurn && !p;
+  const myVetoed = ph === "build" && !!p && p.by === meU && p.state === "vetoed";
+  const judging = ph === "build" && !!p && p.by !== meU && p.state === "pending";
+  const filled = queue.tiles.filter(Boolean).length;
+
+  $("mGrid").classList.remove("hidden");
+  $("mGrid").innerHTML = queue.tiles.map((t, i) => {
+    let cls = "m-cell", txt = t;
+    if (t) cls += " filled";
+    else if (p && p.idx === i) { cls += p.state === "vetoed" ? " vetoed" : " pending"; txt = p.text; }
+    else if (canPick) { cls += " open"; if (queue.sel === i) cls += " sel"; }
+    return `<div class="${cls}" data-i="${i}"><small>${i + 1}</small>${esc(txt || "")}</div>`;
+  }).join("");
+
+  if (ph === "ready") {
+    $("mReady").classList.remove("hidden");
+    $("mCount").textContent = "";
+    const iReady = queue.ready.includes(meU), oppReady = queue.ready.includes(queue.oppUid);
+    $("mBegin").disabled = iReady;
+    $("mBegin").textContent = iReady ? "Waiting…" : "Begin";
+    $("mReadyNote").textContent = iReady ? `Waiting for ${opp} to press begin…` : oppReady ? `${opp} is ready!` : "";
+    return;
+  }
+
+  $("mBuild").classList.remove("hidden");
+  $("mCount").textContent = `${filled}/25 tiles written`;
+  let status;
+  if (canPick) status = queue.sel === null ? "Your turn! Tap an empty tile and write something you two can realistically make." : `Tile ${queue.sel + 1}: type your word.`;
+  else if (myVetoed) status = `${opp} vetoed “${p.text}”. Fix it and submit again.`;
+  else if (p && p.by === meU) status = `Waiting for ${opp} to accept or veto “${p.text}”…`;
+  else if (judging) status = `${opp} wants tile ${p.idx + 1} to be “${p.text}”.`;
+  else if (p) status = `You vetoed “${p.text}”. Waiting for ${opp} to fix it…`;
+  else status = `Waiting for ${opp} to pick a tile…`;
+  $("mStatus").textContent = status;
+
+  const showEdit = (canPick && queue.sel !== null) || myVetoed;
+  $("mEdit").classList.toggle("hidden", !showEdit);
+  $("mJudge").classList.toggle("hidden", !judging);
+  if (showEdit) {
+    const key = myVetoed ? `${p.idx}:${p.text}` : `sel${queue.sel}`;
+    if (queue.editFor !== key) { queue.editFor = key; $("mWord").value = myVetoed ? p.text : ""; $("mWord").focus(); }
+  } else queue.editFor = "";
+}
+
+$("mGrid").addEventListener("click", (e) => {
+  const c = e.target.closest(".m-cell.open");
+  if (!c || !queue.active) return;
+  queue.sel = Number(c.dataset.i); renderBuild();
+});
+function submitProposal() {
+  const p = queue.proposal, myVetoed = !!p && p.by === me.uid && p.state === "vetoed";
+  const idx = myVetoed ? p.idx : queue.sel;
+  if (idx === null || idx === undefined) return;
+  const text = $("mWord").value.replace(/\s+/g, " ").trim().slice(0, 30);
+  if (!text) { toast("Type a word first", 1800); return; }
+  if (isStartEl(text)) { toast("You already start with that one, pick something else", 2500); return; }
+  if (queue.tiles.some((t, i) => t && i !== idx && keyOf(t) === keyOf(text))) { toast("That word is already on the board", 2500); return; }
+  updateDoc(matchDoc(), { proposal: { idx, text, by: me.uid, state: "pending" } })
+    .then(() => { queue.sel = null; $("mWord").value = ""; queue.editFor = ""; })
+    .catch(() => toast("Couldn't send that. Try again.", 2500));
+}
+$("mSubmit").onclick = submitProposal;
+$("mWord").addEventListener("keydown", (e) => { if (e.key === "Enter") submitProposal(); });
+$("mAccept").onclick = () => {
+  const p = queue.proposal;
+  if (!queue.active || !p || p.by === me.uid || p.state !== "pending") return;
+  const tiles = queue.tiles.slice(); tiles[p.idx] = p.text;
+  const upd = { tiles, proposal: null, turn: me.uid };   // you pick the next tile
+  if (tiles.every(Boolean)) upd.phase = "ready";
+  updateDoc(matchDoc(), upd).catch(() => toast("Couldn't send that. Try again.", 2500));
+};
+$("mVeto").onclick = () => {
+  const p = queue.proposal;
+  if (!queue.active || !p || p.by === me.uid || p.state !== "pending") return;
+  updateDoc(matchDoc(), { proposal: { ...p, state: "vetoed" } }).catch(() => toast("Couldn't send that. Try again.", 2500));
+};
+$("mBegin").onclick = () => updateDoc(matchDoc(), { ready: arrayUnion(me.uid) }).catch(() => toast("Couldn't send that. Try again.", 2500));
+const vote = (v) => { if (queue.active && queue.phase === "pick") updateDoc(matchDoc(), { [`votes.${me.uid}`]: v }).catch(() => {}); };
+$("modeDefault").onclick = () => vote("default");
+$("modeCustom").onclick = () => vote("custom");
+
+function cancelLobby(msg) {
+  queue.unsubs.forEach((u) => u()); queue.unsubs = [];
+  clearTimeout(queue.introTimer);
+  Object.assign(queue, { active: false, playing: false, matchId: null, finishing: false });
+  $("matchModal").classList.add("hidden");
+  try { localStorage.removeItem(qKey()); } catch (e) { /* ignore */ }
+  if (msg) toast(msg, 4000);
+}
+$("mLeave").onclick = async () => {
+  if (!queue.active || queue.playing) return;
+  try { await updateDoc(matchDoc(), { status: "cancelled" }); } catch (e) { /* leave anyway */ }
+  cancelLobby("You left the match. Nothing was lost.");
+};
+
+// the game itself: swap to the 4 basics and show the (shuffled) board
+async function startPlay(items) {
+  if (queue.playing || queue.startingPlay) return;
+  queue.startingPlay = true;
+  try {
+    for (let i = 0; i < 50 && board.querySelector(".item.busy"); i++) await sleep(100);   // let a mix in progress land first
+    savedInventory = new Map(inventory);
+    Object.assign(queue, { items, claims: new Map(), pending: new Set(), learned: 0, savedBoard: snapshotBoard() });
+    inventory.clear(); START.forEach((s) => inventory.set(keyOf(s.n), s));
+    renderSidebar(); clearBoard();
+    $("matchModal").classList.add("hidden");
+    $("queuePanel").classList.remove("hidden"); $("queueBtn").classList.add("active");
+    $("qpTitle").textContent = `⚔️ vs ${queue.oppName}`;
+    queue.playing = true;
+    renderQueueBoard();
+    queue.unsubs.push(onSnapshot(collection(db, "matches", queue.matchId, "claims"), onClaimsSnap));
+    toast(`⚔️ Go! You're back to the 4 basics`, 3500);
+  } finally { queue.startingPlay = false; }
+}
+
 // ---------- live match ----------
 function onMatchSnap(s) {
   if (!queue.active || !s.exists()) return;
   const m = s.data({ serverTimestamps: "estimate" });
-  queue.endReq = m.endReq || [];
-  renderQueueBoard();
+  if (!queue.playing && (m.status === "cancelled" || m.status === "forfeit" || m.status === "done")) {
+    cancelLobby(`${queue.oppName} left before the game started`); return;
+  }
+  if (m.status === "cancelled") return;
   if (m.status === "forfeit") { finishQueue("forfeit", m.loser); return; }
   if (m.status === "done") { finishQueue("done"); return; }
+  Object.assign(queue, {
+    phase: m.phase || "pick", mode: m.mode || null, votes: m.votes || {}, tiles: m.tiles || Array(25).fill(""),
+    proposal: m.proposal || null, turn: m.turn || m.players[0], ready: m.ready || [], endReq: m.endReq || []
+  });
+  if (!queue.playing) {
+    if (queue.phase === "play") { if (m.items && m.items.length === 25) startPlay(m.items); return; }
+    lobbyLogic(); renderLobby(); return;
+  }
+  renderQueueBoard();
   if (queue.endReq.includes(me.uid) && queue.endReq.includes(queue.oppUid)) {
     updateDoc(matchDoc(), { status: "done" }).catch(() => {});
     finishQueue("agreed");
@@ -1325,7 +1585,7 @@ function onClaimsSnap(s) {
 }
 
 function renderQueueBoard() {
-  if (!queue.active) return;
+  if (!queue.active || !queue.playing) return;
   const mine = qLines(me.uid), theirs = qLines(queue.oppUid);
   const inLine = new Set([...mine.flat(), ...theirs.flat()]);
   $("qpGrid").innerHTML = queue.items.map((n, i) => {
@@ -1341,6 +1601,7 @@ function renderQueueBoard() {
 
 // called after every successful mix while in a match
 async function queueOnResult(result) {
+  if (!queue.playing) return;
   const idx = queue.items.findIndex((x) => keyOf(x) === keyOf(result.n));
   if (idx < 0 || queue.pending.has(idx)) return;
   const owner = queue.claims.get(idx);
@@ -1353,25 +1614,26 @@ async function queueOnResult(result) {
 }
 
 $("qpEnd").onclick = () => {
-  if (!queue.active) return;
+  if (!queue.playing) return;
   const asked = queue.endReq.includes(me.uid);
   updateDoc(matchDoc(), { endReq: asked ? arrayRemove(me.uid) : arrayUnion(me.uid) })
     .catch(() => toast("Couldn't send that. Try again.", 2500));
 };
 $("qpLeave").onclick = async () => {
-  if (!queue.active) return;
+  if (!queue.playing) return;
   if (!confirm("Leave the match? Leaving counts as a loss and all the points you earned in it are thrown away.")) return;
   try { await updateDoc(matchDoc(), { status: "forfeit", loser: me.uid }); } catch (e) { /* leave anyway */ }
   finishQueue("forfeit", me.uid);
 };
 // closing the tab mid-match = leaving (best effort). There is no inactivity timeout: players can think as long as they like.
 window.addEventListener("pagehide", () => {
-  if (queue.active && !queue.finishing && me) updateDoc(matchDoc(), { status: "forfeit", loser: me.uid }).catch(() => {});
+  if (queue.active && !queue.finishing && me)
+    updateDoc(matchDoc(), queue.playing ? { status: "forfeit", loser: me.uid } : { status: "cancelled" }).catch(() => {});
 });
 
 // ---------- end of match ----------
 async function finishQueue(reason, loserUid) {
-  if (!queue.active || queue.finishing) return;
+  if (!queue.playing || queue.finishing) return;
   queue.finishing = true;
   queue.unsubs.forEach((u) => u()); queue.unsubs = [];
 
@@ -1390,7 +1652,7 @@ async function finishQueue(reason, loserUid) {
   // back to your own board, now with everything you learned
   inventory.clear(); savedInventory.forEach((v, k) => inventory.set(k, v)); savedInventory = null;
   const sb = queue.savedBoard;
-  Object.assign(queue, { active: false, savedBoard: null, matchId: null });
+  Object.assign(queue, { active: false, playing: false, savedBoard: null, matchId: null });
   $("queuePanel").classList.add("hidden"); $("queueBtn").classList.remove("active");
   clearBoard(); restoreBoard(sb); renderSidebar();
   try { localStorage.removeItem(qKey()); } catch (e) { /* ignore */ }
@@ -1432,8 +1694,13 @@ async function resumeQueue() {
     const ref = doc(db, "matches", st.matchId);
     const s = await getDoc(ref);
     if (s.exists() && s.data().status === "active") {
-      await updateDoc(ref, { status: "forfeit", loser: me.uid });
-      toast("You left your match, so it counted as a loss ⚔️", 5000);
+      if (s.data().phase === "play") {
+        await updateDoc(ref, { status: "forfeit", loser: me.uid });
+        toast("You left your match, so it counted as a loss ⚔️", 5000);
+      } else {
+        await updateDoc(ref, { status: "cancelled" });   // still in the lobby: nothing to lose
+        toast("Your match was cancelled when you left the page", 4000);
+      }
     }
   } catch (e) { /* ignore */ }
 }
@@ -1442,8 +1709,10 @@ function teardownQueue() {
   clearInterval(queue.seenTimer);
   if (queue.unsubMine) queue.unsubMine();
   queue.unsubs.forEach((u) => u());
-  Object.assign(queue, { waiting: false, active: false, starting: false, finishing: false, matching: false,
+  clearTimeout(queue.introTimer);
+  Object.assign(queue, { waiting: false, active: false, playing: false, startingPlay: false, starting: false, finishing: false, matching: false,
     matchId: null, unsubs: [], unsubMine: null, savedBoard: null });
+  $("matchModal").classList.add("hidden");
   $("queuePanel").classList.add("hidden"); $("queueBtn").classList.remove("active"); $("queueBtn").classList.remove("waiting");
   $("queueModal").classList.add("hidden");
 }

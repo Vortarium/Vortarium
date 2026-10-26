@@ -129,6 +129,49 @@
     </div>
   </div>
 
+  <div id="matchModal" class="modal hidden">
+    <div class="card match-card">
+      <button id="mLeave" class="mini close" type="button" title="Leave (no penalty before the game starts)">🚪 Leave</button>
+      <div class="vs-head go">
+        <div class="vs-side left"><span class="vs-tag tag-blue">You</span><b id="vsMe"></b></div>
+        <div class="vs-mid">⚔️</div>
+        <div class="vs-side right"><span class="vs-tag tag-red">Opponent</span><b id="vsOpp"></b></div>
+      </div>
+      <div id="mIntro"><p class="m-big">Match found!</p></div>
+      <div id="mPick" class="hidden">
+        <p class="m-ask">How do you want to play?</p>
+        <div class="mode-row">
+          <button id="modeDefault" class="mode-card" type="button"><b>🤖 Default</b><span>The AI picks 25 tricky words for you both</span></button>
+          <button id="modeCustom" class="mode-card" type="button"><b>✍️ Custom</b><span>Take turns writing the 25 tiles. Accept or veto each one</span></button>
+        </div>
+        <p id="mVotes" class="m-note"></p>
+      </div>
+      <div id="mGen" class="hidden">
+        <div class="q-spin">🤖</div>
+        <p class="q-wait-text">Picking the words<span class="dots-anim"></span></p>
+      </div>
+      <div id="mBuild" class="hidden">
+        <p id="mStatus" class="m-status"></p>
+        <div id="mEdit" class="m-edit hidden">
+          <input id="mWord" type="text" maxlength="30" autocomplete="off" spellcheck="false" placeholder="Type your word…" />
+          <button id="mSubmit" class="btn" type="button">Submit</button>
+        </div>
+        <div id="mJudge" class="m-edit hidden">
+          <button id="mAccept" class="btn big" type="button">✅ Accept</button>
+          <button id="mVeto" class="btn big pinkbtn" type="button">❌ Veto</button>
+        </div>
+      </div>
+      <div id="mReady" class="hidden">
+        <p class="m-big">Board complete!</p>
+        <p>The tiles get shuffled when you both press begin.</p>
+        <button id="mBegin" class="btn big" type="button">Begin</button>
+        <p id="mReadyNote" class="m-note"></p>
+      </div>
+      <div id="mGrid" class="m-grid hidden"></div>
+      <p id="mCount" class="m-note"></p>
+    </div>
+  </div>
+
   <div id="queueModal" class="modal hidden">
     <div class="card daily-card">
       <button id="queueClose" class="mini close" type="button">✕</button>
