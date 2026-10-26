@@ -25,6 +25,9 @@ const _G = [
   [87, [[3,"YuQ="],[5,"b34PJC3Ht+SH"],[6,"ezIncg=="],[8,"PQ=="],[11,"w207PuHPyp09SRup0pUSKg=="],[2,"IAc="],[1,"SBRXq8M="],[9,"lQ=="],[10,"sKRwEg=="],[7,"CXty"],[4,"nYM="],[0,"FhRSWA=="]]],
   [117, [[9,"sw=="],[10,"kw=="],[6,"NxIp"],[7,"VkW6pa4="],[5,"WHocWtHUwp3QoQ=="],[1,"/uo="],[8,"dEKiiZc="],[0,"AgbE3g=="],[12,"SxlS"],[2,"4vo="],[4,"n6XQ6eYxEyA="],[3,"prTR2NTb"],[11,"aRtA"]]],
   [73, [[12,"w1wtU8uZ0g=="],[9,"270="],[6,"ZA=="],[0,"CB0bHSE0Sio="],[7,"SFx3Tw=="],[3,"SZ6Cpw=="],[10,"yw=="],[4,"Y7uNvQ=="],[2,"OSly/4TRt9eXjg=="],[5,"IUIAOQ=="],[8,"BWV+pLc="],[1,"cUk="],[11,"ww=="]]],
+  [204, [[3,"lzwCGDloPwhf6oo="],[6,"9Q=="],[9,"YDrAiLw="],[10,"OWv/yg=="],[2,"qg=="],[4,"EQ0X"],[0,"q56ylLC+g5BefCt6bw=="],[8,"qcXaDwtub7k="],[1,"9w=="],[7,"u9HT1Q=="],[5,"u8A="]]],
+  [139, [[10,"aTwD"],[7,"DK+jh70="],[1,"sfXgmoWG5pGkiYgr"],[3,"ltg="],[6,"VyfJ"],[0,"2uWsmfbD"],[5,"bikIw/zmjA=="],[8,"QdKc4w=="],[2,"2L8="],[11,"Djluhg=="],[4,"k9rJ"],[9,"IXs="]]],
+  [97, [[10,"43BJXA=="],[1,"RB+p9w=="],[3,"tLSx"],[11,"xww7bIQ="],[4,"iJDx3g=="],[9,"9rlMewLh/g=="],[0,"MDg4Pw=="],[2,"M+E="],[7,"UmpH+7TW5W8k"],[6,"WjM="],[8,"XmmF"],[5,"bHFiF1nz"]]],
 ]; 
 function _dk([seed, parts]) {
   return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
@@ -234,7 +237,9 @@ function makeSidebarBtn(el) {
   b.className = "el"; b.type = "button";
   b.dataset.k = keyOf(el.n);
   b.textContent = `${el.e} ${el.n}`;
-  // plain click = drop a copy on the board; press and drag = pull a copy off the list
+  // plain click = drop a copy on the board; press and drag = pull a copy off the list.
+  // While dragging, a floating ghost follows the pointer (the board clips anything outside it),
+  // and the real copy is created where you let go.
   let sx = 0, sy = 0, down = false, dragged = false;
   b.addEventListener("pointerdown", (ev) => {
     if (ev.button !== 0) return;
@@ -243,10 +248,8 @@ function makeSidebarBtn(el) {
   b.addEventListener("pointermove", (ev) => {
     if (!down || dragged) return;
     if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-    dragged = true;
-    const br = board.getBoundingClientRect();
-    const node = spawn(el, ev.clientX - br.left - 40, ev.clientY - br.top - 16);
-    node._begin(ev);
+    dragged = true; down = false;
+    startSidebarDrag(el, ev);
   });
   const up = () => { down = false; };
   b.addEventListener("pointerup", up);
@@ -335,6 +338,38 @@ function makeDraggable(node) {
   node.addEventListener("pointercancel", end);
 }
 
+function startSidebarDrag(el, ev0) {
+  const ghost = document.createElement("div");
+  ghost.className = "item ghost";
+  ghost.innerHTML = `<span>${esc(el.e)} ${esc(el.n)}</span>`;
+  document.body.appendChild(ghost);
+  const place = (e) => { ghost.style.left = e.clientX - ghost.offsetWidth / 2 + "px"; ghost.style.top = e.clientY - ghost.offsetHeight / 2 + "px"; };
+  place(ev0);
+  let target = null;
+  const move = (e) => {
+    place(e);
+    const t = e.clientX < $("sidebar").getBoundingClientRect().left ? itemUnder(e.clientX, e.clientY, null) : null;
+    if (t !== target) { target?.classList.remove("target"); target = t; target?.classList.add("target"); }
+  };
+  const finish = (e, drop) => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onCancel);
+    const w = ghost.offsetWidth, h = ghost.offsetHeight;
+    ghost.remove();
+    const t = target; target?.classList.remove("target"); target = null;
+    if (!drop || e.clientX >= $("sidebar").getBoundingClientRect().left) return;   // let go over the sidebar = discard
+    const br = board.getBoundingClientRect();
+    const node = spawn(el, e.clientX - br.left - w / 2, e.clientY - br.top - h / 2);
+    if (t && document.body.contains(t)) combine(node, t);
+  };
+  const onUp = (e) => finish(e, true);
+  const onCancel = (e) => finish(e, false);
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onCancel);
+}
+
 function itemUnder(cx, cy, self) {
   const items = [...board.querySelectorAll(".item")].reverse();
   for (const it of items) {
@@ -363,7 +398,7 @@ async function combine(dragged, target) {
     const isNewToMe = !inventory.has(keyOf(result.n));
     // in daily mode new elements are temporary, except real first discoveries (those are credited to you for good)
     if (isNewToMe) addToInventory(result, !daily.active || first);
-    if (first || isNewToMe) playSfx(sfxDiscovery);
+    if (first) playSfx(sfxDiscovery);   // only real new discoveries, not just new-to-me elements
     if (first) toast("✨ First discovery!");
     if (daily.active) dailyOnResult(result, first);
   } catch (e) {
@@ -681,9 +716,9 @@ const DAILY_MS = 20 * 60 * 1000;
 const FALLBACK_ITEMS = ["Human","Lightbulb","Germany","Ruby","Dinosaur","Submarine","Pyramid","Violin","Astronaut","Samurai","Piano","Pizza",
   "Vampire","Telescope","Dragon","Compass","Robot","Diamond","Japan","Library","Skeleton","Penguin","Rocket","Castle","Bacteria","Sword","Clock","Egypt","Wizard","Spaceship"];
 // Every board gets randomly drawn categories so the 25 things are truly different and niche, never the easy basics.
-const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone or mineral","a chemical element","a plant or flower","a fruit or vegetable",
+const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone","a common material","a plant or flower","a fruit or vegetable",
   "a dish or food","a drink","a musical instrument","a tool","a machine or invention","a vehicle","a building or landmark","a profession or job","a mythical creature","a fantasy item",
-  "a science concept","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a disease or medicine",
+  "an everyday concept like sleep or time","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a school subject",
   "a type of weather phenomenon","a famous profession like scientist or explorer","a geographic feature","a technology or gadget","a toy","a religion-neutral myth or legend figure","an art or craft","a currency or money thing","a container","a holiday or festival"];
 const LINES = (() => {
   const L = [];
@@ -765,16 +800,18 @@ function saveDailyLocal() {
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
 async function generateBoardItems(date) {
   const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
+  const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
   const prompt =
-`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.
-Give exactly 25 DIFFERENT, NICHE and specific things. This is a hard challenge board, so they must take many mixes to reach.
-- They must NOT be basic or easy things reachable in 1-2 mixes. Avoid generic words like Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Tree, Ocean, Storm, Rainbow, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Forest, Clay, Brick, Dust, Metal.
-- Aim for specific, unique, interesting words like Human, Lightbulb, Germany, Ruby, Violin, Samurai, Submarine, Pyramid, Penguin, Bacteria.
-- One entry per line below, each matching its category, picked by you to be surprising and not the most obvious example:
+`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things. They only get 20 minutes, so the board must be achievable.
+Give exactly 25 DIFFERENT things, a balanced mix of difficulty:
+- About 8 easy (reachable in 2-4 mixes), about 12 medium (4-7 mixes), and at most 5 a little harder (7-10 mixes).
+- Everyday, well-known words anyone recognises, like Cow, Sky, Sleep, Juice, Math, Pizza, Doctor, Guitar, Moon, Egypt, Robot, Cake.
+- NOT the very basics (Steam, Mud, Cloud, Lava, Rain, Sand, Smoke, Ash, Ice, Fog, Wind, Sun, Mountain, Lake, River, Clay, Dust) and NOT obscure or technical things (no rare elements or minerals like Bismuth, no scientific jargon).
+- Use these categories for variety, one entry each, picking a familiar but not the most obvious example:
 ${themes.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 - Short names, 1-2 words, Title Case.
 - Do NOT include Earth, Air, Water or Fire.
-- Variety seed (use it to pick unusual answers): ${date}-${Math.random().toString(36).slice(2, 10)}
+- Variety seed (use it to pick different answers each day): ${date}-${Math.random().toString(36).slice(2, 10)}
 Reply as JSON: {"items": ["...", "..."]}`;
   const blocked = new Set(START.map((s) => keyOf(s.n)));
   const clean = (arr) => {
