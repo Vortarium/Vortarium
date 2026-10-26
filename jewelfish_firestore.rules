@@ -111,9 +111,9 @@ service cloud.firestore {
         // and only when moving to a later date, so a day can't be banked twice
         && request.resource.data.get('dailyScore', 0) >= resource.data.get('dailyScore', 0)
         && request.resource.data.get('dailyScore', 0) <= resource.data.get('dailyScore', 0) + 152
-        // queue score: can only go up, max 12 bingos (one full board) per match
+        // queue score: can only go up, max 152 pts (same as a full daily) per match
         && request.resource.data.get('queueScore', 0) >= resource.data.get('queueScore', 0)
-        && request.resource.data.get('queueScore', 0) <= resource.data.get('queueScore', 0) + 12
+        && request.resource.data.get('queueScore', 0) <= resource.data.get('queueScore', 0) + 152
         && (request.resource.data.get('lastDailyDate', '') == resource.data.get('lastDailyDate', '')
             || (request.resource.data.lastDailyDate is string
                 && request.resource.data.lastDailyDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')

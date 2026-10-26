@@ -31,6 +31,9 @@ const _G = [
   [221, [[6,"0siknXBTMlY="],[2,"5F4adydUPxQ="],[4,"CQ0mfQ=="],[3,"PxADDn9sUw=="],[8,"391VC3g="],[1,"w6mDZTRMDVc="],[5,"8sKXooE="],[7,"r9+R"],[0,"jLzThJE="]]],
   [170, [[12,"Y0Q="],[2,"nd65"],[7,"l6yX"],[0,"69jd1bfghw=="],[6,"CP7c"],[11,"DnXy"],[5,"AuDD"],[10,"STUJm7iBBA=="],[4,"y8wI"],[1,"ypOw"],[8,"joeZ1kdjaw=="],[9,"OzdBo+U="],[3,"+Nb8HQ=="]]],
   [151, [[3,"pdz56g=="],[4,"8+3nPQM="],[7,"ZYXL/fo="],[0,"xtyT7+PluPE="],[8,"KbeE"],[2,"wcWTsYv9hkM="],[1,"+fDih+CDmA=="],[6,"ByvVxsU="],[5,"BD3a8OW7rd8="]]],
+  [85, [[5,"SwYI"],[4,"k4el/ZHt"],[6,"KF4JFQ=="],[2,"ZSzGzao="],[0,"BG0="],[9,"k6khRQRN"],[3,"W4CMnpPI45w="],[8,"d0ZI1A=="],[1,"BEI2/vbx6oc="],[10,"sIs="],[7,"AnRZhJA="]]],
+  [216, [[6,"+rObo2JVUD8="],[1,"kce0eQ=="],[2,"g4c="],[10,"VCvT0Ylk"],[4,"NTAfaA=="],[8,"9JE="],[9,"FCo="],[5,"1d+VrZ9ZMks="],[3,"+xgBOiVz"],[0,"iZOpmQ=="],[7,"meDqa0o3bQ=="]]],
+  [59, [[2,"Em0bb9jEyg=="],[1,"Jz0kJhw="],[5,"1DoDaD0F8w=="],[0,"TCcoCRs="],[9,"9oQ="],[6,"QGFAHyY="],[3,"TkXtiLiGwA=="],[7,"eDtd"],[4,"S7etu/Q="],[8,"bXRLwIWHiw=="]]],
 ]; 
 function _dk([seed, parts]) {
   return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
@@ -730,7 +733,8 @@ const LINES = (() => {
   return L;
 })();
 
-const daily = { active: false, date: null, items: [], found: new Set(), startAt: null, timer: null, finishing: false };
+const daily = { active: false, date: null, items: [], found: new Set(), startAt: null, timer: null, finishing: false,
+  started: false, dailyInv: null, dailyBoard: null, realBoard: null };
 let savedInventory = null;   // the player's real elements while a daily run is going
 
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -775,7 +779,7 @@ function renderDailyBoard(newKey) {
   $("dpScore").textContent = `${bd.pts} pts`;
   $("dpFoot").textContent = daily.startAt
     ? `${bd.f}/25 found · ${bd.b} bingo${bd.b === 1 ? "" : "s"}`
-    : "Mix two things to start the 20:00 clock!";
+    : "No time limit until midnight 🌙";
 }
 $("dpToggle").onclick = () => {
   const hide = !$("dpGrid").classList.contains("hidden");
@@ -784,18 +788,25 @@ $("dpToggle").onclick = () => {
   $("dpToggle").textContent = hide ? "+" : "–";
 };
 
+function dailyEndAt() {   // no time limit: the challenge runs until the next midnight
+  const [y, m, d] = daily.date.split("-").map(Number);
+  return new Date(y, m - 1, d + 1).getTime();
+}
+function fmtLeft(ms) {
+  const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${pad2(m)}:${pad2(s % 60)}` : `${m}:${pad2(s % 60)}`;
+}
 function tick() {
-  const left = daily.startAt ? Math.max(0, DAILY_MS - (Date.now() - daily.startAt)) : DAILY_MS;
-  const s = Math.ceil(left / 1000);
-  $("dpTimer").textContent = `⏱ ${Math.floor(s / 60)}:${pad2(s % 60)}`;
-  $("dpTimer").classList.toggle("low", !!daily.startAt && s <= 60);
-  if (daily.startAt && left <= 0) finishDaily();
+  const left = Math.max(0, dailyEndAt() - Date.now());
+  $("dpTimer").textContent = `🌙 ${fmtLeft(left)}`;
+  $("dpTimer").classList.toggle("low", left <= 60000);
+  if (left <= 0) finishDaily();
 }
 function startTick() { clearInterval(daily.timer); daily.timer = setInterval(tick, 250); tick(); }
 
 function saveDailyLocal() {
-  if (!daily.active || !me) return;
-  const inv = [...inventory.values()].filter((el) => !START.some((s) => keyOf(s.n) === keyOf(el.n)));
+  if (!daily.started || !me) return;
+  const inv = [...(daily.active ? inventory : (daily.dailyInv || new Map())).values()].filter((el) => !START.some((s) => keyOf(s.n) === keyOf(el.n)));
   lsSet(lsKey(daily.date), { date: daily.date, items: daily.items, found: [...daily.found], startAt: daily.startAt, inv });
 }
 
@@ -863,7 +874,8 @@ async function loadDailyBoard(date) {
 // ---------- run lifecycle ----------
 function startDaily(date, items, resume) {
   savedInventory = new Map(inventory);
-  Object.assign(daily, { active: true, date, items, finishing: false,
+  daily.realBoard = snapshotBoard();   // your own board comes back when you switch out or finish
+  Object.assign(daily, { active: true, started: true, dailyInv: null, dailyBoard: null, date, items, finishing: false,
     found: new Set(resume?.found || []), startAt: resume?.startAt || null });
   inventory.clear();
   START.forEach((s) => inventory.set(keyOf(s.n), s));
@@ -873,7 +885,7 @@ function startDaily(date, items, resume) {
   $("dailyPanel").classList.remove("hidden");
   $("diamondBtn").classList.add("active");
   renderDailyBoard();
-  if (daily.startAt) startTick(); else tick();
+  startTick();
   saveDailyLocal();
 }
 
@@ -899,26 +911,26 @@ function dailyOnResult(result, first) {
 
 function teardownDaily() {
   clearInterval(daily.timer);
-  daily.active = false; savedInventory = null;
+  daily.active = false; daily.started = false; daily.dailyInv = null; daily.dailyBoard = null; daily.realBoard = null;
+  if (!queue.active) savedInventory = null;
   $("dailyPanel").classList.add("hidden");
   $("diamondBtn").classList.remove("active");
   $("dailyModal").classList.add("hidden");
 }
 
 async function finishDaily() {
-  if (!daily.active || daily.finishing) return;
+  if (!daily.started || daily.finishing) return;
   daily.finishing = true;
   clearInterval(daily.timer);
   const date = daily.date, bd = dailyBreakdown();
   const res = { ...bd, date, cleared: bd.f === 25, oldBank: me.dailyScore || 0,
     streakBefore: streakNow(), newStreak: me.lastDailyDate === yesterdayOf(date) ? (me.streak || 0) + 1 : 1 };
 
-  // bring the player's real elements back
-  inventory.clear();
-  savedInventory.forEach((v, k) => inventory.set(k, v));
+  // bring the player's real elements and board back (if they were inside the daily at the time)
+  const wasIn = daily.active, realBoard = daily.realBoard;
+  if (wasIn) { inventory.clear(); savedInventory.forEach((v, k) => inventory.set(k, v)); }
   teardownDaily();
-  clearBoard();
-  renderSidebar();
+  if (wasIn) { clearBoard(); restoreBoard(realBoard); renderSidebar(); }
 
   lsSet(lsKey(date), { date, finished: true, submitted: false, pts: bd.pts });
   playResult(res);
@@ -971,9 +983,36 @@ async function resumeDaily() {
     resumed = true;
     startDaily(st.date, st.items, st);
     toast("Welcome back! Your daily challenge is still going 💎", 3000);
-    if (st.startAt && Date.now() - st.startAt >= DAILY_MS) await finishDaily();
+    if (Date.now() >= dailyEndAt()) await finishDaily();
   }
   refreshDailyUI();
+}
+
+// ---------- switching out of / back into a started daily ----------
+function switchOutDaily() {
+  if (board.querySelector(".item.busy")) { toast("Wait for the mix to finish first", 2000); return; }
+  daily.dailyInv = new Map(inventory);
+  daily.dailyBoard = snapshotBoard();
+  inventory.clear(); savedInventory.forEach((v, k) => inventory.set(k, v)); savedInventory = null;
+  daily.active = false;
+  clearBoard(); restoreBoard(daily.realBoard); daily.realBoard = null;
+  renderSidebar();
+  $("dailyPanel").classList.add("hidden"); $("diamondBtn").classList.remove("active");
+  saveDailyLocal();
+  toast("Back on your own board. Tap 💎 to return to the daily!", 3000);
+}
+function switchInDaily() {
+  if (board.querySelector(".item.busy")) { toast("Wait for the mix to finish first", 2000); return; }
+  if (queue.waiting) leaveQueueWait();
+  savedInventory = new Map(inventory);
+  daily.realBoard = snapshotBoard();
+  inventory.clear(); (daily.dailyInv || new Map()).forEach((v, k) => inventory.set(k, v)); daily.dailyInv = null;
+  daily.active = true;
+  clearBoard(); restoreBoard(daily.dailyBoard); daily.dailyBoard = null;
+  renderSidebar();
+  $("dailyPanel").classList.remove("hidden"); $("diamondBtn").classList.add("active");
+  renderDailyBoard(); tick(); saveDailyLocal();
+  toast("Back in the daily 💎", 2000);
 }
 
 // ---------- daily modal ----------
@@ -982,8 +1021,8 @@ const showDailyView = (v) => {
   $("dailyResult").classList.toggle("hidden", v !== "result");
 };
 async function openDaily() {
-  if (daily.active) { toast("Daily challenge in progress! Fill that bingo board 💎", 3000); return; }
   if (queue.active) { toast("Finish your queue match first ⚔️", 3000); return; }
+  if (daily.started) { daily.active ? switchOutDaily() : switchInDaily(); return; }   // 💎 toggles in and out once a daily is started
   showDailyView("intro");
   $("dailyModal").classList.remove("hidden");
   const done = me.lastDailyDate === dateStr();
@@ -1038,7 +1077,7 @@ const tween = (ms, fn) => new Promise((res) => {
 async function playResult(r) {
   showDailyView("result");
   $("dailyModal").classList.remove("hidden");
-  $("drTitle").textContent = r.cleared ? "🎉 BOARD CLEARED!" : "⏰ Time's up!";
+  $("drTitle").textContent = r.cleared ? "🎉 BOARD CLEARED!" : "🌙 Midnight!";
   const rows = [`Items found: ${r.f} × 1 = ${r.f}`, `Bingos: ${r.b} = +${r.bp}`];
   if (r.cleared) rows.push("Full board bonus: +25");
   $("drBreak").innerHTML = rows.map((x) => `<li>${esc(x)}</li>`).join("");
@@ -1077,7 +1116,7 @@ async function playResult(r) {
 //  - matches/{id}: the shared board + status. matches/{id}/claims/{tile}: one doc per claimed tile
 //    (create-only, so if both players grab a tile at once, exactly one wins it).
 //  - no inactivity timer: players can take as long as they want
-//  - each bingo (a full line of YOUR tiles) = 1 point, banked into queueScore at the end
+//  - scoring matches the daily (1 per tile, bingos 3+n, whole board +25), banked into queueScore at the end
 // ==========================================================
 const QUEUE_DIFF = "easy";          // difficulty of the AI board
 const queue = {
@@ -1090,6 +1129,8 @@ const qKey = () => `jf_q_${me.uid}`;
 const matchDoc = () => doc(db, "matches", queue.matchId);
 const qLines = (u) => LINES.filter((l) => l.every((i) => queue.claims.get(i) === u));
 const qCount = (u) => { let c = 0; queue.claims.forEach((v) => { if (v === u) c++; }); return c; };
+// same scoring as the daily: 1 per tile, bingos 3+n, whole board +25
+const qPts = (u) => { const t = qCount(u), b = qLines(u).length; return t + bingoPoints(b) + (t === 25 ? 25 : 0); };
 
 const snapshotBoard = () => [...board.querySelectorAll(".item")].filter((n) => !n.classList.contains("busy"))
   .map((n) => ({ n: n.dataset.n, e: n.dataset.e, x: parseFloat(n.style.left), y: parseFloat(n.style.top) }));
@@ -1221,7 +1262,7 @@ function onClaimsSnap(s) {
     toast(c.uid === me.uid ? `🔵 You claimed ${name}!` : `🔴 ${queue.oppName} claimed ${name}`, 2200);
   });
   const nowMine = qLines(me.uid).length, nowTheirs = qLines(queue.oppUid).length;
-  if (nowMine > prevMine) toast("🎉 BINGO! +1 point", 3000);
+  if (nowMine > prevMine) toast("🎉 BINGO!", 3000);
   else if (nowTheirs > prevTheirs) toast(`😬 ${queue.oppName} got a bingo!`, 3000);
   renderQueueBoard();
   if (queue.claims.size >= 25) {
@@ -1238,7 +1279,7 @@ function renderQueueBoard() {
     const o = queue.claims.get(i);
     return `<div class="dp-cell${o ? (o === me.uid ? " mine" : " theirs") : ""}${o && inLine.has(i) ? " line" : ""}">${esc(n)}</div>`;
   }).join("");
-  $("qpScore").textContent = `🔵 ${mine.length} · 🔴 ${theirs.length}`;
+  $("qpScore").textContent = `🔵 ${qPts(me.uid)} · 🔴 ${qPts(queue.oppUid)}`;
   const iAsked = queue.endReq.includes(me.uid), theyAsked = queue.endReq.includes(queue.oppUid);
   $("qpFoot").textContent = `${qCount(me.uid)} yours · ${qCount(queue.oppUid)} theirs · ${25 - queue.claims.size} open` +
     (theyAsked ? " · they want to end!" : iAsked ? " · waiting for them…" : "");
@@ -1286,10 +1327,12 @@ async function finishQueue(reason, loserUid) {
   const myT = qCount(myUid), theirT = qCount(opp);
   const iLeft = reason === "forfeit" && loserUid === myUid;
   const oppLeft = reason === "forfeit" && loserUid === opp;
-  const pts = iLeft ? 0 : mineB;
+  const bp = bingoPoints(mineB), bonus = myT === 25 ? 25 : 0;
+  const myPts = myT + bp + bonus, theirPts = qPts(opp);
+  const pts = iLeft ? 0 : myPts;
   const learned = queue.learned, matchId = queue.matchId;
-  const won = iLeft ? false : oppLeft ? true : (mineB !== theirB ? mineB > theirB : myT > theirT);
-  const draw = !iLeft && !oppLeft && mineB === theirB && myT === theirT;
+  const won = iLeft ? false : oppLeft ? true : myPts > theirPts;
+  const draw = !iLeft && !oppLeft && myPts === theirPts;
 
   // back to your own board, now with everything you learned
   inventory.clear(); savedInventory.forEach((v, k) => inventory.set(k, v)); savedInventory = null;
@@ -1299,7 +1342,9 @@ async function finishQueue(reason, loserUid) {
   clearBoard(); restoreBoard(sb); renderSidebar();
   try { localStorage.removeItem(qKey()); } catch (e) { /* ignore */ }
 
-  const rows = [`🔵 Your bingos: ${mineB}`, `🔴 ${oppName}'s bingos: ${theirB}`, `Tiles claimed: you ${myT} · ${oppName} ${theirT}`];
+  const rows = [`🔵 Tiles claimed: ${myT} × 1 = ${myT}`, `Bingos: ${mineB} = +${bp}`];
+  if (bonus) rows.push("Whole board yours: +25");
+  rows.push(`🔴 ${oppName}: ${theirT} tiles, ${theirB} bingo${theirB === 1 ? "" : "s"} (${theirPts} pts)`);
   if (learned) rows.push(`✨ New elements learned: ${learned}`);
   if (iLeft) rows.push("You left the match, so your points were thrown away.");
   if (oppLeft) rows.push(`${oppName} left the match.`);
@@ -1353,7 +1398,7 @@ function teardownQueue() {
 // ---------- queue modal ----------
 $("queueBtn").onclick = () => {
   if (queue.active) { toast("Match in progress! Claim those tiles ⚔️", 2500); return; }
-  if (daily.active) { toast("Finish your daily challenge first 💎", 2500); return; }
+  if (daily.active) { toast("Tap 💎 to switch out of your daily first", 2500); return; }
   showQView(queue.waiting ? "wait" : "intro");
   $("qMsg").textContent = "";
   $("queueModal").classList.remove("hidden");
