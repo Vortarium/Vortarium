@@ -800,7 +800,6 @@ function saveDailyLocal() {
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
 async function generateBoardItems(date) {
   const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
-  const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
   const prompt =
 `Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things. They only get 20 minutes, so the board must be achievable.
 Give exactly 25 DIFFERENT things, a balanced mix of difficulty:
