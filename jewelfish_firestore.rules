@@ -46,6 +46,58 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Queue: a waiting player. Only you write your own doc (join / heartbeat / leave);
+    // anyone can set matchId once, to pair two waiting players.
+    match /queue/{uid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'username', 'created', 'seen', 'matchId'])
+        && request.resource.data.matchId == null;
+      allow update: if request.auth != null && (
+        (request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seen']))
+        || (resource.data.matchId == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['matchId'])
+          && request.resource.data.matchId is string));
+      allow delete: if request.auth.uid == uid;
+    }
+
+    // Queue matches: shared board + status. Only the two players can see or touch them.
+    // There is no inactivity timeout: players can think as long as they like.
+    match /matches/{id} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.players;
+      allow create: if request.auth != null
+        && request.auth.uid in request.resource.data.players
+        && request.resource.data.players.size() == 2
+        && request.resource.data.items is list && request.resource.data.items.size() == 25
+        && request.resource.data.status == 'active';
+      allow update: if request.auth != null && request.auth.uid in resource.data.players
+        && resource.data.status == 'active' && (
+        // ask to end / cancel the request (only your own entry changes)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endReq'])
+          && request.resource.data.endReq.toSet().difference(resource.data.endReq.toSet()).hasOnly([request.auth.uid].toSet())
+          && resource.data.endReq.toSet().difference(request.resource.data.endReq.toSet()).hasOnly([request.auth.uid].toSet())
+          && request.resource.data.endReq.toSet().hasOnly(resource.data.players.toSet()))
+        // finish (full board / both agreed), or forfeit yourself
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'loser'])
+          && (request.resource.data.status == 'done'
+            || (request.resource.data.status == 'forfeit' && request.resource.data.loser == request.auth.uid))));
+      allow delete: if false;
+
+      // one doc per claimed tile (id = tile number 0-24). Create-only, so the first claim wins.
+      match /claims/{idx} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(id)).data.players;
+        allow create: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/matches/$(id)).data.players
+          && get(/databases/$(database)/documents/matches/$(id)).data.status == 'active'
+          && idx.matches('^([0-9]|1[0-9]|2[0-4])$')
+          && request.resource.data.keys().hasOnly(['uid', 'idx'])
+          && request.resource.data.uid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
     // Players: everyone logged in can read (leaderboard), only you can write your own.
     match /users/{uid} {
       allow read: if request.auth != null;
@@ -59,6 +111,9 @@ service cloud.firestore {
         // and only when moving to a later date, so a day can't be banked twice
         && request.resource.data.get('dailyScore', 0) >= resource.data.get('dailyScore', 0)
         && request.resource.data.get('dailyScore', 0) <= resource.data.get('dailyScore', 0) + 152
+        // queue score: can only go up, max 12 bingos (one full board) per match
+        && request.resource.data.get('queueScore', 0) >= resource.data.get('queueScore', 0)
+        && request.resource.data.get('queueScore', 0) <= resource.data.get('queueScore', 0) + 12
         && (request.resource.data.get('lastDailyDate', '') == resource.data.get('lastDailyDate', '')
             || (request.resource.data.lastDailyDate is string
                 && request.resource.data.lastDailyDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')

@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, runTransaction, increment,
-  arrayUnion, collection, query, orderBy, limit, getDocs, where,
+  arrayUnion, arrayRemove, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, where,
   getCountFromServer, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -177,10 +177,17 @@ $("authForm").addEventListener("submit", async (ev) => {
   $("authSubmit").disabled = false;
 });
 
-$("logoutBtn").onclick = () => signOut(auth);
+$("logoutBtn").onclick = async () => {
+  if (queue.active) {
+    if (!confirm("Log out mid-match? Leaving counts as a loss and your points from it are thrown away.")) return;
+    try { await updateDoc(doc(db, "matches", queue.matchId), { status: "forfeit", loser: me.uid }); } catch (e) { /* ignore */ }
+  }
+  signOut(auth);
+};
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    teardownQueue();
     me = null;
     teardownDaily();
     gameScreen.classList.add("hidden");
@@ -201,7 +208,8 @@ onAuthStateChanged(auth, async (user) => {
   me = {
     uid: user.uid, username: data.username, discoveries: data.discoveries || 0,
     dailyScore: data.dailyScore || 0, streak: data.streak || 0,
-    lastDailyDate: data.lastDailyDate || "", lastDailyScore: data.lastDailyScore || 0
+    lastDailyDate: data.lastDailyDate || "", lastDailyScore: data.lastDailyScore || 0,
+    queueScore: data.queueScore || 0
   };
   inventory.clear();
   START.forEach((s) => inventory.set(keyOf(s.n), s));
@@ -214,6 +222,7 @@ onAuthStateChanged(auth, async (user) => {
   renderSidebar();
   refreshDailyUI();
   await resumeDaily();
+  await resumeQueue();
 });
 
 // ==========================================================
@@ -267,7 +276,8 @@ function addToInventory(el, persist = true) {
   elementList.appendChild(makeSidebarBtn(el));
   applyFilter();
   if (!persist) return; // daily mode: temporary elements are not saved to the account
-  if (daily.active && savedInventory) savedInventory.set(k, el);
+  if (queue.active && savedInventory && !savedInventory.has(k)) queue.learned++;   // counted as something new you learned
+  if ((daily.active || queue.active) && savedInventory) savedInventory.set(k, el);
   setDoc(doc(db, "users", me.uid), { elements: arrayUnion({ n: el.n, e: el.e }) }, { merge: true })
     .catch(() => {});
 }
@@ -386,6 +396,7 @@ async function combine(dragged, target) {
     if (first) playSfx(sfxDiscovery);   // only a real first discovery gets the discovery sound
     if (first) toast("✨ First discovery!");
     if (daily.active) dailyOnResult(result, first);
+    if (queue.active) queueOnResult(result);
   } catch (e) {
     console.error(e);
     think.remove();
@@ -637,7 +648,8 @@ $("dictModal").addEventListener("click", (e) => { if (e.target.id === "dictModal
 // ==========================================================
 const LB = {
   disc:  { field: "discoveries", icon: "💎", title: "🏆 Top Discoverers",   empty: "No discoveries yet. Be the first!",  mine: () => me.discoveries },
-  daily: { field: "dailyScore",  icon: "⭐", title: "⭐ Top Daily Players", empty: "No daily scores yet. Be the first!", mine: () => me.dailyScore || 0 }
+  daily: { field: "dailyScore",  icon: "⭐", title: "⭐ Top Daily Players", empty: "No daily scores yet. Be the first!", mine: () => me.dailyScore || 0 },
+  queue: { field: "queueScore", icon: "⚔️", title: "⚔️ Top Queue Players", empty: "No queue points yet. Be the first!", mine: () => me.queueScore || 0 }
 };
 let lbTab = "disc", lbToken = 0;
 
@@ -647,6 +659,7 @@ async function showLeaderboard(tab = lbTab) {
   $("lbModal").classList.remove("hidden");
   $("lbTabDisc").classList.toggle("active", tab === "disc");
   $("lbTabDaily").classList.toggle("active", tab === "daily");
+  $("lbTabQueue").classList.toggle("active", tab === "queue");
   $("lbTitle").textContent = cfg.title;
   const list = $("lbList");
   list.innerHTML = "<li>Loading…</li>";
@@ -687,6 +700,7 @@ async function showLeaderboard(tab = lbTab) {
 $("trophyBtn").onclick = () => showLeaderboard("disc");
 $("lbTabDisc").onclick = () => showLeaderboard("disc");
 $("lbTabDaily").onclick = () => showLeaderboard("daily");
+$("lbTabQueue").onclick = () => showLeaderboard("queue");
 $("lbClose").onclick = () => $("lbModal").classList.add("hidden");
 $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $("lbModal").classList.add("hidden"); });
 
@@ -783,20 +797,29 @@ function saveDailyLocal() {
 }
 
 // ---------- board creation (Gemini once per day, then shared via Firestore) ----------
-async function generateBoardItems(date) {
-  const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
-  const prompt =
-`Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.
-Give exactly 25 DIFFERENT, EVERYDAY things that most people know. This is a medium-difficulty board: each should take a handful of mixes to reach, not one or two, and not dozens.
-- Good examples of the right difficulty: Cow, Sky, Sleep, Juice, Math, Dog, Book, Moon, Bread, Music, Pizza, Doctor, Boat.
-- Too easy, do NOT use: Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Dust, Metal.
-- Too hard or obscure, do NOT use: chemical elements, gemstones, rare minerals, scientific terms, obscure animals or historical figures (no Bismuth, Samurai, Bacteria, etc).
+// Daily boards sit between easy and medium: about 3 to 10 mixes per item, everyday well-known things.
+const DAILY_THEMES = ["a farm or pet animal","a wild animal","a bird","a sea creature","a fruit or vegetable","a simple food","a drink","a simple tool","a household object","a simple building or place","a plant or flower","a natural material","a type of weather","something in the sky","a landform or body of water","a simple vehicle","a toy","a piece of clothing","a body part","something found at the beach","something found in a kitchen","a sweet or snack","a simple machine or gadget","a metal or building material","a simple everyday idea (like Sleep or Home)"];
+const EASY_FALLBACK = ["Steam","Mud","Cloud","Lava","Rain","Sand","Glass","Plant","Ocean","Storm","Smoke","Ash","Ice","Snow","Fog","Wind","Sun","Mountain","Lake","River","Island","Dust","Metal","Tree","Moon","Salt","Brick","Seed","Wave","Cactus"];
+async function generateBoardItems(seed, diff = "daily") {
+  const themes = shuffle(DAILY_THEMES.slice()).slice(0, 25);
+  const catLines = themes.map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const head = `Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.\n`;
+  const tail = `\n- Short names, 1-2 words, Title Case.\n- Do NOT include Earth, Air, Water or Fire.\n- Variety seed (use it so the board differs from other boards): ${seed}-${Math.random().toString(36).slice(2, 10)}\nReply as JSON: {"items": ["...", "..."]}`;
+  const bodies = {
+    easy:
+`Give exactly 25 DIFFERENT, VERY EASY things that anyone knows. This is an EASY board: every item should be reachable in only 1 to 3 mixes from the four starting elements.
+- Good examples of the right difficulty: Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Dust, Metal, Tree, Seed.
+- Use some of those, and also come up with other similarly easy things (nature, weather, materials, very simple everyday things).
+- Nothing obscure and nothing that needs a long chain of mixes.`,
+    daily:
+`Give exactly 25 DIFFERENT, EVERYDAY things that most people know. This is a ROUGHLY 3 TO 10 MIXES board: each item should take about 3 to 10 combinations to reach from the four starting elements, so not instant, but never a long grind.
+- Good examples of the right difficulty: Glass, Tree, Brick, Bread, Boat, Egg, Fish, Cheese, House, Bird, Bridge, Flower, Salt.
+- Too easy, do NOT use (1 to 2 mixes): Steam, Mud, Cloud, Lava, Rain, Sand, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Dust.
+- Too hard, do NOT use: Computer, Robot, Piano, Doctor, Pirate, Dragon, Rocket, chemical elements, gemstones, rare minerals, scientific terms, obscure animals or historical figures.
 - One entry per line below, each matching its category, a common well-known example:
-${themes.map((t, i) => `${i + 1}. ${t}`).join("\n")}
-- Short names, 1-2 words, Title Case.
-- Do NOT include Earth, Air, Water or Fire.
-- Variety seed (use it so the board differs from other days): ${date}-${Math.random().toString(36).slice(2, 10)}
-Reply as JSON: {"items": ["...", "..."]}`;
+${catLines}`
+  };
+  const prompt = head + (bodies[diff] || bodies.daily) + tail;
   const blocked = new Set(START.map((s) => keyOf(s.n)));
   const clean = (arr) => {
     const seen = new Set(), out = [];
@@ -816,7 +839,7 @@ Reply as JSON: {"items": ["...", "..."]}`;
     });
   } catch (e) { console.warn("board generation failed", e); throw e; }
   // top up if Gemini gave fewer than 25 unique entries
-  if (items.length < 25) items = clean([...items, ...shuffle(FALLBACK_ITEMS.slice())]);
+  if (items.length < 25) items = clean([...items, ...shuffle((diff === "easy" ? EASY_FALLBACK : FALLBACK_ITEMS).slice())]);
   return shuffle(items.slice(0, 25));
 }
 
@@ -824,7 +847,7 @@ async function loadDailyBoard(date) {
   const ref = doc(db, "daily", date);
   const snap = await getDoc(ref);
   if (snap.exists()) return snap.data().items;
-  const items = await generateBoardItems(date);
+  const items = await generateBoardItems(date, "daily");
   // first writer wins so everyone gets the same board
   return runTransaction(db, async (tx) => {
     const ex = await tx.get(ref);
@@ -957,6 +980,7 @@ const showDailyView = (v) => {
 };
 async function openDaily() {
   if (daily.active) { toast("Daily challenge in progress! Fill that bingo board 💎", 3000); return; }
+  if (queue.active) { toast("Finish your queue match first ⚔️", 3000); return; }
   showDailyView("intro");
   $("dailyModal").classList.remove("hidden");
   const done = me.lastDailyDate === dateStr();
@@ -989,6 +1013,7 @@ $("dailyAccept").onclick = async () => {
     await setDoc(doc(db, "users", me.uid), { dailyStarted: date }, { merge: true });
     $("dailyModal").classList.add("hidden");
     msg.textContent = "";
+    if (queue.waiting) leaveQueueWait();
     startDaily(date, items);
   } catch (e) {
     console.error(e);
@@ -1042,6 +1067,299 @@ async function playResult(r) {
   playSfx(sfxDiscovery);
   $("drDone").classList.remove("hidden");
 }
+
+// ==========================================================
+//  Queue: 1v1 bingo race on a shared board
+//  - queue/{uid}: a waiting player. The newer player of a pair creates the match.
+//  - matches/{id}: the shared board + status. matches/{id}/claims/{tile}: one doc per claimed tile
+//    (create-only, so if both players grab a tile at once, exactly one wins it).
+//  - no inactivity timer: players can take as long as they want
+//  - each bingo (a full line of YOUR tiles) = 1 point, banked into queueScore at the end
+// ==========================================================
+const QUEUE_DIFF = "easy";          // difficulty of the AI board
+const queue = {
+  waiting: false, starting: false, active: false, finishing: false, matching: false,
+  matchId: null, items: [], claims: new Map(), pending: new Set(),
+  oppUid: null, oppName: "", endReq: [], learned: 0, savedBoard: null,
+  unsubs: [], unsubMine: null, seenTimer: null
+};
+const qKey = () => `jf_q_${me.uid}`;
+const matchDoc = () => doc(db, "matches", queue.matchId);
+const qLines = (u) => LINES.filter((l) => l.every((i) => queue.claims.get(i) === u));
+const qCount = (u) => { let c = 0; queue.claims.forEach((v) => { if (v === u) c++; }); return c; };
+
+const snapshotBoard = () => [...board.querySelectorAll(".item")].filter((n) => !n.classList.contains("busy"))
+  .map((n) => ({ n: n.dataset.n, e: n.dataset.e, x: parseFloat(n.style.left), y: parseFloat(n.style.top) }));
+const restoreBoard = (arr) => (arr || []).forEach((s) => spawn({ n: s.n, e: s.e }, s.x, s.y));
+
+const showQView = (v) => ["intro", "wait", "result"].forEach((n) => $("q" + n[0].toUpperCase() + n.slice(1)).classList.toggle("hidden", n !== v));
+function updateQueueBtn() {
+  $("queueBtn").classList.toggle("waiting", queue.waiting);
+  $("queueBtn").title = queue.waiting ? "Waiting for an opponent…" : "Queue (1v1 race)";
+}
+
+// ---------- joining / matchmaking ----------
+async function joinQueue() {
+  if (queue.waiting || queue.active) return;
+  const myRef = doc(db, "queue", me.uid);
+  $("qMsg").textContent = "";
+  try {
+    await deleteDoc(myRef).catch(() => {});   // clear any leftover from an old session
+    await setDoc(myRef, { uid: me.uid, username: me.username, created: serverTimestamp(), seen: Date.now(), matchId: null });
+  } catch (e) { console.error(e); $("qMsg").textContent = friendlyError(e); return; }
+  queue.waiting = true; updateQueueBtn(); showQView("wait");
+  queue.unsubMine = onSnapshot(myRef, (s) => { const d = s.data(); if (d && d.matchId) beginMatch(d.matchId); });
+  queue.seenTimer = setInterval(() => { updateDoc(myRef, { seen: Date.now() }).catch(() => {}); tryMatch(); }, 8000);
+  tryMatch();
+}
+function stopWaiting() {
+  clearInterval(queue.seenTimer);
+  if (queue.unsubMine) queue.unsubMine();
+  queue.unsubMine = null; queue.waiting = false; updateQueueBtn();
+}
+function leaveQueueWait() {
+  stopWaiting();
+  if (me) deleteDoc(doc(db, "queue", me.uid)).catch(() => {});
+  $("queueModal").classList.add("hidden"); showQView("intro");
+}
+
+// The oldest waiting player just waits. Every newer player pairs up with the oldest one.
+async function tryMatch() {
+  if (!queue.waiting || queue.starting || queue.matching) return;
+  queue.matching = true;
+  try {
+    const snap = await getDocs(query(collection(db, "queue"), where("seen", ">", Date.now() - 30000)));
+    const w = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }))
+      .filter((x) => !x.matchId)
+      .sort((a, b) => ((a.created?.toMillis?.() || 0) - (b.created?.toMillis?.() || 0)) || a.id.localeCompare(b.id));
+    const first = w[0];
+    if (!first || first.id === me.uid || !w.some((x) => x.id === me.uid)) return;
+
+    let items;
+    try { items = await generateBoardItems("queue-" + Date.now(), QUEUE_DIFF); }
+    catch (e) { items = shuffle(EASY_FALLBACK.slice()).slice(0, 25); }
+    if (!queue.waiting) return;
+
+    const myRef = doc(db, "queue", me.uid), theirRef = doc(db, "queue", first.id);
+    const mRef = doc(collection(db, "matches"));
+    await runTransaction(db, async (tx) => {
+      const [t, m] = [await tx.get(theirRef), await tx.get(myRef)];
+      if (!t.exists() || t.data().matchId || !m.exists() || m.data().matchId) throw new Error("taken");
+      tx.set(mRef, {
+        players: [first.id, me.uid], names: { [first.id]: first.username, [me.uid]: me.username },
+        items, status: "active", endReq: [], loser: null, created: serverTimestamp()
+      });
+      tx.update(theirRef, { matchId: mRef.id });
+      tx.update(myRef, { matchId: mRef.id });
+    });
+    // my own queue doc now has matchId, its listener calls beginMatch
+  } catch (e) { console.warn("matchmaking retry", e); }
+  finally { queue.matching = false; }
+}
+
+async function beginMatch(matchId) {
+  if (!queue.waiting || queue.starting || queue.active) return;
+  queue.starting = true;
+  try {
+    const ms = await getDoc(doc(db, "matches", matchId));
+    if (!ms.exists()) throw new Error("match missing");
+    const m = ms.data();
+    const oppUid = m.players.find((p) => p !== me.uid);
+    stopWaiting();
+    deleteDoc(doc(db, "queue", me.uid)).catch(() => {});
+    for (let i = 0; i < 50 && board.querySelector(".item.busy"); i++) await sleep(100);   // let a mix in progress land first
+
+    savedInventory = new Map(inventory);
+    Object.assign(queue, {
+      active: true, finishing: false, matchId, items: m.items, claims: new Map(), pending: new Set(),
+      oppUid, oppName: (m.names || {})[oppUid] || "Opponent", endReq: [], learned: 0,
+      savedBoard: snapshotBoard()
+    });
+    inventory.clear(); START.forEach((s) => inventory.set(keyOf(s.n), s));
+    renderSidebar(); clearBoard();
+    $("queueModal").classList.add("hidden");
+    $("queuePanel").classList.remove("hidden"); $("queueBtn").classList.add("active");
+    $("qpTitle").textContent = `⚔️ vs ${queue.oppName}`;
+    renderQueueBoard();
+    lsSet(qKey(), { matchId });
+    queue.unsubs = [
+      onSnapshot(matchDoc(), onMatchSnap),
+      onSnapshot(collection(db, "matches", matchId, "claims"), onClaimsSnap)
+    ];
+    toast(`⚔️ Matched with ${queue.oppName}! You're back to the 4 basics`, 4000);
+  } catch (e) {
+    console.error(e);
+    queue.active = false;
+    toast(friendlyError(e), 4000);
+  } finally { queue.starting = false; }
+}
+
+// ---------- live match ----------
+function onMatchSnap(s) {
+  if (!queue.active || !s.exists()) return;
+  const m = s.data({ serverTimestamps: "estimate" });
+  queue.endReq = m.endReq || [];
+  renderQueueBoard();
+  if (m.status === "forfeit") { finishQueue("forfeit", m.loser); return; }
+  if (m.status === "done") { finishQueue("done"); return; }
+  if (queue.endReq.includes(me.uid) && queue.endReq.includes(queue.oppUid)) {
+    updateDoc(matchDoc(), { status: "done" }).catch(() => {});
+    finishQueue("agreed");
+  }
+}
+
+function onClaimsSnap(s) {
+  if (!queue.active) return;
+  const prevMine = qLines(me.uid).length, prevTheirs = qLines(queue.oppUid).length;
+  queue.claims = new Map(s.docs.map((d) => [Number(d.id), d.data().uid]));
+  s.docChanges().forEach((ch) => {
+    if (ch.type !== "added") return;
+    const c = ch.doc.data(), name = queue.items[Number(ch.doc.id)];
+    toast(c.uid === me.uid ? `🔵 You claimed ${name}!` : `🔴 ${queue.oppName} claimed ${name}`, 2200);
+  });
+  const nowMine = qLines(me.uid).length, nowTheirs = qLines(queue.oppUid).length;
+  if (nowMine > prevMine) toast("🎉 BINGO! +1 point", 3000);
+  else if (nowTheirs > prevTheirs) toast(`😬 ${queue.oppName} got a bingo!`, 3000);
+  renderQueueBoard();
+  if (queue.claims.size >= 25) {
+    updateDoc(matchDoc(), { status: "done" }).catch(() => {});
+    finishQueue("full");
+  }
+}
+
+function renderQueueBoard() {
+  if (!queue.active) return;
+  const mine = qLines(me.uid), theirs = qLines(queue.oppUid);
+  const inLine = new Set([...mine.flat(), ...theirs.flat()]);
+  $("qpGrid").innerHTML = queue.items.map((n, i) => {
+    const o = queue.claims.get(i);
+    return `<div class="dp-cell${o ? (o === me.uid ? " mine" : " theirs") : ""}${o && inLine.has(i) ? " line" : ""}">${esc(n)}</div>`;
+  }).join("");
+  $("qpScore").textContent = `🔵 ${mine.length} · 🔴 ${theirs.length}`;
+  const iAsked = queue.endReq.includes(me.uid), theyAsked = queue.endReq.includes(queue.oppUid);
+  $("qpFoot").textContent = `${qCount(me.uid)} yours · ${qCount(queue.oppUid)} theirs · ${25 - queue.claims.size} open` +
+    (theyAsked ? " · they want to end!" : iAsked ? " · waiting for them…" : "");
+  $("qpEnd").textContent = iAsked ? "⏳ Cancel request" : theyAsked ? "✅ Accept end" : "🤝 Request end";
+}
+
+// called after every successful mix while in a match
+async function queueOnResult(result) {
+  const idx = queue.items.findIndex((x) => keyOf(x) === keyOf(result.n));
+  if (idx < 0 || queue.pending.has(idx)) return;
+  const owner = queue.claims.get(idx);
+  if (owner) { if (owner !== me.uid) toast(`Too slow, ${queue.oppName} already has ${result.n} 🔴`, 2500); return; }
+  const matchId = queue.matchId;
+  queue.pending.add(idx);
+  try { await setDoc(doc(db, "matches", matchId, "claims", String(idx)), { uid: me.uid, idx }); }
+  catch (e) { if (queue.active) toast(`Too slow, ${queue.oppName} grabbed ${result.n} first! 🔴`, 3000); }
+  finally { queue.pending.delete(idx); }
+}
+
+$("qpEnd").onclick = () => {
+  if (!queue.active) return;
+  const asked = queue.endReq.includes(me.uid);
+  updateDoc(matchDoc(), { endReq: asked ? arrayRemove(me.uid) : arrayUnion(me.uid) })
+    .catch(() => toast("Couldn't send that. Try again.", 2500));
+};
+$("qpLeave").onclick = async () => {
+  if (!queue.active) return;
+  if (!confirm("Leave the match? Leaving counts as a loss and all the points you earned in it are thrown away.")) return;
+  try { await updateDoc(matchDoc(), { status: "forfeit", loser: me.uid }); } catch (e) { /* leave anyway */ }
+  finishQueue("forfeit", me.uid);
+};
+// closing the tab mid-match = leaving (best effort). There is no inactivity timeout: players can think as long as they like.
+window.addEventListener("pagehide", () => {
+  if (queue.active && !queue.finishing && me) updateDoc(matchDoc(), { status: "forfeit", loser: me.uid }).catch(() => {});
+});
+
+// ---------- end of match ----------
+async function finishQueue(reason, loserUid) {
+  if (!queue.active || queue.finishing) return;
+  queue.finishing = true;
+  queue.unsubs.forEach((u) => u()); queue.unsubs = [];
+
+  const myUid = me.uid, opp = queue.oppUid, oppName = queue.oppName;
+  const mineB = qLines(myUid).length, theirB = qLines(opp).length;
+  const myT = qCount(myUid), theirT = qCount(opp);
+  const iLeft = reason === "forfeit" && loserUid === myUid;
+  const oppLeft = reason === "forfeit" && loserUid === opp;
+  const pts = iLeft ? 0 : mineB;
+  const learned = queue.learned, matchId = queue.matchId;
+  const won = iLeft ? false : oppLeft ? true : (mineB !== theirB ? mineB > theirB : myT > theirT);
+  const draw = !iLeft && !oppLeft && mineB === theirB && myT === theirT;
+
+  // back to your own board, now with everything you learned
+  inventory.clear(); savedInventory.forEach((v, k) => inventory.set(k, v)); savedInventory = null;
+  const sb = queue.savedBoard;
+  Object.assign(queue, { active: false, savedBoard: null, matchId: null });
+  $("queuePanel").classList.add("hidden"); $("queueBtn").classList.remove("active");
+  clearBoard(); restoreBoard(sb); renderSidebar();
+  try { localStorage.removeItem(qKey()); } catch (e) { /* ignore */ }
+
+  const rows = [`🔵 Your bingos: ${mineB}`, `🔴 ${oppName}'s bingos: ${theirB}`, `Tiles claimed: you ${myT} · ${oppName} ${theirT}`];
+  if (learned) rows.push(`✨ New elements learned: ${learned}`);
+  if (iLeft) rows.push("You left the match, so your points were thrown away.");
+  if (oppLeft) rows.push(`${oppName} left the match.`);
+  $("qrTitle").textContent = iLeft ? "🚪 You left: loss" : draw ? "🤝 Draw!" : won ? "🏆 You won!" : "😵 You lost";
+  $("qrBreak").innerHTML = rows.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("qrScore").textContent = pts;
+  $("qrTotal").textContent = (me.queueScore || 0).toLocaleString();
+  showQView("result"); $("queueModal").classList.remove("hidden");
+
+  if (pts > 0) { await submitQueue(pts, matchId); $("qrTotal").textContent = (me.queueScore || 0).toLocaleString(); }
+}
+
+async function submitQueue(pts, matchId) {
+  const k = `jf_qsub_${me.uid}_${matchId}`;
+  if (lsGet(k)) return;
+  for (let i = 0; i < 3; i++) {
+    try {
+      await setDoc(doc(db, "users", me.uid), { queueScore: increment(pts) }, { merge: true });
+      me.queueScore = (me.queueScore || 0) + pts; lsSet(k, 1); return;
+    } catch (e) { console.warn("queue save failed", e); await sleep(1200); }
+  }
+  toast("Couldn't save your queue points.", 5000);
+}
+
+// refreshed / reopened the game mid-match = you left it
+async function resumeQueue() {
+  deleteDoc(doc(db, "queue", me.uid)).catch(() => {});
+  const st = lsGet(qKey());
+  if (!st || !st.matchId) return;
+  try { localStorage.removeItem(qKey()); } catch (e) { /* ignore */ }
+  try {
+    const ref = doc(db, "matches", st.matchId);
+    const s = await getDoc(ref);
+    if (s.exists() && s.data().status === "active") {
+      await updateDoc(ref, { status: "forfeit", loser: me.uid });
+      toast("You left your match, so it counted as a loss ⚔️", 5000);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function teardownQueue() {
+  clearInterval(queue.seenTimer);
+  if (queue.unsubMine) queue.unsubMine();
+  queue.unsubs.forEach((u) => u());
+  Object.assign(queue, { waiting: false, active: false, starting: false, finishing: false, matching: false,
+    matchId: null, unsubs: [], unsubMine: null, savedBoard: null });
+  $("queuePanel").classList.add("hidden"); $("queueBtn").classList.remove("active"); $("queueBtn").classList.remove("waiting");
+  $("queueModal").classList.add("hidden");
+}
+
+// ---------- queue modal ----------
+$("queueBtn").onclick = () => {
+  if (queue.active) { toast("Match in progress! Claim those tiles ⚔️", 2500); return; }
+  if (daily.active) { toast("Finish your daily challenge first 💎", 2500); return; }
+  showQView(queue.waiting ? "wait" : "intro");
+  $("qMsg").textContent = "";
+  $("queueModal").classList.remove("hidden");
+};
+$("qJoin").onclick = joinQueue;
+$("qLeaveWait").onclick = leaveQueueWait;
+$("queueClose").onclick = () => $("queueModal").classList.add("hidden");
+$("qDone").onclick = () => $("queueModal").classList.add("hidden");
+$("queueModal").addEventListener("click", (e) => { if (e.target.id === "queueModal") $("queueModal").classList.add("hidden"); });
 
 // ---------- helpers ----------
 // Turn any technical error into something a player can understand.

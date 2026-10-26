@@ -58,6 +58,7 @@
     <div id="topBar">
       <button id="trophyBtn" class="btn round" type="button" title="Leaderboard">🏆</button>
       <button id="diamondBtn" class="btn round diamond" type="button" title="Daily challenge">💎</button>
+      <button id="queueBtn" class="btn round queue" type="button" title="Queue (1v1 race)">⚔️</button>
       <button id="dictBtn" class="btn round dict" type="button" title="Dictionary">📖</button>
       <div class="pill" id="streakPill" title="Daily streak"><span id="flame">🔥</span> <b id="streakNum">0</b></div>
       <div class="pill" id="scorePill" title="Daily score">⭐ <b id="dailyScoreNum">0</b></div>
@@ -70,6 +71,15 @@
       </div>
       <div id="dpGrid" class="dp-grid"></div>
       <div id="dpFoot" class="dp-foot"></div>
+    </div>
+    <div id="queuePanel" class="daily-panel hidden">
+      <div class="dp-head"><span id="qpTitle">⚔️</span><span id="qpScore">🔵 0 · 🔴 0</span></div>
+      <div id="qpGrid" class="dp-grid"></div>
+      <div id="qpFoot" class="dp-foot"></div>
+      <div class="qp-actions">
+        <button id="qpEnd" class="mini" type="button">🤝 Request end</button>
+        <button id="qpLeave" class="mini" type="button">🚪 Leave</button>
+      </div>
     </div>
     <div id="bottomBar">
       <button id="recipeBtn" class="btn round small recipe" type="button" title="Recipes">📜</button>
@@ -86,6 +96,7 @@
       <div class="tabs lb-tabs">
         <button id="lbTabDisc" class="tab active" type="button">💎 Discoveries</button>
         <button id="lbTabDaily" class="tab" type="button">⭐ Daily</button>
+        <button id="lbTabQueue" class="tab" type="button">⚔️ Queue</button>
       </div>
       <h2 id="lbTitle">🏆 Top Discoverers</h2>
       <ol id="lbList"></ol>
@@ -115,6 +126,40 @@
       <p id="dictCount" class="dict-count"></p>
       <input id="dictSearch" class="dict-search" type="search" placeholder="🔍 Search discovered elements…" autocomplete="off" spellcheck="false" />
       <ul id="dictList"></ul>
+    </div>
+  </div>
+
+  <div id="queueModal" class="modal hidden">
+    <div class="card daily-card">
+      <button id="queueClose" class="mini close" type="button">✕</button>
+      <h2>⚔️ Queue</h2>
+      <div id="qIntro">
+        <p>Race another player to claim a shared bingo board!</p>
+        <ul class="rules">
+          <li>When 2 players are waiting, you both drop back to the original 4 elements for the match</li>
+          <li>Be the first to make a tile's element to <b>claim</b> it: <b class="tag-blue">blue</b> is yours, <b class="tag-red">red</b> is theirs</li>
+          <li>Every bingo (a full line of your tiles) is <b>+1</b> point</li>
+          <li>No timer. Both players can agree to end it, or it ends when the board is full</li>
+          <li>Leave mid-match and you lose, and the points from it are thrown away</li>
+          <li>After the match you return to your own board, plus everything you learned</li>
+        </ul>
+        <p id="qMsg" class="error"></p>
+        <button id="qJoin" class="btn big" type="button">Join the queue</button>
+      </div>
+      <div id="qWait" class="hidden">
+        <div class="q-spin">⚔️</div>
+        <p class="q-wait-text">Waiting for an opponent<span class="dots-anim"></span></p>
+        <p>You can keep playing while you wait. The match starts as soon as someone else joins!</p>
+        <button id="qLeaveWait" class="btn big pinkbtn" type="button">Leave queue</button>
+      </div>
+      <div id="qResult" class="hidden">
+        <div id="qrTitle" class="dr-title"></div>
+        <ul id="qrBreak" class="dr-break"></ul>
+        <div id="qrScore" class="big-score">0</div>
+        <div class="dr-label">points earned</div>
+        <div class="dr-bank">Queue Score: <b id="qrTotal">0</b> ⚔️</div>
+        <button id="qDone" class="btn big" type="button">Back to my board</button>
+      </div>
     </div>
   </div>
 
