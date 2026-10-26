@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, runTransaction, increment,
-  arrayUnion, arrayRemove, updateDoc, deleteDoc, collection, query, orderBy, limit, getDocs, where,
+  arrayUnion, arrayRemove, updateDoc, deleteDoc, documentId, collection, query, orderBy, limit, getDocs, where,
   getCountFromServer, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
@@ -34,6 +34,13 @@ const _G = [
   [85, [[5,"SwYI"],[4,"k4el/ZHt"],[6,"KF4JFQ=="],[2,"ZSzGzao="],[0,"BG0="],[9,"k6khRQRN"],[3,"W4CMnpPI45w="],[8,"d0ZI1A=="],[1,"BEI2/vbx6oc="],[10,"sIs="],[7,"AnRZhJA="]]],
   [216, [[6,"+rObo2JVUD8="],[1,"kce0eQ=="],[2,"g4c="],[10,"VCvT0Ylk"],[4,"NTAfaA=="],[8,"9JE="],[9,"FCo="],[5,"1d+VrZ9ZMks="],[3,"+xgBOiVz"],[0,"iZOpmQ=="],[7,"meDqa0o3bQ=="]]],
   [59, [[2,"Em0bb9jEyg=="],[1,"Jz0kJhw="],[5,"1DoDaD0F8w=="],[0,"TCcoCRs="],[9,"9oQ="],[6,"QGFAHyY="],[3,"TkXtiLiGwA=="],[7,"eDtd"],[4,"S7etu/Q="],[8,"bXRLwIWHiw=="]]],
+  [151, [[5,"Cxk="],[1,"g9fKp4yB"],[2,"4rfD17eDoA=="],[4,"hP33"],[3,"pPjV38c5"],[0,"xvTp5sY="],[7,"eoep6+nCBQ=="],[9,"SQElJK3wjg=="],[8,"fr6Oks0="],[6,"anHL+sU="]]],
+  [109, [[5,"VCkSMq0="],[3,"orSqzg=="],[10,"iGM="],[9,"w11jZx/alw=="],[6,"Ugwv"],[8,"aD2J/czD"],[2,"3Jnp"],[4,"5YPq59YYV2I="],[0,"Cjc347vJoe4="],[1,"K6j7"],[7,"a1Sdpg=="]]],
+  [193, [[7,"p6275w=="],[5,"9/rA"],[0,"kL6ruI6mpMA="],[6,"hcGIj7g="],[3,"mP0+"],[9,"Qw5D2ug="],[4,"81kDHEdANk4="],[8,"g4g="],[1,"uL6ypaxFUw=="],[2,"1pmBc1BjJkk="]]],
+  [114, [[10,"oG4="],[8,"VVI="],[2,"4u3Kzw=="],[1,"CqLryQ=="],[11,"ei1F"],[3,"k7eU7emH"],[7,"YmCQr6A="],[9,"pHZwbDbUnA=="],[0,"FQ64/8ihrA=="],[6,"LAoc4PA="],[4,"iY7Z9Lo="],[5,"bCs0"]]],
+  [105, [[7,"Z3U="],[2,"5P/x8f6Zqg=="],[6,"ag5hwPXrwak="],[5,"WHYkHQ=="],[1,"Efv/3/WF1w=="],[3,"paq4r+U="],[4,"rYTb+A=="],[0,"OAYUBMbb/Q=="],[8,"H0al7tfV"],[9,"50Z0"]]],
+  [183, [[9,"ZBVR"],[1,"gqS+"],[3,"8efCDHQ="],[10,"QTqN/A=="],[11,"UhWSqg=="],[2,"mNS9iGk="],[6,"h8XphpBcGD4="],[7,"kbb/8g=="],[0,"5uc="],[4,"zcMXHzxaSlg="],[5,"CcH2kg=="],[8,"n6n9"]]],
+  [112, [[4,"tJ8="],[1,"KdE="],[6,"Zxsj0e4="],[10,"lWA="],[7,"VEmrldL2nQ=="],[9,"xF5sZBjZiA=="],[5,"Yy8nIw=="],[0,"FyI508nk4Os="],[2,"gez5zOc="],[3,"85at1cY="],[8,"Q0HaqJXC"]]],
 ]; 
 function _dk([seed, parts]) {
   return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
@@ -227,6 +234,7 @@ onAuthStateChanged(auth, async (user) => {
   clearBoard();
   renderSidebar();
   refreshDailyUI();
+  repairElementIndex();   // background, once per account: re-register your elements in the dictionary
   await resumeDaily();
   await resumeQueue();
 });
@@ -396,9 +404,11 @@ async function combine(dragged, target) {
     const { result, first } = await getResult(a, b);
     dragged.remove(); target.remove();
     spawn(result, x, y, first);
-    const isNewToMe = !inventory.has(keyOf(result.n));
+    const rk = keyOf(result.n), realHad = (savedInventory || inventory).has(rk);   // savedInventory = your real elements during a daily/queue
+    const isNewToMe = !inventory.has(rk);
     // in daily mode new elements are temporary, except real first discoveries (those are credited to you for good)
     if (isNewToMe) addToInventory(result, !daily.active || first);
+    if (!first && !realHad) ensureElementDoc(result);   // make sure the dictionary knows this element
     if (first) playSfx(sfxDiscovery);   // only a real first discovery gets the discovery sound
     if (first) toast("✨ First discovery!");
     if (daily.active) dailyOnResult(result, first);
@@ -411,6 +421,47 @@ async function combine(dragged, target) {
     setTimeout(() => dragged.classList.remove("shake"), 450);
     toast(friendlyError(e), 5000);
   }
+}
+
+// ==========================================================
+//  Dictionary index repair
+//  The dictionary lists the "elements" collection. An element only got a record there when
+//  it was FIRST created, so results reached through older recipes could be in your inventory
+//  without being in the dictionary. These two helpers register any missing ones (no discovery
+//  credit, no counter change).
+// ==========================================================
+const elDocId = (n) => keyOf(n).replace(/\//g, "∕").slice(0, 400);
+const isStartEl = (n) => START.some((s) => keyOf(s.n) === keyOf(n));
+async function ensureElementDoc(el) {
+  if (!me || isStartEl(el.n)) return;
+  try {
+    const ref = doc(db, "elements", elDocId(el.n));
+    if (!(await getDoc(ref)).exists())
+      await setDoc(ref, { n: el.n, e: el.e, by: me.username, uid: me.uid, created: serverTimestamp() });
+  } catch (e) { /* someone else created it first, or offline; fine */ }
+}
+async function repairElementIndex() {
+  const flag = `jf_elfix1_${me.uid}`;
+  if (lsGet(flag)) return;
+  const mine = [...inventory.values()].filter((x) => !isStartEl(x.n));   // read now, before any daily/queue swap
+  const uid = me.uid, username = me.username;
+  let restored = 0, failed = false;
+  for (let i = 0; i < mine.length; i += 30) {
+    const chunk = mine.slice(i, i + 30);
+    try {
+      const snap = await getDocs(query(collection(db, "elements"), where(documentId(), "in", chunk.map((x) => elDocId(x.n)))));
+      const have = new Set(snap.docs.map((d) => d.id));
+      for (const el of chunk) {
+        if (have.has(elDocId(el.n))) continue;
+        try {
+          await setDoc(doc(db, "elements", elDocId(el.n)), { n: el.n, e: el.e, by: username, uid, created: serverTimestamp() });
+          restored++;
+        } catch (e) { failed = true; }
+      }
+    } catch (e) { failed = true; console.warn("element index repair", e); }
+  }
+  if (!failed) lsSet(flag, 1);
+  if (restored) toast(`📖 Restored ${restored} missing elements to the dictionary`, 4500);
 }
 
 // ==========================================================
@@ -636,6 +687,8 @@ async function openDict() {
     const all = new Map();
     START.forEach((s) => all.set(keyOf(s.n), { n: s.n, e: s.e }));
     snap.docs.forEach((d) => { const v = d.data(); if (v.n) all.set(keyOf(v.n), { n: v.n, e: v.e || "✨" }); });
+    // elements you own always show, even if the shared index missed them
+    (savedInventory || inventory).forEach((s) => { const k = keyOf(s.n); if (!all.has(k)) all.set(k, { n: s.n, e: s.e || "✨" }); });
     dictItems = [...all.values()].sort((a, b) => a.n.localeCompare(b.n));
     $("dictCount").textContent = `${dictItems.length.toLocaleString()} elements discovered by everyone`;
     renderDict();
