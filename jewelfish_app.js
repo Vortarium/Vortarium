@@ -25,6 +25,9 @@ const _G = [
   [87, [[3,"YuQ="],[5,"b34PJC3Ht+SH"],[6,"ezIncg=="],[8,"PQ=="],[11,"w207PuHPyp09SRup0pUSKg=="],[2,"IAc="],[1,"SBRXq8M="],[9,"lQ=="],[10,"sKRwEg=="],[7,"CXty"],[4,"nYM="],[0,"FhRSWA=="]]],
   [117, [[9,"sw=="],[10,"kw=="],[6,"NxIp"],[7,"VkW6pa4="],[5,"WHocWtHUwp3QoQ=="],[1,"/uo="],[8,"dEKiiZc="],[0,"AgbE3g=="],[12,"SxlS"],[2,"4vo="],[4,"n6XQ6eYxEyA="],[3,"prTR2NTb"],[11,"aRtA"]]],
   [73, [[12,"w1wtU8uZ0g=="],[9,"270="],[6,"ZA=="],[0,"CB0bHSE0Sio="],[7,"SFx3Tw=="],[3,"SZ6Cpw=="],[10,"yw=="],[4,"Y7uNvQ=="],[2,"OSly/4TRt9eXjg=="],[5,"IUIAOQ=="],[8,"BWV+pLc="],[1,"cUk="],[11,"ww=="]]],
+  [52, [[13,"YMk="],[2,"BQgM"],[4,"WzaA5Ko="],[1,"NiESEQ=="],[10,"0It1"],[8,"IQh3"],[6,"DlA6MzE="],[11,"z8cKWHg="],[9,"ybmU"],[0,"U3Y="],[14,"GQ=="],[3,"cQ9F"],[12,"9rcwZA=="],[7,"ND8zQnM="],[5,"onZtWmc="]]],
+  [44, [[12,"9r8/dg=="],[9,"8eA="],[5,"knMwdw=="],[8,"Bx1pTg=="],[2,"KQBo"],[14,"EY+n"],[6,"81BR"],[10,"950="],[0,"fUQ="],[3,"Rm0dhA=="],[11,"3cI6Ajw="],[7,"Dg42O34="],[13,"cN7w9Hw="],[1,"E2U="],[4,"TyKqtg=="],[15,"fw=="]]],
+  [113, [[11,"HgtOG7s="],[12,"K3R1u+M="],[9,"kHBE"],[13,"2Jo="],[7,"VAa2k9c="],[5,"fAFyB6k="],[2,"0dA="],[6,"fS0="],[8,"YEe3+A=="],[4,"nfLb"],[0,"ICgozw=="],[1,"VO+5"],[10,"vxldFeE="],[3,"kpSU0eQ="]]],
 ]; 
 function _dk([seed, parts]) {
   return parts.slice().sort((x, y) => x[0] - y[0]).map(([i, t]) =>
@@ -242,11 +245,14 @@ function makeSidebarBtn(el) {
   });
   b.addEventListener("pointermove", (ev) => {
     if (!down || dragged) return;
-    if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+    const dx = ev.clientX - sx, dy = ev.clientY - sy;
+    if (Math.hypot(dx, dy) < 6) return;
+    // mostly-vertical movement is a scroll of the list, not a drag
+    if (ev.pointerType === "touch" && Math.abs(dy) > Math.abs(dx)) { down = false; return; }
     dragged = true;
     const br = board.getBoundingClientRect();
     const node = spawn(el, ev.clientX - br.left - 40, ev.clientY - br.top - 16);
-    node._begin(ev);
+    node._begin(ev, true);
   });
   const up = () => { down = false; };
   b.addEventListener("pointerup", up);
@@ -291,15 +297,51 @@ function spawn(el, x, y, first = false) {
 }
 
 function makeDraggable(node) {
-  let offX = 0, offY = 0, target = null;
+  let offX = 0, offY = 0, target = null, pid = null;
 
-  const begin = (ev) => {
-    if (node.classList.contains("busy")) return;
-    node.setPointerCapture(ev.pointerId);
+  const place = (cx, cy) => {
+    const br = board.getBoundingClientRect();
+    const w = node.offsetWidth, h = node.offsetHeight;
+    // keep the item visible inside the board while dragging (it can still be dropped on the sidebar to delete)
+    node.style.left = clamp(cx - br.left - offX, 0, board.clientWidth - w) + "px";
+    node.style.top = clamp(cy - br.top - offY, 0, board.clientHeight - h) + "px";
+  };
+
+  const move = (ev) => {
+    if (ev.pointerId !== pid) return;
+    place(ev.clientX, ev.clientY);
+    const t = itemUnder(ev.clientX, ev.clientY, node);
+    if (t !== target) { target?.classList.remove("target"); target = t; target?.classList.add("target"); }
+  };
+
+  const end = async (ev) => {
+    if (ev.pointerId !== pid) return;
+    pid = null;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+    node.classList.remove("dragging");
+    target?.classList.remove("target");
+    const t = target; target = null;
+
+    const sb = $("sidebar").getBoundingClientRect();
+    if (ev.type === "pointerup" && ev.clientX > sb.left) { node.remove(); return; }   // dropped on sidebar = delete
+    if (t && t.isConnected) await combine(node, t);
+  };
+
+  const begin = (ev, centered = false) => {
+    if (node.classList.contains("busy") || pid !== null) return;
+    pid = ev.pointerId;
+    try { node.setPointerCapture(pid); } catch (e) { /* window listeners still track it */ }
     const r = node.getBoundingClientRect();
-    offX = ev.clientX - r.left; offY = ev.clientY - r.top;
+    if (centered) { offX = node.offsetWidth / 2; offY = node.offsetHeight / 2; }
+    else { offX = ev.clientX - r.left; offY = ev.clientY - r.top; }
     node.classList.add("dragging");
     node.style.zIndex = ++zTop;
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    if (centered) place(ev.clientX, ev.clientY);
   };
   node._begin = begin;   // lets the sidebar hand a fresh copy over to be dragged
   node.addEventListener("pointerdown", (ev) => { if (ev.button === 0) begin(ev); });
@@ -311,28 +353,6 @@ function makeDraggable(node) {
     const x = parseFloat(node.style.left) + 24, y = parseFloat(node.style.top) + 24;
     spawn({ n: node.dataset.n, e: node.dataset.e }, x, y);
   });
-
-  node.addEventListener("pointermove", (ev) => {
-    if (!node.classList.contains("dragging")) return;
-    const br = board.getBoundingClientRect();
-    node.style.left = ev.clientX - br.left - offX + "px";
-    node.style.top = ev.clientY - br.top - offY + "px";
-    const t = itemUnder(ev.clientX, ev.clientY, node);
-    if (t !== target) { target?.classList.remove("target"); target = t; target?.classList.add("target"); }
-  });
-
-  const end = async (ev) => {
-    if (!node.classList.contains("dragging")) return;
-    node.classList.remove("dragging");
-    target?.classList.remove("target");
-    const t = target; target = null;
-
-    const sb = $("sidebar").getBoundingClientRect();
-    if (ev.clientX > sb.left) { node.remove(); return; }   // dropped on sidebar = delete
-    if (t) await combine(node, t);
-  };
-  node.addEventListener("pointerup", end);
-  node.addEventListener("pointercancel", end);
 }
 
 function itemUnder(cx, cy, self) {
@@ -363,7 +383,7 @@ async function combine(dragged, target) {
     const isNewToMe = !inventory.has(keyOf(result.n));
     // in daily mode new elements are temporary, except real first discoveries (those are credited to you for good)
     if (isNewToMe) addToInventory(result, !daily.active || first);
-    if (first || isNewToMe) playSfx(sfxDiscovery);
+    if (first) playSfx(sfxDiscovery);   // only a real first discovery gets the discovery sound
     if (first) toast("✨ First discovery!");
     if (daily.active) dailyOnResult(result, first);
   } catch (e) {
@@ -678,13 +698,13 @@ $("lbModal").addEventListener("click", (e) => { if (e.target.id === "lbModal") $
 //  - 1 pt per item, bingo = 3 pts, each extra bingo = 3+n pts, whole board = +25
 // ==========================================================
 const DAILY_MS = 20 * 60 * 1000;
-const FALLBACK_ITEMS = ["Human","Lightbulb","Germany","Ruby","Dinosaur","Submarine","Pyramid","Violin","Astronaut","Samurai","Piano","Pizza",
-  "Vampire","Telescope","Dragon","Compass","Robot","Diamond","Japan","Library","Skeleton","Penguin","Rocket","Castle","Bacteria","Sword","Clock","Egypt","Wizard","Spaceship"];
-// Every board gets randomly drawn categories so the 25 things are truly different and niche, never the easy basics.
-const BOARD_THEMES = ["a country","a famous city","an animal","a bird","a sea creature","an insect","a gemstone or mineral","a chemical element","a plant or flower","a fruit or vegetable",
-  "a dish or food","a drink","a musical instrument","a tool","a machine or invention","a vehicle","a building or landmark","a profession or job","a mythical creature","a fantasy item",
-  "a science concept","a planet, star or space object","a sport or game","a piece of clothing","a household object","a weapon","a historical civilization or era","a body part or organ","a language or writing thing","a disease or medicine",
-  "a type of weather phenomenon","a famous profession like scientist or explorer","a geographic feature","a technology or gadget","a toy","a religion-neutral myth or legend figure","an art or craft","a currency or money thing","a container","a holiday or festival"];
+const FALLBACK_ITEMS = ["Cow","Sky","Sleep","Juice","Math","Dog","Book","Moon","Bread","Music","Pizza","Egg","Bird","Fish","Milk","Cheese",
+  "Doctor","Farm","Robot","Castle","Pirate","Piano","Boat","Beach","Candy","Soap","Computer","Dream","Knife","Garden"];
+// Every board gets randomly drawn, everyday categories: things most people know, a middle difficulty (not trivial, not obscure).
+const BOARD_THEMES = ["a farm or pet animal","a wild animal","a bird","a sea creature","a fruit or vegetable","a food or dish","a drink","a musical thing","a tool",
+  "a household object","a vehicle","a building or place","a job or profession","a famous creature from myths","a school subject or everyday idea (like Math or Sleep)",
+  "something in the sky or space","a sport or game","a piece of clothing","a body part","a plant or flower","a toy","a gadget or machine","a country or famous city",
+  "something found in a kitchen","something found at the beach","a feeling or state (like Sleep or Love)","a type of weather","a holiday or party thing","a sweet or snack","a story character type (like Pirate or Wizard)"];
 const LINES = (() => {
   const L = [];
   for (let r = 0; r < 5; r++) L.push([0, 1, 2, 3, 4].map((c) => r * 5 + c));
@@ -767,14 +787,15 @@ async function generateBoardItems(date) {
   const themes = shuffle(BOARD_THEMES.slice()).slice(0, 25);
   const prompt =
 `Make a bingo board for a crafting game like Infinite Craft. Players start with only Earth, Air, Water and Fire and combine two things at a time to make new things.
-Give exactly 25 DIFFERENT, NICHE and specific things. This is a hard challenge board, so they must take many mixes to reach.
-- They must NOT be basic or easy things reachable in 1-2 mixes. Avoid generic words like Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Tree, Ocean, Storm, Rainbow, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Forest, Clay, Brick, Dust, Metal.
-- Aim for specific, unique, interesting words like Human, Lightbulb, Germany, Ruby, Violin, Samurai, Submarine, Pyramid, Penguin, Bacteria.
-- One entry per line below, each matching its category, picked by you to be surprising and not the most obvious example:
+Give exactly 25 DIFFERENT, EVERYDAY things that most people know. This is a medium-difficulty board: each should take a handful of mixes to reach, not one or two, and not dozens.
+- Good examples of the right difficulty: Cow, Sky, Sleep, Juice, Math, Dog, Book, Moon, Bread, Music, Pizza, Doctor, Boat.
+- Too easy, do NOT use: Steam, Mud, Cloud, Lava, Rain, Sand, Glass, Plant, Ocean, Storm, Smoke, Ash, Ice, Snow, Fog, Wind, Sun, Mountain, Lake, River, Island, Dust, Metal.
+- Too hard or obscure, do NOT use: chemical elements, gemstones, rare minerals, scientific terms, obscure animals or historical figures (no Bismuth, Samurai, Bacteria, etc).
+- One entry per line below, each matching its category, a common well-known example:
 ${themes.map((t, i) => `${i + 1}. ${t}`).join("\n")}
 - Short names, 1-2 words, Title Case.
 - Do NOT include Earth, Air, Water or Fire.
-- Variety seed (use it to pick unusual answers): ${date}-${Math.random().toString(36).slice(2, 10)}
+- Variety seed (use it so the board differs from other days): ${date}-${Math.random().toString(36).slice(2, 10)}
 Reply as JSON: {"items": ["...", "..."]}`;
   const blocked = new Set(START.map((s) => keyOf(s.n)));
   const clean = (arr) => {
@@ -788,7 +809,7 @@ Reply as JSON: {"items": ["...", "..."]}`;
   };
   let items = [];
   try {
-    items = await geminiJSON(prompt, { temperature: 1, maxOutputTokens: 2048 }, (p) => {
+    items = await geminiJSON(prompt, { temperature: 0.9, maxOutputTokens: 2048 }, (p) => {
       const c = clean(Array.isArray(p.items) ? p.items : []);
       if (c.length < 15) throw new Error("AI board too short");
       return c;

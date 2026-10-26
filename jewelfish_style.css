@@ -1,6 +1,7 @@
 :root {
   --paper: #fdf8e8;
   --ink: #2b2b2b;
+  --shadow: #2b2b2b;
   --blue: #7ad0ff;
   --pink: #ff9fc2;
   --yellow: #ffe27a;
@@ -8,19 +9,19 @@
   --card: #ffffff;
   --panel: rgba(255,255,255,.93);
   --dot: rgba(0,0,0,.12);
-  --shadow: #2b2b2b;
   --wobble: 255px 15px 225px 15px / 15px 225px 15px 255px;
   --wobble2: 15px 225px 15px 255px / 255px 15px 225px 15px;
 }
 
 body.dark {
-  --paper: #15171d; --ink: #e6e2d3; --card: #1f222a; --panel: rgba(31,34,42,.94); --dot: rgba(255,255,255,.07);
+  color-scheme: dark;
   --shadow: #000;
+  --paper: #15171d; --ink: #e6e2d3; --card: #1f222a; --panel: rgba(31,34,42,.94); --dot: rgba(255,255,255,.07);
   --blue: #2e6f8e; --pink: #8c4160; --yellow: #8a7530; --green: #3d7b48;
 }
 body.themefade, body.themefade * { transition: background-color .5s, color .5s, border-color .5s, box-shadow .5s !important; }
-input, button { color: var(--ink); }
-.item.ghost { position: fixed; z-index: 100000; pointer-events: none; cursor: grabbing; animation: none; box-shadow: 7px 7px 0 var(--shadow); transform: rotate(-3deg) scale(1.06); }
+input, button, select, textarea { color: var(--ink); }
+input::placeholder { color: var(--ink); opacity: .5; }
 * { box-sizing: border-box; }
 
 html, body {
@@ -198,7 +199,8 @@ form input:focus { background: var(--card); box-shadow: 3px 3px 0 var(--blue); }
 .lb-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-row .score { font-family: "Caveat", cursive; font-size: 26px; }
 .lb-row.me { background: var(--yellow); }
-.lb-row.gold { background: #ffd84d; }
+.lb-row.gold { background: #ffd84d; color: #2b2b2b; }
+body.dark .lb-row.gold { background: #8a7530; color: var(--ink); }
 .lb-you { margin-top: 4px; text-align: center; }
 .dots { font-size: 30px; line-height: .6; letter-spacing: 6px; margin-bottom: 6px; }
 .lb-you .lb-row { text-align: left; }
@@ -268,7 +270,7 @@ form input:focus { background: var(--card); box-shadow: 3px 3px 0 var(--blue); }
 }
 .charge-fill {
   height: 100%; width: 0;
-  background: repeating-linear-gradient(45deg, var(--yellow) 0 12px, #ffd84d 12px 24px);
+  background: repeating-linear-gradient(45deg, var(--yellow) 0 12px, color-mix(in srgb, var(--yellow) 70%, #fff) 12px 24px);
 }
 .dr-bank { font-size: 24px; }
 .dr-bank b { font-family: "Caveat", cursive; font-size: 36px; }
