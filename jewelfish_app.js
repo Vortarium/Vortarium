@@ -51,6 +51,10 @@ const API_KEYS = _G.map(_dk);
 const KEY_TIMEOUT_MS = 3000;
 let keyIdx = 0; // stays on the last working key between mixes
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
+// "Saver mode" (toggled by the vortarium account, shared by everyone): every key calls this model instead.
+const GEMINI_MODEL_SAVER = "gemini-3.1-flash-lite";
+let saverMode = false;
+const activeModel = () => (saverMode ? GEMINI_MODEL_SAVER : GEMINI_MODEL);
 
 const firebaseConfig = {
   apiKey: "AIzaSyB3Qaz6ybfPKqhHjLQxrfjEpLDnY94oZ_w",
@@ -204,6 +208,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) {
     teardownQueue();
     me = null;
+    stopSettingsListener();
     teardownDaily();
     gameScreen.classList.add("hidden");
     authScreen.classList.remove("hidden");
@@ -238,6 +243,7 @@ onAuthStateChanged(auth, async (user) => {
   clearBoard();
   renderSidebar();
   refreshDailyUI();
+  startSettingsListener(); renderQualityBtn();
   repairElementIndex();   // background, once per account: re-register your elements in the dictionary
   await resumeDaily();
   await resumeQueue();
@@ -539,6 +545,7 @@ Reply as JSON: {"name": "...", "emoji": "..."}`;
 // Shared Gemini caller: rotates keys on slow/failed answers. `shape` turns the parsed JSON into the
 // value you want (throw inside it to count as a failed attempt and try the next key).
 async function geminiJSON(prompt, { temperature = 0.7, maxOutputTokens = 1024 } = {}, shape = (x) => x) {
+  const model = activeModel();   // read once so a whole key rotation uses one model
   const body = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { temperature, maxOutputTokens, responseMimeType: "application/json" }
@@ -546,8 +553,8 @@ async function geminiJSON(prompt, { temperature = 0.7, maxOutputTokens = 1024 } 
 
   const tryKey = async (rawKey) => {
     const key = encodeURIComponent(rawKey);
-    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent?key=${key}`;
-    const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${key}`;
+    const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
     // Express-mode keys (start with "AQ") use the Vertex endpoint, AI Studio keys use the other one.
     const urls = rawKey.startsWith("AQ") ? [vertexUrl, studioUrl] : [studioUrl, vertexUrl];
     const ctrl = new AbortController();
@@ -586,6 +593,37 @@ async function geminiJSON(prompt, { temperature = 0.7, maxOutputTokens = 1024 } 
   throw new Error("The mixer is busy right now. Please wait a bit and try again.");
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---------- Saver mode (owner button, global switch stored in meta/settings) ----------
+let settingsUnsub = null;
+const isOwner = () => !!me && String(me.username).toLowerCase() === "vortarium";
+function renderQualityBtn() {
+  const b = $("qualityBtn");
+  b.classList.toggle("hidden", !isOwner());
+  b.classList.toggle("on", saverMode);
+  b.textContent = saverMode ? "🔋" : "⚡";
+  b.title = saverMode
+    ? "Saver mode ON: every key uses Gemini 3.1 Flash-Lite (click to switch back)"
+    : "Saver mode off: using Gemini 3.5 Flash-Lite (click to turn Saver mode on)";
+}
+function startSettingsListener() {
+  if (settingsUnsub) return;
+  settingsUnsub = onSnapshot(doc(db, "meta", "settings"),
+    (s) => { saverMode = !!(s.exists() && s.data().saver); renderQualityBtn(); },
+    () => {});
+}
+function stopSettingsListener() {
+  if (settingsUnsub) settingsUnsub();
+  settingsUnsub = null; saverMode = false; renderQualityBtn();
+}
+$("qualityBtn").onclick = async () => {
+  if (!isOwner()) return;
+  const next = !saverMode;
+  try {
+    await setDoc(doc(db, "meta", "settings"), { saver: next, by: me.username, updated: serverTimestamp() }, { merge: true });
+    toast(next ? "🔋 Saver mode ON: all keys now use Gemini 3.1 Flash-Lite" : "⚡ Saver mode off: back to Gemini 3.5 Flash-Lite", 3500);
+  } catch (e) { console.error(e); toast("Couldn't change it. Did you publish the new Firestore rules?", 4000); }
+};
 
 // ==========================================================
 //  Clear button

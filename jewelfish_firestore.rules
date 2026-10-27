@@ -33,6 +33,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Saver mode switch: everyone can read it, only the vortarium account can change it.
+    match /meta/settings {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.token.email == 'vortarium@jewelfish.app'
+        && request.resource.data.saver is bool;
+      allow delete: if false;
+    }
+
     // Daily challenge boards: one per date, created once by the first player to open it.
     match /daily/{date} {
       allow read: if request.auth != null;

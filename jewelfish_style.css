@@ -378,3 +378,7 @@ body.dark .btn.round.queue { background: #6b44a3; }
 .m-edit input:focus { background: var(--card); box-shadow: 3px 3px 0 var(--blue); }
 .m-edit .btn.big { width: auto; flex: 1; font-size: 22px; }
 @media (max-width: 600px) { .m-cell { font-size: 11px; } .vs-side b { font-size: 26px; } }
+
+/* ---------- saver mode button (vortarium only) ---------- */
+.btn.round.quality { background: #ffb35c; }
+.btn.round.quality.on { background: var(--green); }
