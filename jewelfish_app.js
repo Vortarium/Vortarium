@@ -624,14 +624,24 @@ try {
 // ==========================================================
 let rcToken = 0;
 const emojiOf = (name) => (inventory.get(keyOf(name)) || {}).e || "";
+const RESULT_MAX = 10;   // dictionary and recipe book never show more than this at once
 function rcShowList() {
   $("rcBack").classList.add("hidden"); $("rcTitle").classList.add("hidden");
-  $("rcSearch").classList.remove("hidden"); $("rcHint").textContent = "Click an element to see how it is made";
+  $("rcSearch").classList.remove("hidden");
   const q = $("rcSearch").value.trim().toLowerCase();
-  const rows = [...inventory.values()].filter((x) => !q || keyOf(x.n).includes(q));
   const list = $("rcList"); list.innerHTML = "";
-  if (!rows.length) { list.innerHTML = `<li class="none">No elements match.</li>`; return; }
-  rows.forEach((x) => {
+  if (!q) {
+    $("rcHint").textContent = "Search one of your elements to see how it is made";
+    list.innerHTML = `<li class="none">Type to search (shows up to ${RESULT_MAX} results)</li>`;
+    return;
+  }
+  const all = [...inventory.values()].filter((x) => keyOf(x.n).includes(q))
+    .sort((a, b) => (keyOf(b.n).startsWith(q) - keyOf(a.n).startsWith(q)) || a.n.localeCompare(b.n));
+  if (!all.length) { $("rcHint").textContent = ""; list.innerHTML = `<li class="none">No elements match.</li>`; return; }
+  $("rcHint").textContent = all.length > RESULT_MAX
+    ? `Showing ${RESULT_MAX} of ${all.length}. Keep typing to narrow it down`
+    : "Click an element to see how it is made";
+  all.slice(0, RESULT_MAX).forEach((x) => {
     const li = document.createElement("li");
     li.className = "pick"; li.textContent = `${x.e} ${x.n}`;
     li.onclick = () => rcShowRecipes(x);
@@ -645,7 +655,7 @@ async function rcShowRecipes(el) {
   $("rcHint").textContent = "";
   const list = $("rcList"); list.innerHTML = "<li>Loading…</li>";
   try {
-    const snap = await getDocs(query(collection(db, "recipes"), where("n", "==", el.n), limit(100)));
+    const snap = await getDocs(query(collection(db, "recipes"), where("n", "==", el.n), limit(60)));
     if (token !== rcToken) return;
     const seen = new Set(), rows = [];
     snap.docs.forEach((d) => {
@@ -655,8 +665,9 @@ async function rcShowRecipes(el) {
     });
     const isStart = START.some((s) => keyOf(s.n) === keyOf(el.n));
     if (isStart) rows.unshift(`<li class="none">Starting element, you begin with this one!</li>`);
-    list.innerHTML = rows.length ? rows.join("") : `<li class="none">No recipe found for this one.</li>`;
-    $("rcHint").textContent = snap.size > 1 ? `${rows.length} ways to make it` : "";
+    const total = rows.length;
+    list.innerHTML = total ? rows.slice(0, RESULT_MAX + (isStart ? 1 : 0)).join("") : `<li class="none">No recipe found for this one.</li>`;
+    $("rcHint").textContent = total > RESULT_MAX ? `Showing ${RESULT_MAX} of ${total} ways to make it` : (snap.size > 1 ? `${total} ways to make it` : "");
   } catch (e) {
     console.error(e);
     if (token === rcToken) list.innerHTML = "<li>Couldn't load recipes. Please wait a bit and try again.</li>";
@@ -671,35 +682,44 @@ $("recipeModal").addEventListener("click", (e) => { if (e.target.id === "recipeM
 // ==========================================================
 //  Dictionary: every element anyone has discovered (names only, no recipes)
 // ==========================================================
-let dictItems = [], dictToken = 0;
-function renderDict() {
-  const q = $("dictSearch").value.trim().toLowerCase();
-  const rows = q ? dictItems.filter((x) => keyOf(x.n).includes(q)) : dictItems;
-  $("dictList").innerHTML = rows.length
-    ? rows.map((x) => `<li>${esc(x.e)} ${esc(x.n)}</li>`).join("")
-    : `<li class="none">This hasn't been discovered yet, maybe you can find it!</li>`;
-}
-async function openDict() {
+let dictToken = 0, dictTimer = null;
+async function renderDict() {
+  const q = keyOf($("dictSearch").value);
   const token = ++dictToken;
+  clearTimeout(dictTimer);
+  const list = $("dictList");
+  if (!q) { list.innerHTML = `<li class="none">Type something to search (shows up to ${RESULT_MAX} results)</li>`; return; }
+  list.innerHTML = "<li>Searching…</li>";
+  dictTimer = setTimeout(async () => {
+    try {
+      const found = new Map();
+      // your own elements (and the 4 starters) match anywhere in the name
+      [...START, ...(savedInventory || inventory).values()].forEach((x) => { const k = keyOf(x.n); if (k.includes(q)) found.set(k, { n: x.n, e: x.e || "✨" }); });
+      // everyone's elements: only the first few that START with what you typed are fetched
+      const lo = q.replace(/\//g, "∕");
+      const snap = await getDocs(query(collection(db, "elements"), where(documentId(), ">=", lo), where(documentId(), "<=", lo + "\uf8ff"), limit(RESULT_MAX)));
+      if (token !== dictToken) return;
+      snap.docs.forEach((d) => { const v = d.data(), k = keyOf(v.n || ""); if (v.n && !found.has(k)) found.set(k, { n: v.n, e: v.e || "✨" }); });
+      const rows = [...found.values()]
+        .sort((a, b) => (keyOf(b.n).startsWith(q) - keyOf(a.n).startsWith(q)) || a.n.localeCompare(b.n))
+        .slice(0, RESULT_MAX);
+      list.innerHTML = rows.length
+        ? rows.map((x) => `<li>${esc(x.e)} ${esc(x.n)}</li>`).join("")
+        : `<li class="none">This hasn't been discovered yet, maybe you can find it!</li>`;
+    } catch (e) {
+      console.error(e);
+      if (token === dictToken) list.innerHTML = "<li>Couldn't search the dictionary. Please wait a bit and try again.</li>";
+    }
+  }, 250);
+}
+function openDict() {
   $("dictModal").classList.remove("hidden");
   $("dictSearch").value = "";
-  $("dictList").innerHTML = "<li>Loading…</li>";
   $("dictCount").textContent = "";
-  try {
-    const snap = await getDocs(collection(db, "elements"));
-    if (token !== dictToken) return;
-    const all = new Map();
-    START.forEach((s) => all.set(keyOf(s.n), { n: s.n, e: s.e }));
-    snap.docs.forEach((d) => { const v = d.data(); if (v.n) all.set(keyOf(v.n), { n: v.n, e: v.e || "✨" }); });
-    // elements you own always show, even if the shared index missed them
-    (savedInventory || inventory).forEach((s) => { const k = keyOf(s.n); if (!all.has(k)) all.set(k, { n: s.n, e: s.e || "✨" }); });
-    dictItems = [...all.values()].sort((a, b) => a.n.localeCompare(b.n));
-    $("dictCount").textContent = `${dictItems.length.toLocaleString()} elements discovered by everyone`;
-    renderDict();
-  } catch (e) {
-    console.error(e);
-    if (token === dictToken) $("dictList").innerHTML = "<li>Couldn't load the dictionary. Please wait a bit and try again.</li>";
-  }
+  renderDict();
+  getCountFromServer(collection(db, "elements"))
+    .then((s) => { $("dictCount").textContent = `${s.data().count.toLocaleString()} elements discovered by everyone`; })
+    .catch(() => {});
 }
 $("dictBtn").onclick = openDict;
 $("dictSearch").addEventListener("input", renderDict);
