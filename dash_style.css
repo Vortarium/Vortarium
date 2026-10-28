@@ -254,3 +254,7 @@ html.ldm *, html.ldm *::before, html.ldm *::after { box-shadow: none !important;
 #cwheel{display:block;margin:4px auto 8px;width:150px;height:150px;border-radius:50%;cursor:crosshair;touch-action:none}
 
 #fpsBox{position:absolute;top:4px;left:6px;font:700 11px Nunito,monospace;color:#fff;opacity:.75;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:4}
+
+/* cosmetics: 8 x 4 icon pages */
+.skgrid{grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;justify-content:stretch}
+.skgrid .sk{width:auto;height:auto;aspect-ratio:1}.skgrid .sk img{width:80%;height:80%}

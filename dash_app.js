@@ -63,6 +63,7 @@ const OBJ = {
   trig_pulse: { name: 'Pulse Trigger', cat: 'triggers', trig: true },
   zone_d: { name: 'D Block', cat: 'triggers', zone: true },
   zone_s: { name: 'S Block', cat: 'triggers', zone: true },
+  zone_h: { name: 'H Block', cat: 'triggers', zone: true },
   orb_b: { name: 'Blue Orb (gravity)', cat: 'orbs' },
   port_gd: { name: 'Gravity Down Portal', cat: 'portals' },
   port_gu: { name: 'Gravity Up Portal', cat: 'portals' }
@@ -101,8 +102,8 @@ Object.assign(PORT_COL, { port_big: '#9aa8ff', port_mini: '#e8ff3d' });
 const ORBS = ['orb_y', 'orb_p', 'orb_b', 'orb_r', 'orb_d', 'orb_db'], PADS = ['pad_y', 'pad_p', 'pad_b', 'pad_r'], DASH = { orb_d: 1, orb_db: 1 };
 const ORBCOL = { orb_y: '#ffe21f', orb_p: '#ff5fd2', orb_b: '#2fb6ff', orb_r: '#ff3030', orb_d: '#3dff5a', orb_db: '#ff8a00' };
 const PADCOL = { pad_y: '#ffe21f', pad_p: '#ff5fd2', pad_b: '#2fb6ff', pad_r: '#ff3030' };
-const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8', trig_pulse: '#ffffff', trig_rot: '#ff7a2f', trig_spawn: '#ff4fd8', zone_d: '#e0408f', zone_s: '#1fb5a8' };
-const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP', trig_pulse: 'PUL', trig_rot: 'ROT', trig_spawn: 'SPN', zone_d: 'D', zone_s: 'S' };
+const TRC = { trig_color: null, trig_move: '#3aa0ff', trig_end: '#35d35a', trig_zoom: '#b06bff', trig_toggle: '#ff9a1f', trig_alpha: '#8fa0c8', trig_pulse: '#ffffff', trig_rot: '#ff7a2f', trig_spawn: '#ff4fd8', zone_d: '#e0408f', zone_s: '#1fb5a8', zone_h: '#e0c020', trig_death: '#d02030', trig_cam: '#35c0d8', trig_pvis: '#9ad86a', trig_pinv: '#7a7aa0' };
+const TRL = { trig_color: 'COL', trig_move: 'MOV', trig_end: 'END', trig_zoom: 'ZOOM', trig_toggle: 'TOG', trig_alpha: 'ALP', trig_pulse: 'PUL', trig_rot: 'ROT', trig_spawn: 'SPN', zone_d: 'D', zone_s: 'S', zone_h: 'H', trig_death: 'DTH', trig_cam: 'CAM', trig_pvis: 'VIS', trig_pinv: 'INV' };
 OBJ.spike.hz = { k: 't', a: 1, b: 1, n: 1 };
 ['Plain','Inset','Cross','Dots','Stripes','Checker','Bevel','Slab','Frame','Diamond'].forEach((n, i) => [0, 1].forEach(v => { if (i + v) OBJ['blk' + (i + v * 10)] = { name: n + (v ? ' Dark' : ''), cat: 'blocks', solid: true, bs: i, bv: v }; }));
 OBJ.block.solid = true;
@@ -114,6 +115,20 @@ const TXF = ['400 {s}px "Lilita One",sans-serif', '800 {s}px "Nunito",sans-serif
 try { if (document.fonts) TXF.forEach(f => document.fonts.load(f.replace('{s}', '24'), 'Aa')); } catch { }
 OBJ.dtext = { name: 'Aa Text', cat: 'decor', deco: true, text: true };
 OBJ.trig_rot = { name: 'Rotate Trigger', cat: 'triggers', trig: true };
+OBJ.trig_death = { name: 'Death Trigger', cat: 'triggers', trig: true };
+OBJ.trig_cam = { name: 'Camera Static Trigger', cat: 'triggers', trig: true };
+OBJ.trig_pvis = { name: 'Player Visible', cat: 'triggers', trig: true };
+OBJ.trig_pinv = { name: 'Player Invisible', cat: 'triggers', trig: true };
+OBJ.port_duel = { name: 'Duel Portal', cat: 'portals' };
+OBJ.port_unduel = { name: 'Unduel Portal', cat: 'portals' };
+const DUELP = { port_duel: 1, port_unduel: 1 };   // duel: splits the player in 2 (the 2nd one mirrored, upside down, opposite colours). unduel: back to 1 player
+Object.assign(PORT_COL, { port_duel: '#ff5fd2', port_unduel: '#5fe0ff' });
+// toggle orb: a gray orb that toggles its target group (like a Toggle Trigger) only when the player clicks it
+OBJ.orb_t = { name: 'Toggle Orb (click)', cat: 'orbs' }; ORBS.push('orb_t'); ORBCOL.orb_t = '#9aa0b0';
+// teleport portals: the input portal's "tg" is the group ID of the output portal the player is sent to
+OBJ.port_tp_in = { name: 'Teleport Input Portal', cat: 'portals' }; OBJ.port_tp_out = { name: 'Teleport Output Portal', cat: 'portals' };
+const TPP = { port_tp_in: 1, port_tp_out: 1 };
+Object.assign(PORT_COL, { port_tp_in: '#b06bff', port_tp_out: '#ffa23d' });
 OBJ.trig_spawn = { name: 'Spawn Trigger', cat: 'triggers', trig: true };
 ['Flower','Tulip','Bush','Tree','Grass','Cloud','Big Cloud','Brick','Mini Bricks','Mini Spike','Mini Spike Row','Star','Moon','Sun','Dots','Ring','Diamond','Crystal','Vine','Mushroom','Leaf','Pebbles','Fence','Lamp','Arrow','Cross','Wave','Zigzag','Heart','Pillar']
  .forEach((n, i) => OBJ['dc' + i] = { name: n, cat: 'decor', deco: true, dk: i, di: i });
@@ -205,7 +220,7 @@ function drawIcon(c, skin, c1, c2, s) {
     () => { c.fillStyle = c2; c.beginPath(); c.arc(0, 0, .4 * s, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); E(0, -.2, .1, c1); E(0, .2, .1, c2); } // 39 split disc
   ];
   c.save(); c.lineJoin = 'round'; rr(c, -h, -h, s, s, s * .2); c.fillStyle = c1; c.fill(); c.save(); c.clip();
-  D[((skin % 40) + 40) % 40](); c.restore(); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+  { const si = ((skin % 80) + 80) % 80; if (si >= 40) genPat(c, si, c1, c2, s); else D[si](); } c.restore(); rr(c, -h + lw / 2, -h + lw / 2, s - lw, s - lw, s * .2); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
 }
 function drawBall(c, idx, c1, c2, s) {
   const r = s * .5, lw = Math.max(1.5, s * .07), K = '#111', W = '#fff';
@@ -256,13 +271,14 @@ function drawBall(c, idx, c1, c2, s) {
     () => { E(0, 0, .5); E(0, 0, .34, c1); E(0, 0, .14); },
     () => { for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3; E(Math.cos(t) * .22, Math.sin(t) * .22, .17); } E(0, 0, .1, K); }
   ];
-  c.save(); c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = c1; c.fill(); c.save(); c.clip(); D[idx % 40](); c.restore();
+  c.save(); c.beginPath(); c.arc(0, 0, r, 0, 7); c.fillStyle = c1; c.fill(); c.save(); c.clip(); { const bi = ((idx % 80) + 80) % 80; if (bi >= 40) genPat(c, bi + 500, c1, c2, s); else D[bi](); } c.restore();
   c.beginPath(); c.arc(0, 0, r - lw / 2, 0, 7); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
 }
 function drawUfo(c, cube, idx, c1, c2, s) {
-  const k = idx % 40, lw = Math.max(1.5, s * .05), dot = (x, y, d, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
+  const k = ((idx % 80) + 80) % 80, lw = Math.max(1.5, s * .05), dot = (x, y, d, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
   const poly = a => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); };
   c.save(); c.lineJoin = 'round'; c.save(); c.translate(0, -s * .2); drawIcon(c, cube, c1, c2, s * .5); c.restore();
+  if (k >= 40) { ufoGen(c, k, c1, c2, s); c.restore(); return; }
   if (k === 0) { c.beginPath(); c.ellipse(0, s * .17, s * .52, s * .16, 0, 0, 7); }
   else if (k === 1) { c.beginPath(); c.ellipse(0, s * .2, s * .58, s * .1, 0, 0, 7); }
   else if (k === 2) { c.beginPath(); c.ellipse(0, s * .15, s * .42, s * .24, 0, 0, 7); }
@@ -302,9 +318,9 @@ const WV2 = [
   [-.55, 0, -.2, -.4, .2, -.15, .55, 0, .2, .15, -.2, .4], [-.5, -.4, -.1, -.15, .55, -.15, .55, .15, -.1, .15, -.5, .4], [-.55, -.25, .55, 0, -.55, .25]
 ];
 function drawWave(c, idx, c1, c2, s) {
-  const a = idx < 12 ? WV[idx] : WV2[(idx - 12) % 7], poly = k => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s * k, a[i + 1] * s * k); c.closePath(); };
+  const a = idx >= 40 ? waveGen(idx) : idx < 12 ? WV[idx] : WV2[(idx - 12) % 7], poly = k => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s * k, a[i + 1] * s * k); c.closePath(); };
   c.save(); c.lineJoin = 'round'; poly(1); c.fillStyle = c1; c.fill(); c.strokeStyle = '#000'; c.lineWidth = Math.max(1.5, s * .08); c.stroke();
-  const st = idx < 12 ? 0 : ((idx - 12) / 7) | 0;
+  const st = idx >= 40 ? (idx * 3 + 1) % 4 : idx < 12 ? 0 : ((idx - 12) / 7) | 0;
   if (st === 0) { c.translate(-s * .05, 0); poly(.5); c.fillStyle = c2; c.fill(); }
   else if (st === 1) { c.save(); poly(1); c.clip(); c.fillStyle = c2; c.fillRect(-s, -.07 * s, 2 * s, .14 * s); c.restore(); }
   else if (st === 2) { c.fillStyle = c2; [-.25, 0, .25].forEach(x => { c.beginPath(); c.arc(x * s, 0, .07 * s, 0, 7); c.fill(); }); }
@@ -312,7 +328,7 @@ function drawWave(c, idx, c1, c2, s) {
   c.restore();
 }
 function drawRobot(c, idx, c1, c2, s, ph = 0, air = false) {
-  const kk = ((idx % 40) + 40) % 40, m = kk - 12, nw = kk >= 12, k = nw ? 0 : kk, bd = nw ? 1 + m % 4 : 0, ey = nw ? 3 + ((m / 4) | 0) : k % 4, tp = nw ? (m >> 2) % 3 : k % 3, ac = nw ? (m >> 1) % 3 : k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
+  const kk = ((idx % 80) + 80) % 80, g2 = kk >= 40, j = kk - 40, m = kk - 12, nw = kk >= 12 && !g2, k = nw || g2 ? 0 : kk, bd = g2 ? j % 8 : nw ? 1 + m % 4 : 0, ey = g2 ? j % 10 : nw ? 3 + ((m / 4) | 0) : k % 4, tp = g2 ? (j >> 1) % 3 : nw ? (m >> 2) % 3 : k % 3, ac = g2 ? (j >> 2) % 3 : nw ? (m >> 1) % 3 : k >> 2, em = g2 ? 1 + j % 4 : 0, lw = Math.max(1.5, s * .06), K = '#14141c';
   const seg = (x0, y0, x1, y1, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x0 * s, y0 * s); c.lineTo(x1 * s, y1 * s); c.stroke(); };
   const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
   c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
@@ -327,6 +343,9 @@ function drawRobot(c, idx, c1, c2, s, ph = 0, air = false) {
   else { rr(c, -.18 * s, -.5 * s, .36 * s, .09 * s, .03 * s); c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw * .8; c.stroke(); }
   c.fillStyle = c1; c.strokeStyle = '#000'; c.lineWidth = lw;
   if (bd === 2) { const pts = [-.3, -.42, .3, -.42, .4, -.3, .4, 0, .3, .1, -.3, .1, -.4, 0, -.4, -.3]; c.beginPath(); for (let i = 0; i < pts.length; i += 2) c[i ? 'lineTo' : 'moveTo'](pts[i] * s, pts[i + 1] * s); c.closePath(); }
+  else if (bd === 5) { c.beginPath(); c.moveTo(-.4 * s, .1 * s); c.lineTo(-.4 * s, -.2 * s); c.arc(0, -.2 * s, .4 * s, Math.PI, 0); c.lineTo(.4 * s, .1 * s); c.lineTo(.27 * s, .18 * s); c.lineTo(.13 * s, .1 * s); c.lineTo(0, .18 * s); c.lineTo(-.13 * s, .1 * s); c.lineTo(-.27 * s, .18 * s); c.closePath(); }   // ghost
+  else if (bd === 6) { rr(c, -.48 * s, 0, .96 * s, .17 * s, .08 * s); c.fill(); c.stroke(); rr(c, -.4 * s, -.42 * s, .8 * s, .46 * s, .05 * s); }   // tank: body on treads
+  else if (bd === 7) { c.beginPath(); c.ellipse(0, -.16 * s, .42 * s, .3 * s, 0, 0, 7); }   // round alien head
   else rr(c, -.4 * s, -.42 * s, .8 * s, .52 * s, (bd === 1 ? .22 : bd === 3 ? .03 : bd === 4 ? .16 : .1) * s);
   c.fill(); c.stroke(); c.fillStyle = c2; if (bd === 3) c.fillRect(-.37 * s, -.4 * s, .74 * s, .07 * s); else if (bd === 4) c.fillRect(-.4 * s, -.1 * s, .8 * s, .05 * s);
   rr(c, -.3 * s, -.34 * s, .6 * s, .24 * s, .06 * s); c.fillStyle = K; c.fill();
@@ -344,10 +363,17 @@ function drawRobot(c, idx, c1, c2, s, ph = 0, air = false) {
   if (ac === 0) [-.1, 0, .1].forEach(x => seg(x, -.04, x, .05, lw * .8, '#000'));
   else if (ac === 1) { c.fillStyle = c2; c.fillRect(-.3 * s, -.04 * s, .6 * s, .05 * s); }
   else [-.14, 0, .14].forEach(x => dot(x, .0, .03, c2));
+  if (em) {   // emblem on the lower body (second set of robot skins)
+    c.fillStyle = c2; c.strokeStyle = '#000'; c.lineWidth = lw * .7;
+    if (em === 1) [-1, 1].forEach(sg => { c.beginPath(); c.arc(sg * .27 * s, .04 * s, .05 * s, 0, 7); c.fill(); c.stroke(); });
+    else if (em === 2) [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * .22 * s, .08 * s); c.lineTo(sg * .34 * s, .08 * s); c.lineTo(sg * .28 * s, -.02 * s); c.closePath(); c.fill(); c.stroke(); });
+    else if (em === 3) [-1, 1].forEach(sg => { c.fillRect(sg * .3 * s - .04 * s, -.04 * s, .08 * s, .12 * s); });
+    else [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * .2 * s, .0); c.lineTo(sg * .3 * s, .05 * s); c.lineTo(sg * .2 * s, .1 * s); c.stroke(); });
+  }
   c.restore();
 }
 function drawSpider(c, idx, c1, c2, s, ph = 0, air = false) {
-  const kk = ((idx % 40) + 40) % 40, m = kk - 12, nw = kk >= 12, k = nw ? 0 : kk, lgv = nw ? 1 + m % 4 : 0, bs = nw ? (m >> 1) % 6 : k % 3, ee = nw ? 3 + ((m / 4) | 0) : k % 4, mk = nw ? (m >> 2) % 3 : k >> 2, lw = Math.max(1.5, s * .06), K = '#14141c';
+  const kk = ((idx % 80) + 80) % 80, g2 = kk >= 40, j = kk - 40, m = kk - 12, nw = kk >= 12 && !g2, k = nw || g2 ? 0 : kk, lgv = g2 ? j % 5 : nw ? 1 + m % 4 : 0, bs = g2 ? j % 8 : nw ? (m >> 1) % 6 : k % 3, ee = g2 ? j % 10 : nw ? 3 + ((m / 4) | 0) : k % 4, mk = g2 ? (j >> 1) % 3 : nw ? (m >> 2) % 3 : k >> 2, sp = g2 ? 1 + (j >> 2) % 3 : 0, lw = Math.max(1.5, s * .06), K = '#14141c';
   const line = (a, w, col) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.stroke(); };
   const dot = (x, y, r, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, r * s, 0, 7); c.fill(); };
   c.save(); c.lineJoin = 'round'; c.lineCap = 'round';
@@ -363,8 +389,13 @@ function drawSpider(c, idx, c1, c2, s, ph = 0, air = false) {
   else if (bs === 2) for (let i = 0; i < 6; i++) { const t = i * Math.PI / 3; c[i ? 'lineTo' : 'moveTo'](Math.cos(t) * .29 * s, (-.02 + Math.sin(t) * .27) * s); }
   else if (bs === 3) { c.moveTo(0, -.3 * s); c.lineTo(.32 * s, -.02 * s); c.lineTo(0, .26 * s); c.lineTo(-.32 * s, -.02 * s); }
   else if (bs === 4) c.rect(-.27 * s, -.27 * s, .54 * s, .5 * s);
-  else for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4 + Math.PI / 8; c[i ? 'lineTo' : 'moveTo'](Math.cos(t) * .3 * s, (-.02 + Math.sin(t) * .28) * s); }
+  else if (bs === 5) for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4 + Math.PI / 8; c[i ? 'lineTo' : 'moveTo'](Math.cos(t) * .3 * s, (-.02 + Math.sin(t) * .28) * s); }
+  else if (bs === 6) c.ellipse(0, -.02 * s, .36 * s, .2 * s, 0, 0, 7);   // wide beetle
+  else { c.moveTo(-.3 * s, .2 * s); c.lineTo(-.3 * s, -.05 * s); c.arc(0, -.05 * s, .3 * s, Math.PI, 0); c.lineTo(.3 * s, .2 * s); }   // jellyfish dome
   c.closePath(); c.fill(); c.stroke();
+  if (sp === 1) [[-.17, .12], [.17, .12], [0, .17]].forEach(([x, y]) => dot(x, y, .045, c2));   // spots (second set of spider skins)
+  else if (sp === 2) { line([-.2, .09, .2, .09], lw * .9, c2); line([-.15, .17, .15, .17], lw * .9, c2); }
+  else if (sp === 3) { c.strokeStyle = c2; c.lineWidth = lw * .8; c.beginPath(); c.arc(0, .12 * s, .09 * s, 0, 7); c.stroke(); }
   if (mk === 0) { c.fillStyle = c2; c.beginPath(); c.ellipse(0, .12 * s, .1 * s, .06 * s, 0, 0, 7); c.fill(); }
   else if (mk === 1) [-.12, 0, .12].forEach(x => dot(x, -.19 + Math.abs(x) * .3, .035, c2));
   else line([-.2, .1, .2, .1], lw * 1.5, c2);
@@ -395,9 +426,9 @@ const SHIPS = [
   [-.5, .3, -.3, .04, 0, .2, .3, .04, .5, .3], [-.55, .1, .1, .04, .55, .18, .1, .32, -.55, .26], [-.5, .04, .3, .04, .55, .32, -.5, .32], [-.45, .32, -.55, .18, -.45, .04, .45, .04, .55, .18, .45, .32],
   [-.55, .04, .55, .04, .55, .1, .3, .32, .1, .1, -.1, .32, -.3, .1, -.55, .32], [-.5, .18, -.3, .04, 0, .12, .3, .04, .55, .18, .3, .32, 0, .24, -.3, .32]
 ];
-function hull(c, k, s) { c.beginPath(); const a = SHIPS[k % 40]; for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); }
+function hull(c, k, s) { c.beginPath(); const a = shipPts(k); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); }
 function drawShip(c, cube, ship, c1, c2, s) {
-  const k = ((ship % 40) + 40) % 40, p = k % 6, lw = Math.max(1.5, s * .05);
+  const k = ((ship % 80) + 80) % 80, p = k % 6, lw = Math.max(1.5, s * .05);
   c.save(); c.translate(0, -s * .05); c.lineJoin = 'round';
   c.save(); c.translate(0, -s * .13); drawIcon(c, cube, c1, c2, s * .55); c.restore();
   c.fillStyle = '#ffb020'; c.beginPath(); c.moveTo(-.5 * s, .12 * s); c.lineTo(-.7 * s, .17 * s); c.lineTo(-.5 * s, .22 * s); c.fill();
@@ -409,6 +440,68 @@ function drawShip(c, cube, ship, c1, c2, s) {
   else if (p === 4) { c.fillRect(-s, .26 * s, 2 * s, .07 * s); c.beginPath(); c.arc(.1 * s, .12 * s, .04 * s, 0, 7); c.fill(); }
   else { c.beginPath(); c.arc(.05 * s, .17 * s, .07 * s, 0, 7); c.fill(); }
   c.restore(); hull(c, k, s); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke(); c.restore();
+}
+// ---------- second set of icons (40-79 of every mode): generated from seeds, so every one is unique ----------
+function genPat(c, seed, c1, c2, s) {   // cube / ball body pattern, drawn inside the already clipped shape
+  const r = rng(seed * 2654435761 + 97), K = '#111', W = '#fff', pick = a => a[(r() * a.length) | 0], cols = [c2, W, K, c2];
+  const F = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x * s, y * s, w * s, h * s); };
+  const E = (x, y, d, col) => { c.fillStyle = col; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.fill(); };
+  const T = (x, y, d, col, a) => { c.fillStyle = col; c.beginPath(); for (let i = 0; i < 3; i++) { const t = a + i * 2.094; c[i ? 'lineTo' : 'moveTo']((x + Math.cos(t) * d) * s, (y + Math.sin(t) * d) * s); } c.closePath(); c.fill(); };
+  const L = (x0, y0, x1, y1, w, col) => { c.strokeStyle = col; c.lineWidth = w * s; c.lineCap = 'round'; c.beginPath(); c.moveTo(x0 * s, y0 * s); c.lineTo(x1 * s, y1 * s); c.stroke(); };
+  const R = (x, y, d, col, w) => { c.strokeStyle = col; c.lineWidth = w * s; c.beginPath(); c.arc(x * s, y * s, d * s, 0, 7); c.stroke(); };
+  const base = (r() * 8) | 0, bc = pick(cols);
+  c.save(); c.globalAlpha *= .75;
+  if (base === 1) for (let i = 0; i < 3; i++) F(-.5, -.42 + i * .33, 1, .12, bc);
+  else if (base === 2) for (let i = 0; i < 3; i++) F(-.42 + i * .33, -.5, .12, 1, bc);
+  else if (base === 3) for (let i = -2; i <= 2; i++) L(i * .35 - .5, -.6, i * .35 + .5, .6, .1, bc);
+  else if (base === 4) F(-.5, -.5, 1, .5, bc);
+  else if (base === 5) F(-.5, -.5, .5, 1, bc);
+  else if (base === 6) { for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2) F(-.5 + i / 3, -.5 + j / 3, 1 / 3, 1 / 3, bc); }
+  else if (base === 7) { R(0, 0, .36, bc, .08); R(0, 0, .2, bc, .06); }
+  c.restore();
+  const mir = r() < .65, n = 2 + ((r() * 3) | 0);
+  for (let i = 0; i < n; i++) {
+    const kind = (r() * 6) | 0, x = (.12 + r() * .26) * (mir ? 1 : (r() < .5 ? -1 : 1)), y = (r() - .5) * .7, d = .05 + r() * .09, col = pick(cols), a = r() * 6.28;
+    const draw = (px, py) => { if (kind === 0) E(px, py, d, col); else if (kind === 1) F(px - d, py - d, d * 2, d * 2, col); else if (kind === 2) T(px, py, d * 1.5, col, a); else if (kind === 3) R(px, py, d * 1.2, col, .05); else if (kind === 4) L(px - d, py - d, px + d, py + d, .06, col); else { F(px - d * .35, py - d * 1.3, d * .7, d * 2.6, col); F(px - d * 1.3, py - d * .35, d * 2.6, d * .7, col); } };
+    draw(x, y); if (mir) draw(-x, y);
+  }
+  const ce = (r() * 7) | 0, cc = pick([c2, W, K]);
+  if (ce === 0) E(0, 0, .13, cc); else if (ce === 1) { E(0, 0, .17, cc); E(0, 0, .07, K); } else if (ce === 2) T(0, 0, .2, cc, -1.57); else if (ce === 3) R(0, 0, .18, cc, .06); else if (ce === 4) F(-.12, -.12, .24, .24, cc); else if (ce === 5) { F(-.05, -.22, .1, .44, cc); F(-.22, -.05, .44, .1, cc); }
+}
+const HULLG = {}, WG = {};
+function shipPts(k) { return k < 40 ? SHIPS[k] : HULLG[k] || (HULLG[k] = genHull(k)); }
+function genHull(k) {
+  const r = rng(k * 40503 + 11), a = [], n = 3 + ((r() * 3) | 0), tx = -.55 + r() * .08, nx = .5 + r() * .1, ny = .12 + r() * .1, by = .27 + r() * .08;
+  a.push(tx, by, tx, r() < .5 ? .1 + r() * .1 : .02 + r() * .06);
+  Array.from({ length: n }, () => -.4 + r() * .8).sort((p, q) => p - q).forEach(x => a.push(x, .02 + r() * .17));
+  a.push(nx, ny, .3 + r() * .1, by);
+  Array.from({ length: (r() * 3) | 0 }, () => -.35 + r() * .7).sort((p, q) => q - p).forEach(x => a.push(x, by - r() * .08));
+  return a;
+}
+function waveGen(idx) {
+  if (WG[idx]) return WG[idx];
+  const r = rng(idx * 9176 + 3), n = 1 + ((r() * 3) | 0), tl = -.55 + r() * .06, h0 = .12 + r() * .3, up = [];
+  Array.from({ length: n }, () => -.4 + r() * .8).sort((p, q) => p - q).forEach(x => up.push([x, -(.12 + r() * .34)]));
+  const a = [tl, -h0]; up.forEach(p => a.push(p[0], p[1])); a.push(.55, 0); for (let i = up.length - 1; i >= 0; i--) a.push(up[i][0], -up[i][1]); a.push(tl, h0);
+  if (r() < .6) a.push(-.35 + r() * .3, 0);
+  return WG[idx] = a;
+}
+function ufoGen(c, k, c1, c2, s) {   // saucer body + lights + underside, drawn after the cube on top (the caller restores the context)
+  const r = rng(k * 7243 + 5), lw = Math.max(1.5, s * .05), poly = a => { c.beginPath(); for (let i = 0; i < a.length; i += 2) c[i ? 'lineTo' : 'moveTo'](a[i] * s, a[i + 1] * s); c.closePath(); };
+  const w = .36 + r() * .22, cy = .16 + r() * .06, h = .08 + r() * .1, shp = (r() * 6) | 0, und = (r() * 4) | 0, nl = 1 + ((r() * 5) | 0), ty = (r() * 3) | 0, lc = r() < .5 ? c1 : '#fff';
+  if (und === 1) { c.save(); c.globalAlpha *= .35; c.fillStyle = c1; poly([-.14, cy + h, .14, cy + h, .3, .64, -.3, .64]); c.fill(); c.restore(); }
+  else if (und === 2) { c.strokeStyle = '#000'; c.lineWidth = lw * 1.4; c.lineCap = 'round'; [-1, 1].forEach(sg => { c.beginPath(); c.moveTo(sg * w * .5 * s, (cy + h * .8) * s); c.lineTo(sg * w * .75 * s, .46 * s); c.stroke(); }); }
+  else if (und === 3) { c.fillStyle = '#ffb020'; [-.18, 0, .18].forEach(x => { c.beginPath(); c.ellipse(x * s, (cy + h + .05) * s, .035 * s, .06 * s, 0, 0, 7); c.fill(); }); }
+  if (shp === 0) { c.beginPath(); c.ellipse(0, cy * s, w * s, h * s, 0, 0, 7); }
+  else if (shp === 1) poly([-w, cy + h * .6, -w * .6, cy - h, w * .6, cy - h, w, cy + h * .6, w * .5, cy + h, -w * .5, cy + h]);
+  else if (shp === 2) { rr(c, -w * s, (cy - h) * s, 2 * w * s, 2 * h * s, h * .8 * s); }
+  else if (shp === 3) poly([-w, cy, 0, cy - h * 1.3, w, cy, 0, cy + h * 1.3]);
+  else if (shp === 4) { const a = []; for (let i = 0; i <= 8; i++) a.push(-w + i * w / 4, cy + (i & 1 ? h * .9 : -h * .3)); a.push(w, cy + h, -w, cy + h); poly(a); }
+  else { c.beginPath(); c.ellipse(0, cy * s, w * 1.1 * s, h * .6 * s, 0, 0, 7); }
+  c.fillStyle = c2; c.fill(); c.strokeStyle = '#000'; c.lineWidth = lw; c.stroke();
+  c.fillStyle = lc; for (let i = 0; i < nl; i++) { const x = nl === 1 ? 0 : -w * .6 + i * (w * 1.2) / (nl - 1); c.beginPath(); c.arc(x * s, cy * s, .035 * s, 0, 7); c.fill(); }
+  if (ty === 1) { c.fillStyle = c1; c.fillRect(-w * .8 * s, (cy + h * .45) * s, w * 1.6 * s, .035 * s); }
+  else if (ty === 2) { c.strokeStyle = c1; c.lineWidth = lw * .8; c.beginPath(); c.ellipse(0, cy * s, w * .72 * s, h * .55 * s, 0, 0, 7); c.stroke(); }
 }
 const ICACHE = {};
 function shipURL(ship, cube, c1, c2, size = 64) {
@@ -532,7 +625,7 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.translate(x + cs / 2, y + cs / 2); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.moveTo(-cs * .42, cs / 2); c.quadraticCurveTo(0, cs * .05, cs * .42, cs / 2); c.closePath();
     c.fillStyle = PADCOL[t]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = lw; c.stroke();
-  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t] || SZP[t]) {
+  } else if (SPEEDS[t] || GRAV[t] || MODEP[t] || REVP[t] || SZP[t] || DUELP[t] || TPP[t]) {
     const cl = PORT_COL[t], pcx = x + cs / 2, pcy = y - cs / 2;   // centre of the 3-cell stack
     c.translate(pcx, pcy); c.rotate(r * Math.PI / 2);
     c.beginPath(); c.ellipse(0, 0, cs * .34, cs * PH / 2, 0, 0, 7); c.fillStyle = cl; c.globalAlpha = A0 * .22; c.fill(); c.globalAlpha = A0;
@@ -540,6 +633,8 @@ function drawObj(c, o, x, y, cs, col, ed, time = 0) {
     c.rotate(-r * Math.PI / 2);
     c.fillStyle = '#fff'; c.font = `bold ${cs * (SZP[t] ? .36 : .5)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
     if (SZP[t]) { const mini = t === 'port_mini', q = cs * (mini ? .16 : .3); c.fillStyle = '#fff'; c.strokeStyle = '#fff'; c.lineWidth = lw; c.beginPath(); c.rect(-q / 2, -q / 2 - cs * .3, q, q); mini ? c.stroke() : c.fill(); c.beginPath(); c.rect(-q / 2, -q / 2 + cs * .3, q, q); mini ? c.stroke() : c.fill(); c.fillText(mini ? 'MINI' : 'BIG', 0, 0); }
+    else if (DUELP[t]) { const q = cs * .2, two = t === 'port_duel'; c.fillStyle = '#fff'; c.fillRect(-q / 2, -q / 2 - (two ? cs * .26 : 0), q, q); if (two) { c.fillStyle = '#111'; c.strokeStyle = '#fff'; c.lineWidth = lw; c.fillRect(-q / 2, -q / 2 + cs * .26, q, q); c.strokeRect(-q / 2, -q / 2 + cs * .26, q, q); c.fillStyle = '#fff'; } c.font = `bold ${cs * .26}px sans-serif`; c.fillText(two ? 'x2' : 'x1', 0, two ? 0 : cs * .26); }
+    else if (TPP[t]) c.fillText(t === 'port_tp_in' ? 'IN' : 'OUT', 0, 0);
     else c.fillText(MODEP[t] ? PLET[t] : REVP[t] ? (t === 'port_mf' ? '▶' : '◀') : GRAV[t] ? (t === 'port_gd' ? '▼' : '▲') : ['>', '>>', '>>>', '>>>>'][['port_s1', 'port_s2', 'port_s3', 'port_s4'].indexOf(t)].slice(0, 3), 0, 0);
   } else if (t === 'coin') {
     const cx = x + cs / 2, cy = y + cs / 2, g = o.gold, f = g ? '#ffd21f' : '#c8743a', f2 = g ? '#fff2a0' : '#e8a070', sq = Math.abs(Math.cos(time * 3));
@@ -782,21 +877,27 @@ function makeLayer(list, dynG) {   // split a sorted object list into static (ba
   return L;
 }
 // ---------- the game ----------
+const PF = ['p', 'mode', 'gr', 'mini', 'cyT', 'swT', 'edgeT', 'holdUsed', 'orbT', 'inD', 'pv', 'trail', 'held', 'skin', 'uk'];   // everything that belongs to ONE player. In a duel the 2nd player lives in game.d; swap() exchanges the two so the normal single-player code can run on either
 class Game {
   constructor(cv) {
     this.cv = cv; this.c = cv.getContext('2d', { alpha: false }); this.practice = false; this.cps = []; this.cpT = 0; this.cb = {}; this.running = false; this.paused = false;
     this.held = false; this.edgeT = 0; this.skin = { id: 0, c1: PRIMARY[0], c2: SECONDARY[0] };
-    const press = d => { if (!this.running || this.paused) return; if (d) { if (!this.held) { this.edgeT = .1; this.orbT = .13; this.holdUsed = false; } this.held = true; } else { this.held = false; this.holdUsed = false; } };
-    cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true); });
-    addEventListener('pointerup', () => press(false)); addEventListener('pointercancel', () => press(false));
+    const inp = (h, d) => { if (d) { if (!h.held) { h.edgeT = .1; h.orbT = .13; h.holdUsed = false; } h.held = true; } else { h.held = false; h.holdUsed = false; } };   // h = the player state object that receives this input
+    const press = (d, who) => {
+      if (!this.running || this.paused) return; const D = this.d;
+      if (D && this.indep) inp(who === 'b' ? D : this, d);   // independent duel: Up arrow = player 2, Space / W / click = player 1, they never affect each other
+      else { inp(this, d); if (D) inp(D, d); }   // dependent duel (default): both players get every input
+    };
+    cv.addEventListener('pointerdown', e => { e.preventDefault(); press(true, 'a'); });
+    addEventListener('pointerup', () => press(false, 'a')); addEventListener('pointercancel', () => press(false, 'a'));
     addEventListener('keydown', e => {
       if (!this.running) return;
-      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); if (!e.repeat) press(true); }
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); if (!e.repeat) press(true, e.code === 'ArrowUp' ? 'b' : 'a'); }
       else if (e.code === 'Escape' && !e.repeat) this.cb.onPause && this.cb.onPause();
       else if (e.code === 'KeyZ' && !e.repeat && this.practice && !this.paused) this.addCP();
       else if (e.code === 'KeyX' && !e.repeat && this.practice && !this.paused) this.cps.pop();
     });
-    addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') press(false); });
+    addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') press(false, e.code === 'ArrowUp' ? 'b' : 'a'); });
     addEventListener('resize', () => this.running && this.resize());
   }
   resize() {
@@ -817,13 +918,13 @@ class Game {
     // hitboxes are built lazily in prep() the first time an object comes into range
     const mv = new Set(objs.filter(o => o.t === 'trig_move' || o.t === 'trig_rot').map(o => Number(o.tg))), rg = new Set(objs.filter(o => o.t === 'trig_rot').map(o => Number(o.tg))), inMv = o => o.gl.some(k => mv.has(k));
     const solid = o => !OBJ[o.t].trig && !OBJ[o.t].deco && !OBJ[o.t].coin && !OBJ[o.t].zone;
-    this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s');   // D blocks: the wave slides along blocks / slopes inside them instead of dying (still solid). S blocks: end a dash.
+    this.ZD = objs.filter(o => o.t === 'zone_d'); this.ZS = objs.filter(o => o.t === 'zone_s'); this.ZH = objs.filter(o => o.t === 'zone_h');   // D blocks: the wave slides along blocks / slopes inside them instead of dying (still solid). S blocks: end a dash.
     this.DEC = objs.filter(o => OBJ[o.t].deco && !OBJ[o.t].glow && !o.iv && !inMv(o) && (!LDM || OBJ[o.t].text)); this.GLW = LDM ? [] : objs.filter(o => OBJ[o.t].glow && !o.iv && !inMv(o));   // LDM still shows text
     this.hasGrav = objs.some(o => o.t === 'orb_b' || o.t === 'orb_db' || o.t === 'pad_b' || GRAV[o.t] || MODEP[o.t]); this.mports = objs.filter(o => MODEP[o.t] && !o.nt); this.szp = objs.filter(o => SZP[o.t] && !o.nt);
     this.S = objs.filter(o => solid(o) && !inMv(o));
     this.D = objs.filter(o => (solid(o) || OBJ[o.t].deco) && inMv(o)); this.Dset = new Set(this.D);   // decor in a moved / rotated group follows it too
     this.DG = []; { const m = new Map(); for (const o of this.D) { const gk = o.gl.join(',') + '|' + o.z; let G = m.get(gk); if (!G) { G = { gl: o.gl, z: o.z, list: [], x0: 1e9, x1: -1e9, rot: o.gl.some(k => rg.has(k)) }; m.set(gk, G); this.DG.push(G); } G.list.push(o); G.x0 = Math.min(G.x0, o.ex); G.x1 = Math.max(G.x1, o.ex); } }   // moving objects are handled per group: a whole group far from the player / camera is skipped with one check
-    const dynG = new Set(); for (const o of objs) if ((o.t === 'trig_color' && Number(o.tg) > 0) || o.t === 'trig_alpha' || o.t === 'trig_toggle') dynG.add(Number(o.tg));   // groups a trigger recolours / fades / toggles: those objects are never baked into tiles
+    const dynG = new Set(); for (const o of objs) if ((o.t === 'trig_color' && Number(o.tg) > 0) || o.t === 'trig_alpha' || o.t === 'trig_toggle' || o.t === 'trig_death') dynG.add(Number(o.tg));   // groups a trigger recolours / fades / toggles: those objects are never baked into tiles
     chunkClear();
     this.SR = this.S;   // render list. LDM: blocks completely buried in other blocks (all 4 neighbours solid) are never drawn
     if (LDM) { const full = new Set(), isFull = o => { const d = OBJ[o.t]; return d.solid && !d.slope && !d.half && (!o.sc || o.sc === 1) && Number.isInteger(o.x) && Number.isInteger(o.y); }; for (const o of this.S) if (isFull(o)) full.add(o.x + ',' + o.y); this.SR = this.S.filter(o => !(isFull(o) && full.has((o.x - 1) + ',' + o.y) && full.has((o.x + 1) + ',' + o.y) && full.has(o.x + ',' + (o.y - 1)) && full.has(o.x + ',' + (o.y + 1)))); }
@@ -834,8 +935,9 @@ class Game {
       for (const z of this.zl) this.LZ[z] = { LD: makeLayer(dM.get(z) || [], dynG), LS: makeLayer(sM.get(z) || [], dynG), GLW: gM.get(z) || [], DG: this.DG.filter(G => G.z === z) }; }   // one set of layers per Z level, drawn back (1) to front (8)
     const tr = objs.filter(o => OBJ[o.t].trig); this.T = tr.filter(o => !o.touch && !o.so); this.TT = tr.filter(o => o.touch && !o.so);   // 'spawn ordered' triggers never fire by themselves, only when a Spawn Trigger spawns their group
     this.COIN = objs.filter(o => o.t === 'coin'); this.coinTotal = this.COIN.length; this.coinSet = new Set();
-    this.ports = objs.filter(o => SPEEDS[o.t] && !o.nt); this.rports = objs.filter(o => REVP[o.t] && !o.nt);
+    this.dports = objs.filter(o => DUELP[o.t] && !o.nt); this.ports = objs.filter(o => SPEEDS[o.t] && !o.nt); this.rports = objs.filter(o => REVP[o.t] && !o.nt);
     const end = tr.find(o => o.t === 'trig_end'); this.autoEnd = !end; this.endX = end ? end.ex : (objs.length ? objs.reduce((m, o) => Math.max(m, o.ex), 0) : 0) + U + 3 * U;   // no End Trigger placed: level ends 3 blocks past the farthest object
+    this.EMT = LDM ? [] : objs.filter(o => ORBS.includes(o.t) || PADS.includes(o.t) || o.t.startsWith('port')); this.fx = [];   // objects that shed little particles
     this.objs = objs; this.killY = (topRows(level.objs || []) + 10) * U;
   }
   prep(o) {
@@ -864,7 +966,7 @@ class Game {
     return t + (x - x0) / (BASE * sp);
   }
   start(o = {}) {
-    this.practice = !!o.practice; this.cps = []; this.cpT = 0; this.sx = o.x || 0; this.sy = o.y || 0; this.attempts = 1; this.best = 0; this.jumps = 0; this.camY = -70; this.won = false;
+    this.practice = !!o.practice; this.cps = []; this.cpT = 0; this.sx = o.x || 0; this.sy = o.y || 0; this.attempts = 1; this.best = 0; this.jumps = 0; this.camY = -70; this.won = false; this.dtDone = []; this.dtArm = []; this.objs.forEach(o => { o.dd = false; });
     this.reset(true); this.running = true; this.paused = false; this.acc = 0; this.last = performance.now();
     cancelAnimationFrame(this.raf); this.resize(); this.raf = requestAnimationFrame(t => this.frame(t));
   }
@@ -872,15 +974,17 @@ class Game {
   pause() { this.paused = true; }
   resume() { this.paused = false; this.last = performance.now(); }
   reset(first) {
-    this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null;
-    this.objs.forEach(o => { this.clrRot(o); if (o.cm) o.col0 = o.cm === 's' ? this.skin.c2 : this.skin.c1; o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
+    this.pv = null; this.cyT = 0; this.orbT = 0; this.pulse = null; this.d = null; this.ceilY = null; this.indep = false; this.udq = 0; this.uk = 'used'; this.pInv = false; this.camLock = null;
+    this.objs.forEach(o => { this.clrRot(o); o.used2 = false; if (o.cm) o.col0 = o.cm === 's' ? this.skin.c2 : this.skin.c1; o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }); this.zoom = 1; this.coinSet = new Set(); this.trail = [];
+    for (const t of this.dtDone || []) for (const o of this.groups[t.tg] || []) o.off = !t.on;   // death triggers that already went off stay applied on every later attempt
     this.gr = 1; this.swT = 0; this.holdUsed = false; this.mode = this.level.startMode || 'cube'; for (const q of this.mports) { if (q.ex >= this.sx) break; this.mode = PMODE[q.t]; } this.mini = false; for (const q of this.szp) { if (q.ex >= this.sx) break; this.mini = q.t === 'port_mini'; } this.gOff = {}; this.acts = []; this.parts = [];
     this.mir = 0; for (const q of this.rports) { if (q.ex >= this.sx) break; this.mir = q.t === 'port_mb' ? 1 : 0; } this.mf = this.mir ? -1 : 1;
     this.bg = this.level.bg || '#2b5fd9'; this.ground = this.level.ground || '#173a94';
     this.p = { x: this.sx, y: this.sy, vy: 0, rot: 0, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 };
+    { let q = null; for (const o of this.dports) { if (o.ex >= this.sx) break; q = o.t === 'port_duel' ? o : null; } if (q) this.makeDual(q, q.ex, q.ey); }   // starting after a duel portal: start already split
     this.speed = this.level.startSpeed || 1; for (const p of this.ports) { if (p.ex >= this.sx) break; this.speed = SPEEDS[p.t]; }
     this.time = this.timeAtX(this.sx); this.ti = 0; this.si = lb(this.S, this.sx - 130); this.tI = lb(this.TT, this.sx - 40); this.cpT = 0;
-    while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.ti++; }
+    while (this.ti < this.T.length && this.T[this.ti].ex < this.sx) { this.fire(this.T[this.ti], true); this.runActs(); this.ti++; }   // apply each instant trigger right away so later rotate / move triggers see the earlier ones
     this.runActs();
     if (!first) this.attempts++;
     this.cb.onSpawn && this.cb.onSpawn(this.time);
@@ -910,11 +1014,20 @@ class Game {
       const cpos = o => { const g = this.gsum(o.gl); return [o.ex + 15 + (g ? g.x * U : 0) + (o.rx || 0), o.ey + 15 + (g ? g.y * U : 0) + (o.ry || 0)]; };
       let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const o of cen) { const [a, b] = cpos(o); x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b); }
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, key = 'r' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
-      this.acts.push({ key, k: 'rot', list: mem.map(o => { const [a, b] = cpos(o); return { o, dx: a - cx, dy: b - cy, a0: o.ra || 0 }; }), cx, cy, deg: Number(t.deg) || 0, t0: this.time, dur });
+      // each member remembers its offset from the pivot plus where its group / the pivot's group were at fire time, so moves that run at the same time (or later) stack on top of the rotation instead of being cancelled by it
+      const gc0 = this.gsum(cen[0].gl), cgl = cen[0].gl;
+      this.acts.push({ key, k: 'rot', cgl, gc0x: gc0.x * U, gc0y: gc0.y * U, list: mem.map(o => { const [a, b] = cpos(o), g = this.gsum(o.gl); return { o, dx: a - cx, dy: b - cy, a0: o.ra || 0, rx0: o.rx || 0, ry0: o.ry || 0, gx0: g.x * U, gy0: g.y * U }; }), deg: Number(t.deg) || 0, t0: this.time, dur });
     } else if (t.t === 'trig_zoom') {
       this.acts = this.acts.filter(a => a.k !== 'zoom'); this.acts.push({ k: 'zoom', from: this.zoom, to: Math.max(.2, t.zoom || 1), t0: this.time, dur });
     } else if (t.t === 'trig_toggle') {
       (this.groups[t.tg] || []).forEach(o => { o.off = !t.on; });
+    } else if (t.t === 'trig_death') {
+      // death trigger: passing / touching it ARMS it. The next time you die the toggle happens once (and stays applied on later attempts); after that it does nothing for the rest of this play session
+      if (!instant && !t.dd && !this.dtArm.includes(t)) this.dtArm.push(t);
+    } else if (t.t === 'trig_cam') {
+      if (!instant) { this.acts = this.acts.filter(a => a.k !== 'cam'); this.acts.push({ k: 'cam', tg: Number(t.tg), t0: this.time, dur: Math.max(.05, t.dur || 1) }); }
+    } else if (t.t === 'trig_pvis') { this.pInv = false;
+    } else if (t.t === 'trig_pinv') { this.pInv = true;
     } else if (t.t === 'trig_alpha') {
       const key = 'a' + t.tg; this.acts = this.acts.filter(a => a.key !== key);
       this.acts.push({ key, k: 'al', list: (this.groups[t.tg] || []).map(o => [o, o.alp]), to: (t.pc ?? 100) / 100, t0: this.time, dur });
@@ -929,6 +1042,7 @@ class Game {
     const due = [];   // m: 1 = only the actions that touch physics (move / follow), run every 240Hz step; 2 = only the visual ones (colour, alpha, bg, ground, pulse, zoom), run once per drawn frame; 0 = everything
     for (let i = this.acts.length - 1; i >= 0; i--) {
       const a = this.acts[i]; if (m && (m === 1) !== (a.k === 'mv' || a.k === 'fol' || a.k === 'rot')) continue;
+      if (a.k === 'cam') { const el = Math.max(0, this.time - a.t0); if (el >= a.dur + .4) { this.camLock = null; this.acts.splice(i, 1); } else this.camLock = { tg: a.tg, w: ease(Math.min(1, el / .4) * Math.min(1, Math.max(0, 1 - (el - a.dur) / .4))) }; continue; }   // camera static trigger: eases onto the group's centre, holds for `dur`, eases back
       const pr = a.dur > 0 ? Math.min(1, (this.time - a.t0) / a.dur) : 1;
       if (a.k === 'bg') this.bg = rgb2hex(lerpC(a.from, a.to, pr));
       else if (a.k === 'gr') this.ground = rgb2hex(lerpC(a.from, a.to, pr));
@@ -936,8 +1050,11 @@ class Game {
       else if (a.k === 'mv') { const e = ease(pr), g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }); g.x += a.d[0] * (e - (a.pe || 0)); g.y += a.d[1] * (e - (a.pe || 0)); a.pe = e; }
       else if (a.k === 'fol') { const g = this.gOff[a.g] || (this.gOff[a.g] = { x: 0, y: 0 }), dx = this.p.x - a.lx, dy = this.p.y - a.ly; a.lx = this.p.x; a.ly = this.p.y; if (a.horz) g.x += dx / U; if (a.vert) g.y += dy / U; }
       else if (a.k === 'rot') {
-        const e = pr, an = a.deg * e * Math.PI / 180, cs_ = Math.cos(an), sn = Math.sin(an);
-        for (const q of a.list) { const o = q.o, g = this.gsum(o.gl), gx = g ? g.x * U : 0, gy = g ? g.y * U : 0; o.rx = a.cx + q.dx * cs_ + q.dy * sn - 15 - o.ex - gx; o.ry = a.cy - q.dx * sn + q.dy * cs_ - 15 - o.ey - gy; o.ra = q.a0 + a.deg * e; if (OBJ[o.t].hz) this.rotHz(o); }
+        const e = pr, an = a.deg * e * Math.PI / 180, cs_ = Math.cos(an), sn = Math.sin(an), gc = this.gsum(a.cgl), dcx = gc.x * U - a.gc0x, dcy = gc.y * U - a.gc0y;
+        for (const q of a.list) {
+          const o = q.o, g = this.gsum(o.gl), rx_ = q.dx + g.x * U - q.gx0 - dcx, ry_ = q.dy + g.y * U - q.gy0 - dcy;   // current offset from the (possibly moving) pivot
+          o.rx = q.rx0 + rx_ * (cs_ - 1) + ry_ * sn; o.ry = q.ry0 - rx_ * sn + ry_ * (cs_ - 1); o.ra = q.a0 + a.deg * e; if (OBJ[o.t].hz) this.rotHz(o);
+        }
       }
       else if (a.k === 'spawn') { if (pr >= 1) due.push(a.tg); }
       else if (a.k === 'pulse') this.pulse = { col: a.to, a: 1 - pr };
@@ -949,14 +1066,16 @@ class Game {
   }
   snap() {
     const p = this.p, os = [];
-    for (const o of this.objs) if (o.used || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0 || o.ra || o.rx || o.ry) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col, o.ra || 0, o.rx || 0, o.ry || 0]);
+    for (const o of this.objs) if (o.used || o.used2 || o.got || o.tf || o.off || o.alp !== 1 || o.col !== o.col0 || o.ra || o.rx || o.ry) os.push([o, o.used, o.got, o.tf, o.off, o.alp, o.col, o.ra || 0, o.rx || 0, o.ry || 0, o.used2]);
     return { p: { ...p, dash: p.dash ? { ...p.dash } : null }, gr: this.gr, mir: this.mir, mini: !!this.mini, mode: this.mode, speed: this.speed, time: this.time, ti: this.ti, zoom: this.zoom, bg: this.bg, ground: this.ground,
-      gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os };
+      gOff: JSON.parse(JSON.stringify(this.gOff)), acts: this.acts.map(a => ({ ...a })), coins: [...this.coinSet], os, inv: this.pInv, ceilY: this.ceilY, indep: this.indep, d: this.d ? { ...this.d, p: { ...this.d.p, dash: this.d.p.dash ? { ...this.d.p.dash } : null }, trail: [], pv: null } : null };
   }
   restore(k) {
-    this.pv = null; this.cyT = 0;
-    for (const o of this.objs) { this.clrRot(o); o.col = o.col0; o.used = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
-    for (const [o, u, g, t, off, al, col, ra, rx, ry] of k.os) { o.used = u; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; if (ra || rx || ry) { o.ra = ra || 0; o.rx = rx || 0; o.ry = ry || 0; if (o.ra) this.rotHz(o); } }
+    this.pv = null; this.cyT = 0; this.uk = 'used'; this.camLock = null; this.udq = 0; this.pInv = !!k.inv; this.ceilY = k.ceilY ?? null; this.indep = !!k.indep;
+    this.d = k.d ? { ...k.d, p: { ...k.d.p, dash: k.d.p.dash ? { ...k.d.p.dash } : null, dead: false, deadT: 0 }, trail: [], pv: null, held: this.indep ? false : this.held } : null;
+    for (const o of this.objs) { this.clrRot(o); o.col = o.col0; o.used = false; o.used2 = false; o.alp = 1; o.off = false; o.got = false; o.tf = false; }
+    for (const t of this.dtDone || []) for (const o of this.groups[t.tg] || []) o.off = !t.on;
+    for (const [o, u, g, t, off, al, col, ra, rx, ry, u2] of k.os) { o.used = u; o.used2 = !!u2; o.got = g; o.tf = t; o.off = off; o.alp = al; o.col = col; if (ra || rx || ry) { o.ra = ra || 0; o.rx = rx || 0; o.ry = ry || 0; if (o.ra) this.rotHz(o); } }
     this.p = { ...k.p, dash: k.p.dash ? { ...k.p.dash } : null, dead: false, deadT: 0 };
     this.gr = k.gr; this.mini = !!k.mini; this.mir = k.mir || 0; this.mf = this.mir ? -1 : 1; this.mode = k.mode; this.speed = k.speed; this.time = k.time; this.ti = k.ti; this.zoom = k.zoom; this.bg = k.bg; this.ground = k.ground;
     this.gOff = JSON.parse(JSON.stringify(k.gOff)); this.acts = k.acts.map(a => ({ ...a })); this.coinSet = new Set(k.coins);
@@ -969,8 +1088,12 @@ class Game {
     if (c) { this.restore(c.s); this.attempts++; this.cb.onSpawn && this.cb.onSpawn(this.time); } else this.reset();
   }
   die() {
-    const p = this.p; p.dead = true; p.deadT = .7;
-    for (let i = 0, N = LDM ? 5 : this.lq ? 10 : 22; i < N; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: p.x + 15, y: p.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? this.skin.c1 : this.skin.c2, s: 3 + Math.random() * 5 }); }
+    const p = this.p; if (p.dead) return; p.dead = true; p.deadT = .7;
+    const boom = (q, sk) => { for (let i = 0, N = LDM ? 5 : this.lq ? 10 : 22; i < N; i++) { const a = Math.random() * 6.28, v = 80 + Math.random() * 260; this.parts.push({ x: q.x + 15, y: q.y + 15, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .6 + Math.random() * .3, col: i % 2 ? sk.c1 : sk.c2, s: 3 + Math.random() * 5 }); } };
+    boom(p, this.skin);
+    if (this.d) { const q = this.d.p; q.dead = true; q.deadT = .7; boom(q, this.d.skin); }   // in a duel one death is both deaths
+    for (const t of this.dtArm || []) { t.dd = true; this.dtDone.push(t); for (const o of this.groups[t.tg] || []) o.off = !t.on; }   // armed death triggers go off now, exactly once
+    this.dtArm = [];
     this.cb.onDeath && this.cb.onDeath(this.pct(), this.attempts);
   }
   pct() { return isFinite(this.endX) ? Math.max(0, Math.min(100, this.p.x / this.endX * 100)) : 0; }
@@ -991,13 +1114,33 @@ class Game {
       this.parts = this.parts.filter(q => q.life > 0); if (p.deadT <= 0) this.respawn(); return;
     }
     if (this.autoEnd && p.x >= this.endX) { this.win(); return; }
-    this.time += dt; this.edgeT -= dt; this.orbT = (this.orbT || 0) - dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
+    this.time += dt; if (this.practice && (this.cpT += dt) >= 3) this.addCP();
     while (this.ti < this.T.length && this.T[this.ti].ex <= p.x) {
       const t = this.T[this.ti++]; if (t.off) continue; if (t.t === 'trig_end') { this.win(); return; } this.fire(t);
     }
     this.runActs(1);
+    this.pstep(dt); if (p.dead || this.won) return;
+    if (this.d && !this.udq) { this.swap(); this.pstep(dt); this.swap(); }   // duel: the 2nd player runs the exact same code with its own state swapped in
+    if (this.udq) this.doUnduel();
+  }
+  swap() { const D = this.d; for (const k of PF) { const t = this[k]; this[k] = D[k]; D[k] = t; } }
+  // duel portal: split into 2. Player 2 is the mirror image of player 1 across the middle of the lane (upside down, opposite gravity, swapped colours) and a ceiling (the ground flipped) closes the lane
+  makeDual(o, x, y) {
+    const p = this.p, ceil = Math.max(3, Math.min(20, +o.lh || 7)) * U, y2 = Math.min(ceil - p.y - 30, ceil - 30), ind = !!o.ind;   // the lane between the ground and the ceiling; player 2 is player 1 mirrored across its middle
+    this.d = { p: { x: p.x, y: y2, vy: -p.vy, rot: p.rot, grounded: false, dead: false, deadT: 0, dash: null, rb: 0 }, mode: this.mode, gr: -this.gr, mini: this.mini, cyT: 0, swT: .15, edgeT: ind ? 0 : this.edgeT, holdUsed: ind ? false : this.holdUsed, orbT: ind ? 0 : this.orbT, inD: false, pv: null, trail: [], held: ind ? false : this.held, skin: { ...this.skin, c1: this.skin.c2, c2: this.skin.c1 }, uk: 'used2' };
+    this.ceilY = ceil; this.indep = ind;
+  }
+  // unduel portal: back to ONE player, the one that entered it (so if player 2 enters, player 1 vanishes and the colours go back to normal)
+  doUnduel() {
+    const w = this.udq; this.udq = 0;
+    if (w === 2) { this.swap(); this.skin = this.d.skin; this.uk = 'used'; }
+    this.d = null; this.ceilY = null; this.indep = false;
+  }
+  pstep(dt) {
+    const p = this.p; this.edgeT -= dt; this.orbT = (this.orbT || 0) - dt; this.tpT = (this.tpT || 0) - dt;
     {   // zones
-      const p_ = this.p; this.inD = false;
+      const p_ = this.p; this.inD = false; this.inH = false;
+      if (this.ZH.length && this.mode !== 'wave') for (let i = lb(this.ZH, p_.x - 40); i < this.ZH.length && this.ZH[i].ex < p_.x + 70; i++) { const z = this.ZH[i]; if (!z.off && p_.x - 8 < z.ex + 30 && p_.x + 38 > z.ex && p_.y - 8 < z.ey + 30 && p_.y + 38 > z.ey) { this.inH = true; break; } }   // H block: head bumps don't kill
       if (this.mode === 'wave' && this.ZD.length) { const sb = this.sbx(); for (let i = lb(this.ZD, p_.x - 40); i < this.ZD.length && this.ZD[i].ex < p_.x + 40; i++) { const z = this.ZD[i]; if (!z.off && p_.x + sb[0] < z.ex + 30 && p_.x + 30 - sb[0] > z.ex && p_.y + sb[1] < z.ey + 30 && p_.y + 30 - sb[2] > z.ey) { this.inD = true; break; } } }
       if (p_.dash && this.ZS.length) for (let i = lb(this.ZS, p_.x - 40); i < this.ZS.length && this.ZS[i].ex < p_.x + 40; i++) { const z = this.ZS[i]; if (!z.off && p_.x + 3 < z.ex + 30 && p_.x + 27 > z.ex && p_.y + 3 < z.ey + 30 && p_.y + 27 > z.ey) { this.endDash(); break; } }
     }
@@ -1016,6 +1159,7 @@ class Game {
       else if (this.mode === 'spider' && edge && (wasG || this.cyT > 0)) { this.cyT = 0; this.spiderJump(); }
       const gm = this.mode === 'ufo' ? (mi ? .7 : .55) : this.mode === 'ball' ? .9 : this.mode === 'robot' ? ((p.rb -= dt) > 0 && this.held ? .2 : 1) * (mi ? 1.15 : 1) : 1; p.vy -= G * gm * dt * this.gr; if (p.vy * gr < -VMAX) p.vy = -VMAX * gr; } p.y += p.vy * dt;
     { const fb = this.sbx()[3]; if (p.y <= -fb) { p.y = -fb; if (gr > 0 || p.vy < 0) p.vy = 0; if (gr > 0) p.grounded = true; } }
+    if (this.ceilY != null) { const fc = this.sbx()[4]; if (p.y + 30 - fc >= this.ceilY) { p.y = this.ceilY - 30 + fc; if (gr < 0 || p.vy > 0) p.vy = 0; if (gr < 0) p.grounded = true; } }   // duel ceiling = the ground mirrored: it works like the floor for whoever is standing on it
     if (p.y > this.killY) { this.die(); return; }
     const S = this.S;
     while (this.si < S.length && S[this.si].ex < p.x - 130) { S[this.si].pp = false; this.si++; }   // unload objects we've passed (hitboxes rebuilt lazily if we respawn)
@@ -1028,7 +1172,7 @@ class Game {
     if (this.mode === 'ship') { const tr = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; p.rot += (tr - p.rot) * Math.min(1, 12 * dt); } else if (this.mode === 'wave') p.rot = -Math.atan2(p.vy, BASE * this.speed) * 180 / Math.PI; else if (this.mode === 'ufo' || this.mode === 'robot' || this.mode === 'spider') p.rot += (0 - p.rot) * Math.min(1, 12 * dt); else if (this.mode === 'ball') p.rot += 500 * dt * (this.gr > 0 ? 1 : -1); else if (p.grounded) p.rot = Math.round(p.rot / 90) * 90;   // landing on a block / the floor: instantly show the face you land on, no rolling
     else p.rot += 420 * dt * this.gr;
     if (this.mode === 'wave') { const tl = this.trail, l = tl[tl.length - 1]; if (!l || p.x + 15 - l.x > 5) { tl.push({ x: p.x + 15, y: p.y + 15 }); if (tl.length > 45) tl.shift(); } } else if (this.trail.length) this.trail = [];
-    if (!LDM && !p.dead && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
+    if (!LDM && !p.dead && !this.pInv && p.grounded && Math.random() < dt * 30) this.parts.push({ x: p.x, y: p.y + 2, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 50, life: .25, col: this.skin.c1, s: 2 + Math.random() * 2 });
     for (const q of this.parts) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
     if (this.parts.length > 60) this.parts = this.parts.filter(q => q.life > 0);
   }
@@ -1057,6 +1201,7 @@ class Game {
         } else {
           const land = gr > 0 ? ((gk || p.vy <= 0) && prevB >= by + bh - tol) : ((gk || p.vy >= 0) && prevB + 30 <= by + tolT);
           if (land) { p.y = gr > 0 ? by + bh - fl : by - 30 + fc; p.vy = 0; p.grounded = true; }
+          else if (this.inH && (gr > 0 ? prevB + 30 <= by + tolT : prevB >= by + bh - tol)) { if (gr > 0) { p.y = by - 30 + fc; if (p.vy > 0) p.vy = 0; } else { p.y = by + bh - fl; if (p.vy < 0) p.vy = 0; } }   // H block: you bump your head and slide on instead of dying
           else this.die();
         }
       }
@@ -1067,24 +1212,40 @@ class Game {
       else { const h = o.hb; if (this.hitI(p, x + h[0], y + h[1], h[2] - h[0], h[3] - h[1], this.priIn())) this.die(); }
     } else if (ORBS.includes(t)) {
       const hf = 15 * (o.sc || 1), pi = this.mode === 'wave' ? 3 : this.ins(3), on = p.x + pi < x + 15 + hf && p.x + 30 - pi > x + 15 - hf && p.y + pi < y + 15 + hf && p.y + 30 - pi > y + 15 - hf;   // the orb's hitbox is exactly its 1x1 grid cell
-      if (on && !o.used && this.orbT > 0) {
-        o.used = true; p.grounded = false; this.cyT = 0; p.rb = 0; this.edgeT = 0; this.orbT = 0; this.holdUsed = true; this.jumps++;
-        if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; }
+      if (on && !o[this.uk] && this.orbT > 0 && t === 'orb_t') {   // toggle orb: consumes the click, no jump, toggles its group
+        o[this.uk] = true; this.edgeT = 0; this.orbT = 0; this.holdUsed = true;
+        for (const q of this.groups[Number(o.tg)] || []) q.off = !o.on;
+      } else if (on && !o[this.uk] && this.orbT > 0) {
+        o[this.uk] = true; p.grounded = false; this.cyT = 0; p.rb = 0; this.edgeT = 0; this.orbT = 0; this.holdUsed = true; this.jumps++;
+        if (t === 'orb_b') { this.gr = -this.gr; p.vy = -200 * this.gr; if (this.d && !this.indep) { const D = this.d; D.gr = -D.gr; D.p.vy = -200 * D.gr; D.p.grounded = false; D.cyT = 0; D.orbT = 0; D.edgeT = 0; D.holdUsed = true; } }   // dependent duel: a gravity orb flips BOTH players
         else if (DASH[t]) { const an = (o.a || 0) * Math.PI / 180; p.dash = { vy: Math.sin(an) * BASE * this.speed * this.gr, t: 0, flip: t === 'orb_db' }; p.vy = p.dash.vy; }
         else p.vy = PHYS[t] * this.gr;
       }
     } else if (PADS.includes(t)) {
       const b = o.pb, on = this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1]);
-      if (on && !o.used) { o.used = true; p.grounded = false; this.cyT = 0; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr * (t !== 'pad_b' && ((o.r || 0) & 3) === 2 ? -1 : 1); }   // a pad turned upside down (rotated 180) launches the other way
-      else if (!on) o.used = false;
+      if (on && !o[this.uk]) { o[this.uk] = true; p.grounded = false; this.cyT = 0; p.rb = 0; if (t === 'pad_b') this.gr = -this.gr; p.vy = PHYS[t] * this.gr * (t !== 'pad_b' && ((o.r || 0) & 3) === 2 ? -1 : 1); }   // a pad turned upside down (rotated 180) launches the other way
+      else if (!on) o[this.uk] = false;
     } else if (t.startsWith('port')) {
       const b = o.qb; if (!this.hit(p, x + b[0], y + b[1], b[2] - b[0], b[3] - b[1])) return;
       if (SPEEDS[t]) this.speed = SPEEDS[t];
       else if (t === 'port_gd' || t === 'port_gu') { const ng = t === 'port_gu' ? -1 : 1; if (ng !== this.gr) this.swT = .15; this.gr = ng; this.cyT = 0; }
       else if (MODEP[t]) { if (this.mode !== PMODE[t]) { this.mode = PMODE[t]; p.rot = 0; this.swT = .15; } }   // new mode starts upright: no spinning back from the cube's accumulated roll
       else if (REVP[t]) this.mir = t === 'port_mb' ? 1 : 0;
+      else if (t === 'port_tp_in') this.tele(o);
+      else if (t === 'port_duel') { if (!this.d) this.makeDual(o, x, y); }
+      else if (t === 'port_unduel') { if (this.d && !this.udq) this.udq = this.uk === 'used2' ? 2 : 1; }
       else if (SZP[t]) { const nm = t === 'port_mini'; if (nm !== !!this.mini) this.swT = .15; this.mini = nm; }
     }
+  }
+  // teleport input portal: send the player to the first output portal in the group named by the input's target ID
+  tele(o) {
+    if (this.tpT > 0) return;
+    const q = (this.groups[Number(o.tg)] || []).find(z => z.t === 'port_tp_out' && !z.off); if (!q) return;
+    const p = this.p, g = this.gsum(q.gl);
+    p.x = q.ex + (g ? g.x * U : 0) + (q.rx || 0); p.y = q.ey + (g ? g.y * U : 0) + (q.ry || 0) + 1.5 * U - 15;
+    this.tpT = .15; this.trail = []; this.cyT = 0;
+    this.si = lb(this.S, p.x - 130); this.ti = lb(this.T, p.x); this.tI = lb(this.TT, p.x - 40);
+    for (let i = 0; i < 14; i++) this.parts.push({ x: p.x + 15, y: p.y + 15, vx: (Math.random() - .5) * 200, vy: (Math.random() - .5) * 200, life: .35, col: PORT_COL.port_tp_out, s: 3 + Math.random() * 3 });
   }
   // spider: tap while on a surface = instantly teleport to the nearest solid surface on the other side and flip gravity
   spiderJump() {
@@ -1098,6 +1259,7 @@ class Game {
     };
     const S = this.S; for (let i = lb(S, p.x - 130); i < S.length && S[i].ex < p.x + 130; i++) test(S[i], 0, 0);
     for (const o of this.D) { const g = this.gsum(o.gl); test(o, (g ? g.x * U : 0) + (o.rx || 0), (g ? g.y * U : 0) + (o.ry || 0)); }
+    if (up && this.ceilY != null) { const t = this.ceilY - 30 + this.sbx()[4]; if (best === null || t < best) best = t; }
     if (!up && best === null) best = -this.sbx()[3];
     if (best === null) return;
     const from = p.y; p.y = best; this.gr = -this.gr; p.vy = 0; p.grounded = false; this.edgeT = 0; this.jumps++;
@@ -1139,7 +1301,7 @@ class Game {
     this.fcount = (this.fcount || 0) + 1;
     if (!this.paused && !this.won) {
       this.acc += dt; let n = 0;
-      while (this.acc >= STEP && n++ < 40) { const p = this.p, v = this.pv || (this.pv = { x: 0, y: 0 }); v.x = p.x; v.y = p.y; this.step(STEP); this.acc -= STEP; }
+      while (this.acc >= STEP && n++ < 40) { const p = this.p, v = this.pv || (this.pv = { x: 0, y: 0 }); v.x = p.x; v.y = p.y; if (this.d) { const q = this.d.p, w = this.d.pv || (this.d.pv = { x: 0, y: 0 }); w.x = q.x; w.y = q.y; } this.step(STEP); this.acc -= STEP; }
       if (n >= 40) this.acc = 0;
       if (this.p.dead === false) this.best = Math.max(this.best, this.pct());
     }
@@ -1155,9 +1317,15 @@ class Game {
     // draw the player between the last two physics steps so motion stays smooth when the display (60Hz) and the 240Hz physics step don't line up
     const pv = this.pv, al = Math.min(1, Math.max(0, this.acc / STEP)); let ix = p.x, iy = p.y;
     if (pv && !p.dead && !this.won && !this.paused && Math.abs(p.x - pv.x) < 20 && Math.abs(p.y - pv.y) < 60) { ix = pv.x + (p.x - pv.x) * al; iy = pv.y + (p.y - pv.y) * al; }
-    this.camX = ix - (W / s) * .3;
-    const ty = Math.max(-70, iy - (H / s) * .4); this.camY += (ty - this.camY) * Math.min(1, 6 * dt);
-    const cxp = Math.round(this.camX * s), cyp = Math.round(this.camY * s);
+    let ix2 = 0, iy2 = null; if (this.d) { const q = this.d.p, qv = this.d.pv; ix2 = q.x; iy2 = q.y; if (qv && !q.dead && !this.won && !this.paused && Math.abs(q.x - qv.x) < 20 && Math.abs(q.y - qv.y) < 60) { ix2 = qv.x + (q.x - qv.x) * al; iy2 = qv.y + (q.y - qv.y) * al; } }
+    const ty = Math.max(-70, iy2 != null ? (iy + iy2) / 2 + 15 - (H / s) * .5 : iy - (H / s) * .4); this.camY += (ty - this.camY) * Math.min(1, 6 * dt);   // duel: the camera centres between the two players
+    let camXf = ix - (W / s) * .3, camYf = this.camY;
+    const cl = this.camLock; if (cl && cl.w > 0.001) {   // camera static trigger: blend towards the centre of the target group
+      const L = this.groups[cl.tg]; if (L && L.length) { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const o of L) { const g = this.gsum(o.gl), a = o.ex + 15 + (g ? g.x * U : 0) + (o.rx || 0), b = o.ey + 15 + (g ? g.y * U : 0) + (o.ry || 0); if (a < x0) x0 = a; if (a > x1) x1 = a; if (b < y0) y0 = b; if (b > y1) y1 = b; }
+        camXf += ((x0 + x1) / 2 - W / s / 2 - camXf) * cl.w; camYf += ((y0 + y1) / 2 - H / s / 2 - camYf) * cl.w; }
+    }
+    this.camX = camXf;
+    const cxp = Math.round(camXf * s), cyp = Math.round(camYf * s);
     const X = x => x * s - cxp, Y = y => H - (y * s - cyp), lq = (this.q || 0) >= 1; this.lq = lq;
     const mt = this.mir ? -1 : 1; this.mf += (mt - this.mf) * Math.min(1, 9 * dt); if (Math.abs(mt - this.mf) < .003) this.mf = mt;
     c.fillStyle = this.bg; c.fillRect(0, 0, W, H); c.save(); if (this.mf !== 1) { c.translate(W / 2, 0); c.scale(this.mf, 1); c.translate(-W / 2, 0); }
@@ -1167,6 +1335,7 @@ class Game {
     if (!LDM && this.pulse && this.pulse.a > .01) { c.globalAlpha = this.pulse.a; c.fillStyle = this.pulse.col; c.fillRect(0, 0, W, H); c.globalAlpha = 1; }   // pulse trigger flash
     const gy = Y(0);
     if (gy < H) drawGround(c, W, H, gy, s, cxp / s, this.ground, LDM ? 'plain' : this.level.grs, lq);
+    if (this.ceilY != null) { const cy = Y(this.ceilY); if (cy > 0) { c.save(); c.translate(0, 2 * cy); c.scale(1, -1); drawGround(c, W, Math.max(H, 2 * cy), cy, s, cxp / s, this.ground, LDM ? 'plain' : this.level.grs, lq); c.restore(); } }   // duel ceiling: the ground flipped upside down
 
     const cs = U * s, S = this.SR; let lo = 0, hi = S.length; const lx = this.camX - (LDM ? 90 : 200);
     while (lo < hi) { const m = (lo + hi) >> 1; if (S[m].ex < lx) lo = m + 1; else hi = m; }
@@ -1200,10 +1369,33 @@ class Game {
     for (const o of this.COIN) if (!o.got && !o.off && !o.iv) { const x = X(o.ex); if (x > -cs * 2 && x < W + cs) drawObj(c, o, x, Y(o.ey + U), cs, '#fff', false, this.time); }
     if (this.practice) for (const q of this.cps) { const x = X(q.x + 15), y = Y(q.y + 15); if (x > -40 && x < W + 40) { const r = 11 * s; c.fillStyle = '#35ff6a'; c.strokeStyle = '#000'; c.lineWidth = 2 * s; c.beginPath(); c.moveTo(x, y - r); c.lineTo(x + r * .7, y); c.lineTo(x, y + r); c.lineTo(x - r * .7, y); c.closePath(); c.fill(); c.stroke(); } }
     if (isFinite(this.endX)) { const x = X(this.endX); if (x > -50 && x < W + 50) { const gr = c.createLinearGradient(x - 12 * s, 0, x + 12 * s, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(x - 12 * s, 0, 24 * s, H); } }
+    if (this.EMT.length && !this.paused && this.fx.length < (lq ? 60 : 140)) {   // orbs / pads / portals emit particles
+      const E = this.EMT, rate = lq ? .6 : 1;
+      for (let i = lb(E, this.camX - 60); i < E.length && E[i].ex < rx - 100; i++) {
+        const o = E[i]; if (o.off || o.iv) continue; const t = o.t, orb = ORBS.includes(t), pad = !orb && PADS.includes(t);
+        if (Math.random() > (orb ? 5 : pad ? 5 : 12) * dt * rate) continue;
+        const g = this.Dset.has(o) ? this.gsum(o.gl) : null, bx = o.ex + (g ? g.x * U : 0) + (o.rx || 0), by = o.ey + (g ? g.y * U : 0) + (o.ry || 0), R = Math.random;
+        let x, y, vx, vy;
+        if (orb) { const a = R() * 6.283; x = bx + 15 + Math.cos(a) * 13; y = by + 15 + Math.sin(a) * 13; vx = Math.cos(a) * 14; vy = Math.sin(a) * 14 + 8; }
+        else if (pad) { x = bx + 6 + R() * 18; y = by + 4; vx = (R() - .5) * 10; vy = 30 + R() * 30; }
+        else { x = bx + 15 + (R() - .5) * 16; y = by + R() * PH * U; vx = (R() - .5) * 12; vy = (R() - .5) * 36; }
+        const life = .5 + R() * .4; this.fx.push({ x, y, vx, vy, life, l0: life, s: 1.5 + R() * 2, col: orb ? ORBCOL[t] : pad ? PADCOL[t] : PORT_COL[t] || '#fff' });
+      }
+    }
+    for (let i = this.fx.length - 1; i >= 0; i--) {
+      const q = this.fx[i]; if (!this.paused) { q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt; }
+      if (q.life <= 0) { this.fx.splice(i, 1); continue; }
+      c.globalAlpha = Math.min(1, q.life / q.l0 * 1.2) * .85; c.fillStyle = q.col; const r = q.s * s; c.fillRect(X(q.x) - r / 2, Y(q.y) - r / 2, r, r);
+    }
+    c.globalAlpha = 1;
     for (const q of this.parts) { c.globalAlpha = Math.max(0, Math.min(1, q.life * 2)); c.fillStyle = q.col; c.fillRect(X(q.x) - q.s * s / 2, Y(q.y) - q.s * s / 2, q.s * s, q.s * s); }
     c.globalAlpha = 1;
+    const drawPl = (ix, iy) => {
+      if (this.pInv) return; const p = this.p;   // player invisible trigger: nothing of the player is drawn
     if (!p.dead && this.trail.length > 1) { c.strokeStyle = this.skin.c1; c.lineWidth = 3 * s * this.sz(); c.lineJoin = 'round'; c.globalAlpha = .8; c.beginPath(); this.trail.forEach((q, i) => c[i ? 'lineTo' : 'moveTo'](X(q.x), Y(q.y))); c.lineTo(X(ix + 15), Y(iy + 15)); c.stroke(); c.globalAlpha = 1; }
     if (!p.dead) { const zf = this.mode === 'wave' ? 1 : this.sz(); c.save(); c.translate(X(ix) + 15 * s, Y(iy) - 15 * s); c.rotate(p.rot * Math.PI / 180); if (this.mode === 'ship') { if (this.gr < 0) c.scale(1, -1); drawShip(c, this.skin.id, this.skin.ship || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'ufo') { if (this.gr < 0) c.scale(1, -1); drawUfo(c, this.skin.id, this.skin.ufo || 0, this.skin.c1, this.skin.c2, 30 * s * zf); } else if (this.mode === 'robot') { if (this.gr < 0) c.scale(1, -1); drawRobot(c, this.skin.robot || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'spider') { if (this.gr < 0) c.scale(1, -1); drawSpider(c, this.skin.spider || 0, this.skin.c1, this.skin.c2, 30 * s * zf, p.x / 14, !p.grounded); } else if (this.mode === 'ball') drawBall(c, this.skin.ball || 0, this.skin.c1, this.skin.c2, 30 * s * zf); else if (this.mode === 'wave') drawWave(c, this.skin.wave || 0, this.skin.c1, this.skin.c2, 12 * s * this.sz()); else drawIcon(c, this.skin.id, this.skin.c1, this.skin.c2, 30 * s * zf); c.restore(); }
+    };
+    drawPl(ix, iy); if (this.d) { this.swap(); drawPl(ix2, iy2); this.swap(); }
     if (this.attempts && this.sx === 0) { c.fillStyle = 'rgba(255,255,255,.9)'; c.font = `bold ${30 * s}px "Lilita One",sans-serif`; c.textAlign = 'left'; c.fillText('Attempt ' + this.attempts, X(150), Y(150)); }   // drawn last: always in front of every object and the player
     c.restore();
   }
@@ -1287,8 +1479,8 @@ const ACH = (() => {
   list.sort((a, b) => a.tier - b.tier || a.ci - b.ci);
   const cols = []; for (let i = 1; i < 23; i++) { cols.push({ k: 'p', i }); cols.push({ k: 's', i }); }
   // each mode has 40 icons (0 = default). Only some are achievement rewards (picked pseudo-randomly, handed out slightly out of order); the rest are shop-only
-  const mk = (k, cnt, seed) => {
-    const r = rng(seed); let idx = Array.from({ length: 39 }, (_, i) => i + 1);
+  const mk = (k, cnt, seed, lo = 1, len = 39) => {
+    const r = rng(seed); let idx = Array.from({ length: len }, (_, i) => i + lo);
     for (let i = idx.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
     idx = idx.slice(0, cnt).sort((a, b) => a - b);
     for (let i = 0; i < idx.length - 1; i++) if (r() < .3) { const j = Math.min(idx.length - 1, i + 1 + Math.floor(r() * 3)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
@@ -1306,6 +1498,13 @@ const ACH = (() => {
   const NEWA = [['likesGiven', 'Supporter', 'Like {n} levels', [1, 3, 5, 10, 20, 35, 50, 75, 100, 150], [10, 10, 15, 20, 25, 30, 40, 50, 75, 100]],
                 ['deaths', 'Respawner', 'Die {n} times', [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000], [10, 10, 15, 20, 25, 30, 40, 50, 75, 100]]];
   NEWA.forEach(([stat, name, desc, ns, gems], ci) => ns.forEach((n, i) => list.push({ stat, n, name: `${name} ${i + 1}`, desc: desc.replace('{n}', fmt(n)), tier: 2 + i / ns.length, ci: 200 + ci, rw: null, gem: gems[i] })));
+  // second set of icons (41-80 of every mode): 93 harder achievements that keep numbering on from each stat's last tier. Same rule as before: each pays out one icon.
+  const X2 = { totalViews: [3500, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000], levelsBeaten: [200, 250, 300, 400, 500, 650, 800, 1000], netLikes: [400, 500, 650, 800, 1000, 1500, 2000, 3000], maxPostLikes: [125, 150, 200, 250, 300, 400, 500, 750], rated: [80, 100, 125, 150, 200, 250, 300, 400],
+    stars: [400, 500, 650, 800, 1000, 1250, 1500, 2000, 2500], demons: [65, 80, 100, 125, 150, 200, 250, 300, 350], published: [65, 80, 100, 125, 150, 200, 250, 300], comments: [250, 300, 400, 500, 650, 800, 1000, 1500], crystals: [4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000], starCoins: [100, 125, 150, 200, 250, 300, 400, 500, 650] };
+  const rews = [...mk('skin', 14, 111, 40, 40), ...mk('ship', 14, 212, 40, 40), ...mk('ball', 14, 313, 40, 40), ...mk('ufo', 14, 414, 40, 40), ...mk('wave', 15, 515, 40, 40), ...mk('robot', 11, 616, 40, 40), ...mk('spider', 11, 717, 40, 40)], r2 = rng(808);
+  for (let i = rews.length - 1; i > 0; i--) { const j = Math.floor(r2() * (i + 1)); [rews[i], rews[j]] = [rews[j], rews[i]]; }
+  const ex = []; Object.keys(X2).forEach((stat, si) => X2[stat].forEach((n, i) => ex.push({ stat, n, f: i / X2[stat].length, si })));
+  ex.sort((a, b) => a.f - b.f || a.si - b.si).forEach((e, j) => { const df = ACH_DEFS.find(d => d[0] === e.stat); cnt[e.stat] = (cnt[e.stat] || df[3].length) + 1; list.push({ stat: e.stat, n: e.n, name: `${df[1]} ${cnt[e.stat]}`, desc: df[2].replace('{n}', fmt(e.n)), tier: 3 + j / 100, ci: 99, rw: rews[j] }); });
   return list;
 })();
 const RWN = { skin: 'Cube skin', ship: 'Ship skin', ball: 'Ball skin', ufo: 'UFO skin', wave: 'Wave skin', robot: 'Robot skin', spider: 'Spider skin' };
@@ -1440,21 +1639,23 @@ views.account = ({ tab = 'account' } = {}) => {
 };
 
 /* ================= cosmetics ================= */
-views.cosmetics = ({ tab = 'cube' } = {}) => {
+views.cosmetics = ({ tab = 'cube', pg = 0 } = {}) => {
+  const NSK = 80, PGS = 32; pg = Math.max(0, Math.min(Math.ceil(NSK / PGS) - 1, +pg || 0)); curP = { ...curP, tab, pg };
   const un = unlocked_(), sk = P?.skin || 0, sh = P?.ship || 0, c1 = P?.c1 || 0, c2 = P?.c2 || 0, bl = P?.ball || 0, uf = P?.ufo || 0, wv = P?.wave || 0, rbt = P?.robot || 0, spd = P?.spider || 0;
   const req = (k, i) => { const a = ACH.find(a => a.rw && a.rw.k === k && a.rw.i === i); return a ? `${a.name}: ${a.desc}` : i ? 'Sold in Community > Shop' : 'Default'; };
-  const grid = (k, n, cur, img) => Array.from({ length: n }, (_, i) => `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`).join('');
+  const grid = (k, n, cur, img) => Array.from({ length: Math.max(0, Math.min(PGS, n - pg * PGS)) }, (_, q) => { const i = pg * PGS + q; return `<div class="sk ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? k + ' ' + (i + 1) : req(k, i))}"><img src="${img(i)}"></div>`; }).join('');
   const sw = (k, arr, cur) => arr.map((c, i) => `<div class="sw ${un[k].has(i) ? '' : 'locked'} ${i === cur ? 'sel' : ''}" style="background:${c}" data-act="equip" data-k="${k}" data-i="${i}" title="${esc(un[k].has(i) ? 'Color ' + (i + 1) : req(k, i))}"></div>`).join('');
   let body;
-  if (tab === 'cube') body = `<div class="skgrid">${grid('skin', 40, sk, i => skinURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ship') body = `<div class="skgrid">${grid('ship', 40, sh, i => shipURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ball') body = `<div class="skgrid">${grid('ball', 40, bl, i => ballURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'ufo') body = `<div class="skgrid">${grid('ufo', 40, uf, i => ufoURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'wave') body = `<div class="skgrid">${grid('wave', 40, wv, i => waveURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'robot') body = `<div class="skgrid">${grid('robot', 40, rbt, i => robotURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
-  else if (tab === 'spider') body = `<div class="skgrid">${grid('spider', 40, spd, i => spiderURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  if (tab === 'cube') body = `<div class="skgrid">${grid('skin', NSK, sk, i => skinURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ship') body = `<div class="skgrid">${grid('ship', NSK, sh, i => shipURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ball') body = `<div class="skgrid">${grid('ball', NSK, bl, i => ballURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'ufo') body = `<div class="skgrid">${grid('ufo', NSK, uf, i => ufoURL(i, sk, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'wave') body = `<div class="skgrid">${grid('wave', NSK, wv, i => waveURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'robot') body = `<div class="skgrid">${grid('robot', NSK, rbt, i => robotURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
+  else if (tab === 'spider') body = `<div class="skgrid">${grid('spider', NSK, spd, i => spiderURL(i, PRIMARY[c1], SECONDARY[c2], 56))}</div>`;
   else if (tab === 'colors') body = `<h3>Primary</h3><div class="swatches">${sw('p', PRIMARY, c1)}</div><h3>Secondary</h3><div class="swatches">${sw('s', SECONDARY, c2)}</div>`;
   else body = ACH.map(a => { const v = achVal(a), done = isEarned(a); return `<div class="ach ${done ? 'done' : ''}"><div><b>${a.name}</b><div class="muted">${a.desc} → ${rwTxt(a)}</div></div><span class="st">${done ? '✔' : fmt(Math.min(v, a.n)) + '/' + fmt(a.n)}</span></div>`; }).join('');
+  if (['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider'].includes(tab)) { const pages = Math.ceil(NSK / PGS); body += `<div class="pager"><button class="btn sm" data-act="cospg" data-pg="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>◀ Prev</button><b>Page ${pg + 1} / ${pages}</b><button class="btn sm" data-act="cospg" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>`; }
   const tabs = ['cube', 'ship', 'ball', 'ufo', 'wave', 'robot', 'spider', 'colors', 'achievements'].map(t => `<button class="${t === tab ? 'on' : ''}" data-act="costab" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('');
   page('Cosmetics', `<div class="tabs">${tabs}</div><div class="cosm"><div class="preview card"><div class="pvrow"><img src="${myIcon(120)}"><img src="${shipURL(sh, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ballURL(bl, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${ufoURL(uf, sk, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${waveURL(wv, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${robotURL(rbt, PRIMARY[c1], SECONDARY[c2], 120)}"><img src="${spiderURL(spd, PRIMARY[c1], SECONDARY[c2], 120)}"></div><div class="muted">${me ? 'Tap an unlocked item to equip it' : 'Log in to unlock cosmetics with achievements'}</div></div><div>${body}</div></div>`);
 };
@@ -1482,7 +1683,7 @@ function shopStock() {
   const day = SHOP_ROTATE_DAYS ? Math.floor(Date.now() / 864e5 / SHOP_ROTATE_DAYS) : 1;
   if (shopCache && shopCache.day === day) return shopCache;
   const r = rng(day * 2654435761 + 12345), shuf = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const pool = []; [['skin', 39], ['ship', 39], ['ball', 39], ['ufo', 39], ['wave', 39], ['robot', 39], ['spider', 39]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
+  const pool = []; [['skin', 79], ['ship', 79], ['ball', 79], ['ufo', 79], ['wave', 79], ['robot', 79], ['spider', 79]].forEach(([k, n]) => { for (let i = 1; i <= n; i++) pool.push({ k, i }); });
   const icons = shuf(pool).slice(0, 30).map(it => ({ ...it, key: it.k + ':' + it.i, price: SHOP_PRICES[Math.floor(r() * SHOP_PRICES.length)] })).sort((a, b) => a.price - b.price);
   const cols = shuf(Object.keys(SHOP_GROUPS)).map(g => { const a = SPEC.filter(x => x.g === g), x = a[Math.floor(r() * a.length)]; return { k: 'col', g, i: x.i, key: 'col:' + x.i, price: SHOP_CPRICES[Math.floor(r() * SHOP_CPRICES.length)] }; });
   return shopCache = { day, icons, cols };
@@ -1766,7 +1967,7 @@ function startPlay(o) {
       if (PL.kind === 'play' && me && fp > Math.floor(oldBest)) setDoc(doc(db, 'users', me.uid, 'progress', PL.id), { best: fp }, { merge: true }).catch(() => { });   // new best % is saved to the account immediately
       if (PL.kind === 'play') { if (pct > ls) localStorage[bestKey(PL.id)] = fp; if (!me && fp > 0) anonBest(PL.id, fp); }
     },
-    onWin: () => { winSongFade(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); },
+    onWin: () => { winSongFade(); sfx('win'); pf.style.width = '100%'; pp.textContent = '100%'; $('#winTitle').textContent = PL.practice ? 'Practice Complete!' : 'Level Complete!'; $('#winInfo').textContent = `Attempts: ${game.attempts} · Jumps: ${game.jumps}` + (PL.practice ? ' · practice runs don\'t count' : ''); $('#winBox').classList.add('open'); onWon(); if (PL.practice) { PL.practice = false; setPracUI(); } },   // beating a level in practice mode switches practice off, so Replay starts a normal run
     onFrame: pct => { fN++; { const n = performance.now(); if (n - fT >= 500) { fe.textContent = 'fps: ' + Math.round(fN * 1000 / (n - fT)); fN = 0; fT = n; } }  const w = Math.round(pct * 10) / 10; if (w !== fw) { fw = w; pf.style.width = w + '%'; } const f = Math.floor(pct); if (f !== fpc) { fpc = f; pp.textContent = f + '%'; } },
     onPause: pauseToggle
   };
@@ -2092,7 +2293,8 @@ function place(cx, cy) {
   const o = { t, x: cx, y: cy, r: ed.rot, g: 0 }; if (ed.rot45 && !no45(o)) o.r45 = 1; if (ed.zv) o.z = ed.zv;   // placing while a Z layer is shown puts the object on that layer
   if (t === 'block' || t === 'spike' || t === 'half' || (OBJ[t].slope && !OBJ[t].slide)) o.c = '#0d0d22';
   if (t === 'trig_move') Object.assign(o, { fx: false, fy: false });
-  if (t === 'trig_toggle') Object.assign(o, { on: false });
+  if (t === 'trig_toggle' || t === 'trig_death' || t === 'orb_t') Object.assign(o, { on: false });
+  if (t === 'trig_cam') Object.assign(o, { dur: 2 });
   if (t === 'dtext') Object.assign(o, { txt: 'Text', fn: '0' });
   if (OBJ[t].trig) o.touch = false;
   if (DASH[t]) o.a = 0;
@@ -2136,9 +2338,19 @@ function objPanel() {
   else if (t === 'trig_spawn') h += n('tg', 'Group to spawn', 'min="1"') + n('dur', 'Delay (s)', 'step=".1" min="0"') + '<p class="muted">When passed / touched, fires every trigger in that group after the delay. Triggers set to "spawn ordered" only ever run this way.</p>';
   else if (t === 'trig_pulse') h += col('col', 'Pulse color') + n('dur', 'Fade out time (s)', 'step=".1" min=".05"') + '<p class="muted">Flashes the background with this color, then fades it out.</p>';
   else if (t === 'zone_d') return h + '<p class="muted">Place above (or below) blocks or slopes: the blocks stay solid, but the wave slides along their top / underside like ground instead of dying. Hitting the side of a block or a spike still kills. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
+  else if (t === 'zone_h') return h + '<p class="muted">Place on top of blocks (the same cell as the block works): while the cube / ball / robot / spider is inside it, hitting its head on the block\'s underside just bumps it instead of killing. Hitting the side of a block or a spike still kills. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
+  else if (t === 'trig_death') h += n('tg', 'Target group', 'min="1"') + `<label class="ck"><input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> Enable group</label><p class="muted">Works like a Toggle Trigger, but passing / touching it only arms it. The NEXT time you die, the toggle happens once and stays for your later attempts. After that this trigger does nothing. Leave the level and come back and it works again.</p>`;
+  else if (t === 'trig_cam') h += n('tg', 'Group to lock the camera on', 'min="1"') + n('dur', 'Hold time (s)', 'step=".1" min=".1"') + '<p class="muted">The camera glides to the centre of that group, stays there for the hold time, then glides back to following the player.</p>';
+  else if (t === 'trig_pvis') h += '<p class="muted">Makes the player fully visible again.</p>';
+  else if (t === 'trig_pinv') h += '<p class="muted">Makes the player fully invisible (icon, trail and run dust). You can still die and play normally.</p>';
   else if (t === 'zone_s') return h + '<p class="muted">Place in front of a dash orb: entering it cancels the dash so you stop dashing. Invisible in play.</p><div class="row"><button class="btn sm red" data-act="eddel">Delete</button></div>';
   else if (t === 'trig_end') h += '<p class="muted">Touching this ends the level. While one is placed it replaces the automatic end zone (3 blocks past the last object).</p>';
   else {
+    if (t === 'port_duel') h += `<label class=\"ck\"><input type=\"checkbox\" data-p=\"ind\" ${o.ind ? 'checked' : ''}> Independent mode (2 players)</label>` + n('lh', 'Lane height (blocks, 3-20, default 7)', 'min=\"3\" max=\"20\" step=\"1\"') + '<p class=\"muted\">Splits you in 2: player 2 is your mirror image across the middle of the lane, upside down, with your colours swapped. The ground is flipped into a ceiling at the lane height. <b>Dependent</b> (default): both cubes get every input, and a gravity orb touched by either one flips both. <b>Independent</b>: Space / W / click = player 1, Up arrow = player 2, each on its own. Either player can take a separate portal and change mode alone.</p>';
+    if (t === 'port_unduel') h += '<p class="muted">Back to one player: whoever enters it stays (colours back to normal) and the other one disappears. The survivor keeps its own gravity and the ceiling goes away, so if player 2 (upside down) is the one who survives, put a gravity portal after this.</p>';
+    if (t === 'orb_t') h += n('tg', 'Target group', 'min="1"') + `<label class="ck"><input type="checkbox" data-p="on" ${o.on ? 'checked' : ''}> Enable group when clicked</label><p class="muted">Clicking the orb sets the group on or off (like a Toggle Trigger), with no jump.</p>`;
+    if (t === 'port_tp_in') h += n('tg', 'Output portal group ID', 'min="1"') + '<p class="muted">Entering this portal teleports you to the Teleport Output Portal whose group ID (Edit Group) matches this number.</p>';
+    if (t === 'port_tp_out') h += '<p class="muted">Give this portal a group ID with Edit Group, then type that ID into a Teleport Input Portal.</p>';
     if (DASH[t]) h += n('a', 'Dash angle (-75..75)', 'min="-75" max="75" step="15"');
     if (OBJ[t].text) h += `<label>Description (the text shown)<input type="text" maxlength="40" data-p="txt" value="${esc(o.txt ?? '')}"></label><label>Font<select data-p="fn">${TXN.map((nm, i) => `<option value="${i}" ${(+o.fn || 0) === i ? 'selected' : ''}>${nm}</option>`).join('')}</select></label>`;
     if (!OBJ[t].slope) h += n('sc', 'Scale (0.1 - 5)', 'min=".1" max="5" step=".1"').replace(`value="${nv(o.sc)}"`, `value="${o.sc || 1}"`);
@@ -2294,6 +2506,7 @@ function edSettings() {
 const val = id => $('#' + id)?.value ?? '';
 const actions = {
   go: d => go(d.v, { ...d }), back: () => back(), closemodal: closeModal,
+  cospg: d => views.cosmetics({ tab: curP.tab || 'cube', pg: +d.pg }),
   costab: d => { curP = { ...curP, tab: d.t }; views.cosmetics({ tab: d.t }); },
   acctab: d => { curP = { ...curP, tab: d.t }; views.account({ tab: d.t }); },
   login: async () => { const u = val('au').trim(), p = val('ap'); if (!u || !p) throw 'Enter a username and password'; await signInWithEmailAndPassword(auth, emailOf(u), p); },
@@ -2305,7 +2518,7 @@ const actions = {
   equip: async d => {
     if (!me) return toast('Log in to customize your icon', 'err'); const un = unlocked_(), i = +d.i;
     if (!un[d.k].has(i)) { const a = ACH.find(a => a.rw && a.rw.k === d.k && a.rw.i === i); return toast('🔒 ' + (a ? `${a.name}: ${a.desc}` : 'Find it in Community > Shop'), 'err'); }
-    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', robot: 'robot', spider: 'spider', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube' });
+    const f = ({ skin: 'skin', ship: 'ship', ball: 'ball', ufo: 'ufo', wave: 'wave', robot: 'robot', spider: 'spider', p: 'c1', s: 'c2' })[d.k]; P[f] = i; await updateDoc(doc(db, 'users', me.uid), { [f]: i }); renderFooter(); views.cosmetics({ tab: curP.tab || 'cube', pg: curP.pg });
   },
   openlvl: d => { closeModal(); go('level', { id: d.id }); },
   pg: d => renderLevels(d.kind, +d.pg), dosearch: doSearch, srchpg: d => { SRCH.pg = Math.max(0, +d.pg); renderSearch(); },
