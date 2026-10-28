@@ -1412,6 +1412,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MOD = 'Vortarium';
 const STAR_SCALE = 1;           // stars awarded per difficulty star (1..5). Change here to rebalance.
 const SLOTS = 20, SONG_CHUNK = 600000;
+const MAXOBJ = 16000;   // max objects per level
+// big levels are gzipped + base64'd ("gz:" prefix) so 16K objects still fit in one Firestore document; old plain-JSON levels keep working
+async function gzStr(str) { const buf = await new Response(new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer(); return 'gz:' + await blobB64(new Blob([buf])); }
+async function ungz(str) { if (typeof str !== 'string' || !str.startsWith('gz:')) return str; const bytes = Uint8Array.from(atob(str.slice(3)), c => c.charCodeAt(0)); return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text(); }
+async function pushDraft(i, lv) { if (!me) return; let j = JSON.stringify(lv); if (j.length >= 300000) j = await gzStr(j); if (j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + i), { slot: i, lv: j, updated: lv.updated || 0 }).catch(() => { }); }
 const blobB64 = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(b); });
 let me = null, P = null;
 const settings = Object.assign({ music: true, sfx: true, vol: .6 }, JSON.parse(localStorage.dash_settings || '{}'));
@@ -1858,7 +1863,7 @@ async function awardAuthor(id, L, d) {
   const uid = L.authorId, br = doc(db, 'users', uid, 'beaten', id), pr = doc(db, 'users', uid, 'progress', id);
   const [snap, psnap] = await Promise.all([getDoc(br), getDoc(pr)]);
   const first = !snap.exists(), starred = snap.exists() && snap.data().starred, prevC = snap.exists() ? (snap.data().coins || []) : [];
-  let nc = L.coins; if (nc == null) { try { nc = JSON.parse(L.data).objs.filter(o => o.t === 'coin').length; } catch { nc = 0; } }
+  let nc = L.coins; if (nc == null) { try { nc = JSON.parse(await ungz(L.data)).objs.filter(o => o.t === 'coin').length; } catch { nc = 0; } }
   const addC = Array.from({ length: nc }, (_, i) => i).filter(i => !prevC.includes(i));
   const gemTotal = GEMS[d.stars], gemHave = psnap.exists() ? (psnap.data().gems || 0) : 0, gems = Math.max(0, gemTotal - gemHave), upd = {};
   if (first) upd.levelsBeaten = increment(1);
@@ -1943,7 +1948,7 @@ async function playPublished(id, practice = false) {
   let songUrl = null;
   if (lv.songParts || lv.songUrl) { let s = await idbGet('level:' + id); if (!s) { toast('Loading song…'); try { s = await fetchSong(id, lv); } catch (e) { toast('Song failed to load: ' + errMsg(e), 'err'); } } if (s instanceof Blob) songUrl = URL.createObjectURL(s); else if (s?.url) songUrl = s.url; }
   const prog = await getProgress(id), prevBest = prog.best, dd = dOf(lv);
-  startPlay({ level: { ...JSON.parse(lv.data), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, attBase: prog.attempts, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
+  startPlay({ level: { ...JSON.parse(await ungz(lv.data)), rated: lv.status === 'rated' }, kind: 'play', id, lv, songUrl, prevBest, attBase: prog.attempts, practice, gemsGot: prog.gems, gemTotal: (lv.status === 'rated' && dd && me && P) ? GEMS[dd.stars] : 0, songSpeed: lv.songSpeed, songOff: lv.songOff, onExit: () => { showLayer('view'); views.level({ id }); } });
 }
 const attKey = id => 'dash_att_' + id;
 function bumpAttempts() { if (!PL || game.practice) return; if (PL.kind === 'play') { PL.attTot = (PL.attTot || 0) + 1; localStorage[attKey(PL.id)] = PL.attTot; } else if (PL.kind === 'test' && PL.lv0) PL.lv0.attempts = (PL.lv0.attempts || 0) + 1; }   // practice runs don't count
@@ -2161,13 +2166,13 @@ const skey = () => `dash_levels_${me ? me.uid : 'anon'}`;
 function loadSlots() { try { slots = JSON.parse(localStorage[skey()] || '[]'); } catch { slots = []; } slots.forEach(l => { if (l) { l.name = String(l.name || '').slice(0, 18); l.desc = String(l.desc || '').slice(0, 200); } }); while (slots.length && !slots[slots.length - 1]) slots.pop(); }
 let pushT = {};
 function saveSlots(i) {
-  localStorage[skey()] = JSON.stringify(slots);
-  if (me && i != null && i >= 0 && slots[i]) { clearTimeout(pushT[i]); pushT[i] = setTimeout(() => { const j = JSON.stringify(slots[i]); if (j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + i), { slot: i, lv: j, updated: slots[i].updated || 0 }).catch(() => { }); }, 1500); }
+  try { localStorage[skey()] = JSON.stringify(slots); } catch (e) { toast('Browser storage is full - big levels only stay safe if you are logged in', 'err'); }
+  if (me && i != null && i >= 0 && slots[i]) { clearTimeout(pushT[i]); pushT[i] = setTimeout(() => { if (slots[i]) pushDraft(i, slots[i]); }, 1500); }
 }
 async function pullDrafts() {
   try {
     const s = await getDocs(collection(db, 'users', me.uid, 'drafts')); let ch = false;
-    s.forEach(d => { const r = d.data(), l = slots[r.slot]; if (!l || (r.updated || 0) > (l.updated || 0)) { try { slots[r.slot] = JSON.parse(r.lv); ch = true; } catch { } } });
+    for (const d of s.docs) { const r = d.data(), l = slots[r.slot]; if (!l || (r.updated || 0) > (l.updated || 0)) { try { slots[r.slot] = JSON.parse(await ungz(r.lv)); ch = true; } catch { } } }
     if (ch) { localStorage[skey()] = JSON.stringify(slots); if (cur === 'editor') views.editor(); }
   } catch { }
 }
@@ -2215,11 +2220,12 @@ function importLevel(i) {
   const l = slots[i]; if (!l) return; if (l.pub) return toast("Published levels can't be changed", 'err');
   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
   inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return; if (f.size > 900000) return toast('File too big', 'err');
+    const f = inp.files[0]; if (!f) return; if (f.size > 6e6) return toast('File too big', 'err');
     let o; try { o = JSON.parse(await f.text()); } catch { return toast('Not a valid level file', 'err'); }
     if (!o || !Array.isArray(o.objs)) return toast('Not a valid level file', 'err');
     const objs = o.objs.filter(q => q && typeof q.t === 'string' && OBJ[q.t] && Number.isFinite(q.x) && Number.isFinite(q.y)).map(q => { const c = {}; for (const [k, v] of Object.entries(q)) if (['number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length <= 40)) c[k] = v; return c; });
     if (!objs.length) return toast('No objects found in that file', 'err');
+    if (objs.length > MAXOBJ) { toast(`Only the first ${fmt(MAXOBJ)} objects were imported`); objs.length = MAXOBJ; }
     if (l.objs.length && !confirm(`Replace this level's ${l.objs.length} objects with ${objs.length} imported objects?`)) return;
     const hex = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
     l.objs = objs; if (typeof o.name === 'string' && o.name.trim()) l.name = o.name.trim().slice(0, 18); if (typeof o.desc === 'string') l.desc = o.desc.slice(0, 200);
@@ -2278,7 +2284,7 @@ function edXform(kind) {
   if (sx || sy) ed.sels.forEach(o => { o.x = r3(o.x + sx); o.y = r3(o.y + sy); });
   changed(); renderProps();
 }
-const snap = () => { const s = JSON.stringify(ed.lv.objs); if (ed.hist[ed.hist.length - 1] !== s) { ed.hist.push(s); if (ed.hist.length > 60) ed.hist.shift(); } };
+const snap = () => { const s = JSON.stringify(ed.lv.objs); if (ed.hist[ed.hist.length - 1] !== s) { ed.hist.push(s); if (ed.hist.length > (ed.lv.objs.length > 4000 ? 15 : 60)) ed.hist.shift(); } };
 let asT = null;
 function changed() { if (!ed.keepRedo) ed.redo = []; ed.lv.updated = Date.now(); clearTimeout(asT); asT = setTimeout(() => saveSlots(ed.slot), 800); renderEdUI(); }
 function s2w(e) { const cv = $('#editCanvas'), H = cv.clientHeight; ed.mx = e.offsetX; ed.my = e.offsetY; ed.wx = e.offsetX / ed.z + ed.camX; ed.wy = (H - e.offsetY) / ed.z + ed.camY; return [ed.wx, ed.wy]; }
@@ -2286,6 +2292,7 @@ const under = (o, wx, wy) => { const px = wx / U, py = wy / U, b = objBox(o); re
 function pick(wx, wy) { return stackAt(wx, wy)[0] || null; }
 function place(cx, cy) {
   if (cx < 0 || cy < 0) return; const lv = ed.lv, t = ed.tool;
+  if (lv.objs.length >= MAXOBJ) { if (!place.warn || Date.now() - place.warn > 2500) { place.warn = Date.now(); toast(`Object limit reached (${fmt(MAXOBJ)})`, 'err'); } return; }
   if (t === 'coin' && lv.objs.filter(o => o.t === 'coin').length >= 3 && !lv.objs.some(o => o.t === 'coin' && o.x === cx && o.y === cy)) return toast('Max 3 star coins per level', 'err');
   if (lv.objs.some(o => o.t === t && o.x === cx && o.y === cy && (o.r || 0) === ed.rot && (o.r45 || 0) === (no45({ t }) ? 0 : ed.rot45))) return;
   if (!OBJ[t].trig && !OBJ[t].deco && !OBJ[t].zone) lv.objs = lv.objs.filter(o => !(o.t === t && o.x === cx && o.y === cy));   // blocks / hazards can now be stacked: only the same object type gets replaced
@@ -2464,7 +2471,7 @@ function edRot45() {
 function edRotate(d = 1) { if (ed.sels.length) edXform(d > 0 ? 'cw' : 'ccw'); else ed.rot = ((ed.rot + d) % 4 + 4) % 4; }
 function edDelSel() { if (!ed.sels.length) return; snap(); const s = new Set(ed.sels); ed.lv.objs = ed.lv.objs.filter(o => !s.has(o)); ed.sels = []; ed.sel = null; renderProps(); changed(); }
 function edCopy() { if (!ed.sels.length) return; const mx = Math.min(...ed.sels.map(o => o.x)), my = Math.min(...ed.sels.map(o => o.y)); ed.clip = ed.sels.map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x - mx, y: o.y - my })); toast('Copied ' + ed.clip.length); renderProps(); }
-function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0, Math.floor(ed.wx / U)), by = Math.max(0, Math.floor(ed.wy / U)); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.clip.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x + bx, y: o.y + by })); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); }
+function edPaste() { if (!ed.clip.length) return; snap(); const bx = Math.max(0, Math.floor(ed.wx / U)), by = Math.max(0, Math.floor(ed.wy / U)); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.clip.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).slice(0, Math.max(0, MAXOBJ - ed.lv.objs.length)).map(o => ({ ...JSON.parse(JSON.stringify(o)), x: o.x + bx, y: o.y + by })); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); }
 addEventListener('keydown', e => {
   if (!ed.on || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || $('#modal').classList.contains('open')) return;
   const k = e.key.toLowerCase(), st = 60 / ed.z;
@@ -2496,7 +2503,7 @@ function edPlay(here) {
     startPlay({ level: { objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs, grs: lv.grs, startMode: lv.startMode, startSpeed: lv.startSpeed }, kind: 'test', lv0: lv, songSpeed: lv.songSpeed, songOff: lv.songOff, startX: sx, startY: sy, songUrl: b instanceof Blob ? URL.createObjectURL(b) : null, onExit: () => { ed.on = true; showLayer('edit'); renderEdUI(); edDraw(); } });
   });
 }
-async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); const j = JSON.stringify(ed.lv); if (me && j.length < 900000) setDoc(doc(db, 'users', me.uid, 'drafts', 's' + ed.slot), { slot: ed.slot, lv: j, updated: ed.lv.updated || 0 }).catch(() => { }); showLayer('view'); setTrack('menu'); edRefresh(); renderFooter(); }
+async function edBack() { ed.on = false; saveSlots(ed.slot); clearTimeout(pushT[ed.slot]); pushDraft(ed.slot, ed.lv); showLayer('view'); setTrack('menu'); edRefresh(); renderFooter(); }
 function edSettings() {
   stopPreview(); const lv = ed.lv;
   modal(`<h2>Level settings</h2><label>Title<input id="lvName" maxlength="18" value="${esc(lv.name)}"></label><label>Description<textarea id="lvDesc" maxlength="200" rows="3">${esc(lv.desc)}</textarea></label><div class="row"><label style="flex:1">Background<input type="color" id="lvBg" value="${lv.bg}"></label><label style="flex:1">Ground<input type="color" id="lvGr" value="${lv.ground}"></label></div><label>Background style<select id="lvBgs">${BGS.map(([k, n]) => `<option value="${k}" ${(lv.bgs || 'stripes') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label>Ground style<select id="lvGrs">${GRS.map(([k, n]) => `<option value="${k}" ${(lv.grs || 'tiles') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="row"><label style="flex:1">Start gamemode<select id="lvSm">${[['cube','Cube'],['ship','Ship'],['ball','Ball'],['ufo','UFO'],['wave','Wave'],['robot','Robot'],['spider','Spider']].map(([k, n]) => `<option value="${k}" ${(lv.startMode || 'cube') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label style="flex:1">Start speed<select id="lvSs">${[[.8,'Slow (0.8x)'],[1,'Normal (1x)'],[1.3,'Fast (1.3x)'],[1.6,'Faster (1.6x)']].map(([k, n]) => `<option value="${k}" ${(lv.startSpeed || 1) == k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div><label>${lv.songName ? 'Change song' : 'Level song'} (mp3)<input type="file" id="songfile" accept="audio/*"></label>${lv.songName ? `<div class="card"><b>🎵 ${esc(lv.songName)}</b><div class="row"><label style="flex:1">Speed<select id="songspd">${[2, 1.5, 1, .5].map(v => `<option value="${v}" ${(lv.songSpeed || 1) == v ? 'selected' : ''}>${v}x</option>`).join('')}</select></label><label style="flex:1">Start offset (ms)<input type="number" min="0" step="10" id="songoff" value="${lv.songOff || 0}"></label></div><div class="row"><button class="btn blue sm" data-act="songprev">▶ Preview / stop</button><button class="btn red sm" data-act="edsong-rm">Remove song</button></div></div>` : '<p class="muted">No song set</p>'}<div class="row"><button class="btn green" data-act="edsave">Save</button></div>`);
@@ -2593,7 +2600,7 @@ const actions = {
   edzr: () => { ed.zv = Math.min(8, (ed.zv || 0) + 1); renderEdUI(); },
   edcm: d => { snap(); for (const o of selTargets()) if (colorable(o)) { if (d.m) o.cm = d.m; else delete o.cm; } changed(); renderProps(); },
   edpanel: d => { if (!ed.sels.length) return; ed.panel = ed.panel === d.pn ? null : d.pn; renderProps(); },
-  edcp: () => { if (!ed.sels.length) return; snap(); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.sels.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).map(o => JSON.parse(JSON.stringify(o))); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); },   // Copy Paste: an exact duplicate right on top
+  edcp: () => { if (!ed.sels.length) return; snap(); let room = 3 - ed.lv.objs.filter(o => o.t === 'coin').length; const n = ed.sels.filter(o => o.t !== 'trig_end' && (o.t !== 'coin' || room-- > 0)).slice(0, Math.max(0, MAXOBJ - ed.lv.objs.length)).map(o => JSON.parse(JSON.stringify(o))); ed.lv.objs.push(...n); ed.sels = n; ed.sel = n.length === 1 ? n[0] : null; renderProps(); changed(); },   // Copy Paste: an exact duplicate right on top
   'edsong-rm': async () => { ed.lv.songName = ''; await idbDel(`draft:${me.uid}:${ed.slot}`); saveSlots(ed.slot); closeModal(); },
 };
 document.addEventListener('click', e => {
@@ -2607,7 +2614,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('change', async e => {
   if (e.target.id === 'songfile' && e.target.files[0]) {
-    const f = e.target.files[0]; if (f.size > 8 * 1024 * 1024) return toast('Song must be under 8 MB', 'err');
+    const f = e.target.files[0]; if (f.size > 16 * 1024 * 1024) return toast('Song must be under 16 MB', 'err');
     await idbSet(`draft:${me.uid}:${ed.slot}`, f); ed.lv.songName = f.name.replace(/\.[^.]+$/, '').slice(0, 60); ed.lv.songSpeed = ed.lv.songSpeed || 1; ed.lv.songOff = ed.lv.songOff || 0; saveSlots(ed.slot); toast('Song added', 'ok'); edSettings();
   }
 });
@@ -2621,7 +2628,9 @@ async function publish(i) {
   if (!confirm(`Publish "${lv.name}"? Published levels can't be edited (you can copy them).`)) return;
   try {
     if (lv.objs.filter(o => o.t === 'coin').length > 3) throw 'Max 3 star coins per level';
-    const data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', grs: lv.grs || 'tiles', startMode: lv.startMode || 'cube', startSpeed: lv.startSpeed || 1, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
+    let data = JSON.stringify({ v: 2, objs: lv.objs, bg: lv.bg, ground: lv.ground, bgs: lv.bgs || 'stripes', grs: lv.grs || 'tiles', startMode: lv.startMode || 'cube', startSpeed: lv.startSpeed || 1, songSpeed: lv.songSpeed || 1, songOff: lv.songOff || 0 });
+    if (data.length > 300000) data = await gzStr(data);
+    if (lv.objs.length > MAXOBJ) throw `Max ${fmt(MAXOBJ)} objects per level`;
     if (data.length > 900000) throw 'Level is too big to upload';
     const sb = await idbGet(`draft:${me.uid}:${i}`), has = sb instanceof Blob && sb.size > 0, parts = has ? Math.ceil(sb.size / SONG_CHUNK) : 0;
     const r = doc(collection(db, 'levels')); toast('Uploading level…');
