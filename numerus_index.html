@@ -151,6 +151,34 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 @keyframes statDown{0%{opacity:0;color:#e5384a;transform:scale(.9)}15%{opacity:1;color:#e5384a;transform:scale(1.08)}85%{opacity:1;color:#e5384a;transform:scale(1.04)}100%{opacity:1;color:var(--ink);transform:none}}
 .tile .av{width:38px;height:38px;flex:none;background:#f3f1ea;border-radius:12px;overflow:hidden}
 .tile .av svg{width:100%;height:100%;display:block}
+
+:root{--z:1.5}
+#app{zoom:var(--z);min-height:calc(100vh / var(--z))}
+@media (max-width:800px){:root{--z:1.3}}
+@media (max-width:560px){:root{--z:1.15}}
+.summary div{overflow:visible}
+.summary b{position:relative;z-index:2}
+.summary b.up,.summary b.down{animation-duration:3s;animation-fill-mode:both}
+@keyframes statUp{
+  0%{opacity:0;color:#2fbf7a;transform:scale(1)}
+  8%{opacity:1;color:#2fbf7a;transform:scale(1.04);animation-timing-function:cubic-bezier(.5,0,1,.8)}
+  80%{opacity:1;color:#2fbf7a;transform:scale(1.9);animation-timing-function:cubic-bezier(.9,0,1,1)}
+  85%{color:#2fbf7a;transform:scale(.86);animation-timing-function:ease-out}
+  89%{color:#2fbf7a;transform:scale(1.06)}
+  93%{color:#2fbf7a;transform:scale(1)}
+  100%{opacity:1;color:var(--ink);transform:scale(1)}
+}
+@keyframes statDown{
+  0%{opacity:0;color:#e5384a;transform:scale(1)}
+  8%{opacity:1;color:#e5384a;transform:scale(1.04);animation-timing-function:cubic-bezier(.5,0,1,.8)}
+  80%{opacity:1;color:#e5384a;transform:scale(1.9);animation-timing-function:cubic-bezier(.9,0,1,1)}
+  85%{color:#e5384a;transform:scale(.86);animation-timing-function:ease-out}
+  89%{color:#e5384a;transform:scale(1.06)}
+  93%{color:#e5384a;transform:scale(1)}
+  100%{opacity:1;color:var(--ink);transform:scale(1)}
+}
+.tile{position:relative}
+.tile.me{z-index:2}
 </style>
 </head>
 <body>
@@ -273,7 +301,7 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment, getCountFromServer } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCi35IyqyH4clYPOletvpu4NTllKKF64E8",
@@ -348,28 +376,27 @@ function getKey() { if (_k) return _k; const m = {}; _P.forEach(p => m[p.i] = p.
 /* ---------- questions ---------- */
 const MODEL = "gemini-3.5-flash-lite";
 const BANK = [
-  ["How many steps does it take to walk up to the very top of the Eiffel Tower?", 1665, "steps"],
-  ["How many hairs are on an average human head?", 100000, "hairs"],
-  ["How many times does an average adult's heart beat in one day?", 100000, "beats"],
-  ["How many heartbeats happen in an 80-year lifetime, at an average of 70 beats per minute?", 2943360000, "beats"],
-  ["How many liters of water fill an Olympic swimming pool (50 m x 25 m x 2 m)?", 2500000, "liters"],
-  ["How many breaths does a resting adult take in one hour?", 900, "breaths"],
-  ["How many sheets of standard 0.1 mm printer paper stacked would reach the 381 m roof of the Empire State Building?", 3810000, "sheets"],
-  ["How many US pennies (1.52 mm thick) stacked would reach the height of Mount Everest (8,849 m)?", 5821711, "pennies"],
-  ["How many liters of air does a resting adult breathe in a full day?", 11000, "liters"],
-  ["How many times does an average person blink in an hour while awake?", 1000, "blinks"],
-  ["How many words are in all seven Harry Potter novels combined?", 1084170, "words"],
-  ["How many liters of blood does an adult heart pump in one day?", 7200, "liters"],
-  ["How many kilometers does a person walk in 80 years at 7,500 steps a day and a 0.75 m stride?", 164250, "kilometers"],
-  ["How many cups of coffee are drunk around the world every day?", 2250000000, "cups"],
-  ["How many steps are in a 10 kilometer walk with a 0.75 m stride?", 13333, "steps"],
-  ["How many words does the average person speak in a day?", 16000, "words"]
+  ["How much rain does Togo get in a year?", 1168, "millimeters"],
+  ["How many islands does Indonesia have?", 17508, "islands"],
+  ["How many languages are spoken in Papua New Guinea?", 840, "languages"],
+  ["How long is Canada's coastline?", 202080, "kilometers"],
+  ["How many rooms are in the White House?", 132, "rooms"],
+  ["How many steps are inside the Statue of Liberty, ground to crown?", 354, "steps"],
+  ["What is the surface temperature of the Sun?", 5500, "degrees Celsius"],
+  ["How much does a large chicken egg weigh?", 57, "grams"],
+  ["How fast can a cheetah run at top speed?", 70, "miles per hour"],
+  ["How long are all the blood vessels in the human body laid end to end?", 100000, "kilometers"],
+  ["How many people live in Iceland?", 390000, "people"],
+  ["How big is Vatican City?", 0.44, "square kilometers"],
+  ["How long is a year on Mars?", 687, "Earth days"],
+  ["How many hours a day does a koala sleep?", 20, "hours"],
+  ["How many species of birds exist in the world?", 11000, "species"]
 ].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: "" }));
 const fallback10 = () => shuffle(BANK).slice(0, 10);
 async function genQuestions() {
   try {
     const cats = shuffle(["human body", "space", "geography", "history", "pop culture", "food and cooking", "sports", "animals", "technology", "chemistry", "everyday life", "music", "movies and TV", "math", "weather and earth science", "architecture"]).slice(0, 10);
-    const prompt = `Create 10 numeric ESTIMATION questions for a party game. Players must make a smart estimate by reasoning through sizes, rates and quantities (Fermi-style), NOT by recalling a fact. Rules: NO trivia someone could simply know. Never ask "what year", never ask for numbers people memorize (keys on a piano, bones in the body, number of states, famous heights, lengths or distances, speeds of light, etc). Good examples of the style: "How many steps does it take to walk up to the top of the Eiffel Tower?", "How many hairs are on an average human head?", "How many heartbeats does a person have in an 80 year life?", "How many liters of water fill an Olympic swimming pool?". Invent fresh questions like these, not these exact ones. Vary the subject widely (use these loosely as inspiration: ${cats.join(", ")}), and vary the size of the answers from small to enormous. Each question must have ONE defensible numeric answer from a well-established source or a straightforward calculation, and any assumption needed (standard, average, typical) must be stated inside the question. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "steps" or "liters"}.`;
+    const prompt = `Create 10 short, extremely random numeric guessing questions for a party game where players go with their gut instinct. Each question is ONE short plain sentence (under 15 words) asking for a single number about almost anything: countries, animals, movies, food, history, space, sports, music, weather, the human body, everyday objects, world records, brands, nature. Examples of the right style: "How much rain does Togo get in a year, in millimeters?", "How many islands does Indonesia have?", "How many words are spoken in the movie Ocean's Eleven?". The questions must NOT need math, multi-step reasoning, long setups or extra assumptions, and must not be long or complicated. Make them quirky and wildly different from each other. Avoid overly famous numbers (keys on a piano) and avoid year or date questions. Each needs one verifiable numeric answer from a reliable source. Use a different random subject for each, loosely inspired by: ${cats.join(", ")}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "millimeters" or "islands"}.`;
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
@@ -404,6 +431,7 @@ $("authForm").onsubmit = async e => {
   const name = $("uName").value.trim(), pw = $("uPass").value;
   $("authErr").textContent = "";
   if (!/^[A-Za-z0-9_]{3,14}$/.test(name)) { $("authErr").textContent = "Username: 3-14 letters, numbers or _"; return; }
+  if (name.toLowerCase() === "numeron") { $("authErr").textContent = "That name is reserved"; return; }
   if (pw.length < 6) { $("authErr").textContent = "Password needs at least 6 characters"; return; }
   busy(signUpMode ? "Creating account…" : "Logging in…");
   try {
@@ -430,6 +458,7 @@ onAuthStateChanged(auth, async user => {
     const d = snap.data();
     me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 };
     shown.points = me.points; shown.wins = me.wins; shown.games = me.games;
+    prefetchRanks();
     look.skin = d.skin ?? 0; look.acc = d.acc ?? 0; look.color = d.color ?? 0;
     $("whoName").textContent = d.name;
     step = 0; renderWizard(); goTab("play"); show("main");
@@ -490,14 +519,16 @@ function animateStat(el, key, to) {
   el.classList.remove("up", "down");
   if (from === null || from === to) { el.textContent = fmt(to); return; }
   void el.offsetWidth; el.classList.add(to > from ? "up" : "down");
-  const t0 = performance.now(), D = 3000;
+  const t0 = performance.now(), D = 2400;
+  el.textContent = fmt(from);
   const tick = now => {
     if (el._tok !== tok) return;
-    const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3);
+    const p = Math.min(1, (now - t0) / D), e = p * p * (3 - 2 * p);
     el.textContent = fmt(Math.round(from + (to - from) * e));
-    if (p < 1) requestAnimationFrame(tick); else { el.textContent = fmt(to); el.classList.remove("up", "down"); }
+    if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(to);
   };
-  el.textContent = fmt(from); requestAnimationFrame(tick);
+  requestAnimationFrame(tick);
+  setTimeout(() => { if (el._tok === tok) el.classList.remove("up", "down"); }, 3050);
 }
 async function loadStats() {
   try {
@@ -507,29 +538,61 @@ async function loadStats() {
   animateStat($("sPts"), "points", me.points); animateStat($("sWins"), "wins", me.wins); animateStat($("sGames"), "games", me.games);
   loadLB();
 }
-async function loadLB() {
-  const list = $("lbList"); list.innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
-  const f = lbField;
-  try {
-    const snap = await getDocs(query(collection(db, USERS), orderBy(f, "desc"), limit(5)));
-    list.innerHTML = ""; let inTop = false;
-    snap.docs.forEach((d, i) => {
-      const x = d.data(); const mine = d.id === me.uid; if (mine) inTop = true;
-      const t = document.createElement("div"); t.className = "tile" + (mine ? " me" : "");
-      const rk = document.createElement("div"); rk.className = "rk"; rk.textContent = "#" + (i + 1);
-      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = x.name;
-      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(x[f] || 0);
-      const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(x);
-      t.append(rk, av, nm, vl); list.appendChild(t);
+const lastRank = {}; let lbTok = 0;
+async function myRank(f) { try { const c = await getCountFromServer(query(collection(db, USERS), where(f, ">", me[f] || 0))); return c.data().count + 1; } catch (e) { return null; } }
+async function prefetchRanks() { for (const f of ["points", "wins", "games"]) { const r = await myRank(f); if (r) lastRank[f] = r; } }
+function tileFor(x, rk, mine, val) {
+  const t = document.createElement("div"); t.className = "tile" + (mine ? " me" : "");
+  if (rk) { const r = document.createElement("div"); r.className = "rk"; r.textContent = rk; t.appendChild(r); }
+  const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(x);
+  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = x.name;
+  const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(val);
+  t.append(av, nm, vl); return t;
+}
+function rankAnim(rows, ni, meTile, oldRank, newRank) {
+  const up = newRank < oldRank, col = up ? "62,207,142" : "229,56,74";
+  const Y = n => `calc(${n * 100}% + ${n * 8}px)`;
+  const cs = getComputedStyle(meTile), bg0 = cs.backgroundColor, bd0 = cs.borderColor;
+  meTile.style.zIndex = 3;
+  meTile.animate([
+    { backgroundColor: `rgba(${col},.5)`, borderColor: `rgb(${col})` },
+    { backgroundColor: `rgba(${col},.5)`, borderColor: `rgb(${col})`, offset: .65 },
+    { backgroundColor: bg0, borderColor: bd0 }
+  ], { duration: 2400, easing: "ease-out" });
+  if (ni >= 0) {
+    const others = rows.filter((_, i) => i !== ni), oldIdx = new Map();
+    if (oldRank <= 5) { const order = others.slice(); order.splice(Math.min(oldRank - 1, others.length), 0, meTile); order.forEach((el, i) => oldIdx.set(el, i)); }
+    else { others.forEach((el, i) => oldIdx.set(el, i)); oldIdx.set(meTile, 5); }
+    rows.forEach((el, idx) => {
+      const d = oldIdx.get(el) - idx; if (!d) return;
+      if (el === meTile) {
+        el.animate([
+          { transform: `translate(0,${Y(d)}) scale(1)`, opacity: oldRank > 5 ? 0 : 1 },
+          { transform: `translate(6%,${Y(d)}) scale(1.05)`, opacity: 1, offset: .22 },
+          { transform: "translate(6%,0) scale(1.05)", opacity: 1, offset: .72 },
+          { transform: "translate(0,0) scale(1)", opacity: 1 }
+        ], { duration: 1100, easing: "ease-in-out" });
+      } else el.animate([{ transform: `translateY(${Y(d)})` }, { transform: "translateY(0)" }], { duration: 800, easing: "cubic-bezier(.34,1.56,.64,1)" });
     });
-    if (!inTop) {
+  } else {
+    meTile.animate([{ transform: "translateX(0) scale(1)" }, { transform: "translateX(7%) scale(1.06)", offset: .25 }, { transform: "translateX(7%) scale(1.06)", offset: .6 }, { transform: "translateX(0) scale(1)" }], { duration: 900, easing: "ease-in-out" });
+  }
+}
+async function loadLB() {
+  const list = $("lbList"), f = lbField, tok = ++lbTok;
+  list.innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  try {
+    const [snap, newRank] = await Promise.all([getDocs(query(collection(db, USERS), orderBy(f, "desc"), limit(5))), myRank(f)]);
+    if (tok !== lbTok) return;
+    list.innerHTML = ""; const rows = []; let ni = -1;
+    snap.docs.forEach((d, i) => { const x = d.data(), mine = d.id === me.uid; if (mine) ni = i; const t = tileFor(x, "#" + (i + 1), mine, x[f] || 0); rows.push(t); list.appendChild(t); });
+    let meTile = ni >= 0 ? rows[ni] : null;
+    if (!meTile) {
       const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep);
-      const t = document.createElement("div"); t.className = "tile me";
-      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = me.name;
-      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(me[f] || 0);
-      const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(look);
-      t.append(av, nm, vl); list.appendChild(t);
+      meTile = tileFor({ name: me.name, skin: look.skin, acc: look.acc, color: look.color }, "", true, me[f] || 0); list.appendChild(meTile);
     }
+    const old = lastRank[f]; if (newRank) lastRank[f] = newRank;
+    if (old && newRank && old !== newRank) rankAnim(rows, ni, meTile, old, newRank);
   } catch (e) { console.error(e); list.innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; }
 }
 
@@ -542,6 +605,10 @@ function startMatch(cfg) {
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color);
   $("mMeName").textContent = me.name; $("mOppName").textContent = M.opp.name;
   $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
+  if (M.mode === "ai") M.qs.forEach((q, i) => {
+    const e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
+    M.ans["a" + i + "_p2"] = Number((q.a === 0 ? e * 5 : q.a * (1 + e)).toPrecision(3));
+  });
   show("match"); unbusy(); beginRound(0);
 }
 function beginRound(i) {
@@ -560,12 +627,6 @@ function beginRound(i) {
     if (left <= 0 && !M.submitted) submitMine(null);
     if (M.submitted && !M.revealed && Date.now() - M.subAt > 66000) { M.ans["a" + M.round + "_" + SLOT_OPP(M.slot)] = null; checkReveal(); }
   }, 100);
-  if (M.mode === "ai") {
-    const a = q.a, e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
-    let g = a === 0 ? e * 5 : a * (1 + e);
-    g = Number(g.toPrecision(3));
-    const my = M.round; setTimeout(() => { if (M && M.round === my && !M.done) setAns("a" + my + "_p2", g); }, rand(5000, 25000));
-  }
 }
 $("ansForm").onsubmit = e => {
   e.preventDefault(); if (!M || M.submitted) return;
@@ -619,6 +680,9 @@ async function finishMatch() {
     try {
       await updateDoc(doc(db, USERS, me.uid), { points: increment(M.my), wins: increment(won ? 1 : 0), games: increment(1) });
       me.points += M.my; me.wins += won ? 1 : 0; me.games += 1;
+      if (M.mode === "ai" && M.diff === "hard") {
+        try { await setDoc(doc(db, USERS, "numeron"), { name: "Numeron", skin: 4, acc: 1, color: 1, points: increment(M.op), wins: increment(M.op > M.my ? 1 : 0), games: increment(1) }, { merge: true }); } catch (e) { console.error(e); }
+      }
     } catch (e) { console.error(e); }
   }
 }
@@ -631,7 +695,7 @@ const AI_ERR = { easy: [0.40, 0.95], medium: [0.20, 0.70], hard: [0.05, 0.50] };
 document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
   const d = b.dataset.d; busy("Writing 10 questions…");
   const qs = await genQuestions();
-  startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) } });
+  startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], ...(d === "hard" ? { skin: 4, acc: 1, color: 1 } : { skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) }) } });
 });
 
 /* ---------- human matchmaking ---------- */
@@ -819,7 +883,7 @@ $("calcUse").onclick = () => {
         cx.globalAlpha = .14 * p.f; cx.beginPath(); cx.moveTo(mx, my); cx.lineTo(p.rx, p.ry); cx.stroke();
       }
     }
-    if (mouse.on) { cx.globalAlpha = .1; cx.strokeStyle = "#1d1d1f"; cx.lineWidth = 1; cx.beginPath(); cx.arc(mx, my, 260, 0, 6.2832); cx.stroke(); cx.beginPath(); cx.arc(mx, my, 6, 0, 6.2832); cx.stroke(); }
+    
     cx.globalAlpha = 1;
     requestAnimationFrame(frame);
   }

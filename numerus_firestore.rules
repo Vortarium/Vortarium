@@ -11,13 +11,20 @@ service cloud.firestore {
     match /numerus_users/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid;
+
+      // Numeron's shared stats (all players combined): anyone can add to them, but they can only go up
+      allow create: if signedIn() && uid == 'numeron';
+      allow update: if signedIn() && uid == 'numeron'
+        && request.resource.data.points >= resource.data.points
+        && request.resource.data.wins >= resource.data.wins
+        && request.resource.data.games >= resource.data.games;
+
       allow delete: if false;
     }
 
     // Matchmaking queue (players also update each other's entry when pairing up)
     match /numerus_queue/{uid} {
-      allow read, create, update: if signedIn();
-      allow delete: if signedIn();
+      allow read, create, update, delete: if signedIn();
     }
 
     // Live matches (questions + each player's answers)
