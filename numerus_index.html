@@ -123,9 +123,38 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 @keyframes sp{to{transform:rotate(360deg)}}
 .pop{animation:pop .4s ease}
 @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+
+#bgc{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+#app{z-index:1}
+.ansWrap{display:flex;gap:8px;align-items:stretch}
+.ansWrap .field{flex:1;min-width:0}
+.calcBtn{flex:0 0 58px;margin-bottom:10px;border:2px solid var(--line);background:var(--card);border-radius:14px;cursor:pointer;display:grid;place-items:center;color:var(--ink);transition:transform .12s,border-color .2s}
+.calcBtn:hover{border-color:var(--ink)}
+.calcBtn:active{transform:scale(.94)}
+.calcBtn[disabled]{opacity:.4;pointer-events:none}
+.calcWrap{position:fixed;inset:0;z-index:25;display:none;align-items:center;justify-content:center;background:#1d1d1f40;padding:16px}
+.calcWrap.on{display:flex}
+.calcPanel{width:100%;max-width:360px;background:var(--card);border:2px solid var(--line);border-radius:26px;padding:16px;box-shadow:0 20px 60px #0003;animation:in .25s ease}
+.calcTop{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.calcTop button{border:0;background:#ebe9e0;border-radius:50%;width:30px;height:30px;cursor:pointer;font:inherit;font-weight:800}
+.calcIn{font-size:22px!important;font-weight:800;text-align:right;margin-bottom:4px!important;font-variant-numeric:tabular-nums}
+.calcRes{text-align:right;color:var(--mute);font-weight:700;min-height:22px;margin-bottom:10px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calcKeys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.calcKeys button{border:0;border-radius:14px;padding:14px 0;font:inherit;font-size:18px;font-weight:700;background:#f1efe7;cursor:pointer;color:var(--ink)}
+.calcKeys button:active{transform:scale(.94)}
+.calcKeys button.op{background:#e4e1d6}
+.calcKeys button.eq{grid-column:span 4;background:#e4e1d6}
+.summary b{display:block;font-variant-numeric:tabular-nums}
+.summary b.up{animation:statUp 3s ease both}
+.summary b.down{animation:statDown 3s ease both}
+@keyframes statUp{0%{opacity:0;color:#2fbf7a;transform:scale(.9)}15%{opacity:1;color:#2fbf7a;transform:scale(1.08)}85%{opacity:1;color:#2fbf7a;transform:scale(1.04)}100%{opacity:1;color:var(--ink);transform:none}}
+@keyframes statDown{0%{opacity:0;color:#e5384a;transform:scale(.9)}15%{opacity:1;color:#e5384a;transform:scale(1.08)}85%{opacity:1;color:#e5384a;transform:scale(1.04)}100%{opacity:1;color:var(--ink);transform:none}}
+.tile .av{width:38px;height:38px;flex:none;background:#f3f1ea;border-radius:12px;overflow:hidden}
+.tile .av svg{width:100%;height:100%;display:block}
 </style>
 </head>
 <body>
+<canvas id="bgc"></canvas>
 <div id="app">
 <button id="muteBtn" title="Sound">♪</button>
 
@@ -156,7 +185,7 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 
   <div class="pane" id="panestats">
     <div class="summary"><div><b id="sPts" class="mono">0</b><span>points</span></div><div><b id="sWins" class="mono">0</b><span>wins</span></div><div><b id="sGames" class="mono">0</b><span>games</span></div></div>
-    <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Most points</button><button id="lbWins">Most wins</button></div>
+    <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Points</button><button id="lbWins">Wins</button><button id="lbGames">Games</button></div>
     <div class="lb" id="lbList"></div>
     <p class="muted" style="font-size:12px;text-align:center;margin-top:14px">Only Hard AI and human matches count.</p>
   </div>
@@ -202,12 +231,14 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   </div>
   <div class="tbar"><i id="tFill"></i></div>
   <div id="qBox">
-    <div class="cat" id="qCat"></div>
     <h2 id="qText"></h2>
     <div class="unit" id="qUnit"></div>
     <form id="ansForm" autocomplete="off">
-      <input class="field" id="ansIn" inputmode="decimal" placeholder="your number" autocomplete="off">
-      <button class="btn">Lock in</button>
+      <div class="ansWrap">
+        <input class="field" id="ansIn" inputmode="decimal" placeholder="your number" autocomplete="off" maxlength="18">
+        <button type="button" class="calcBtn" id="calcBtn" aria-label="Calculator"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2.5" width="16" height="19" rx="3"/><rect x="7" y="5.5" width="10" height="4" rx="1"/><circle cx="8.5" cy="13.5" r=".7" fill="currentColor"/><circle cx="12" cy="13.5" r=".7" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".7" fill="currentColor"/><circle cx="8.5" cy="17.5" r=".7" fill="currentColor"/><circle cx="12" cy="17.5" r=".7" fill="currentColor"/><circle cx="15.5" cy="17.5" r=".7" fill="currentColor"/></svg></button>
+      </div>
+      <button class="btn" id="lockBtn">Lock in</button>
     </form>
     <div id="waitMsg"></div>
   </div>
@@ -226,6 +257,14 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   <div class="muted" id="resNote" style="font-size:13px;margin-bottom:8px"></div>
   <div class="row"><button class="btn ghost" id="resHome">Home</button><button class="btn" id="resAgain">Play again</button></div>
 </section>
+
+<div id="calcWrap" class="calcWrap"><div class="calcPanel">
+  <div class="calcTop"><b>Calculator</b><button type="button" id="calcClose" aria-label="Close">✕</button></div>
+  <input class="field calcIn" id="calcIn" inputmode="none" placeholder="0" autocomplete="off" spellcheck="false">
+  <div class="calcRes" id="calcRes"></div>
+  <div class="calcKeys" id="calcKeys"></div>
+  <button type="button" class="btn" id="calcUse" style="width:100%">Use as answer</button>
+</div></div>
 
 <div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
 </div>
@@ -273,7 +312,7 @@ const COLORS = [{ n: "Coral", h: "#ff6b57" }, { n: "Sky", h: "#4aa8ff" }, { n: "
 const SKINS = ["Cube", "Orb", "Pill", "Dome", "Gem"];
 const ACCS = ["Cap", "Glasses", "Bow tie", "Phones", "Crown"];
 function shade(hex, amt) { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255; const f = v => Math.max(0, Math.min(255, Math.round(v + 255 * amt))); return "#" + [f(r), f(g), f(b)].map(v => v.toString(16).padStart(2, "0")).join(""); }
-function robot(skin, acc, color) {
+function robot(skin, acc, color, vb) {
   const c = COLORS[color].h, d = shade(c, -0.14), ink = "#1d1d1f";
   const top = [30, 26, 22, 24, 26][skin];
   let head = "";
@@ -292,9 +331,10 @@ function robot(skin, acc, color) {
   if (acc === 2) a = `<polygon points="60,92 44,84 44,100" fill="${ink}"/><polygon points="60,92 76,84 76,100" fill="${ink}"/><circle cx="60" cy="92" r="4" fill="${ink}"/>`;
   if (acc === 3) a = `<path d="M30 ${eyeY + 2}A30 30 0 0 1 90 ${eyeY + 2}" fill="none" stroke="${ink}" stroke-width="5" stroke-linecap="round"/><rect x="24" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/><rect x="85" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/>`;
   if (acc === 4) a = `<path d="M38 ${top + 4}L41 ${top - 14}L51 ${top - 3}L60 ${top - 17}L69 ${top - 3}L79 ${top - 14}L82 ${top + 4}Z" fill="#ffc83d" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>`;
-  return `<svg viewBox="0 0 120 130">${ant}${body}${head}${face}${a}</svg>`;
+  return `<svg viewBox="${vb || "0 0 120 130"}">${ant}${body}${head}${face}${a}</svg>`;
 }
 const _c = "rus";
+const headOf = d => robot((d.skin | 0) % 5, (d.acc | 0) % 5, (d.color | 0) % 5, "16 0 88 90");
 
 /* ---------- API key (split, scrambled, decoded only when needed) ---------- */
 const _P = [{"i":2,"d":"PVVWUWVXY3FMU0NKMjlaVU03cng="},{"i":6,"d":"PWtpNmMyemRBWjlMaGVMQTJHbGo="},{"i":1,"d":"PVFxK2UzOFhPVTVGY0dwOXJFb08="},{"i":0,"d":"PU1SNVhNZWJveUFESDM0UUpuVVA="},{"i":5,"d":"PUE3bVpZRFBBVUFvOEhGNDBWTEw="},{"i":3,"d":"PThzbTlYQzhhbG85WEFINA=="},{"i":4,"d":"PW9SV1NMUUYzUFVtSEduY1RKdkI="},{"i":7,"d":"PWd2YVVXalMzWEhmZ2lvMW1CM3k="}];
@@ -308,22 +348,28 @@ function getKey() { if (_k) return _k; const m = {}; _P.forEach(p => m[p.i] = p.
 /* ---------- questions ---------- */
 const MODEL = "gemini-3.5-flash-lite";
 const BANK = [
-  ["How many bones are in an adult human body?", 206, "bones", "Biology"], ["How tall is Mount Everest?", 8849, "meters", "Geography"],
-  ["How many days does Earth take to orbit the Sun?", 365.25, "days", "Space"], ["How fast does light travel in a vacuum?", 299792, "km per second", "Physics"],
-  ["How many keys are on a standard piano?", 88, "keys", "Music"], ["What is the average distance from Earth to the Moon?", 384400, "kilometers", "Space"],
-  ["How many elements are on the periodic table?", 118, "elements", "Chemistry"], ["How many teeth does a typical adult have?", 32, "teeth", "Biology"],
-  ["At what temperature does water boil at sea level?", 212, "degrees Fahrenheit", "Science"], ["How many minutes are in a week?", 10080, "minutes", "Math"],
-  ["How many Harry Potter novels are in the main series?", 7, "books", "Pop culture"], ["How deep is the Mariana Trench?", 10935, "meters", "Geography"],
-  ["How many Earths could fit across the Sun's diameter?", 109, "Earths", "Space"], ["What is Earth's diameter?", 12742, "kilometers", "Geography"],
-  ["How many liters of blood are in an average adult?", 5, "liters", "Biology"], ["How many chromosomes are in a human body cell?", 46, "chromosomes", "Biology"],
-  ["In what year was the first iPhone released?", 2007, "year", "Tech"], ["How tall is the Burj Khalifa?", 828, "meters", "Architecture"],
-  ["How many seconds are in a day?", 86400, "seconds", "Math"], ["How many World Cup titles has Brazil won?", 5, "titles", "Sports"]
-].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: x[3] }));
+  ["How many steps does it take to walk up to the very top of the Eiffel Tower?", 1665, "steps"],
+  ["How many hairs are on an average human head?", 100000, "hairs"],
+  ["How many times does an average adult's heart beat in one day?", 100000, "beats"],
+  ["How many heartbeats happen in an 80-year lifetime, at an average of 70 beats per minute?", 2943360000, "beats"],
+  ["How many liters of water fill an Olympic swimming pool (50 m x 25 m x 2 m)?", 2500000, "liters"],
+  ["How many breaths does a resting adult take in one hour?", 900, "breaths"],
+  ["How many sheets of standard 0.1 mm printer paper stacked would reach the 381 m roof of the Empire State Building?", 3810000, "sheets"],
+  ["How many US pennies (1.52 mm thick) stacked would reach the height of Mount Everest (8,849 m)?", 5821711, "pennies"],
+  ["How many liters of air does a resting adult breathe in a full day?", 11000, "liters"],
+  ["How many times does an average person blink in an hour while awake?", 1000, "blinks"],
+  ["How many words are in all seven Harry Potter novels combined?", 1084170, "words"],
+  ["How many liters of blood does an adult heart pump in one day?", 7200, "liters"],
+  ["How many kilometers does a person walk in 80 years at 7,500 steps a day and a 0.75 m stride?", 164250, "kilometers"],
+  ["How many cups of coffee are drunk around the world every day?", 2250000000, "cups"],
+  ["How many steps are in a 10 kilometer walk with a 0.75 m stride?", 13333, "steps"],
+  ["How many words does the average person speak in a day?", 16000, "words"]
+].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: "" }));
 const fallback10 = () => shuffle(BANK).slice(0, 10);
 async function genQuestions() {
   try {
     const cats = shuffle(["human body", "space", "geography", "history", "pop culture", "food and cooking", "sports", "animals", "technology", "chemistry", "everyday life", "music", "movies and TV", "math", "weather and earth science", "architecture"]).slice(0, 10);
-    const prompt = `Create 10 numeric estimation trivia questions for a party game. Each question must have ONE definite numeric answer that people can estimate (like "How many liters of water are on Earth?" or "How many times does an adult breathe in an hour?"). Mix easy and hard, small and huge numbers. Use these topics, one per question, in order: ${cats.join(", ")}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "liters" or "times", "cat": short topic label}. Use well-established, widely accepted values.`;
+    const prompt = `Create 10 numeric ESTIMATION questions for a party game. Players must make a smart estimate by reasoning through sizes, rates and quantities (Fermi-style), NOT by recalling a fact. Rules: NO trivia someone could simply know. Never ask "what year", never ask for numbers people memorize (keys on a piano, bones in the body, number of states, famous heights, lengths or distances, speeds of light, etc). Good examples of the style: "How many steps does it take to walk up to the top of the Eiffel Tower?", "How many hairs are on an average human head?", "How many heartbeats does a person have in an 80 year life?", "How many liters of water fill an Olympic swimming pool?". Invent fresh questions like these, not these exact ones. Vary the subject widely (use these loosely as inspiration: ${cats.join(", ")}), and vary the size of the answers from small to enormous. Each question must have ONE defensible numeric answer from a well-established source or a straightforward calculation, and any assumption needed (standard, average, typical) must be stated inside the question. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "steps" or "liters"}.`;
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
@@ -377,12 +423,13 @@ onAuthStateChanged(auth, async user => {
     let snap = await getDoc(ref);
     if (!snap.exists()) {
       const nm = pendingName || user.email.split("@")[0];
-      await setDoc(ref, { name: nm, points: 0, wins: 0, games: 0, skin: 0, acc: 0, color: 0, createdAt: serverTimestamp() });
+      await setDoc(ref, { name: nm, points: 0, wins: 0, games: 0, skin: Math.floor(Math.random() * 5), acc: Math.floor(Math.random() * 5), color: Math.floor(Math.random() * 5), createdAt: serverTimestamp() });
       snap = await getDoc(ref);
     }
     pendingName = null;
     const d = snap.data();
     me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 };
+    shown.points = me.points; shown.wins = me.wins; shown.games = me.games;
     look.skin = d.skin ?? 0; look.acc = d.acc ?? 0; look.color = d.color ?? 0;
     $("whoName").textContent = d.name;
     step = 0; renderWizard(); goTab("play"); show("main");
@@ -414,7 +461,7 @@ function renderWizard() {
     if (step === 0) b.innerHTML = robot(i, look.acc, look.color) + SKINS[i];
     if (step === 1) b.innerHTML = robot(look.skin, i, look.color) + ACCS[i];
     if (step === 2) b.innerHTML = `<div class="sw" style="background:${COLORS[i].h}"></div>${COLORS[i].n}`;
-    b.onclick = () => { look[key] = i; if (step < 2) { step++; renderWizard(); } else { renderWizard(); finishLook(); } };
+    b.onclick = () => { look[key] = i; renderWizard(); };
     box.appendChild(b);
   }
   $("stepBack").style.visibility = step === 0 ? "hidden" : "visible";
@@ -434,14 +481,30 @@ $("chHuman").onclick = () => joinQueue();
 
 /* ---------- stats ---------- */
 let lbField = "points";
-$("lbPts").onclick = () => { lbField = "points"; $("lbPts").classList.add("on"); $("lbWins").classList.remove("on"); loadLB(); };
-$("lbWins").onclick = () => { lbField = "wins"; $("lbWins").classList.add("on"); $("lbPts").classList.remove("on"); loadLB(); };
+const LB_TABS = { lbPts: "points", lbWins: "wins", lbGames: "games" };
+Object.keys(LB_TABS).forEach(id => $(id).onclick = () => { lbField = LB_TABS[id]; Object.keys(LB_TABS).forEach(k => $(k).classList.toggle("on", k === id)); loadLB(); });
+const shown = { points: null, wins: null, games: null };
+function animateStat(el, key, to) {
+  const tok = el._tok = (el._tok || 0) + 1;
+  const from = shown[key]; shown[key] = to;
+  el.classList.remove("up", "down");
+  if (from === null || from === to) { el.textContent = fmt(to); return; }
+  void el.offsetWidth; el.classList.add(to > from ? "up" : "down");
+  const t0 = performance.now(), D = 3000;
+  const tick = now => {
+    if (el._tok !== tok) return;
+    const p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(from + (to - from) * e));
+    if (p < 1) requestAnimationFrame(tick); else { el.textContent = fmt(to); el.classList.remove("up", "down"); }
+  };
+  el.textContent = fmt(from); requestAnimationFrame(tick);
+}
 async function loadStats() {
   try {
     const s = await getDoc(doc(db, USERS, me.uid)); const d = s.data();
     me.points = d.points || 0; me.wins = d.wins || 0; me.games = d.games || 0;
   } catch (e) {}
-  $("sPts").textContent = fmt(me.points); $("sWins").textContent = fmt(me.wins); $("sGames").textContent = fmt(me.games);
+  animateStat($("sPts"), "points", me.points); animateStat($("sWins"), "wins", me.wins); animateStat($("sGames"), "games", me.games);
   loadLB();
 }
 async function loadLB() {
@@ -456,14 +519,16 @@ async function loadLB() {
       const rk = document.createElement("div"); rk.className = "rk"; rk.textContent = "#" + (i + 1);
       const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = x.name;
       const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(x[f] || 0);
-      t.append(rk, nm, vl); list.appendChild(t);
+      const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(x);
+      t.append(rk, av, nm, vl); list.appendChild(t);
     });
     if (!inTop) {
       const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep);
       const t = document.createElement("div"); t.className = "tile me";
       const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = me.name;
-      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(f === "points" ? me.points : me.wins);
-      t.append(nm, vl); list.appendChild(t);
+      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(me[f] || 0);
+      const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(look);
+      t.append(av, nm, vl); list.appendChild(t);
     }
   } catch (e) { console.error(e); list.innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; }
 }
@@ -483,23 +548,23 @@ function beginRound(i) {
   M.round = i; M.revealed = false; M.submitted = false; M.subAt = 0;
   $("mRound").textContent = i + 1;
   const q = M.qs[i];
-  $("qCat").textContent = q.cat || "Estimate"; $("qText").textContent = q.q; $("qUnit").textContent = q.unit ? "Answer in: " + q.unit : "";
-  $("ansIn").value = ""; $("ansIn").disabled = false; $("ansForm").querySelector("button").disabled = false; $("waitMsg").textContent = "";
+  $("qText").textContent = q.q; $("qUnit").textContent = q.unit ? "Answer in: " + q.unit : "";
+  $("ansIn").value = ""; $("ansIn").disabled = false; $("lockBtn").disabled = false; $("calcBtn").disabled = false; closeCalc(); $("waitMsg").textContent = "";
   $("qBox").style.display = ""; $("revBox").style.display = "none";
   setTimeout(() => $("ansIn").focus(), 50);
-  const total = 20000; M.tEnd = Date.now() + total;
+  const total = 60000; M.tEnd = Date.now() + total;
   clearInterval(M.timer);
   M.timer = setInterval(() => {
     const left = M.tEnd - Date.now();
     $("tFill").style.width = Math.max(0, left / total * 100) + "%";
     if (left <= 0 && !M.submitted) submitMine(null);
-    if (M.submitted && !M.revealed && Date.now() - M.subAt > 26000) { M.ans["a" + M.round + "_" + SLOT_OPP(M.slot)] = null; checkReveal(); }
+    if (M.submitted && !M.revealed && Date.now() - M.subAt > 66000) { M.ans["a" + M.round + "_" + SLOT_OPP(M.slot)] = null; checkReveal(); }
   }, 100);
   if (M.mode === "ai") {
-    const a = q.a, s = M.sigma; const noise = s * (Math.random() + Math.random() + Math.random() - 1.5) * 1.6;
-    let g = a === 0 ? noise * 5 : a * Math.exp(noise);
+    const a = q.a, e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
+    let g = a === 0 ? e * 5 : a * (1 + e);
     g = Number(g.toPrecision(3));
-    const my = M.round; setTimeout(() => { if (M && M.round === my && !M.done) setAns("a" + my + "_p2", g); }, rand(2500, 9000));
+    const my = M.round; setTimeout(() => { if (M && M.round === my && !M.done) setAns("a" + my + "_p2", g); }, rand(5000, 25000));
   }
 }
 $("ansForm").onsubmit = e => {
@@ -510,7 +575,7 @@ $("ansForm").onsubmit = e => {
 };
 function submitMine(v) {
   if (M.submitted) return; M.submitted = true; M.subAt = Date.now();
-  $("ansIn").disabled = true; $("ansForm").querySelector("button").disabled = true;
+  $("ansIn").disabled = true; $("lockBtn").disabled = true; $("calcBtn").disabled = true; closeCalc();
   $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + M.opp.name + "…";
   setAns("a" + M.round + "_" + M.slot, v);
 }
@@ -562,11 +627,11 @@ $("resAgain").onclick = () => { $("modeBot").innerHTML = robot(look.skin, look.a
 
 /* ---------- AI match ---------- */
 const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
-const AI_SIGMA = { easy: 1.1, medium: 0.45, hard: 0.1 };
+const AI_ERR = { easy: [0.40, 0.95], medium: [0.20, 0.70], hard: [0.05, 0.50] };
 document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
   const d = b.dataset.d; busy("Writing 10 questions…");
   const qs = await genQuestions();
-  startMatch({ mode: "ai", diff: d, sigma: AI_SIGMA[d], qs, slot: "p1", opp: { name: AI_NAMES[d], skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) } });
+  startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) } });
 });
 
 /* ---------- human matchmaking ---------- */
@@ -658,6 +723,108 @@ async function enterMatch(mid) {
     }
   }, err => console.error(err));
 }
+
+/* ---------- numbers only ---------- */
+function cleanNum(v) {
+  v = v.replace(/[^0-9.\-]/g, ""); const neg = v.startsWith("-"); v = v.replace(/-/g, "");
+  const i = v.indexOf("."); if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
+  return (neg ? "-" : "") + v;
+}
+$("ansIn").addEventListener("beforeinput", e => { if (e.data && !/^[0-9.\-]+$/.test(e.data)) e.preventDefault(); });
+$("ansIn").addEventListener("input", e => { const c = cleanNum(e.target.value); if (c !== e.target.value) e.target.value = c; });
+
+/* ---------- calculator ---------- */
+function calcEval(src) {
+  const t = src.replace(/×|x|X|\*/g, "*").replace(/÷|\//g, "/").replace(/−|–/g, "-").replace(/\s+/g, "");
+  if (!t) throw 0;
+  let i = 0; const peek = () => t[i];
+  function num() { const m = /^(\d+\.?\d*|\.\d+)/.exec(t.slice(i)); if (!m) throw 0; i += m[0].length; return parseFloat(m[0]); }
+  function prim() { if (peek() === "(") { i++; const v = expr(); if (peek() !== ")") throw 0; i++; return v; } return num(); }
+  function pow() { const b = prim(); if (peek() === "^") { i++; return Math.pow(b, unary()); } return b; }
+  function unary() { if (peek() === "-") { i++; return -unary(); } if (peek() === "+") { i++; return unary(); } return pow(); }
+  function term() { let v = unary(); while (peek() === "*" || peek() === "/") { const o = t[i++]; const r = unary(); v = o === "*" ? v * r : v / r; } return v; }
+  function expr() { let v = term(); while (peek() === "+" || peek() === "-") { const o = t[i++]; const r = term(); v = o === "+" ? v + r : v - r; } return v; }
+  const v = expr(); if (i !== t.length || !isFinite(v)) throw 0; return v;
+}
+const plain = v => Number(v.toPrecision(12)).toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: 6 });
+const calcWrap = $("calcWrap"), calcIn = $("calcIn"), calcRes = $("calcRes");
+function calcUpdate() { try { calcRes.textContent = calcIn.value.trim() ? "= " + fmt(calcEval(calcIn.value)) : ""; } catch (e) { calcRes.textContent = ""; } }
+function closeCalc() { calcWrap.classList.remove("on"); }
+function calcEquals() { try { calcIn.value = plain(calcEval(calcIn.value)); calcUpdate(); } catch (e) { calcRes.textContent = "Check your expression"; } }
+[["C", "fn"], ["(", "op"], [")", "op"], ["⌫", "fn"], ["7"], ["8"], ["9"], ["÷", "op"], ["4"], ["5"], ["6"], ["×", "op"], ["1"], ["2"], ["3"], ["−", "op"], ["0"], ["."], ["^", "op"], ["+", "op"], ["=", "eq"]].forEach(([k, c]) => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = k; if (c) b.className = c;
+  b.onclick = () => { if (k === "C") calcIn.value = ""; else if (k === "⌫") calcIn.value = calcIn.value.slice(0, -1); else if (k === "=") { calcEquals(); return; } else calcIn.value += k; calcUpdate(); };
+  $("calcKeys").appendChild(b);
+});
+calcIn.addEventListener("beforeinput", e => { if (e.data && !/^[0-9+\-*/×÷−^().xX\s]+$/.test(e.data)) e.preventDefault(); });
+calcIn.addEventListener("input", () => { calcIn.value = calcIn.value.replace(/[^0-9+\-*/×÷−^().xX\s]/g, ""); calcUpdate(); });
+calcIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); calcEquals(); } });
+$("calcBtn").onclick = () => { if (!M || M.submitted) return; calcIn.value = $("ansIn").value; calcUpdate(); calcWrap.classList.add("on"); setTimeout(() => calcIn.focus(), 30); };
+$("calcClose").onclick = closeCalc;
+calcWrap.addEventListener("click", e => { if (e.target === calcWrap) closeCalc(); });
+addEventListener("keydown", e => { if (e.key === "Escape") closeCalc(); });
+$("calcUse").onclick = () => {
+  try { const v = calcEval(calcIn.value); if (M && !M.submitted) $("ansIn").value = cleanNum(plain(v)); closeCalc(); $("ansIn").focus(); }
+  catch (e) { calcRes.textContent = "Check your expression"; }
+};
+
+/* ---------- living background ---------- */
+(function () {
+  const cv = $("bgc"), cx = cv.getContext("2d");
+  const pal = ["#ff6b57", "#4aa8ff", "#3ecf8e", "#ffc83d", "#9b6bff", "#1d1d1f"];
+  const mouse = { x: 0, y: 0, on: false }; let W = 0, H = 0, P = [];
+  const mk = () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, r: 14 + Math.random() * 46, n: 3 + Math.floor(Math.random() * 4), a: Math.random() * 6.28, va: (Math.random() - .5) * .025, vx: (Math.random() - .5) * .8, vy: (Math.random() - .5) * .8, pvx: 0, pvy: 0, d: .3 + Math.random() * .9, c: pal[Math.floor(Math.random() * pal.length)], fill: Math.random() < .4, rx: 0, ry: 0 });
+  function resize() {
+    const dpr = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(70, Math.max(24, W * H / 22000))); while (P.length < n) P.push(mk()); P.length = n;
+  }
+  addEventListener("resize", resize); resize();
+  addEventListener("pointermove", e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; }, { passive: true });
+  addEventListener("pointerup", e => { if (e.pointerType === "touch") setTimeout(() => mouse.on = false, 600); });
+  document.addEventListener("mouseleave", () => mouse.on = false);
+  function poly(p) {
+    cx.beginPath();
+    for (let k = 0; k < p.n; k++) { const t = p.a + k / p.n * 6.2832, x = p.rx + Math.cos(t) * p.r, y = p.ry + Math.sin(t) * p.r; k ? cx.lineTo(x, y) : cx.moveTo(x, y); }
+    cx.closePath();
+  }
+  function frame() {
+    cx.clearRect(0, 0, W, H);
+    const mx = mouse.on ? mouse.x : W / 2, my = mouse.on ? mouse.y : H / 2, px = mx / W - .5, py = my / H - .5;
+    for (const p of P) {
+      p.x += p.vx + p.pvx; p.y += p.vy + p.pvy; p.a += p.va; p.pvx *= .93; p.pvy *= .93;
+      if (p.x < -100) p.x = W + 100; if (p.x > W + 100) p.x = -100; if (p.y < -100) p.y = H + 100; if (p.y > H + 100) p.y = -100;
+      p.rx = p.x - px * 70 * p.d; p.ry = p.y - py * 70 * p.d;
+      p.f = 0;
+      if (mouse.on) {
+        const dx = p.rx - mx, dy = p.ry - my, dist = Math.hypot(dx, dy) || 1;
+        if (dist < 260) { p.f = 1 - dist / 260; p.pvx += dx / dist * p.f * .35; p.pvy += dy / dist * p.f * .35; p.a += p.f * .05; p.ux = dx / dist; p.uy = dy / dist; }
+      }
+    }
+    cx.lineWidth = 1;
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const a = P[i], b = P[j], d = Math.hypot(a.rx - b.rx, a.ry - b.ry);
+      if (d < 170) { cx.globalAlpha = .09 * (1 - d / 170); cx.strokeStyle = "#1d1d1f"; cx.beginPath(); cx.moveTo(a.rx, a.ry); cx.lineTo(b.rx, b.ry); cx.stroke(); }
+    }
+    for (const p of P) {
+      poly(p);
+      if (p.fill) { cx.globalAlpha = .05 + p.f * .12; cx.fillStyle = p.c; cx.fill(); }
+      cx.globalAlpha = .11 + p.f * .3; cx.strokeStyle = p.c; cx.lineWidth = 1.2; cx.stroke();
+      if (p.f > 0) {
+        const L = 12 + 34 * p.f, ex = p.rx + p.ux * L, ey = p.ry + p.uy * L;
+        cx.globalAlpha = .35 * p.f; cx.lineWidth = 1.2; cx.beginPath(); cx.moveTo(p.rx, p.ry); cx.lineTo(ex, ey);
+        const ang = Math.atan2(p.uy, p.ux);
+        cx.moveTo(ex, ey); cx.lineTo(ex - Math.cos(ang - .5) * 6, ey - Math.sin(ang - .5) * 6);
+        cx.moveTo(ex, ey); cx.lineTo(ex - Math.cos(ang + .5) * 6, ey - Math.sin(ang + .5) * 6); cx.stroke();
+        cx.globalAlpha = .14 * p.f; cx.beginPath(); cx.moveTo(mx, my); cx.lineTo(p.rx, p.ry); cx.stroke();
+      }
+    }
+    if (mouse.on) { cx.globalAlpha = .1; cx.strokeStyle = "#1d1d1f"; cx.lineWidth = 1; cx.beginPath(); cx.arc(mx, my, 260, 0, 6.2832); cx.stroke(); cx.beginPath(); cx.arc(mx, my, 6, 0, 6.2832); cx.stroke(); }
+    cx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
 </script>
 </body>
 </html>
