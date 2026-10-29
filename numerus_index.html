@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NUMERUS</title>
+<style>
+:root{--bg:#f5f4ef;--ink:#1d1d1f;--mute:#8d8b84;--card:#fff;--line:#e7e4da;--acc:#ff6b57;--ok:#3ecf8e}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:flex;justify-content:center}
+#app{width:100%;max-width:520px;min-height:100vh;position:relative;display:flex;flex-direction:column}
+.screen{display:none;flex:1;flex-direction:column;padding:22px 20px 24px;animation:in .35s ease}
+.screen.on{display:flex}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.logo{font-weight:800;letter-spacing:.32em;font-size:22px}
+.logo i{font-style:normal;color:var(--acc)}
+.mono{font-variant-numeric:tabular-nums}
+.btn{appearance:none;border:0;background:var(--ink);color:#fff;font:inherit;font-weight:700;padding:14px 22px;border-radius:16px;cursor:pointer;transition:transform .12s,opacity .2s}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent;color:var(--ink);border:2px solid var(--line)}
+.btn.small{padding:8px 14px;font-size:13px;border-radius:12px}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.card{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:18px}
+.muted{color:var(--mute)}
+#muteBtn{position:fixed;top:14px;right:14px;z-index:20;width:38px;height:38px;border-radius:50%;border:2px solid var(--line);background:var(--card);cursor:pointer;font-size:16px}
+/* auth */
+#auth{justify-content:center;gap:22px;text-align:center}
+#auth .logo{font-size:34px}
+#auth .sub{color:var(--mute);font-size:14px;margin-top:-10px}
+.seg{display:flex;background:#ebe9e0;border-radius:14px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:transparent;font:inherit;font-weight:700;padding:10px;border-radius:11px;cursor:pointer;color:var(--mute)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px #0001}
+.field{width:100%;font:inherit;font-size:16px;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card);outline:none;margin-bottom:10px}
+.field:focus{border-color:var(--ink)}
+.err{color:#d6402c;font-size:13px;min-height:18px;margin:2px 0 8px}
+/* main */
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-right:44px}
+.who{font-size:13px;color:var(--mute)}
+.who b{color:var(--ink)}
+.who a{margin-left:8px;cursor:pointer;text-decoration:underline}
+.pane{display:none;flex:1;flex-direction:column}
+.pane.on{display:flex}
+.stage{display:flex;flex-direction:column;align-items:center;margin:14px 0 6px}
+.robot{width:150px;height:175px;animation:hover 2.6s ease-in-out infinite}
+.robot svg{width:100%;height:100%;overflow:visible}
+@keyframes hover{50%{transform:translateY(-12px)}}
+.ped{width:150px;height:14px;border-radius:50%;background:#1d1d1f14;margin-top:-4px;animation:sh 2.6s ease-in-out infinite}
+@keyframes sh{50%{transform:scale(.8);opacity:.6}}
+.gui{width:210px;height:18px;border-radius:12px;background:var(--card);border:2px solid var(--line);margin-top:-2px}
+.step{text-align:center;margin:14px 0 10px;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase}
+.dots{display:flex;justify-content:center;gap:6px;margin-bottom:12px}
+.dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--ink)}
+.opts{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.opt{border:2px solid var(--line);background:var(--card);border-radius:16px;padding:6px 2px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;font-size:11px;color:var(--mute);transition:transform .12s}
+.opt:active{transform:scale(.95)}
+.opt.on{border-color:var(--ink);color:var(--ink)}
+.opt svg{width:100%;height:56px}
+.sw{width:34px;height:34px;border-radius:50%;margin:11px 0}
+.row{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.nav{display:flex;gap:8px;margin-top:auto;padding-top:18px}
+.nav button{flex:1;border:0;background:transparent;font:inherit;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:12px;padding:14px;border-radius:14px;cursor:pointer;color:var(--mute)}
+.nav button.on{background:var(--ink);color:#fff}
+/* stats */
+.lb{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.tile{display:flex;align-items:center;gap:12px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px 14px}
+.tile .rk{width:26px;font-weight:800;color:var(--mute)}
+.tile .nm{flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .vl{font-weight:800}
+.tile.me{border-color:var(--ink)}
+.dotsep{text-align:center;color:var(--mute);letter-spacing:.3em;font-weight:800;line-height:.6}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.summary div{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px;text-align:center}
+.summary b{display:block;font-size:22px}
+.summary span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.1em}
+/* mode screens */
+.h1{font-size:26px;font-weight:800;text-align:center;margin:8px 0 18px}
+.choices{display:flex;flex-direction:column;gap:12px}
+.choice{display:flex;align-items:center;gap:14px;text-align:left;background:var(--card);border:2px solid var(--line);border-radius:22px;padding:18px;cursor:pointer;font:inherit;transition:transform .12s,border-color .2s}
+.choice:hover{border-color:var(--ink)}
+.choice:active{transform:scale(.98)}
+.choice .ic{font-size:30px;width:44px;text-align:center}
+.choice b{display:block;font-size:17px}
+.choice span{font-size:13px;color:var(--mute)}
+/* queue */
+#queue{align-items:center;justify-content:center;text-align:center;gap:14px}
+.big{font-size:84px;font-weight:800}
+/* match */
+.mbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pl{display:flex;align-items:center;gap:8px;min-width:0}
+.pl.r{flex-direction:row-reverse;text-align:right}
+.pl svg{width:44px;height:52px}
+.pl b{display:block;font-size:13px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl span{font-size:22px;font-weight:800}
+.rd{font-size:12px;color:var(--mute);text-align:center}
+.rd b{color:var(--ink)}
+.tbar{height:6px;background:var(--line);border-radius:6px;margin:14px 0 22px;overflow:hidden}
+.tbar i{display:block;height:100%;width:100%;background:var(--ink);transition:width .1s linear}
+.cat{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);font-weight:800;text-align:center}
+#qText{font-size:24px;line-height:1.3;text-align:center;margin:10px 0 8px}
+.unit{text-align:center;color:var(--mute);font-size:14px;margin-bottom:22px}
+#ansIn{text-align:center;font-size:30px;font-weight:800;padding:16px}
+#ansForm .btn{width:100%;margin-top:2px}
+#waitMsg{text-align:center;color:var(--mute);margin-top:14px;min-height:20px}
+.revnum{text-align:center;margin:6px 0 16px}
+.revnum small{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.revnum b{font-size:38px}
+.rrow{display:flex;align-items:center;gap:12px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.rrow .g{flex:1}
+.rrow .g small{display:block;color:var(--mute);font-size:12px}
+.rrow .g b{font-size:18px}
+.rrow .pt{font-size:24px;font-weight:800}
+.rrow.win{border-color:var(--ok)}
+/* result */
+#result{align-items:center;justify-content:center;text-align:center;gap:10px}
+#result .robot{width:130px;height:150px}
+.rt{font-size:42px;font-weight:800}
+.tot{display:flex;gap:28px;font-size:14px;color:var(--mute);margin:4px 0 16px}
+.tot b{display:block;font-size:30px;color:var(--ink)}
+#busy{position:fixed;inset:0;background:#f5f4efee;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:30;font-weight:700}
+#busy.on{display:flex}
+.spin{width:30px;height:30px;border:4px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.pop{animation:pop .4s ease}
+@keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div id="app">
+<button id="muteBtn" title="Sound">♪</button>
+
+<!-- AUTH -->
+<section id="auth" class="screen on">
+  <div class="logo">NUME<i>R</i>US</div>
+  <div class="sub">how close can you get?</div>
+  <div class="seg"><button id="tabIn" class="on">Log in</button><button id="tabUp">Sign up</button></div>
+  <form id="authForm" autocomplete="off">
+    <input class="field" id="uName" placeholder="Username" maxlength="14" autocapitalize="off" spellcheck="false">
+    <input class="field" id="uPass" type="password" placeholder="Password" autocomplete="off">
+    <div class="err" id="authErr"></div>
+    <button class="btn" id="authBtn" style="width:100%">Log in</button>
+  </form>
+</section>
+
+<!-- MAIN -->
+<section id="main" class="screen">
+  <div class="top"><div class="logo" style="font-size:16px">NUME<i>R</i>US</div><div class="who"><b id="whoName"></b><a id="logout">log out</a></div></div>
+
+  <div class="pane on" id="paneplay">
+    <div class="stage"><div class="robot" id="stageBot"></div><div class="ped"></div><div class="gui"></div></div>
+    <div class="step" id="stepLbl"></div>
+    <div class="dots" id="dots"></div>
+    <div class="opts" id="opts"></div>
+    <div class="row"><button class="btn ghost small" id="stepBack">‹ Back</button><button class="btn small" id="stepNext">Continue ›</button></div>
+  </div>
+
+  <div class="pane" id="panestats">
+    <div class="summary"><div><b id="sPts" class="mono">0</b><span>points</span></div><div><b id="sWins" class="mono">0</b><span>wins</span></div><div><b id="sGames" class="mono">0</b><span>games</span></div></div>
+    <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Most points</button><button id="lbWins">Most wins</button></div>
+    <div class="lb" id="lbList"></div>
+    <p class="muted" style="font-size:12px;text-align:center;margin-top:14px">Only Hard AI and human matches count.</p>
+  </div>
+
+  <div class="nav"><button id="navPlay" class="on">Play</button><button id="navStats">Stats</button></div>
+</section>
+
+<!-- MODE -->
+<section id="mode" class="screen">
+  <div class="stage"><div class="robot" id="modeBot" style="width:110px;height:130px"></div><div class="ped" style="width:110px"></div></div>
+  <div class="h1">Who do you want to face?</div>
+  <div class="choices">
+    <button class="choice" id="chHuman"><div class="ic">👤</div><div><b>Human</b><span>Queue up for a real opponent (60s)</span></div></button>
+    <button class="choice" id="chAI"><div class="ic">🤖</div><div><b>Robot</b><span>Easy, medium or hard</span></div></button>
+  </div>
+  <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="modeBack">‹ Back</button></div>
+</section>
+
+<section id="diff" class="screen">
+  <div class="h1" style="margin-top:40px">Pick a difficulty</div>
+  <div class="choices">
+    <button class="choice" data-d="easy"><div class="ic">🌱</div><div><b>Easy</b><span>Wide guesses. Practice only.</span></div></button>
+    <button class="choice" data-d="medium"><div class="ic">⚡</div><div><b>Medium</b><span>Decent aim. Practice only.</span></div></button>
+    <button class="choice" data-d="hard"><div class="ic">🔥</div><div><b>Hard</b><span>Razor precision. Counts for stats.</span></div></button>
+  </div>
+  <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="diffBack">‹ Back</button></div>
+</section>
+
+<!-- QUEUE -->
+<section id="queue" class="screen">
+  <div class="robot" id="queueBot" style="width:110px;height:130px"></div>
+  <div class="big mono" id="qTime">60</div>
+  <div id="qMsg" class="muted">Searching for an opponent…</div>
+  <div class="row"><button class="btn ghost" id="qLeave">Leave queue</button><button class="btn" id="qRetry" style="display:none">Try again</button></div>
+</section>
+
+<!-- MATCH -->
+<section id="match" class="screen">
+  <div class="mbar">
+    <div class="pl"><div id="mMeBot"></div><div><b id="mMeName"></b><span class="mono" id="mMeScore">0</span></div></div>
+    <div class="rd">Round<br><b id="mRound">1</b>/10</div>
+    <div class="pl r"><div id="mOppBot"></div><div><b id="mOppName"></b><span class="mono" id="mOppScore">0</span></div></div>
+  </div>
+  <div class="tbar"><i id="tFill"></i></div>
+  <div id="qBox">
+    <div class="cat" id="qCat"></div>
+    <h2 id="qText"></h2>
+    <div class="unit" id="qUnit"></div>
+    <form id="ansForm" autocomplete="off">
+      <input class="field" id="ansIn" inputmode="decimal" placeholder="your number" autocomplete="off">
+      <button class="btn">Lock in</button>
+    </form>
+    <div id="waitMsg"></div>
+  </div>
+  <div id="revBox" style="display:none">
+    <div class="revnum pop"><small>Correct answer</small><b class="mono" id="revAns"></b> <span class="muted" id="revUnit"></span></div>
+    <div class="rrow" id="revMe"><div class="g"><small id="revMeN"></small><b class="mono" id="revMeG"></b></div><div class="pt mono" id="revMeS"></div></div>
+    <div class="rrow" id="revOpp"><div class="g"><small id="revOppN"></small><b class="mono" id="revOppG"></b></div><div class="pt mono" id="revOppS"></div></div>
+  </div>
+</section>
+
+<!-- RESULT -->
+<section id="result" class="screen">
+  <div class="robot" id="resBot"></div><div class="ped"></div>
+  <div class="rt" id="resTitle"></div>
+  <div class="tot"><div><b class="mono" id="resMe">0</b><span id="resMeN"></span></div><div><b class="mono" id="resOpp">0</b><span id="resOppN"></span></div></div>
+  <div class="muted" id="resNote" style="font-size:13px;margin-bottom:8px"></div>
+  <div class="row"><button class="btn ghost" id="resHome">Home</button><button class="btn" id="resAgain">Play again</button></div>
+</section>
+
+<div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCi35IyqyH4clYPOletvpu4NTllKKF64E8",
+  authDomain: "earth-aefc5.firebaseapp.com",
+  projectId: "earth-aefc5",
+  storageBucket: "earth-aefc5.firebasestorage.app",
+  messagingSenderId: "766512520129",
+  appId: "1:766512520129:web:24ee38a15dde0da1ed6d40",
+  measurementId: "G-VKG184MDN7"
+};
+const app = initializeApp(firebaseConfig);
+try { getAnalytics(app); } catch (e) {}
+const auth = getAuth(app);
+const db = getFirestore(app);
+const USERS = "numerus_users", QUEUE = "numerus_queue", MATCHES = "numerus_matches";
+
+const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = n => (n === null || n === undefined) ? "—" : Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 });
+
+/* ---------- audio ---------- */
+const music = new Audio("numerus_music.mp3"); music.loop = true; music.volume = 0.5;
+const sWin = new Audio("numerus_win.mp3"), sLoss = new Audio("numerus_loss.mp3");
+let muted = false;
+function tryMusic() { if (!muted) music.play().catch(() => {}); }
+tryMusic();
+["pointerdown", "keydown", "touchstart"].forEach(ev => addEventListener(ev, tryMusic, { once: false, passive: true }));
+function sfx(a) { if (muted) return; try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
+$("muteBtn").onclick = e => { e.stopPropagation(); muted = !muted; $("muteBtn").textContent = muted ? "✕" : "♪"; if (muted) music.pause(); else music.play().catch(() => {}); };
+
+/* ---------- robot art ---------- */
+const _b = "me";
+const COLORS = [{ n: "Coral", h: "#ff6b57" }, { n: "Sky", h: "#4aa8ff" }, { n: "Mint", h: "#3ecf8e" }, { n: "Sun", h: "#ffc83d" }, { n: "Grape", h: "#9b6bff" }];
+const SKINS = ["Cube", "Orb", "Pill", "Dome", "Gem"];
+const ACCS = ["Cap", "Glasses", "Bow tie", "Phones", "Crown"];
+function shade(hex, amt) { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255; const f = v => Math.max(0, Math.min(255, Math.round(v + 255 * amt))); return "#" + [f(r), f(g), f(b)].map(v => v.toString(16).padStart(2, "0")).join(""); }
+function robot(skin, acc, color) {
+  const c = COLORS[color].h, d = shade(c, -0.14), ink = "#1d1d1f";
+  const top = [30, 26, 22, 24, 26][skin];
+  let head = "";
+  if (skin === 0) head = `<rect x="32" y="30" width="56" height="48" rx="11" fill="${c}"/>`;
+  if (skin === 1) head = `<circle cx="60" cy="54" r="28" fill="${c}"/>`;
+  if (skin === 2) head = `<rect x="38" y="22" width="44" height="60" rx="22" fill="${c}"/>`;
+  if (skin === 3) head = `<path d="M30 78V54a30 30 0 0 1 60 0v24a6 6 0 0 1-6 6H36a6 6 0 0 1-6-6z" fill="${c}"/>`;
+  if (skin === 4) head = `<polygon points="60,26 88,40 88,70 60,84 32,70 32,40" fill="${c}" stroke="${c}" stroke-width="4" stroke-linejoin="round"/>`;
+  const eyeY = skin === 2 ? 50 : 54;
+  const face = `<rect x="38" y="${eyeY - 9}" width="44" height="18" rx="9" fill="#fff" opacity=".92"/><circle cx="51" cy="${eyeY}" r="4.5" fill="${ink}"/><circle cx="69" cy="${eyeY}" r="4.5" fill="${ink}"/>`;
+  const body = `<rect x="43" y="90" width="34" height="28" rx="9" fill="${d}"/><circle cx="60" cy="104" r="4" fill="#fff" opacity=".85"/><circle cx="36" cy="102" r="6" fill="${c}"/><circle cx="84" cy="102" r="6" fill="${c}"/>`;
+  const ant = `<line x1="60" y1="${top}" x2="60" y2="${top - 11}" stroke="${ink}" stroke-width="3" stroke-linecap="round"/><circle cx="60" cy="${top - 13}" r="4" fill="${ink}"/>`;
+  let a = "";
+  if (acc === 0) a = `<path d="M34 ${top + 12}Q60 ${top - 22} 86 ${top + 12}Z" fill="${ink}"/><rect x="58" y="${top + 6}" width="38" height="7" rx="3.5" fill="${ink}"/>`;
+  if (acc === 1) a = `<g fill="none" stroke="${ink}" stroke-width="3"><circle cx="51" cy="${eyeY}" r="9"/><circle cx="69" cy="${eyeY}" r="9"/><line x1="60" y1="${eyeY}" x2="60" y2="${eyeY}"/></g><line x1="58" y1="${eyeY - 1}" x2="62" y2="${eyeY - 1}" stroke="${ink}" stroke-width="3"/>`;
+  if (acc === 2) a = `<polygon points="60,92 44,84 44,100" fill="${ink}"/><polygon points="60,92 76,84 76,100" fill="${ink}"/><circle cx="60" cy="92" r="4" fill="${ink}"/>`;
+  if (acc === 3) a = `<path d="M30 ${eyeY + 2}A30 30 0 0 1 90 ${eyeY + 2}" fill="none" stroke="${ink}" stroke-width="5" stroke-linecap="round"/><rect x="24" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/><rect x="85" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/>`;
+  if (acc === 4) a = `<path d="M38 ${top + 4}L41 ${top - 14}L51 ${top - 3}L60 ${top - 17}L69 ${top - 3}L79 ${top - 14}L82 ${top + 4}Z" fill="#ffc83d" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>`;
+  return `<svg viewBox="0 0 120 130">${ant}${body}${head}${face}${a}</svg>`;
+}
+const _c = "rus";
+
+/* ---------- API key (split, scrambled, decoded only when needed) ---------- */
+const _P = [{"i":2,"d":"PVVWUWVXY3FMU0NKMjlaVU03cng="},{"i":6,"d":"PWtpNmMyemRBWjlMaGVMQTJHbGo="},{"i":1,"d":"PVFxK2UzOFhPVTVGY0dwOXJFb08="},{"i":0,"d":"PU1SNVhNZWJveUFESDM0UUpuVVA="},{"i":5,"d":"PUE3bVpZRFBBVUFvOEhGNDBWTEw="},{"i":3,"d":"PThzbTlYQzhhbG85WEFINA=="},{"i":4,"d":"PW9SV1NMUUYzUFVtSEduY1RKdkI="},{"i":7,"d":"PWd2YVVXalMzWEhmZ2lvMW1CM3k="}];
+const _O = [4,5,2,3];
+let _k = null;
+function _h(s) { let x = 2166136261; for (const c of s) { x ^= c.charCodeAt(0); x = Math.imul(x, 16777619) >>> 0; } return x; }
+function _ks(seed, n) { let x = _h(seed); const o = []; for (let i = 0; i < n; i++) { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; o.push(x >>> 24); } return o; }
+function _dec(p, i) { let s = atob(p); s = [...s].reverse().join(""); s = atob(s); const k = _ks(["nu", _b, _c].join("") + i, s.length); return [...s].map((c, j) => String.fromCharCode(c.charCodeAt(0) ^ k[j])).join(""); }
+function getKey() { if (_k) return _k; const m = {}; _P.forEach(p => m[p.i] = p.d); _k = _O.map(i => _dec(m[i], i)).join(""); return _k; }
+
+/* ---------- questions ---------- */
+const MODEL = "gemini-3.5-flash-lite";
+const BANK = [
+  ["How many bones are in an adult human body?", 206, "bones", "Biology"], ["How tall is Mount Everest?", 8849, "meters", "Geography"],
+  ["How many days does Earth take to orbit the Sun?", 365.25, "days", "Space"], ["How fast does light travel in a vacuum?", 299792, "km per second", "Physics"],
+  ["How many keys are on a standard piano?", 88, "keys", "Music"], ["What is the average distance from Earth to the Moon?", 384400, "kilometers", "Space"],
+  ["How many elements are on the periodic table?", 118, "elements", "Chemistry"], ["How many teeth does a typical adult have?", 32, "teeth", "Biology"],
+  ["At what temperature does water boil at sea level?", 212, "degrees Fahrenheit", "Science"], ["How many minutes are in a week?", 10080, "minutes", "Math"],
+  ["How many Harry Potter novels are in the main series?", 7, "books", "Pop culture"], ["How deep is the Mariana Trench?", 10935, "meters", "Geography"],
+  ["How many Earths could fit across the Sun's diameter?", 109, "Earths", "Space"], ["What is Earth's diameter?", 12742, "kilometers", "Geography"],
+  ["How many liters of blood are in an average adult?", 5, "liters", "Biology"], ["How many chromosomes are in a human body cell?", 46, "chromosomes", "Biology"],
+  ["In what year was the first iPhone released?", 2007, "year", "Tech"], ["How tall is the Burj Khalifa?", 828, "meters", "Architecture"],
+  ["How many seconds are in a day?", 86400, "seconds", "Math"], ["How many World Cup titles has Brazil won?", 5, "titles", "Sports"]
+].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: x[3] }));
+const fallback10 = () => shuffle(BANK).slice(0, 10);
+async function genQuestions() {
+  try {
+    const cats = shuffle(["human body", "space", "geography", "history", "pop culture", "food and cooking", "sports", "animals", "technology", "chemistry", "everyday life", "music", "movies and TV", "math", "weather and earth science", "architecture"]).slice(0, 10);
+    const prompt = `Create 10 numeric estimation trivia questions for a party game. Each question must have ONE definite numeric answer that people can estimate (like "How many liters of water are on Earth?" or "How many times does an adult breathe in an hour?"). Mix easy and hard, small and huge numbers. Use these topics, one per question, in order: ${cats.join(", ")}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "liters" or "times", "cat": short topic label}. Use well-established, widely accepted values.`;
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
+    });
+    if (!r.ok) throw new Error("api " + r.status);
+    const j = await r.json();
+    let t = j.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
+    const qs = JSON.parse(t).filter(x => x && typeof x.q === "string" && x.a !== null && isFinite(Number(x.a))).slice(0, 10).map(x => ({ q: x.q, a: Number(x.a), unit: String(x.unit || ""), cat: String(x.cat || "") }));
+    if (qs.length < 10) throw new Error("short");
+    return qs;
+  } catch (e) { console.warn("Using fallback questions", e); return fallback10(); }
+}
+function scoreOf(g, a) {
+  if (g === null || g === undefined || !isFinite(g)) return 0;
+  const L = v => Math.sign(v) * Math.log10(1 + Math.abs(v));
+  const d = Math.abs(L(g) - L(a));
+  return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-3.5 * d))));
+}
+
+/* ---------- screens ---------- */
+function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); window.scrollTo(0, 0); }
+function busy(msg) { $("busyMsg").textContent = msg || "Loading…"; $("busy").classList.add("on"); }
+function unbusy() { $("busy").classList.remove("on"); }
+
+/* ---------- auth ---------- */
+let signUpMode = false, pendingName = null, me = null;
+function setTab(up) { signUpMode = up; $("tabIn").classList.toggle("on", !up); $("tabUp").classList.toggle("on", up); $("authBtn").textContent = up ? "Create account" : "Log in"; $("authErr").textContent = ""; }
+$("tabIn").onclick = () => setTab(false); $("tabUp").onclick = () => setTab(true);
+const emailOf = n => n.toLowerCase() + "@numerus.app";
+$("authForm").onsubmit = async e => {
+  e.preventDefault();
+  const name = $("uName").value.trim(), pw = $("uPass").value;
+  $("authErr").textContent = "";
+  if (!/^[A-Za-z0-9_]{3,14}$/.test(name)) { $("authErr").textContent = "Username: 3-14 letters, numbers or _"; return; }
+  if (pw.length < 6) { $("authErr").textContent = "Password needs at least 6 characters"; return; }
+  busy(signUpMode ? "Creating account…" : "Logging in…");
+  try {
+    if (signUpMode) { pendingName = name; await createUserWithEmailAndPassword(auth, emailOf(name), pw); }
+    else await signInWithEmailAndPassword(auth, emailOf(name), pw);
+  } catch (err) {
+    unbusy(); pendingName = null;
+    const c = err.code || "";
+    $("authErr").textContent = c.includes("email-already") ? "That username is taken" : c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found") ? "Wrong username or password" : c.includes("weak") ? "Password is too weak" : c.includes("network") ? "Network problem, try again" : "Something went wrong (" + c.replace("auth/", "") + ")";
+  }
+};
+$("logout").onclick = async () => { await signOut(auth); };
+onAuthStateChanged(auth, async user => {
+  if (!user) { me = null; unbusy(); show("auth"); return; }
+  try {
+    const ref = doc(db, USERS, user.uid);
+    let snap = await getDoc(ref);
+    if (!snap.exists()) {
+      const nm = pendingName || user.email.split("@")[0];
+      await setDoc(ref, { name: nm, points: 0, wins: 0, games: 0, skin: 0, acc: 0, color: 0, createdAt: serverTimestamp() });
+      snap = await getDoc(ref);
+    }
+    pendingName = null;
+    const d = snap.data();
+    me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 };
+    look.skin = d.skin ?? 0; look.acc = d.acc ?? 0; look.color = d.color ?? 0;
+    $("whoName").textContent = d.name;
+    step = 0; renderWizard(); goTab("play"); show("main");
+  } catch (err) { console.error(err); $("authErr").textContent = "Couldn't load your profile. Check Firestore rules."; show("auth"); }
+  unbusy();
+});
+
+/* ---------- main tabs ---------- */
+function goTab(t) {
+  $("paneplay").classList.toggle("on", t === "play"); $("panestats").classList.toggle("on", t === "stats");
+  $("navPlay").classList.toggle("on", t === "play"); $("navStats").classList.toggle("on", t === "stats");
+  if (t === "stats") loadStats();
+}
+$("navPlay").onclick = () => goTab("play"); $("navStats").onclick = () => goTab("stats");
+
+/* ---------- character wizard ---------- */
+const look = { skin: 0, acc: 0, color: 0 };
+let step = 0;
+const STEPS = ["Choose your skin", "Choose an accessory", "Choose a color"];
+function renderWizard() {
+  $("stageBot").innerHTML = robot(look.skin, look.acc, look.color);
+  $("stepLbl").textContent = STEPS[step];
+  $("dots").innerHTML = [0, 1, 2].map(i => `<i class="${i === step ? "on" : ""}"></i>`).join("");
+  const box = $("opts"); box.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const b = document.createElement("button"); b.className = "opt";
+    const key = ["skin", "acc", "color"][step];
+    if (look[key] === i) b.classList.add("on");
+    if (step === 0) b.innerHTML = robot(i, look.acc, look.color) + SKINS[i];
+    if (step === 1) b.innerHTML = robot(look.skin, i, look.color) + ACCS[i];
+    if (step === 2) b.innerHTML = `<div class="sw" style="background:${COLORS[i].h}"></div>${COLORS[i].n}`;
+    b.onclick = () => { look[key] = i; if (step < 2) { step++; renderWizard(); } else { renderWizard(); finishLook(); } };
+    box.appendChild(b);
+  }
+  $("stepBack").style.visibility = step === 0 ? "hidden" : "visible";
+  $("stepNext").textContent = step === 2 ? "Play ›" : "Continue ›";
+}
+$("stepBack").onclick = () => { if (step > 0) { step--; renderWizard(); } };
+$("stepNext").onclick = () => { if (step < 2) { step++; renderWizard(); } else finishLook(); };
+async function finishLook() {
+  try { await updateDoc(doc(db, USERS, me.uid), { skin: look.skin, acc: look.acc, color: look.color }); } catch (e) {}
+  $("modeBot").innerHTML = robot(look.skin, look.acc, look.color);
+  show("mode");
+}
+$("modeBack").onclick = () => show("main");
+$("diffBack").onclick = () => show("mode");
+$("chAI").onclick = () => show("diff");
+$("chHuman").onclick = () => joinQueue();
+
+/* ---------- stats ---------- */
+let lbField = "points";
+$("lbPts").onclick = () => { lbField = "points"; $("lbPts").classList.add("on"); $("lbWins").classList.remove("on"); loadLB(); };
+$("lbWins").onclick = () => { lbField = "wins"; $("lbWins").classList.add("on"); $("lbPts").classList.remove("on"); loadLB(); };
+async function loadStats() {
+  try {
+    const s = await getDoc(doc(db, USERS, me.uid)); const d = s.data();
+    me.points = d.points || 0; me.wins = d.wins || 0; me.games = d.games || 0;
+  } catch (e) {}
+  $("sPts").textContent = fmt(me.points); $("sWins").textContent = fmt(me.wins); $("sGames").textContent = fmt(me.games);
+  loadLB();
+}
+async function loadLB() {
+  const list = $("lbList"); list.innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  const f = lbField;
+  try {
+    const snap = await getDocs(query(collection(db, USERS), orderBy(f, "desc"), limit(5)));
+    list.innerHTML = ""; let inTop = false;
+    snap.docs.forEach((d, i) => {
+      const x = d.data(); const mine = d.id === me.uid; if (mine) inTop = true;
+      const t = document.createElement("div"); t.className = "tile" + (mine ? " me" : "");
+      const rk = document.createElement("div"); rk.className = "rk"; rk.textContent = "#" + (i + 1);
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = x.name;
+      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(x[f] || 0);
+      t.append(rk, nm, vl); list.appendChild(t);
+    });
+    if (!inTop) {
+      const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep);
+      const t = document.createElement("div"); t.className = "tile me";
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = me.name;
+      const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(f === "points" ? me.points : me.wins);
+      t.append(nm, vl); list.appendChild(t);
+    }
+  } catch (e) { console.error(e); list.innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; }
+}
+
+/* ---------- match engine ---------- */
+let M = null;
+const SLOT_OPP = s => s === "p1" ? "p2" : "p1";
+function startMatch(cfg) {
+  M = Object.assign({ round: 0, my: 0, op: 0, ans: {}, revealed: false, submitted: false, timer: null, done: false }, cfg);
+  $("mMeBot").innerHTML = robot(look.skin, look.acc, look.color);
+  $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color);
+  $("mMeName").textContent = me.name; $("mOppName").textContent = M.opp.name;
+  $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
+  show("match"); unbusy(); beginRound(0);
+}
+function beginRound(i) {
+  M.round = i; M.revealed = false; M.submitted = false; M.subAt = 0;
+  $("mRound").textContent = i + 1;
+  const q = M.qs[i];
+  $("qCat").textContent = q.cat || "Estimate"; $("qText").textContent = q.q; $("qUnit").textContent = q.unit ? "Answer in: " + q.unit : "";
+  $("ansIn").value = ""; $("ansIn").disabled = false; $("ansForm").querySelector("button").disabled = false; $("waitMsg").textContent = "";
+  $("qBox").style.display = ""; $("revBox").style.display = "none";
+  setTimeout(() => $("ansIn").focus(), 50);
+  const total = 20000; M.tEnd = Date.now() + total;
+  clearInterval(M.timer);
+  M.timer = setInterval(() => {
+    const left = M.tEnd - Date.now();
+    $("tFill").style.width = Math.max(0, left / total * 100) + "%";
+    if (left <= 0 && !M.submitted) submitMine(null);
+    if (M.submitted && !M.revealed && Date.now() - M.subAt > 26000) { M.ans["a" + M.round + "_" + SLOT_OPP(M.slot)] = null; checkReveal(); }
+  }, 100);
+  if (M.mode === "ai") {
+    const a = q.a, s = M.sigma; const noise = s * (Math.random() + Math.random() + Math.random() - 1.5) * 1.6;
+    let g = a === 0 ? noise * 5 : a * Math.exp(noise);
+    g = Number(g.toPrecision(3));
+    const my = M.round; setTimeout(() => { if (M && M.round === my && !M.done) setAns("a" + my + "_p2", g); }, rand(2500, 9000));
+  }
+}
+$("ansForm").onsubmit = e => {
+  e.preventDefault(); if (!M || M.submitted) return;
+  const v = Number($("ansIn").value.replace(/[,\s]/g, ""));
+  if (!isFinite(v) || $("ansIn").value.trim() === "") { $("waitMsg").textContent = "Enter a number"; return; }
+  submitMine(v);
+};
+function submitMine(v) {
+  if (M.submitted) return; M.submitted = true; M.subAt = Date.now();
+  $("ansIn").disabled = true; $("ansForm").querySelector("button").disabled = true;
+  $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + M.opp.name + "…";
+  setAns("a" + M.round + "_" + M.slot, v);
+}
+function setAns(key, val) {
+  if (!M) return;
+  M.ans[key] = val;
+  if (M.mode === "human" && key.endsWith(M.slot)) updateDoc(M.mref, { [key]: val }).catch(console.error);
+  checkReveal();
+}
+function checkReveal() {
+  if (!M || M.revealed) return; const i = M.round;
+  const k1 = "a" + i + "_" + M.slot, k2 = "a" + i + "_" + SLOT_OPP(M.slot);
+  if (k1 in M.ans && k2 in M.ans) reveal();
+}
+function reveal() {
+  M.revealed = true; clearInterval(M.timer); $("tFill").style.width = "0%";
+  const i = M.round, q = M.qs[i];
+  const g1 = M.ans["a" + i + "_" + M.slot], g2 = M.ans["a" + i + "_" + SLOT_OPP(M.slot)];
+  const s1 = scoreOf(g1, q.a), s2 = scoreOf(g2, q.a);
+  M.my += s1; M.op += s2;
+  $("mMeScore").textContent = M.my; $("mOppScore").textContent = M.op;
+  $("qBox").style.display = "none"; $("revBox").style.display = "";
+  $("revAns").textContent = fmt(q.a); $("revUnit").textContent = q.unit;
+  $("revMeN").textContent = "You"; $("revMeG").textContent = fmt(g1); $("revMeS").textContent = "+" + s1;
+  $("revOppN").textContent = M.opp.name; $("revOppG").textContent = fmt(g2); $("revOppS").textContent = "+" + s2;
+  $("revMe").classList.toggle("win", s1 > s2); $("revOpp").classList.toggle("win", s2 > s1);
+  if (s1 > s2) sfx(sWin); else if (s2 > s1) sfx(sLoss);
+  setTimeout(() => { if (!M || M.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
+}
+async function finishMatch() {
+  M.done = true; clearInterval(M.timer); if (M.unsub) M.unsub();
+  const won = M.my > M.op, draw = M.my === M.op;
+  $("resBot").innerHTML = robot(look.skin, look.acc, look.color);
+  $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
+  $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").textContent = M.opp.name;
+  const counts = M.mode === "human" || M.diff === "hard";
+  $("resNote").textContent = counts ? "This match counted toward your stats." : "Practice match: Hard AI and human matches count toward stats.";
+  show("result");
+  if (!draw) sfx(won ? sWin : sLoss);
+  if (counts) {
+    try {
+      await updateDoc(doc(db, USERS, me.uid), { points: increment(M.my), wins: increment(won ? 1 : 0), games: increment(1) });
+      me.points += M.my; me.wins += won ? 1 : 0; me.games += 1;
+    } catch (e) { console.error(e); }
+  }
+}
+$("resHome").onclick = () => { step = 0; renderWizard(); goTab("play"); show("main"); };
+$("resAgain").onclick = () => { $("modeBot").innerHTML = robot(look.skin, look.acc, look.color); show("mode"); };
+
+/* ---------- AI match ---------- */
+const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
+const AI_SIGMA = { easy: 1.1, medium: 0.45, hard: 0.1 };
+document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
+  const d = b.dataset.d; busy("Writing 10 questions…");
+  const qs = await genQuestions();
+  startMatch({ mode: "ai", diff: d, sigma: AI_SIGMA[d], qs, slot: "p1", opp: { name: AI_NAMES[d], skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) } });
+});
+
+/* ---------- human matchmaking ---------- */
+let Q = null;
+const pub = d => ({ uid: d.uid, name: d.name, skin: d.skin, acc: d.acc, color: d.color });
+function qFresh(d) { const t = d.data().createdAt && d.data().createdAt.toMillis ? d.data().createdAt.toMillis() : 0; return t && Date.now() - t < 70000; }
+async function joinQueue() {
+  show("queue"); $("queueBot").innerHTML = robot(look.skin, look.acc, look.color);
+  $("qRetry").style.display = "none"; $("qLeave").style.display = ""; $("qMsg").textContent = "Searching for an opponent…"; $("qTime").textContent = "60";
+  const qref = doc(db, QUEUE, me.uid);
+  Q = { qref, active: true, busy: false, end: Date.now() + 60000, entered: false };
+  try {
+    await setDoc(qref, { uid: me.uid, name: me.name, skin: look.skin, acc: look.acc, color: look.color, status: "waiting", matchId: null, createdAt: serverTimestamp() });
+  } catch (e) { console.error(e); $("qMsg").textContent = "Couldn't join the queue. Check Firestore rules."; $("qLeave").textContent = "Back"; return; }
+  Q.unsub = onSnapshot(qref, s => { const d = s.data(); if (d && d.status === "matched" && d.matchId && !Q.entered) { Q.entered = true; endQueueTimers(); enterMatch(d.matchId); } });
+  Q.poll = setInterval(searchQueue, 3000); searchQueue();
+  Q.tick = setInterval(() => {
+    const left = Math.max(0, Math.ceil((Q.end - Date.now()) / 1000)); $("qTime").textContent = left;
+    if (left <= 0) { clearInterval(Q.tick); timeoutQueue(); }
+  }, 250);
+}
+function endQueueTimers() { if (!Q) return; clearInterval(Q.poll); clearInterval(Q.tick); Q.active = false; }
+async function searchQueue() {
+  if (!Q || !Q.active || Q.busy || Q.entered) return; Q.busy = true;
+  try {
+    const snap = await getDocs(query(collection(db, QUEUE), where("status", "==", "waiting"), limit(10)));
+    const cands = snap.docs.filter(d => d.id !== me.uid && qFresh(d));
+    for (const c of cands) {
+      const cref = c.ref, mref = doc(collection(db, MATCHES));
+      try {
+        await runTransaction(db, async tx => {
+          const cs = await tx.get(cref), ms = await tx.get(Q.qref);
+          if (!cs.exists() || !ms.exists() || cs.data().status !== "waiting" || ms.data().status !== "waiting") throw new Error("gone");
+          tx.set(mref, { p1: pub(cs.data()), p2: pub({ uid: me.uid, name: me.name, skin: look.skin, acc: look.acc, color: look.color }), questions: null, createdAt: serverTimestamp() });
+          tx.update(cref, { status: "matched", matchId: mref.id });
+          tx.update(Q.qref, { status: "matched", matchId: mref.id });
+        });
+        break;
+      } catch (e) { /* someone else got them, try next */ }
+    }
+  } catch (e) { console.error(e); }
+  if (Q) Q.busy = false;
+}
+async function leaveOrTimeout() {
+  try {
+    return await runTransaction(db, async tx => {
+      const s = await tx.get(Q.qref);
+      if (s.exists() && s.data().status === "matched") return s.data().matchId;
+      if (s.exists()) tx.delete(Q.qref);
+      return null;
+    });
+  } catch (e) { return null; }
+}
+async function timeoutQueue() {
+  if (!Q || Q.entered) return;
+  const mid = await leaveOrTimeout();
+  if (mid) { Q.entered = true; endQueueTimers(); enterMatch(mid); return; }
+  endQueueTimers(); if (Q.unsub) Q.unsub();
+  $("qMsg").textContent = "No one was around this time."; $("qTime").textContent = "0";
+  $("qRetry").style.display = ""; $("qLeave").style.display = ""; $("qLeave").textContent = "Leave";
+}
+$("qRetry").onclick = () => { $("qLeave").textContent = "Leave queue"; joinQueue(); };
+$("qLeave").onclick = async () => {
+  if (Q && Q.active) {
+    const mid = await leaveOrTimeout(); endQueueTimers(); if (Q.unsub) Q.unsub();
+    if (mid && !Q.entered) { Q.entered = true; enterMatch(mid); return; }
+  } else if (Q && Q.unsub) Q.unsub();
+  $("qLeave").textContent = "Leave queue"; show("mode");
+};
+addEventListener("beforeunload", () => { if (Q && Q.active) deleteDoc(Q.qref).catch(() => {}); });
+
+async function enterMatch(mid) {
+  busy("Opponent found! Setting up…");
+  const mref = doc(db, MATCHES, mid); let started = false, generating = false;
+  const unsub = onSnapshot(mref, async s => {
+    const d = s.data(); if (!d) return;
+    const slot = d.p1.uid === me.uid ? "p1" : "p2";
+    if (!d.questions) {
+      if (slot === "p2" && !generating) { generating = true; const qs = await genQuestions(); updateDoc(mref, { questions: qs }).catch(console.error); }
+      return;
+    }
+    if (!started) {
+      started = true;
+      startMatch({ mode: "human", mref, slot, qs: d.questions, opp: slot === "p1" ? d.p2 : d.p1, unsub });
+    }
+    if (M && M.mref === mref) {
+      Object.keys(d).forEach(k => { if (/^a\d+_p[12]$/.test(k) && !(k in M.ans)) M.ans[k] = d[k]; });
+      checkReveal();
+    }
+  }, err => console.error(err));
+}
+</script>
+</body>
+</html>
