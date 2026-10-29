@@ -117,13 +117,17 @@ async function loadWorld() {
 
 /* ---------- screens ---------- */
 const show = id => { document.querySelectorAll(".screen").forEach(s => s.classList.remove("show")); id && $(id).classList.add("show"); };
-setTimeout(() => show("auth"), 4200);
+let welcomeDone = false, hasUser = false;
+setTimeout(() => { welcomeDone = true; if (!hasUser) show("auth"); }, 4200);
+const eb = document.body.appendChild(Object.assign(document.createElement("div"), { id: "errbar" }));
+const fail = e => { console.error(e); eb.textContent = "Error: " + (e?.code || e?.message || e) + (/permission/i.test(e?.code + e?.message) ? " (publish earth_firestore.rules in Firebase)" : ""); eb.style.display = "block"; };
+addEventListener("unhandledrejection", e => fail(e.reason)); addEventListener("error", e => fail(e.error || e.message));
 const mail = () => $("user").value.trim().toLowerCase() + "@earth.game";
 const authGo = fn => async () => { $("autherr").textContent = ""; try { await fn(auth, mail(), $("pass").value); } catch (e) { $("autherr").textContent = e.code?.replace("auth/", "").replace(/-/g, " ") || "error"; } };
 $("login").onclick = authGo(signInWithEmailAndPassword); $("signup").onclick = authGo(createUserWithEmailAndPassword);
 let me = null, meta = null, empire = null;
 onAuthStateChanged(auth, async u => {
-  if (!u) return; me = u; show("load"); $("loadbar").style.width = "20%";
+  if (!u) { hasUser = false; if (welcomeDone) show("auth"); return; } hasUser = true; me = u; show("load"); $("loadbar").style.width = "20%";
   const name = u.email.split("@")[0], isAdmin = name === ADMIN;
   const m = await getDoc(doc(db, "world", "meta")); meta = m.exists() ? m.data() : null;
   if (!meta || !(await loadWorld())) {
@@ -139,7 +143,7 @@ async function found() {
   const nm = $("empname").value.trim(); if (!nm) return; show("load"); $("loadtxt").textContent = "Choosing your starting lands…";
   let tries = 0, c; do { const x = Math.random() * W | 0, y = 20 + Math.random() * (H - 40) | 0, i = y * W + x; c = { x, y, b: world.b[i] }; tries++; } while (![10, 12, 13, 14, 15, 16, 17, 21, 22, 23].includes(c.b) && tries < 2000);
   empire = { name: nm, owner: me.email.split("@")[0], spawn: { x: c.x, y: c.y }, era: "Tribal", pop: 120 + (Math.random() * 60 | 0), food: 400, water: 400, happiness: 70, currency: nm.slice(0, 3).toUpperCase() + " Mark", treasury: 100, explored: 1 };
-  await setDoc(doc(db, "players", me.uid), empire); start();
+  try { await setDoc(doc(db, "players", me.uid), empire); } catch (e) { fail(e); show("found"); return; } start();
 }
 const MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31], MN = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 function gameTime() {

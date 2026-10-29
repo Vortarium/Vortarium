@@ -24,3 +24,4 @@ button.alt{background:transparent;color:#8ab4f8;border:1px solid #5f6368}.row{di
 #over{background:rgba(0,0,0,.8)}
 #ground{position:fixed;inset:0;opacity:0;pointer-events:none;transition:opacity .6s;cursor:grab}#ground.on{opacity:1;pointer-events:auto}#geo{position:fixed;inset:0;pointer-events:none}
 #ghint{position:fixed;top:90px;left:50%;transform:translateX(-50%);background:#8ab4f8;color:#202124;padding:8px 18px;border-radius:20px;display:none;pointer-events:none}
+#errbar{position:fixed;top:0;left:0;right:0;background:#c5221f;color:#fff;padding:8px 14px;font-size:13px;display:none;z-index:99}
