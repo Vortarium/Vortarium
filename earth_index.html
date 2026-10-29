@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earth</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Google+Sans+Text&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="earth_style.css"></head>
+<body>
+<canvas id="globe"></canvas>
+<div id="welcome" class="screen show"><h1>Welcome</h1></div>
+<div id="auth" class="screen"><div class="card">
+  <h2>Earth</h2><p class="sub">Sign in or found a new empire</p>
+  <input id="user" placeholder="Account name" autocomplete="username">
+  <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+  <div class="row"><button id="login">Sign in</button><button id="signup" class="alt">Sign up</button></div>
+  <p id="autherr" class="err"></p></div></div>
+<div id="gen" class="screen"><div class="card">
+  <h2>World generation</h2><p class="sub" id="genmsg">The planet is empty.</p>
+  <button id="genbtn" hidden>Generate world</button>
+  <div class="bar"><i id="genbar"></i></div></div></div>
+<div id="load" class="screen"><div class="card"><h2 id="loadtxt">Loading your world…</h2><div class="bar"><i id="loadbar"></i></div></div></div>
+<div id="found" class="screen"><div class="card"><h2>Name your empire</h2>
+  <input id="empname" placeholder="Empire name"><button id="foundbtn">Found empire</button></div></div>
+<div id="hud" hidden>
+  <div id="top"><b id="empire"></b><span id="clock"></span><span id="season"></span><span id="tier"></span></div>
+  <div id="stats"></div>
+  <div id="info" hidden></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script type="module" src="earth_app.js"></script>
+</body></html>

@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.email == 'vortarium@earth.game'; }
+
+    match /world/{doc} {            // world/meta
+      allow read: if signedIn();
+      allow create: if isAdmin();   // create only: world can never be overwritten
+      allow update: if isAdmin() && !('startedAt' in request.resource.data.diff(resource.data).affectedKeys());
+    }
+    match /world_cells/{band} {
+      allow read: if signedIn();
+      allow create: if isAdmin();
+    }
+    match /players/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+    }
+    match /claims/{id} {
+      allow read: if signedIn() && (resource.data.fromUid == request.auth.uid || resource.data.toUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','won','loot','surrender']);
+      allow delete: if signedIn() && resource.data.fromUid == request.auth.uid;
+    }
+    match /history/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+    }
+  }
+}
