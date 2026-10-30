@@ -255,6 +255,12 @@ html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}
 .cardb.y,.cardb.r{display:inline-block}
 .cardb.r{background:#e5384a}
 .chip,.tavi{position:relative}
+#rBar.big .chip{padding-top:12px;padding-bottom:8px}
+#rBar.big .chip b{margin-top:7px}
+#rBar.big .chip .cardb{top:24px;right:auto;left:7px}
+#rBar.big .tavi .cardb{top:auto;right:auto;bottom:-3px;left:-4px}
+#rBar.big .tname{margin-top:4px}
+#rBar.big .tav{margin:10px 0 8px}
 .chip .cardb,.tavi .cardb{position:absolute;top:2px;right:4px}
 #cardAnim{position:fixed;inset:0;overflow:hidden;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;background:#1d1d1f66;gap:14px;text-align:center;padding:20px}
 #cardAnim.on{display:flex;animation:cardBg 6s ease both}
@@ -377,7 +383,7 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
     <div class="step" id="stepLbl"></div>
     <div class="dots" id="dots"></div>
     <div class="opts" id="opts"></div>
-    <div class="row"><button class="btn ghost small" id="stepBack">‹ Back</button><button class="btn small" id="stepNext">Continue ›</button><button class="btn small" id="stepPlay" style="background:var(--acc)">Play ▸</button></div>
+    <div class="row"><button class="btn ghost small" id="stepBack">‹ Back</button><button class="btn small" id="stepNext">Continue ›</button></div>
   </div>
 
   <div class="pane" id="panestats">
@@ -437,6 +443,8 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
     <div class="muted" id="rCount" style="font-size:13px"></div>
   </div>
   <div class="seg" id="rModeSeg" style="margin-top:12px"><button id="rSolos" class="on">Solos</button><button id="rTeams">Teams</button></div>
+  <div class="seg" id="rPickSeg" style="margin-top:8px;display:none"><button id="rRandom" class="on">Random teams</button><button id="rManual">Host picks</button></div>
+  <div id="rTeamCfg" style="display:none"></div>
   <div class="muted" id="rModeNote" style="font-size:12px;text-align:center;margin-top:8px"></div>
   <div class="lb" id="rList"></div>
   <div class="row"><button class="btn" id="rReady">I'm Ready!</button><button class="btn ghost" id="rNot">I'm Not Ready...</button></div>
@@ -512,7 +520,7 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
 </div></div>
 
 <div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
-<div id="cardAnim"><div class="cardIcon"><b class="cardNum" id="cardNum"></b></div><div class="cardTxt" id="cardTxt"></div><div class="cardSub" id="cardSub"></div></div>
+<div id="cardAnim"><div class="cardIcon"></div><div class="cardTxt" id="cardTxt"></div><div class="cardSub" id="cardSub"></div></div>
 <div id="fleeAsk"><div class="panel"><div style="font-weight:800;font-size:18px">Flee this match?</div><div class="muted" id="fleeTxt" style="font-size:14px;margin-top:8px"></div><div class="row" style="margin-top:16px"><button type="button" class="btn danger" id="fleeYes">Flee</button><button type="button" class="btn ghost" id="fleeNo">Stay</button></div></div></div>
 </div>
 
@@ -822,6 +830,7 @@ let enterAnims = [], leaveAnims = [], leaveT = 0;
 function cancelX() {
   clearTimeout(leaveT); [...enterAnims, ...leaveAnims].forEach(a => { try { a.cancel(); } catch (_) {} }); enterAnims = []; leaveAnims = [];
   document.querySelectorAll(".leaving").forEach(s => { s.classList.remove("leaving"); if (s.classList.contains("pane")) s.style.cssText = ""; });
+  $("paneplay").style.minHeight = ""; $("panestats").style.minHeight = ""; $("main").style.overflowX = "";
 }
 // the blocks of a screen that slide on their own: its children, plus the children of the open tab and of choice lists
 function blocksOf(root) {
@@ -851,6 +860,7 @@ function leaveBlocks(root, dir) {
   });
   leaveT = setTimeout(() => { leaveAnims.forEach(a => { try { a.cancel(); } catch (_) {} }); leaveAnims = []; root.classList.remove("leaving"); root.style.cssText = ""; }, end + 40);
 }
+function clearRoomBar() { const b = $("rBar"); if (b) { b.innerHTML = ""; b.className = ""; } $("match").classList.remove("room"); }
 function show(id) {
   const next = $(id), cur = document.querySelector(".screen.on");
   cancelX();
@@ -860,6 +870,7 @@ function show(id) {
     cur.classList.add("leaving"); leaveBlocks(cur, dir); enterBlocks(next, dir);
   }
   if (id !== "main") stopDailyLb();
+  if (id !== "match") clearRoomBar();
   $("fleeBtn").style.display = (id === "match" && M && M.mode !== "daily") ? "block" : "none";
   const on = isVort() && !["auth", "match", "queue"].includes(id);
   $("vortBar").style.display = on ? "flex" : "none"; document.body.classList.toggle("vort", isVort() && id !== "auth");
@@ -976,22 +987,28 @@ onAuthStateChanged(auth, async user => {
 });
 
 /* ---------- main tabs ---------- */
-function goTab(t) {
+function goTab(t, defer) {
   $("paneplay").classList.toggle("on", t === "play"); $("panestats").classList.toggle("on", t === "stats");
   $("navPlay").classList.toggle("on", t === "play"); $("navStats").classList.toggle("on", t === "stats");
-  if (t === "stats") loadStats(); else stopDailyLb();
+  if (t === "stats") { if (defer) setTimeout(() => { if ($("panestats").classList.contains("on")) loadStats(); }, defer); else loadStats(); } else stopDailyLb();
 }
 function switchTab(to) {
   if ($(to === "play" ? "navPlay" : "navStats").classList.contains("on")) return;
-  const old = $(to === "play" ? "panestats" : "paneplay"), nw = $(to === "play" ? "paneplay" : "panestats"), dir = to === "stats" ? 1 : -1;
+  const old = $(to === "play" ? "panestats" : "paneplay"), nw = $(to === "play" ? "paneplay" : "panestats"), dir = to === "stats" ? 1 : -1, main = $("main");
   cancelX();
   const g = { t: old.offsetTop, l: old.offsetLeft, w: old.offsetWidth, h: old.offsetHeight };
-  goTab(to);
+  goTab(to, 320);
   if (reduceMotion()) return;
+  // the whole pane glides as one piece (no per-block stagger), and the new pane keeps the old one's height so the nav bar never jumps
+  main.style.overflowX = "clip"; nw.style.minHeight = g.h + "px";
   old.style.cssText = `top:${g.t}px;left:${g.l}px;width:${g.w}px;height:${g.h}px`;
-  old.classList.add("leaving"); leaveBlocks(old, dir); enterBlocks(nw, dir);
+  old.classList.add("leaving");
+  leaveAnims.push(old.animate([{ transform: "translateX(0)", opacity: 1 }, { transform: `translateX(${-dir * 36}px)`, opacity: 0 }], { duration: 260, easing: "cubic-bezier(.4,0,.7,.4)", fill: "forwards" }));
+  enterAnims.push(nw.animate([{ transform: `translateX(${dir * 36}px)`, opacity: 0 }, { transform: "translateX(0)", opacity: 1 }], { duration: 420, delay: 140, easing: "cubic-bezier(.22,1,.36,1)", fill: "backwards" }));
+  leaveT = setTimeout(cancelX, 600);
 }
-$("navPlay").onclick = () => switchTab("play"); $("navStats").onclick = () => switchTab("stats");
+$("navPlay").onclick = () => { if ($("navPlay").classList.contains("on")) finishLook(); else switchTab("play"); };
+$("navStats").onclick = () => switchTab("stats");
 // sliding pill behind the active button of every segmented control: speeds up, then eases to a stop
 function initSeg(seg) {
   const pill = document.createElement("i"); pill.className = "pill"; seg.prepend(pill); let first = true;
@@ -1028,7 +1045,7 @@ function renderWizard() {
     box.appendChild(b);
   }
   $("stepBack").style.visibility = step === 0 ? "hidden" : "visible";
-  $("stepNext").textContent = step === 2 ? "Play ›" : "Continue ›"; $("stepPlay").style.display = step === 2 ? "none" : "";
+  $("stepNext").textContent = step === 2 ? "Play ›" : "Continue ›";
 }
 function goStep(n) {
   if (n < 0 || n > 2 || n === step) return;
@@ -1043,7 +1060,6 @@ function goStep(n) {
   setTimeout(() => { ghost.remove(); nw.classList.remove("stackIn", "stackBack"); }, 460);
 }
 $("stepBack").onclick = () => goStep(step - 1);
-$("stepPlay").onclick = () => finishLook();
 $("stepNext").onclick = () => { if (step < 2) goStep(step + 1); else finishLook(); };
 async function finishLook() {
   try { await updateDoc(doc(db, USERS, me.uid), { skin: look.skin, acc: look.acc, color: look.color }); } catch (e) {}
@@ -1162,7 +1178,7 @@ function startMatch(cfg) {
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color, null, true);
   $("mMeName").textContent = me.name; $("mOppName").innerHTML = nameHTML(M.opp.name);
   $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
-  $("match").classList.toggle("solo", M.mode === "daily"); $("match").classList.remove("room");
+  clearRoomBar(); $("match").classList.toggle("solo", M.mode === "daily");
   if (M.mode === "daily") M.qs.forEach((q, i) => { M.ans["a" + i + "_p2"] = null; });
   if (M.mode === "ai") M.qs.forEach((q, i) => {
     const e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
@@ -1208,6 +1224,7 @@ function checkRush() {
     if (!(("a" + i + "_" + SLOT_OPP(M.slot)) in M.ans)) return;
     msg = dn(M.opp.name) + " has made their move!";
   } else if (M.mode === "room") {
+    if (M.teamed) return; // teams keep the full 60s so everyone has time
     const act = M.players.filter(p => p.uid !== me.uid && !p.bot && !M.fled.has(p.uid));
     if (!act.length || !act.every(p => ("a" + i + "_" + p.uid) in M.ans)) return;
     msg = "Everyone else has made their move!";
@@ -1413,10 +1430,11 @@ function cardNote(cards, raw, earn, voided, base) {
 }
 const rawNow = () => M.mode === "room" ? (M.contrib || 0) : (M.my || 0);
 // the score on screen is always the score you'd actually get after any card
-function showScores() { if (!M || M.mode === "room") return; $("mMeScore").textContent = cardPay(M.my, M.cards); $("mOppScore").textContent = cardPay(M.op, M.oppCards || 0); }
+// scores keep counting live; a card is only applied to the final total (see finishMatch / finishRoom / finishDaily)
+function showScores() { if (!M || M.mode === "room") return; $("mMeScore").textContent = M.my; $("mOppScore").textContent = M.op; }
 function roomShown() {
   if (!M || M.mode !== "room" || M.teamed) return;
-  M.players.forEach(p => { const el = $("cs_" + p.uid); if (el && !el.classList.contains("up")) el.textContent = fmt(cardPay(M.score[p.uid] || 0, M.cardOf[p.uid] || 0)); });
+  M.players.forEach(p => { const el = $("cs_" + p.uid); if (el && !el.classList.contains("up")) el.textContent = fmt(M.score[p.uid] || 0); });
 }
 function renderCards() {
   if (!M) return; const cls = l => "cardb" + (l >= 2 ? " r" : l === 1 ? " y" : "");
@@ -1427,24 +1445,23 @@ function playCard(red) {
   const el = $("cardAnim"); el.classList.remove("on", "red"); void el.offsetWidth;
   $("cardTxt").textContent = red ? "Red card" : "Yellow card";
   $("cardSub").textContent = red ? "Red card = automatic 0" : "Yellow card = automatic half";
-  $("cardNum").textContent = fmt(cardPay(rawNow(), M.cards));
   if (red) el.classList.add("red"); el.classList.add("on");
   setTimeout(() => { document.body.classList.add("shake"); setTimeout(() => document.body.classList.remove("shake"), 400); }, 840);
   setTimeout(() => el.classList.remove("on"), 6000);
 }
 function giveCard() {
   if (!M || M.done || (M.cards || 0) >= 2) return;
-  M.cards = (M.cards || 0) + 1; const red = M.cards >= 2;
+  lastCardAt = Date.now(); M.cards = (M.cards || 0) + 1; const red = M.cards >= 2;
   M.total = 30000;
   if (!M.revealed) M.tEnd = Math.min(M.tEnd, Math.max((M.t0 || Date.now()) + 30000, Date.now() + 5000));
   if (M.mode === "human") updateDoc(M.mref, { ["card_" + M.slot]: M.cards }).catch(console.error);
   if (M.mode === "room") { M.cardOf[me.uid] = M.cards; updateDoc(M.rref, { ["card_" + me.uid]: M.cards }).catch(console.error); }
   renderCards(); showScores(); roomShown();
-  if (M.mode === "room" && M.teamed && M.myTeam != null && $("tc" + M.myTeam)) $("tc" + M.myTeam).textContent = "you contributed " + fmt(cardPay(M.contrib, M.cards));
   playCard(red);
 }
-const leftMatch = () => { if (inMatch()) awayFlag = true; };
-const backInMatch = () => { if (!awayFlag) return; awayFlag = false; if (inMatch()) giveCard(); };
+let awayAt = 0, lastCardAt = 0;
+const leftMatch = () => { if (inMatch() && !awayFlag && Date.now() - lastCardAt > 3000) { awayFlag = true; awayAt = Date.now(); } };
+const backInMatch = () => { if (!awayFlag) return; awayFlag = false; if (inMatch() && Date.now() - awayAt > 250) giveCard(); };
 document.addEventListener("visibilitychange", () => document.hidden ? leftMatch() : backInMatch());
 addEventListener("blur", leftMatch); addEventListener("focus", backInMatch);
 
@@ -1534,6 +1551,11 @@ $("rNot").onclick = () => setReady(false);
 const setRoomMode = m => { if (RM && RM.d && RM.d.host === me.uid) updateDoc(RM.rref, { mode: m }).catch(console.error); };
 $("rSolos").onclick = () => setRoomMode("solos");
 $("rTeams").onclick = () => setRoomMode("teams");
+const setPick = v => { if (isRoomHost()) updateDoc(RM.rref, { teamPick: v }).catch(console.error); };
+$("rRandom").onclick = () => setPick("random"); $("rManual").onclick = () => setPick("manual");
+const tcols = d => (d.teamColors && d.teamColors.length === 2 ? d.teamColors : [0, 1]);
+function setTeamColor(t, ci) { if (!isRoomHost()) return; const c = [...tcols(RM.d)]; if (c[1 - t] === ci) c[1 - t] = c[t]; c[t] = ci; updateDoc(RM.rref, { teamColors: c }).catch(console.error); }
+function cycleTeam(uid) { if (!isRoomHost() || !RM.d.players[uid]) return; const t = RM.d.players[uid].team; updateDoc(RM.rref, { ["players." + uid + ".team"]: t == null ? 0 : t === 0 ? 1 : null }).catch(console.error); }
 const BOT_NAMES = ["Bolt-E", "Cogsworth", "Gizmo", "Sprocket", "Widget", "Rivet", "Nuts", "Dynamo"];
 const DIFF_LBL = { easy: "Easy", medium: "Medium", hard: "Hard" }, DIFF_NEXT = { easy: "medium", medium: "hard", hard: "easy" };
 const isRoomHost = () => !!(RM && RM.d && RM.d.host === me.uid);
@@ -1550,7 +1572,15 @@ function renderLobby(d) {
   $("rCount").textContent = ps.length + "/8 players" + (d.mode === "solos" && ps.length > 1 ? " · " + ps.map(() => "1").join("v") : "");
   $("rSolos").classList.toggle("on", d.mode === "solos"); $("rTeams").classList.toggle("on", d.mode === "teams");
   $("rModeSeg").style.pointerEvents = isHost ? "" : "none"; $("rModeSeg").style.opacity = isHost ? "" : ".6";
-  $("rModeNote").textContent = (d.mode === "teams" ? "Teams: players are randomly split into two sides with two random colors when the match starts." : "Solos: everyone plays for themselves.") + (ps.some(p => p.bot) ? " Matches with bots count for points, not wins." : "") + (isHost ? "" : " Only the host can change this.");
+  const manual = d.mode === "teams" && d.teamPick === "manual", tc = tcols(d);
+  $("rPickSeg").style.display = d.mode === "teams" ? "" : "none"; $("rRandom").classList.toggle("on", !manual); $("rManual").classList.toggle("on", manual);
+  $("rPickSeg").style.pointerEvents = isHost ? "" : "none"; $("rPickSeg").style.opacity = isHost ? "" : ".6";
+  const cfg = $("rTeamCfg"); cfg.style.display = manual ? "" : "none";
+  if (manual) {
+    cfg.innerHTML = [0, 1].map(t => `<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><b style="font-size:12px;min-width:64px">Team ${t + 1}</b><div style="display:flex;gap:6px">${COLORS.map((c, ci) => `<button type="button" data-tc="${t}:${ci}" aria-label="${c.n}" ${isHost ? "" : "disabled"} style="width:26px;height:26px;border-radius:50%;border:3px solid ${tc[t] === ci ? "var(--ink)" : "transparent"};background:${c.h};opacity:${tc[1 - t] === ci ? ".35" : "1"};cursor:${isHost ? "pointer" : "default"};padding:0"></button>`).join("")}</div></div>`).join("");
+    cfg.querySelectorAll("[data-tc]").forEach(b => b.onclick = () => { const [t, ci] = b.dataset.tc.split(":").map(Number); setTeamColor(t, ci); });
+  }
+  $("rModeNote").textContent = (d.mode === "teams" ? (manual ? "Teams: the host assigns everyone to a team and picks both team colors." : "Teams: players are randomly split into two sides with two random colors when the match starts.") : "Solos: everyone plays for themselves.") + (ps.some(p => p.bot) ? " Matches with bots count for points, not wins." : "") + (isHost ? "" : " Only the host can change this.");
   const L = $("rList"); L.innerHTML = "";
   ps.forEach(p => {
     const t = document.createElement("div"); t.className = "tile" + (p.uid === me.uid ? " me" : "");
@@ -1558,9 +1588,12 @@ function renderLobby(d) {
     const right = p.bot
       ? (isHost ? `<button type="button" class="bdiff d-${p.diff || "medium"}" data-b="${p.uid}">${dl}</button><button type="button" class="brm" data-r="${p.uid}" aria-label="Remove bot">${icon("x")}</button>` : `<div class="vl" style="font-size:13px;color:var(--mute)">${dl}</div>`)
       : `<div class="vl" style="font-size:13px;color:${p.ready ? "var(--ok)" : "var(--mute)"}">${p.ready ? "Ready" : "Not ready"}</div>`;
-    t.innerHTML = `<div class="av">${headOf(p)}</div><div class="nm">${esc(p.name)}${p.bot ? botBadge() : ""}${p.uid === d.host ? " (host)" : ""}</div>${right}`;
+    let tm = "";
+    if (manual) { const col = p.team != null ? COLORS[tc[p.team]] : null; tm = `<button type="button" class="bdiff" data-t="${p.uid}" ${isHost ? "" : "disabled"} style="margin-right:6px;${col ? `background:${col.h};border-color:${col.h};color:#1d1d1f` : ""}">${col ? "Team " + (p.team + 1) : "Pick team"}</button>`; }
+    t.innerHTML = `<div class="av">${headOf(p)}</div><div class="nm">${esc(p.name)}${p.bot ? botBadge() : ""}${p.uid === d.host ? " (host)" : ""}</div>${tm}${right}`;
     L.appendChild(t);
   });
+  L.querySelectorAll("[data-t]").forEach(b => b.onclick = () => cycleTeam(b.dataset.t));
   L.querySelectorAll("[data-b]").forEach(b => b.onclick = () => cycleBot(b.dataset.b));
   L.querySelectorAll("[data-r]").forEach(b => b.onclick = () => removeBot(b.dataset.r));
   if (isHost && ps.length < 8) {
@@ -1570,9 +1603,10 @@ function renderLobby(d) {
   const rd = !!(mine && mine.ready);
   $("rReady").classList.toggle("ghost", !rd); $("rReady").style.background = rd ? "var(--ok)" : "";
   $("rNot").classList.toggle("ghost", rd);
-  const all = ps.length >= 2 && ps.every(p => p.ready);
+  const teamsOk = !manual || (ps.every(p => p.team != null) && ps.some(p => p.team === 0) && ps.some(p => p.team === 1));
+  const all = ps.length >= 2 && ps.every(p => p.ready) && teamsOk;
   $("rStart").style.display = isHost ? "" : "none"; $("rStart").disabled = !all;
-  $("rStart").textContent = ps.length < 2 ? "Need 2+ players" : all ? "Start match" : "Waiting for everyone to be ready";
+  $("rStart").textContent = ps.length < 2 ? "Need 2+ players" : !teamsOk ? "Put at least one player on each team" : all ? "Start match" : "Waiting for everyone to be ready";
 }
 $("rStart").onclick = async () => {
   if (!RM) return; const rref = RM.rref; let d0 = null;
@@ -1581,6 +1615,7 @@ $("rStart").onclick = async () => {
       const s = await tx.get(rref); if (!s.exists()) return null;
       const d = s.data(), ps = Object.values(d.players || {});
       if (d.host !== me.uid || d.status !== "lobby" || ps.length < 2 || !ps.every(p => p.ready)) return null;
+      if (d.mode === "teams" && d.teamPick === "manual" && !(ps.every(p => p.team === 0 || p.team === 1) && ps.some(p => p.team === 0) && ps.some(p => p.team === 1))) return null;
       tx.update(rref, { status: "starting" }); return d;
     });
   } catch (e) { console.error(e); }
@@ -1591,7 +1626,9 @@ $("rStart").onclick = async () => {
     const upd = { questions: qs, status: "playing" };
     // bots answer up front (the host writes it), with the same aim as the solo bots of that difficulty
     ps.filter(p => p.bot).forEach(b => { const er = AI_ERR[b.diff] || AI_ERR.medium; qs.forEach((q, i) => { const e = rand(er[0], er[1]) * (Math.random() < .5 ? -1 : 1); upd["a" + i + "_" + b.uid] = Number((q.a * (1 + e)).toPrecision(3)); }); });
-    if (d0.mode === "teams") {
+    if (d0.mode === "teams" && d0.teamPick === "manual") {
+      upd.teamColors = d0.teamColors && d0.teamColors.length === 2 ? d0.teamColors : [0, 1];
+    } else if (d0.mode === "teams") {
       upd.teamColors = shuffle([0, 1, 2, 3, 4]).slice(0, 2);
       const order = shuffle(ps), half = Math.ceil(order.length / 2);
       order.forEach((p, i) => { upd["players." + p.uid + ".team"] = i < half ? 0 : 1; });
@@ -1637,7 +1674,7 @@ function buildRBar() {
   } else {
     h += `<div class="chips">` + M.players.map(p => `<div class="chip${p.uid === me.uid ? " me" : ""}"><span class="chav">${headOf(p, true)}</span><i class="cardb" data-cu="${p.uid}"></i><b>${esc(p.name)}${p.bot ? botBadge() : ""}</b><span class="tally" id="cs_${p.uid}">0</span></div>`).join("") + `</div>`;
   }
-  $("rBar").innerHTML = h;
+  $("rBar").innerHTML = h; $("rBar").className = M.players.length >= 5 ? "big" : "";
 }
 function tally(el, from, to) {
   if (!el) return; el.classList.remove("up");
@@ -1670,11 +1707,11 @@ function revealRoom() {
     $("revTeam").style.color = wt < 0 ? "" : m.teamCols[wt].h;
     won = wt === m.myTeam;
     [0, 1].forEach(t => tally($("tt" + t), prevT[t], m.teamTot[t]));
-    if (m.myTeam != null) $("tc" + m.myTeam).textContent = "you contributed " + fmt(cardPay(m.contrib, m.cards));
+    if (m.myTeam != null) $("tc" + m.myTeam).textContent = "you contributed " + fmt(m.contrib);
   } else {
     $("revTeam").textContent = ""; $("revTeam").style.color = "";
     won = !!mr && mr.s > 0 && mr.s === sorted[0].s;
-    m.players.forEach(p => tally($("cs_" + p.uid), cardPay(prev[p.uid], m.cardOf[p.uid] || 0), cardPay(m.score[p.uid], m.cardOf[p.uid] || 0)));
+    m.players.forEach(p => tally($("cs_" + p.uid), prev[p.uid], m.score[p.uid]));
   }
   sfx(won ? sWin : sLoss);
   setTimeout(() => { if (M !== m || m.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
@@ -1883,6 +1920,7 @@ function curveSVG(score, m) {
   for (let i = 0; i <= 140; i++) { const v = lo + (hi - lo) * i / 140; line += (i ? "L" : "M") + X(v).toFixed(1) + " " + Yv(v).toFixed(1); if (v <= score) area += `L${X(v).toFixed(1)} ${Yv(v).toFixed(1)}`; }
   area += `L${X(score).toFixed(1)} ${Yv(score).toFixed(1)}L${X(score).toFixed(1)} ${base}Z`;
   const sx = X(score), sy = Yv(score), mx = X(m.mean);
+  dCurve = { lo, hi, W, base, top, mean: m.mean, sd: m.sd, score };
   return `<svg viewBox="0 0 ${W} ${H}" font-family="inherit">
     <path id="cvArea" d="${area}" fill="#ff6b57" opacity=".28"/>
     <path d="${line}" fill="none" stroke="#1d1d1f" stroke-width="2.2" stroke-linecap="round"/>
@@ -1895,13 +1933,17 @@ function curveSVG(score, m) {
     <text x="${W - 2}" y="${H - 6}" text-anchor="end" font-size="10" fill="#8d8b84">${Math.round(hi)}</text>
   </svg>`;
 }
-// 3s: the marker rises from the baseline fast, then slows down into your spot on the curve
+// 3s: the marker sweeps along the curve from the far left to your spot, fast at first, then slowing to a stop
+let dCurve = null;
 const dMark = { t0: -1e9, raf: 0 };
 function markStep() {
-  const dot = $("cvDot"), ln = $("cvLine"), ar = $("cvArea"); if (!dot || !ln) { dMark.raf = 0; return; }
+  const dot = $("cvDot"), ln = $("cvLine"), ar = $("cvArea"), c = dCurve; if (!dot || !ln || !c) { dMark.raf = 0; return; }
   const p = Math.max(0, Math.min(1, (performance.now() - dMark.t0) / 3000)), e = 1 - Math.pow(1 - p, 3);
-  const sy = +dot.dataset.sy, base = +dot.dataset.base, y = base + (sy - base) * e;
-  dot.setAttribute("cy", y.toFixed(1)); ln.setAttribute("y1", y.toFixed(1)); if (ar) ar.setAttribute("opacity", (.28 * e).toFixed(3));
+  const X = v => (v - c.lo) / (c.hi - c.lo) * c.W, Yv = v => c.base - Math.exp(-.5 * ((v - c.mean) / c.sd) ** 2) * (c.base - c.top);
+  const v = c.lo + (c.score - c.lo) * e, x = X(v), y = Yv(v);
+  dot.setAttribute("cx", x.toFixed(1)); dot.setAttribute("cy", y.toFixed(1));
+  ln.setAttribute("x1", x.toFixed(1)); ln.setAttribute("x2", x.toFixed(1)); ln.setAttribute("y1", y.toFixed(1));
+  if (ar) { let a = `M${X(c.lo).toFixed(1)} ${c.base}`; const n = Math.max(2, Math.ceil(140 * (v - c.lo) / (c.hi - c.lo))); for (let k = 0; k <= n; k++) { const u = c.lo + (v - c.lo) * k / n; a += `L${X(u).toFixed(1)} ${Yv(u).toFixed(1)}`; } a += `L${x.toFixed(1)} ${c.base}Z`; ar.setAttribute("d", a); }
   dMark.raf = p < 1 ? requestAnimationFrame(markStep) : 0;
 }
 let dUnsubs = [], dScoreNow = null;
