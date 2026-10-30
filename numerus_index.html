@@ -187,6 +187,13 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 .dscore span{font-size:18px;color:var(--mute);margin-left:6px}
 .dpct{text-align:center;font-weight:700;font-size:18px}
 #dChart svg{width:100%;height:auto;display:block}
+#vortBtn{position:fixed;top:8px;left:8px;z-index:20;display:none;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 12px;font:800 12px/1 inherit;font-family:inherit;color:#fff;background:linear-gradient(135deg,#7c3aed,#ec4899);box-shadow:0 4px 14px #7c3aed55;cursor:pointer}
+body.vort #app{padding-top:36px}
+#vortWrap{position:fixed;inset:0;z-index:35;display:none;align-items:center;justify-content:center;background:#1d1d1f66;padding:16px}
+#vortWrap.on{display:flex}
+#vortWrap .panel{background:#fff;border-radius:22px;padding:18px;width:100%;max-width:460px;max-height:92vh;overflow:auto}
+#vortWrap textarea{width:100%;min-height:200px;border:2px solid var(--line);border-radius:14px;padding:12px;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical;margin:10px 0}
+#vortMsg{font-size:13px;white-space:pre-wrap;min-height:18px}
 </style>
 </head>
 <body>
@@ -223,7 +230,10 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
     <div class="summary"><div><b id="sPts" class="mono">0</b><span>points</span></div><div><b id="sWins" class="mono">0</b><span>wins</span></div><div><b id="sGames" class="mono">0</b><span>games</span></div></div>
     <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Points</button><button id="lbWins">Wins</button><button id="lbGames">Games</button></div>
     <div class="lb" id="lbList"></div>
-    <p class="muted" style="font-size:12px;text-align:center;margin-top:14px">Only Hard AI and human matches count.</p>
+    <div style="margin-top:26px;font-weight:800;font-size:18px;text-align:center">📅 Today's Daily leaderboard</div>
+    <div class="muted" style="font-size:12px;text-align:center;margin-top:2px">Top scores on today's daily. Resets at midnight Eastern.</div>
+    <div class="lb" id="dLb"></div>
+    <p class="muted" style="font-size:12px;text-align:center;margin-top:14px">Points count from every match. Wins count against Medium, Hard and human players.</p>
   </div>
 
   <div class="nav"><button id="navPlay" class="on">Play</button><button id="navStats">Stats</button></div>
@@ -244,8 +254,8 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 <section id="diff" class="screen">
   <div class="h1" style="margin-top:40px">Pick a difficulty</div>
   <div class="choices">
-    <button class="choice" data-d="easy"><div class="ic">🌱</div><div><b>Easy</b><span>Wide guesses. Practice only.</span></div></button>
-    <button class="choice" data-d="medium"><div class="ic">⚡</div><div><b>Medium</b><span>Decent aim. Practice only.</span></div></button>
+    <button class="choice" data-d="easy"><div class="ic">🌱</div><div><b>Easy</b><span>Wide guesses. Points count, wins don't.</span></div></button>
+    <button class="choice" data-d="medium"><div class="ic">⚡</div><div><b>Medium</b><span>Decent aim. Points and wins count.</span></div></button>
     <button class="choice" data-d="hard"><div class="ic">🔥</div><div><b>Hard</b><span>Razor precision. Counts for stats.</span></div></button>
   </div>
   <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="diffBack">‹ Back</button></div>
@@ -300,8 +310,6 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   <div class="dscore"><b class="mono" id="dScore">0</b><span>/ 1000</span></div>
   <div class="dpct" id="dPct"></div>
   <div class="card" style="margin-top:12px"><div id="dChart"></div><div class="muted" id="dNote" style="font-size:12px;text-align:center;margin-top:8px"></div></div>
-  <div class="h2" style="margin:18px 0 0;font-weight:800;font-size:18px;text-align:center">Today's top scorers</div>
-  <div class="lb" id="dLb"></div>
   <div class="muted" id="dNext" style="text-align:center;font-size:13px;margin-top:14px"></div>
   <div class="row"><button class="btn" id="dHome">Home</button></div>
 </section>
@@ -317,11 +325,20 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 <div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
 </div>
 
+<button type="button" id="vortBtn">✦ Question bank</button>
+<div id="vortWrap"><div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Question bank</b><button type="button" id="vortClose" aria-label="Close" style="border:0;background:none;font-size:20px;cursor:pointer">✕</button></div>
+  <div class="muted" style="font-size:13px;margin-top:6px">One question per line: the answer first, then the question. Press Enter for the next one.<br>Example: <code>2300000 How many bananas would reach the ISS?</code></div>
+  <textarea id="vortTxt" spellcheck="false" placeholder="90 How many ads air during an average Super Bowl?&#10;460 How many hours to watch all of One Piece back to back?"></textarea>
+  <div id="vortMsg"></div>
+  <div class="row" style="margin-top:10px"><button type="button" class="btn" id="vortAdd">Add to bank</button></div>
+  <div class="muted" id="vortCount" style="font-size:12px;text-align:center;margin-top:10px"></div>
+</div></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment, getCountFromServer } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment, getCountFromServer, arrayUnion } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCi35IyqyH4clYPOletvpu4NTllKKF64E8",
@@ -397,6 +414,23 @@ function getKey() { if (_k) return _k; const m = {}; _P.forEach(p => m[p.i] = p.
 
 /* ---------- questions ---------- */
 const MODEL = "gemini-3.5-flash-lite";
+
+/* ---------- question bank (Firestore) ---------- */
+const QB = "numerus_questions", SEEN = "numerus_seen";
+const STOP = new Set("a an the of to in on at for and or is are was were be been it its this that these those how many much would will do does did if you your i we they he she them with from by as than then so up down all each about around roughly average typical total take takes taken per".split(" "));
+const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const toks = t => new Set(norm(t).split(" ").filter(w => w.length > 1 && !STOP.has(w)).map(w => w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+function similar(A, B) {
+  let n = 0; A.forEach(w => { if (B.has(w)) n++; });
+  if (n < 2) return false;
+  return n / Math.min(A.size, B.size) >= 0.6 || n / (A.size + B.size - n) >= 0.4;
+}
+function qid(t) {
+  const x = norm(t); let h1 = 0x811c9dc5, h2 = 5381;
+  for (let i = 0; i < x.length; i++) { const c = x.charCodeAt(i); h1 ^= c; h1 = Math.imul(h1, 16777619); h2 = (Math.imul(h2, 33) ^ c) >>> 0; }
+  return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36) + x.length.toString(36);
+}
+const cleanQ = x => ({ q: x.q, a: Number(x.a), unit: String(x.unit || ""), cat: "", id: x.id || qid(x.q) });
 const BANK = [
   ["How many ads air during an average Super Bowl broadcast?", 90, "ads"],
   ["How many hours would it take to watch every episode of One Piece back to back?", 460, "hours"],
@@ -410,23 +444,82 @@ const BANK = [
   ["How many heartbeats does a person have by age 50?", 1839600000, "beats"],
   ["How many days would it take to watch every Marvel Cinematic Universe movie, back to back?", 2.2, "days"],
   ["How many pizza slices does one person eat in a lifetime if they have 2 slices a week for 70 years?", 7280, "slices"]
-].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: "" }));
-const fallback10 = () => shuffle(BANK).slice(0, 10);
-async function genQuestions() {
+].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: "", id: qid(x[0]) }));
+const fromDocs = docs => docs.map(d => cleanQ({ ...d.data(), id: d.id }));
+async function bankRecent(n) { return fromDocs((await getDocs(query(collection(db, QB), orderBy("createdAt", "desc"), limit(n)))).docs); }
+async function bankRandom(n) {
+  const x = Math.random();
+  let docs = (await getDocs(query(collection(db, QB), where("r", ">=", x), orderBy("r"), limit(n)))).docs;
+  if (docs.length < n) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(n - docs.length)))).docs);
+  return fromDocs(docs);
+}
+async function loadSeen(uids) {
+  const set = new Set();
+  await Promise.all([...new Set(uids)].map(async u => { try { const sn = await getDoc(doc(db, SEEN, u)); if (sn.exists()) (sn.data().ids || []).forEach(i => set.add(i)); } catch (e) { console.warn("seen", e); } }));
+  return set;
+}
+function markSeen(qs) {
+  if (!me || !qs || !qs.length) return;
+  setDoc(doc(db, SEEN, me.uid), { ids: arrayUnion(...qs.map(q => q.id || qid(q.q))) }, { merge: true }).catch(e => console.warn("markSeen", e));
+}
+// Writes each question once (the id is a hash of its text, so an exact repeat is refused by the rules). Returns { ok, failed }.
+async function logQuestions(list, source) {
+  const res = await Promise.allSettled(list.map(x => setDoc(doc(db, QB, x.id || qid(x.q)), { q: x.q, a: Number(x.a), unit: x.unit || "", source, by: me ? me.uid : null, r: Math.random(), createdAt: serverTimestamp() })));
+  const ok = [], failed = []; res.forEach((r, i) => (r.status === "fulfilled" ? ok : failed).push(list[i]));
+  return { ok, failed };
+}
+async function aiGenerate(avoid) {
+  const cats = shuffle(["human body", "space", "history", "pop culture", "food and fast food", "sports", "animals", "technology", "everyday life", "music", "movies and TV", "anime and games", "money and business", "the internet", "travel and transport", "nature"]).slice(0, 14);
+  const prompt = `Create 14 short numeric estimation questions for a party game that rewards intuition. Each question is ONE sentence (under 25 words) about something fun, universal and relatable that most people have some feel for. Good examples: "How many ads air during an average Super Bowl broadcast?", "How many hours would it take to watch every episode of One Piece back to back?", "If you collected every human's eyeballs, how many metric tons would they weigh?", "How many Big Macs would weigh as much as the Statue of Liberty?". Prefer counts, durations, weights, money, calories, and everyday-life or pop-culture quantities. IMPORTANT: at most ONE question in the whole set may be about a length, height or distance; most should NOT be lengths. Keep answers reasonable: every answer must be a number between 0.1 and 100,000,000,000 (100 billion), and most should be under a billion. Do NOT ask single-fact trivia someone could simply know (no "what year", no famous single measurements). Never write out the math and never give away the ingredient numbers. Make every question about a totally different subject so nobody can prepare, loosely inspired by: ${cats.join(", ")}. Use stable, well-established figures; if a question uses a changing figure, use the most recent widely reported value. Each answer must be one number computed from widely known figures. Every question in this set must be about a clearly different subject and must not share objects, people, places or numbers with another question in the set. Questions already used in this game, which you must NOT repeat or write anything similar to (same subject, same objects, or same idea reworded): ${JSON.stringify(avoid)}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 14 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "hours" or "tons"}.`;
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
+  });
+  if (!r.ok) throw new Error("api " + r.status);
+  const j = await r.json();
+  const t = j.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
+  return JSON.parse(t).filter(x => x && typeof x.q === "string" && x.q.length > 10 && x.a !== null && isFinite(Number(x.a)) && Number(x.a) > 0 && Number(x.a) <= 1e11).slice(0, 14).map(x => ({ q: x.q.trim(), a: Number(x.a), unit: String(x.unit || "") }));
+}
+// Builds 10 questions nobody in `uids` has seen, not repeating or resembling anything already in the bank.
+async function genQuestions(uids) {
+  uids = uids && uids.length ? uids : (me ? [me.uid] : []);
+  const seen = await loadSeen(uids);
+  let ref = [];
   try {
-    const cats = shuffle(["human body", "space", "history", "pop culture", "food and fast food", "sports", "animals", "technology", "everyday life", "music", "movies and TV", "anime and games", "money and business", "the internet", "travel and transport", "nature"]).slice(0, 14);
-    const prompt = `Create 14 short numeric estimation questions for a party game that rewards intuition. Each question is ONE sentence (under 25 words) about something fun, universal and relatable that most people have some feel for. Good examples: "How many ads air during an average Super Bowl broadcast?", "How many hours would it take to watch every episode of One Piece back to back?", "If you collected every human's eyeballs, how many metric tons would they weigh?", "How many Big Macs would weigh as much as the Statue of Liberty?". Prefer counts, durations, weights, money, calories, and everyday-life or pop-culture quantities. IMPORTANT: at most ONE question in the whole set may be about a length, height or distance; most should NOT be lengths. Keep answers reasonable: every answer must be a number between 0.1 and 100,000,000,000 (100 billion), and most should be under a billion. Do NOT ask single-fact trivia someone could simply know (no "what year", no famous single measurements). Never write out the math and never give away the ingredient numbers. Make every question about a totally different subject so nobody can prepare, loosely inspired by: ${cats.join(", ")}. Use stable, well-established figures; if a question uses a changing figure, use the most recent widely reported value. Each answer must be one number computed from widely known figures. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 14 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "hours" or "tons"}.`;
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
-    });
-    if (!r.ok) throw new Error("api " + r.status);
-    const j = await r.json();
-    let t = j.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
-    const qs = JSON.parse(t).filter(x => x && typeof x.q === "string" && x.a !== null && isFinite(Number(x.a)) && Number(x.a) > 0 && Number(x.a) <= 1e11).slice(0, 10).map(x => ({ q: x.q, a: Number(x.a), unit: String(x.unit || ""), cat: String(x.cat || "") }));
-    if (qs.length < 10) throw new Error("short");
-    return qs;
-  } catch (e) { console.warn("Using fallback questions", e); return fallback10(); }
+    const [rec, rnd] = await Promise.all([bankRecent(150), bankRandom(60)]);
+    const m = new Map(); [...rec, ...rnd].forEach(x => m.set(x.id, x)); ref = [...m.values()];
+  } catch (e) { console.warn("bank unavailable", e); }
+  const refIds = new Set(ref.map(x => x.id)), refTok = ref.map(x => toks(x.q));
+  let fresh = [];
+  try { fresh = await aiGenerate(shuffle(ref).slice(0, 60).map(x => x.q)); } catch (e) { console.warn("AI failed, using the bank", e); }
+  const kept = [];
+  for (const x of fresh) {
+    const id = qid(x.q), tk = toks(x.q);
+    if (seen.has(id) || refIds.has(id) || kept.some(k => k.id === id)) continue;
+    if (refTok.some(t => similar(tk, t)) || kept.some(k => similar(tk, k.tk))) continue;
+    kept.push({ ...x, id, tk });
+  }
+  let chosen = kept.map(cleanQ);
+  if (kept.length) {
+    const { ok, failed } = await logQuestions(kept, "ai");
+    // some refused = exact repeats of questions already in the bank; all refused = logging itself is broken, so still play
+    if (ok.length) { const okIds = new Set(ok.map(x => x.id)); chosen = chosen.filter(x => okIds.has(x.id)); }
+    if (failed.length === kept.length) console.warn("Couldn't log questions to the bank. Check Firestore rules.");
+  }
+  const have = () => new Set(chosen.map(x => x.id));
+  const addFrom = (pool, allowSeen) => {
+    for (const x of shuffle(pool)) {
+      if (chosen.length >= 10) break;
+      if (have().has(x.id) || (!allowSeen && seen.has(x.id))) continue;
+      if (!allowSeen) { const tk = toks(x.q); if (chosen.some(c => similar(tk, toks(c.q)))) continue; }
+      chosen.push(x);
+    }
+  };
+  if (chosen.length < 10) { let pool = []; try { pool = await bankRandom(120); } catch (e) { console.warn(e); } addFrom(pool, false);
+    if (chosen.length < 10) { addFrom(BANK, false); logQuestions(BANK.filter(x => have().has(x.id)), "seed").catch(() => {}); }
+    if (chosen.length < 10) addFrom(pool, true);
+    if (chosen.length < 10) addFrom(BANK, true); }
+  return shuffle(chosen).slice(0, 10);
 }
 function scoreOf(g, a) {
   if (g === null || g === undefined || !isFinite(g)) return 0;
@@ -436,7 +529,14 @@ function scoreOf(g, a) {
 }
 
 /* ---------- screens ---------- */
-function show(id) { document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); window.scrollTo(0, 0); }
+const isVort = () => !!me && me.name.toLowerCase() === "vortarium";
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); window.scrollTo(0, 0);
+  if (id !== "main") stopDailyLb();
+  const on = isVort() && !["auth", "match", "queue"].includes(id);
+  $("vortBtn").style.display = on ? "flex" : "none"; document.body.classList.toggle("vort", isVort() && id !== "auth");
+  if (!on) $("vortWrap").classList.remove("on");
+}
 function busy(msg) { $("busyMsg").textContent = msg || "Loading…"; $("busy").classList.add("on"); }
 function unbusy() { $("busy").classList.remove("on"); }
 
@@ -463,6 +563,31 @@ $("authForm").onsubmit = async e => {
   }
 };
 $("logout").onclick = async () => { await signOut(auth); };
+
+/* ---------- Vortarium: add questions to the bank ---------- */
+async function vortCount() { try { $("vortCount").textContent = "Bank size: " + fmt((await getCountFromServer(collection(db, QB))).data().count) + " questions"; } catch (e) { $("vortCount").textContent = ""; } }
+$("vortBtn").onclick = () => { $("vortMsg").textContent = ""; $("vortWrap").classList.add("on"); vortCount(); setTimeout(() => $("vortTxt").focus(), 30); };
+$("vortClose").onclick = () => $("vortWrap").classList.remove("on");
+$("vortAdd").onclick = async () => {
+  if (!isVort()) return;
+  const rows = [], bad = [];
+  $("vortTxt").value.split(/\r?\n/).forEach((ln, i) => {
+    if (!ln.trim()) return;
+    const m = ln.match(/^\s*(-?\d[\d,]*(?:\.\d+)?|-?\.\d+)\s+(\S.*?)\s*$/);
+    const a = m ? Number(m[1].replace(/,/g, "")) : NaN;
+    if (!m || m[2].length < 8) bad.push({ ln, why: "line " + (i + 1) + ": use \"number question\"" });
+    else if (!(a > 0) || a > 1e11) bad.push({ ln, why: "line " + (i + 1) + ": answer must be above 0 and at most 100 billion" });
+    else rows.push({ q: m[2], a, unit: "", ln });
+  });
+  if (!rows.length) { $("vortMsg").textContent = bad.length ? bad.map(b => b.why).join("\n") : "Type at least one question."; return; }
+  const seenIds = new Set(), uniq = rows.filter(r => { r.id = qid(r.q); if (seenIds.has(r.id)) return false; seenIds.add(r.id); return true; });
+  $("vortAdd").disabled = true; $("vortMsg").textContent = "Adding…";
+  const { ok, failed } = await logQuestions(uniq, "vortarium");
+  const keep = [...bad.map(b => b.ln), ...failed.map(f => f.ln)];
+  $("vortTxt").value = keep.join("\n");
+  $("vortMsg").textContent = `Added ${ok.length}.` + (failed.length ? `\n${failed.length} already in the bank or refused (check the rules if this is unexpected).` : "") + (bad.length ? "\n" + bad.map(b => b.why).join("\n") : "") + (rows.length > uniq.length ? `\n${rows.length - uniq.length} duplicate line(s) in your list skipped.` : "");
+  $("vortAdd").disabled = false; vortCount();
+};
 onAuthStateChanged(auth, async user => {
   if (!user) { me = null; unbusy(); show("auth"); return; }
   try {
@@ -489,7 +614,7 @@ onAuthStateChanged(auth, async user => {
 function goTab(t) {
   $("paneplay").classList.toggle("on", t === "play"); $("panestats").classList.toggle("on", t === "stats");
   $("navPlay").classList.toggle("on", t === "play"); $("navStats").classList.toggle("on", t === "stats");
-  if (t === "stats") loadStats();
+  if (t === "stats") { loadStats(); startDailyLb(); } else stopDailyLb();
 }
 $("navPlay").onclick = () => goTab("play"); $("navStats").onclick = () => goTab("stats");
 
@@ -619,6 +744,7 @@ let M = null;
 const SLOT_OPP = s => s === "p1" ? "p2" : "p1";
 function startMatch(cfg) {
   M = Object.assign({ round: 0, my: 0, op: 0, ans: {}, revealed: false, submitted: false, timer: null, done: false }, cfg);
+  markSeen(M.qs);
   $("mMeBot").innerHTML = robot(look.skin, look.acc, look.color);
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color);
   $("mMeName").textContent = me.name; $("mOppName").textContent = dn(M.opp.name);
@@ -693,14 +819,14 @@ async function finishMatch() {
   $("resBot").innerHTML = robot(look.skin, look.acc, look.color);
   $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
   $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").textContent = dn(M.opp.name);
-  const counts = M.mode === "human" || M.diff === "hard";
-  $("resNote").textContent = counts ? "This match counted toward your stats." : "Practice match: Hard AI and human matches count toward stats.";
+  const counts = true, winCounts = M.mode === "human" || M.diff === "hard" || M.diff === "medium";
+  $("resNote").textContent = winCounts ? "This match counted toward your stats." : "Your points counted. Wins against Bolt-E don't count toward stats.";
   show("result");
   if (!draw) sfx(won ? sWin : sLoss);
   if (counts) {
     try {
-      await updateDoc(doc(db, USERS, me.uid), { points: increment(M.my), wins: increment(won ? 1 : 0), games: increment(1) });
-      me.points += M.my; me.wins += won ? 1 : 0; me.games += 1;
+      await updateDoc(doc(db, USERS, me.uid), { points: increment(M.my), wins: increment(won && winCounts ? 1 : 0), games: increment(1) });
+      me.points += M.my; me.wins += won && winCounts ? 1 : 0; me.games += 1;
       if (M.mode === "ai" && M.diff === "hard") {
         try { await setDoc(doc(db, USERS, "numeron"), { name: "Numeron", skin: 4, acc: 1, color: 1, points: increment(M.op), wins: increment(M.op > M.my ? 1 : 0), games: increment(1) }, { merge: true }); } catch (e) { console.error(e); }
       }
@@ -715,7 +841,7 @@ const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
 const AI_ERR = { easy: [0.40, 0.95], medium: [0.20, 0.70], hard: [0.05, 0.50] };
 document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
   const d = b.dataset.d; busy("Writing 10 questions…");
-  const qs = await genQuestions();
+  const qs = await genQuestions([me.uid]);
   startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], ...(d === "hard" ? { skin: 4, acc: 1, color: 1 } : { skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) }) } });
 });
 
@@ -795,7 +921,7 @@ async function enterMatch(mid) {
     const d = s.data(); if (!d) return;
     const slot = d.p1.uid === me.uid ? "p1" : "p2";
     if (!d.questions) {
-      if (slot === "p2" && !generating) { generating = true; const qs = await genQuestions(); updateDoc(mref, { questions: qs }).catch(console.error); }
+      if (slot === "p2" && !generating) { generating = true; const qs = await genQuestions([d.p1.uid, d.p2.uid]); updateDoc(mref, { questions: qs }).catch(console.error); }
       return;
     }
     if (!started) {
@@ -945,12 +1071,12 @@ async function refreshDaily() {
   try { const sn = await getDoc(doc(db, "numerus_dailyscores", dayKey() + "_" + me.uid)); dailyDone = sn.exists(); } catch (e) {}
   updDailyUI();
 }
-setInterval(() => { const k = dayKey(); if (k !== dailyDay) { dailyDay = k; dailyDone = false; refreshDaily(); } updDailyUI(); }, 1000);
+setInterval(() => { const k = dayKey(); if (k !== dailyDay) { dailyDay = k; dailyDone = false; refreshDaily(); if ($("panestats").classList.contains("on")) startDailyLb(); } updDailyUI(); }, 1000);
 function openMode() { $("modeBot").innerHTML = robot(look.skin, look.acc, look.color); refreshDaily(); show("mode"); }
 async function dailyQuestions(day) {
   const ref = doc(db, "numerus_daily", day), sn = await getDoc(ref);
   if (sn.exists()) return sn.data().questions;
-  const qs = await genQuestions();
+  const qs = await genQuestions([me.uid]);
   return await runTransaction(db, async tx => { const s2 = await tx.get(ref); if (s2.exists()) return s2.data().questions; tx.set(ref, { day, questions: qs, createdAt: serverTimestamp() }); return qs; });
 }
 async function startDaily() {
@@ -1018,12 +1144,17 @@ function renderDailyLb(docs) {
 function startDailyLive() {
   stopDailyLive();
   dUnsubs.push(onSnapshot(doc(db, "numerus_daily_stats", "global"), sn => renderDailyStats(sn.exists() ? sn.data() : null), e => console.error(e)));
-  dUnsubs.push(onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("dLb").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; }));
+}
+let dLbUnsub = null;
+function stopDailyLb() { if (dLbUnsub) { try { dLbUnsub(); } catch (_) {} dLbUnsub = null; } }
+function startDailyLb() {
+  stopDailyLb(); if (!me) return;
+  $("dLb").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  dLbUnsub = onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("dLb").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; });
 }
 function showDailyResult(score, st) {
   dScoreNow = score; $("dScore").textContent = score;
   renderDailyStats(st); if (st && score >= dailyModel(st).mean) sfx(sWin);
-  $("dLb").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
   updDailyUI(); show("daily"); startDailyLive();
 }
 async function viewDaily() {

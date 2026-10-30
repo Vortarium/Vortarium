@@ -65,6 +65,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Question bank: every generated question is logged here once (doc id = hash of the text, so exact repeats are refused).
+    // Anyone signed in can log AI questions; only vortarium can add its own.
+    match /numerus_questions/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.q is string
+        && request.resource.data.a is number
+        && request.resource.data.source in ['ai', 'seed', 'vortarium']
+        && (request.resource.data.source != 'vortarium' || request.auth.token.email == 'vortarium@numerus.app');
+      allow update, delete: if false;
+    }
+
+    // Which bank questions each player has already been served (one doc per player, ids only)
+    match /numerus_seen/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
     // Everything else stays locked
     match /{document=**} {
       allow read, write: if false;
