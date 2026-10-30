@@ -28,7 +28,7 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 #auth .logo{font-size:34px}
 #auth .sub{color:var(--mute);font-size:14px;margin-top:-10px}
 .seg{display:flex;background:#ebe9e0;border-radius:14px;padding:4px;gap:4px}
-.seg button{flex:1;border:0;background:transparent;font:inherit;font-weight:700;padding:10px;border-radius:11px;cursor:pointer;color:var(--mute)}
+.seg button{flex:1;border:0;background:transparent;font:inherit;font-weight:700;padding:10px 4px;border-radius:11px;cursor:pointer;color:var(--mute)}
 .seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px #0001}
 .field{width:100%;font:inherit;font-size:16px;padding:14px 16px;border-radius:14px;border:2px solid var(--line);background:var(--card);outline:none;margin-bottom:10px}
 .field:focus{border-color:var(--ink)}
@@ -228,11 +228,9 @@ body.vort #app{padding-top:36px}
 
   <div class="pane" id="panestats">
     <div class="summary"><div><b id="sPts" class="mono">0</b><span>points</span></div><div><b id="sWins" class="mono">0</b><span>wins</span></div><div><b id="sGames" class="mono">0</b><span>games</span></div></div>
-    <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Points</button><button id="lbWins">Wins</button><button id="lbGames">Games</button></div>
+    <div class="seg" style="margin-top:16px"><button id="lbPts" class="on">Points</button><button id="lbWins">Wins</button><button id="lbGames">Games</button><button id="lbDaily">Dailies</button></div>
+    <div class="muted" id="lbNote" style="display:none;font-size:12px;text-align:center;margin-top:10px">Everyone who finished today's daily, live. Resets at midnight Eastern.</div>
     <div class="lb" id="lbList"></div>
-    <div style="margin-top:26px;font-weight:800;font-size:18px;text-align:center">📅 Today's Daily leaderboard</div>
-    <div class="muted" style="font-size:12px;text-align:center;margin-top:2px">Top scores on today's daily. Resets at midnight Eastern.</div>
-    <div class="lb" id="dLb"></div>
     <p class="muted" style="font-size:12px;text-align:center;margin-top:14px">Points count from every match. Wins count against Medium, Hard and human players.</p>
   </div>
 
@@ -614,7 +612,7 @@ onAuthStateChanged(auth, async user => {
 function goTab(t) {
   $("paneplay").classList.toggle("on", t === "play"); $("panestats").classList.toggle("on", t === "stats");
   $("navPlay").classList.toggle("on", t === "play"); $("navStats").classList.toggle("on", t === "stats");
-  if (t === "stats") { loadStats(); startDailyLb(); } else stopDailyLb();
+  if (t === "stats") loadStats(); else stopDailyLb();
 }
 $("navPlay").onclick = () => goTab("play"); $("navStats").onclick = () => goTab("stats");
 
@@ -653,7 +651,7 @@ $("chHuman").onclick = () => joinQueue();
 
 /* ---------- stats ---------- */
 let lbField = "points";
-const LB_TABS = { lbPts: "points", lbWins: "wins", lbGames: "games" };
+const LB_TABS = { lbPts: "points", lbWins: "wins", lbGames: "games", lbDaily: "daily" };
 Object.keys(LB_TABS).forEach(id => $(id).onclick = () => { lbField = LB_TABS[id]; Object.keys(LB_TABS).forEach(k => $(k).classList.toggle("on", k === id)); loadLB(); });
 const shown = { points: null, wins: null, games: null };
 function animateStat(el, key, to) {
@@ -723,6 +721,9 @@ function rankAnim(rows, ni, meTile, oldRank, newRank) {
 }
 async function loadLB() {
   const list = $("lbList"), f = lbField, tok = ++lbTok;
+  $("lbNote").style.display = f === "daily" ? "block" : "none";
+  if (f === "daily") { startDailyLb(); return; }
+  stopDailyLb();
   list.innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
   try {
     const [snap, newRank] = await Promise.all([getDocs(query(collection(db, USERS), orderBy(f, "desc"), limit(5))), myRank(f)]);
@@ -1071,7 +1072,7 @@ async function refreshDaily() {
   try { const sn = await getDoc(doc(db, "numerus_dailyscores", dayKey() + "_" + me.uid)); dailyDone = sn.exists(); } catch (e) {}
   updDailyUI();
 }
-setInterval(() => { const k = dayKey(); if (k !== dailyDay) { dailyDay = k; dailyDone = false; refreshDaily(); if ($("panestats").classList.contains("on")) startDailyLb(); } updDailyUI(); }, 1000);
+setInterval(() => { const k = dayKey(); if (k !== dailyDay) { dailyDay = k; dailyDone = false; refreshDaily(); if ($("panestats").classList.contains("on") && lbField === "daily") startDailyLb(); } updDailyUI(); }, 1000);
 function openMode() { $("modeBot").innerHTML = robot(look.skin, look.acc, look.color); refreshDaily(); show("mode"); }
 async function dailyQuestions(day) {
   const ref = doc(db, "numerus_daily", day), sn = await getDoc(ref);
@@ -1132,14 +1133,22 @@ function renderDailyStats(st) {
     $("dNote").textContent = `Live: built from ${fmt(st.n)} daily game${st.n === 1 ? "" : "s"} across every day so far.`;
   } else { $("dPct").textContent = "Couldn't load the curve"; $("dChart").innerHTML = ""; $("dNote").textContent = ""; }
 }
-function renderDailyLb(docs) {
-  const list = $("dLb"), day = dayKey();
+const lookCache = new Map(); let dLbTok = 0;
+async function lookOf(uid, fallbackName) {
+  if (uid === me.uid) return { name: me.name, skin: look.skin, acc: look.acc, color: look.color };
+  const c = lookCache.get(uid); if (c && Date.now() - c.t < 60000) return c.v;
+  let v = { name: fallbackName, skin: 0, acc: 0, color: 0 };
+  try { const sn = await getDoc(doc(db, USERS, uid)); if (sn.exists()) { const d = sn.data(); v = { name: d.name || fallbackName, skin: d.skin ?? 0, acc: d.acc ?? 0, color: d.color ?? 0 }; } } catch (e) { console.warn(e); }
+  lookCache.set(uid, { t: Date.now(), v }); return v;
+}
+async function renderDailyLb(docs) {
+  const list = $("lbList"), day = dayKey(), tok = ++dLbTok;
   const rows = docs.map(d => d.data()).filter(x => x.day === day && typeof x.score === "number").sort((a, b) => b.score - a.score || (a.name || "").localeCompare(b.name || ""));
-  list.innerHTML = "";
   if (!rows.length) { list.innerHTML = `<div class="muted" style="text-align:center">No scores yet today.</div>`; return; }
-  const top = rows.slice(0, 10); let meIdx = rows.findIndex(x => x.uid === me.uid);
-  top.forEach((x, i) => list.appendChild(tileFor(x, "#" + (i + 1), x.uid === me.uid, x.score)));
-  if (meIdx >= 10) { const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep); list.appendChild(tileFor(rows[meIdx], "#" + (meIdx + 1), true, rows[meIdx].score)); }
+  const looks = await Promise.all(rows.map(x => lookOf(x.uid, x.name)));
+  if (tok !== dLbTok || lbField !== "daily") return;
+  list.innerHTML = "";
+  rows.forEach((x, i) => list.appendChild(tileFor(looks[i], "#" + (i + 1), x.uid === me.uid, x.score)));
 }
 function startDailyLive() {
   stopDailyLive();
@@ -1149,8 +1158,8 @@ let dLbUnsub = null;
 function stopDailyLb() { if (dLbUnsub) { try { dLbUnsub(); } catch (_) {} dLbUnsub = null; } }
 function startDailyLb() {
   stopDailyLb(); if (!me) return;
-  $("dLb").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
-  dLbUnsub = onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("dLb").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; });
+  $("lbList").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  dLbUnsub = onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("lbList").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; });
 }
 function showDailyResult(score, st) {
   dScoreNow = score; $("dScore").textContent = score;
