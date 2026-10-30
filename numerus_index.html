@@ -272,7 +272,7 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
     <div class="unit" id="qUnit"></div>
     <form id="ansForm" autocomplete="off">
       <div class="ansWrap">
-        <input class="field" id="ansIn" inputmode="decimal" placeholder="your number" autocomplete="off" maxlength="18">
+        <input class="field" id="ansIn" inputmode="decimal" placeholder="your number" autocomplete="off" maxlength="26">
         <button type="button" class="calcBtn" id="calcBtn" aria-label="Calculator"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2.5" width="16" height="19" rx="3"/><rect x="7" y="5.5" width="10" height="4" rx="1"/><circle cx="8.5" cy="13.5" r=".7" fill="currentColor"/><circle cx="12" cy="13.5" r=".7" fill="currentColor"/><circle cx="15.5" cy="13.5" r=".7" fill="currentColor"/><circle cx="8.5" cy="17.5" r=".7" fill="currentColor"/><circle cx="12" cy="17.5" r=".7" fill="currentColor"/><circle cx="15.5" cy="17.5" r=".7" fill="currentColor"/></svg></button>
       </div>
       <button class="btn" id="lockBtn">Lock in</button>
@@ -300,6 +300,8 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   <div class="dscore"><b class="mono" id="dScore">0</b><span>/ 1000</span></div>
   <div class="dpct" id="dPct"></div>
   <div class="card" style="margin-top:12px"><div id="dChart"></div><div class="muted" id="dNote" style="font-size:12px;text-align:center;margin-top:8px"></div></div>
+  <div class="h2" style="margin:18px 0 0;font-weight:800;font-size:18px;text-align:center">Today's top scorers</div>
+  <div class="lb" id="dLb"></div>
   <div class="muted" id="dNext" style="text-align:center;font-size:13px;margin-top:14px"></div>
   <div class="row"><button class="btn" id="dHome">Home</button></div>
 </section>
@@ -813,8 +815,22 @@ function cleanNum(v) {
   const i = v.indexOf("."); if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, "");
   return (neg ? "-" : "") + v;
 }
-$("ansIn").addEventListener("beforeinput", e => { if (e.data && !/^[0-9.\-]+$/.test(e.data)) e.preventDefault(); });
-$("ansIn").addEventListener("input", e => { const c = cleanNum(e.target.value); if (c !== e.target.value) e.target.value = c; });
+function commaNum(v) {
+  v = cleanNum(String(v)); const neg = v.startsWith("-"); if (neg) v = v.slice(1);
+  const i = v.indexOf("."), ip = i >= 0 ? v.slice(0, i) : v, fp = i >= 0 ? v.slice(i) : "";
+  return (neg ? "-" : "") + ip.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + fp;
+}
+$("ansIn").addEventListener("beforeinput", e => { if (e.data && !/^[0-9.,\-\s]+$/.test(e.data)) e.preventDefault(); });
+$("ansIn").addEventListener("input", e => {
+  const el = e.target, pos = el.selectionStart ?? el.value.length;
+  const sig = el.value.slice(0, pos).replace(/[^0-9.\-]/g, "").length;
+  const c = commaNum(el.value);
+  if (c !== el.value) {
+    el.value = c; let n = 0, np = c.length;
+    if (sig === 0) np = 0; else for (let k = 0; k < c.length; k++) { if (/[0-9.\-]/.test(c[k])) n++; if (n === sig) { np = k + 1; break; } }
+    try { el.setSelectionRange(np, np); } catch (_) {}
+  }
+});
 
 /* ---------- calculator ---------- */
 function calcEval(src) {
@@ -842,12 +858,12 @@ function calcEquals() { try { calcIn.value = plain(calcEval(calcIn.value)); calc
 calcIn.addEventListener("beforeinput", e => { if (e.data && !/^[0-9+\-*/×÷−^().xX\s]+$/.test(e.data)) e.preventDefault(); });
 calcIn.addEventListener("input", () => { calcIn.value = calcIn.value.replace(/[^0-9+\-*/×÷−^().xX\s]/g, ""); calcUpdate(); });
 calcIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); calcEquals(); } });
-$("calcBtn").onclick = () => { if (!M || M.submitted) return; calcIn.value = $("ansIn").value; calcUpdate(); calcWrap.classList.add("on"); setTimeout(() => calcIn.focus(), 30); };
+$("calcBtn").onclick = () => { if (!M || M.submitted) return; calcIn.value = $("ansIn").value.replace(/,/g, ""); calcUpdate(); calcWrap.classList.add("on"); setTimeout(() => calcIn.focus(), 30); };
 $("calcClose").onclick = closeCalc;
 calcWrap.addEventListener("click", e => { if (e.target === calcWrap) closeCalc(); });
 addEventListener("keydown", e => { if (e.key === "Escape") closeCalc(); });
 $("calcUse").onclick = () => {
-  try { const v = calcEval(calcIn.value); if (M && !M.submitted) $("ansIn").value = cleanNum(plain(v)); closeCalc(); $("ansIn").focus(); }
+  try { const v = calcEval(calcIn.value); if (M && !M.submitted) $("ansIn").value = commaNum(plain(v)); closeCalc(); $("ansIn").focus(); }
   catch (e) { calcRes.textContent = "Check your expression"; }
 };
 
@@ -920,8 +936,8 @@ const hms = t => [Math.floor(t / 3600), Math.floor(t % 3600 / 60), t % 60].map(v
 let dailyDone = false, dailyDay = dayKey();
 function updDailyUI() {
   const left = hms(secsToMidnight()), b = $("chDaily");
-  b.classList.toggle("locked", dailyDone); b.disabled = dailyDone;
-  $("dailySub").textContent = dailyDone ? "Locked. Unlocks in " + left : "Same 10 questions for everyone. One try a day.";
+  b.classList.toggle("locked", false); b.disabled = false;
+  $("dailySub").textContent = dailyDone ? "Played. See today's leaderboard. Next in " + left : "Same 10 questions for everyone. One try a day.";
   $("dNext").textContent = "Next daily unlocks in " + left + " (midnight Eastern)";
 }
 async function refreshDaily() {
@@ -938,7 +954,7 @@ async function dailyQuestions(day) {
   return await runTransaction(db, async tx => { const s2 = await tx.get(ref); if (s2.exists()) return s2.data().questions; tx.set(ref, { day, questions: qs, createdAt: serverTimestamp() }); return qs; });
 }
 async function startDaily() {
-  if (dailyDone) return;
+  if (dailyDone) { viewDaily(); return; }
   const day = dayKey(); busy("Loading today's questions…");
   try {
     const qs = await dailyQuestions(day);
@@ -947,7 +963,7 @@ async function startDaily() {
     startMatch({ mode: "daily", day, qs, slot: "p1", opp: { name: "", skin: 0, acc: 0, color: 0 } });
   } catch (e) {
     unbusy(); console.error(e);
-    if (e.message === "done") { dailyDone = true; updDailyUI(); }
+    if (e.message === "done") { dailyDone = true; updDailyUI(); unbusy(); viewDaily(); }
   }
 }
 $("chDaily").onclick = () => startDaily();
@@ -975,21 +991,50 @@ function curveSVG(score, m) {
     <text x="${mx.toFixed(1)}" y="${top - 10}" text-anchor="middle" font-size="10" fill="#8d8b84">avg ${Math.round(m.mean)}</text>
     <line x1="${sx.toFixed(1)}" y1="${sy.toFixed(1)}" x2="${sx.toFixed(1)}" y2="${base}" stroke="#ff6b57" stroke-width="2.5"/>
     <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5.5" fill="#ff6b57" stroke="#fff" stroke-width="2"/>
-    <text x="${Math.min(W - 18, Math.max(18, sx)).toFixed(1)}" y="${Math.max(12, sy - 12).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#ff6b57">You</text>
     <text x="2" y="${H - 6}" font-size="10" fill="#8d8b84">${Math.round(lo)}</text>
     <text x="${W - 2}" y="${H - 6}" text-anchor="end" font-size="10" fill="#8d8b84">${Math.round(hi)}</text>
   </svg>`;
 }
-function showDailyResult(score, st) {
-  $("dScore").textContent = score;
-  if (st) {
+let dUnsubs = [], dScoreNow = null;
+function stopDailyLive() { dUnsubs.forEach(u => { try { u(); } catch (_) {} }); dUnsubs = []; }
+function renderDailyStats(st) {
+  const score = dScoreNow;
+  if (st && score !== null) {
     const m = dailyModel(st), pct = Math.min(99, Math.max(1, Math.round(normCdf((score - m.mean) / m.sd) * 100)));
     $("dPct").textContent = `Higher than ${pct}% of players`;
     $("dChart").innerHTML = curveSVG(score, m);
-    $("dNote").textContent = `Built from ${fmt(st.n)} daily game${st.n === 1 ? "" : "s"} across every day so far.`;
-    if (pct >= 50) sfx(sWin);
+    $("dNote").textContent = `Live: built from ${fmt(st.n)} daily game${st.n === 1 ? "" : "s"} across every day so far.`;
   } else { $("dPct").textContent = "Couldn't load the curve"; $("dChart").innerHTML = ""; $("dNote").textContent = ""; }
-  updDailyUI(); show("daily");
+}
+function renderDailyLb(docs) {
+  const list = $("dLb"), day = dayKey();
+  const rows = docs.map(d => d.data()).filter(x => x.day === day && typeof x.score === "number").sort((a, b) => b.score - a.score || (a.name || "").localeCompare(b.name || ""));
+  list.innerHTML = "";
+  if (!rows.length) { list.innerHTML = `<div class="muted" style="text-align:center">No scores yet today.</div>`; return; }
+  const top = rows.slice(0, 10); let meIdx = rows.findIndex(x => x.uid === me.uid);
+  top.forEach((x, i) => list.appendChild(tileFor(x, "#" + (i + 1), x.uid === me.uid, x.score)));
+  if (meIdx >= 10) { const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep); list.appendChild(tileFor(rows[meIdx], "#" + (meIdx + 1), true, rows[meIdx].score)); }
+}
+function startDailyLive() {
+  stopDailyLive();
+  dUnsubs.push(onSnapshot(doc(db, "numerus_daily_stats", "global"), sn => renderDailyStats(sn.exists() ? sn.data() : null), e => console.error(e)));
+  dUnsubs.push(onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("dLb").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; }));
+}
+function showDailyResult(score, st) {
+  dScoreNow = score; $("dScore").textContent = score;
+  renderDailyStats(st); if (st && score >= dailyModel(st).mean) sfx(sWin);
+  $("dLb").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  updDailyUI(); show("daily"); startDailyLive();
+}
+async function viewDaily() {
+  busy("Loading today's results…");
+  try {
+    const sn = await getDoc(doc(db, "numerus_dailyscores", dayKey() + "_" + me.uid));
+    const sc = sn.exists() && typeof sn.data().score === "number" ? sn.data().score : null;
+    if (sc === null) { unbusy(); return; }
+    let st = null; try { st = (await getDoc(doc(db, "numerus_daily_stats", "global"))).data(); } catch (_) {}
+    unbusy(); showDailyResult(sc, st);
+  } catch (e) { console.error(e); unbusy(); }
 }
 async function finishDaily() {
   M.done = true; clearInterval(M.timer);
@@ -1007,7 +1052,7 @@ async function finishDaily() {
   } catch (e) { console.error(e); }
   unbusy(); showDailyResult(score, st);
 }
-$("dHome").onclick = () => { step = 0; renderWizard(); goTab("play"); show("main"); };
+$("dHome").onclick = () => { stopDailyLive(); step = 0; renderWizard(); goTab("play"); show("main"); };
 </script>
 </body>
 </html>
