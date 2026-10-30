@@ -187,7 +187,14 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 .dscore span{font-size:18px;color:var(--mute);margin-left:6px}
 .dpct{text-align:center;font-weight:700;font-size:18px}
 #dChart svg{width:100%;height:auto;display:block}
-#vortBtn{position:fixed;top:8px;left:8px;z-index:20;display:none;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 12px;font:800 12px/1 inherit;font-family:inherit;color:#fff;background:linear-gradient(135deg,#7c3aed,#ec4899);box-shadow:0 4px 14px #7c3aed55;cursor:pointer}
+#vortBar{position:fixed;top:8px;left:8px;z-index:20;display:none;gap:6px}
+#vortBtn,#vortGenTop{border:0;border-radius:999px;padding:7px 12px;font:800 12px/1 inherit;font-family:inherit;color:#fff;background:linear-gradient(135deg,#7c3aed,#ec4899);box-shadow:0 4px 14px #7c3aed55;cursor:pointer}
+#vortGenTop{background:linear-gradient(135deg,#0ea5e9,#7c3aed)}
+#vortGenTop:disabled{opacity:.6;cursor:wait}
+#vortAsk{position:fixed;inset:0;z-index:36;display:none;align-items:center;justify-content:center;background:#1d1d1f66;padding:16px}
+#vortAsk.on{display:flex}
+#vortAsk .panel{background:#fff;border-radius:22px;padding:20px;width:100%;max-width:360px;text-align:center}
+#vortToast{position:fixed;top:44px;left:8px;z-index:20;display:none;background:#1d1d1f;color:#fff;border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;max-width:260px}
 body.vort #app{padding-top:36px}
 #vortWrap{position:fixed;inset:0;z-index:35;display:none;align-items:center;justify-content:center;background:#1d1d1f66;padding:16px}
 #vortWrap.on{display:flex}
@@ -323,7 +330,9 @@ body.vort #app{padding-top:36px}
 <div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
 </div>
 
-<button type="button" id="vortBtn">✦ Question bank</button>
+<div id="vortBar"><button type="button" id="vortBtn">✦ Question bank</button><button type="button" id="vortGenTop">✨ +25 AI</button></div>
+<div id="vortToast"></div>
+<div id="vortAsk"><div class="panel"><div style="font-weight:800;font-size:17px">Add 25 new questions?</div><div class="muted" style="font-size:13px;margin-top:6px">The AI writes 25 new questions for the bank and skips repeats and lookalikes.</div><div class="row" style="margin-top:14px"><button type="button" class="btn" id="askYes">Yes, generate</button><button type="button" class="btn ghost" id="askNo">Cancel</button></div></div></div>
 <div id="vortWrap"><div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Question bank</b><button type="button" id="vortClose" aria-label="Close" style="border:0;background:none;font-size:20px;cursor:pointer">✕</button></div>
   <div class="muted" style="font-size:13px;margin-top:6px">One question per line: the answer first, then the question. Press Enter for the next one.<br>Example: <code>2300000 How many bananas would reach the ISS?</code></div>
@@ -549,8 +558,8 @@ function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); window.scrollTo(0, 0);
   if (id !== "main") stopDailyLb();
   const on = isVort() && !["auth", "match", "queue"].includes(id);
-  $("vortBtn").style.display = on ? "flex" : "none"; document.body.classList.toggle("vort", isVort() && id !== "auth");
-  if (!on) $("vortWrap").classList.remove("on");
+  $("vortBar").style.display = on ? "flex" : "none"; document.body.classList.toggle("vort", isVort() && id !== "auth");
+  if (!on) { $("vortWrap").classList.remove("on"); $("vortAsk").classList.remove("on"); $("vortToast").style.display = "none"; }
 }
 function busy(msg) { $("busyMsg").textContent = msg || "Loading…"; $("busy").classList.add("on"); }
 function unbusy() { $("busy").classList.remove("on"); }
@@ -585,21 +594,31 @@ $("vortBtn").onclick = () => { $("vortMsg").textContent = ""; $("vortWrap").clas
 $("vortClose").onclick = () => $("vortWrap").classList.remove("on");
 $("vortGen").onclick = () => { $("vortGen").style.display = "none"; $("vortConf").style.display = "block"; };
 $("vortNo").onclick = () => { $("vortConf").style.display = "none"; $("vortGen").style.display = ""; };
-$("vortYes").onclick = async () => {
-  if (!isVort()) return;
-  $("vortConf").style.display = "none"; $("vortGen").style.display = ""; $("vortGen").disabled = true; $("vortAdd").disabled = true;
-  $("vortMsg").textContent = "Asking the AI for 25 new questions…";
+let vortBusy = false;
+async function runVortGen(say) {
+  if (!isVort() || vortBusy) return; vortBusy = true;
+  ["vortGen", "vortGenTop", "vortAdd"].forEach(id => $(id).disabled = true);
+  say("Asking the AI for 25 new questions…");
   let added = 0;
   try {
     const m = new Map(); const [rec, rnd] = await Promise.all([bankRecent(200), bankRandom(100)]); [...rec, ...rnd].forEach(x => m.set(x.id, x));
     const ref = [...m.values()];
     for (let t = 0; t < 4 && added < 25; t++) {
       const got = await freshQuestions(25 - added, new Set(), ref, true); added += got.length;
-      $("vortMsg").textContent = `Added ${added} of 25…`;
+      say(`Added ${added} of 25…`);
     }
-    $("vortMsg").textContent = added >= 25 ? "Added 25 new questions to the bank." : `Added ${added} new questions. The AI kept repeating or failing, so try again for the rest.`;
-  } catch (e) { console.error(e); $("vortMsg").textContent = `Something went wrong${added ? " after adding " + added : ""}. Try again.`; }
-  $("vortGen").disabled = false; $("vortAdd").disabled = false; vortCount();
+    say(added >= 25 ? "Added 25 new questions to the bank." : `Added ${added} new questions. The AI kept repeating or failing, so try again for the rest.`);
+  } catch (e) { console.error(e); say(`Something went wrong${added ? " after adding " + added : ""}. Try again.`); }
+  ["vortGen", "vortGenTop", "vortAdd"].forEach(id => $(id).disabled = false); vortBusy = false; vortCount();
+}
+$("vortYes").onclick = () => { $("vortConf").style.display = "none"; $("vortGen").style.display = ""; runVortGen(t => { $("vortMsg").textContent = t; }); };
+// corner button next to "Question bank": confirm, then run with a small toast for progress
+let toastT = null;
+$("vortGenTop").onclick = () => $("vortAsk").classList.add("on");
+$("askNo").onclick = () => $("vortAsk").classList.remove("on");
+$("askYes").onclick = () => {
+  $("vortAsk").classList.remove("on");
+  runVortGen(t => { const el = $("vortToast"); el.textContent = t; el.style.display = "block"; $("vortMsg").textContent = t; clearTimeout(toastT); if (!/…$/.test(t)) toastT = setTimeout(() => { el.style.display = "none"; }, 5000); });
 };
 $("vortAdd").onclick = async () => {
   if (!isVort()) return;
