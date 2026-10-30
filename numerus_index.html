@@ -603,12 +603,15 @@ const music = new Audio(MUSIC[0]); music.volume = 0.5;
 music.addEventListener("ended", () => { musicI = (musicI + 1) % MUSIC.length; music.src = MUSIC[musicI]; music.volume = 0.5; if (!muted) music.play().catch(() => {}); });
 const sDing = new Audio("numerus_ding.mp3");
 const sWin = new Audio("numerus_win.mp3"), sLoss = new Audio("numerus_loss.mp3");
+const sYay = new Audio("numerus_yay.mp3"), sSad = new Audio("numerus_sad.mp3");
+const SFX_ALL = [sDing, sWin, sLoss, sYay, sSad];
 let muted = false;
 function tryMusic() { if (!muted) music.play().catch(() => {}); }
 tryMusic();
 ["pointerdown", "keydown", "touchstart"].forEach(ev => addEventListener(ev, tryMusic, { once: false, passive: true }));
-function sfx(a) { if (muted) return; try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
-$("muteBtn").onclick = e => { e.stopPropagation(); muted = !muted; setMuteIcon(); if (muted) music.pause(); else music.play().catch(() => {}); };
+function sfx(a) { if (muted) return; try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
+function applyMute() { music.muted = muted; SFX_ALL.forEach(a => { a.muted = muted; if (muted) { try { a.pause(); a.currentTime = 0; } catch (e) {} } }); }
+$("muteBtn").onclick = e => { e.stopPropagation(); muted = !muted; applyMute(); setMuteIcon(); if (muted) music.pause(); else music.play().catch(() => {}); };
 
 /* ---------- robot art ---------- */
 const _b = "me";
@@ -1340,7 +1343,7 @@ async function finishMatch() {
   const baseNote = M.oppFled ? "Your opponent fled, so you win. This match counted toward your stats." : winCounts ? "This match counted toward your stats." : "Your points counted. Wins against the easy bot don't count toward stats.";
   $("resNote").textContent = cardNote(M.cards || 0, M.my, earn, voidWin, baseNote);
   show("result");
-  if (!draw) sfx(won ? sWin : sLoss);
+  if (!draw) sfx(won ? sYay : sSad);
   if (counts) {
     try {
       await updateDoc(doc(db, USERS, me.uid), { points: increment(earn), wins: increment(won && winCounts && !voidWin ? 1 : 0), games: increment(1) });
@@ -1766,7 +1769,7 @@ function revealRoom() {
     won = !!mr && mr.s > 0 && mr.s === sorted[0].s;
     m.players.forEach(p => tally($("cs_" + p.uid), prev[p.uid], m.score[p.uid]));
   }
-  sfx(won ? sWin : sLoss);
+  sfx(won ? sYay : sSad);
   setTimeout(() => { if (M !== m || m.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
 }
 function checkRoomForfeit() {
@@ -1795,7 +1798,7 @@ async function finishRoom() {
   else { $("resOpp").textContent = Math.max(...act.map(p => m.score[p.uid])); $("resOppN").textContent = "top score"; }
   const voided = Object.values(m.cardOf).some(v => v >= 2) || m.cards >= 2, earn = cardPay(m.contrib, m.cards), hasBots = m.players.some(p => p.bot), credit = won && !voided && !hasBots;
   $("resNote").textContent = cardNote(m.cards, m.contrib, earn, voided, "You earned the points you contributed" + (credit ? " and a win." : hasBots ? ". Matches with bots count for points, not wins." : "."));
-  show("result"); if (!draw) sfx(won ? sWin : sLoss);
+  show("result"); if (!draw) sfx(won ? sYay : sSad);
   try { await updateDoc(doc(db, USERS, me.uid), { points: increment(earn), wins: increment(credit ? 1 : 0), games: increment(1) }); me.points += earn; me.wins += credit ? 1 : 0; me.games += 1; } catch (e) { console.error(e); }
   RM = null; leaveRoom(m.rref);
 }
