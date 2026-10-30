@@ -33,6 +33,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Daily challenge: today's shared questions (first player of the day creates them, nobody can edit)
+    match /numerus_daily/{day} {
+      allow read, create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // One doc per player per day (id = date_uid). Created when the daily starts, filled in once when it ends.
+    match /numerus_dailyscores/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.day + '_' + request.auth.uid
+        && request.resource.data.score == null;
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && resource.data.score == null
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.score is number;
+      allow delete: if false;
+    }
+
+    // The all-time bell curve (count, sum and sum of squares of every daily score)
+    match /numerus_daily_stats/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && id == 'global' && request.resource.data.n == 1;
+      allow update: if signedIn() && id == 'global'
+        && request.resource.data.n == resource.data.n + 1
+        && request.resource.data.sum >= resource.data.sum
+        && request.resource.data.sumsq >= resource.data.sumsq;
+      allow delete: if false;
+    }
+
     // Everything else stays locked
     match /{document=**} {
       allow read, write: if false;

@@ -179,6 +179,14 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
 }
 .tile{position:relative}
 .tile.me{z-index:2}
+
+.choice.locked{opacity:.55;cursor:not-allowed;pointer-events:none}
+.solo .pl.r,.solo #revOpp{display:none}
+.dscore{text-align:center;margin:6px 0 4px}
+.dscore b{font-size:64px;font-weight:800}
+.dscore span{font-size:18px;color:var(--mute);margin-left:6px}
+.dpct{text-align:center;font-weight:700;font-size:18px}
+#dChart svg{width:100%;height:auto;display:block}
 </style>
 </head>
 <body>
@@ -228,6 +236,7 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   <div class="choices">
     <button class="choice" id="chHuman"><div class="ic">👤</div><div><b>Human</b><span>Queue up for a real opponent (60s)</span></div></button>
     <button class="choice" id="chAI"><div class="ic">🤖</div><div><b>Robot</b><span>Easy, medium or hard</span></div></button>
+    <button class="choice" id="chDaily"><div class="ic">📅</div><div><b>Daily</b><span id="dailySub">Same 10 questions for everyone. One try a day.</span></div></button>
   </div>
   <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="modeBack">‹ Back</button></div>
 </section>
@@ -286,6 +295,15 @@ body{background:var(--bg);color:var(--ink);font-family:ui-rounded,"SF Pro Rounde
   <div class="row"><button class="btn ghost" id="resHome">Home</button><button class="btn" id="resAgain">Play again</button></div>
 </section>
 
+<section id="daily" class="screen">
+  <div class="h1" style="margin-top:20px">Daily complete</div>
+  <div class="dscore"><b class="mono" id="dScore">0</b><span>/ 1000</span></div>
+  <div class="dpct" id="dPct"></div>
+  <div class="card" style="margin-top:12px"><div id="dChart"></div><div class="muted" id="dNote" style="font-size:12px;text-align:center;margin-top:8px"></div></div>
+  <div class="muted" id="dNext" style="text-align:center;font-size:13px;margin-top:14px"></div>
+  <div class="row"><button class="btn" id="dHome">Home</button></div>
+</section>
+
 <div id="calcWrap" class="calcWrap"><div class="calcPanel">
   <div class="calcTop"><b>Calculator</b><button type="button" id="calcClose" aria-label="Close">✕</button></div>
   <input class="field calcIn" id="calcIn" inputmode="none" placeholder="0" autocomplete="off" spellcheck="false">
@@ -322,6 +340,8 @@ const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const BOTS = ["Numeron", "Cogsworth", "Bolt-E"];
+const dn = n => BOTS.includes(n) ? n + " 🤖" : n;
 const fmt = n => (n === null || n === undefined) ? "—" : Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 /* ---------- audio ---------- */
@@ -376,27 +396,24 @@ function getKey() { if (_k) return _k; const m = {}; _P.forEach(p => m[p.i] = p.
 /* ---------- questions ---------- */
 const MODEL = "gemini-3.5-flash-lite";
 const BANK = [
-  ["How much rain does Togo get in a year?", 1168, "millimeters"],
-  ["How many islands does Indonesia have?", 17508, "islands"],
-  ["How many languages are spoken in Papua New Guinea?", 840, "languages"],
-  ["How long is Canada's coastline?", 202080, "kilometers"],
-  ["How many rooms are in the White House?", 132, "rooms"],
-  ["How many steps are inside the Statue of Liberty, ground to crown?", 354, "steps"],
-  ["What is the surface temperature of the Sun?", 5500, "degrees Celsius"],
-  ["How much does a large chicken egg weigh?", 57, "grams"],
-  ["How fast can a cheetah run at top speed?", 70, "miles per hour"],
-  ["How long are all the blood vessels in the human body laid end to end?", 100000, "kilometers"],
-  ["How many people live in Iceland?", 390000, "people"],
-  ["How big is Vatican City?", 0.44, "square kilometers"],
-  ["How long is a year on Mars?", 687, "Earth days"],
-  ["How many hours a day does a koala sleep?", 20, "hours"],
-  ["How many species of birds exist in the world?", 11000, "species"]
+  ["If you stacked 1 billion US $1 bills, how many miles tall would the stack be?", 67.9, "miles"],
+  ["How many Eiffel Towers stacked would reach the top of Mount Everest?", 26.8, "Eiffel Towers"],
+  ["How many hours would it take to drive to the Moon at 60 miles per hour?", 3981, "hours"],
+  ["How many days would it take to walk around the Earth's equator at 3 miles per hour, nonstop?", 346, "days"],
+  ["How many seconds does light need to circle the Earth's equator once?", 0.134, "seconds"],
+  ["How many years would it take to count to one billion at one number per second?", 31.7, "years"],
+  ["How many $1 bills laid end to end would stretch the 13.4 mile length of Manhattan?", 138276, "bills"],
+  ["How many seconds old are you on your 30th birthday?", 946728000, "seconds"],
+  ["If all 8 billion people stood shoulder to shoulder, 18 inches each, how many miles long is the line?", 2272727, "miles"],
+  ["How many heartbeats does a person have by age 50, at 70 beats per minute?", 1839600000, "beats"],
+  ["How many football fields would the Great Wall of China cover laid end to end?", 193218, "football fields"],
+  ["How many days would a snail at 0.03 mph take to cross the continental US coast to coast?", 3889, "days"]
 ].map(x => ({ q: x[0], a: x[1], unit: x[2], cat: "" }));
 const fallback10 = () => shuffle(BANK).slice(0, 10);
 async function genQuestions() {
   try {
     const cats = shuffle(["human body", "space", "geography", "history", "pop culture", "food and cooking", "sports", "animals", "technology", "chemistry", "everyday life", "music", "movies and TV", "math", "weather and earth science", "architecture"]).slice(0, 10);
-    const prompt = `Create 10 short, extremely random numeric guessing questions for a party game where players go with their gut instinct. Each question is ONE short plain sentence (under 15 words) asking for a single number about almost anything: countries, animals, movies, food, history, space, sports, music, weather, the human body, everyday objects, world records, brands, nature. Examples of the right style: "How much rain does Togo get in a year, in millimeters?", "How many islands does Indonesia have?", "How many words are spoken in the movie Ocean's Eleven?". The questions must NOT need math, multi-step reasoning, long setups or extra assumptions, and must not be long or complicated. Make them quirky and wildly different from each other. Avoid overly famous numbers (keys on a piano) and avoid year or date questions. Each needs one verifiable numeric answer from a reliable source. Use a different random subject for each, loosely inspired by: ${cats.join(", ")}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "millimeters" or "islands"}.`;
+    const prompt = `Create 10 short numeric estimation questions for a party game that rewards intuition. Each question is ONE sentence (under 25 words) that makes the player combine TWO things they might roughly know or can ballpark. Examples of the right style: "If you stacked Elon Musk's net worth in $1 bills, how many miles tall would the stack be?" (needs his net worth and the thickness of a bill), "How many hours would it take to drive to the Moon at 60 miles per hour?", "How many Eiffel Towers stacked would reach the top of Mount Everest?". Do NOT ask single-fact trivia someone could simply know (no "what element is silver", no "what year", no counts like keys on a piano, no famous single measurements). Never write out the math and never give away the ingredient numbers; the player supplies them from their own head. Make every question about a totally different random subject so nobody can prepare, loosely inspired by: ${cats.join(", ")}. Use stable, well-established figures; if a question uses a changing figure (net worth, population), use the most recent widely reported value. The answer must be one number computed from those widely known figures. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 10 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "miles" or "hours"}.`;
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
@@ -431,7 +448,7 @@ $("authForm").onsubmit = async e => {
   const name = $("uName").value.trim(), pw = $("uPass").value;
   $("authErr").textContent = "";
   if (!/^[A-Za-z0-9_]{3,14}$/.test(name)) { $("authErr").textContent = "Username: 3-14 letters, numbers or _"; return; }
-  if (name.toLowerCase() === "numeron") { $("authErr").textContent = "That name is reserved"; return; }
+  if (["numeron", "cogsworth"].includes(name.toLowerCase())) { $("authErr").textContent = "That name is reserved"; return; }
   if (pw.length < 6) { $("authErr").textContent = "Password needs at least 6 characters"; return; }
   busy(signUpMode ? "Creating account…" : "Logging in…");
   try {
@@ -458,7 +475,7 @@ onAuthStateChanged(auth, async user => {
     const d = snap.data();
     me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 };
     shown.points = me.points; shown.wins = me.wins; shown.games = me.games;
-    prefetchRanks();
+    prefetchRanks(); refreshDaily();
     look.skin = d.skin ?? 0; look.acc = d.acc ?? 0; look.color = d.color ?? 0;
     $("whoName").textContent = d.name;
     step = 0; renderWizard(); goTab("play"); show("main");
@@ -500,8 +517,7 @@ $("stepBack").onclick = () => { if (step > 0) { step--; renderWizard(); } };
 $("stepNext").onclick = () => { if (step < 2) { step++; renderWizard(); } else finishLook(); };
 async function finishLook() {
   try { await updateDoc(doc(db, USERS, me.uid), { skin: look.skin, acc: look.acc, color: look.color }); } catch (e) {}
-  $("modeBot").innerHTML = robot(look.skin, look.acc, look.color);
-  show("mode");
+  openMode();
 }
 $("modeBack").onclick = () => show("main");
 $("diffBack").onclick = () => show("mode");
@@ -545,7 +561,7 @@ function tileFor(x, rk, mine, val) {
   const t = document.createElement("div"); t.className = "tile" + (mine ? " me" : "");
   if (rk) { const r = document.createElement("div"); r.className = "rk"; r.textContent = rk; t.appendChild(r); }
   const av = document.createElement("div"); av.className = "av"; av.innerHTML = headOf(x);
-  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = x.name;
+  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = dn(x.name);
   const vl = document.createElement("div"); vl.className = "vl mono"; vl.textContent = fmt(val);
   t.append(av, nm, vl); return t;
 }
@@ -603,8 +619,10 @@ function startMatch(cfg) {
   M = Object.assign({ round: 0, my: 0, op: 0, ans: {}, revealed: false, submitted: false, timer: null, done: false }, cfg);
   $("mMeBot").innerHTML = robot(look.skin, look.acc, look.color);
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color);
-  $("mMeName").textContent = me.name; $("mOppName").textContent = M.opp.name;
+  $("mMeName").textContent = me.name; $("mOppName").textContent = dn(M.opp.name);
   $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
+  $("match").classList.toggle("solo", M.mode === "daily");
+  if (M.mode === "daily") M.qs.forEach((q, i) => { M.ans["a" + i + "_p2"] = null; });
   if (M.mode === "ai") M.qs.forEach((q, i) => {
     const e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
     M.ans["a" + i + "_p2"] = Number((q.a === 0 ? e * 5 : q.a * (1 + e)).toPrecision(3));
@@ -637,7 +655,7 @@ $("ansForm").onsubmit = e => {
 function submitMine(v) {
   if (M.submitted) return; M.submitted = true; M.subAt = Date.now();
   $("ansIn").disabled = true; $("lockBtn").disabled = true; $("calcBtn").disabled = true; closeCalc();
-  $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + M.opp.name + "…";
+  $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + dn(M.opp.name) + "…";
   setAns("a" + M.round + "_" + M.slot, v);
 }
 function setAns(key, val) {
@@ -661,17 +679,18 @@ function reveal() {
   $("qBox").style.display = "none"; $("revBox").style.display = "";
   $("revAns").textContent = fmt(q.a); $("revUnit").textContent = q.unit;
   $("revMeN").textContent = "You"; $("revMeG").textContent = fmt(g1); $("revMeS").textContent = "+" + s1;
-  $("revOppN").textContent = M.opp.name; $("revOppG").textContent = fmt(g2); $("revOppS").textContent = "+" + s2;
+  $("revOppN").textContent = dn(M.opp.name); $("revOppG").textContent = fmt(g2); $("revOppS").textContent = "+" + s2;
   $("revMe").classList.toggle("win", s1 > s2); $("revOpp").classList.toggle("win", s2 > s1);
   if (s1 > s2) sfx(sWin); else if (s2 > s1) sfx(sLoss);
   setTimeout(() => { if (!M || M.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
 }
 async function finishMatch() {
+  if (M.mode === "daily") { finishDaily(); return; }
   M.done = true; clearInterval(M.timer); if (M.unsub) M.unsub();
   const won = M.my > M.op, draw = M.my === M.op;
   $("resBot").innerHTML = robot(look.skin, look.acc, look.color);
   $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
-  $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").textContent = M.opp.name;
+  $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").textContent = dn(M.opp.name);
   const counts = M.mode === "human" || M.diff === "hard";
   $("resNote").textContent = counts ? "This match counted toward your stats." : "Practice match: Hard AI and human matches count toward stats.";
   show("result");
@@ -687,7 +706,7 @@ async function finishMatch() {
   }
 }
 $("resHome").onclick = () => { step = 0; renderWizard(); goTab("play"); show("main"); };
-$("resAgain").onclick = () => { $("modeBot").innerHTML = robot(look.skin, look.acc, look.color); show("mode"); };
+$("resAgain").onclick = () => openMode();
 
 /* ---------- AI match ---------- */
 const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
@@ -889,6 +908,106 @@ $("calcUse").onclick = () => {
   }
   frame();
 })();
+
+/* ---------- daily challenge ---------- */
+const ET = "America/New_York";
+function etParts() {
+  const o = {}; new Intl.DateTimeFormat("en-US", { timeZone: ET, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(new Date()).forEach(x => o[x.type] = x.value); return o;
+}
+const dayKey = () => { const o = etParts(); return `${o.year}-${o.month}-${o.day}`; };
+const secsToMidnight = () => { const o = etParts(); return 86400 - (+o.hour * 3600 + +o.minute * 60 + +o.second); };
+const hms = t => [Math.floor(t / 3600), Math.floor(t % 3600 / 60), t % 60].map(v => String(v).padStart(2, "0")).join(":");
+let dailyDone = false, dailyDay = dayKey();
+function updDailyUI() {
+  const left = hms(secsToMidnight()), b = $("chDaily");
+  b.classList.toggle("locked", dailyDone); b.disabled = dailyDone;
+  $("dailySub").textContent = dailyDone ? "Locked. Unlocks in " + left : "Same 10 questions for everyone. One try a day.";
+  $("dNext").textContent = "Next daily unlocks in " + left + " (midnight Eastern)";
+}
+async function refreshDaily() {
+  if (!me) return;
+  try { const sn = await getDoc(doc(db, "numerus_dailyscores", dayKey() + "_" + me.uid)); dailyDone = sn.exists(); } catch (e) {}
+  updDailyUI();
+}
+setInterval(() => { const k = dayKey(); if (k !== dailyDay) { dailyDay = k; dailyDone = false; refreshDaily(); } updDailyUI(); }, 1000);
+function openMode() { $("modeBot").innerHTML = robot(look.skin, look.acc, look.color); refreshDaily(); show("mode"); }
+async function dailyQuestions(day) {
+  const ref = doc(db, "numerus_daily", day), sn = await getDoc(ref);
+  if (sn.exists()) return sn.data().questions;
+  const qs = await genQuestions();
+  return await runTransaction(db, async tx => { const s2 = await tx.get(ref); if (s2.exists()) return s2.data().questions; tx.set(ref, { day, questions: qs, createdAt: serverTimestamp() }); return qs; });
+}
+async function startDaily() {
+  if (dailyDone) return;
+  const day = dayKey(); busy("Loading today's questions…");
+  try {
+    const qs = await dailyQuestions(day);
+    const mref = doc(db, "numerus_dailyscores", day + "_" + me.uid);
+    await runTransaction(db, async tx => { const s2 = await tx.get(mref); if (s2.exists()) throw new Error("done"); tx.set(mref, { day, uid: me.uid, name: me.name, score: null, startedAt: serverTimestamp() }); });
+    startMatch({ mode: "daily", day, qs, slot: "p1", opp: { name: "", skin: 0, acc: 0, color: 0 } });
+  } catch (e) {
+    unbusy(); console.error(e);
+    if (e.message === "done") { dailyDone = true; updDailyUI(); }
+  }
+}
+$("chDaily").onclick = () => startDaily();
+function normCdf(z) { const t = 1 / (1 + .2316419 * Math.abs(z)), d = .3989423 * Math.exp(-z * z / 2); const p = d * t * (.3193815 + t * (-.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; }
+// Mean/spread of every daily score ever played. Five "typical" pseudo-scores keep the curve sensible until real data piles up.
+function dailyModel(st) {
+  const k = 5, n = (st && st.n) || 0, sum = (st && st.sum) || 0, sq = (st && st.sumsq) || 0, N = n + k;
+  const mean = (sum + k * 500) / N, v = Math.max(400, (sq + k * (150 * 150 + 500 * 500)) / N - mean * mean);
+  return { mean, sd: Math.sqrt(v) };
+}
+function curveSVG(score, m) {
+  const W = 320, H = 160, padB = 24, top = 26;
+  const lo = Math.max(0, Math.min(m.mean - 4 * m.sd, score - 40)), hi = Math.min(1000, Math.max(m.mean + 4 * m.sd, score + 40));
+  const X = v => (v - lo) / (hi - lo) * W, base = H - padB;
+  const Yv = v => base - Math.exp(-.5 * ((v - m.mean) / m.sd) ** 2) * (base - top);
+  let line = "", area = `M${X(lo).toFixed(1)} ${base}`;
+  for (let i = 0; i <= 140; i++) { const v = lo + (hi - lo) * i / 140; line += (i ? "L" : "M") + X(v).toFixed(1) + " " + Yv(v).toFixed(1); if (v <= score) area += `L${X(v).toFixed(1)} ${Yv(v).toFixed(1)}`; }
+  area += `L${X(score).toFixed(1)} ${Yv(score).toFixed(1)}L${X(score).toFixed(1)} ${base}Z`;
+  const sx = X(score), sy = Yv(score), mx = X(m.mean);
+  return `<svg viewBox="0 0 ${W} ${H}" font-family="inherit">
+    <path d="${area}" fill="#ff6b57" opacity=".28"/>
+    <path d="${line}" fill="none" stroke="#1d1d1f" stroke-width="2.2" stroke-linecap="round"/>
+    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="#e7e4da" stroke-width="2"/>
+    <line x1="${mx.toFixed(1)}" y1="${top - 6}" x2="${mx.toFixed(1)}" y2="${base}" stroke="#8d8b84" stroke-width="1" stroke-dasharray="3 4"/>
+    <text x="${mx.toFixed(1)}" y="${top - 10}" text-anchor="middle" font-size="10" fill="#8d8b84">avg ${Math.round(m.mean)}</text>
+    <line x1="${sx.toFixed(1)}" y1="${sy.toFixed(1)}" x2="${sx.toFixed(1)}" y2="${base}" stroke="#ff6b57" stroke-width="2.5"/>
+    <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5.5" fill="#ff6b57" stroke="#fff" stroke-width="2"/>
+    <text x="${Math.min(W - 18, Math.max(18, sx)).toFixed(1)}" y="${Math.max(12, sy - 12).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#ff6b57">You</text>
+    <text x="2" y="${H - 6}" font-size="10" fill="#8d8b84">${Math.round(lo)}</text>
+    <text x="${W - 2}" y="${H - 6}" text-anchor="end" font-size="10" fill="#8d8b84">${Math.round(hi)}</text>
+  </svg>`;
+}
+function showDailyResult(score, st) {
+  $("dScore").textContent = score;
+  if (st) {
+    const m = dailyModel(st), pct = Math.min(99, Math.max(1, Math.round(normCdf((score - m.mean) / m.sd) * 100)));
+    $("dPct").textContent = `Higher than ${pct}% of players`;
+    $("dChart").innerHTML = curveSVG(score, m);
+    $("dNote").textContent = `Built from ${fmt(st.n)} daily game${st.n === 1 ? "" : "s"} across every day so far.`;
+    if (pct >= 50) sfx(sWin);
+  } else { $("dPct").textContent = "Couldn't load the curve"; $("dChart").innerHTML = ""; $("dNote").textContent = ""; }
+  updDailyUI(); show("daily");
+}
+async function finishDaily() {
+  M.done = true; clearInterval(M.timer);
+  const score = M.my, mref = doc(db, "numerus_dailyscores", M.day + "_" + me.uid), sref = doc(db, "numerus_daily_stats", "global");
+  busy("Plotting your score…"); let st = null;
+  try {
+    await runTransaction(db, async tx => {
+      const sn = await tx.get(mref); if (!sn.exists() || sn.data().score !== null) throw new Error("dup");
+      tx.update(mref, { score });
+      tx.set(sref, { n: increment(1), sum: increment(score), sumsq: increment(score * score) }, { merge: true });
+      tx.update(doc(db, USERS, me.uid), { points: increment(score), games: increment(1) });
+    });
+    me.points += score; me.games += 1; dailyDone = true;
+    st = (await getDoc(sref)).data();
+  } catch (e) { console.error(e); }
+  unbusy(); showDailyResult(score, st);
+}
+$("dHome").onclick = () => { step = 0; renderWizard(); goTab("play"); show("main"); };
 </script>
 </body>
 </html>
