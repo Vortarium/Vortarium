@@ -84,6 +84,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Custom rooms (8-digit code = doc id). Lobby, ready states, questions and each player's answers live here.
+    match /numerus_rooms/{code} {
+      allow read, update, delete: if signedIn();
+      allow create: if signedIn() && code.matches('[0-9]{8}');
+    }
+
     // Everything else stays locked
     match /{document=**} {
       allow read, write: if false;

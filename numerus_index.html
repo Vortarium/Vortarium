@@ -201,12 +201,49 @@ body.vort #app{padding-top:36px}
 #vortWrap .panel{background:#fff;border-radius:22px;padding:18px;width:100%;max-width:460px;max-height:92vh;overflow:auto}
 #vortWrap textarea{width:100%;min-height:200px;border:2px solid var(--line);border-radius:14px;padding:12px;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical;margin:10px 0}
 #vortMsg{font-size:13px;white-space:pre-wrap;min-height:18px}
+/* flee + rush timer */
+#fleeBtn{position:fixed;top:14px;left:14px;z-index:21;display:none;border:2px solid var(--line);background:var(--card);color:#d6402c;font:800 12px/1 inherit;font-family:inherit;padding:10px 14px;border-radius:999px;cursor:pointer}
+#fleeAsk{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:#1d1d1f66;padding:16px}
+#fleeAsk.on{display:flex}
+#fleeAsk .panel{background:#fff;border-radius:22px;padding:20px;width:100%;max-width:360px;text-align:center}
+.btn.danger{background:#d6402c}
+.tbar i.red{background:#e5384a}
+#waitMsg.red{color:#e5384a;font-weight:700}
+/* rooms */
+.tally{display:inline-block;position:relative;z-index:2;font-variant-numeric:tabular-nums}
+.tally.up{animation:statUp 3s ease both}
+#rBar{display:none}
+.room #rBar{display:block}
+.room .mbar,.room #revMe,.room #revOpp{display:none}
+.tteams{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tpanel{border:3px solid var(--line);border-radius:18px;padding:10px 6px;text-align:center;background:var(--card)}
+.tname{font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase}
+.tav{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;margin:6px 0}
+.tavi{width:30px;height:30px;display:block}
+.tavi svg,.chav svg,.mini svg{width:100%;height:100%;display:block}
+.ttot{font-size:32px;font-weight:800}
+.tcon{font-size:10px;color:var(--mute);min-height:12px}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.chip{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.chip.me{border-color:var(--ink)}
+.chip b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.chip .tally{font-weight:800;font-size:16px}
+.chav{width:30px;height:30px}
+.mini{width:28px;height:28px;flex:none}
+#revList .rrow{padding:6px 10px;margin-bottom:5px}
+#revList .g b{font-size:15px}
+#revList .pt{font-size:18px}
+#revTeam{text-align:center;font-weight:800;margin-bottom:8px}
+.rl-tile .vl{font-size:13px}
+.codeBig{font-size:34px;font-weight:800;letter-spacing:.14em}
+.opt svg{overflow:visible}
 </style>
 </head>
 <body>
 <canvas id="bgc"></canvas>
 <div id="app">
 <button id="muteBtn" title="Sound">♪</button>
+<button id="fleeBtn" type="button">⚑ Flee</button>
 
 <!-- AUTH -->
 <section id="auth" class="screen on">
@@ -252,6 +289,7 @@ body.vort #app{padding-top:36px}
     <button class="choice" id="chHuman"><div class="ic">👤</div><div><b>Human</b><span>Queue up for a real opponent (60s)</span></div></button>
     <button class="choice" id="chAI"><div class="ic">🤖</div><div><b>Robot</b><span>Easy, medium or hard</span></div></button>
     <button class="choice" id="chDaily"><div class="ic">📅</div><div><b>Daily</b><span id="dailySub">Same 10 questions for everyone. One try a day.</span></div></button>
+    <button class="choice" id="chCustom"><div class="ic">🎲</div><div><b>Custom</b><span>Create or join a room with friends (up to 8)</span></div></button>
   </div>
   <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="modeBack">‹ Back</button></div>
 </section>
@@ -264,6 +302,36 @@ body.vort #app{padding-top:36px}
     <button class="choice" data-d="hard"><div class="ic">🔥</div><div><b>Hard</b><span>Razor precision. Counts for stats.</span></div></button>
   </div>
   <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="diffBack">‹ Back</button></div>
+</section>
+
+<!-- CUSTOM -->
+<section id="custom" class="screen">
+  <div class="h1" style="margin-top:40px">Custom game</div>
+  <div class="choices">
+    <button class="choice" id="chCreate"><div class="ic">➕</div><div><b>Create a room</b><span>Get an 8-digit code to share</span></div></button>
+    <div class="card">
+      <div style="font-weight:800;margin-bottom:10px">Join a room</div>
+      <input class="field" id="joinCode" inputmode="numeric" maxlength="8" placeholder="8-digit room code" autocomplete="off">
+      <div class="err" id="joinErr"></div>
+      <button class="btn" id="joinBtn" style="width:100%">Join room</button>
+    </div>
+  </div>
+  <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="customBack">‹ Back</button></div>
+</section>
+
+<!-- ROOM LOBBY -->
+<section id="room" class="screen">
+  <div class="card" style="text-align:center">
+    <div class="muted" style="font-size:11px;letter-spacing:.14em;text-transform:uppercase">Room code</div>
+    <div class="mono codeBig" id="rCode"></div>
+    <div class="muted" id="rCount" style="font-size:13px"></div>
+  </div>
+  <div class="seg" id="rModeSeg" style="margin-top:12px"><button id="rSolos" class="on">Solos</button><button id="rTeams">Teams</button></div>
+  <div class="muted" id="rModeNote" style="font-size:12px;text-align:center;margin-top:8px"></div>
+  <div class="lb" id="rList"></div>
+  <div class="row"><button class="btn" id="rReady">I'm Ready!</button><button class="btn ghost" id="rNot">I'm Not Ready...</button></div>
+  <div class="row"><button class="btn" id="rStart" style="display:none">Start match</button></div>
+  <div class="row" style="margin-top:auto;padding-top:20px"><button class="btn ghost small" id="rLeave">Leave room</button></div>
 </section>
 
 <!-- QUEUE -->
@@ -281,6 +349,7 @@ body.vort #app{padding-top:36px}
     <div class="rd">Round<br><b id="mRound">1</b>/10</div>
     <div class="pl r"><div id="mOppBot"></div><div><b id="mOppName"></b><span class="mono" id="mOppScore">0</span></div></div>
   </div>
+  <div id="rBar"></div>
   <div class="tbar"><i id="tFill"></i></div>
   <div id="qBox">
     <h2 id="qText"></h2>
@@ -298,6 +367,8 @@ body.vort #app{padding-top:36px}
     <div class="revnum pop"><small>Correct answer</small><b class="mono" id="revAns"></b> <span class="muted" id="revUnit"></span></div>
     <div class="rrow" id="revMe"><div class="g"><small id="revMeN"></small><b class="mono" id="revMeG"></b></div><div class="pt mono" id="revMeS"></div></div>
     <div class="rrow" id="revOpp"><div class="g"><small id="revOppN"></small><b class="mono" id="revOppG"></b></div><div class="pt mono" id="revOppS"></div></div>
+    <div id="revTeam"></div>
+    <div id="revList"></div>
   </div>
 </section>
 
@@ -315,6 +386,8 @@ body.vort #app{padding-top:36px}
   <div class="dscore"><b class="mono" id="dScore">0</b><span>/ 1000</span></div>
   <div class="dpct" id="dPct"></div>
   <div class="card" style="margin-top:12px"><div id="dChart"></div><div class="muted" id="dNote" style="font-size:12px;text-align:center;margin-top:8px"></div></div>
+  <div class="muted" style="text-align:center;font-size:12px;margin-top:14px">Today's leaderboard (live)</div>
+  <div class="lb" id="dLb"></div>
   <div class="muted" id="dNext" style="text-align:center;font-size:13px;margin-top:14px"></div>
   <div class="row"><button class="btn" id="dHome">Home</button></div>
 </section>
@@ -328,6 +401,7 @@ body.vort #app{padding-top:36px}
 </div></div>
 
 <div id="busy"><div class="spin"></div><div id="busyMsg">Loading…</div></div>
+<div id="fleeAsk"><div class="panel"><div style="font-weight:800;font-size:18px">Flee this match?</div><div class="muted" id="fleeTxt" style="font-size:14px;margin-top:8px"></div><div class="row" style="margin-top:16px"><button type="button" class="btn danger" id="fleeYes">Flee</button><button type="button" class="btn ghost" id="fleeNo">Stay</button></div></div></div>
 </div>
 
 <div id="vortBar"><button type="button" id="vortBtn">✦ Question bank</button><button type="button" id="vortGenTop">✨ +25 AI</button></div>
@@ -350,7 +424,7 @@ body.vort #app{padding-top:36px}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment, getCountFromServer, arrayUnion } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, runTransaction, serverTimestamp, increment, getCountFromServer, arrayUnion, deleteField } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCi35IyqyH4clYPOletvpu4NTllKKF64E8",
@@ -410,10 +484,12 @@ function robot(skin, acc, color, vb) {
   if (acc === 2) a = `<polygon points="60,92 44,84 44,100" fill="${ink}"/><polygon points="60,92 76,84 76,100" fill="${ink}"/><circle cx="60" cy="92" r="4" fill="${ink}"/>`;
   if (acc === 3) a = `<path d="M30 ${eyeY + 2}A30 30 0 0 1 90 ${eyeY + 2}" fill="none" stroke="${ink}" stroke-width="5" stroke-linecap="round"/><rect x="24" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/><rect x="85" y="${eyeY - 6}" width="11" height="22" rx="5" fill="${ink}"/>`;
   if (acc === 4) a = `<path d="M38 ${top + 4}L41 ${top - 14}L51 ${top - 3}L60 ${top - 17}L69 ${top - 3}L79 ${top - 14}L82 ${top + 4}Z" fill="#ffc83d" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>`;
+  if (acc === 0) a = `<g transform="translate(60 ${top + 12}) scale(1.3) translate(-60 ${-(top + 12)})">${a}</g>`;
+  if (acc === 4) a = `<g transform="translate(60 ${top + 4}) scale(1.3) translate(-60 ${-(top + 4)})">${a}</g>`;
   return `<svg viewBox="${vb || "0 0 120 130"}">${ant}${body}${head}${face}${a}</svg>`;
 }
 const _c = "rus";
-const headOf = d => robot((d.skin | 0) % 5, (d.acc | 0) % 5, (d.color | 0) % 5, "16 0 88 90");
+const headOf = d => robot((d.skin | 0) % 5, (d.acc | 0) % 5, (d.color | 0) % 5, "8 -10 104 100");
 
 /* ---------- API key (split, scrambled, decoded only when needed) ---------- */
 const _P = [{"i":2,"d":"PVVWUWVXY3FMU0NKMjlaVU03cng="},{"i":6,"d":"PWtpNmMyemRBWjlMaGVMQTJHbGo="},{"i":1,"d":"PVFxK2UzOFhPVTVGY0dwOXJFb08="},{"i":0,"d":"PU1SNVhNZWJveUFESDM0UUpuVVA="},{"i":5,"d":"PUE3bVpZRFBBVUFvOEhGNDBWTEw="},{"i":3,"d":"PThzbTlYQzhhbG85WEFINA=="},{"i":4,"d":"PW9SV1NMUUYzUFVtSEduY1RKdkI="},{"i":7,"d":"PWd2YVVXalMzWEhmZ2lvMW1CM3k="}];
@@ -557,6 +633,7 @@ const isVort = () => !!me && me.name.toLowerCase() === "vortarium";
 function show(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id)); window.scrollTo(0, 0);
   if (id !== "main") stopDailyLb();
+  $("fleeBtn").style.display = (id === "match" && M && M.mode !== "daily") ? "block" : "none";
   const on = isVort() && !["auth", "match", "queue"].includes(id);
   $("vortBar").style.display = on ? "flex" : "none"; document.body.classList.toggle("vort", isVort() && id !== "auth");
   if (!on) { $("vortWrap").classList.remove("on"); $("vortAsk").classList.remove("on"); $("vortToast").style.display = "none"; }
@@ -804,7 +881,7 @@ function startMatch(cfg) {
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color);
   $("mMeName").textContent = me.name; $("mOppName").textContent = dn(M.opp.name);
   $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
-  $("match").classList.toggle("solo", M.mode === "daily");
+  $("match").classList.toggle("solo", M.mode === "daily"); $("match").classList.remove("room");
   if (M.mode === "daily") M.qs.forEach((q, i) => { M.ans["a" + i + "_p2"] = null; });
   if (M.mode === "ai") M.qs.forEach((q, i) => {
     const e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
@@ -820,14 +897,42 @@ function beginRound(i) {
   $("ansIn").value = ""; $("ansIn").disabled = false; $("lockBtn").disabled = false; $("calcBtn").disabled = false; closeCalc(); $("waitMsg").textContent = "";
   $("qBox").style.display = ""; $("revBox").style.display = "none";
   setTimeout(() => $("ansIn").focus(), 50);
-  const total = 60000; M.tEnd = Date.now() + total;
+  const total = 60000; M.tEnd = Date.now() + total; M.hardEnd = M.tEnd + 4000; M.rushed = false;
+  $("tFill").classList.remove("red"); $("waitMsg").classList.remove("red");
+  if (M.mode === "room" && $("rRound")) $("rRound").textContent = i + 1;
   clearInterval(M.timer);
   M.timer = setInterval(() => {
+    if (!M) return;
     const left = M.tEnd - Date.now();
     $("tFill").style.width = Math.max(0, left / total * 100) + "%";
-    if (left <= 0 && !M.submitted) submitMine(null);
-    if (M.submitted && !M.revealed && Date.now() - M.subAt > 66000) { M.ans["a" + M.round + "_" + SLOT_OPP(M.slot)] = null; checkReveal(); }
+    // timer hit 0: lock whatever is typed (or nothing) and end the round
+    if (left <= 0 && !M.submitted) {
+      const t = $("ansIn").value.trim(), v = Number(t.replace(/[,\s]/g, ""));
+      submitMine(t !== "" && isFinite(v) ? v : null);
+    }
+    if (!M.revealed && Date.now() > M.hardEnd) { fillMissing(); checkReveal(); }
   }, 100);
+  checkRush();
+}
+function fillMissing() {
+  const i = M.round;
+  if (M.mode === "human") { const k = "a" + i + "_" + SLOT_OPP(M.slot); if (!(k in M.ans)) M.ans[k] = null; }
+  else if (M.mode === "room") M.players.forEach(p => { const k = "a" + i + "_" + p.uid; if (!(k in M.ans)) M.ans[k] = null; });
+}
+// the other side locked in first: your timer turns red and drops to 10s
+function checkRush() {
+  if (!M || M.done || M.submitted || M.revealed || M.rushed) return;
+  const i = M.round; let msg;
+  if (M.mode === "human") {
+    if (!(("a" + i + "_" + SLOT_OPP(M.slot)) in M.ans)) return;
+    msg = dn(M.opp.name) + " has made their move!";
+  } else if (M.mode === "room") {
+    const act = M.players.filter(p => p.uid !== me.uid && !M.fled.has(p.uid));
+    if (!act.length || !act.every(p => ("a" + i + "_" + p.uid) in M.ans)) return;
+    msg = "Everyone else has made their move!";
+  } else return;
+  M.rushed = true; M.tEnd = Math.min(M.tEnd, Date.now() + 10000);
+  $("tFill").classList.add("red"); $("waitMsg").classList.add("red"); $("waitMsg").textContent = msg + " 10 seconds left.";
 }
 $("ansForm").onsubmit = e => {
   e.preventDefault(); if (!M || M.submitted) return;
@@ -838,21 +943,25 @@ $("ansForm").onsubmit = e => {
 function submitMine(v) {
   if (M.submitted) return; M.submitted = true; M.subAt = Date.now();
   $("ansIn").disabled = true; $("lockBtn").disabled = true; $("calcBtn").disabled = true; closeCalc();
-  $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + dn(M.opp.name) + "…";
+  $("waitMsg").textContent = v === null ? "Time's up!" : "Locked in. Waiting for " + (M.mode === "room" ? "the others" : dn(M.opp.name)) + "…";
+  $("waitMsg").classList.remove("red");
   setAns("a" + M.round + "_" + M.slot, v);
 }
 function setAns(key, val) {
   if (!M) return;
   M.ans[key] = val;
   if (M.mode === "human" && key.endsWith(M.slot)) updateDoc(M.mref, { [key]: val }).catch(console.error);
+  if (M.mode === "room") updateDoc(M.rref, { [key]: val }).catch(console.error);
   checkReveal();
 }
 function checkReveal() {
   if (!M || M.revealed) return; const i = M.round;
+  if (M.mode === "room") { if (M.players.every(p => M.fled.has(p.uid) || (("a" + i + "_" + p.uid) in M.ans))) revealRoom(); return; }
   const k1 = "a" + i + "_" + M.slot, k2 = "a" + i + "_" + SLOT_OPP(M.slot);
   if (k1 in M.ans && k2 in M.ans) reveal();
 }
 function reveal() {
+  if (M.mode === "room") { revealRoom(); return; }
   M.revealed = true; clearInterval(M.timer); $("tFill").style.width = "0%";
   const i = M.round, q = M.qs[i];
   const g1 = M.ans["a" + i + "_" + M.slot], g2 = M.ans["a" + i + "_" + SLOT_OPP(M.slot)];
@@ -865,17 +974,18 @@ function reveal() {
   $("revOppN").textContent = dn(M.opp.name); $("revOppG").textContent = fmt(g2); $("revOppS").textContent = "+" + s2;
   $("revMe").classList.toggle("win", s1 > s2); $("revOpp").classList.toggle("win", s2 > s1);
   if (s1 > s2) sfx(sWin); else if (s2 > s1) sfx(sLoss);
-  setTimeout(() => { if (!M || M.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
+  const m = M; setTimeout(() => { if (M !== m || m.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
 }
 async function finishMatch() {
   if (M.mode === "daily") { finishDaily(); return; }
+  if (M.mode === "room") { finishRoom(); return; }
   M.done = true; clearInterval(M.timer); if (M.unsub) M.unsub();
-  const won = M.my > M.op, draw = M.my === M.op;
+  const won = M.oppFled ? true : M.my > M.op, draw = !M.oppFled && M.my === M.op;
   $("resBot").innerHTML = robot(look.skin, look.acc, look.color);
   $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
   $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").textContent = dn(M.opp.name);
   const counts = true, winCounts = M.mode === "human" || M.diff === "hard" || M.diff === "medium";
-  $("resNote").textContent = winCounts ? "This match counted toward your stats." : "Your points counted. Wins against Bolt-E don't count toward stats.";
+  $("resNote").textContent = M.oppFled ? "Your opponent fled, so you win. This match counted toward your stats." : winCounts ? "This match counted toward your stats." : "Your points counted. Wins against Bolt-E don't count toward stats.";
   show("result");
   if (!draw) sfx(won ? sWin : sLoss);
   if (counts) {
@@ -984,10 +1094,248 @@ async function enterMatch(mid) {
       startMatch({ mode: "human", mref, slot, qs: d.questions, opp: slot === "p1" ? d.p2 : d.p1, unsub });
     }
     if (M && M.mref === mref) {
+      if (M.done) return;
+      if (d["fled_" + SLOT_OPP(slot)]) { M.oppFled = true; finishMatch(); return; }
       Object.keys(d).forEach(k => { if (/^a\d+_p[12]$/.test(k) && !(k in M.ans)) M.ans[k] = d[k]; });
-      checkReveal();
+      checkRush(); checkReveal();
     }
   }, err => console.error(err));
+}
+
+/* ---------- flee ---------- */
+const FLEE_TXT = { human: "If you leave now you won't earn any points or win credit, and your opponent will win.", ai: "If you leave now you won't earn any points or win credit for this match.", room: "If you leave now you won't earn any points or win credit, and the match carries on without you." };
+$("fleeBtn").onclick = () => { if (!M || M.done) return; $("fleeTxt").textContent = FLEE_TXT[M.mode] || FLEE_TXT.ai; $("fleeAsk").classList.add("on"); };
+$("fleeNo").onclick = () => $("fleeAsk").classList.remove("on");
+$("fleeYes").onclick = async () => {
+  $("fleeAsk").classList.remove("on");
+  const m = M; if (!m || m.done) return;
+  m.done = true; clearInterval(m.timer); closeCalc();
+  if (m.mode === "human") { try { await updateDoc(m.mref, { ["fled_" + m.slot]: true }); } catch (e) { console.error(e); } if (m.unsub) m.unsub(); }
+  else if (m.mode === "room") { try { await updateDoc(m.rref, { ["fled_" + me.uid]: true }); } catch (e) { console.error(e); } if (m.unsub) m.unsub(); leaveRoom(m.rref); RM = null; }
+  M = null; step = 0; renderWizard(); goTab("play"); show("main");
+};
+
+/* ---------- custom rooms ---------- */
+const ROOMS = "numerus_rooms";
+let RM = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const mePlayer = () => ({ uid: me.uid, name: me.name, skin: look.skin, acc: look.acc, color: look.color, ready: false, joinedAt: Date.now(), team: null });
+$("chCustom").onclick = () => { $("joinErr").textContent = ""; $("joinCode").value = ""; show("custom"); };
+$("customBack").onclick = () => show("mode");
+$("joinCode").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 8); });
+$("chCreate").onclick = async () => {
+  busy("Creating room…");
+  try {
+    for (let t = 0; t < 8; t++) {
+      const code = String(Math.floor(Math.random() * 1e8)).padStart(8, "0"), rref = doc(db, ROOMS, code);
+      const ok = await runTransaction(db, async tx => {
+        if ((await tx.get(rref)).exists()) return false;
+        tx.set(rref, { code, host: me.uid, mode: "solos", status: "lobby", players: { [me.uid]: mePlayer() }, questions: null, createdAt: serverTimestamp() });
+        return true;
+      });
+      if (ok) { unbusy(); enterRoom(code); return; }
+    }
+    throw new Error("codes");
+  } catch (e) { console.error(e); unbusy(); $("joinErr").textContent = "Couldn't create a room. Check Firestore rules."; }
+};
+$("joinBtn").onclick = async () => {
+  const code = $("joinCode").value; $("joinErr").textContent = "";
+  if (!/^\d{8}$/.test(code)) { $("joinErr").textContent = "Enter the 8-digit code"; return; }
+  busy("Joining room…");
+  try {
+    await runTransaction(db, async tx => {
+      const rref = doc(db, ROOMS, code), s = await tx.get(rref);
+      if (!s.exists()) throw new Error("none");
+      const d = s.data(), ps = d.players || {};
+      if (ps[me.uid]) return;
+      if (d.status !== "lobby") throw new Error("started");
+      if (Object.keys(ps).length >= 8) throw new Error("full");
+      tx.update(rref, { ["players." + me.uid]: mePlayer() });
+    });
+    unbusy(); enterRoom(code);
+  } catch (e) {
+    unbusy(); console.warn(e);
+    $("joinErr").textContent = e.message === "none" ? "No room with that code" : e.message === "started" ? "That match already started" : e.message === "full" ? "That room is full (8/8)" : "Couldn't join. Try again.";
+  }
+};
+function enterRoom(code) {
+  M = null; const rref = doc(db, ROOMS, code);
+  RM = { code, rref };
+  RM.unsub = onSnapshot(rref, onRoom, e => console.error(e));
+  $("rCode").textContent = code; show("room");
+}
+async function leaveRoom(rref) {
+  try {
+    await runTransaction(db, async tx => {
+      const s = await tx.get(rref); if (!s.exists()) return;
+      const d = s.data(), ps = { ...d.players }; delete ps[me.uid];
+      const ids = Object.keys(ps).sort((a, b) => ps[a].joinedAt - ps[b].joinedAt);
+      if (!ids.length) { tx.delete(rref); return; }
+      const upd = { ["players." + me.uid]: deleteField() };
+      if (d.host === me.uid) upd.host = ids[0];
+      tx.update(rref, upd);
+    });
+  } catch (e) { console.warn(e); }
+}
+$("rLeave").onclick = async () => {
+  if (!RM) { show("mode"); return; }
+  const r = RM; if (r.unsub) r.unsub(); RM = null;
+  busy("Leaving…"); await leaveRoom(r.rref); unbusy(); show("mode");
+};
+const setReady = v => { if (RM) updateDoc(RM.rref, { ["players." + me.uid + ".ready"]: v }).catch(console.error); };
+$("rReady").onclick = () => setReady(true);
+$("rNot").onclick = () => setReady(false);
+const setRoomMode = m => { if (RM && RM.d && RM.d.host === me.uid) updateDoc(RM.rref, { mode: m }).catch(console.error); };
+$("rSolos").onclick = () => setRoomMode("solos");
+$("rTeams").onclick = () => setRoomMode("teams");
+function renderLobby(d) {
+  unbusy();
+  const ps = Object.values(d.players || {}).sort((a, b) => a.joinedAt - b.joinedAt), isHost = d.host === me.uid, mine = (d.players || {})[me.uid];
+  $("rCount").textContent = ps.length + "/8 players" + (d.mode === "solos" && ps.length > 1 ? " · " + ps.map(() => "1").join("v") : "");
+  $("rSolos").classList.toggle("on", d.mode === "solos"); $("rTeams").classList.toggle("on", d.mode === "teams");
+  $("rModeSeg").style.pointerEvents = isHost ? "" : "none"; $("rModeSeg").style.opacity = isHost ? "" : ".6";
+  $("rModeNote").textContent = (d.mode === "teams" ? "Teams: players are randomly split into two sides with two random colors when the match starts." : "Solos: everyone plays for themselves.") + (isHost ? "" : " Only the host can change this.");
+  const L = $("rList"); L.innerHTML = "";
+  ps.forEach(p => {
+    const t = document.createElement("div"); t.className = "tile" + (p.uid === me.uid ? " me" : "");
+    t.innerHTML = `<div class="av">${headOf(p)}</div><div class="nm">${esc(p.name)}${p.uid === d.host ? " (host)" : ""}</div><div class="vl" style="font-size:13px;color:${p.ready ? "var(--ok)" : "var(--mute)"}">${p.ready ? "Ready" : "Not ready"}</div>`;
+    L.appendChild(t);
+  });
+  const rd = !!(mine && mine.ready);
+  $("rReady").classList.toggle("ghost", !rd); $("rReady").style.background = rd ? "var(--ok)" : "";
+  $("rNot").classList.toggle("ghost", rd);
+  const all = ps.length >= 2 && ps.every(p => p.ready);
+  $("rStart").style.display = isHost ? "" : "none"; $("rStart").disabled = !all;
+  $("rStart").textContent = ps.length < 2 ? "Need 2+ players" : all ? "Start match" : "Waiting for everyone to be ready";
+}
+$("rStart").onclick = async () => {
+  if (!RM) return; const rref = RM.rref; let d0 = null;
+  try {
+    d0 = await runTransaction(db, async tx => {
+      const s = await tx.get(rref); if (!s.exists()) return null;
+      const d = s.data(), ps = Object.values(d.players || {});
+      if (d.host !== me.uid || d.status !== "lobby" || ps.length < 2 || !ps.every(p => p.ready)) return null;
+      tx.update(rref, { status: "starting" }); return d;
+    });
+  } catch (e) { console.error(e); }
+  if (!d0) return;
+  busy("Picking 10 questions…");
+  try {
+    const ps = Object.values(d0.players), qs = await genQuestions(ps.map(p => p.uid));
+    const upd = { questions: qs, status: "playing" };
+    if (d0.mode === "teams") {
+      upd.teamColors = shuffle([0, 1, 2, 3, 4]).slice(0, 2);
+      const order = shuffle(ps), half = Math.ceil(order.length / 2);
+      order.forEach((p, i) => { upd["players." + p.uid + ".team"] = i < half ? 0 : 1; });
+    }
+    await updateDoc(rref, upd);
+  } catch (e) { console.error(e); unbusy(); updateDoc(rref, { status: "lobby" }).catch(() => {}); }
+};
+function onRoom(s) {
+  if (!RM) return;
+  if (!s.exists()) { if (!M || M.mode !== "room") { const r = RM; RM = null; if (r.unsub) r.unsub(); unbusy(); show("mode"); } return; }
+  const d = s.data(); RM.d = d;
+  if (d.status === "lobby") { renderLobby(d); return; }
+  if (d.status === "starting") { if (d.host !== me.uid) busy("Host is starting the match…"); return; }
+  if (d.status === "playing") {
+    if (!M || M.mode !== "room") { startRoomMatch(d); return; }
+    if (M.done) return;
+    Object.keys(d).forEach(k => {
+      if (/^a\d+_/.test(k) && !(k in M.ans)) M.ans[k] = d[k];
+      if (k.startsWith("fled_") && d[k]) M.fled.add(k.slice(5));
+    });
+    checkRoomForfeit(); if (M.done) return;
+    checkRush(); checkReveal();
+  }
+}
+function startRoomMatch(d) {
+  const players = Object.values(d.players).sort((a, b) => a.joinedAt - b.joinedAt), teamed = d.mode === "teams", mine = players.find(p => p.uid === me.uid);
+  M = { mode: "room", rref: RM.rref, slot: me.uid, players, teamed, teamCols: teamed ? d.teamColors.map(i => COLORS[i]) : null, myTeam: mine ? mine.team : null, qs: d.questions, round: 0, ans: {}, score: {}, contrib: 0, teamTot: [0, 0], fled: new Set(), revealed: false, submitted: false, timer: null, done: false, unsub: RM.unsub };
+  players.forEach(p => { M.score[p.uid] = 0; });
+  Object.keys(d).forEach(k => { if (k.startsWith("fled_") && d[k]) M.fled.add(k.slice(5)); });
+  markSeen(M.qs); buildRBar();
+  $("match").classList.remove("solo"); $("match").classList.add("room");
+  unbusy(); show("match"); beginRound(0);
+}
+function buildRBar() {
+  let h = `<div class="rd" style="margin-bottom:8px">Round <b id="rRound">1</b>/10</div>`;
+  if (M.teamed) {
+    h += `<div class="tteams">` + [0, 1].map(t => {
+      const c = M.teamCols[t], ms = M.players.filter(p => p.team === t);
+      return `<div class="tpanel" style="border-color:${c.h}"><div class="tname" style="color:${c.h}">${c.n}</div><div class="tav">${ms.map(p => `<span class="tavi" title="${esc(p.name)}">${headOf(p)}</span>`).join("")}</div><div class="ttot"><span class="tally" id="tt${t}">0</span></div><div class="tcon" id="tc${t}">${t === M.myTeam ? "you contributed 0" : ""}</div></div>`;
+    }).join("") + `</div>`;
+  } else {
+    h += `<div class="chips">` + M.players.map(p => `<div class="chip${p.uid === me.uid ? " me" : ""}"><span class="chav">${headOf(p)}</span><b>${esc(p.name)}</b><span class="tally" id="cs_${p.uid}">0</span></div>`).join("") + `</div>`;
+  }
+  $("rBar").innerHTML = h;
+}
+function tally(el, from, to) {
+  if (!el) return; el.classList.remove("up");
+  if (from === to) { el.textContent = fmt(to); return; }
+  void el.offsetWidth; el.classList.add("up");
+  const t0 = performance.now(), D = 2400; el.textContent = fmt(from);
+  const tick = now => { const p = Math.min(1, (now - t0) / D), e = p * p * (3 - 2 * p); el.textContent = fmt(Math.round(from + (to - from) * e)); if (p < 1) requestAnimationFrame(tick); else el.textContent = fmt(to); };
+  requestAnimationFrame(tick);
+  setTimeout(() => el.classList.remove("up"), 3050);
+}
+function revealRoom() {
+  const m = M; m.revealed = true; clearInterval(m.timer); $("tFill").style.width = "0%";
+  const i = m.round, q = m.qs[i];
+  const rows = m.players.map(p => { const fl = m.fled.has(p.uid), g = fl ? null : (m.ans["a" + i + "_" + p.uid] ?? null); return { p, fl, g, s: fl ? 0 : scoreOf(g, q.a) }; });
+  const prev = { ...m.score }, prevT = [...m.teamTot];
+  rows.forEach(r => { m.score[r.p.uid] += r.s; if (m.teamed) m.teamTot[r.p.team] += r.s; });
+  const mr = rows.find(r => r.p.uid === me.uid); m.contrib += mr ? mr.s : 0;
+  $("qBox").style.display = "none"; $("revBox").style.display = "";
+  $("revAns").textContent = fmt(q.a); $("revUnit").textContent = q.unit;
+  const sorted = [...rows].sort((a, b) => b.s - a.s);
+  $("revList").innerHTML = sorted.map(r => {
+    const dot = m.teamed ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${m.teamCols[r.p.team].h};margin-right:6px"></span>` : "";
+    return `<div class="rrow${r.s === sorted[0].s && r.s > 0 ? " win" : ""}"><span class="mini">${headOf(r.p)}</span><div class="g"><small>${dot}${esc(r.p.uid === me.uid ? "You" : r.p.name)}</small><b class="mono">${r.fl ? "fled" : fmt(r.g)}</b></div><div class="pt mono">+${r.s}</div></div>`;
+  }).join("");
+  let won = false;
+  if (m.teamed) {
+    const rt = [0, 1].map(t => rows.filter(r => r.p.team === t).reduce((a, r) => a + r.s, 0));
+    const wt = rt[0] > rt[1] ? 0 : rt[1] > rt[0] ? 1 : -1;
+    $("revTeam").textContent = wt < 0 ? `Round tied ${rt[0]} – ${rt[1]}` : `${m.teamCols[wt].n} wins the round, ${rt[wt]} – ${rt[1 - wt]}`;
+    $("revTeam").style.color = wt < 0 ? "" : m.teamCols[wt].h;
+    won = wt === m.myTeam;
+    [0, 1].forEach(t => tally($("tt" + t), prevT[t], m.teamTot[t]));
+    if (m.myTeam != null) $("tc" + m.myTeam).textContent = "you contributed " + fmt(m.contrib);
+  } else {
+    $("revTeam").textContent = ""; $("revTeam").style.color = "";
+    won = !!mr && mr.s > 0 && mr.s === sorted[0].s;
+    m.players.forEach(p => tally($("cs_" + p.uid), prev[p.uid], m.score[p.uid]));
+  }
+  sfx(won ? sWin : sLoss);
+  setTimeout(() => { if (M !== m || m.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
+}
+function checkRoomForfeit() {
+  if (!M || M.mode !== "room" || M.done) return;
+  const act = M.players.filter(p => !M.fled.has(p.uid));
+  if (M.teamed ? !(act.some(p => p.team === 0) && act.some(p => p.team === 1)) : act.length <= 1) finishMatch();
+}
+async function finishRoom() {
+  const m = M; if (m.finished) return; m.finished = true;
+  m.done = true; clearInterval(m.timer); if (m.unsub) m.unsub();
+  const act = m.players.filter(p => !m.fled.has(p.uid));
+  let won = false, draw = false;
+  if (m.teamed) {
+    const t0 = act.some(p => p.team === 0), t1 = act.some(p => p.team === 1); let wt;
+    if (t0 && !t1) wt = 0; else if (t1 && !t0) wt = 1; else wt = m.teamTot[0] > m.teamTot[1] ? 0 : m.teamTot[1] > m.teamTot[0] ? 1 : -1;
+    won = wt === m.myTeam; draw = wt === -1;
+  } else {
+    const top = Math.max(...act.map(p => m.score[p.uid])), ws = act.filter(p => m.score[p.uid] === top);
+    won = ws.length === 1 && ws[0].uid === me.uid; draw = ws.length > 1 && ws.some(p => p.uid === me.uid);
+  }
+  $("resBot").innerHTML = robot(look.skin, look.acc, look.color);
+  $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
+  $("resMe").textContent = m.contrib; $("resMeN").textContent = "your points";
+  if (m.teamed) { $("resOpp").textContent = m.teamTot[m.myTeam] + " – " + m.teamTot[1 - m.myTeam]; $("resOppN").textContent = "team totals"; }
+  else { $("resOpp").textContent = Math.max(...act.map(p => m.score[p.uid])); $("resOppN").textContent = "top score"; }
+  $("resNote").textContent = "You earned the points you contributed" + (won ? " and a win." : ".");
+  show("result"); if (!draw) sfx(won ? sWin : sLoss);
+  try { await updateDoc(doc(db, USERS, me.uid), { points: increment(m.contrib), wins: increment(won ? 1 : 0), games: increment(1) }); me.points += m.contrib; me.wins += won ? 1 : 0; me.games += 1; } catch (e) { console.error(e); }
+  RM = null; leaveRoom(m.rref);
 }
 
 /* ---------- numbers only ---------- */
@@ -1196,29 +1544,32 @@ async function lookOf(uid, fallbackName) {
   lookCache.set(uid, { t: Date.now(), v }); return v;
 }
 async function renderDailyLb(docs) {
-  const list = $("lbList"), day = dayKey(), tok = ++dLbTok;
+  const list = dLbEl, day = dayKey(), tok = ++dLbTok; if (!list) return;
   const rows = docs.map(d => d.data()).filter(x => x.day === day && typeof x.score === "number").sort((a, b) => b.score - a.score || (a.name || "").localeCompare(b.name || ""));
   if (!rows.length) { list.innerHTML = `<div class="muted" style="text-align:center">No scores yet today.</div>`; return; }
   const looks = await Promise.all(rows.map(x => lookOf(x.uid, x.name)));
-  if (tok !== dLbTok || lbField !== "daily") return;
+  if (tok !== dLbTok || !dLbEl || dLbEl !== list) return;
   list.innerHTML = "";
-  rows.forEach((x, i) => list.appendChild(tileFor(looks[i], "#" + (i + 1), x.uid === me.uid, x.score)));
+  const lim = list.id === "dLb" ? 5 : rows.length;
+  rows.slice(0, lim).forEach((x, i) => list.appendChild(tileFor(looks[i], "#" + (i + 1), x.uid === me.uid, x.score)));
+  const mi = rows.findIndex(x => x.uid === me.uid);
+  if (mi >= lim) { const sep = document.createElement("div"); sep.className = "dotsep"; sep.textContent = "..."; list.appendChild(sep); list.appendChild(tileFor(looks[mi], "#" + (mi + 1), true, rows[mi].score)); }
 }
 function startDailyLive() {
   stopDailyLive();
   dUnsubs.push(onSnapshot(doc(db, "numerus_daily_stats", "global"), sn => renderDailyStats(sn.exists() ? sn.data() : null), e => console.error(e)));
 }
-let dLbUnsub = null;
-function stopDailyLb() { if (dLbUnsub) { try { dLbUnsub(); } catch (_) {} dLbUnsub = null; } }
-function startDailyLb() {
-  stopDailyLb(); if (!me) return;
-  $("lbList").innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
-  dLbUnsub = onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); $("lbList").innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; });
+let dLbUnsub = null, dLbEl = null;
+function stopDailyLb() { if (dLbUnsub) { try { dLbUnsub(); } catch (_) {} dLbUnsub = null; } dLbEl = null; }
+function startDailyLb(el) {
+  stopDailyLb(); if (!me) return; dLbEl = el || $("lbList");
+  dLbEl.innerHTML = `<div class="muted" style="text-align:center">Loading…</div>`;
+  dLbUnsub = onSnapshot(query(collection(db, "numerus_dailyscores"), where("day", "==", dayKey())), sn => renderDailyLb(sn.docs), e => { console.error(e); (dLbEl || $("lbList")).innerHTML = `<div class="muted" style="text-align:center">Couldn't load the leaderboard.</div>`; });
 }
 function showDailyResult(score, st) {
   dScoreNow = score; $("dScore").textContent = score;
   renderDailyStats(st); if (st && score >= dailyModel(st).mean) sfx(sWin);
-  updDailyUI(); show("daily"); startDailyLive();
+  updDailyUI(); show("daily"); startDailyLive(); startDailyLb($("dLb"));
 }
 async function viewDaily() {
   busy("Loading today's results…");
