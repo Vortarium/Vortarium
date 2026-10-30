@@ -572,7 +572,10 @@ const nameHTML = n => escName(n) + (BOTS.includes(n) ? botBadge() : "");
 const fmt = n => (n === null || n === undefined) ? "—" : Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 /* ---------- audio ---------- */
-const music = new Audio("numerus_music.mp3"); music.loop = true; music.volume = 0.5;
+const MUSIC = ["numerus_music.mp3", "numerus_music2.mp3"]; let musicI = 0;
+const music = new Audio(MUSIC[0]); music.volume = 0.5;
+music.addEventListener("ended", () => { musicI = (musicI + 1) % MUSIC.length; music.src = MUSIC[musicI]; music.volume = 0.5; if (!muted) music.play().catch(() => {}); });
+const sDing = new Audio("numerus_ding.mp3");
 const sWin = new Audio("numerus_win.mp3"), sLoss = new Audio("numerus_loss.mp3");
 let muted = false;
 function tryMusic() { if (!muted) music.play().catch(() => {}); }
@@ -697,6 +700,21 @@ async function bankRandom(n) {
   if (docs.length < n) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(n - docs.length)))).docs);
   return fromDocs(docs);
 }
+const LOCK_MS = 12 * 60 * 60 * 1000;
+// Random bank questions that are unlocked (no unlockAt, or unlockAt already passed). Also returns the still-locked ones as a last resort.
+async function bankAvailable(want) {
+  const avail = new Map(), locked = new Map(), now = Date.now();
+  for (let t = 0; t < 5 && avail.size < want; t++) {
+    let docs = []; try { const x = Math.random(); docs = (await getDocs(query(collection(db, QB), where("r", ">=", x), orderBy("r"), limit(80)))).docs; if (docs.length < 80) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(80 - docs.length)))).docs); } catch (e) { console.warn("bank unavailable", e); break; }
+    docs.forEach(d => { const u = Number(d.data().unlockAt) || 0, c = cleanQ({ ...d.data(), id: d.id }); c.unlockAt = u; (u <= now ? avail : locked).set(d.id, c); });
+  }
+  return { avail: [...avail.values()], locked: [...locked.values()] };
+}
+// Every question used in a game is locked for 12 hours (unlockAt = when it becomes valid again)
+async function markUsed(qs) {
+  const t = Date.now() + LOCK_MS;
+  await Promise.allSettled(qs.map(x => updateDoc(doc(db, QB, x.id || qid(x.q)), { unlockAt: t })));
+}
 async function loadSeen(uids) {
   const set = new Set();
   await Promise.all([...new Set(uids)].map(async u => { try { const sn = await getDoc(doc(db, SEEN, u)); if (sn.exists()) (sn.data().ids || []).forEach(i => set.add(i)); } catch (e) { console.warn("seen", e); } }));
@@ -708,7 +726,7 @@ function markSeen(qs) {
 }
 // Writes each question once (the id is a hash of its text, so an exact repeat is refused by the rules). Returns { ok, failed }.
 async function logQuestions(list, source) {
-  const res = await Promise.allSettled(list.map(x => setDoc(doc(db, QB, x.id || qid(x.q)), { q: x.q, a: Number(x.a), unit: x.unit || "", source, by: me ? me.uid : null, r: Math.random(), createdAt: serverTimestamp() })));
+  const res = await Promise.allSettled(list.map(x => setDoc(doc(db, QB, x.id || qid(x.q)), { q: x.q, a: Number(x.a), unit: x.unit || "", source, by: me ? me.uid : null, r: Math.random(), unlockAt: x.unlockAt || 0, createdAt: serverTimestamp() })));
   const ok = [], failed = []; res.forEach((r, i) => (r.status === "fulfilled" ? ok : failed).push(list[i]));
   return { ok, failed };
 }
@@ -783,35 +801,37 @@ async function freshQuestions(n, seen, ref, exact) {
   out.forEach(x => ref.push(x));
   return out;
 }
-// 10 questions nobody in `uids` has seen. Each slot has a 25% chance of being freshly AI-written, otherwise it comes from the bank.
+// 10 random questions from the bank that are currently unlocked. Used questions are locked for 12 hours.
 async function genQuestions(uids) {
-  uids = uids && uids.length ? uids : (me ? [me.uid] : []);
-  const seen = await loadSeen(uids);
-  let k = 0; for (let i = 0; i < 10; i++) if (Math.random() < 0.25) k++;
-  let pool = []; try { pool = await bankRandom(50); } catch (e) { console.warn("bank unavailable", e); }
+  const { avail, locked } = await bankAvailable(40);
   const chosen = [], have = () => new Set(chosen.map(x => x.id));
-  const addFrom = (list, allowSeen, max) => {
+  const addFrom = (list, max, skipSimilar) => {
     for (const x of shuffle(list)) {
       if (chosen.length >= max) break;
-      if (have().has(x.id) || (!allowSeen && seen.has(x.id))) continue;
-      if (!allowSeen) { const tk = toks(x.q); if (chosen.some(c => similar(tk, toks(c.q)))) continue; }
+      if (have().has(x.id)) continue;
+      if (skipSimilar) { const tk = toks(x.q); if (chosen.some(c => similar(tk, toks(c.q)))) continue; }
       chosen.push(x);
     }
   };
-  addFrom(pool, false, 10 - k);
-  const need = 10 - chosen.length; // the fresh share, plus any slots the bank couldn't fill
-  if (need > 0) {
-    let ref = [...chosen];
-    try { const rec = await bankRecent(100); const m = new Map(); [...rec, ...pool, ...chosen].forEach(x => m.set(x.id, x)); ref = [...m.values()]; } catch (e) { console.warn(e); }
-    const fresh = await freshQuestions(need, seen, ref, false);
+  addFrom(avail, 10, true);
+  if (chosen.length < 10) addFrom(avail, 10, false);
+  const lockedIds = new Set(locked.map(x => x.id));
+  if (chosen.length < 10) { // not enough unlocked questions: have the AI add new ones to the bank
+    const need = 10 - chosen.length;
+    let ref = [...chosen, ...avail, ...locked];
+    try { const rec = await bankRecent(100); const m = new Map(); [...rec, ...ref].forEach(x => m.set(x.id, x)); ref = [...m.values()]; } catch (e) { console.warn(e); }
+    const fresh = await freshQuestions(need, new Set(), ref, false);
     fresh.slice(0, need).forEach(x => { if (!have().has(x.id)) chosen.push(x); });
   }
-  if (chosen.length < 10) {
-    addFrom(BANK, false, 10); logQuestions(BANK.filter(x => have().has(x.id)), "seed").catch(() => {});
-    if (chosen.length < 10) addFrom(pool, true, 10);
-    if (chosen.length < 10) addFrom(BANK, true, 10);
+  if (chosen.length < 10) { // built-in seed questions that aren't locked
+    const seeds = BANK.filter(x => !lockedIds.has(x.id));
+    addFrom(seeds, 10, false);
+    await logQuestions(seeds.filter(x => have().has(x.id)), "seed").catch(() => {});
   }
-  return shuffle(chosen).slice(0, 10);
+  if (chosen.length < 10) addFrom([...locked].sort((a, b) => a.unlockAt - b.unlockAt), 10, false); // last resort: soonest to unlock
+  const out = shuffle(chosen).slice(0, 10);
+  await markUsed(out);
+  return out;
 }
 // Every mode draws its 10 questions through here: bots, dailies, 1v1 and rooms. `uids` are the people who must not have seen them.
 const matchQuestions = uids => genQuestions(uids && uids.length ? uids : (me ? [me.uid] : []));
@@ -1173,12 +1193,11 @@ let M = null;
 const SLOT_OPP = s => s === "p1" ? "p2" : "p1";
 function startMatch(cfg) {
   M = Object.assign({ cards: 0, oppCards: 0, round: 0, my: 0, op: 0, ans: {}, revealed: false, submitted: false, timer: null, done: false }, cfg);
-  markSeen(M.qs);
   $("mMeBot").innerHTML = robot(look.skin, look.acc, look.color, null, true);
   $("mOppBot").innerHTML = robot(M.opp.skin, M.opp.acc, M.opp.color, null, true);
   $("mMeName").textContent = me.name; $("mOppName").innerHTML = nameHTML(M.opp.name);
   $("mMeScore").textContent = "0"; $("mOppScore").textContent = "0";
-  clearRoomBar(); $("match").classList.toggle("solo", M.mode === "daily");
+  clearRoomBar(); $("revList").innerHTML = ""; $("revTeam").textContent = ""; $("match").classList.toggle("solo", M.mode === "daily");
   if (M.mode === "daily") M.qs.forEach((q, i) => { M.ans["a" + i + "_p2"] = null; });
   if (M.mode === "ai") M.qs.forEach((q, i) => {
     const e = rand(M.err[0], M.err[1]) * (Math.random() < 0.5 ? -1 : 1);
@@ -1267,6 +1286,7 @@ function reveal() {
   M.my += s1; M.op += s2;
   showScores();
   $("qBox").style.display = "none"; $("revBox").style.display = "";
+  $("revList").innerHTML = ""; $("revTeam").textContent = "";
   $("revAns").textContent = fmt(q.a); $("revUnit").textContent = q.unit;
   $("revMeN").textContent = "You"; $("revMeG").textContent = fmt(g1); $("revMeS").textContent = "+" + s1;
   $("revOppN").innerHTML = nameHTML(M.opp.name); $("revOppG").textContent = fmt(g2); $("revOppS").textContent = "+" + s2;
@@ -1322,7 +1342,7 @@ async function joinQueue() {
   try {
     await setDoc(qref, { uid: me.uid, name: me.name, skin: look.skin, acc: look.acc, color: look.color, status: "waiting", matchId: null, createdAt: serverTimestamp() });
   } catch (e) { console.error(e); $("qMsg").textContent = "Couldn't join the queue. Check Firestore rules."; $("qLeave").textContent = "Back"; return; }
-  Q.unsub = onSnapshot(qref, s => { const d = s.data(); if (d && d.status === "matched" && d.matchId && !Q.entered) { Q.entered = true; endQueueTimers(); enterMatch(d.matchId); } });
+  Q.unsub = onSnapshot(qref, s => { const d = s.data(); if (d && d.status === "matched" && d.matchId && !Q.entered) { Q.entered = true; endQueueTimers(); sfx(sDing); enterMatch(d.matchId); } });
   Q.poll = setInterval(searchQueue, 3000); searchQueue();
   Q.tick = setInterval(() => {
     const left = Math.max(0, Math.ceil((Q.end - Date.now()) / 1000)); setQTime(left);
@@ -1378,7 +1398,7 @@ async function leaveOrTimeout() {
 async function timeoutQueue() {
   if (!Q || Q.entered) return;
   const mid = await leaveOrTimeout();
-  if (mid) { Q.entered = true; endQueueTimers(); enterMatch(mid); return; }
+  if (mid) { Q.entered = true; endQueueTimers(); sfx(sDing); enterMatch(mid); return; }
   endQueueTimers(); if (Q.unsub) Q.unsub();
   $("qMsg").textContent = "No one was around this time."; qDigits(0, false);
   $("qRetry").style.display = ""; $("qLeave").style.display = ""; $("qLeave").textContent = "Leave";
@@ -1660,7 +1680,7 @@ function startRoomMatch(d) {
   players.forEach(p => { M.score[p.uid] = 0; });
   Object.keys(d).forEach(k => { if (k.startsWith("fled_") && d[k]) M.fled.add(k.slice(5)); });
   Object.keys(d).forEach(k => { if (/^a\d+_/.test(k)) M.ans[k] = d[k]; });
-  markSeen(M.qs); buildRBar();
+  buildRBar();
   $("match").classList.remove("solo"); $("match").classList.add("room");
   unbusy(); show("match"); beginRound(0); renderCards();
 }
