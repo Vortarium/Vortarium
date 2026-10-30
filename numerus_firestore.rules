@@ -54,14 +54,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // The all-time bell curve (count, sum and sum of squares of every daily score)
+    // The all-time bell curve (count, sum and sum of squares of every game score: dailies, bot, human and room/team games, one entry per player per game)
     match /numerus_daily_stats/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && id == 'global' && request.resource.data.n == 1;
       allow update: if signedIn() && id == 'global'
         && request.resource.data.n == resource.data.n + 1
         && request.resource.data.sum >= resource.data.sum
-        && request.resource.data.sumsq >= resource.data.sumsq;
+        && request.resource.data.sumsq >= resource.data.sumsq
+        && request.resource.data.sum - resource.data.sum <= 1000
+        && request.resource.data.sumsq - resource.data.sumsq <= 1000000;
       allow delete: if false;
     }
 

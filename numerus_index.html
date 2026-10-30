@@ -293,6 +293,32 @@ body.shake .screen.on{animation:shk .38s}
 @keyframes stackBack{from{transform:scale(.92);opacity:.4}to{transform:none;opacity:1}}
 @keyframes gUnder{from{transform:none;opacity:1}to{transform:scale(.92);opacity:.25}}
 @keyframes gOut{from{transform:none;opacity:1}to{transform:translateX(105%) rotate(4deg);opacity:.2}}
+
+/* play-menu icon hover animations */
+.ic-ring{opacity:0;transform-origin:24px 7px}.ic-dot{opacity:0}.ic-cheek{opacity:0}
+.ic-ant,.ic-reyes,.ic-heyes,.ic-smile,.ic-die,.ic-pg{transform-origin:24px 24px}
+.ic-ant{transform-origin:24px 7px}.ic-reyes{transform-origin:24px 25.5px}.ic-heyes{transform-origin:24px 16.5px}.ic-smile{transform-origin:24px 21px}.ic-pg{transform-origin:24px 21px}
+.choice:hover .ic-die{animation:icRoll .9s cubic-bezier(.3,.7,.4,1) both}
+.choice:hover .ic-pg1{animation:icFlip1 1s ease-in-out both}
+.choice:hover .ic-pg2{animation:icFlip2 1s ease-in-out both}
+.choice:hover .ic-reyes{animation:icBlink 1.3s ease both}
+.choice:hover .ic-dot{animation:icDot 1.3s ease both}
+.choice:hover .ic-ant{animation:icAnt 1.3s ease both}
+.choice:hover .ic-ring{animation:icRing .7s ease-out .6s both}
+.choice:hover .ic-ring2{animation-delay:.85s}
+.choice:hover .ic-heyes{animation:icBlink 1s ease .1s both}
+.choice:hover .ic-smile{animation:icSmile 1s ease both}
+.choice:hover .ic-cheek{animation:icCheek 1s ease both}
+@keyframes icRoll{0%{transform:rotate(0) translateY(0)}30%{transform:rotate(130deg) translateY(-5px) scale(.94)}65%{transform:rotate(260deg) translateY(-2px)}100%{transform:rotate(360deg) translateY(0)}}
+@keyframes icFlip1{0%{transform:scaleY(1)}45%,100%{transform:scaleY(0)}}
+@keyframes icFlip2{0%,45%{transform:scaleY(1)}90%,100%{transform:scaleY(0)}}
+@keyframes icBlink{0%,100%{transform:scaleY(1)}12%,22%{transform:scaleY(.08)}34%{transform:scaleY(1)}58%,68%{transform:scaleY(.08)}80%{transform:scaleY(1)}}
+@keyframes icDot{0%{opacity:0;transform:translateY(0)}10%{opacity:1}45%{opacity:1;transform:translateY(-5px)}50%,100%{opacity:0;transform:translateY(-5px)}}
+@keyframes icAnt{0%,45%{fill:#1d1d1f;transform:scale(1)}58%{fill:#4aa8ff;transform:scale(1.4)}100%{fill:#1d1d1f;transform:scale(1)}}
+@keyframes icRing{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(2.3)}}
+@keyframes icSmile{0%,100%{transform:scale(1)}40%,80%{transform:scale(1.35,1.9) translateY(-.4px)}}
+@keyframes icCheek{0%,100%{opacity:0}40%,80%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.choice:hover .ic *{animation:none!important}}
 /* queue tick */
 #qTime{position:relative;display:flex;justify-content:center;height:1.1em;line-height:1.1em}
 #qTime .dg{position:relative;display:inline-block;width:.62em;height:1.1em;text-align:center}
@@ -628,10 +654,10 @@ const IC = { coral: "#ff6b57", sky: "#4aa8ff", mint: "#3ecf8e", sun: "#ffc83d", 
 function icon(name, cls) {
   const { coral, sky, mint, sun, grape, ink, paper } = IC, D = h => shade(h, -0.14);
   const P = {
-    human: `<path d="M7 43c0-10 7.5-16 17-16s17 6 17 16z" fill="${D(sky)}"/><circle cx="24" cy="17" r="10" fill="${sky}"/><circle cx="20" cy="16.5" r="1.9" fill="${ink}"/><circle cx="28" cy="16.5" r="1.9" fill="${ink}"/><path d="M20.4 21c2.2 2 4.8 2 7.2 0" fill="none" stroke="${ink}" stroke-width="1.9" stroke-linecap="round"/><path d="M15.5 12.5a9.5 9.5 0 0 1 6-4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>`,
-    robot: `<line x1="24" y1="9" x2="24" y2="14" stroke="${ink}" stroke-width="2.8" stroke-linecap="round"/><circle cx="24" cy="7" r="3.2" fill="${ink}"/><circle cx="7" cy="26" r="3.6" fill="${coral}"/><circle cx="41" cy="26" r="3.6" fill="${coral}"/><rect x="10" y="14" width="28" height="24" rx="8" fill="${coral}"/><rect x="14" y="20" width="20" height="11" rx="5.5" fill="#fff" opacity=".92"/><circle cx="20" cy="25.5" r="2.5" fill="${ink}"/><circle cx="28" cy="25.5" r="2.5" fill="${ink}"/><rect x="17" y="39" width="14" height="6" rx="3" fill="${D(coral)}"/>`,
-    calendar: `<rect x="6" y="9" width="36" height="34" rx="9" fill="${paper}"/><path d="M6 21v-3a9 9 0 0 1 9-9h18a9 9 0 0 1 9 9v3z" fill="${coral}"/><rect x="14" y="4.5" width="4.4" height="10" rx="2.2" fill="${ink}"/><rect x="29.6" y="4.5" width="4.4" height="10" rx="2.2" fill="${ink}"/><g fill="${ink}" opacity=".28"><circle cx="15" cy="28.5" r="2"/><circle cx="24" cy="28.5" r="2"/><circle cx="33" cy="28.5" r="2"/><circle cx="15" cy="36" r="2"/><circle cx="33" cy="36" r="2"/></g><circle cx="24" cy="36" r="4.6" fill="${sun}"/>`,
-    die: `<g transform="rotate(-9 24 24)"><rect x="8" y="9" width="32" height="32" rx="10" fill="${D(grape)}"/><rect x="8" y="6.5" width="32" height="32" rx="10" fill="${grape}"/><g fill="#fff"><circle cx="17" cy="15.5" r="3"/><circle cx="31" cy="15.5" r="3"/><circle cx="24" cy="22.5" r="3"/><circle cx="17" cy="29.5" r="3"/><circle cx="31" cy="29.5" r="3"/></g></g>`,
+    human: `<path d="M7 43c0-10 7.5-16 17-16s17 6 17 16z" fill="${D(sky)}"/><circle cx="24" cy="17" r="10" fill="${sky}"/><circle class="ic-cheek" cx="16.5" cy="20" r="2.4" fill="${coral}"/><circle class="ic-cheek" cx="31.5" cy="20" r="2.4" fill="${coral}"/><g class="ic-heyes"><circle cx="20" cy="16.5" r="1.9" fill="${ink}"/><circle cx="28" cy="16.5" r="1.9" fill="${ink}"/></g><path class="ic-smile" d="M20.4 21c2.2 2 4.8 2 7.2 0" fill="none" stroke="${ink}" stroke-width="1.9" stroke-linecap="round"/><path d="M15.5 12.5a9.5 9.5 0 0 1 6-4" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>`,
+    robot: `<line x1="24" y1="9" x2="24" y2="14" stroke="${ink}" stroke-width="2.8" stroke-linecap="round"/><circle class="ic-ring" cx="24" cy="7" r="3.2" fill="none" stroke="${sky}" stroke-width="1.6"/><circle class="ic-ring ic-ring2" cx="24" cy="7" r="3.2" fill="none" stroke="${sky}" stroke-width="1.6"/><circle class="ic-ant" cx="24" cy="7" r="3.2" fill="${ink}"/><circle class="ic-dot" cx="24" cy="14" r="1.6" fill="${sky}"/><circle cx="7" cy="26" r="3.6" fill="${coral}"/><circle cx="41" cy="26" r="3.6" fill="${coral}"/><rect x="10" y="14" width="28" height="24" rx="8" fill="${coral}"/><g class="ic-reyes"><rect x="14" y="20" width="20" height="11" rx="5.5" fill="#fff" opacity=".92"/><circle cx="20" cy="25.5" r="2.5" fill="${ink}"/><circle cx="28" cy="25.5" r="2.5" fill="${ink}"/></g><rect x="17" y="39" width="14" height="6" rx="3" fill="${D(coral)}"/>`,
+    calendar: `<rect x="6" y="9" width="36" height="34" rx="9" fill="${paper}"/><path d="M6 21v-3a9 9 0 0 1 9-9h18a9 9 0 0 1 9 9v3z" fill="${coral}"/><rect x="14" y="4.5" width="4.4" height="10" rx="2.2" fill="${ink}"/><rect x="29.6" y="4.5" width="4.4" height="10" rx="2.2" fill="${ink}"/><g><path d="M6 21h36v13a9 9 0 0 1-9 9H15a9 9 0 0 1-9-9z" fill="${paper}"/><g fill="${ink}" opacity=".28"><circle cx="15" cy="28.5" r="2"/><circle cx="24" cy="28.5" r="2"/><circle cx="24" cy="36" r="2"/><circle cx="15" cy="36" r="2"/></g><circle cx="33" cy="32" r="4.6" fill="${mint}"/></g><g class="ic-pg ic-pg2"><path d="M6 21h36v13a9 9 0 0 1-9 9H15a9 9 0 0 1-9-9z" fill="${paper}"/><g fill="${ink}" opacity=".28"><circle cx="24" cy="28.5" r="2"/><circle cx="33" cy="28.5" r="2"/><circle cx="33" cy="36" r="2"/><circle cx="15" cy="36" r="2"/></g><circle cx="15" cy="28.5" r="4.6" fill="${sky}"/></g><g class="ic-pg ic-pg1"><path d="M6 21h36v13a9 9 0 0 1-9 9H15a9 9 0 0 1-9-9z" fill="${paper}"/><g fill="${ink}" opacity=".28"><circle cx="15" cy="28.5" r="2"/><circle cx="24" cy="28.5" r="2"/><circle cx="33" cy="28.5" r="2"/><circle cx="15" cy="36" r="2"/><circle cx="33" cy="36" r="2"/></g><circle cx="24" cy="36" r="4.6" fill="${sun}"/></g>`,
+    die: `<g class="ic-die"><g transform="rotate(-9 24 24)"><rect x="8" y="9" width="32" height="32" rx="10" fill="${D(grape)}"/><rect x="8" y="6.5" width="32" height="32" rx="10" fill="${grape}"/><g fill="#fff"><circle cx="17" cy="15.5" r="3"/><circle cx="31" cy="15.5" r="3"/><circle cx="24" cy="22.5" r="3"/><circle cx="17" cy="29.5" r="3"/><circle cx="31" cy="29.5" r="3"/></g></g></g>`,
     sprout: `<ellipse cx="24" cy="41" rx="14" ry="4.2" fill="${paper}"/><path d="M24 40V23" stroke="${ink}" stroke-width="3" stroke-linecap="round"/><path d="M24 30C14 31.5 8.5 25.5 8.5 16.5 18 16 24 21 24 30z" fill="${mint}"/><path d="M24 25C24 15 30 9.5 40 9.5 40 19.5 34.5 26 24 25z" fill="${D(mint)}"/><path d="M13 21c3 .6 6 2.4 8 5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>`,
     bolt: `<path d="M28 4 10.5 26.5H22L18 44l19.5-25H26.5z" fill="${sun}" stroke="${sun}" stroke-width="3" stroke-linejoin="round"/><path d="M26.5 19.5H37.5L18 44l4-17.5z" fill="${shade(sun, -0.12)}"/><path d="M21 11 14.5 22" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".6"/>`,
     flame: `<path d="M24 4c2 8 12 12 12 24a12 12 0 0 1-24 0c0-6 3-9 5-12 1 4 3 5 4 5 0-6 0-11 3-17z" fill="${coral}"/><path d="M24 22c1 5 6 7 6 13a6 6 0 0 1-12 0c0-3 2-5 3-7 1 2 2 2 3 2 0-3 0-5 0-8z" fill="${sun}"/><path d="M16.5 22c-1.4 2-2.6 4.2-2.6 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5"/>`,
@@ -1294,10 +1320,17 @@ function reveal() {
   if (s1 > s2) sfx(sWin); else if (s2 > s1) sfx(sLoss);
   const m = M; setTimeout(() => { if (M !== m || m.done) return; if (i < 9) beginRound(i + 1); else finishMatch(); }, 4500);
 }
+// Every finished game adds this player's raw score (0 to 1000) to the all-time bell curve (daily, normal, bot and room/team games).
+async function logGameScore(score, complete) {
+  if (!me || !complete || M.scoreLogged || !isFinite(score)) return; M.scoreLogged = true;
+  score = Math.max(0, Math.min(1000, Math.round(score)));
+  try { await setDoc(doc(db, "numerus_daily_stats", "global"), { n: increment(1), sum: increment(score), sumsq: increment(score * score) }, { merge: true }); } catch (e) { console.warn("bell curve log", e); }
+}
 async function finishMatch() {
   if (M.mode === "daily") { finishDaily(); return; }
   if (M.mode === "room") { finishRoom(); return; }
   M.done = true; clearInterval(M.timer); if (M.unsub) M.unsub();
+  logGameScore(M.my, M.round >= 9 && M.revealed);
   const won = M.oppFled ? true : M.my > M.op, draw = !M.oppFled && M.my === M.op;
   $("resBot").innerHTML = robot(look.skin, look.acc, look.color, null, true);
   $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
@@ -1744,6 +1777,7 @@ function checkRoomForfeit() {
 async function finishRoom() {
   const m = M; if (m.finished) return; m.finished = true;
   m.done = true; clearInterval(m.timer); if (m.unsub) m.unsub();
+  logGameScore(m.score[me.uid] || 0, m.round >= 9 && m.revealed && !m.fled.has(me.uid));
   const act = m.players.filter(p => !m.fled.has(p.uid));
   let won = false, draw = false;
   if (m.teamed) {
