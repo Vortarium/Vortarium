@@ -66,7 +66,7 @@ service cloud.firestore {
     }
 
     // Question bank: every generated question is logged here once (doc id = hash of the text, so exact repeats are refused).
-    // Anyone signed in can log AI questions; only vortarium can add its own.
+    // Anyone signed in can log AI questions; only vortarium can add its own and fix missing units.
     match /numerus_questions/{id} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -74,7 +74,17 @@ service cloud.firestore {
         && request.resource.data.a is number
         && request.resource.data.source in ['ai', 'seed', 'vortarium']
         && (request.resource.data.source != 'vortarium' || request.auth.token.email == 'vortarium@numerus.app');
-      allow update, delete: if false;
+      // Unit audit: only vortarium, only the unit field, and only to fill a blank (or placeholder) unit.
+      allow update: if signedIn()
+        && request.auth.token.email == 'vortarium@numerus.app'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unit'])
+        && request.resource.data.unit is string
+        && request.resource.data.unit.size() > 0
+        && request.resource.data.unit.size() <= 40
+        && (!('unit' in resource.data)
+            || resource.data.unit == ''
+            || resource.data.unit.lower().matches('(n/?a|none|null|units?|numbers?|count|value|[?.-]+)'));
+      allow delete: if false;
     }
 
     // Which bank questions each player has already been served (one doc per player, ids only)
