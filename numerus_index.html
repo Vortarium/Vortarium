@@ -330,6 +330,11 @@ body.vort #app{padding-top:36px}
   <textarea id="vortTxt" spellcheck="false" placeholder="90 How many ads air during an average Super Bowl?&#10;460 How many hours to watch all of One Piece back to back?"></textarea>
   <div id="vortMsg"></div>
   <div class="row" style="margin-top:10px"><button type="button" class="btn" id="vortAdd">Add to bank</button></div>
+  <div style="border-top:2px solid var(--line);margin-top:16px;padding-top:14px;text-align:center">
+    <button type="button" class="btn ghost" id="vortGen">✨ Generate 25 with AI</button>
+    <div id="vortConf" style="display:none;margin-top:10px"><div style="font-size:13px;font-weight:700">Ask the AI to add 25 new questions to the bank? It skips repeats and lookalikes.</div>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn small" id="vortYes">Yes, generate</button><button type="button" class="btn ghost small" id="vortNo">Cancel</button></div></div>
+  </div>
   <div class="muted" id="vortCount" style="font-size:12px;text-align:center;margin-top:10px"></div>
 </div></div>
 <script type="module">
@@ -466,9 +471,9 @@ async function logQuestions(list, source) {
   const ok = [], failed = []; res.forEach((r, i) => (r.status === "fulfilled" ? ok : failed).push(list[i]));
   return { ok, failed };
 }
-async function aiGenerate(avoid) {
-  const cats = shuffle(["human body", "space", "history", "pop culture", "food and fast food", "sports", "animals", "technology", "everyday life", "music", "movies and TV", "anime and games", "money and business", "the internet", "travel and transport", "nature"]).slice(0, 14);
-  const prompt = `Create 14 short numeric estimation questions for a party game that rewards intuition. Each question is ONE sentence (under 25 words) about something fun, universal and relatable that most people have some feel for. Good examples: "How many ads air during an average Super Bowl broadcast?", "How many hours would it take to watch every episode of One Piece back to back?", "If you collected every human's eyeballs, how many metric tons would they weigh?", "How many Big Macs would weigh as much as the Statue of Liberty?". Prefer counts, durations, weights, money, calories, and everyday-life or pop-culture quantities. IMPORTANT: at most ONE question in the whole set may be about a length, height or distance; most should NOT be lengths. Keep answers reasonable: every answer must be a number between 0.1 and 100,000,000,000 (100 billion), and most should be under a billion. Do NOT ask single-fact trivia someone could simply know (no "what year", no famous single measurements). Never write out the math and never give away the ingredient numbers. Make every question about a totally different subject so nobody can prepare, loosely inspired by: ${cats.join(", ")}. Use stable, well-established figures; if a question uses a changing figure, use the most recent widely reported value. Each answer must be one number computed from widely known figures. Every question in this set must be about a clearly different subject and must not share objects, people, places or numbers with another question in the set. Questions already used in this game, which you must NOT repeat or write anything similar to (same subject, same objects, or same idea reworded): ${JSON.stringify(avoid)}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly 14 objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "hours" or "tons"}.`;
+async function aiGenerate(avoid, n) {
+  const cats = shuffle(["human body", "space", "history", "pop culture", "food and fast food", "sports", "animals", "technology", "everyday life", "music", "movies and TV", "anime and games", "money and business", "the internet", "travel and transport", "nature"]).slice(0, Math.min(16, n));
+  const prompt = `Create ${n} short numeric estimation questions for a party game that rewards intuition. Each question is ONE sentence (under 25 words) about something fun, universal and relatable that most people have some feel for. Good examples: "How many ads air during an average Super Bowl broadcast?", "How many hours would it take to watch every episode of One Piece back to back?", "If you collected every human's eyeballs, how many metric tons would they weigh?", "How many Big Macs would weigh as much as the Statue of Liberty?". Prefer counts, durations, weights, money, calories, and everyday-life or pop-culture quantities. IMPORTANT: at most ONE question in the whole set may be about a length, height or distance; most should NOT be lengths. Keep answers reasonable: every answer must be a number between 0.1 and 100,000,000,000 (100 billion), and most should be under a billion. Do NOT ask single-fact trivia someone could simply know (no "what year", no famous single measurements). Never write out the math and never give away the ingredient numbers. Make every question about a totally different subject so nobody can prepare, loosely inspired by: ${cats.join(", ")}. Use stable, well-established figures; if a question uses a changing figure, use the most recent widely reported value. Each answer must be one number computed from widely known figures. Every question in this set must be about a clearly different subject and must not share objects, people, places or numbers with another question in the set. Questions already used in this game, which you must NOT repeat or write anything similar to (same subject, same objects, or same idea reworded): ${JSON.stringify(avoid)}. Seed ${Math.floor(Math.random() * 1e6)}. Return ONLY a JSON array of exactly ${n} objects: {"q": the question text, "a": the answer as a plain number (no commas or text), "unit": short unit label like "hours" or "tons"}.`;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": getKey() },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 1, responseMimeType: "application/json" } })
@@ -476,47 +481,59 @@ async function aiGenerate(avoid) {
   if (!r.ok) throw new Error("api " + r.status);
   const j = await r.json();
   const t = j.candidates[0].content.parts[0].text.replace(/```json|```/g, "").trim();
-  return JSON.parse(t).filter(x => x && typeof x.q === "string" && x.q.length > 10 && x.a !== null && isFinite(Number(x.a)) && Number(x.a) > 0 && Number(x.a) <= 1e11).slice(0, 14).map(x => ({ q: x.q.trim(), a: Number(x.a), unit: String(x.unit || "") }));
+  return JSON.parse(t).filter(x => x && typeof x.q === "string" && x.q.length > 10 && x.a !== null && isFinite(Number(x.a)) && Number(x.a) > 0 && Number(x.a) <= 1e11).slice(0, n).map(x => ({ q: x.q.trim(), a: Number(x.a), unit: String(x.unit || "") }));
 }
-// Builds 10 questions nobody in `uids` has seen, not repeating or resembling anything already in the bank.
-async function genQuestions(uids) {
-  uids = uids && uids.length ? uids : (me ? [me.uid] : []);
-  const seen = await loadSeen(uids);
-  let ref = [];
-  try {
-    const [rec, rnd] = await Promise.all([bankRecent(150), bankRandom(60)]);
-    const m = new Map(); [...rec, ...rnd].forEach(x => m.set(x.id, x)); ref = [...m.values()];
-  } catch (e) { console.warn("bank unavailable", e); }
-  const refIds = new Set(ref.map(x => x.id)), refTok = ref.map(x => toks(x.q));
+// Asks the AI for new questions, drops repeats/lookalikes of anything in `ref` (the bank sample) and of each other, and logs the survivors.
+// `ref` is extended with what was accepted. exact=true logs only `n` of them (used by Vortarium's 25-question button).
+async function freshQuestions(n, seen, ref, exact) {
+  const ask = Math.min(30, n + (exact ? 8 : 4));
   let fresh = [];
-  try { fresh = await aiGenerate(shuffle(ref).slice(0, 60).map(x => x.q)); } catch (e) { console.warn("AI failed, using the bank", e); }
-  const kept = [];
+  try { fresh = await aiGenerate(shuffle(ref).slice(0, 60).map(x => x.q), ask); } catch (e) { console.warn("AI failed", e); return []; }
+  const refIds = new Set(ref.map(x => x.id)), refTok = ref.map(x => toks(x.q)), kept = [];
   for (const x of fresh) {
     const id = qid(x.q), tk = toks(x.q);
     if (seen.has(id) || refIds.has(id) || kept.some(k => k.id === id)) continue;
     if (refTok.some(t => similar(tk, t)) || kept.some(k => similar(tk, k.tk))) continue;
     kept.push({ ...x, id, tk });
   }
-  let chosen = kept.map(cleanQ);
-  if (kept.length) {
-    const { ok, failed } = await logQuestions(kept, "ai");
-    // some refused = exact repeats of questions already in the bank; all refused = logging itself is broken, so still play
-    if (ok.length) { const okIds = new Set(ok.map(x => x.id)); chosen = chosen.filter(x => okIds.has(x.id)); }
-    if (failed.length === kept.length) console.warn("Couldn't log questions to the bank. Check Firestore rules.");
+  let toLog = exact ? kept.slice(0, n) : kept, out = toLog.map(cleanQ);
+  if (toLog.length) {
+    const { ok, failed } = await logQuestions(toLog, "ai");
+    // some refused = exact repeats already in the bank; all refused = logging itself is broken, so still play
+    if (ok.length) { const okIds = new Set(ok.map(x => x.id)); out = out.filter(x => okIds.has(x.id)); }
+    if (failed.length === toLog.length) console.warn("Couldn't log questions to the bank. Check Firestore rules.");
   }
-  const have = () => new Set(chosen.map(x => x.id));
-  const addFrom = (pool, allowSeen) => {
-    for (const x of shuffle(pool)) {
-      if (chosen.length >= 10) break;
+  out.forEach(x => ref.push(x));
+  return out;
+}
+// 10 questions nobody in `uids` has seen. Each slot has a 25% chance of being freshly AI-written, otherwise it comes from the bank.
+async function genQuestions(uids) {
+  uids = uids && uids.length ? uids : (me ? [me.uid] : []);
+  const seen = await loadSeen(uids);
+  let k = 0; for (let i = 0; i < 10; i++) if (Math.random() < 0.25) k++;
+  let pool = []; try { pool = await bankRandom(50); } catch (e) { console.warn("bank unavailable", e); }
+  const chosen = [], have = () => new Set(chosen.map(x => x.id));
+  const addFrom = (list, allowSeen, max) => {
+    for (const x of shuffle(list)) {
+      if (chosen.length >= max) break;
       if (have().has(x.id) || (!allowSeen && seen.has(x.id))) continue;
       if (!allowSeen) { const tk = toks(x.q); if (chosen.some(c => similar(tk, toks(c.q)))) continue; }
       chosen.push(x);
     }
   };
-  if (chosen.length < 10) { let pool = []; try { pool = await bankRandom(120); } catch (e) { console.warn(e); } addFrom(pool, false);
-    if (chosen.length < 10) { addFrom(BANK, false); logQuestions(BANK.filter(x => have().has(x.id)), "seed").catch(() => {}); }
-    if (chosen.length < 10) addFrom(pool, true);
-    if (chosen.length < 10) addFrom(BANK, true); }
+  addFrom(pool, false, 10 - k);
+  const need = 10 - chosen.length; // the fresh share, plus any slots the bank couldn't fill
+  if (need > 0) {
+    let ref = [...chosen];
+    try { const rec = await bankRecent(100); const m = new Map(); [...rec, ...pool, ...chosen].forEach(x => m.set(x.id, x)); ref = [...m.values()]; } catch (e) { console.warn(e); }
+    const fresh = await freshQuestions(need, seen, ref, false);
+    fresh.slice(0, need).forEach(x => { if (!have().has(x.id)) chosen.push(x); });
+  }
+  if (chosen.length < 10) {
+    addFrom(BANK, false, 10); logQuestions(BANK.filter(x => have().has(x.id)), "seed").catch(() => {});
+    if (chosen.length < 10) addFrom(pool, true, 10);
+    if (chosen.length < 10) addFrom(BANK, true, 10);
+  }
   return shuffle(chosen).slice(0, 10);
 }
 function scoreOf(g, a) {
@@ -566,6 +583,24 @@ $("logout").onclick = async () => { await signOut(auth); };
 async function vortCount() { try { $("vortCount").textContent = "Bank size: " + fmt((await getCountFromServer(collection(db, QB))).data().count) + " questions"; } catch (e) { $("vortCount").textContent = ""; } }
 $("vortBtn").onclick = () => { $("vortMsg").textContent = ""; $("vortWrap").classList.add("on"); vortCount(); setTimeout(() => $("vortTxt").focus(), 30); };
 $("vortClose").onclick = () => $("vortWrap").classList.remove("on");
+$("vortGen").onclick = () => { $("vortGen").style.display = "none"; $("vortConf").style.display = "block"; };
+$("vortNo").onclick = () => { $("vortConf").style.display = "none"; $("vortGen").style.display = ""; };
+$("vortYes").onclick = async () => {
+  if (!isVort()) return;
+  $("vortConf").style.display = "none"; $("vortGen").style.display = ""; $("vortGen").disabled = true; $("vortAdd").disabled = true;
+  $("vortMsg").textContent = "Asking the AI for 25 new questions…";
+  let added = 0;
+  try {
+    const m = new Map(); const [rec, rnd] = await Promise.all([bankRecent(200), bankRandom(100)]); [...rec, ...rnd].forEach(x => m.set(x.id, x));
+    const ref = [...m.values()];
+    for (let t = 0; t < 4 && added < 25; t++) {
+      const got = await freshQuestions(25 - added, new Set(), ref, true); added += got.length;
+      $("vortMsg").textContent = `Added ${added} of 25…`;
+    }
+    $("vortMsg").textContent = added >= 25 ? "Added 25 new questions to the bank." : `Added ${added} new questions. The AI kept repeating or failing, so try again for the rest.`;
+  } catch (e) { console.error(e); $("vortMsg").textContent = `Something went wrong${added ? " after adding " + added : ""}. Try again.`; }
+  $("vortGen").disabled = false; $("vortAdd").disabled = false; vortCount();
+};
 $("vortAdd").onclick = async () => {
   if (!isVort()) return;
   const rows = [], bad = [];
@@ -841,7 +876,7 @@ $("resAgain").onclick = () => openMode();
 const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
 const AI_ERR = { easy: [0.40, 0.95], medium: [0.20, 0.70], hard: [0.05, 0.50] };
 document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
-  const d = b.dataset.d; busy("Writing 10 questions…");
+  const d = b.dataset.d; busy("Picking 10 questions…");
   const qs = await genQuestions([me.uid]);
   startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], ...(d === "hard" ? { skin: 4, acc: 1, color: 1 } : { skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) }) } });
 });
