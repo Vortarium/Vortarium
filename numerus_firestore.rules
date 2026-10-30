@@ -86,11 +86,11 @@ service cloud.firestore {
         && (!('unit' in resource.data)
             || resource.data.unit == ''
             || resource.data.unit.lower().matches('(n/?a|none|null|units?|numbers?|count|value|[?.-]+)'));
-      // 12-hour lock: any signed-in player can lock a question they just used (unlockAt = ms time it becomes valid again), nothing else.
+      // 24-hour lock: any signed-in player can lock a question they just used (unlockAt = ms time it becomes valid again), nothing else.
       allow update: if signedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockAt'])
         && request.resource.data.unlockAt is number
-        && request.resource.data.unlockAt <= request.time.toMillis() + 43260000;
+        && request.resource.data.unlockAt <= request.time.toMillis() + 86460000;
       allow delete: if false;
     }
 

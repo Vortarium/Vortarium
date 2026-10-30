@@ -726,7 +726,7 @@ async function bankRandom(n) {
   if (docs.length < n) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(n - docs.length)))).docs);
   return fromDocs(docs);
 }
-const LOCK_MS = 12 * 60 * 60 * 1000;
+const LOCK_MS = 24 * 60 * 60 * 1000;
 // Random bank questions that are unlocked (no unlockAt, or unlockAt already passed). Also returns the still-locked ones as a last resort.
 async function bankAvailable(want) {
   const avail = new Map(), locked = new Map(), now = Date.now();
@@ -736,7 +736,7 @@ async function bankAvailable(want) {
   }
   return { avail: [...avail.values()], locked: [...locked.values()] };
 }
-// Every question used in a game is locked for 12 hours (unlockAt = when it becomes valid again)
+// Every question used in a game is locked for 24 hours (unlockAt = when it becomes valid again)
 async function markUsed(qs) {
   const t = Date.now() + LOCK_MS;
   await Promise.allSettled(qs.map(x => updateDoc(doc(db, QB, x.id || qid(x.q)), { unlockAt: t })));
@@ -827,7 +827,7 @@ async function freshQuestions(n, seen, ref, exact) {
   out.forEach(x => ref.push(x));
   return out;
 }
-// 10 random questions from the bank that are currently unlocked. Used questions are locked for 12 hours.
+// 10 random questions from the bank that are currently unlocked. Used questions are locked for 24 hours.
 async function genQuestions(uids) {
   const { avail, locked } = await bankAvailable(40);
   const chosen = [], have = () => new Set(chosen.map(x => x.id));
@@ -1337,7 +1337,7 @@ async function finishMatch() {
   $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").innerHTML = nameHTML(M.opp.name);
   const counts = true, winCounts = M.mode === "human" || M.diff === "hard" || M.diff === "medium";
   const earn = cardPay(M.my, M.cards), voidWin = (M.cards || 0) >= 2 || !!M.oppRed;
-  const baseNote = M.oppFled ? "Your opponent fled, so you win. This match counted toward your stats." : winCounts ? "This match counted toward your stats." : "Your points counted. Wins against Bolt-E don't count toward stats.";
+  const baseNote = M.oppFled ? "Your opponent fled, so you win. This match counted toward your stats." : winCounts ? "This match counted toward your stats." : "Your points counted. Wins against the easy bot don't count toward stats.";
   $("resNote").textContent = cardNote(M.cards || 0, M.my, earn, voidWin, baseNote);
   show("result");
   if (!draw) sfx(won ? sWin : sLoss);
@@ -1345,7 +1345,7 @@ async function finishMatch() {
     try {
       await updateDoc(doc(db, USERS, me.uid), { points: increment(earn), wins: increment(won && winCounts && !voidWin ? 1 : 0), games: increment(1) });
       me.points += earn; me.wins += won && winCounts && !voidWin ? 1 : 0; me.games += 1;
-      if (M.mode === "ai" && M.diff === "hard") {
+      if (M.mode === "ai") { // every bot match is against Numeron, so all difficulties grow his stats
         try { await setDoc(doc(db, USERS, "numeron"), { name: "Numeron", skin: 4, acc: 1, color: 1, points: increment(M.op), wins: increment(M.op > M.my ? 1 : 0), games: increment(1) }, { merge: true }); } catch (e) { console.error(e); }
       }
     } catch (e) { console.error(e); }
@@ -1355,12 +1355,12 @@ $("resHome").onclick = () => { step = 0; renderWizard(); goTab("play"); show("ma
 $("resAgain").onclick = () => openMode();
 
 /* ---------- AI match ---------- */
-const AI_NAMES = { easy: "Bolt-E", medium: "Cogsworth", hard: "Numeron" };
-const AI_ERR = { easy: [0.40, 0.95], medium: [0.20, 0.70], hard: [0.05, 0.50] };
+const AI_NAMES = { easy: "Numeron", medium: "Numeron", hard: "Numeron" };
+const AI_ERR = { easy: [0.50, 1.00], medium: [0.30, 0.85], hard: [0.15, 0.70] };
 document.querySelectorAll("#diff .choice").forEach(b => b.onclick = async () => {
   const d = b.dataset.d; busy("Picking 10 questions…");
   const qs = await matchQuestions([me.uid]);
-  startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: AI_NAMES[d], ...(d === "hard" ? { skin: 4, acc: 1, color: 1 } : { skin: Math.floor(rand(0, 5)), acc: Math.floor(rand(0, 5)), color: Math.floor(rand(0, 5)) }) } });
+  startMatch({ mode: "ai", diff: d, err: AI_ERR[d], qs, slot: "p1", opp: { name: "Numeron", skin: 4, acc: 1, color: 1 } });
 });
 
 /* ---------- human matchmaking ---------- */
