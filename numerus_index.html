@@ -729,20 +729,36 @@ async function bankRandom(n) {
   if (docs.length < n) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(n - docs.length)))).docs);
   return fromDocs(docs);
 }
-const LOCK_MS = 24 * 60 * 60 * 1000;
-// Random bank questions that are unlocked (no unlockAt, or unlockAt already passed). Also returns the still-locked ones as a last resort.
+const LOCK_MS = 7 * 24 * 60 * 60 * 1000;
+// Local backup of the lock (works even if the Firestore rules aren't published yet)
+const usedLS = () => { try { return JSON.parse(localStorage.getItem("numerus_used") || "{}"); } catch (e) { return {}; } };
+// Purely random draw: many independent random points on the bank's random key `r`, one doc each (no contiguous window, so no clusters).
+// Questions with enabled === false (toggle in Firebase) or an unlockAt in the future are not eligible.
 async function bankAvailable(want) {
-  const avail = new Map(), locked = new Map(), now = Date.now();
-  for (let t = 0; t < 5 && avail.size < want; t++) {
-    let docs = []; try { const x = Math.random(); docs = (await getDocs(query(collection(db, QB), where("r", ">=", x), orderBy("r"), limit(80)))).docs; if (docs.length < 80) docs = docs.concat((await getDocs(query(collection(db, QB), where("r", "<", x), orderBy("r", "desc"), limit(80 - docs.length)))).docs); } catch (e) { console.warn("bank unavailable", e); break; }
-    docs.forEach(d => { const u = Number(d.data().unlockAt) || 0, c = cleanQ({ ...d.data(), id: d.id }); c.unlockAt = u; (u <= now ? avail : locked).set(d.id, c); });
+  const avail = new Map(), locked = new Map(), off = new Set(), all = new Set(), now = Date.now(), ls = usedLS();
+  for (let t = 0; t < 10 && avail.size < want; t++) {
+    let docs = [];
+    try {
+      const res = await Promise.all(Array.from({ length: 24 }, () => { const x = Math.random(); return getDocs(query(collection(db, QB), where("r", ">=", x), orderBy("r"), limit(1))); }));
+      res.forEach(r => r.docs.forEach(d => docs.push(d)));
+    } catch (e) { console.warn("bank unavailable", e); break; }
+    docs.forEach(d => {
+      if (all.has(d.id)) return; all.add(d.id);
+      const dt = d.data();
+      if (dt.enabled === false) { off.add(d.id); return; }
+      if (dt.enabled === undefined) updateDoc(d.ref, { enabled: true }).catch(() => {}); // give every question its on/off toggle
+      const u = Math.max(Number(dt.unlockAt) || 0, Number(ls[d.id]) || 0), c = cleanQ({ ...dt, id: d.id }); c.unlockAt = u;
+      (u <= now ? avail : locked).set(d.id, c);
+    });
   }
-  return { avail: [...avail.values()], locked: [...locked.values()] };
+  return { avail: [...avail.values()], locked: [...locked.values()], off };
 }
-// Every question used in a game is locked for 24 hours (unlockAt = when it becomes valid again)
+// Every question used in any game (daily, team, custom, duel, bot) is locked for 7 days (unlockAt = when it becomes valid again)
 async function markUsed(qs) {
   const t = Date.now() + LOCK_MS;
-  await Promise.allSettled(qs.map(x => updateDoc(doc(db, QB, x.id || qid(x.q)), { unlockAt: t })));
+  try { const ls = usedLS(), now = Date.now(); Object.keys(ls).forEach(k => { if (ls[k] < now) delete ls[k]; }); qs.forEach(x => { ls[x.id || qid(x.q)] = t; }); localStorage.setItem("numerus_used", JSON.stringify(ls)); } catch (e) {}
+  const res = await Promise.allSettled(qs.map(x => updateDoc(doc(db, QB, x.id || qid(x.q)), { unlockAt: t })));
+  const bad = res.filter(r => r.status === "rejected"); if (bad.length) console.warn("question lock failed for " + bad.length + " (publish the latest firestore rules)", bad[0].reason);
 }
 async function loadSeen(uids) {
   const set = new Set();
@@ -755,7 +771,7 @@ function markSeen(qs) {
 }
 // Writes each question once (the id is a hash of its text, so an exact repeat is refused by the rules). Returns { ok, failed }.
 async function logQuestions(list, source) {
-  const res = await Promise.allSettled(list.map(x => setDoc(doc(db, QB, x.id || qid(x.q)), { q: x.q, a: Number(x.a), unit: x.unit || "", source, by: me ? me.uid : null, r: Math.random(), unlockAt: x.unlockAt || 0, createdAt: serverTimestamp() })));
+  const res = await Promise.allSettled(list.map(x => setDoc(doc(db, QB, x.id || qid(x.q)), { q: x.q, a: Number(x.a), unit: x.unit || "", source, by: me ? me.uid : null, r: Math.random(), unlockAt: x.unlockAt || 0, enabled: true, createdAt: serverTimestamp() })));
   const ok = [], failed = []; res.forEach((r, i) => (r.status === "fulfilled" ? ok : failed).push(list[i]));
   return { ok, failed };
 }
@@ -830,9 +846,9 @@ async function freshQuestions(n, seen, ref, exact) {
   out.forEach(x => ref.push(x));
   return out;
 }
-// 10 random questions from the bank that are currently unlocked. Used questions are locked for 24 hours.
+// 10 purely random questions from the bank that are enabled and currently unlocked. Used questions are locked for 7 days.
 async function genQuestions(uids) {
-  const { avail, locked } = await bankAvailable(40);
+  const { avail, locked, off } = await bankAvailable(30);
   const chosen = [], have = () => new Set(chosen.map(x => x.id));
   const addFrom = (list, max, skipSimilar) => {
     for (const x of shuffle(list)) {
@@ -853,7 +869,7 @@ async function genQuestions(uids) {
     fresh.slice(0, need).forEach(x => { if (!have().has(x.id)) chosen.push(x); });
   }
   if (chosen.length < 10) { // built-in seed questions that aren't locked
-    const seeds = BANK.filter(x => !lockedIds.has(x.id));
+    const seeds = BANK.filter(x => !lockedIds.has(x.id) && !off.has(x.id));
     addFrom(seeds, 10, false);
     await logQuestions(seeds.filter(x => have().has(x.id)), "seed").catch(() => {});
   }

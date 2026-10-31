@@ -86,11 +86,14 @@ service cloud.firestore {
         && (!('unit' in resource.data)
             || resource.data.unit == ''
             || resource.data.unit.lower().matches('(n/?a|none|null|units?|numbers?|count|value|[?.-]+)'));
-      // 24-hour lock: any signed-in player can lock a question they just used (unlockAt = ms time it becomes valid again), nothing else.
+      // 7-day lock + on/off toggle. Any signed-in player can lock a question they just used (unlockAt = ms time it becomes valid again)
+      // and can give a question that has no toggle yet enabled: true. Turning a question off (enabled: false) is done in the Firebase console.
       allow update: if signedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockAt'])
-        && request.resource.data.unlockAt is number
-        && request.resource.data.unlockAt <= request.time.toMillis() + 86460000;
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unlockAt', 'enabled'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['unlockAt'])
+            || (request.resource.data.unlockAt is number && request.resource.data.unlockAt <= request.time.toMillis() + 604860000))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['enabled'])
+            || (!('enabled' in resource.data) && request.resource.data.enabled == true));
       allow delete: if false;
     }
 
