@@ -630,7 +630,7 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
 <div id="vortAsk"><div class="panel"><div style="font-weight:800;font-size:17px">Add 25 new questions?</div><div class="muted" style="font-size:13px;margin-top:6px">The AI writes 25 new questions for the bank and skips repeats and lookalikes.</div><div class="row" style="margin-top:14px"><button type="button" class="btn" id="askYes">Yes, generate</button><button type="button" class="btn ghost" id="askNo">Cancel</button></div></div></div>
 <div id="vortWrap"><div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Question bank</b><button type="button" id="vortClose" aria-label="Close" style="border:0;background:none;cursor:pointer;display:grid;place-items:center"><span class="xi" data-ico="x"></span></button></div>
-  <div style="margin-top:12px"><input class="field" id="vortSearch" placeholder="Search the question bank…" autocomplete="off" spellcheck="false" style="margin-bottom:6px"><div class="muted" id="vortSInfo" style="font-size:12px"></div><div id="vortRes"></div></div>
+  <div style="margin-top:12px"><input class="field" id="vortSearch" placeholder="Search the question bank…" autocomplete="off" spellcheck="false" style="margin-bottom:6px"><button type="button" class="btn ghost small" id="vortDup" style="margin-bottom:6px">Find lookalike questions</button><div class="muted" id="vortSInfo" style="font-size:12px"></div><div id="vortRes"></div></div>
   <div style="border-top:2px solid var(--line);margin-top:12px"></div>
   <div class="muted" style="font-size:13px;margin-top:6px">One question per line: the answer first, then the question. Put the unit in [brackets] anywhere in the line. Any question left without a unit is filled in by the AI after you post.<br>Example: <code>2300000 How many bananas would reach the ISS? [bananas]</code></div>
   <textarea id="vortTxt" spellcheck="false" placeholder="90 How many ads air during an average Super Bowl? [ads]&#10;460 How many hours to watch all of One Piece back to back? [hours]"></textarea>
@@ -770,9 +770,21 @@ const MODEL = "gemini-3.5-flash-lite";
 
 /* ---------- question bank (Firestore) ---------- */
 const QB = "numerus_questions", SEEN = "numerus_seen";
-const STOP = new Set("a an the of to in on at for and or is are was were be been it its this that these those how many much would will do does did if you your i we they he she them with from by as than then so up down all each about around roughly average typical total take takes taken per".split(" "));
+const STOP = new Set("a an the of to in on at for and or is are was were be been it its this that these those how many much would will do does did if you your i we they he she them with from by as than then so up down all each about around roughly average typical total take takes taken per laid lay laying one single whole entire what which there have has contain contains contained could should can number amount count".split(" "));
+const SYN = { hen: "chicken", hens: "chicken", rooster: "chicken", pound: "lb", pounds: "lb", lbs: "lb", kilogram: "kg", kilograms: "kg", kilos: "kg", kilo: "kg", minutes: "minute", mins: "minute", min: "minute" };
 const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const toks = t => new Set(norm(t).split(" ").filter(w => w.length > 1 && !STOP.has(w)).map(w => w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+const toks = t => new Set(norm(t).split(" ").map(w => SYN[w] || w).filter(w => w.length > 1 && !STOP.has(w)).map(w => w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
+const unitKey = u => String(u || "").toLowerCase().replace(/[^a-z]+/g, "").replace(/s$/, "");
+const sig = x => ({ tk: toks(x.q), a: Number(x.a), u: unitKey(x.unit) });
+// Two questions are the "same" if their wording overlaps a lot, OR they share their key words, measure the same unit and have a similar answer (a rephrase).
+function dupQ(A, B) {
+  let n = 0; A.tk.forEach(w => { if (B.tk.has(w)) n++; });
+  if (A.u && B.u && A.u !== B.u && n < 3) return false; // measuring different things (grams vs eggs), only a heavy wording overlap counts
+  if (similar(A.tk, B.tk)) return true;
+  if (n < 2 || !A.u || A.u !== B.u) return false;
+  const hi = Math.max(Math.abs(A.a), Math.abs(B.a)), lo = Math.min(Math.abs(A.a), Math.abs(B.a));
+  return n / Math.min(A.tk.size, B.tk.size) >= 0.5 && lo > 0 && hi / lo <= 3;
+}
 function similar(A, B) {
   let n = 0; A.forEach(w => { if (B.has(w)) n++; });
   if (n < 2) return false;
@@ -828,8 +840,8 @@ async function bankAvailable(want) {
     (u <= now ? avail : locked).set(d.id, c);
   });
   // hide lookalikes of anything used in the last 7 days (different id, nearly the same question)
-  const lt = [...locked.values()].map(x => toks(x.q));
-  for (const [id, x] of [...avail]) { const tk = toks(x.q); if (lt.some(t => similar(tk, t))) { x.unlockAt = now + 1; avail.delete(id); locked.set(id, x); } }
+  const lt = [...locked.values()].map(sig);
+  for (const [id, x] of [...avail]) { const sg = sig(x); if (lt.some(t => dupQ(sg, t))) { x.unlockAt = now + 1; avail.delete(id); locked.set(id, x); } }
   return { avail: [...avail.values()], locked: [...locked.values()], off };
 }
 // Every question used in any game (daily, team, custom, duel, bot) is locked for 7 days (unlockAt = when it becomes valid again)
@@ -906,15 +918,22 @@ async function auditUnits(say) {
 // Asks the AI for new questions, drops repeats/lookalikes of anything in `ref` (the bank sample) and of each other, and logs the survivors.
 // `ref` is extended with what was accepted. exact=true logs only `n` of them (used by Vortarium's 25-question button).
 async function freshQuestions(n, seen, ref, exact) {
-  const ask = Math.min(30, n + (exact ? 8 : 4));
-  let fresh = [];
-  try { fresh = await aiGenerate(shuffle(ref).slice(0, 60).map(x => x.q), ask); } catch (e) { console.warn("AI failed", e); return []; }
-  const refIds = new Set(ref.map(x => x.id)), refTok = ref.map(x => toks(x.q)), kept = [];
-  for (const x of fresh) {
-    const id = qid(x.q), tk = toks(x.q);
-    if (seen.has(id) || refIds.has(id) || kept.some(k => k.id === id)) continue;
-    if (refTok.some(t => similar(tk, t)) || kept.some(k => similar(tk, k.tk))) continue;
-    kept.push({ ...x, id, tk });
+  // compare against the ENTIRE bank (fresh read), plus anything passed in, so nothing can be a rephrase of an existing question
+  let full = [];
+  try { full = fromDocs((await getDocs(collection(db, QB))).docs); } catch (e) { console.warn("couldn't read the whole bank", e); }
+  const all = new Map(); [...full, ...ref].forEach(x => all.set(x.id, x));
+  const refList = [...all.values()], refSig = refList.map(sig), kept = [];
+  const avoidList = () => { const rec = [...refList].slice(-40).map(x => x.q), rnd = shuffle(refList).slice(0, 220).map(x => x.q); return [...new Set([...rec, ...rnd])]; };
+  for (let att = 0; att < 3 && kept.length < n; att++) {
+    const ask = Math.min(30, (n - kept.length) + (exact ? 8 : 4));
+    let fresh = [];
+    try { fresh = await aiGenerate([...avoidList(), ...kept.map(k => k.q)], ask); } catch (e) { console.warn("AI failed", e); break; }
+    for (const x of fresh) {
+      const id = qid(x.q), sg = sig(x);
+      if (seen.has(id) || all.has(id) || kept.some(k => k.id === id)) continue;
+      if (refSig.some(r => dupQ(sg, r)) || kept.some(k => dupQ(sg, k.sg))) continue;
+      kept.push({ ...x, id, sg });
+    }
   }
   let toLog = exact ? kept.slice(0, n) : kept, out = toLog.map(cleanQ);
   if (toLog.length) {
@@ -923,6 +942,7 @@ async function freshQuestions(n, seen, ref, exact) {
     if (ok.length) { const okIds = new Set(ok.map(x => x.id)); out = out.filter(x => okIds.has(x.id)); }
     if (failed.length === toLog.length) console.warn("Couldn't log questions to the bank. Check Firestore rules.");
   }
+  bankCache = null;
   out.forEach(x => ref.push(x));
   return out;
 }
@@ -934,7 +954,7 @@ async function genQuestions(uids) {
     for (const x of shuffle(list)) {
       if (chosen.length >= max) break;
       if (have().has(x.id)) continue;
-      if (skipSimilar) { const tk = toks(x.q); if (chosen.some(c => similar(tk, toks(c.q)))) continue; }
+      if (skipSimilar) { const sg = sig(x); if (chosen.some(c => dupQ(sg, sig(c)))) continue; }
       chosen.push(x);
     }
   };
@@ -1077,10 +1097,34 @@ async function vortRender() {
   $("vortSInfo").textContent = hits.length + " match" + (hits.length === 1 ? "" : "es") + (hits.length > 40 ? " (showing 40)" : "");
   $("vortRes").innerHTML = hits.slice(0, 40).map(x => `<div class="vres"><div class="vq">${esc(x.q)}<small>${esc(String(x.a))} ${esc(x.unit || "")} · ${vortStatus(x)}</small></div><button type="button" data-id="${esc(x.id)}">Delete</button></div>`).join("");
 }
+
+// group lookalike questions in the bank so extras can be removed
+let vortClusters = [];
+async function vortFindDups() {
+  if (!isVort()) return; vortAll = null; const all = await vortLoadBank(true); if (!all.length) return;
+  $("vortSInfo").textContent = "Comparing " + all.length + " questions…"; await new Promise(r => setTimeout(r, 30));
+  const sg = all.map(sig), par = all.map((_, i) => i), find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (dupQ(sg[i], sg[j])) par[find(j)] = find(i);
+  const g = new Map(); all.forEach((x, i) => { const r = find(i); if (!g.has(r)) g.set(r, []); g.get(r).push(x); });
+  vortClusters = [...g.values()].filter(c => c.length > 1).map(c => c.sort((a, b) => ((a.createdAt && a.createdAt.seconds) || 0) - ((b.createdAt && b.createdAt.seconds) || 0))).sort((a, b) => b.length - a.length);
+  const extra = vortClusters.reduce((n, c) => n + c.length - 1, 0);
+  $("vortSInfo").textContent = vortClusters.length ? vortClusters.length + " groups of lookalikes, " + extra + " extra questions. The oldest in each group is kept." : "No lookalikes found.";
+  $("vortRes").innerHTML = vortClusters.slice(0, 30).map((c, k) => `<div style="margin-top:10px"><button type="button" class="vkeep" data-cl="${k}" style="border:0;border-radius:10px;background:#7c3aed;color:#fff;font:800 12px/1 inherit;font-family:inherit;padding:9px 11px;cursor:pointer;width:100%">Keep the oldest, delete the other ${c.length - 1}</button>` + c.map(x => `<div class="vres"><div class="vq">${esc(x.q)}<small>${esc(String(x.a))} ${esc(x.unit || "")} · ${vortStatus(x)}</small></div><button type="button" data-id="${esc(x.id)}">Delete</button></div>`).join("") + "</div>").join("");
+}
+$("vortDup").onclick = vortFindDups;
 let vortSTimer = null;
 $("vortSearch").oninput = () => { clearTimeout(vortSTimer); vortSTimer = setTimeout(vortRender, 150); };
 $("vortRes").onclick = async e => {
   const b = e.target.closest("button"); if (!b || !isVort()) return;
+  if (b.dataset.cl !== undefined) {
+    const keepTxt = b.textContent;
+    if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = "Sure? Tap again to delete"; setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = keepTxt; } }, 3500); return; }
+    b.disabled = true; b.textContent = "Deleting…";
+    const c = vortClusters[Number(b.dataset.cl)] || [];
+    const res = await Promise.allSettled(c.slice(1).map(x => deleteDoc(doc(db, QB, x.id))));
+    const bad = res.filter(r => r.status === "rejected").length; bankCache = null;
+    await vortFindDups(); if (bad) $("vortSInfo").textContent = bad + " deletes failed (publish the latest firestore rules). " + $("vortSInfo").textContent; return;
+  }
   if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = "Sure?"; setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "Delete"; } }, 3500); return; }
   b.disabled = true; b.textContent = "…";
   try { await deleteDoc(doc(db, QB, b.dataset.id)); vortAll = vortAll.filter(x => x.id !== b.dataset.id); vortRender(); } catch (er) { b.disabled = false; b.textContent = "Delete"; $("vortSInfo").textContent = "Delete failed (publish the latest firestore rules): " + er.message; }
