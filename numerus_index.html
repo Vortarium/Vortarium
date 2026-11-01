@@ -206,6 +206,11 @@ body.vort #app{padding-top:36px}
 #vortWrap{position:fixed;inset:0;z-index:35;display:none;align-items:center;justify-content:center;background:#1d1d1f66;padding:16px}
 #vortWrap.on{display:flex}
 #vortWrap .panel{background:#fff;border-radius:22px;padding:18px;width:100%;max-width:460px;max-height:92vh;overflow:auto}
+.vres{display:flex;align-items:center;gap:8px;border:2px solid var(--line);border-radius:14px;padding:8px 10px;margin-top:6px}
+.vres .vq{flex:1;min-width:0;font-size:13px;line-height:1.35}.vres .vq small{display:block;color:var(--mute);font-size:11px;margin-top:2px}
+.vres button{flex:none;border:0;border-radius:10px;background:#d6402c;color:#fff;font:800 12px/1 inherit;font-family:inherit;padding:9px 11px;cursor:pointer}
+.vres button.sure{background:#7c1d12}
+#vortRes{max-height:300px;overflow:auto}
 #vortWrap textarea{width:100%;min-height:200px;border:2px solid var(--line);border-radius:14px;padding:12px;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical;margin:10px 0}
 #vortMsg{font-size:13px;white-space:pre-wrap;min-height:18px}
 /* flee + rush timer */
@@ -625,6 +630,8 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
 <div id="vortAsk"><div class="panel"><div style="font-weight:800;font-size:17px">Add 25 new questions?</div><div class="muted" style="font-size:13px;margin-top:6px">The AI writes 25 new questions for the bank and skips repeats and lookalikes.</div><div class="row" style="margin-top:14px"><button type="button" class="btn" id="askYes">Yes, generate</button><button type="button" class="btn ghost" id="askNo">Cancel</button></div></div></div>
 <div id="vortWrap"><div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Question bank</b><button type="button" id="vortClose" aria-label="Close" style="border:0;background:none;cursor:pointer;display:grid;place-items:center"><span class="xi" data-ico="x"></span></button></div>
+  <div style="margin-top:12px"><input class="field" id="vortSearch" placeholder="Search the question bank…" autocomplete="off" spellcheck="false" style="margin-bottom:6px"><div class="muted" id="vortSInfo" style="font-size:12px"></div><div id="vortRes"></div></div>
+  <div style="border-top:2px solid var(--line);margin-top:12px"></div>
   <div class="muted" style="font-size:13px;margin-top:6px">One question per line: the answer first, then the question. Put the unit in [brackets] anywhere in the line. Any question left without a unit is filled in by the AI after you post.<br>Example: <code>2300000 How many bananas would reach the ISS? [bananas]</code></div>
   <textarea id="vortTxt" spellcheck="false" placeholder="90 How many ads air during an average Super Bowl? [ads]&#10;460 How many hours to watch all of One Piece back to back? [hours]"></textarea>
   <div id="vortMsg"></div>
@@ -1040,8 +1047,35 @@ $("logout").onclick = async () => { await signOut(auth); };
 
 /* ---------- Vortarium: add questions to the bank ---------- */
 async function vortCount() { try { $("vortCount").textContent = "Bank size: " + fmt((await getCountFromServer(collection(db, QB))).data().count) + " questions"; } catch (e) { $("vortCount").textContent = ""; } }
-$("vortBtn").onclick = () => { $("vortMsg").textContent = ""; $("vortWrap").classList.add("on"); vortCount(); setTimeout(() => $("vortTxt").focus(), 30); };
+$("vortBtn").onclick = () => { $("vortMsg").textContent = ""; vortAll = null; vortRender(); $("vortWrap").classList.add("on"); vortCount(); setTimeout(() => $("vortTxt").focus(), 30); };
 $("vortClose").onclick = () => $("vortWrap").classList.remove("on");
+/* vortarium: search the question bank and delete questions */
+let vortAll = null, vortLoading = false;
+async function vortLoadBank(force) {
+  if (vortAll && !force) return vortAll; if (vortLoading) return vortAll || [];
+  vortLoading = true; $("vortSInfo").textContent = "Loading the bank…";
+  try { vortAll = (await getDocs(collection(db, QB))).docs.map(d => ({ id: d.id, ...d.data() })); } catch (e) { $("vortSInfo").textContent = "Couldn't load the bank: " + e.message; vortAll = null; }
+  vortLoading = false; return vortAll || [];
+}
+function vortStatus(x) { const n = Date.now(), u = Number(x.unlockAt) || 0; return (x.enabled === false ? "disabled · " : "") + (u > n ? "locked " + Math.ceil((u - n) / 3600000) + "h" : "available"); }
+async function vortRender() {
+  if (!isVort()) return;
+  const t = $("vortSearch").value.trim().toLowerCase(), all = await vortLoadBank(false);
+  if (!all.length) return;
+  if (!t) { $("vortRes").innerHTML = ""; $("vortSInfo").textContent = all.length + " questions in the bank. Type to search."; return; }
+  const words = t.split(/\s+/), hits = all.filter(x => { const h = (String(x.q) + " " + (x.unit || "") + " " + x.a).toLowerCase(); return words.every(w => h.includes(w)); });
+  $("vortSInfo").textContent = hits.length + " match" + (hits.length === 1 ? "" : "es") + (hits.length > 40 ? " (showing 40)" : "");
+  $("vortRes").innerHTML = hits.slice(0, 40).map(x => `<div class="vres"><div class="vq">${esc(x.q)}<small>${esc(String(x.a))} ${esc(x.unit || "")} · ${vortStatus(x)}</small></div><button type="button" data-id="${esc(x.id)}">Delete</button></div>`).join("");
+}
+let vortSTimer = null;
+$("vortSearch").oninput = () => { clearTimeout(vortSTimer); vortSTimer = setTimeout(vortRender, 150); };
+$("vortRes").onclick = async e => {
+  const b = e.target.closest("button"); if (!b || !isVort()) return;
+  if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = "Sure?"; setTimeout(() => { if (b.isConnected) { b.classList.remove("sure"); b.textContent = "Delete"; } }, 3500); return; }
+  b.disabled = true; b.textContent = "…";
+  try { await deleteDoc(doc(db, QB, b.dataset.id)); vortAll = vortAll.filter(x => x.id !== b.dataset.id); vortRender(); } catch (er) { b.disabled = false; b.textContent = "Delete"; $("vortSInfo").textContent = "Delete failed (publish the latest firestore rules): " + er.message; }
+};
+
 $("vortGen").onclick = () => { $("vortGen").style.display = "none"; $("vortConf").style.display = "block"; };
 $("vortNo").onclick = () => { $("vortConf").style.display = "none"; $("vortGen").style.display = ""; };
 let vortBusy = false;
@@ -1425,7 +1459,7 @@ async function finishMatch() {
   $("resTitle").textContent = draw ? "Draw" : won ? "You win!" : "You lose";
   $("resMe").textContent = M.my; $("resOpp").textContent = M.op; $("resMeN").textContent = me.name; $("resOppN").innerHTML = nameHTML(M.opp.name);
   const counts = true, winCounts = M.mode === "human" || M.diff === "hard" || M.diff === "medium";
-  const earn = cardPay(M.my, M.cards), voidWin = (M.cards || 0) >= 2 || !!M.oppRed;
+  const earn = cardPay(M.my, M.cards), voidWin = (M.cards || 0) >= 1 || !!M.oppRed;
   const baseNote = M.oppFled ? "Your opponent fled, so you win. This match counted toward your stats." : winCounts ? "This match counted toward your stats." : "Your points counted. Wins against the easy bot don't count toward stats.";
   $("resNote").textContent = cardNote(M.cards || 0, M.my, earn, voidWin, baseNote);
   show("result");
@@ -1564,10 +1598,10 @@ let awayFlag = false;
 const inMatch = () => !!M && !M.done && $("match").classList.contains("on");
 const cardPay = (pts, c) => (c || 0) >= 2 ? 0 : (c || 0) === 1 ? Math.floor(pts / 2) : pts;
 function cardNote(cards, raw, earn, voided, base) {
-  if (cards >= 2) return "Red card = automatic 0.";
+  if (cards >= 2) return "Red card = automatic 0, and no win credit.";
   let t = base;
   if (cards === 1) t = `Yellow card = automatic half (${raw} to ${earn}). ` + base;
-  if (voided) t += " A red card was shown, so no win credit.";
+  if (voided) t += cards === 1 ? " A yellow card was shown, so no win credit." : " A red card was shown, so no win credit.";
   return t;
 }
 const rawNow = () => M.mode === "room" ? (M.contrib || 0) : (M.my || 0);
@@ -1882,7 +1916,7 @@ async function finishRoom() {
   $("resMe").textContent = m.contrib; $("resMeN").textContent = "your points";
   if (m.teamed) { $("resOpp").textContent = m.teamTot[m.myTeam] + " – " + m.teamTot[1 - m.myTeam]; $("resOppN").textContent = "team totals"; }
   else { $("resOpp").textContent = Math.max(...act.map(p => m.score[p.uid])); $("resOppN").textContent = "top score"; }
-  const voided = Object.values(m.cardOf).some(v => v >= 2) || m.cards >= 2, earn = cardPay(m.contrib, m.cards), hasBots = m.players.some(p => p.bot), credit = won && !voided && !hasBots;
+  const voided = Object.values(m.cardOf).some(v => v >= 2) || m.cards >= 1, earn = cardPay(m.contrib, m.cards), hasBots = m.players.some(p => p.bot), credit = won && !voided && !hasBots;
   $("resNote").textContent = cardNote(m.cards, m.contrib, earn, voided, "You earned the points you contributed" + (credit ? " and a win." : hasBots ? ". Matches with bots count for points, not wins." : "."));
   show("result"); if (!draw) sfx(won ? sYay : sSad);
   try { await updateDoc(doc(db, USERS, me.uid), { points: increment(earn), wins: increment(credit ? 1 : 0), games: increment(1) }); me.points += earn; me.wins += credit ? 1 : 0; me.games += 1; } catch (e) { console.error(e); }
