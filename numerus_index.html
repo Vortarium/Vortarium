@@ -994,18 +994,14 @@ async function genQuestions(uids) {
 }
 // Every mode draws its 10 questions through here: bots, dailies, 1v1 and rooms. `uids` are the people who must not have seen them.
 const matchQuestions = uids => genQuestions(uids && uids.length ? uids : (me ? [me.uid] : []));
-// Points depend on how far the guess is from the answer as a share of the answer, in plain (linear) distance, so the same distance above or
-// below scores exactly the same: 5 and 15 for an answer of 10 both get 47. The curve has a long tail, so a guess in the right ballpark still
-// earns real points (1m for 8m is worth about 30, 2m for 8m about 35). Lazy near-zero guesses can't farm that tail: below 10% of the answer
-// the score fades to 0 (1% of the answer or less earns nothing).
+// Original steep log-scale scoring, made fair: a guess above the answer is mirrored to the same linear distance below it first, so the same
+// distance above or below scores exactly the same (5 and 15 for an answer of 10 both get 40). Guesses far off still earn almost nothing.
 function scoreOf(g, a) {
   if (g === null || g === undefined || !isFinite(g) || !isFinite(a)) return 0;
-  const A = Math.max(Math.abs(a), 1e-9), e = Math.abs(g - a) / A;
-  let sc = 100 / (1 + Math.pow(e / 0.45, 1.25));
-  const r = g / a;
-  if (r <= 0) return 0;
-  if (r < 0.1) sc *= Math.max(0, Math.log10(r / 0.01));
-  return Math.max(0, Math.min(100, Math.round(sc)));
+  const eff = g > a ? Math.max(0, 2 * a - g) : g;
+  const L = v => Math.sign(v) * Math.log10(1 + Math.abs(v));
+  const d = Math.abs(L(eff) - L(a));
+  return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-3.5 * d))));
 }
 
 /* ---------- screens ---------- */
