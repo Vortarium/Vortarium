@@ -994,13 +994,16 @@ async function genQuestions(uids) {
 }
 // Every mode draws its 10 questions through here: bots, dailies, 1v1 and rooms. `uids` are the people who must not have seen them.
 const matchQuestions = uids => genQuestions(uids && uids.length ? uids : (me ? [me.uid] : []));
-// Scoring: the closer the guess is to the answer, the closer to 100 you get; an exact answer is 100.
-// e = distance from the answer as a share of the answer, so the same distance above or below scores exactly the same (5 and 15 for an answer of 10 both get 65).
-// Points = 100 * (1 - e^1.5): 10% off = 97, 50% off = 65, 100% or more off = 1. Any real guess earns at least 1 point; no answer earns 0.
+// The original scoring (log scale, 100 * e^(-3.5 * distance)), kept as it was, plus fairness:
+// a guess below the answer is measured as if it were the same linear distance ABOVE the answer, so 5 and 15 for an answer of 10 score exactly the same.
+// Guesses more than half the answer too low are then penalised for the extra orders of magnitude they are below (so 1 for 8 million still earns 0).
 function scoreOf(g, a) {
-  if (g === null || g === undefined || !isFinite(g) || !isFinite(a)) return 0;
-  const e = Math.min(1, Math.abs(g - a) / Math.max(Math.abs(a), 1e-9));
-  return Math.max(1, Math.min(100, Math.round(100 * (1 - Math.pow(e, 1.5)))));
+  if (g === null || g === undefined || !isFinite(g)) return 0;
+  const L = v => Math.sign(v) * Math.log10(1 + Math.abs(v));
+  let d;
+  if (g < a) d = Math.abs(L(2 * a - g) - L(a)) + Math.max(0, L(a / 2) - L(g));
+  else d = Math.abs(L(g) - L(a));
+  return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-3.5 * d))));
 }
 
 /* ---------- screens ---------- */
