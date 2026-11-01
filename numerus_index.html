@@ -809,31 +809,34 @@ async function bankRandom(n) {
 const LOCK_MS = 7 * 24 * 60 * 60 * 1000;
 // Local backup of the lock (works even if the Firestore rules aren't published yet)
 const usedLS = () => { try { return JSON.parse(localStorage.getItem("numerus_used") || "{}"); } catch (e) { return {}; } };
-// Purely random draw: many independent random points on the bank's random key `r`, one doc each (no contiguous window, so no clusters).
-// Questions with enabled === false (toggle in Firebase) or an unlockAt in the future are not eligible.
+// Reads the WHOLE bank (cached for 45 s) so locks, the on/off toggle and lookalikes are checked exactly, and every eligible question has an equal chance.
+let bankCache = null, bankCacheT = 0;
+async function bankDocs() {
+  if (bankCache && Date.now() - bankCacheT < 45000) return bankCache;
+  const docs = (await getDocs(collection(db, QB))).docs; bankCache = docs; bankCacheT = Date.now(); return docs;
+}
 async function bankAvailable(want) {
-  const avail = new Map(), locked = new Map(), off = new Set(), all = new Set(), now = Date.now(), ls = usedLS();
-  for (let t = 0; t < 10 && avail.size < want; t++) {
-    let docs = [];
-    try {
-      const res = await Promise.all(Array.from({ length: 24 }, () => { const x = Math.random(); return getDocs(query(collection(db, QB), where("r", ">=", x), orderBy("r"), limit(1))); }));
-      res.forEach(r => r.docs.forEach(d => docs.push(d)));
-    } catch (e) { console.warn("bank unavailable", e); break; }
-    docs.forEach(d => {
-      if (all.has(d.id)) return; all.add(d.id);
-      const dt = d.data();
-      if (dt.enabled === false) { off.add(d.id); return; }
-      if (dt.enabled === undefined) updateDoc(d.ref, { enabled: true }).catch(() => {}); // give every question its on/off toggle
-      const u = Math.max(Number(dt.unlockAt) || 0, Number(ls[d.id]) || 0), c = cleanQ({ ...dt, id: d.id }); c.unlockAt = u;
-      (u <= now ? avail : locked).set(d.id, c);
-    });
-  }
+  const avail = new Map(), locked = new Map(), off = new Set(), now = Date.now(), ls = usedLS();
+  let docs = [];
+  try { docs = await bankDocs(); } catch (e) { console.warn("bank unavailable", e); return { avail: [], locked: [], off }; }
+  docs.forEach(d => {
+    const dt = d.data();
+    if (dt.enabled === false) { off.add(d.id); return; }
+    if (dt.enabled === undefined) updateDoc(d.ref, { enabled: true }).catch(() => {}); // give every question its on/off toggle
+    if (!isFinite(Number(dt.a)) || typeof dt.q !== "string") return;
+    const u = Math.max(Number(dt.unlockAt) || 0, Number(ls[d.id]) || 0), c = cleanQ({ ...dt, id: d.id }); c.unlockAt = u;
+    (u <= now ? avail : locked).set(d.id, c);
+  });
+  // hide lookalikes of anything used in the last 7 days (different id, nearly the same question)
+  const lt = [...locked.values()].map(x => toks(x.q));
+  for (const [id, x] of [...avail]) { const tk = toks(x.q); if (lt.some(t => similar(tk, t))) { x.unlockAt = now + 1; avail.delete(id); locked.set(id, x); } }
   return { avail: [...avail.values()], locked: [...locked.values()], off };
 }
 // Every question used in any game (daily, team, custom, duel, bot) is locked for 7 days (unlockAt = when it becomes valid again)
 async function markUsed(qs) {
   const t = Date.now() + LOCK_MS;
   try { const ls = usedLS(), now = Date.now(); Object.keys(ls).forEach(k => { if (ls[k] < now) delete ls[k]; }); qs.forEach(x => { ls[x.id || qid(x.q)] = t; }); localStorage.setItem("numerus_used", JSON.stringify(ls)); } catch (e) {}
+  bankCache = null;
   const res = await Promise.allSettled(qs.map(x => updateDoc(doc(db, QB, x.id || qid(x.q)), { unlockAt: t })));
   const bad = res.filter(r => r.status === "rejected"); if (bad.length) console.warn("question lock failed for " + bad.length + " (publish the latest firestore rules)", bad[0].reason);
 }
@@ -957,11 +960,18 @@ async function genQuestions(uids) {
 }
 // Every mode draws its 10 questions through here: bots, dailies, 1v1 and rooms. `uids` are the people who must not have seen them.
 const matchQuestions = uids => genQuestions(uids && uids.length ? uids : (me ? [me.uid] : []));
+// Points depend on how far the guess is from the answer as a share of the answer, in plain (linear) distance, so the same distance above or
+// below scores exactly the same: 5 and 15 for an answer of 10 both get 47. The curve has a long tail, so a guess in the right ballpark still
+// earns real points (1m for 8m is worth about 30, 2m for 8m about 35). Lazy near-zero guesses can't farm that tail: below 10% of the answer
+// the score fades to 0 (1% of the answer or less earns nothing).
 function scoreOf(g, a) {
-  if (g === null || g === undefined || !isFinite(g)) return 0;
-  const L = v => Math.sign(v) * Math.log10(1 + Math.abs(v));
-  const d = Math.abs(L(g) - L(a));
-  return Math.max(0, Math.min(100, Math.round(100 * Math.exp(-3.5 * d))));
+  if (g === null || g === undefined || !isFinite(g) || !isFinite(a)) return 0;
+  const A = Math.max(Math.abs(a), 1e-9), e = Math.abs(g - a) / A;
+  let sc = 100 / (1 + Math.pow(e / 0.45, 1.25));
+  const r = g / a;
+  if (r <= 0) return 0;
+  if (r < 0.1) sc *= Math.max(0, Math.log10(r / 0.01));
+  return Math.max(0, Math.min(100, Math.round(sc)));
 }
 
 /* ---------- screens ---------- */
