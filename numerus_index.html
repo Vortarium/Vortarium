@@ -686,8 +686,9 @@ let muted = false;
 function tryMusic() { if (!muted) music.play().catch(() => {}); }
 tryMusic();
 ["pointerdown", "keydown", "touchstart"].forEach(ev => addEventListener(ev, tryMusic, { once: false, passive: true }));
-function sfx(a) { if (muted) return; try { a.muted = false; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
-function applyMute() { music.muted = muted; SFX_ALL.forEach(a => { a.muted = muted; if (muted) { try { a.pause(); a.currentTime = 0; } catch (e) {} } }); }
+function sfx(a) { try { a.muted = false; a.volume = 1; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {} }
+// The mute button only affects the background music (numerus_music.mp3 / numerus_music2.mp3); sound effects always play at normal volume.
+function applyMute() { music.muted = muted; SFX_ALL.forEach(a => { a.muted = false; a.volume = 1; }); }
 $("muteBtn").onclick = e => { e.stopPropagation(); muted = !muted; applyMute(); setMuteIcon(); if (muted) music.pause(); else music.play().catch(() => {}); };
 
 /* ---------- robot art ---------- */
