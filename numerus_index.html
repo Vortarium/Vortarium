@@ -630,7 +630,7 @@ svg.live .rb-note.n2{animation-name:rbNote2;animation-delay:calc(var(--xl) + .45
 <div id="vortAsk"><div class="panel"><div style="font-weight:800;font-size:17px">Add 25 new questions?</div><div class="muted" style="font-size:13px;margin-top:6px">The AI writes 25 new questions for the bank and skips repeats and lookalikes.</div><div class="row" style="margin-top:14px"><button type="button" class="btn" id="askYes">Yes, generate</button><button type="button" class="btn ghost" id="askNo">Cancel</button></div></div></div>
 <div id="vortWrap"><div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Question bank</b><button type="button" id="vortClose" aria-label="Close" style="border:0;background:none;cursor:pointer;display:grid;place-items:center"><span class="xi" data-ico="x"></span></button></div>
-  <div style="margin-top:12px"><input class="field" id="vortSearch" placeholder="Search the question bank…" autocomplete="off" spellcheck="false" style="margin-bottom:6px"><button type="button" class="btn ghost small" id="vortDup" style="margin-bottom:6px">Find lookalike questions</button><div class="muted" id="vortSInfo" style="font-size:12px"></div><div id="vortRes"></div></div>
+  <div style="margin-top:12px"><input class="field" id="vortSearch" placeholder="Search the question bank…" autocomplete="off" spellcheck="false" style="margin-bottom:6px"><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn ghost small" id="vortDup" style="margin-bottom:6px">Find lookalikes</button><button type="button" class="btn small" id="vortClean" style="margin-bottom:6px">Remove all lookalikes</button></div><div class="muted" id="vortSInfo" style="font-size:12px"></div><div id="vortRes"></div></div>
   <div style="border-top:2px solid var(--line);margin-top:12px"></div>
   <div class="muted" style="font-size:13px;margin-top:6px">One question per line: the answer first, then the question. Put the unit in [brackets] anywhere in the line. Any question left without a unit is filled in by the AI after you post.<br>Example: <code>2300000 How many bananas would reach the ISS? [bananas]</code></div>
   <textarea id="vortTxt" spellcheck="false" placeholder="90 How many ads air during an average Super Bowl? [ads]&#10;460 How many hours to watch all of One Piece back to back? [hours]"></textarea>
@@ -775,7 +775,8 @@ const SYN = { hen: "chicken", hens: "chicken", rooster: "chicken", pound: "lb", 
 const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const toks = t => new Set(norm(t).split(" ").map(w => SYN[w] || w).filter(w => w.length > 1 && !STOP.has(w)).map(w => w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w));
 const unitKey = u => String(u || "").toLowerCase().replace(/[^a-z]+/g, "").replace(/s$/, "");
-const sig = x => ({ tk: toks(x.q), a: Number(x.a), u: unitKey(x.unit) });
+const sigCache = new Map();
+const sig = x => { const c = x.id && sigCache.get(x.id); if (c && c.q === x.q) return c.s; const r = { tk: toks(x.q), a: Number(x.a), u: unitKey(x.unit) }; if (x.id) { if (sigCache.size > 20000) sigCache.clear(); sigCache.set(x.id, { q: x.q, s: r }); } return r; };
 // Two questions are the "same" if their wording overlaps a lot, OR they share their key words, measure the same unit and have a similar answer (a rephrase).
 function dupQ(A, B) {
   let n = 0; A.tk.forEach(w => { if (B.tk.has(w)) n++; });
@@ -821,12 +822,26 @@ async function bankRandom(n) {
 const LOCK_MS = 7 * 24 * 60 * 60 * 1000;
 // Local backup of the lock (works even if the Firestore rules aren't published yet)
 const usedLS = () => { try { return JSON.parse(localStorage.getItem("numerus_used") || "{}"); } catch (e) { return {}; } };
-// Reads the WHOLE bank (cached for 45 s) so locks, the on/off toggle and lookalikes are checked exactly, and every eligible question has an equal chance.
-let bankCache = null, bankCacheT = 0;
+// The whole bank is kept in memory and updated live (one listener per player), so picking questions is instant and always sees the latest locks.
+let bankCache = null, bankCacheT = 0; const bankLive = new Map(); let bankLiveStarted = false, bankLiveReady = null;
+function startBankLive() {
+  if (bankLiveStarted) return; bankLiveStarted = true;
+  bankLiveReady = new Promise(res => {
+    let first = true;
+    onSnapshot(collection(db, QB), snap => {
+      snap.docChanges().forEach(c => { if (c.type === "removed") bankLive.delete(c.doc.id); else bankLive.set(c.doc.id, c.doc); });
+      if (first) { first = false; res(true); }
+    }, err => { console.warn("bank listener", err); bankLiveStarted = false; if (first) { first = false; res(false); } });
+  });
+}
 async function bankDocs() {
+  startBankLive();
+  const ok = await Promise.race([bankLiveReady, new Promise(r => setTimeout(() => r(false), 6000))]);
+  if (ok && bankLive.size) return [...bankLive.values()];
   if (bankCache && Date.now() - bankCacheT < 45000) return bankCache;
   const docs = (await getDocs(collection(db, QB))).docs; bankCache = docs; bankCacheT = Date.now(); return docs;
 }
+const backfilled = new Set();
 async function bankAvailable(want) {
   const avail = new Map(), locked = new Map(), off = new Set(), now = Date.now(), ls = usedLS();
   let docs = [];
@@ -834,7 +849,7 @@ async function bankAvailable(want) {
   docs.forEach(d => {
     const dt = d.data();
     if (dt.enabled === false) { off.add(d.id); return; }
-    if (dt.enabled === undefined) updateDoc(d.ref, { enabled: true }).catch(() => {}); // give every question its on/off toggle
+    if (dt.enabled === undefined && !backfilled.has(d.id)) { backfilled.add(d.id); updateDoc(d.ref, { enabled: true }).catch(() => {}); } // give every question its on/off toggle
     if (!isFinite(Number(dt.a)) || typeof dt.q !== "string") return;
     const u = Math.max(Number(dt.unlockAt) || 0, Number(ls[d.id]) || 0), c = cleanQ({ ...dt, id: d.id }); c.unlockAt = u;
     (u <= now ? avail : locked).set(d.id, c);
@@ -920,7 +935,7 @@ async function auditUnits(say) {
 async function freshQuestions(n, seen, ref, exact) {
   // compare against the ENTIRE bank (fresh read), plus anything passed in, so nothing can be a rephrase of an existing question
   let full = [];
-  try { full = fromDocs((await getDocs(collection(db, QB))).docs); } catch (e) { console.warn("couldn't read the whole bank", e); }
+  try { full = fromDocs(await bankDocs()); } catch (e) { console.warn("couldn't read the whole bank", e); }
   const all = new Map(); [...full, ...ref].forEach(x => all.set(x.id, x));
   const refList = [...all.values()], refSig = refList.map(sig), kept = [];
   const avoidList = () => { const rec = [...refList].slice(-40).map(x => x.q), rnd = shuffle(refList).slice(0, 220).map(x => x.q); return [...new Set([...rec, ...rnd])]; };
@@ -959,15 +974,14 @@ async function genQuestions(uids) {
     }
   };
   addFrom(avail, 10, true);
-  if (chosen.length < 10) addFrom(avail, 10, false);
   const lockedIds = new Set(locked.map(x => x.id));
   if (chosen.length < 10) { // not enough unlocked questions: have the AI add new ones to the bank
     const need = 10 - chosen.length;
     let ref = [...chosen, ...avail, ...locked];
-    try { const rec = await bankRecent(100); const m = new Map(); [...rec, ...ref].forEach(x => m.set(x.id, x)); ref = [...m.values()]; } catch (e) { console.warn(e); }
     const fresh = await freshQuestions(need, new Set(), ref, false);
     fresh.slice(0, need).forEach(x => { if (!have().has(x.id)) chosen.push(x); });
   }
+  if (chosen.length < 10) addFrom(avail, 10, false); // last resort: allow near-lookalikes rather than failing
   if (chosen.length < 10) { // built-in seed questions that aren't locked
     const seeds = BANK.filter(x => !lockedIds.has(x.id) && !off.has(x.id));
     addFrom(seeds, 10, false);
@@ -975,7 +989,7 @@ async function genQuestions(uids) {
   }
   if (chosen.length < 10) addFrom([...locked].sort((a, b) => a.unlockAt - b.unlockAt), 10, false); // last resort: soonest to unlock
   const out = shuffle(chosen).slice(0, 10);
-  await markUsed(out);
+  markUsed(out); // locks are saved on this device instantly and sent to Firebase in the background
   return out;
 }
 // Every mode draws its 10 questions through here: bots, dailies, 1v1 and rooms. `uids` are the people who must not have seen them.
@@ -1100,18 +1114,34 @@ async function vortRender() {
 
 // group lookalike questions in the bank so extras can be removed
 let vortClusters = [];
-async function vortFindDups() {
-  if (!isVort()) return; vortAll = null; const all = await vortLoadBank(true); if (!all.length) return;
-  $("vortSInfo").textContent = "Comparing " + all.length + " questions…"; await new Promise(r => setTimeout(r, 30));
+function bankClusters(all) {
   const sg = all.map(sig), par = all.map((_, i) => i), find = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (dupQ(sg[i], sg[j])) par[find(j)] = find(i);
   const g = new Map(); all.forEach((x, i) => { const r = find(i); if (!g.has(r)) g.set(r, []); g.get(r).push(x); });
-  vortClusters = [...g.values()].filter(c => c.length > 1).map(c => c.sort((a, b) => ((a.createdAt && a.createdAt.seconds) || 0) - ((b.createdAt && b.createdAt.seconds) || 0))).sort((a, b) => b.length - a.length);
+  return [...g.values()].filter(c => c.length > 1).map(c => c.sort((a, b) => ((a.createdAt && a.createdAt.seconds) || 0) - ((b.createdAt && b.createdAt.seconds) || 0))).sort((a, b) => b.length - a.length);
+}
+// delete every lookalike in the bank, keeping the oldest question of each group
+async function vortAutoClean() {
+  if (!isVort()) return 0; const all = (await vortLoadBank(true)); let n = 0;
+  for (const c of bankClusters(all)) { const res = await Promise.allSettled(c.slice(1).map(x => deleteDoc(doc(db, QB, x.id)))); n += res.filter(r => r.status === "fulfilled").length; }
+  vortAll = null; bankCache = null; return n;
+}
+async function vortFindDups() {
+  if (!isVort()) return; vortAll = null; const all = await vortLoadBank(true); if (!all.length) return;
+  $("vortSInfo").textContent = "Comparing " + all.length + " questions…"; await new Promise(r => setTimeout(r, 30));
+  vortClusters = bankClusters(all);
   const extra = vortClusters.reduce((n, c) => n + c.length - 1, 0);
   $("vortSInfo").textContent = vortClusters.length ? vortClusters.length + " groups of lookalikes, " + extra + " extra questions. The oldest in each group is kept." : "No lookalikes found.";
   $("vortRes").innerHTML = vortClusters.slice(0, 30).map((c, k) => `<div style="margin-top:10px"><button type="button" class="vkeep" data-cl="${k}" style="border:0;border-radius:10px;background:#7c3aed;color:#fff;font:800 12px/1 inherit;font-family:inherit;padding:9px 11px;cursor:pointer;width:100%">Keep the oldest, delete the other ${c.length - 1}</button>` + c.map(x => `<div class="vres"><div class="vq">${esc(x.q)}<small>${esc(String(x.a))} ${esc(x.unit || "")} · ${vortStatus(x)}</small></div><button type="button" data-id="${esc(x.id)}">Delete</button></div>`).join("") + "</div>").join("");
 }
 $("vortDup").onclick = vortFindDups;
+$("vortClean").onclick = async () => {
+  const b = $("vortClean");
+  if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = "Sure? Tap again"; setTimeout(() => { b.classList.remove("sure"); b.textContent = "Remove all lookalikes"; }, 3500); return; }
+  b.disabled = true; b.textContent = "Cleaning…"; $("vortSInfo").textContent = "Scanning the whole bank for lookalikes…";
+  const n = await vortAutoClean(); b.disabled = false; b.classList.remove("sure"); b.textContent = "Remove all lookalikes";
+  $("vortRes").innerHTML = ""; $("vortSInfo").textContent = "Removed " + n + " lookalike question" + (n === 1 ? "" : "s") + " (the oldest of each group was kept).";
+};
 let vortSTimer = null;
 $("vortSearch").oninput = () => { clearTimeout(vortSTimer); vortSTimer = setTimeout(vortRender, 150); };
 $("vortRes").onclick = async e => {
@@ -1145,7 +1175,9 @@ async function runVortGen(say) {
       const got = await freshQuestions(25 - added, new Set(), ref, true); added += got.length;
       say(`Added ${added} of 25…`);
     }
-    const final = added >= 25 ? "Added 25 new questions to the bank." : `Added ${added} new questions. The AI kept repeating or failing, so try again for the rest.`;
+    say(`Added ${added}. Scanning the whole bank for lookalikes…`);
+    const removed = await vortAutoClean().catch(() => 0);
+    const final = (added >= 25 ? "Added 25 new questions to the bank." : `Added ${added} new questions. The AI kept repeating or failing, so try again for the rest.`) + (removed ? ` Removed ${removed} lookalike${removed === 1 ? "" : "s"} from the bank.` : " No lookalikes found.");
     say(final + "\nChecking units…");
     say(final + "\n" + await auditUnits(t => say(final + "\n" + t)));
   } catch (e) { console.error(e); say(`Something went wrong${added ? " after adding " + added : ""}. Try again.`); }
@@ -1199,7 +1231,7 @@ onAuthStateChanged(auth, async user => {
     }
     pendingName = null;
     const d = snap.data();
-    me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 };
+    me = { uid: user.uid, name: d.name, points: d.points || 0, wins: d.wins || 0, games: d.games || 0 }; startBankLive();
     shown.points = me.points; shown.wins = me.wins; shown.games = me.games;
     prefetchRanks(); refreshDaily();
     look.skin = d.skin ?? 0; look.acc = d.acc ?? 0; look.color = d.color ?? 0;
