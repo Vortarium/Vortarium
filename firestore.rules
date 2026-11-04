@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // profiles, likes and playlists all live under the user's own account
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+
+      match /likes/{songId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // private by default: only the owner can read their own playlists here
+      match /playlists/{playlistId} {
+        allow read, create, update, delete: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // copies of playlists the owner has made public (anyone signed in can open them)
+    match /public_playlists/{playlistId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+
+    match /songs/{songId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.ownerId
+                    && request.resource.data.uuid == songId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+
+      match /chunks/{chunkId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == get(/databases/$(database)/documents/songs/$(songId)).data.ownerId
+                              && request.resource.data.data.size() < 950000;
+        allow delete: if request.auth != null
+                      && request.auth.uid == get(/databases/$(database)/documents/songs/$(songId)).data.ownerId;
+      }
+    }
+  }
+}
