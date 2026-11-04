@@ -41,14 +41,25 @@ service cloud.firestore {
     // copies of playlists the owner has made public (anyone signed in can open them)
     match /public_playlists/{playlistId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      // owner can edit anything; people the playlist is shared with may only change songIds (adding songs)
+      allow update: if request.auth != null
+                    && (request.auth.uid == request.resource.data.ownerId
+                        || (request.auth.uid in resource.data.get('sharedWith', [])
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['songIds'])));
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
 
-    // playlists the owner shared with specific followers (listed in sharedWith)
+    // playlists the owner shared with specific followers (listed in sharedWith).
+    // Collaborative: everyone in sharedWith can add songs; this doc is the source of truth.
     match /shared_playlists/{playlistId} {
-      allow read: if request.auth != null && request.auth.uid in resource.data.sharedWith;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow read: if request.auth != null
+                  && (request.auth.uid == resource.data.ownerId || request.auth.uid in resource.data.sharedWith);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow update: if request.auth != null
+                    && (request.auth.uid == resource.data.ownerId
+                        || (request.auth.uid in resource.data.sharedWith
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['songIds'])));
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
 
