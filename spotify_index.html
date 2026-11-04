@@ -452,6 +452,22 @@ html.phone .mbody{grid-template-columns:1fr}
 html.phone #pd{display:none}
 html.phone .auth{padding:32px 20px}
 html.phone .row,html.phone .card{-webkit-touch-callout:none}
+
+/* ---- loading skeletons ---- */
+.sk{background:linear-gradient(90deg,#222 25%,#333 50%,#222 75%);background-size:200% 100%;animation:skm 1.2s linear infinite;border-radius:6px}
+@keyframes skm{to{background-position:-200% 0}}
+.sk.sq{aspect-ratio:1;width:100%;border-radius:8px}
+.sk.big{width:200px;height:200px;flex:none}
+.skel{padding-top:8px}
+.skg{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}
+.skc{display:flex;flex-direction:column;gap:8px;padding:12px}
+.skq{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px}
+.skr{display:flex;align-items:center;gap:14px;padding:8px 0}
+.skh{display:flex;align-items:flex-end;gap:24px;padding:24px 0}
+html.phone .skh{flex-direction:column;align-items:stretch}
+html.phone .skh .big{width:min(62vw,240px);height:min(62vw,240px);align-self:center}
+html.phone .skg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+@media(prefers-reduced-motion:reduce){.sk{animation:none}}
 </style>
 </head>
 <body>
@@ -461,7 +477,7 @@ html.phone .row,html.phone .card{-webkit-touch-callout:none}
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAnalytics} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-analytics.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,collection,doc,setDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,collection,doc,setDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 try{getAnalytics(app)}catch{}
@@ -569,7 +585,7 @@ const colorCache={};
 function domColor(url,cb){if(!url)return cb(null);if(colorCache[url])return cb(colorCache[url]);const i=new Image();i.onload=()=>{try{const c=document.createElement("canvas");c.width=c.height=12;const x=c.getContext("2d");x.drawImage(i,0,0,12,12);const d=x.getImageData(0,0,12,12).data;let r=0,g=0,b=0,n=0;for(let k=0;k<d.length;k+=4){const m=Math.max(d[k],d[k+1],d[k+2]),l=Math.min(d[k],d[k+1],d[k+2]);const w=1+(m-l)/40;r+=d[k]*w;g+=d[k+1]*w;b+=d[k+2]*w;n+=w}r/=n;g/=n;b/=n;const k=Math.min(1,150/Math.max(r,g,b,1));colorCache[url]=`rgb(${r*k|0},${g*k|0},${b*k|0})`;cb(colorCache[url])}catch{cb(null)}};i.onerror=()=>cb(null);i.src=url}
 
 /* ---------- state ---------- */
-let homeN=60,me=null,users={},songs=[],pls=[],ownPl=[],pubPl=[],likes=new Set(),unsubs=[];
+let homeN=60,me=null,users={},songs=[],pls=[],ownPl=[],pubPl=[],sharedPl=[],likes=new Set(),unsubs=[];
 let view={t:"home"},hist=[],fwd=[],shown=[],queue=[],qi=-1,shuffle=false,repeat=0,built=false,ctxName="",panel="np",libQ="",libSort="recent",libFilter="mine",libSearch=false;
 const audio=new Audio();
 let following=new Set(),notifs=[],fcount={},fcAt={},lastId=null,skipPush=false,topShown=[];
@@ -589,6 +605,24 @@ addEventListener("popstate",()=>$("#app")?.classList.remove("npopen"));
 function updNav(){const b=$("#bnav");if(!b)return;const lib=$("#app").classList.contains("tablib"),c=lib?"lib":view.t=="search"?"search":view.t=="home"?"home":"";b.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("on",x.dataset.nav==c))}
 function syncNP(){const b=$("#bpp2");if(!b)return;b.innerHTML=audio.paused?I.play:I.pause;$("#bsh2")?.classList.toggle("on",shuffle);const rp=$("#brp2");if(rp){rp.classList.toggle("on",repeat>0);rp.innerHTML=repeat==2?I.rep1:I.rep}syncSeek()}
 function syncSeek(){const k=$("#sk2");if(!k)return;const d=audio.duration||0;k.value=d?audio.currentTime/d*1000:0;k.style.setProperty("--p",k.value/10+"%");$("#tc2").textContent=fmt(audio.currentTime);$("#td2").textContent=fmt(d)}
+let skel=false,skelSide=false,skelT=0;
+function startSkel(side){clearTimeout(skelT);skel=true;skelSide=!!side;skelT=setTimeout(()=>{skel=false;skelSide=false;if(built){renderSide();render()}},1000+Math.random()*800)}
+const skTx=(w,h=12)=>`<div class="sk" style="width:${w};height:${h}px"></div>`;
+const skCard=()=>`<div class="skc"><div class="sk sq"></div>${skTx("80%")}${skTx("55%",10)}</div>`;
+const skRow=()=>`<div class="skr"><div class="sk" style="width:40px;height:40px;flex:none"></div><div style="flex:1">${skTx("45%")}<div style="height:8px"></div>${skTx("25%",10)}</div>${skTx("40px",10)}</div>`;
+function paintSkel(){
+ const v=view,m=$("#main");$("#hdr").innerHTML=`<div class="stick"></div>`;
+ const grid=n=>`<div class="skg">${Array.from({length:n},skCard).join("")}</div>`,rows=n=>Array.from({length:n},skRow).join("");
+ const sec=`<div class="sk" style="width:180px;height:22px;margin:24px 0 12px"></div>`;
+ const hero=`<div class="skh"><div class="sk big"></div><div style="flex:1">${skTx("20%")}<div style="height:14px"></div>${skTx("60%",40)}<div style="height:14px"></div>${skTx("35%")}</div></div>`;
+ let h;
+ if(v.t=="home")h=`<div class="skq">${Array.from({length:6},()=>`<div class="sk" style="height:56px"></div>`).join("")}</div>`+sec+grid(6)+sec+grid(6);
+ else if(["pl","liked","artist","user","all"].includes(v.t))h=hero+rows(8);
+ else if(v.t=="artists"||v.t=="search")h=sec+grid(8)+sec+rows(4);
+ else h=sec+rows(6);
+ $("#mainbox").classList.toggle("plain",["home","settings","artists","search"].includes(v.t));
+ m.innerHTML=`<div class="skel">${h}</div>`;
+}
 const savePset=()=>{try{localStorage.setItem("spot_panel",JSON.stringify(pset))}catch{}};
 const viewsOf=s=>s?.views|0,totalViews=l=>l.reduce((a,s)=>a+viewsOf(s),0);
 const topSongs=l=>[...l].filter(s=>viewsOf(s)>0).sort((a,b)=>viewsOf(b)-viewsOf(a)).slice(0,5);
@@ -600,7 +634,7 @@ const vcLoad=()=>{try{return JSON.parse(localStorage.getItem(vcKey())||"{}")}cat
 const vcSave=m=>{try{const n=Date.now();for(const k in m)if(n-m[k]>VC_MS)delete m[k];localStorage.setItem(vcKey(),JSON.stringify(m))}catch{}};
 const countView=id=>{if(!me||!id)return;const m=vcLoad(),n=Date.now();if(m[id]&&n-m[id]<VC_MS)return;m[id]=n;vcSave(m);updateDoc(doc(db,"songs",id),{views:increment(1)}).catch(()=>{})};
 const endView=id=>{if(!me||!id)return;const m=vcLoad();if(m[id]){delete m[id];vcSave(m)}};
-const mergePl=()=>{pls=[...ownPl,...pubPl.filter(p=>!ownPl.some(o=>o.id==p.id))].sort((a,b)=>ms(b)-ms(a));built&&(renderSide(),render())};
+const mergePl=()=>{const seen=new Set(ownPl.map(o=>o.id));const a=pubPl.filter(p=>!seen.has(p.id));a.forEach(p=>seen.add(p.id));pls=[...ownPl,...a,...sharedPl.filter(p=>!seen.has(p.id))].sort((a,b)=>ms(b)-ms(a));built&&(renderSide(),render())};
 const song=id=>songs.find(s=>s.id==id);
 const uname=id=>users[id]?.displayName||users[id]?.username||"Unknown";
 const mine=s=>me&&s.ownerId===me.uid;
@@ -646,12 +680,13 @@ function nameScreen(){
 
 onAuthStateChanged(auth,u=>{
  me=u;unsubs.forEach(f=>f());unsubs=[];audio.pause();
- if(!u){users={};songs=[];pls=[];ownPl=[];pubPl=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
+ if(!u){users={};songs=[];pls=[];ownPl=[];pubPl=[];sharedPl=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  unsubs.push(onSnapshot(collection(db,"users"),s=>{users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd()}));
  unsubs.push(onSnapshot(collection(db,"songs"),s=>{songs=s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.ready).sort((a,b)=>ms(b)-ms(a));built&&(renderSide(),render(),playerUI())}));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"playlists"),s=>{ownPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
+ unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("sharedWith","array-contains",u.uid)),s=>{sharedPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
  unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"likes"),s=>{likes=new Set(s.docs.map(d=>d.id));built&&(renderSide(),render(),playerUI())}));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"following"),s=>{following=new Set(s.docs.map(d=>d.id));built&&render()},()=>{}));
@@ -702,7 +737,7 @@ function buildApp(){
  $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
  $("#main").onclick=mainClick;$("#main").oncontextmenu=mainCtx;
  $("#bnav").onclick=e=>{const b=e.target.closest("[data-nav]");if(!b)return;const a=$("#app"),n=b.dataset.nav;
-  if(n=="lib"){a.classList.add("tablib");a.classList.remove("npopen");$("#lib").scrollTop=0;updNav();return}
+  if(n=="lib"){if(!a.classList.contains("tablib"))startSkel(true);a.classList.add("tablib");a.classList.remove("npopen");renderSide();$("#lib").scrollTop=0;updNav();return}
   if(n=="create"){const r=b.getBoundingClientRect();return menu(Math.max(8,r.left-100),r.top-140,[[I.plus+"Create a new playlist",()=>newPlaylist()],[I.up+"Upload songs",()=>uploadModal()],[I.sync+"Upload check",()=>uploadModal("check")]])}
   a.classList.remove("tablib");
   if(n=="home"){$("#gq").value="";go({t:"home"})}else{go({t:"search",q:$("#gq").value},1);$("#gq").focus()}
@@ -720,10 +755,11 @@ audio.onended=()=>{endView(curId());next(true)};
 function go(v,keepInput){
  $("#app")?.classList.remove("tablib","npopen");
  if(view.t=="search"&&v.t=="search"){view=v;render();return}
- hist.push(view);fwd=[];view=v;if(v.t!="search"&&!keepInput){const g=$("#gq");if(g){g.value="";$("#gqx").style.display="none"}}
+ const same=JSON.stringify(v)==JSON.stringify(view);hist.push(view);fwd=[];view=v;if(v.t!="search"&&!keepInput){const g=$("#gq");if(g){g.value="";$("#gqx").style.display="none"}}
+ if(keepInput)clearTimeout(skelT),skel=false;else if(!same)startSkel();
  render();$("#mainbox").scrollTop=0}
-function back(){$("#app").classList.remove("tablib");if(hist.length){fwd.push(view);view=hist.pop();syncSearch();render()}}
-function forward(){$("#app").classList.remove("tablib");if(fwd.length){hist.push(view);view=fwd.pop();syncSearch();render()}}
+function back(){$("#app").classList.remove("tablib");if(hist.length){fwd.push(view);view=hist.pop();syncSearch();startSkel();render()}}
+function forward(){$("#app").classList.remove("tablib");if(fwd.length){hist.push(view);view=fwd.pop();syncSearch();startSkel();render()}}
 function syncSearch(){const g=$("#gq");if(!g)return;g.value=view.t=="search"?view.q||"":"";$("#gqx").style.display=g.value?"flex":"none"}
 function renderTop(){
  const u=users[me.uid];
@@ -739,7 +775,7 @@ const curId=()=>queue[qi];
 function renderSide(){
  if(!$("#lib"))return;
  $("#libt").title=$("#app").classList.contains("collapsed")?"Expand Your Library":"Collapse Your Library";
- $("#chips").innerHTML=[["mine","Playlists"],["pub","Public"]].map(([k,n])=>`<button class="chip ${libFilter==k?"on":""}" data-f="${k}">${n}</button>`).join("");
+ $("#chips").innerHTML=[["mine","Playlists"],["shared","Shared"],["pub","Public"]].map(([k,n])=>`<button class="chip ${libFilter==k?"on":""}" data-f="${k}">${n}</button>`).join("");
  $("#chips").onclick=e=>{const b=e.target.closest("[data-f]");if(b){libFilter=b.dataset.f;renderSide()}};
  const wide=$("#app").classList.contains("wide");
  $("#libtools").innerHTML=(libSearch?`<div class="libsearch">${I.search.replace("<svg","<svg width=14 height=14 style='width:14px;height:14px'")}<input id="lq" placeholder="Search in Your Library" value="${esc(libQ)}"></div>`:`<button class="ib sm" id="lsb" title="Search in Your Library">${I.search}</button>`)+`<button class="sb" id="lso" title="Change sort order">${libSort=="recent"?"Recents":"Alphabetical"}${I.list.replace("<svg","<svg style='width:16px;height:16px'")}</button>`;
@@ -748,13 +784,14 @@ function renderSide(){
  $("#lso").onclick=()=>{libSort=libSort=="recent"?"alpha":"recent";renderSide()};
  lib();
  function lib(){
-  let l=libFilter=="mine"?pls.filter(p=>p.ownerId===me.uid):pls.filter(p=>p.ownerId!==me.uid&&p.public);
+  if(skelSide){$("#lib").innerHTML=Array.from({length:7},()=>`<div class="skr" style="padding:8px"><div class="sk" style="width:56px;height:56px;flex:none"></div><div style="flex:1"><div class="sk" style="width:55%;height:12px"></div><div style="height:8px"></div><div class="sk" style="width:30%;height:10px"></div></div></div>`).join("");return}
+  let l=libFilter=="mine"?pls.filter(p=>p.ownerId===me.uid):libFilter=="shared"?pls.filter(p=>p.ownerId!==me.uid&&(p.sharedWith||[]).includes(me.uid)):pls.filter(p=>p.ownerId!==me.uid&&p.public);
   const q=libQ.toLowerCase().trim();if(q)l=l.filter(p=>p.name.toLowerCase().includes(q));
   if(libSort=="alpha")l=[...l].sort((a,b)=>a.name.localeCompare(b.name));
   const playingPl=ctxPl;
   const showLiked=libFilter=="mine"&&(!q||"liked songs".includes(q));
   $("#lib").innerHTML=(showLiked?`<div class="li ${view.t=="liked"?"on":""}" data-k="liked" title="Liked Songs"><div class="art liked">${I.added.replace(/<circle[^>]*>/,"").replace("<path",'<path')&&F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div><div class="tx"><div class="t">Liked Songs</div><div class="s">${I.pin}Playlist • ${likes.size} song${likes.size==1?"":"s"}</div></div></div>`:"")+
-  l.map(p=>`<div class="li ${view.t=="pl"&&view.id==p.id?"on":""} ${playingPl==p.id?"playing":""}" data-k="pl" data-id="${p.id}" title="${esc(p.name)}">${art(p.coverUrl)}<div class="tx"><div class="t">${esc(p.name)}</div><div class="s">Playlist • ${esc(uname(p.ownerId))}</div></div><div class="ex">${(p.songIds||[]).length} songs</div></div>`).join("")||(showLiked?"":`<div class="noplay">${libFilter=="pub"?"No public playlists from others yet.":"Nothing found."}</div>`);
+  l.map(p=>`<div class="li ${view.t=="pl"&&view.id==p.id?"on":""} ${playingPl==p.id?"playing":""}" data-k="pl" data-id="${p.id}" title="${esc(p.name)}">${art(p.coverUrl)}<div class="tx"><div class="t">${esc(p.name)}</div><div class="s">Playlist • ${esc(uname(p.ownerId))}</div></div><div class="ex">${(p.songIds||[]).length} songs</div></div>`).join("")||(showLiked?"":`<div class="noplay">${libFilter=="pub"?"No public playlists from others yet.":libFilter=="shared"?"Nothing has been shared with you yet.":"Nothing found."}</div>`);
  }
 }
 let ctxPl=null;
@@ -781,6 +818,7 @@ const hdrFor=title=>`<div class="stick"></div><div class="hp"><button class="big
 
 function render(){
  renderSide();if(!built)return;renderTop();
+ if(skel){setHc(null);$("#homebtn").classList.toggle("on",view.t=="home");updNav();paintSkel();return}
  const m=$("#main"),v=view,hdr=$("#hdr");let h="",hdrh=`<div class="stick"></div>`;
  setHc(null);syncSearch();
  $("#homebtn").classList.toggle("on",v.t=="home");$("#homebtn").innerHTML=I.home;
@@ -906,7 +944,7 @@ function addToPlaylistMenu(x,y,s){
 function plMenu(e,p){
  if(!p)return;const r=e.currentTarget?.getBoundingClientRect?.();const x=e.clientX||r?.left,y=e.clientY||r?.bottom;
  const it=[[I.play+"Play",()=>{ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;playFirst(plSongs(p))}],[I.dl+"Download all",()=>downloadAll(plSongs(p))]];
- if(p.ownerId==me.uid)it.push("-",[(p.public?I.lock+"Make private":I.globe+"Make public"),()=>plUpdate(p,{public:!p.public})],[I.pen+"Edit details",()=>editPl(p)],[I.trash+"Delete playlist",()=>delPl(p),"x"]);
+ if(p.ownerId==me.uid)it.push("-",[I.share+((p.sharedWith||[]).length?`Shared with ${(p.sharedWith||[]).length} • manage`:"Share with followers"),()=>sharePl(p)],[(p.public?I.lock+"Make private":I.globe+"Make public"),()=>plUpdate(p,{public:!p.public})],[I.pen+"Edit details",()=>editPl(p)],[I.trash+"Delete playlist",()=>delPl(p),"x"]);
  menu(x,y,it);
 }
 
@@ -1089,9 +1127,33 @@ async function plUpdate(p,d){
  const np={...p,...d};
  await updateDoc(doc(db,"users",me.uid,"playlists",p.id),d);
  const m=doc(db,"public_playlists",p.id);
- if(np.public){const{id,...x}=np;await setDoc(m,x)}else if(p.public)await deleteDoc(m).catch(()=>{});
+ if(np.public){const{id,sharedWith,...x}=np;await setDoc(m,x)}else if(p.public)await deleteDoc(m).catch(()=>{});
+ const sm=doc(db,"shared_playlists",p.id);
+ if((np.sharedWith||[]).length){const{id,...x}=np;await setDoc(sm,x)}else if((p.sharedWith||[]).length)await deleteDoc(sm).catch(()=>{});
 }
-async function delPl(p){if(!await confirmBox("Delete playlist?",`"${esc(p.name)}" will be removed from Your Library.`))return;await rm(p.coverPath);await deleteDoc(doc(db,"users",me.uid,"playlists",p.id));if(p.public)await deleteDoc(doc(db,"public_playlists",p.id)).catch(()=>{});if(view.id==p.id){view={t:"home"};hist=[];fwd=[];render()}toast("Playlist deleted")}
+async function sharePl(p){
+ let fol=[];
+ try{const sn=await getDocs(collection(db,"users",me.uid,"followers"));fol=sn.docs.map(d=>d.id)}catch(e){return toast(fsMsg(e))}
+ const cur=p.sharedWith||[],ids=[...new Set([...fol,...cur])].filter(id=>users[id]&&id!=me.uid).sort((a,b)=>(users[a].displayName||"").localeCompare(users[b].displayName||""));
+ const row=id=>{const u=users[id];return `<label class="chk" data-n="${esc((u.displayName||"")+" "+(u.username||"")).toLowerCase()}">${avatar(u,"av")}<span class="tx" style="flex:1"><b>${esc(u.displayName||u.username)}</b><small>@${esc(u.username||"")}${fol.includes(id)?"":" • no longer follows you"}</small></span><input class="sw" type="checkbox" data-id="${id}" ${cur.includes(id)?"checked":""}></label>`};
+ const {m,close}=openModal(`<div class="mh"><h2>Share playlist</h2><button class="ib mclose" title="Close">${I.x}</button></div>
+  <p style="color:#b3b3b3;font-size:14px;line-height:1.5;margin-bottom:12px">Choose which followers can open <b style="color:#fff">${esc(p.name)}</b>. They get a notification and find it under Shared in Your Library.</p>
+  ${ids.length?`<div class="libsearch" style="margin-bottom:8px"><input id="shq" placeholder="Search your followers"></div><div class="shl" style="max-height:44vh;overflow:auto">${ids.map(row).join("")}</div>`:`<div class="noplay" style="padding:20px 0">Nobody follows you yet. Once people follow you, you can pick them here.</div>`}
+  <div class="mf"><button class="ghost" id="shc">Cancel</button>${ids.length||cur.length?`<button class="pill" id="shs">Save</button>`:""}</div>`,"sm");
+ m.querySelector("#shc").onclick=close;
+ const q=m.querySelector("#shq");if(q)q.oninput=()=>{const t=q.value.toLowerCase().trim();m.querySelectorAll(".shl .chk").forEach(l=>l.style.display=l.dataset.n.includes(t)?"":"none")};
+ const sv=m.querySelector("#shs");if(sv)sv.onclick=async()=>{
+  const sel=[...m.querySelectorAll('.shl input:checked')].map(x=>x.dataset.id),added=sel.filter(id=>!cur.includes(id)),removed=cur.filter(id=>!sel.includes(id));
+  sv.disabled=true;
+  try{
+   await plUpdate(p,{sharedWith:sel});
+   const nid=`${me.uid}_${p.id}`;
+   await Promise.all([...added.map(id=>setDoc(doc(db,"users",id,"notifications",nid),{type:"share",fromUid:me.uid,plId:p.id,plName:p.name,read:false,createdAt:serverTimestamp()}).catch(()=>{})),...removed.map(id=>deleteDoc(doc(db,"users",id,"notifications",nid)).catch(()=>{}))]);
+   close();toast(sel.length?`Shared with ${sel.length} follower${sel.length==1?"":"s"}`:"Sharing turned off");
+  }catch(e){toast(fsMsg(e));sv.disabled=false}
+ };
+}
+async function delPl(p){if(!await confirmBox("Delete playlist?",`"${esc(p.name)}" will be removed from Your Library.`))return;await rm(p.coverPath);await deleteDoc(doc(db,"users",me.uid,"playlists",p.id));if(p.public)await deleteDoc(doc(db,"public_playlists",p.id)).catch(()=>{});if((p.sharedWith||[]).length){await deleteDoc(doc(db,"shared_playlists",p.id)).catch(()=>{});(p.sharedWith||[]).forEach(id=>deleteDoc(doc(db,"users",id,"notifications",`${me.uid}_${p.id}`)).catch(()=>{}))}if(view.id==p.id){view={t:"home"};hist=[];fwd=[];render()}toast("Playlist deleted")}
 function toggleLike(id){const r=doc(db,"users",me.uid,"likes",id);likes.has(id)?deleteDoc(r):setDoc(r,{at:serverTimestamp()})}
 function editProfile(){
  const u=users[me.uid];
@@ -1137,7 +1199,7 @@ document.addEventListener("drop",async e=>{if(!built)return;const sid=e.dataTran
 function updBell(){const n=notifs.filter(x=>!x.read).length,b=$("#nbdg");if(b){b.textContent=n>9?"9+":n;b.style.display=n?"flex":"none"}}
 function openNotifs(e){
  const r=e.currentTarget.getBoundingClientRect(),list=notifs.slice(0,25);
- const items=list.length?list.map(n=>[`${avatar(users[n.fromUid])}<span style="white-space:normal;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> started following you<br><small style="color:#b3b3b3">${ago(n)}</small></span>${n.read?"":'<i style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0"></i>'}`,()=>go({t:"user",id:n.fromUid})]):[["<span style='color:#b3b3b3'>No notifications yet</span>",()=>{}]];
+ const items=list.length?list.map(n=>[`${avatar(users[n.fromUid])}<span style="white-space:normal;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> ${n.type=="share"?`shared the playlist "${esc(n.plName||"a playlist")}" with you`:"started following you"}<br><small style="color:#b3b3b3">${ago(n)}</small></span>${n.read?"":'<i style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0"></i>'}`,()=>go(n.type=="share"?{t:"pl",id:n.plId}:{t:"user",id:n.fromUid})]):[["<span style='color:#b3b3b3'>No notifications yet</span>",()=>{}]];
  menu(Math.max(8,r.right-340),r.bottom+8,items,Math.min(340,innerWidth-16));
  notifs.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,"users",me.uid,"notifications",n.id),{read:true}).catch(()=>{}));
 }

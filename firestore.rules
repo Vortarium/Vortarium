@@ -22,14 +22,14 @@ service cloud.firestore {
         allow create, update, delete: if request.auth != null && request.auth.uid == followerId && followerId != uid;
       }
 
-      // follow notifications: the follower creates it, the owner reads/clears it
-      match /notifications/{fromId} {
+      // notifications (follows and shared playlists): the sender creates them, the owner reads/clears them
+      match /notifications/{notifId} {
         allow read, update: if request.auth != null && request.auth.uid == uid;
         allow create: if request.auth != null
-                      && request.auth.uid == fromId
                       && request.resource.data.fromUid == request.auth.uid
-                      && fromId != uid;
-        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == fromId);
+                      && request.auth.uid != uid
+                      && (notifId == request.auth.uid || notifId.matches(request.auth.uid + '_.*'));
+        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == resource.data.fromUid);
       }
 
       // private by default: only the owner can read their own playlists here
@@ -41,6 +41,13 @@ service cloud.firestore {
     // copies of playlists the owner has made public (anyone signed in can open them)
     match /public_playlists/{playlistId} {
       allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+
+    // playlists the owner shared with specific followers (listed in sharedWith)
+    match /shared_playlists/{playlistId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.sharedWith;
       allow create, update: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
