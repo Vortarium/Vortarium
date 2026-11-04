@@ -13,7 +13,7 @@
 </style>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--g:#1ed760;--g2:#3be477;--bg:#121212;--el:#1f1f1f;--el2:#181818;--hv:#2a2a2a;--sub:#b3b3b3;--line:#2a2a2a;--hc:#535353;--lw:300px;--rw:0px;
+:root{--g:#1ed760;--g2:#3be477;--bg:#121212;--el:#1f1f1f;--el2:#181818;--hv:#2a2a2a;--sub:#b3b3b3;--line:#2a2a2a;--hc:#535353;--lw:300px;--rw:360px;
 --f:"SpotSans",CircularSp,Circular,"Helvetica Neue",Helvetica,Arial,sans-serif}
 html,body{height:100%}
 body{background:#000;color:#fff;font:400 14px/1.4 var(--f);overflow:hidden;-webkit-font-smoothing:antialiased}
@@ -325,6 +325,25 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radiu
 @media(max-width:900px){.th,.row{grid-template-columns:32px minmax(0,1fr) 88px 52px}.th .dac,.row .da{display:none}.sbox{width:34vw;min-width:150px}#topbar .r .pill{display:none}}
 @media(max-width:720px){#app{grid-template-columns:1fr!important;grid-template-areas:"top" "main" "player"}#side,#right{display:none!important}#player{grid-template-columns:1fr auto}.vol{display:none}.hero .art,.hero .av.big{width:140px;height:140px}.mbody{grid-template-columns:1fr}.cvr{margin:0 auto}}
 #ucv .ov span{display:none}#ucv .ov svg{width:22px;height:22px}#ucv svg{width:28px;height:28px}#ucv .cvx{top:2px;right:2px;width:20px;height:20px}
+
+/* ---- collapsed library (covers only) ---- */
+#app.collapsed{--lw:80px}
+#app.collapsed .libhead{justify-content:center;padding:14px 0 8px}
+#app.collapsed .libhead .tl{font-size:0;gap:0;justify-content:center;width:100%}
+#app.collapsed .libhead>span,#app.collapsed #chips,#app.collapsed #libtools,#app.collapsed .noplay{display:none}
+#app.collapsed #lib{padding:0 8px}
+#app.collapsed .li{padding:8px 0;justify-content:center}
+#app.collapsed .li .tx,#app.collapsed .li .ex{display:none!important}
+/* ---- notifications / follow ---- */
+.avbtn{position:relative}
+.bdg{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;border-radius:9px;background:var(--g);color:#000;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 4px}
+.fbtn{border:1px solid #7c7c7c;border-radius:500px;padding:7px 16px;font-weight:700;color:#fff}
+.fbtn:hover{border-color:#fff;transform:scale(1.04)}
+.note a{color:var(--g);text-decoration:underline;font-weight:700}
+/* ---- now playing panel ---- */
+.npcov.sm{width:128px}
+.npv{color:var(--sub);font-size:13px;margin-top:4px}
+.qh .qa{color:var(--sub);font-size:13px;font-weight:700}.qh .qa:hover{color:#fff;text-decoration:underline}
 </style>
 </head>
 <body>
@@ -334,7 +353,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radiu
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAnalytics} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-analytics.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,collection,doc,setDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,collection,doc,setDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 try{getAnalytics(app)}catch{}
@@ -394,6 +413,8 @@ const I={
  dl:S('<circle cx="12" cy="12" r="9.2"/><path d="M12 7v9M8 12.5l4 4 4-4"/>'),
  dldone:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.2" style="fill:#1ed760"/><path d="M12 7v8.5M8.2 12.4l3.8 3.8 3.8-3.8" style="fill:none;stroke:#000;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>',
  dling:S('<path d="M12 2a10 10 0 0110 10"/>').replace('class="st"','class="st spin"'),
+ bell:S('<path d="M6 17v-6a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21a2 2 0 004 0"/>'),
+ tune:S('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
  logo:'<svg class="logo" viewBox="0 0 24 24"><path d="M12 0a12 12 0 100 24 12 12 0 000-24zm5.5 17.3a.75.75 0 01-1 .25c-2.8-1.7-6.3-2.1-10.4-1.1a.75.75 0 11-.3-1.5c4.5-1 8.4-.6 11.5 1.3.4.2.5.7.2 1zm1.5-3.3a.94.94 0 01-1.3.3c-3.2-2-8.1-2.6-11.9-1.4a.94.94 0 11-.5-1.8c4.3-1.3 9.7-.7 13.4 1.6.4.2.5.8.3 1.3zm.1-3.4C15.3 8.3 8.9 8.1 5.2 9.2a1.13 1.13 0 11-.7-2.1c4.2-1.3 11.3-1 15.7 1.6a1.13 1.13 0 01-1.1 1.9z"/></svg>'
 };
 const fsMsg=e=>e.code=="permission-denied"?"Firebase blocked this. Publish the latest firestore.rules in the Firebase console, then try again.":e.message;
@@ -402,6 +423,7 @@ const emailOf=u=>u.toLowerCase()+"@spotify-clone.app";
 const uploadFile=(path,file,max=320)=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=i.width*k;c.height=i.height*k;c.getContext("2d").drawImage(i,0,0,c.width,c.height);res({url:c.toDataURL("image/jpeg",.8),path:""})};i.onerror=()=>rej(new Error("Couldn't read that image."));i.src=URL.createObjectURL(file)});
 const rm=async()=>{};
 const clean=n=>n.replace(/_spotdown\.org/gi,"").replace(/\s{2,}/g," ").trim();
+const SD=/_spotdown\.org/i;
 const AUD=/\.(mp3|m4a|wav|ogg|oga|flac|aac|opus|webm|wma)$/i;
 const MIME={mp3:"audio/mpeg",m4a:"audio/mp4",wav:"audio/wav",ogg:"audio/ogg",oga:"audio/ogg",flac:"audio/flac",aac:"audio/aac",opus:"audio/ogg",webm:"audio/webm",wma:"audio/x-ms-wma"};
 async function expand(list){const out=[];
@@ -441,6 +463,21 @@ function domColor(url,cb){if(!url)return cb(null);if(colorCache[url])return cb(c
 let homeN=60,me=null,users={},songs=[],pls=[],ownPl=[],pubPl=[],likes=new Set(),unsubs=[];
 let view={t:"home"},hist=[],fwd=[],shown=[],queue=[],qi=-1,shuffle=false,repeat=0,built=false,ctxName="",panel="np",libQ="",libSort="recent",libFilter="mine",libSearch=false;
 const audio=new Audio();
+let following=new Set(),notifs=[],fcount={},fcAt={},lastId=null,skipPush=false,topShown=[];
+let played=[];try{played=JSON.parse(localStorage.getItem("spot_played")||"[]")}catch{}
+const savePlayed=()=>{try{localStorage.setItem("spot_played",JSON.stringify(played.slice(-100)))}catch{}};
+let pset={hist:false,small:false};try{Object.assign(pset,JSON.parse(localStorage.getItem("spot_panel")||"{}"))}catch{}
+const savePset=()=>{try{localStorage.setItem("spot_panel",JSON.stringify(pset))}catch{}};
+const viewsOf=s=>s?.views|0,totalViews=l=>l.reduce((a,s)=>a+viewsOf(s),0);
+const topSongs=l=>[...l].filter(s=>viewsOf(s)>0).sort((a,b)=>viewsOf(b)-viewsOf(a)).slice(0,5);
+const vtxt=n=>`${n.toLocaleString()} view${n==1?"":"s"}`;
+const ago=d=>{const m=Math.floor((Date.now()-ms(d))/6e4);return m<1?"Just now":m<60?m+"m ago":m<1440?Math.floor(m/60)+"h ago":Math.floor(m/1440)+"d ago"};
+const VC_MS=60000;
+const vcKey=()=>"spot_vc_"+(me?.uid||"");
+const vcLoad=()=>{try{return JSON.parse(localStorage.getItem(vcKey())||"{}")}catch{return{}}};
+const vcSave=m=>{try{const n=Date.now();for(const k in m)if(n-m[k]>VC_MS)delete m[k];localStorage.setItem(vcKey(),JSON.stringify(m))}catch{}};
+const countView=id=>{if(!me||!id)return;const m=vcLoad(),n=Date.now();if(m[id]&&n-m[id]<VC_MS)return;m[id]=n;vcSave(m);updateDoc(doc(db,"songs",id),{views:increment(1)}).catch(()=>{})};
+const endView=id=>{if(!me||!id)return;const m=vcLoad();if(m[id]){delete m[id];vcSave(m)}};
 const mergePl=()=>{pls=[...ownPl,...pubPl.filter(p=>!ownPl.some(o=>o.id==p.id))].sort((a,b)=>ms(b)-ms(a));built&&(renderSide(),render())};
 const song=id=>songs.find(s=>s.id==id);
 const uname=id=>users[id]?.displayName||users[id]?.username||"Unknown";
@@ -487,7 +524,7 @@ function nameScreen(){
 
 onAuthStateChanged(auth,u=>{
  me=u;unsubs.forEach(f=>f());unsubs=[];audio.pause();
- if(!u){users={};songs=[];pls=[];ownPl=[];pubPl=[];likes=new Set();queue=[];qi=-1;return authScreen()}
+ if(!u){users={};songs=[];pls=[];ownPl=[];pubPl=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  unsubs.push(onSnapshot(collection(db,"users"),s=>{users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd()}));
@@ -495,6 +532,8 @@ onAuthStateChanged(auth,u=>{
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"playlists"),s=>{ownPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
  unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"likes"),s=>{likes=new Set(s.docs.map(d=>d.id));built&&(renderSide(),render(),playerUI())}));
+ unsubs.push(onSnapshot(collection(db,"users",u.uid,"following"),s=>{following=new Set(s.docs.map(d=>d.id));built&&render()},()=>{}));
+ unsubs.push(onSnapshot(collection(db,"users",u.uid,"notifications"),s=>{notifs=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>ms(b)-ms(a));built&&updBell()},()=>{}));
 });
 
 /* ---------- app shell ---------- */
@@ -502,8 +541,8 @@ function buildApp(){
  built=true;$("#app").style.display="grid";const pf=users[me.uid]?.prefs;if(pf){shuffle=!!pf.shuffle;repeat=pf.repeat|0;audio.volume=pf.vol??1}
  $("#app").className=innerWidth<1180?"nopanel":"";
  $("#app").innerHTML=`<div id="topbar"><div class="l">${I.logo}<button class="nv" id="bk" title="Go back">${I.back}</button><button class="nv" id="fw" title="Go forward">${I.fwd}</button></div>
- <div class="c"><button id="homebtn" title="Home">${I.home}</button><div class="sbox">${I.search}<input id="gq" placeholder="What do you want to play?" autocomplete="off" spellcheck="false"><button id="gqx" title="Clear search" style="display:none">${I.x}</button><span class="sep"></span><button id="brw" title="Browse all songs">${I.browse}</button></div></div>
- <div class="r"><button class="pill" id="up2">${I.up}Upload</button><button class="avbtn" id="mebtn" title="Account"></button></div></div>
+ <div class="c"><button id="homebtn" title="Home">${I.home}</button><div class="sbox">${I.search}<input id="gq" placeholder="Search songs, artists, people" autocomplete="off" spellcheck="false"><button id="gqx" title="Clear search" style="display:none">${I.x}</button><span class="sep"></span><button id="brw" title="Browse all songs">${I.browse}</button></div></div>
+ <div class="r"><button class="pill" id="up2">${I.up}Upload</button><button class="avbtn" id="nbell" title="Notifications">${I.bell}<span class="bdg" id="nbdg"></span></button><button class="avbtn" id="mebtn" title="Account"></button></div></div>
  <div class="box" id="side"><div class="box" id="libbox" style="background:none"><div class="libhead"><button class="tl" id="libt">${I.lib}Your Library</button><span><button class="ib" id="newbtn" title="Create">${I.plus}</button><button class="ib" id="wdbtn" title="Expand Your Library">${I.expand}</button></span></div>
  <div class="chips" id="chips"></div><div class="libtools" id="libtools"></div><div id="lib"></div></div></div>
  <div class="box" id="mainbox"><div id="hdr"><div class="stick"></div></div><div id="main"></div></div>
@@ -515,8 +554,8 @@ function buildApp(){
  const side=$("#side");
  side.onclick=e=>{const l=e.target.closest(".li");if(l)go(l.dataset.k=="liked"?{t:"liked"}:{t:"pl",id:l.dataset.id})};
  side.oncontextmenu=e=>{const l=e.target.closest(".li[data-k=pl]");if(l){e.preventDefault();plMenu(e,pls.find(p=>p.id==l.dataset.id))}};
- $("#libt").onclick=()=>$("#app").classList.toggle("wide");
- $("#wdbtn").onclick=()=>{const w=$("#app").classList.toggle("wide");$("#wdbtn").title=w?"Shrink Your Library":"Expand Your Library";renderSide()};
+ $("#libt").onclick=()=>{const a=$("#app");a.classList.remove("wide");a.classList.toggle("collapsed");renderSide()};
+ $("#wdbtn").onclick=()=>{$("#app").classList.remove("collapsed");const w=$("#app").classList.toggle("wide");$("#wdbtn").title=w?"Shrink Your Library":"Expand Your Library";renderSide()};
  $("#newbtn").onclick=e=>{const r=e.currentTarget.getBoundingClientRect();menu(r.left,r.bottom+6,[[I.plus+"Create a new playlist",()=>newPlaylist()],[I.up+"Upload songs",()=>uploadModal()],[I.sync+"Upload check",()=>uploadModal("check")]])};
  $("#homebtn").onclick=()=>{$("#gq").value="";go({t:"home"})};
  $("#up2").onclick=()=>uploadModal();
@@ -528,7 +567,7 @@ function buildApp(){
  $("#gqx").onclick=()=>{gq.value="";gq.oninput();gq.focus()};
  $("#bpp").onclick=()=>togglePlay();
  $("#bnx").onclick=()=>next(false);$("#bpv").onclick=prev;
- $("#bsh").onclick=()=>{shuffle=!shuffle;playerUI();savePrefs()};
+ $("#bsh").onclick=toggleShuffle;
  $("#brp").onclick=()=>{repeat=(repeat+1)%3;playerUI();savePrefs()};
  const sk=$("#sk");sk.oninput=()=>{if(audio.duration)audio.currentTime=sk.value/1000*audio.duration;sk.style.setProperty("--p",sk.value/10+"%")};
  const vl=$("#vl");vl.style.setProperty("--p",audio.volume*100+"%");
@@ -546,7 +585,7 @@ function setPanel(p){const a=$("#app");if(!a.classList.contains("nopanel")&&pane
 audio.ontimeupdate=()=>{const sk=$("#sk");if(!sk||!audio.duration)return;sk.value=audio.currentTime/audio.duration*1000;sk.style.setProperty("--p",sk.value/10+"%");$("#tc").textContent=fmt(audio.currentTime);$("#td").textContent=fmt(audio.duration);
  if("mediaSession" in navigator&&Date.now()-(audio._ps||0)>1000){audio._ps=Date.now();try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}}};
 audio.onplay=audio.onpause=()=>{playerUI();if("mediaSession" in navigator)navigator.mediaSession.playbackState=audio.paused?"paused":"playing"};
-audio.onended=()=>next(true);
+audio.onended=()=>{endView(curId());next(true)};
 
 /* ---------- navigation ---------- */
 function go(v,keepInput){
@@ -558,7 +597,7 @@ function forward(){if(fwd.length){hist.push(view);view=fwd.pop();syncSearch();re
 function syncSearch(){const g=$("#gq");if(!g)return;g.value=view.t=="search"?view.q||"":"";$("#gqx").style.display=g.value?"flex":"none"}
 function renderTop(){
  const u=users[me.uid];
- $("#mebtn").innerHTML=avatar(u);
+ $("#mebtn").innerHTML=avatar(u);updBell();$("#nbell").onclick=openNotifs;
  $("#mebtn").onclick=e=>{const r=e.currentTarget.getBoundingClientRect();menu(r.right-220,r.bottom+8,[[I.user+"Profile",()=>go({t:"user",id:me.uid})],[I.pen+"Account settings",()=>go({t:"settings"})],"-",[I.back+"Log out",()=>signOut(auth)]])};
  $("#bk").disabled=!hist.length;$("#fw").disabled=!fwd.length;
 }
@@ -569,7 +608,7 @@ const curId=()=>queue[qi];
 
 function renderSide(){
  if(!$("#lib"))return;
- $("#renderGuard")&&0;
+ $("#libt").title=$("#app").classList.contains("collapsed")?"Expand Your Library":"Collapse Your Library";
  $("#chips").innerHTML=[["mine","Playlists"],["pub","Public"]].map(([k,n])=>`<button class="chip ${libFilter==k?"on":""}" data-f="${k}">${n}</button>`).join("");
  $("#chips").onclick=e=>{const b=e.target.closest("[data-f]");if(b){libFilter=b.dataset.f;renderSide()}};
  const wide=$("#app").classList.contains("wide");
@@ -584,8 +623,8 @@ function renderSide(){
   if(libSort=="alpha")l=[...l].sort((a,b)=>a.name.localeCompare(b.name));
   const playingPl=ctxPl;
   const showLiked=libFilter=="mine"&&(!q||"liked songs".includes(q));
-  $("#lib").innerHTML=(showLiked?`<div class="li ${view.t=="liked"?"on":""}" data-k="liked"><div class="art liked">${I.added.replace(/<circle[^>]*>/,"").replace("<path",'<path')&&F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div><div class="tx"><div class="t">Liked Songs</div><div class="s">${I.pin}Playlist • ${likes.size} song${likes.size==1?"":"s"}</div></div></div>`:"")+
-  l.map(p=>`<div class="li ${view.t=="pl"&&view.id==p.id?"on":""} ${playingPl==p.id?"playing":""}" data-k="pl" data-id="${p.id}">${art(p.coverUrl)}<div class="tx"><div class="t">${esc(p.name)}</div><div class="s">Playlist • ${esc(uname(p.ownerId))}</div></div><div class="ex">${(p.songIds||[]).length} songs</div></div>`).join("")||(showLiked?"":`<div class="noplay">${libFilter=="pub"?"No public playlists from others yet.":"Nothing found."}</div>`);
+  $("#lib").innerHTML=(showLiked?`<div class="li ${view.t=="liked"?"on":""}" data-k="liked" title="Liked Songs"><div class="art liked">${I.added.replace(/<circle[^>]*>/,"").replace("<path",'<path')&&F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div><div class="tx"><div class="t">Liked Songs</div><div class="s">${I.pin}Playlist • ${likes.size} song${likes.size==1?"":"s"}</div></div></div>`:"")+
+  l.map(p=>`<div class="li ${view.t=="pl"&&view.id==p.id?"on":""} ${playingPl==p.id?"playing":""}" data-k="pl" data-id="${p.id}" title="${esc(p.name)}">${art(p.coverUrl)}<div class="tx"><div class="t">${esc(p.name)}</div><div class="s">Playlist • ${esc(uname(p.ownerId))}</div></div><div class="ex">${(p.songIds||[]).length} songs</div></div>`).join("")||(showLiked?"":`<div class="noplay">${libFilter=="pub"?"No public playlists from others yet.":"Nothing found."}</div>`);
  }
 }
 let ctxPl=null;
@@ -596,6 +635,7 @@ const keyOf=n=>clean(n).replace(/\.[^.]+$/,"").toLowerCase();
 const stateIc=id=>have.has(id)?I.dldone:dling.has(id)?I.dling:I.dl;
 const likeIc=id=>likes.has(id)?I.added:I.add;
 const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${have.has(s.id)?"":"nd"}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n"><span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span></div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button><button class="hb dl ${have.has(s.id)?"on":""}" data-dl="${s.id}" title="${have.has(s.id)?"Downloaded":"Download to play"}">${stateIc(s.id)}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
+const topRows=l=>{topShown=l;return `<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Views</span><span></span><span class="dur">${I.clock}</span></div>`+l.map((s,i)=>rowHTML(s,i).replace(/<span class="da">.*?<\/span>/,`<span class="da">${vtxt(viewsOf(s))}</span>`).replace('<div class="row ','<div data-top="1" class="row ')).join("")};
 const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+list.map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
 const songCards=l=>`<div class="grid">${l.map(s=>`<div class="card ${have.has(s.id)?"":"nd"}" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<button class="hb dl cdl ${have.has(s.id)?"on":""}" data-dl="${s.id}" title="${have.has(s.id)?"Downloaded":"Download to play"}">${stateIc(s.id)}</button><div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const plCards=l=>`<div class="grid">${l.map(p=>`<div class="card" data-pl="${p.id}">${art(p.coverUrl)}<div class="t">${esc(p.name)}</div><div class="s">By ${esc(uname(p.ownerId))}</div><button class="pp" data-playpl="${p.id}" title="Play">${I.play}</button></div>`).join("")}</div>`;
@@ -605,7 +645,7 @@ const hero=(type,title,meta,a,desc,cls="")=>`<div class="hero ${cls}">${a}<div s
 const sum=l=>`${l.length} song${l.length==1?"":"s"}${l.length?", "+fmtLong(l.reduce((a,s)=>a+(s.duration||0),0)):""}`;
 const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button><button class="ib sm2" id="dlall" title="Download all">${I.dl}</button>${x}</div>`;
 const viewKey=()=>view.t+":"+(view.id||view.name||"");
-const viewTitle=()=>({home:"Home",all:"All songs",search:"Search results",liked:"Liked Songs",settings:"Settings"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
+const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",settings:"Settings"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
 const setHc=c=>$("#mainbox").style.setProperty("--hc",c||"#535353");
 const hdrFor=title=>`<div class="stick"></div><div class="hp"><button class="big" id="hdrplay" title="Play">${I.play}</button><b>${esc(title)}</b></div>`;
 
@@ -626,7 +666,7 @@ function render(){
    h=`<div class="quick">${tiles.join("")}</div>`+
     (songs.length?`<div class="sec"><h2>Recently added</h2><button data-go="all">Show all</button></div>`+songCards(songs.slice(0,8)):"")+
     (pls.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pls.slice(0,8)):"")+
-    (ar.length?`<div class="sec"><h2>Artists</h2></div>`+artistCards(ar):"")+
+    (ar.length?`<div class="sec"><h2>Artists</h2><button data-go="artists">Show all</button></div>`+artistCards(ar):"")+
     (myS.length?`<div class="sec"><h2>Your uploads</h2><button data-hf="mine">Show all</button></div>`+songCards(myS.slice(0,8)):"");
   }else if(f=="songs"){shown=songs;h=`<div class="sec"><h2>Songs</h2><span style="color:#b3b3b3">${songs.length} total</span></div>`+songCards(songs.slice(0,homeN))}
   else if(f=="playlists")h=`<div class="sec"><h2>Playlists</h2></div>`+(pls.length?plCards(pls):`<div class="empty">No playlists yet. Use the + in Your Library to create one.</div>`);
@@ -645,18 +685,21 @@ function render(){
   h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
-  const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});
-  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),"","u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
+  const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
+  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span>`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
-  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),"","u")+barH()+rows(l,{empty:"No songs credited to this artist yet."});
+  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${vtxt(totalViews(l))} total`,"u")+barH()+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
+ }else if(v.t=="artists"){
+  hdrh=`<div class="stick"></div>`;const all=[...allArtists().values()].sort((a,b)=>a.name.localeCompare(b.name));
+  h=`<div class="sec"><h2>Artists</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(all.length?artistCards(all):`<div class="empty">No artists yet.</div>`);
  }else if(v.t=="settings"){
   const u=users[me.uid];
   h=`<div class="sec"><h2>Account settings</h2></div><div class="setrow">${avatar(u)}<div class="tx"><div style="font-weight:700;font-size:18px">${esc(u.displayName)}</div><div style="color:#b3b3b3">@${esc(u.username)}</div></div></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><button class="pill" id="s1">${I.pen}Edit profile</button><button class="pill dark" id="s2">${I.lock}Change password</button><button class="pill dark" id="s3">Log out</button></div>`;
  }
- $("#mainbox").classList.toggle("plain",v.t=="home"||v.t=="settings");
+ $("#mainbox").classList.toggle("plain",v.t=="home"||v.t=="settings"||v.t=="artists");
  hdr.innerHTML=hdrh;m.innerHTML=h;
  const w=(id,f)=>{const e=$("#"+id);if(e)e.onclick=f};
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>signOut(auth));
@@ -664,21 +707,23 @@ function render(){
  const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);w("dlall",()=>downloadAll(shown));
  hdr.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){view={...view,f:c.dataset.hf};homeN=60;render()}};
  playerUI(1);
+ if(v.t=="user")loadFollowers(v.id);
 }
 function sr(){
  const q=(view.q||"").toLowerCase().trim(),el=$("#sr");if(!el)return;
  if(!q){const ar=[...allArtists().values()].sort((a,b)=>b.n-a.n).slice(0,12);return el.innerHTML=`<div class="sec" style="margin-top:12px"><h2>Search</h2></div><div class="empty" style="padding:24px 0">Find songs, artists, playlists and people.</div>`+(ar.length?`<div class="sec"><h2>Browse artists</h2></div>`+artistCards(ar):"")}
  const s=songs.filter(x=>x.title.toLowerCase().includes(q)||artistsOf(x).some(a=>a.toLowerCase().includes(q))||uname(x.ownerId).toLowerCase().includes(q));
  const ar=[...allArtists().values()].filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n).slice(0,8);
- const p=pls.filter(x=>x.name.toLowerCase().includes(q)),u=Object.values(users).filter(x=>(x.displayName||"").toLowerCase().includes(q)||x.username?.toLowerCase().includes(q));
+ const p=pls.filter(x=>x.name.toLowerCase().includes(q)),qu=q.replace(/^@/,""),u=Object.values(users).filter(x=>qu&&((x.displayName||"").toLowerCase().includes(qu)||(x.username||"").toLowerCase().includes(qu))).sort((a,b)=>{const sc=x=>(x.username||"").toLowerCase()==qu||(x.displayName||"").toLowerCase()==qu?0:(x.username||"").toLowerCase().startsWith(qu)||(x.displayName||"").toLowerCase().startsWith(qu)?1:2;return sc(a)-sc(b)}).slice(0,12);
  shown=s;
- el.innerHTML=(ar.length?`<div class="sec" style="margin-top:12px"><h2>Artists</h2></div>`+artistCards(ar):"")+(s.length?`<div class="sec"><h2>Songs</h2></div>`+rows(s):"")+(p.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(p):"")+(u.length?`<div class="sec"><h2>Profiles</h2></div><div class="grid">${u.map(x=>`<div class="card" data-u="${x.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(x).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(x.displayName)}</div><div class="s">Profile</div></div>`).join("")}</div>`:"")||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
+ el.innerHTML=(ar.length?`<div class="sec" style="margin-top:12px"><h2>Artists</h2></div>`+artistCards(ar):"")+(u.length?`<div class="sec"><h2>Profiles</h2></div><div class="grid">${u.map(x=>`<div class="card" data-u="${x.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(x).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(x.displayName||x.username||"")}</div><div class="s">Profile • @${esc(x.username||"")}${x.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`:"")+(s.length?`<div class="sec"><h2>Songs</h2></div>`+rows(s):"")+(p.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(p):"")||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
 }
 
 /* ---------- click handling ---------- */
 function mainClick(e){
  const t=e.target;
- if(t.closest("#shbig")){shuffle=!shuffle;playerUI();savePrefs();return}
+ if(t.closest("#shbig")){toggleShuffle();return}
+ const fl=t.closest("[data-follow]");if(fl)return toggleFollow(fl.dataset.follow);
  const hf=t.closest("[data-hf]");if(hf){view={...view,f:hf.dataset.hf};homeN=60;return render()}
  const sg=t.closest("[data-go]");if(sg)return go({t:sg.dataset.go});
  const dl=t.closest("[data-dl]");if(dl)return download(dl.dataset.dl);
@@ -687,7 +732,7 @@ function mainClick(e){
  const ar=t.closest("[data-artist]");if(ar)return go({t:"artist",name:ar.dataset.artist});
  const us=t.closest("[data-u]");if(us)return go({t:"user",id:us.dataset.u});
  const kk=t.closest("[data-k=liked]");if(kk)return go({t:"liked"});
- const row=t.closest(".row");if(row)return playFrom(shown,+row.dataset.i);
+ const row=t.closest(".row");if(row?.dataset.top)return playFrom(topShown,+row.dataset.i);if(row)return playFrom(shown,+row.dataset.i);
  const sc=t.closest("[data-song]");if(sc){const l=shown.length&&shown.some(s=>s.id==sc.dataset.song)?shown:songs;return playFrom(l,l.findIndex(s=>s.id==sc.dataset.song))}
  const pc=t.closest("[data-pl]");if(pc)return go({t:"pl",id:pc.dataset.pl});
 }
@@ -698,11 +743,11 @@ function mainCtx(e){
 }
 
 /* ---------- menus ---------- */
-function menu(x,y,items){
+function menu(x,y,items,w){
  document.querySelector(".menu")?.remove();
  const m=document.createElement("div");m.className="menu";
  m.innerHTML=items.map((it,i)=>it=="-"?"<hr>":`<button data-i="${i}" class="${it[2]||""}">${it[0]}</button>`).join("");
- document.body.appendChild(m);
+ document.body.appendChild(m);if(w)m.style.width=w+"px";
  m.style.left=Math.max(8,Math.min(x,innerWidth-m.offsetWidth-8))+"px";m.style.top=Math.max(8,Math.min(y,innerHeight-m.offsetHeight-8))+"px";
  m.onclick=e=>{const b=e.target.closest("button");if(!b)return;const keep=items[b.dataset.i][3];if(!keep)m.remove();items[b.dataset.i][1](e)};
  setTimeout(()=>document.addEventListener("click",()=>m.remove(),{once:true}),0);
@@ -787,6 +832,7 @@ function uploadModal(startMode="upload"){
  const {m,close}=openModal(`<div class="mh"><h2>Add songs</h2><button class="ib mclose" title="Close">${I.x}</button></div>
  <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="check">${I.sync}Upload check</button></div>
  <div class="note" id="nt"></div>
+ <div class="note" id="sdn">${I.info}<span>Songs must be downloaded from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a>. Only files with <b style="color:#fff">_spotdown.org</b> in the name are accepted; the tag is removed from the title automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
  <div class="fld"><label>Artists (optional)</label><div class="chipin" id="ach"><input placeholder="Type a name and press Enter"></div><div class="hint">Added to the artists found in each file's tags and filename.</div></div>
  <div class="fld" id="tfld"><label>Title (optional, single song only)</label><input type="text" id="ut" maxlength="120" placeholder="Use the file name"></div>
@@ -804,7 +850,7 @@ function uploadModal(startMode="upload"){
   q("#tfld").style.display=x=="upload"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#go").innerHTML=x=="check"?`${I.sync}Run upload check`:`${I.up}Upload`;sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
   const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=!n||busy};
- const add=async list=>{q("#fmsg").textContent="Reading files…";try{const a=await expand([...list]);const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=a.length?"":"No audio files found."}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
+ const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>SD.test(f.name)),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: the name must contain _spotdown.org (download from spotdown.org)`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
  const dz=q("#dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove("over")};
@@ -830,6 +876,7 @@ function uploadModal(startMode="upload"){
  };
 }
 async function doUpload(list,o,prog){
+ list=list.filter(f=>SD.test(f.name));
  const seen=new Set(songs.map(x=>x.key||x.title.toLowerCase())),todo=[];let dup=0;
  for(const f of list){const k=keyOf(f.name);if(seen.has(k)){dup++;continue}seen.add(k);todo.push(f)}
  if(!todo.length)throw new Error(`Nothing to upload: ${dup} song${dup>1?"s":""} already exist.`);
@@ -852,6 +899,7 @@ async function doUpload(list,o,prog){
  return{done,fail,dup};
 }
 async function doCheck(list,o,prog){
+ list=list.filter(f=>SD.test(f.name));
  const idx=new Map();songs.forEach(s=>{const k=s.key||s.title.toLowerCase();if(!idx.has(k))idx.set(k,[]);idx.get(k).push(s)});
  const cv=o.cover?await uploadFile("",o.cover,400):null;
  let upd=0,same=0,nf=0,notMine=0,fail=0,n=0;prog(0,list.length);
@@ -954,13 +1002,44 @@ document.addEventListener("drop",async e=>{if(!built)return;const sid=e.dataTran
  }catch(x){toast(fsMsg(x))}
 });
 
+/* ---------- follow + notifications ---------- */
+function updBell(){const n=notifs.filter(x=>!x.read).length,b=$("#nbdg");if(b){b.textContent=n>9?"9+":n;b.style.display=n?"flex":"none"}}
+function openNotifs(e){
+ const r=e.currentTarget.getBoundingClientRect(),list=notifs.slice(0,25);
+ const items=list.length?list.map(n=>[`${avatar(users[n.fromUid])}<span style="white-space:normal;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> started following you<br><small style="color:#b3b3b3">${ago(n)}</small></span>${n.read?"":'<i style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0"></i>'}`,()=>go({t:"user",id:n.fromUid})]):[["<span style='color:#b3b3b3'>No notifications yet</span>",()=>{}]];
+ menu(r.right-340,r.bottom+8,items,340);
+ notifs.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,"users",me.uid,"notifications",n.id),{read:true}).catch(()=>{}));
+}
+async function toggleFollow(id){
+ if(!id||id==me.uid)return;
+ try{
+  if(following.has(id)){
+   await deleteDoc(doc(db,"users",me.uid,"following",id));await deleteDoc(doc(db,"users",id,"followers",me.uid));await deleteDoc(doc(db,"users",id,"notifications",me.uid)).catch(()=>{});
+   fcount[id]=Math.max(0,(fcount[id]||1)-1)}
+  else{
+   await setDoc(doc(db,"users",me.uid,"following",id),{at:serverTimestamp()});await setDoc(doc(db,"users",id,"followers",me.uid),{at:serverTimestamp()});
+   await setDoc(doc(db,"users",id,"notifications",me.uid),{type:"follow",fromUid:me.uid,read:false,createdAt:serverTimestamp()}).catch(()=>{});
+   fcount[id]=(fcount[id]||0)+1}
+  fcAt[id]=Date.now();
+ }catch(e){toast(fsMsg(e))}
+ render();
+}
+function loadFollowers(id){
+ const put=()=>{const e=$("#fcnt");if(e&&view.t=="user"&&view.id==id&&fcount[id]!=null)e.textContent=fcount[id]+" follower"+(fcount[id]==1?"":"s")};
+ put();if(Date.now()-(fcAt[id]||0)<15000)return;fcAt[id]=Date.now();
+ getDocs(collection(db,"users",id,"followers")).then(s=>{fcount[id]=s.size;put()}).catch(()=>{});
+}
+
 /* ---------- player ---------- */
 let pt,ctxKey="";const savePrefs=()=>{clearTimeout(pt);pt=setTimeout(()=>updateDoc(doc(db,"users",me.uid),{prefs:{shuffle,repeat,vol:audio.volume}}).catch(()=>{}),600)};
-function playFrom(list,i){const s=list[i];if(!s)return;if(!have.has(s.id))return toast("Download this song first (the arrow icon)");queue=list.filter(x=>have.has(x.id)).map(x=>x.id);qi=queue.indexOf(s.id);ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;loadCur()}
+function playFrom(list,i){const s=list[i];if(!s)return;if(!have.has(s.id))return toast("Download this song first (the arrow icon)");queue=list.filter(x=>have.has(x.id)).map(x=>x.id);qi=queue.indexOf(s.id);if(shuffle)shuffleUpcoming();ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;countView(s.id);loadCur()}
 function playFirst(l){const d=l.filter(s=>have.has(s.id));d.length?playFrom(d,0):toast("Download songs first (the arrow icon)")}
 function togglePlay(){if(audio.src)audio.paused?audio.play():audio.pause();else playFirst(shown.length?shown:songs)}
+function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Math.floor(Math.random()*(i-qi));[queue[i],queue[j]]=[queue[j],queue[i]]}}
+function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI();savePrefs()}
 let cur=null;
-async function loadCur(){const s=song(queue[qi]);if(!s)return;const b=await tx("readonly",x=>x.get(s.id));if(!b){have.delete(s.id);render();return toast("Local copy missing. Download it again.")}
+async function loadCur(){const s=song(queue[qi]);if(!s)return;
+ if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;const b=await tx("readonly",x=>x.get(s.id));if(!b){have.delete(s.id);render();return toast("Local copy missing. Download it again.")}
  if(cur)URL.revokeObjectURL(cur);cur=URL.createObjectURL(b);audio.src=cur;audio.play().catch(()=>{});mediaMeta(s);playerUI();renderPanel()}
 async function download(id,quiet){const s=song(id);if(!s||have.has(id)||dling.has(id))return;dling.add(id);render();
  try{const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
@@ -974,14 +1053,21 @@ async function undownload(id){await tx("readwrite",x=>x.delete(id));have.delete(
 function next(auto){
  if(!queue.length)return;
  if(auto&&repeat==2){audio.currentTime=0;return audio.play()}
- if(shuffle&&queue.length>1){let n;do n=Math.floor(Math.random()*queue.length);while(n==qi);qi=n}
- else if(qi+1<queue.length)qi++;
- else if(repeat==1)qi=0;
+ if(qi+1<queue.length)qi++;
+ else if(repeat==1){if(shuffle){qi=-1;shuffleUpcoming()}qi=0}
  else if(auto){audio.pause();return playerUI()}
  else qi=0;
  loadCur();
 }
-function prev(){if(!queue.length)return;if(audio.currentTime>3||qi<=0){audio.currentTime=0}else{qi--;loadCur()}}
+function prev(){
+ if(audio.src&&audio.currentTime>3){audio.currentTime=0;return}
+ let pid=null;while(played.length){const c=played.pop();if(song(c)&&have.has(c)){pid=c;break}}
+ savePlayed();
+ if(!pid){if(audio.src)audio.currentTime=0;return}
+ if(!queue.length){queue=[pid];qi=0}else if(queue[qi-1]==pid)qi--;else queue.splice(Math.max(qi,0),0,pid);
+ skipPush=true;loadCur();
+}
+function playHist(id){if(!have.has(id))return toast("Download this song first (the arrow icon)");if(qi<0||!queue.length){queue=[id];qi=0}else{queue.splice(qi+1,0,id);qi++}countView(id);loadCur()}
 function markPlaying(){const id=curId(),pl=!audio.paused;document.querySelectorAll(".row").forEach(r=>{const c=r.dataset.id==id;r.classList.toggle("cur",c);r.classList.toggle("playing",c&&pl)})}
 function playerUI(skipPanel){
  if(!built)return;const s=song(curId());
@@ -997,36 +1083,40 @@ function playerUI(skipPanel){
  markPlaying();if(!skipPanel)renderPanel();
 }
 
-/* ---------- right panel: now playing / queue ---------- */
+/* ---------- right panel: big player + queue ---------- */
 let panelSig="";
 function renderPanel(){
  const r=$("#right");if(!r)return;const s=song(curId());
- const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,songs.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,ctxName].join("~");if(sig==panelSig)return;panelSig=sig;
- const hd=(t,lk)=>`<div class="rh"><button class="ttl ${lk?"lk":""}" id="rht">${esc(t)}</button><button class="ib" id="rhm" title="More options">${I.more}</button><button class="ib" id="rhx" title="Close">${I.x}</button></div>`;
- let h="";
- if(panel=="q"){
-  const nxt=queue.slice(qi+1).map(song).filter(Boolean);
-  const item=(x,c)=>`<div class="qi ${c?"cur":""}" data-qs="${x.id}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div></div>`;
-  h=`<div class="rh"><span class="ttl">Queue</span><button class="ib" id="rhx" title="Close">${I.x}</button></div><div class="rb">`+(s?`<div class="qh first">Now playing</div>${item(s,1)}`:"")+(nxt.length?`<div class="qh" style="display:flex;justify-content:space-between"><span>Next up</span><button id="qclr" style="color:#b3b3b3;font-size:13px;font-weight:700">Clear queue</button></div>`+nxt.map(x=>item(x)).join(""):`<div class="noplay">${s?"Nothing else is queued up.":"Your queue is empty.<br>Play a song or choose Add to queue from a song's menu."}</div>`)+`</div>`;
- }else if(!s){
-  h=hd("Now playing")+`<div class="rb"><div class="noplay"><div class="npcov" style="margin-bottom:18px">${I.note}</div>Pick a song to see its details and credits here.</div></div>`;
- }else{
-  const A=artistsOf(s),first=A[0],more=first?songsBy(first).filter(x=>x.id!=s.id).slice(0,4):[],ups=songs.filter(x=>x.ownerId==s.ownerId).length;
-  h=hd(ctxName||"Now playing",!!ctxName)+`<div class="rb">${s.coverUrl?`<img class="npcov" src="${esc(s.coverUrl)}">`:`<div class="npcov">${I.note}</div>`}
-  <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>
-  <div class="npcard hl"><div class="bgc" style="background-image:url('${s.coverUrl?esc(s.coverUrl):""}');${s.coverUrl?"":"background:#333"}"><h4>${first?"About the artist":"Uploaded by"}</h4></div><div class="inner"><div class="nm">${esc(first||uname(s.ownerId))}</div><div class="sm">${first?`${songsBy(first).length} song${songsBy(first).length==1?"":"s"} in the library`:`${ups} upload${ups==1?"":"s"}`}</div><button class="pill sm" id="npview" style="margin-top:12px">${first?"View artist":"View profile"}</button></div></div>
-  <div class="npcard"><h4>Credits</h4>${A.map(n=>`<div class="cr"><div><div class="a" data-artist="${esc(n)}">${esc(n)}</div><div class="r">Original artist</div></div></div>`).join("")}<div class="cr"><div><div class="a" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</div><div class="r">Uploaded by • ${dateOf(s)}</div></div></div></div>
-  ${more.length?`<div class="npcard"><h4>More from ${esc(first)}<button id="npall">Show all</button></h4>${more.map(x=>`<div class="qi" data-qs="${x.id}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${fmt(x.duration)}</div></div></div>`).join("")}</div>`:""}</div>`;
- }
- r.innerHTML=h;
+ const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,pset.hist,pset.small,songs.length].join("~");
+ if(sig==panelSig)return;panelSig=sig;
+ const A=artistsOf(s);
+ const item=(x,i,c)=>`<div class="qi ${c?"cur":""}" data-qi="${i}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div>${c?"":`<button class="hb" data-qrm="${i}" title="Remove from queue">${I.x}</button>`}</div>`;
+ const allNxt=queue.slice(qi+1).map((id,k)=>[song(id),qi+1+k]).filter(([x])=>x),nxt=allNxt.slice(0,10),moreN=allNxt.length-nxt.length;
+ const hist=pset.hist?played.slice(-20).reverse().map(song).filter(Boolean):[];
+ const big=s?`${s.coverUrl?`<img class="npcov ${pset.small?"sm":""}" src="${esc(s.coverUrl)}">`:`<div class="npcov ${pset.small?"sm":""}">${I.note}</div>`}
+  <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div><div class="npv">${vtxt(viewsOf(s))} • Uploaded by <span class="ar" data-u="${s.ownerId}" style="cursor:pointer">${esc(uname(s.ownerId))}</span></div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>`
+  :`<div class="npcov ${pset.small?"sm":""}">${I.note}</div><div class="noplay" style="padding:18px 0 4px">Pick a song to see it here.</div>`;
+ r.innerHTML=`<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${I.x}</button></div>
+ <div class="rb">${big}
+ <div class="qh" id="qsec" style="display:flex;justify-content:space-between;align-items:center"><span>Next in queue</span>${nxt.length?`<button class="qa" id="qclr">Clear queue</button>`:""}</div>
+ ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?"Nothing else is queued up.":"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
+ ${pset.hist?`<div class="qh">Recently played</div>${hist.length?hist.map(x=>`<div class="qi" data-hs="${x.id}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div></div>`).join(""):`<div class="noplay" style="padding:12px 0">Nothing yet.</div>`}`:""}</div>`;
  const w=(id,f)=>{const e=r.querySelector("#"+id);if(e)e.onclick=f};
  w("rhx",()=>{$("#app").classList.add("nopanel");playerUI(1)});
  w("rht",()=>{const k=ctxKey.split(":");if(k[0]=="pl")go({t:"pl",id:k[1]});else if(k[0]=="liked")go({t:"liked"});else if(k[0]=="artist")go({t:"artist",name:k.slice(1).join(":")});else if(k[0]=="user")go({t:"user",id:k[1]});else go({t:k[0]=="search"?"home":k[0]})});
  w("rhm",e=>{const b=e.currentTarget.getBoundingClientRect();s&&songMenu(e,s,b.left-120,b.bottom+6)});
- w("npsh",()=>copyInfo(s));w("npview",()=>s&&(artistsOf(s)[0]?go({t:"artist",name:artistsOf(s)[0]}):go({t:"user",id:s.ownerId})));w("npall",()=>go({t:"artist",name:artistsOf(s)[0]}));
+ w("rhc",e=>{const b=e.currentTarget.getBoundingClientRect(),ck=on=>on?I.check:"<span style='width:16px;display:inline-block'></span>";
+  menu(b.left-170,b.bottom+6,[[ck(pset.hist)+"Show recently played",()=>{pset.hist=!pset.hist;savePset();panelSig="";renderPanel()}],[ck(pset.small)+"Compact album cover",()=>{pset.small=!pset.small;savePset();panelSig="";renderPanel()}]])});
+ w("npsh",()=>copyInfo(s));
  w("qclr",()=>{queue=queue.slice(0,qi+1);panelSig="";renderPanel()});
- r.onclick=e=>{const l=e.target.closest("[data-pl-like]");if(l)return toggleLike(l.dataset.plLike);const a=e.target.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});const u=e.target.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});
-  const q=e.target.closest("[data-qs]");if(q){const id=q.dataset.qs,i=queue.indexOf(id);if(i>-1&&panel=="q"){qi=i;loadCur()}else{const x=song(id);if(x)playFrom([x],0)}}};
+ r.onclick=e=>{const t=e.target;
+  const l=t.closest("[data-pl-like]");if(l)return toggleLike(l.dataset.plLike);
+  const rm=t.closest("[data-qrm]");if(rm){queue.splice(+rm.dataset.qrm,1);panelSig="";return renderPanel()}
+  const a=t.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});
+  const u=t.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});
+  const q=t.closest("[data-qi]");if(q){const i=+q.dataset.qi;if(i!=qi&&queue[i]){qi=i;countView(queue[qi]);loadCur()}return}
+  const hs=t.closest("[data-hs]");if(hs)playHist(hs.dataset.hs)};
+ if(panel=="q")r.querySelector("#qsec")?.scrollIntoView({block:"start"});
 }
 
 /* ---------- media keys / OS media controls ---------- */
