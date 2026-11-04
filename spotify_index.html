@@ -628,11 +628,13 @@ const viewsOf=s=>s?.views|0,totalViews=l=>l.reduce((a,s)=>a+viewsOf(s),0);
 const topSongs=l=>[...l].filter(s=>viewsOf(s)>0).sort((a,b)=>viewsOf(b)-viewsOf(a)).slice(0,5);
 const vtxt=n=>`${n.toLocaleString()} view${n==1?"":"s"}`;
 const ago=d=>{const m=Math.floor((Date.now()-ms(d))/6e4);return m<1?"Just now":m<60?m+"m ago":m<1440?Math.floor(m/60)+"h ago":Math.floor(m/1440)+"d ago"};
-/* A view is counted when a song is finished with: it ends, restarts (repeat one / restart),
-   or playback moves on to another song. Moving on early only counts after MIN_VIEW_SEC of listening. */
-const MIN_VIEW_SEC=30;let vcId=null,vcDone=false;
-const countView=id=>{if(!me||!id)return;updateDoc(doc(db,"songs",id),{views:increment(1)}).catch(()=>{})};
-const finishView=force=>{if(vcId&&!vcDone&&(force||audio.currentTime>=MIN_VIEW_SEC)){vcDone=true;countView(vcId)}};
+/* A view is counted every time a song starts playing (click, next song after one ends, or a loop replay).
+   Per account, each song has its own 1 minute cooldown; other songs are unaffected. */
+const VC_MS=60000;
+const vcKey=()=>"spot_vc_"+(me?.uid||"");
+const vcLoad=()=>{try{return JSON.parse(localStorage.getItem(vcKey())||"{}")}catch{return{}}};
+const vcSave=m=>{try{const n=Date.now();for(const k in m)if(n-m[k]>VC_MS)delete m[k];localStorage.setItem(vcKey(),JSON.stringify(m))}catch{}};
+const countView=id=>{if(!me||!id)return;const m=vcLoad(),n=Date.now();if(m[id]&&n-m[id]<VC_MS)return;m[id]=n;vcSave(m);updateDoc(doc(db,"songs",id),{views:increment(1)}).catch(()=>{})};
 const mergePl=()=>{
  /* shared_playlists is the source of truth for songs of any playlist that is shared (collaborators add there) */
  const sh=new Map(ownShared.map(p=>[p.id,p]));
@@ -763,7 +765,7 @@ function setPanel(p){const a=$("#app");if(!a.classList.contains("nopanel")&&pane
 audio.ontimeupdate=()=>{const sk=$("#sk");if(!sk||!audio.duration)return;sk.value=audio.currentTime/audio.duration*1000;sk.style.setProperty("--p",sk.value/10+"%");$("#tc").textContent=fmt(audio.currentTime);$("#td").textContent=fmt(audio.duration);syncSeek();
  if("mediaSession" in navigator&&Date.now()-(audio._ps||0)>1000){audio._ps=Date.now();try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}}};
 audio.onplay=audio.onpause=()=>{playerUI();if("mediaSession" in navigator)navigator.mediaSession.playbackState=audio.paused?"paused":"playing"};
-audio.onended=()=>{finishView(true);next(true)};
+audio.onended=()=>{next(true)};
 
 /* ---------- navigation ---------- */
 function go(v,keepInput){
@@ -1246,9 +1248,9 @@ function togglePlay(){if(audio.src)audio.paused?audio.play():audio.pause();else 
 function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Math.floor(Math.random()*(i-qi));[queue[i],queue[j]]=[queue[j],queue[i]]}}
 function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI();savePrefs()}
 let cur=null;
-async function loadCur(){const s=song(queue[qi]);if(!s)return;finishView(false);vcId=s.id;vcDone=false;
+async function loadCur(){const s=song(queue[qi]);if(!s)return;
  if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;const b=await tx("readonly",x=>x.get(s.id));if(!b){have.delete(s.id);render();return toast("Local copy missing. Download it again.")}
- if(cur)URL.revokeObjectURL(cur);cur=URL.createObjectURL(b);audio.src=cur;audio.play().catch(()=>{});mediaMeta(s);playerUI();renderPanel()}
+ if(cur)URL.revokeObjectURL(cur);cur=URL.createObjectURL(b);audio.src=cur;audio.play().catch(()=>{});countView(s.id);mediaMeta(s);playerUI();renderPanel()}
 async function download(id,quiet){const s=song(id);if(!s||have.has(id)||dling.has(id))return;dling.add(id);render();
  try{const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
   if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
@@ -1260,7 +1262,7 @@ async function downloadAll(l){const t=l.filter(s=>!have.has(s.id));if(!t.length)
 async function undownload(id){await tx("readwrite",x=>x.delete(id));have.delete(id);if(queue[qi]==id)audio.pause();render();toast("Removed from this device")}
 function next(auto){
  if(!queue.length)return;
- if(auto&&repeat==2){vcDone=false;audio.currentTime=0;return audio.play()}
+ if(auto&&repeat==2){countView(curId());audio.currentTime=0;return audio.play()}
  if(qi+1<queue.length)qi++;
  else if(repeat==1){if(shuffle){qi=-1;shuffleUpcoming()}qi=0}
  else if(auto){audio.pause();return playerUI()}
@@ -1268,7 +1270,7 @@ function next(auto){
  loadCur();
 }
 function prev(){
- if(audio.src&&audio.currentTime>3){finishView(false);vcDone=false;audio.currentTime=0;return}
+ if(audio.src&&audio.currentTime>3){audio.currentTime=0;return}
  let pid=null;while(played.length){const c=played.pop();if(song(c)&&have.has(c)){pid=c;break}}
  savePlayed();
  if(!pid){if(audio.src)audio.currentTime=0;return}
