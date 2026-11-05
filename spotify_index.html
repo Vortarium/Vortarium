@@ -608,7 +608,21 @@ function buildArtists(filename,tags,extra=[]){
  return dedupe(a)}
 const idb=new Promise((res,rej)=>{const r=indexedDB.open("spotify_local",1);r.onupgradeneeded=()=>r.result.createObjectStore("audio");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const CH=6e5,b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(",")[1]);f.readAsDataURL(b)});
-const tx=async(m,f)=>{const d=await idb;return new Promise((res,rej)=>{const r=f(d.transaction("audio",m).objectStore("audio"));r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})};
+const tx=async(m,f)=>{const d=await idb;return new Promise((res,rej)=>{try{const r=f(d.transaction("audio",m).objectStore("audio"));r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}})};
+/* in-memory copy of downloaded songs: used when IndexedDB is unavailable, full or evicted on some devices */
+const mem=new Map();
+async function fetchSongBlob(id){const s=song(id);if(!s)throw new Error("song not found");
+ const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
+ if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
+ const parts=p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u});
+ return new Blob(parts,{type:s.mime||"audio/mpeg"})}
+async function getBlob(id){
+ if(mem.has(id))return mem.get(id);
+ try{const b=await tx("readonly",x=>x.get(id));if(b){mem.set(id,b);return b}}catch{}
+ /* not stored locally (or storage failed): pull it from the server again */
+ const b=await fetchSongBlob(id);mem.set(id,b);
+ tx("readwrite",x=>x.put(b,id)).then(()=>have.add(id)).catch(()=>{});
+ return b}
 const have=new Set(),dling=new Set();
 tx("readonly",x=>x.getAllKeys()).then(k=>{k.forEach(x=>have.add(x));built&&render()});
 navigator.storage?.persist?.();
@@ -918,7 +932,7 @@ function render(){
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
-  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span>${v.id==me.uid?` • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`:""}`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
+  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
@@ -1409,17 +1423,17 @@ function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Mat
 function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI();savePrefs()}
 let cur=null;
 async function loadCur(){const s=song(queue[qi]);if(!s)return;
- if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;const b=await tx("readonly",x=>x.get(s.id));if(!b){have.delete(s.id);render();return toast("Local copy missing. Download it again.")}
+ if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;let b;try{b=await getBlob(s.id)}catch(e){return toast("Couldn't load this song: "+e.message)}
+ have.add(s.id);
  if(cur)URL.revokeObjectURL(cur);cur=URL.createObjectURL(b);audio.src=cur;audio.play().catch(()=>{});countView(s.id);mediaMeta(s);playerUI();renderPanel()}
 async function download(id,quiet){const s=song(id);if(!s||have.has(id)||dling.has(id))return;dling.add(id);render();
- try{const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
-  if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
-  const parts=p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u});
-  await tx("readwrite",x=>x.put(new Blob(parts,{type:s.mime}),id));have.add(id);quiet||toast("Downloaded "+s.title)}
+ try{const b=await fetchSongBlob(id);mem.set(id,b);
+  try{await tx("readwrite",x=>x.put(b,id))}catch(e){console.warn("IndexedDB save failed, keeping in memory",e)}
+  have.add(id);quiet||toast("Downloaded "+s.title)}
  catch(e){toast("Download failed: "+e.message)}finally{dling.delete(id);render()}}
 async function downloadAll(l){const t=l.filter(s=>!have.has(s.id));if(!t.length)return toast("Everything here is already downloaded");
  for(let k=0;k<t.length;k++){toast(`Downloading ${k+1}/${t.length}…`,1);await download(t[k].id,1)}toast("Downloaded "+t.length+" songs")}
-async function undownload(id){await tx("readwrite",x=>x.delete(id));have.delete(id);if(queue[qi]==id)audio.pause();render();toast("Removed from this device")}
+async function undownload(id){mem.delete(id);await tx("readwrite",x=>x.delete(id)).catch(()=>{});have.delete(id);if(queue[qi]==id)audio.pause();render();toast("Removed from this device")}
 function next(auto){
  if(!queue.length)return;
  if(auto&&repeat==2){countView(curId());audio.currentTime=0;return audio.play()}
