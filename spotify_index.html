@@ -471,6 +471,12 @@ html.phone .seg button svg{display:none}
 html.phone .selm .row{grid-template-columns:28px minmax(0,1fr) auto}
 html.phone .selm .row .n{display:flex}
 
+/* ---- explicit badge, report dialog, older notifications ---- */
+.xb{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:3px;background:#b3b3b3;color:#000;font-size:11px;font-weight:700;margin-right:6px;vertical-align:middle;flex-shrink:0;line-height:1}
+.rd{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:50%;border:2px solid #7c7c7c;flex-shrink:0;cursor:pointer;position:relative;outline:0;background:transparent}
+.rd:checked{border-color:var(--g)}.rd:checked::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--g)}
+.nrow{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:6px;cursor:pointer;font-size:14px}.nrow:hover{background:#ffffff1a}
+
 /* ---- loading skeletons ---- */
 .sk{background:linear-gradient(90deg,#222 25%,#333 50%,#222 75%);background-size:200% 100%;animation:skm 1.2s linear infinite;border-radius:6px}
 @keyframes skm{to{background-position:-200% 0}}
@@ -675,7 +681,9 @@ const uname=id=>users[id]?.displayName||users[id]?.username||"Unknown";
 const mine=s=>me&&s.ownerId===me.uid;
 const artistsOf=s=>Array.isArray(s?.artists)?s.artists:[];
 const creditPlain=s=>[artistsOf(s).join(", "),uname(s.ownerId)].filter(Boolean).join(" • ");
-const credit=(s,link=true)=>{const a=artistsOf(s);const A=a.map(n=>link?`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`:esc(n)).join(", ");const U=link?`<span class="up" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`:esc(uname(s.ownerId));return A?`${A}<span class="bl">•</span>${U}`:U};
+const xb=s=>s?.explicit?`<span class="xb" title="Explicit">E</span>`:"";
+const credit=(s,link=true)=>xb(s)+credit0(s,link);
+const credit0=(s,link=true)=>{const a=artistsOf(s);const A=a.map(n=>link?`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`:esc(n)).join(", ");const U=link?`<span class="up" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`:esc(uname(s.ownerId));return A?`${A}<span class="bl">•</span>${U}`:U};
 const allArtists=()=>{const m=new Map();songs.forEach(s=>artistsOf(s).forEach(n=>{const k=n.toLowerCase();if(!m.has(k))m.set(k,{name:n,n:0});m.get(k).n++}));return m};
 const songsBy=n=>songs.filter(s=>artistsOf(s).some(a=>a.toLowerCase()==n.toLowerCase()));
 
@@ -978,8 +986,8 @@ function songMenu(e,s,ax,ay){
  artistsOf(s).slice(0,4).forEach(a=>items.push([I.user+"Go to "+esc(a),()=>go({t:"artist",name:a})]));
  items.push([I.note+"Uploaded by "+esc(uname(s.ownerId)),()=>go({t:"user",id:s.ownerId})]);
  if(inPl)items.push("-",[I.x+"Remove from this playlist",()=>plUpdate(inPl,{songIds:(inPl.songIds||[]).filter(z=>z!=s.id)})]);
- if(o)items.push("-",[I.pen+"Edit details",()=>editSong(s)],[I.trash+"Delete song",()=>delSong(s),"x"]);
- items.push("-",[I.share+"Copy song info",()=>copyInfo(s)]);
+ if(o||isMod())items.push("-",[I.pen+"Edit details",()=>editSong(s)],[I.trash+"Delete song",()=>delSong(s),"x"]);
+ items.push("-",...(o?[]:[[I.info+"Report problem",()=>reportSong(s)]]),[I.share+"Copy song info",()=>copyInfo(s)]);
  menu(x,y,items);
 }
 const copyInfo=s=>{navigator.clipboard?.writeText(`${s.title} – ${artistsOf(s).join(", ")||uname(s.ownerId)}`).then(()=>toast("Copied song info"),()=>toast("Couldn't copy"))};
@@ -1186,8 +1194,8 @@ async function doCheck(list,o,prog){
 
 /* ---------- actions ---------- */
 function editSong(s){
- form("Edit details",[{type:"cover",value:s.coverUrl},{label:"Title",value:s.title},{type:"chips",label:"Original artists",value:artistsOf(s),hint:"Everyone who is part of this song. They're shown before the uploader and used in search."}],"Save",async([c,t,a])=>{
-  if(!t)throw new Error("Title can't be empty.");const d={title:t,artists:a,artist:a.join(", ")};
+ form("Edit details",[{type:"cover",value:s.coverUrl},{label:"Title",value:s.title},{type:"chips",label:"Original artists",value:artistsOf(s),hint:"Everyone who is part of this song. They're shown before the uploader and used in search."},{type:"check",label:"Explicit",sub:"Contains swear words or mature language, so listeners are told beforehand",value:!!s.explicit}],"Save",async([c,t,a,x])=>{
+  if(!t)throw new Error("Title can't be empty.");const d={title:t,artists:a,artist:a.join(", "),explicit:!!x};
   if(c instanceof File)d.coverUrl=(await uploadFile("",c,400)).url;else if(c==="")d.coverUrl="";
   await updateDoc(doc(db,"songs",s.id),d);toast("Saved");
  });
@@ -1195,6 +1203,7 @@ function editSong(s){
 async function delSong(s){
  if(!await confirmBox("Delete song?",`"${esc(s.title)}" will be removed for everyone. This can't be undone.`))return;
  if(queue[qi]==s.id){audio.pause();audio.removeAttribute("src");queue=[];qi=-1}
+ if(!mine(s))await setDoc(doc(db,"users",s.ownerId,"notifications",`${me.uid}_del_${s.id}`),{type:"removed",fromUid:me.uid,songId:s.id,songTitle:s.title,read:false,createdAt:serverTimestamp()}).catch(()=>{});
  const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));await tx("readwrite",x=>x.delete(s.id));have.delete(s.id);playerUI();toast("Song deleted");
 }
 function newPlaylist(addId){
@@ -1289,11 +1298,54 @@ document.addEventListener("drop",async e=>{if(!built)return;const sid=e.dataTran
 
 /* ---------- follow + notifications ---------- */
 function updBell(){const n=notifs.filter(x=>!x.read).length,b=$("#nbdg");if(b){b.textContent=n>9?"9+":n;b.style.display=n?"flex":"none"}}
+const RSN={1:"The audio file is broken, or the wrong audio (or no audio) plays.",2:"The song title or artist information is incorrect.",3:"The song contains inappropriate content or needs an explicit marker.",4:"A duplicate of this song already exists (requesting a takedown).",5:"The song does not belong here: it is not music, or it is harmful or spam."};
+const RSHORT={1:"broken or wrong audio",2:"incorrect title or artists",3:"inappropriate content / needs an explicit marker",4:"duplicate song, takedown requested",5:"not music, harmful, or spam"};
+const modUid=()=>Object.values(users).find(u=>(u.username||"").toLowerCase()=="vortarium")?.id;
+const isMod=()=>(users[me?.uid]?.username||"").toLowerCase()=="vortarium";
+const notifText=n=>n.type=="share"?`shared the playlist "${esc(n.plName||"a playlist")}" with you`:n.type=="report"?`reported <i>${esc(n.songTitle||"a song")}</i>: ${esc(RSHORT[n.code]||"a problem")}`:n.type=="removed"?`removed your song "${esc(n.songTitle||"")}"`:"started following you";
+const notifGo=n=>n.type=="share"?go({t:"pl",id:n.plId}):n.type=="report"?reviewReport(n):go({t:"user",id:n.fromUid});
+const markRead=n=>updateDoc(doc(db,"users",me.uid,"notifications",n.id),{read:true}).catch(()=>{});
+const notifItem=n=>[`${avatar(users[n.fromUid])}<span style="white-space:normal;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> ${notifText(n)}<br><small style="color:#b3b3b3">${ago(n)}</small></span>${n.read?"":'<i style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0"></i>'}`,()=>notifGo(n)];
 function openNotifs(e){
- const r=e.currentTarget.getBoundingClientRect(),list=notifs.slice(0,25);
- const items=list.length?list.map(n=>[`${avatar(users[n.fromUid])}<span style="white-space:normal;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> ${n.type=="share"?`shared the playlist "${esc(n.plName||"a playlist")}" with you`:"started following you"}<br><small style="color:#b3b3b3">${ago(n)}</small></span>${n.read?"":'<i style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--g);flex-shrink:0"></i>'}`,()=>go(n.type=="share"?{t:"pl",id:n.plId}:{t:"user",id:n.fromUid})]):[["<span style='color:#b3b3b3'>No notifications yet</span>",()=>{}]];
+ const r=e.currentTarget.getBoundingClientRect(),recent=notifs.slice(0,5),older=notifs.slice(5);
+ const items=recent.length?recent.map(notifItem):[["<span style='color:#b3b3b3'>No notifications yet</span>",()=>{}]];
+ if(older.length)items.push("-",[`${I.clock}View older notifications (${older.length})`,()=>openOlder()]);
  menu(Math.max(8,r.right-340),r.bottom+8,items,Math.min(340,innerWidth-16));
- notifs.filter(n=>!n.read).forEach(n=>updateDoc(doc(db,"users",me.uid,"notifications",n.id),{read:true}).catch(()=>{}));
+ recent.filter(n=>!n.read).forEach(markRead);
+}
+function openOlder(){
+ const older=notifs.slice(5);
+ const {m,close}=openModal(`<div class="mh"><h2>Older notifications</h2><button class="ib mclose" title="Close">${I.x}</button></div><div style="max-height:60vh;overflow-y:auto;margin:0 -8px">${older.map((n,i)=>`<div class="nrow" data-i="${i}">${avatar(users[n.fromUid])}<span style="flex:1;min-width:0;line-height:1.3"><b>${esc(uname(n.fromUid))}</b> ${notifText(n)}<br><small style="color:#b3b3b3">${ago(n)}</small></span></div>`).join("")}</div>`,"sm");
+ m.querySelectorAll(".nrow").forEach(r=>r.onclick=()=>{close();notifGo(older[+r.dataset.i])});
+ older.filter(n=>!n.read).forEach(markRead);
+}
+function reportSong(s){
+ if(!s||mine(s))return;
+ const {m,close}=openModal(`<div class="mh"><h2>Report a problem</h2><button class="ib mclose" title="Close">${I.x}</button></div>
+ <p style="color:#b3b3b3;font-size:14px;line-height:1.5;margin-bottom:10px">What is wrong with <b style="color:#fff">${esc(s.title)}</b>?</p>
+ ${Object.entries(RSN).map(([k,t])=>`<label class="chk"><span class="tx"><b>${esc(t)}</b></span><input class="rd" type="radio" name="rr" value="${k}"></label>`).join("")}
+ <div class="mf"><span class="msg" id="fmsg"></span><button class="ghost" id="rc">Cancel</button><button class="pill" id="rs">Send report</button></div>`,"sm");
+ m.querySelector("#rc").onclick=close;
+ m.querySelector("#rs").onclick=async()=>{
+  const pick=m.querySelector("input[name=rr]:checked"),msg=m.querySelector("#fmsg"),btn=m.querySelector("#rs");
+  if(!pick){msg.textContent="Choose an option first.";msg.className="msg err";return}
+  const code=+pick.value,mod=modUid(),to=[...new Set(code<=2?[s.ownerId]:code==3?[s.ownerId,mod]:[mod])].filter(x=>x&&x!=me.uid);
+  if(!to.length){msg.textContent="No one could be notified right now.";msg.className="msg err";return}
+  btn.disabled=true;
+  const res=await Promise.all(to.map(uid=>setDoc(doc(db,"users",uid,"notifications",`${me.uid}_r${code}_${s.id}`),{type:"report",code,songId:s.id,songTitle:s.title,fromUid:me.uid,read:false,createdAt:serverTimestamp()}).then(()=>1,()=>0)));
+  close();toast(res.some(Boolean)?"Report sent. Thank you.":"You have already sent this report.");
+ };
+}
+function reviewReport(n){
+ const s=song(n.songId),mod=isMod(),own=s&&mine(s);
+ const {m,close}=openModal(`<div class="mh"><h2>Reported song</h2><button class="ib mclose" title="Close">${I.x}</button></div>
+ <p style="color:#b3b3b3;line-height:1.5;font-size:15px"><b style="color:#fff">${esc(uname(n.fromUid))}</b> reported <b style="color:#fff">${esc(n.songTitle||"a song")}</b>:<br>${esc(RSN[n.code]||"")}</p>
+ ${s?"":`<p style="color:#ff7a7a;margin-top:10px">This song no longer exists.</p>`}
+ <div class="mf" style="flex-wrap:wrap"><button class="ghost" id="rc">Close</button>${s&&(own||mod)?`<button class="pill dark" id="re">Edit details</button>`:""}${s&&mod?`<button class="pill dark" id="rx">${s.explicit?"Remove explicit marker":"Mark explicit"}</button><button class="pill" id="rd" style="background:#ff7a7a">Delete song</button>`:""}</div>`,"sm");
+ const w=(id,f)=>{const b=m.querySelector("#"+id);if(b)b.onclick=f};
+ w("rc",close);w("re",()=>{close();editSong(s)});
+ w("rx",async()=>{try{await updateDoc(doc(db,"songs",s.id),{explicit:!s.explicit});toast(s.explicit?"Explicit marker removed":"Marked explicit");close()}catch(x){toast(fsMsg(x))}});
+ w("rd",()=>{close();delSong(s)});
 }
 async function toggleFollow(id){
  if(!id||id==me.uid)return;
@@ -1379,7 +1431,7 @@ function renderPanel(){
  const allNxt=queue.slice(qi+1).map((id,k)=>[song(id),qi+1+k]).filter(([x])=>x),nxt=allNxt.slice(0,10),moreN=allNxt.length-nxt.length;
  const hist=pset.hist?played.slice(-20).reverse().map(song).filter(Boolean):[];
  const big=s?`${s.coverUrl?`<img class="npcov ${pset.small?"sm":""}" src="${esc(s.coverUrl)}">`:`<div class="npcov ${pset.small?"sm":""}">${I.note}</div>`}
-  <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div><div class="npv">${vtxt(viewsOf(s))} • Uploaded by <span class="ar" data-u="${s.ownerId}" style="cursor:pointer">${esc(uname(s.ownerId))}</span></div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>`
+  <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${xb(s)}${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div><div class="npv">${vtxt(viewsOf(s))} • Uploaded by <span class="ar" data-u="${s.ownerId}" style="cursor:pointer">${esc(uname(s.ownerId))}</span></div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>`
   :`<div class="npcov ${pset.small?"sm":""}">${I.note}</div><div class="noplay" style="padding:18px 0 4px">Pick a song to see it here.</div>`;
  const npctl=`<div class="npctl"><div class="seek"><span id="tc2">0:00</span><input type="range" id="sk2" min="0" max="1000" value="0"><span id="td2">0:00</span></div><div class="ctl"><button id="bsh2" title="Shuffle">${I.shuf}</button><button id="bpv2" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp2" title="Play">${I.play}</button><button id="bnx2" class="sk2" title="Next">${I.next}</button><button id="brp2" title="Repeat">${I.rep}</button></div></div>`;
  r.innerHTML=`<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>

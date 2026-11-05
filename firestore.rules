@@ -2,6 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // the Vortarium account is the moderator (can edit/take down any song)
+    function isMod() {
+      return request.auth != null && request.auth.token.email == 'vortarium@spotify-clone.app';
+    }
+
     // profiles, likes and playlists all live under the user's own account
     match /users/{uid} {
       allow read: if request.auth != null;
@@ -71,9 +76,10 @@ service cloud.firestore {
       // owners can edit anything; everyone else may only add exactly +1 to the view counter
       allow update: if request.auth != null
                     && (request.auth.uid == resource.data.ownerId
+                        || isMod()
                         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
                             && request.resource.data.views == resource.data.get('views', 0) + 1));
-      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.ownerId || isMod());
 
       match /chunks/{chunkId} {
         allow read: if request.auth != null;
@@ -81,7 +87,7 @@ service cloud.firestore {
                               && request.auth.uid == get(/databases/$(database)/documents/songs/$(songId)).data.ownerId
                               && request.resource.data.data.size() < 950000;
         allow delete: if request.auth != null
-                      && request.auth.uid == get(/databases/$(database)/documents/songs/$(songId)).data.ownerId;
+                      && (request.auth.uid == get(/databases/$(database)/documents/songs/$(songId)).data.ownerId || isMod());
       }
     }
   }
