@@ -786,7 +786,7 @@ function buildApp(){
  $("#bk").onclick=back;$("#fw").onclick=forward;
  $("#brw").onclick=()=>{$("#gq").value="";go({t:"all"})};
  const gq=$("#gq");
- gq.oninput=()=>{$("#gqx").style.display=gq.value?"flex":"none";if(view.t=="search"){view.q=gq.value;sr()}else go({t:"search",q:gq.value},1)};
+ gq.oninput=()=>{$("#gqx").style.display=gq.value?"flex":"none";if(view.t=="search"){view.q=gq.value;view.n=10;sr()}else go({t:"search",q:gq.value},1)};
  gq.onfocus=()=>{if(view.t!="search"&&gq.value)go({t:"search",q:gq.value},1)};
  $("#gqx").onclick=()=>{gq.value="";gq.oninput();gq.focus()};
  $("#bpp").onclick=()=>togglePlay();
@@ -800,7 +800,7 @@ function buildApp(){
  audio.onvolumechange=volUI;
  $("#bfs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
  $("#bnp").onclick=()=>setPanel("np");$("#bq").onclick=()=>setPanel("q");
- $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
+ $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
  $("#main").onclick=mainClick;$("#main").oncontextmenu=mainCtx;
  $("#bnav").onclick=e=>{const b=e.target.closest("[data-nav]");if(!b)return;const a=$("#app"),n=b.dataset.nav;
   if(n=="lib"){if(!a.classList.contains("tablib"))startSkel(true);a.classList.add("tablib");a.classList.remove("npopen");renderSide();$("#lib").scrollTop=0;updNav();return}
@@ -921,7 +921,9 @@ function render(){
   hdrh=hdrFor("All songs");
   h=hero("Library","All songs",`<span class="dim">${sum(songs)}</span>`,`<div class="art">${I.note}</div>`)+barH()+rows(songs.slice(0,homeN),{empty:"No songs yet."});
  }else if(v.t=="search"){
-  m.innerHTML=`<div id="sr"></div>`;hdr.innerHTML=hdrh;sr();$("#mainbox").classList.add("plain");return;
+  m.innerHTML=`<div id="sr"></div>`;hdr.innerHTML=hdrh;delete hdr.dataset.sf;
+  hdr.onclick=e=>{const c=e.target.closest("[data-sf]");if(c){view.f=c.dataset.sf;view.n=10;delete hdr.dataset.sf;$("#mainbox").scrollTop=0;sr()}};
+  sr();$("#mainbox").classList.add("plain");return;
  }else if(v.t=="liked"){
   const l=songs.filter(s=>likes.has(s.id));setHc("#4a3fb5");hdrh=hdrFor("Liked Songs");
   h=hero("Playlist","Liked Songs",`${avatar(users[me.uid])}<b>${esc(uname(me.uid))}</b><span class="dim">• ${sum(l)}</span>`,`<div class="art liked">${F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div>`)+barH()+rows(l,{empty:"Songs you like will appear here. Use the + next to any song."});
@@ -966,14 +968,19 @@ function render(){
  updNav();playerUI(1);
  if(v.t=="user")loadFollowers(v.id);
 }
+let srMore=false;
 function sr(){
  const q=(view.q||"").toLowerCase().trim(),el=$("#sr");if(!el)return;
  if(!q){const ar=[...allArtists().values()].sort((a,b)=>b.n-a.n).slice(0,12);return el.innerHTML=`<div class="sec" style="margin-top:12px"><h2>Search</h2></div><div class="empty" style="padding:24px 0">Find songs, artists, playlists and people.</div>`+(ar.length?`<div class="sec"><h2>Browse artists</h2></div>`+artistCards(ar):"")}
  const s=songs.filter(x=>x.title.toLowerCase().includes(q)||artistsOf(x).some(a=>a.toLowerCase().includes(q))||uname(x.ownerId).toLowerCase().includes(q));
- const ar=[...allArtists().values()].filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n).slice(0,8);
- const p=pls.filter(x=>x.name.toLowerCase().includes(q)),qu=q.replace(/^@/,""),u=Object.values(users).filter(x=>qu&&((x.displayName||"").toLowerCase().includes(qu)||(x.username||"").toLowerCase().includes(qu))).sort((a,b)=>{const sc=x=>(x.username||"").toLowerCase()==qu||(x.displayName||"").toLowerCase()==qu?0:(x.username||"").toLowerCase().startsWith(qu)||(x.displayName||"").toLowerCase().startsWith(qu)?1:2;return sc(a)-sc(b)}).slice(0,12);
- shown=s;
- el.innerHTML=(ar.length?`<div class="sec" style="margin-top:12px"><h2>Artists</h2></div>`+artistCards(ar):"")+(u.length?`<div class="sec"><h2>Profiles</h2></div><div class="grid">${u.map(x=>`<div class="card" data-u="${x.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(x).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(x.displayName||x.username||"")}</div><div class="s">Profile • @${esc(x.username||"")}${x.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`:"")+(s.length?`<div class="sec"><h2>Songs</h2></div>`+rows(s):"")+(p.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(p):"")||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
+ const ar=[...allArtists().values()].filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
+ const p=pls.filter(x=>x.name.toLowerCase().includes(q)),qu=q.replace(/^@/,""),u=Object.values(users).filter(x=>qu&&((x.displayName||"").toLowerCase().includes(qu)||(x.username||"").toLowerCase().includes(qu))).sort((a,b)=>{const sc=x=>(x.username||"").toLowerCase()==qu||(x.displayName||"").toLowerCase()==qu?0:(x.username||"").toLowerCase().startsWith(qu)||(x.displayName||"").toLowerCase().startsWith(qu)?1:2;return sc(a)-sc(b)});
+ const f=view.f||"all",n=view.n||10;srMore=false;
+ const lim=(arr,key)=>{const on=f=="all"||f==key,l=on?arr.slice(0,n):[];if(on&&arr.length>n)srMore=true;return l};
+ const sS=lim(s,"songs"),arS=lim(ar,"artists"),uS=lim(u,"users"),pS=lim(p,"playlists");
+ const hd=`<div class="stick"></div><div class="chips" style="padding:0">${[["all","All"],["artists","Artists"],["users","Users"],["songs","Songs"],["playlists","Playlists"]].map(([k,t])=>`<button class="chip ${f==k?"on":""}" data-sf="${k}">${t}</button>`).join("")}</div>`;
+ if($("#hdr").dataset.sf!=f+"|"){$("#hdr").innerHTML=hd;$("#hdr").dataset.sf=f+"|"}
+ el.innerHTML=(arS.length?`<div class="sec" style="margin-top:12px"><h2>Artists</h2></div>`+artistCards(arS):"")+(uS.length?`<div class="sec"><h2>Profiles</h2></div><div class="grid">${uS.map(x=>`<div class="card" data-u="${x.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(x).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(x.displayName||x.username||"")}</div><div class="s">Profile • @${esc(x.username||"")}${x.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`:"")+(sS.length?`<div class="sec"><h2>Songs</h2></div>`+rows(sS):"")+(pS.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pS):"")||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
 }
 
 /* ---------- click handling ---------- */
