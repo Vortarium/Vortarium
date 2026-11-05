@@ -1152,7 +1152,7 @@ function uploadModal(startMode="upload"){
  const {m,close}=openModal(`<div class="mh"><h2>Add songs</h2><button class="ib mclose" title="Close">${I.x}</button></div>
  <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button>`:""}</div>
  <div class="note" id="nt"></div>
- <div class="note" id="sdn">${I.info}<span>Songs must be downloaded from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a>. Only files with <b style="color:#fff">_spotdown.org</b> in the name are accepted; the tag is removed from the title automatically.</span></div>
+ <div class="note" id="sdn">${I.info}<span>Recommended: download songs from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a> for the best results. Your own MP3s and other audio files work too, no special file name needed. The <b style="color:#fff">_spotdown.org</b> tag is removed from titles automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
  <div class="fld" id="afld"><label>Artists (optional)</label><div class="chipin" id="ach"><input placeholder="Type a name and press Enter"></div><div class="hint">Added to the artists found in each file's tags and filename.</div></div>
  <div class="fld" id="tfld"><label>Title (optional, single song only)</label><input type="text" id="ut" maxlength="120" placeholder="Use the file name"></div>
@@ -1176,7 +1176,7 @@ function uploadModal(startMode="upload"){
   q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
   const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&!n)||busy};
- const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>SD.test(f.name)&&!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: the name must contain _spotdown.org (download from spotdown.org) and not have a number in brackets like (1)`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
+ const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: names with a number in brackets like (1) are treated as copies`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
  const dz=q("#dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove("over")};
@@ -1208,7 +1208,7 @@ function uploadModal(startMode="upload"){
  };
 }
 async function doUpload(list,o,prog){
- list=list.filter(f=>SD.test(f.name)&&!DUPN.test(clean(f.name)));
+ list=list.filter(f=>!DUPN.test(clean(f.name)));
  const seen=new Set(songs.map(x=>x.key||x.title.toLowerCase())),todo=[],byKey=new Map(songs.map(x=>[x.key||x.title.toLowerCase(),x.id])),idOf=new Map();let dup=0;
  for(const f of list){const k=keyOf(f.name);if(seen.has(k)){dup++;if(byKey.has(k))idOf.set(f,byKey.get(k));continue}seen.add(k);todo.push(f)}
  if(!todo.length&&!(o.keepDups&&idOf.size))throw new Error(`Nothing to upload: ${dup} song${dup>1?"s":""} already exist.`);
@@ -1231,7 +1231,7 @@ async function doUpload(list,o,prog){
  return{done,fail,dup,ids:[...new Set(list.map(f=>idOf.get(f)).filter(Boolean))]};
 }
 async function doCheck(list,o,prog){
- list=list.filter(f=>SD.test(f.name));
+ 
  const idx=new Map();songs.forEach(s=>{const k=s.key||s.title.toLowerCase();if(!idx.has(k))idx.set(k,[]);idx.get(k).push(s)});
  const cv=o.cover?await uploadFile("",o.cover,400):null;
  let upd=0,same=0,nf=0,notMine=0,fail=0,n=0;prog(0,list.length);
