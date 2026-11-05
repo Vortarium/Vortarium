@@ -68,6 +68,21 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
 
+    // lyrics found online, saved once per song. Anyone signed in can save lyrics for a song that has none yet;
+    // only the Vortarium moderator or the song's owner can replace or delete them.
+    match /lyrics/{songId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['status', 'synced', 'plain', 'source', 'by', 'at'])
+                    && request.resource.data.by == request.auth.uid
+                    && request.resource.data.synced.size() < 300000
+                    && request.resource.data.plain.size() < 300000;
+      allow update, delete: if isMod()
+                            || (request.auth != null
+                                && exists(/databases/$(database)/documents/songs/$(songId))
+                                && get(/databases/$(database)/documents/songs/$(songId)).data.ownerId == request.auth.uid);
+    }
+
     match /songs/{songId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null

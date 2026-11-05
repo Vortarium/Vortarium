@@ -495,6 +495,14 @@ html.phone .skh{flex-direction:column;align-items:stretch}
 html.phone .skh .big{width:min(62vw,240px);height:min(62vw,240px);align-self:center}
 html.phone .skg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 @media(prefers-reduced-motion:reduce){.sk{animation:none}}
+/* ---- lyrics ---- */
+#right .rb{position:relative}
+.lyh{margin:4px 0 14px}.lyh .nt{font-size:20px;font-weight:700}.lyh .na{color:var(--sub);font-size:14px;margin-top:2px}
+.lyl{padding-bottom:40vh}
+.lyl .ll{font-size:24px;font-weight:700;line-height:1.3;color:#ffffff66;padding:8px 0;cursor:pointer;transition:color .2s}
+.lyl .ll:hover{color:#ffffffcc}.lyl .ll.on{color:#fff}
+.lyl.plain{font-size:17px;font-weight:500;line-height:1.7;color:#fff;cursor:default}
+html.phone .lyl .ll{font-size:22px}
 </style>
 </head>
 <body>
@@ -504,7 +512,7 @@ html.phone .skg{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAnalytics} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-analytics.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,collection,doc,setDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,collection,doc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 try{getAnalytics(app)}catch{}
@@ -566,6 +574,7 @@ const I={
  dling:S('<path d="M12 2a10 10 0 0110 10"/>').replace('class="st"','class="st spin"'),
  chevd:S('<path d="M5 9l7 7 7-7"/>'),
  bell:S('<path d="M6 17v-6a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21a2 2 0 004 0"/>'),
+ mic:S('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>'),
  sel:S('<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M8 12.5l3 3 5.2-6"/>'),
  tune:S('<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'),
  logo:'<svg class="logo" viewBox="0 0 24 24"><path d="M12 0a12 12 0 100 24 12 12 0 000-24zm5.5 17.3a.75.75 0 01-1 .25c-2.8-1.7-6.3-2.1-10.4-1.1a.75.75 0 11-.3-1.5c4.5-1 8.4-.6 11.5 1.3.4.2.5.7.2 1zm1.5-3.3a.94.94 0 01-1.3.3c-3.2-2-8.1-2.6-11.9-1.4a.94.94 0 11-.5-1.8c4.3-1.3 9.7-.7 13.4 1.6.4.2.5.8.3 1.3zm.1-3.4C15.3 8.3 8.9 8.1 5.2 9.2a1.13 1.13 0 11-.7-2.1c4.2-1.3 11.3-1 15.7 1.6a1.13 1.13 0 01-1.1 1.9z"/></svg>'
@@ -773,7 +782,7 @@ function buildApp(){
  <div id="player"><div class="pl" id="pl"></div>
  <div class="pc"><div class="ctl"><button id="bsh" title="Enable shuffle">${I.shuf}</button><button id="bpv" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp" title="Play">${I.play}</button><button id="bnx" class="sk2" title="Next">${I.next}</button><button id="brp" title="Enable repeat">${I.rep}</button></div>
  <div class="seek"><span id="tc">0:00</span><input type="range" id="sk" min="0" max="1000" value="0" title="Seek"><span id="td">0:00</span></div></div>
- <div class="vol"><button class="ib" id="bnp" title="Now playing view">${I.npv}</button><button class="ib" id="bq" title="Queue">${I.queue}</button><button class="ib" id="bmu" title="Mute">${I.vol}</button><input type="range" id="vl" min="0" max="100" value="${audio.volume*100}" title="Volume"><span class="sp"></span><button class="ib" id="bfs" title="Full screen">${I.full}</button></div></div>
+ <div class="vol"><button class="ib" id="bly" title="Lyrics">${I.mic}</button><button class="ib" id="bnp" title="Now playing view">${I.npv}</button><button class="ib" id="bq" title="Queue">${I.queue}</button><button class="ib" id="bmu" title="Mute">${I.vol}</button><input type="range" id="vl" min="0" max="100" value="${audio.volume*100}" title="Volume"><span class="sp"></span><button class="ib" id="bfs" title="Full screen">${I.full}</button></div></div>
  <nav id="bnav"><button data-nav="home">${I.home}<span>Home</span></button><button data-nav="search">${I.search}<span>Search</span></button><button data-nav="lib">${I.lib}<span>Your Library</span></button><button data-nav="create">${I.plus}<span>Create</span></button></nav>`;
  const side=$("#side");
  side.onclick=e=>{const l=e.target.closest(".li");if(l)go(l.dataset.k=="liked"?{t:"liked"}:{t:"pl",id:l.dataset.id})};
@@ -799,7 +808,7 @@ function buildApp(){
  $("#bmu").onclick=()=>{audio.muted=!audio.muted;volUI()};
  audio.onvolumechange=volUI;
  $("#bfs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
- $("#bnp").onclick=()=>setPanel("np");$("#bq").onclick=()=>setPanel("q");
+ $("#bnp").onclick=()=>setPanel("np");$("#bq").onclick=()=>setPanel("q");$("#bly").onclick=()=>setPanel("ly");
  $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
  $("#main").onclick=mainClick;$("#main").oncontextmenu=mainCtx;
  $("#bnav").onclick=e=>{const b=e.target.closest("[data-nav]");if(!b)return;const a=$("#app"),n=b.dataset.nav;
@@ -811,8 +820,8 @@ function buildApp(){
  renderSide();renderTop();render();playerUI();renderPanel();volUI();updNav();
 }
 function volUI(){const v=$("#vl");if(!v)return;const z=audio.muted||audio.volume==0;v.value=z?0:audio.volume*100;v.style.setProperty("--p",v.value+"%");$("#bmu").innerHTML=z?I.vol0:I.vol;$("#bmu").title=z?"Unmute":"Mute"}
-function setPanel(p){const a=$("#app");if(!a.classList.contains("nopanel")&&panel==p&&innerWidth>=1180)a.classList.add("nopanel");else{a.classList.remove("nopanel");if(innerWidth<1180)a.classList.remove("nopanel");panel=p}renderPanel();$("#bnp").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="np");$("#bq").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="q")}
-audio.ontimeupdate=()=>{const sk=$("#sk");if(!sk||!audio.duration)return;sk.value=audio.currentTime/audio.duration*1000;sk.style.setProperty("--p",sk.value/10+"%");$("#tc").textContent=fmt(audio.currentTime);$("#td").textContent=fmt(audio.duration);syncSeek();
+function setPanel(p){const a=$("#app");if(!a.classList.contains("nopanel")&&panel==p&&innerWidth>=1180)a.classList.add("nopanel");else{a.classList.remove("nopanel");if(innerWidth<1180)a.classList.remove("nopanel");panel=p}renderPanel();$("#bnp").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="np");$("#bq").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="q");$("#bly").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="ly")}
+audio.ontimeupdate=()=>{const sk=$("#sk");if(!sk||!audio.duration)return;sk.value=audio.currentTime/audio.duration*1000;sk.style.setProperty("--p",sk.value/10+"%");$("#tc").textContent=fmt(audio.currentTime);$("#td").textContent=fmt(audio.duration);syncSeek();lyTick();
  if("mediaSession" in navigator&&Date.now()-(audio._ps||0)>1000){audio._ps=Date.now();try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}}};
 /* listening time: only seconds of real, un-paused playback count (seeks and skips are ignored) */
 let lastT=0,pendSec=0,pendBy={},wrapInit={};
@@ -1141,29 +1150,32 @@ async function filesFromDrop(dt){
 function uploadModal(startMode="upload"){
  let mode=startMode,files=[],busy=false,finished=false,newPl=null;
  const {m,close}=openModal(`<div class="mh"><h2>Add songs</h2><button class="ib mclose" title="Close">${I.x}</button></div>
- <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button></div>
+ <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button>`:""}</div>
  <div class="note" id="nt"></div>
  <div class="note" id="sdn">${I.info}<span>Songs must be downloaded from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a>. Only files with <b style="color:#fff">_spotdown.org</b> in the name are accepted; the tag is removed from the title automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
- <div class="fld"><label>Artists (optional)</label><div class="chipin" id="ach"><input placeholder="Type a name and press Enter"></div><div class="hint">Added to the artists found in each file's tags and filename.</div></div>
+ <div class="fld" id="afld"><label>Artists (optional)</label><div class="chipin" id="ach"><input placeholder="Type a name and press Enter"></div><div class="hint">Added to the artists found in each file's tags and filename.</div></div>
  <div class="fld" id="tfld"><label>Title (optional, single song only)</label><input type="text" id="ut" maxlength="120" placeholder="Use the file name"></div>
  <div id="plbox" style="display:none"><div style="display:flex;gap:14px;align-items:flex-start"><div class="cvr" id="plcv" style="width:96px;height:96px;box-shadow:none;flex-shrink:0"></div><div style="flex:1;min-width:0"><div class="fld"><label>Playlist name</label><input type="text" id="pn" maxlength="120" placeholder="My new playlist"></div><div class="fld"><label>Description</label><textarea id="pdesc" maxlength="300" placeholder="Add an optional description" style="height:64px"></textarea></div></div></div><div class="hint" style="margin:-2px 0 14px">Tap the square to choose a playlist cover. Every song in this batch goes into this new playlist.</div></div>
- <div class="fld"><label>Song cover (optional)</label><div style="display:flex;gap:14px;align-items:center"><div class="cvr" id="ucv" style="width:72px;height:72px;box-shadow:none"></div><span class="hint" style="margin:0">Otherwise each file's own embedded cover is used.</span></div></div>
+ <div class="fld" id="cfld"><label>Song cover (optional)</label><div style="display:flex;gap:14px;align-items:center"><div class="cvr" id="ucv" style="width:72px;height:72px;box-shadow:none"></div><span class="hint" style="margin:0">Otherwise each file's own embedded cover is used.</span></div></div>
  <div id="copts" style="margin-bottom:6px"><label class="chk"><span class="tx"><b>Update titles</b><small>Use the title tag when the file has one</small></span><input class="sw" type="checkbox" id="ct" checked></label><label class="chk"><span class="tx"><b>Update artists</b><small>Replace credited artists with the new ones</small></span><input class="sw" type="checkbox" id="ca" checked></label><label class="chk"><span class="tx"><b>Update covers</b><small>Use the file's embedded cover or the one chosen above</small></span><input class="sw" type="checkbox" id="cc" checked></label></div>
  <div id="xopt" style="margin-bottom:6px"><label class="chk"><span class="tx"><b>Explicit</b><small>Mark every song in this batch as explicit (swear words or mature language)</small></span><input class="sw" type="checkbox" id="cx"></label></div>
  <div class="prog" id="pg"><i></i></div><div class="res" id="res"></div>
  <div class="mf"><span class="msg" id="fmsg"></span><button class="ghost" id="cn">Cancel</button><button class="pill green" id="go" disabled>Upload</button></div>`,"xl",()=>{if(busy)toast("Still working in the background…")});
  const q=s=>m.querySelector(s);
  const chips=chipInput(q("#ach"),[]),cvp=coverPicker(q("#ucv"),"",I.img),plcv=coverPicker(q("#plcv"),"",I.note);
- const goLbl=x=>x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
+ const goLbl=x=>x=="lyrics"?`${I.mic}Start lyric check`:x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
  const files_in=document.createElement("input");files_in.type="file";files_in.multiple=true;files_in.accept="audio/*,.zip,application/zip";files_in.hidden=true;
  const dir_in=document.createElement("input");dir_in.type="file";dir_in.multiple=true;dir_in.webkitdirectory=true;dir_in.hidden=true;
  m.append(files_in,dir_in);
  const setMode=x=>{mode=x;m.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m==x));
   q("#nt").innerHTML=I.info+(x=="check"?`<span><b style="color:#fff">Upload check</b> doesn't upload any audio. Each file is matched by title to songs <i>you</i> already uploaded, and their title, artists and cover are refreshed from the new data. Much faster.</span>`:x=="playlist"?`<span>Uploads the songs like normal, then puts <b style="color:#fff">all of them</b> into a brand new playlist you can name and customize below. Songs that already exist are added to it too instead of being uploaded again.</span>`:`<span>Audio is stored on the server so everyone can listen. Songs with a title that already exists are skipped. Original artists are saved from the file tags.</span>`);
-  q("#tfld").style.display=x=="check"?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"?"none":"";q("#go").innerHTML=goLbl(x);sum()};
+  const LY=x=="lyrics";
+  if(LY)q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Lyric check</b> goes through every song that doesn't have lyrics saved yet, looks them up online (with timestamps when available) and saves them on the server for everyone. Songs where nothing is found are marked as having no lyrics. Songs that already have lyrics are skipped.</span>`;
+  ["#dz","#sdn","#afld","#cfld"].forEach(k=>q(k).style.display=LY?"none":"");
+  q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
-  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=!n||busy};
+  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&!n)||busy};
  const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>SD.test(f.name)&&!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: the name must contain _spotdown.org (download from spotdown.org) and not have a number in brackets like (1)`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
@@ -1172,13 +1184,16 @@ function uploadModal(startMode="upload"){
  m.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{if(!busy){setMode(b.dataset.m)}});
  q("#cn").onclick=close;setMode(mode);
  q("#go").onclick=async()=>{
-  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||!files.length)return;busy=true;q("#go").disabled=true;
+  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||(mode!="lyrics"&&!files.length))return;busy=true;q("#go").disabled=true;
   const pg=q("#pg"),bar=pg.firstChild,res=q("#res");pg.style.display="block";res.style.display="none";
-  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";q("#go").textContent=`${mode=="check"?"Checking":"Uploading"} ${d}/${t}…`;toast(`${mode=="check"?"Checking":"Uploading"} ${d}/${t}…`,1)};
+  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
   const o={artists:chips.get(),title:q("#ut").value.trim(),cover:cvp.get() instanceof File?cvp.get():null,ft:q("#ct").checked,fa:q("#ca").checked,fc:q("#cc").checked,explicit:q("#cx").checked};
   let html="";
   try{
-   if(mode=="check"){const r=await doCheck(files,o,prog);
+   if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
+    html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
+    toast(`Lyric check: ${r.found} found`)}
+   else if(mode=="check"){const r=await doCheck(files,o,prog);
     html=`<b>${r.upd}</b> song${r.upd==1?"":"s"} updated${r.same?` • ${r.same} already up to date`:""}${r.nf?` • ${r.nf} not found in your uploads`:""}${r.notMine?` • ${r.notMine} belong to someone else`:""}${r.fail?` • ${r.fail} failed`:""}`;
     toast(`Upload check: ${r.upd} updated`)}
    else{const r=await doUpload(files,{...o,keepDups:mode=="playlist"},prog);
@@ -1469,16 +1484,69 @@ function playerUI(skipPanel){
  $("#brp").classList.toggle("on",repeat>0);$("#brp").title=["Enable repeat","Enable repeat one","Disable repeat"][repeat];$("#brp").innerHTML=repeat==2?I.rep1:I.rep;
  const sb=$("#shbig");if(sb)sb.classList.toggle("on",shuffle);
  const here=ctxKey==viewKey()&&audio.src&&!pp;["#bigplay","#hdrplay"].forEach(q=>{const b=$(q);if(b){b.innerHTML=here?I.pause:I.play;b.title=here?"Pause":"Play"}});
- const a=$("#app");$("#bnp")?.classList.toggle("on",!a.classList.contains("nopanel")&&panel=="np");$("#bq")?.classList.toggle("on",!a.classList.contains("nopanel")&&panel=="q");
+ const a=$("#app");$("#bnp")?.classList.toggle("on",!a.classList.contains("nopanel")&&panel=="np");$("#bq")?.classList.toggle("on",!a.classList.contains("nopanel")&&panel=="q");$("#bly")?.classList.toggle("on",!a.classList.contains("nopanel")&&panel=="ly");
  document.title=s&&!pp?`${s.title} • ${artistsOf(s)[0]||uname(s.ownerId)}`:"Spotify";
  markPlaying();if(!skipPanel)renderPanel();syncNP();
 }
+
+/* ---------- lyrics (LRCLIB lookup, saved to the server in the "lyrics" collection) ---------- */
+const lyr={};let lyIdx=-1;
+function parseLrc(t){const out=[];for(const ln of String(t||"").split("\n")){const m=[...ln.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];if(!m.length)continue;const x=ln.replace(/\[[^\]]*\]/g,"").trim();m.forEach(k=>out.push({t:+k[1]*60+ +k[2],x}))}return out.sort((a,b)=>a.t-b.t)}
+async function lrSearch(qs){const r=await fetch("https://lrclib.net/api/search?"+new URLSearchParams(qs));if(!r.ok)throw new Error("Lyrics service error "+r.status);return r.json()}
+const pickLy=(arr,d)=>{arr=(Array.isArray(arr)?arr:[]).filter(x=>x&&!x.instrumental&&(x.syncedLyrics||x.plainLyrics));if(d>0)arr=arr.filter(x=>!x.duration||Math.abs(x.duration-d)<=6);return arr.sort((a,b)=>(b.syncedLyrics?1:0)-(a.syncedLyrics?1:0))[0]||null};
+const packLy=x=>({status:"found",synced:x.syncedLyrics||"",plain:x.plainLyrics||(x.syncedLyrics||"").replace(/\[[^\]]*\]\s*/g,""),source:"lrclib"});
+async function findLyrics(s){
+ const d=Math.round(s.duration||0),ar=artistsOf(s)[0]||"",tn=(s.title||"").replace(/[\(\[][^\)\]]*[\)\]]/g,"").replace(/\s{2,}/g," ").trim()||s.title||"";
+ const c=[];if(/ - /.test(tn)){const[a,...t]=tn.split(" - ");c.push([t.join(" - ").trim(),a.trim()])}c.push([tn,ar]);
+ for(const [t,a] of c){if(!t)continue;
+  let x=pickLy(await lrSearch(a?{track_name:t,artist_name:a}:{track_name:t}),d);
+  if(!x&&a)x=pickLy(await lrSearch({q:t+" "+a}),d);
+  if(x)return packLy(x)}
+ return{status:"none",synced:"",plain:"",source:"lrclib"}}
+const lyDoc=d=>({status:d.status,synced:d.synced||"",plain:d.plain||"",source:d.source||"lrclib",by:me.uid,at:serverTimestamp()});
+const lyRender=id=>{if(panel=="ly"&&curId()==id){panelSig="";renderPanel()}};
+async function ensureLyrics(s){
+ const id=s.id;if(lyr[id])return;lyr[id]={status:"loading"};
+ try{
+  const g=await getDoc(doc(db,"lyrics",id));let d;
+  if(g.exists())d=g.data();
+  else{d=await findLyrics(s);setDoc(doc(db,"lyrics",id),lyDoc(d)).catch(()=>{})}
+  const L={status:d.status,synced:d.synced||"",plain:d.plain||""};if(L.synced)L.lines=parseLrc(L.synced);
+  lyr[id]=L;
+ }catch(e){console.error(e);lyr[id]={status:"error"}}
+ lyRender(id)}
+function lyHTML(s){
+ if(!s)return `<div class="noplay">Pick a song to see its lyrics.</div>`;
+ const L=lyr[s.id],head=`<div class="lyh"><div class="nt">${esc(s.title)}</div><div class="na">${esc(artistsOf(s).join(", ")||uname(s.ownerId))}</div></div>`;
+ if(!L||L.status=="loading")return head+`<div class="noplay">Looking for lyrics…</div>`;
+ if(L.status=="error")return head+`<div class="noplay">Couldn't reach the lyrics service.<br><button class="pill sm dark" id="lyretry" style="margin-top:12px">Try again</button></div>`;
+ if(L.status!="found")return head+`<div class="noplay">No lyrics found for this song.</div>`;
+ if(L.lines?.length)return head+`<div class="lyl" id="lyl">${L.lines.map((l,i)=>`<div class="ll" data-li="${i}" data-t="${l.t}">${esc(l.x)||"♪"}</div>`).join("")}</div>`;
+ return head+`<div class="lyl plain">${esc(L.plain).replace(/\n/g,"<br>")}</div>`}
+function lyTick(){
+ if(panel!="ly")return;const s=song(curId()),L=s&&lyr[s.id];if(!L?.lines?.length)return;
+ const t=audio.currentTime+.15;let lo=0,hi=L.lines.length-1,i=-1;
+ while(lo<=hi){const m=(lo+hi)>>1;if(L.lines[m].t<=t){i=m;lo=m+1}else hi=m-1}
+ if(i==lyIdx)return;lyIdx=i;const el=$("#lyl");if(!el)return;
+ el.querySelector(".ll.on")?.classList.remove("on");const n=el.querySelector(`[data-li="${i}"]`);if(!n)return;
+ n.classList.add("on");const rb=$("#right .rb");rb.scrollTo({top:n.offsetTop-rb.clientHeight/2+n.clientHeight/2,behavior:"smooth"})}
+/* Vortarium only: scan every song and look up lyrics for the ones that don't have any yet */
+async function doLyricCheck(prog){
+ const ex=new Map();(await getDocs(collection(db,"lyrics"))).forEach(d=>ex.set(d.id,d.data().status));
+ const todo=songs.filter(s=>ex.get(s.id)!="found"),skipped=songs.length-todo.length;
+ let found=0,none=0,fail=0,n=0;if(!todo.length)return{found,none,skipped,fail};prog(0,todo.length);
+ await pool(todo,3,async s=>{
+  try{const d=await findLyrics(s);await setDoc(doc(db,"lyrics",s.id),lyDoc(d));
+   const L={status:d.status,synced:d.synced,plain:d.plain};if(L.synced)L.lines=parseLrc(L.synced);lyr[s.id]=L;d.status=="found"?found++:none++}
+  catch(e){fail++;console.error(s.title,e)}
+  prog(++n,todo.length)});
+ return{found,none,skipped,fail}}
 
 /* ---------- right panel: big player + queue ---------- */
 let panelSig="";
 function renderPanel(){
  const r=$("#right");if(!r)return;const s=song(curId());
- const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,phone,pset.hist,pset.small,songs.length].join("~");
+ const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,phone,pset.hist,pset.small,songs.length,lyr[s?.id]?.status].join("~");
  if(sig==panelSig)return;panelSig=sig;
  const A=artistsOf(s);
  const item=(x,i,c)=>`<div class="qi ${c?"cur":""}" data-qi="${i}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div>${c?"":`<button class="hb" data-qrm="${i}" title="Remove from queue">${I.x}</button>`}</div>`;
@@ -1488,12 +1556,15 @@ function renderPanel(){
   <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${xb(s)}${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div><div class="npv">${vtxt(viewsOf(s))} • Uploaded by <span class="ar" data-u="${s.ownerId}" style="cursor:pointer">${esc(uname(s.ownerId))}</span></div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>`
   :`<div class="npcov ${pset.small?"sm":""}">${I.note}</div><div class="noplay" style="padding:18px 0 4px">Pick a song to see it here.</div>`;
  const npctl=`<div class="npctl"><div class="seek"><span id="tc2">0:00</span><input type="range" id="sk2" min="0" max="1000" value="0"><span id="td2">0:00</span></div><div class="ctl"><button id="bsh2" title="Shuffle">${I.shuf}</button><button id="bpv2" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp2" title="Play">${I.play}</button><button id="bnx2" class="sk2" title="Next">${I.next}</button><button id="brp2" title="Repeat">${I.rep}</button></div></div>`;
- r.innerHTML=`<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
+ r.innerHTML=`<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button><button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
  <div class="rb">${big}${s?npctl:""}
  <div class="qh" id="qsec" style="display:flex;justify-content:space-between;align-items:center"><span>Next in queue</span>${nxt.length?`<button class="qa" id="qclr">Clear queue</button>`:""}</div>
  ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?"Nothing else is queued up.":"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
  ${pset.hist?`<div class="qh">Recently played</div>${hist.length?hist.map(x=>`<div class="qi" data-hs="${x.id}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div></div>`).join(""):`<div class="noplay" style="padding:12px 0">Nothing yet.</div>`}`:""}</div>`;
+ if(panel=="ly"){if(s&&!lyr[s.id])ensureLyrics(s);r.querySelector(".rb").innerHTML=lyHTML(s)+(s?npctl:"");lyIdx=-1}
  const w=(id,f)=>{const e=r.querySelector("#"+id);if(e)e.onclick=f};
+ w("rhl",()=>{panel=panel=="ly"?"np":"ly";panelSig="";renderPanel();playerUI(1)});
+ w("lyretry",()=>{if(s){delete lyr[s.id];panelSig="";renderPanel()}});
  w("rhx",()=>{if(phone)closeNP();else{$("#app").classList.add("nopanel");playerUI(1)}});
  const sk2=r.querySelector("#sk2");if(sk2)sk2.oninput=()=>{if(audio.duration)audio.currentTime=sk2.value/1000*audio.duration;sk2.style.setProperty("--p",sk2.value/10+"%")};
  w("bpp2",()=>togglePlay());w("bnx2",()=>next(false));w("bpv2",()=>prev());w("bsh2",toggleShuffle);w("brp2",()=>{repeat=(repeat+1)%3;playerUI();savePrefs()});
@@ -1505,6 +1576,7 @@ function renderPanel(){
  w("npsh",()=>copyInfo(s));
  w("qclr",()=>{queue=queue.slice(0,qi+1);panelSig="";renderPanel()});
  r.onclick=e=>{const t=e.target;
+  const ll=t.closest("[data-t]");if(ll){audio.currentTime=+ll.dataset.t;if(audio.paused)audio.play();return}
   const l=t.closest("[data-pl-like]");if(l)return toggleLike(l.dataset.plLike);
   const rm=t.closest("[data-qrm]");if(rm){queue.splice(+rm.dataset.qrm,1);panelSig="";return renderPanel()}
   const a=t.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});
@@ -1512,6 +1584,7 @@ function renderPanel(){
   const q=t.closest("[data-qi]");if(q){const i=+q.dataset.qi;if(i!=qi&&queue[i]){qi=i;loadCur()}return}
   const hs=t.closest("[data-hs]");if(hs)playHist(hs.dataset.hs)};
  if(panel=="q"&&!phone)r.querySelector("#qsec")?.scrollIntoView({block:"start"});
+ if(panel=="ly")setTimeout(lyTick,0);
  syncNP();
 }
 
