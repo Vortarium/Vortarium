@@ -1191,8 +1191,8 @@ function uploadModal(startMode="upload"){
   let html="";
   try{
    if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
-    html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
-    toast(`Lyric check: ${r.found} found`)}
+    html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.marked?` • ${r.marked} marked explicit`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
+    toast(`Lyric check: ${r.found} found${r.marked?`, ${r.marked} marked explicit`:""}`)}
    else if(mode=="check"){const r=await doCheck(files,o,prog);
     html=`<b>${r.upd}</b> song${r.upd==1?"":"s"} updated${r.same?` • ${r.same} already up to date`:""}${r.nf?` • ${r.nf} not found in your uploads`:""}${r.notMine?` • ${r.notMine} belong to someone else`:""}${r.fail?` • ${r.fail} failed`:""}`;
     toast(`Upload check: ${r.upd} updated`)}
@@ -1503,6 +1503,13 @@ async function findLyrics(s){
   if(!x&&a)x=pickLy(await lrSearch({q:t+" "+a}),d);
   if(x)return packLy(x)}
  return{status:"none",synced:"",plain:"",source:"lrclib"}}
+/* auto-explicit: swear words, slurs and other bad words found in the lyrics */
+const BAD=/\b(?:f+u+c+k\w*|motherf\w+|sh[i1]t\w*|bullsh\w+|b[i1]tch\w*|cunt\w*|pussy|pussies|dick\w*|cock(?:s|sucker\w*)?|asshole\w*|ass|jackass|dumbass|badass|bastard\w*|whore\w*|slut\w*|goddamn\w*|n[i1]gg(?:a|as|er|ers|az|uh)|f[a4]gg?(?:ot|ots|its?)?|fag|fags|retard\w*|ch[i1]nk\w*|sp[i1]c|sp[i1]cs|k[i1]ke\w*|gook\w*|wetback\w*|beaner\w*|tranny|trannies|dyke|dykes|coon|coons|paki|towelhead\w*|raghead\w*|negro|negroes|wop|piss\w*|twat\w*|wank\w*|prick|prick?s|douche\w*|skank\w*|jizz|cum|cumming)\b/i;
+const hasBad=t=>BAD.test(String(t||""));
+function autoExplicit(s,L){
+ if(!s||s.explicit||!L||L.status!="found")return null;
+ if(!hasBad((L.plain||"")+"\n"+String(L.synced||"").replace(/\[[^\]]*\]/g," ")))return null;
+ return updateDoc(doc(db,"songs",s.id),{explicit:true}).then(()=>true,()=>false)}
 const lyDoc=d=>({status:d.status,synced:d.synced||"",plain:d.plain||"",source:d.source||"lrclib",by:me.uid,at:serverTimestamp()});
 const lyRender=id=>{if(panel=="ly"&&curId()==id){panelSig="";renderPanel()}};
 async function ensureLyrics(s){
@@ -1512,7 +1519,7 @@ async function ensureLyrics(s){
   if(g.exists())d=g.data();
   else{d=await findLyrics(s);setDoc(doc(db,"lyrics",id),lyDoc(d)).catch(()=>{})}
   const L={status:d.status,synced:d.synced||"",plain:d.plain||""};if(L.synced)L.lines=parseLrc(L.synced);
-  lyr[id]=L;
+  lyr[id]=L;autoExplicit(s,L);
  }catch(e){console.error(e);lyr[id]={status:"error"}}
  lyRender(id)}
 function lyHTML(s){
@@ -1532,15 +1539,19 @@ function lyTick(){
  n.classList.add("on");const rb=$("#right .rb");rb.scrollTo({top:n.offsetTop-rb.clientHeight/2+n.clientHeight/2,behavior:"smooth"})}
 /* Vortarium only: scan every song and look up lyrics for the ones that don't have any yet */
 async function doLyricCheck(prog){
- const ex=new Map();(await getDocs(collection(db,"lyrics"))).forEach(d=>ex.set(d.id,d.data().status));
- const todo=songs.filter(s=>ex.get(s.id)!="found"),skipped=songs.length-todo.length;
- let found=0,none=0,fail=0,n=0;if(!todo.length)return{found,none,skipped,fail};prog(0,todo.length);
+ const ex=new Map();(await getDocs(collection(db,"lyrics"))).forEach(d=>ex.set(d.id,d.data()));
+ let found=0,none=0,fail=0,n=0,marked=0;
+ /* songs that already have lyrics: scan them for bad words and mark explicit */
+ await pool(songs.filter(s=>ex.get(s.id)?.status=="found"&&!s.explicit),5,async s=>{if(await autoExplicit(s,ex.get(s.id)))marked++});
+ const todo=songs.filter(s=>ex.get(s.id)?.status!="found"),skipped=songs.length-todo.length;
+ if(!todo.length)return{found,none,skipped,fail,marked};prog(0,todo.length);
  await pool(todo,3,async s=>{
   try{const d=await findLyrics(s);await setDoc(doc(db,"lyrics",s.id),lyDoc(d));
-   const L={status:d.status,synced:d.synced,plain:d.plain};if(L.synced)L.lines=parseLrc(L.synced);lyr[s.id]=L;d.status=="found"?found++:none++}
+   const L={status:d.status,synced:d.synced,plain:d.plain};if(L.synced)L.lines=parseLrc(L.synced);lyr[s.id]=L;d.status=="found"?found++:none++;
+   if(await autoExplicit(s,L))marked++}
   catch(e){fail++;console.error(s.title,e)}
   prog(++n,todo.length)});
- return{found,none,skipped,fail}}
+ return{found,none,skipped,fail,marked}}
 
 /* ---------- right panel: big player + queue ---------- */
 let panelSig="";

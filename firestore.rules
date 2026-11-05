@@ -93,7 +93,10 @@ service cloud.firestore {
                     && (request.auth.uid == resource.data.ownerId
                         || isMod()
                         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
-                            && request.resource.data.views == resource.data.get('views', 0) + 1));
+                            && request.resource.data.views == resource.data.get('views', 0) + 1)
+                        // anyone can switch explicit ON (done automatically when lyrics contain bad words), never off
+                        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['explicit'])
+                            && request.resource.data.explicit == true));
       allow delete: if request.auth != null && (request.auth.uid == resource.data.ownerId || isMod());
 
       match /chunks/{chunkId} {
