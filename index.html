@@ -712,6 +712,53 @@
         #music-menu.is-muted .icon-sound { display: none; }
         #music-menu.is-muted .icon-muted { display: block; }
 
+        /* ── Project open: the hub is removed from the page, so nothing can show behind the game ── */
+        html.in-game, html.in-game body { background: #000; overflow: hidden; }
+        html.in-game body::before { display: none; }
+        #game-overlay { height: 100vh; height: 100dvh; }
+
+        /* touch screens: no hover shake / glow that sticks after a tap */
+        @media (hover: none) {
+            .trending:hover { animation: none; }
+            .trending:hover::before, .trending:hover::after { animation: none; opacity: 0; }
+            .game-card:hover .thumb-wrap, .rank-row:hover { transform: none; }
+        }
+
+        /* ── Mobile layout (class set by script when a phone/tablet is detected) ── */
+        html.mobile header { flex-wrap: wrap; justify-content: flex-start; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 14px 12px; }
+        html.mobile .hdr-left { width: 100%; gap: 8px; }
+        html.mobile .playtime, html.mobile .log-btn { flex: 1; justify-content: center; text-align: center; font-size: 0.82rem; padding: 9px 10px; }
+        html.mobile #search-wrap { flex: 1 1 100%; max-width: none; }
+        html.mobile #game-search { font-size: 16px; padding: 11px 16px 11px 40px; }
+        html.mobile .hero { padding-top: calc(138px + env(safe-area-inset-top)); }
+        html.mobile .main-logo { width: 78%; }
+        html.mobile .about-btn { margin-top: 16px; padding: 10px 20px; font-size: 0.88rem; }
+        html.mobile main { padding: 8px 16px calc(96px + env(safe-area-inset-bottom)); }
+        html.mobile section { margin-top: 34px; }
+        html.mobile .section-head { margin-bottom: 14px; }
+        html.mobile .trending { min-height: 270px; padding: 20px; border-radius: 22px; align-items: flex-end; }
+        html.mobile .trending-scrim { background: linear-gradient(0deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 60%, rgba(0,0,0,0) 100%); }
+        html.mobile .trending-badge { font-size: 0.78rem; padding: 6px 12px; }
+        html.mobile .trending h2 { font-size: 2.1rem; margin: 12px 0 8px; }
+        html.mobile .trending p { font-size: 0.92rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        html.mobile .play-btn { margin-top: 16px; padding: 11px 24px; font-size: 0.95rem; }
+        html.mobile .rank-row { height: 76px; gap: 14px; padding: 0 16px; border-radius: 16px; }
+        html.mobile .rank-num { font-size: 1.8rem; min-width: 26px; }
+        html.mobile .rank-name { font-size: 1.02rem; }
+        html.mobile .rank-play { display: none; }
+        html.mobile .grid.all { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+        html.mobile .thumb-wrap { border-radius: 16px; }
+        html.mobile .game-title { font-size: 0.92rem; margin-top: 9px; }
+        html.mobile .game-date { font-size: 0.78rem; }
+        html.mobile #music-wrap { right: 14px; bottom: calc(14px + env(safe-area-inset-bottom)); }
+        html.mobile #mute-btn { font-size: 0; gap: 0; padding: 13px; }
+        html.mobile #mute-btn .chev { display: none; }
+        html.mobile #about-modal, html.mobile #log-modal { place-items: end center; padding: 0; }
+        html.mobile .about-panel { max-width: none; max-height: 88vh; max-height: 88dvh; border-radius: 26px 26px 0 0; }
+        html.mobile .about-top { padding: 22px 70px 10px 22px; }
+        html.mobile .about-body { padding: 4px 22px calc(28px + env(safe-area-inset-bottom)); }
+        html.mobile #back-logo { top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; width: 84px; }
+
         /* ── Responsive ── */
         @media (max-width: 900px) {
             .grid.all { grid-template-columns: repeat(3, 1fr); }
@@ -743,6 +790,7 @@
         <div id="curtain-spinner"></div>
     </div>
 
+    <div id="hub">
     <header>
         <div class="hdr-left">
             <div class="playtime">Playtime: <span id="playtime-display">0m 0s</span></div>
@@ -859,12 +907,37 @@
         </button>
     </div>
 
+    </div><!-- /hub -->
+
     <div id="game-overlay">
         <img src="v.png" id="back-logo" onclick="closeGame()">
         <iframe id="game-iframe" src=""></iframe>
     </div>
 
     <script>
+        // ── Playtime tracker ──────────────────────────────────────────────────
+        // ── Device detection (adds html.mobile for the phone layout) ──────────
+        const MQ_COARSE = matchMedia('(pointer: coarse)');
+        function detectMobile() {
+            const ua = /Android|iPhone|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                || (navigator.userAgentData && navigator.userAgentData.mobile === true);
+            const touchSmall = navigator.maxTouchPoints > 1 && MQ_COARSE.matches && Math.min(screen.width, screen.height) <= 820;
+            return !!(ua || touchSmall || innerWidth <= 700);
+        }
+        let isMobile = detectMobile();
+        document.documentElement.classList.toggle('mobile', isMobile);
+        addEventListener('resize', () => {
+            isMobile = detectMobile();
+            document.documentElement.classList.toggle('mobile', isMobile);
+        });
+
+        // The whole homepage lives in #hub. Opening a project takes #hub out of the page
+        // (replaced by a placeholder) and closing puts it back, so nothing is ever
+        // layered behind the game.
+        const hubNode = document.getElementById('hub');
+        const hubMark = document.createComment('hub');
+        let hubScroll = 0;
+
         // ── Playtime tracker ──────────────────────────────────────────────────
         let totalSeconds = parseInt(localStorage.getItem('vortarium_playtime')) || 0;
         const timeDisplay = document.getElementById('playtime-display');
@@ -1356,6 +1429,17 @@
         // One fade at a time — starting a new fade cancels the previous one
         let fadeTimer = null;
 
+        // Hard stop. iOS ignores audio.volume (it's always 1), so a volume-based
+        // fade never "finishes" there and the music kept playing in games.
+        function stopMusicNow() { clearInterval(fadeTimer); music.pause(); music.volume = 1; }
+        function stopMusicForGame() {
+            if (isMobile) { stopMusicNow(); return; }
+            fadeOut(music, 600);
+            setTimeout(() => { if (inGame) stopMusicNow(); }, 750);   // guaranteed stop
+        }
+        // Safety net: the hub music can never be playing while a project is open
+        music.addEventListener('play', () => { if (inGame) stopMusicNow(); });
+
         function fadeOut(audio, duration) {
             clearInterval(fadeTimer);
             return new Promise(resolve => {
@@ -1446,11 +1530,15 @@
         function launchGame(prefix) {
             const g = byPrefix[prefix];
             if (g && isLocked(g)) return;   // locked projects can't be opened
+            if (inGame) return;
             inGame = true;
-            fadeOut(music, 600);
-            setScrollbarVisible(false);
+            stopMusicForGame();
+            setMusicMenu(false);
 
             runCurtain(() => {
+                hubScroll = window.scrollY;
+                hubNode.replaceWith(hubMark);                       // homepage leaves the page
+                document.documentElement.classList.add('in-game');
                 iframe.src = prefix + '_index.html';
                 overlay.style.display = 'block';
             }, 1400);
@@ -1460,10 +1548,14 @@
         function closeGame() {
             runCurtain(() => {
                 overlay.style.display = 'none';
+                hubMark.replaceWith(hubNode);                       // homepage comes back
+                document.documentElement.classList.remove('in-game');
+                document.documentElement.style.scrollBehavior = 'auto';
+                window.scrollTo(0, hubScroll);
+                document.documentElement.style.scrollBehavior = '';
                 iframe.src = '';
             }, 1400).then(() => {
-                setScrollbarVisible(true);
-                inGame = false;
+                                inGame = false;
                 fadeIn(music, 800);
             });
         }
