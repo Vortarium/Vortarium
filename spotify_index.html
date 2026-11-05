@@ -579,6 +579,8 @@ const clean0=n=>n.replace(/_spotdown\.org/gi,"").replace(/\s{2,}/g," ").trim();
 /* titles never contain underscores: they become spaces (clean0 keeps the raw file key stable for duplicate detection) */
 const clean=n=>clean0(n).replace(/_/g," ").replace(/\s{2,}/g," ").trim();
 const fixedT=new Set();
+/* songs with a number in brackets in the name, like "Song (2)", are copies and get removed automatically */
+const DUPN=/\(\s*\d+\s*\)/;
 const SD=/_spotdown\.org/i;
 const AUD=/\.(mp3|m4a|wav|ogg|oga|flac|aac|opus|webm|wma)$/i;
 const MIME={mp3:"audio/mpeg",m4a:"audio/mp4",wav:"audio/wav",ogg:"audio/ogg",oga:"audio/ogg",flac:"audio/flac",aac:"audio/aac",opus:"audio/ogg",webm:"audio/webm",wma:"audio/x-ms-wma"};
@@ -733,7 +735,7 @@ onAuthStateChanged(auth,u=>{
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  unsubs.push(onSnapshot(collection(db,"users"),s=>{users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd()}));
- unsubs.push(onSnapshot(collection(db,"songs"),s=>{songs=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}return x}).filter(x=>x.ready).sort((a,b)=>ms(b)-ms(a));built&&(renderSide(),render(),playerUI())}));
+ unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[];songs=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}if(x.ready&&DUPN.test(x.title||"")&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}return x}).filter(x=>x.ready&&!DUPN.test(x.title||"")).sort((a,b)=>ms(b)-ms(a));if(rmQ.length)delSongsBulk(rmQ);built&&(renderSide(),render(),playerUI())}));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"playlists"),s=>{ownPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("sharedWith","array-contains",u.uid)),s=>{sharedPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("ownerId","==",u.uid)),s=>{ownShared=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
@@ -1030,9 +1032,9 @@ function exitSel(){selMode=false;sel.clear()}
 const selList=()=>view.t=="all"?songs:view.t=="liked"?songs.filter(s=>likes.has(s.id)):view.t=="pl"?plSongs(pls.find(p=>p.id==view.id)||{}):[];
 function selBarHTML(){
  if(!selOk())return"";
- const n=sel.size,p=view.t=="pl"?pls.find(x=>x.id==view.id):null,canRm=view.t=="liked"||(p&&p.ownerId==me.uid),tot=selList().length;
+ const n=sel.size,allMine=n>0&&[...sel].every(id=>{const x=song(id);return x&&mine(x)}),p=view.t=="pl"?pls.find(x=>x.id==view.id):null,canRm=view.t=="liked"||(p&&p.ownerId==me.uid),tot=selList().length;
  const b=(a,ic,t,x="")=>`<button class="sb2 ${x}" data-sel="${a}" ${n||a=="all"||a=="done"?"":"disabled"}>${ic}<span>${t}</span></button>`;
- return `<div class="selbar"><b class="sc">${n?n+" selected":"Select songs"}</b>${b("all",I.check,n&&n>=tot?"None":"All")}${b("pl",I.plus,"Add to playlist")}${canRm?b("rm",I.trash,"Remove","x"):""}${b("like",I.add,"Like")}${b("q",I.queueadd,"Queue")}${b("dl",I.dl,"Download")}${b("done",I.x,"Done")}</div>`}
+ return `<div class="selbar"><b class="sc">${n?n+" selected":"Select songs"}</b>${b("all",I.check,n&&n>=tot?"None":"All")}${b("pl",I.plus,"Add to playlist")}${canRm?b("rm",I.trash,"Remove","x"):""}${b("like",I.add,"Like")}${b("q",I.queueadd,"Queue")}${b("dl",I.dl,"Download")}${allMine?b("delall",I.trash,"Delete all","x"):""}${b("done",I.x,"Done")}</div>`}
 function updSelBar(){const b=document.querySelector(".selbar");if(b)b.outerHTML=selBarHTML()}
 function toggleSel(id){if(!id)return;sel.has(id)?sel.delete(id):sel.add(id);const r=document.querySelector(`.row[data-id="${id}"]`);if(r){r.classList.toggle("selected",sel.has(id));r.querySelector(".ck")?.classList.toggle("on",sel.has(id))}updSelBar()}
 async function plAddMany(p,ids){
@@ -1053,6 +1055,9 @@ async function selAction(a,e){
   if(a=="q"){const d=ids.filter(id=>have.has(id));if(!d.length)return toast("Download these songs first");queue.push(...d);panelSig="";renderPanel();toast(`Added ${d.length} to queue`)}
   else if(a=="like"){const n=ids.filter(id=>!likes.has(id));await Promise.all(n.map(id=>setDoc(doc(db,"users",me.uid,"likes",id),{at:serverTimestamp()})));toast(n.length?`Saved ${n.length} to Liked Songs`:"Already in Liked Songs")}
   else if(a=="dl"){await downloadAll(ss)}
+  else if(a=="delall"){const own=ss.filter(mine);if(!own.length||own.length!=ss.length)return toast("You can only delete songs you own");
+   if(!await confirmBox(`Delete ${own.length} song${own.length==1?"":"s"}?`,`${own.length==1?"This song":"These "+own.length+" songs"} will be permanently removed from the server for everyone. This can't be undone.`,"Delete all"))return;
+   toast(`Deleting ${own.length} song${own.length==1?"":"s"}…`,1);const n=await delSongsBulk(own);toast(`Deleted ${n} song${n==1?"":"s"}`)}
   else if(a=="rm"){
    if(view.t=="liked")await Promise.all(ids.map(id=>deleteDoc(doc(db,"users",me.uid,"likes",id))));
    else{const p=pls.find(x=>x.id==view.id);if(!p||p.ownerId!=me.uid)return;const rmv=new Set(ids);await plUpdate(p,{songIds:(p.songIds||[]).filter(id=>!rmv.has(id))})}
@@ -1138,7 +1143,7 @@ function uploadModal(startMode="upload"){
   q("#tfld").style.display=x=="check"?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
   const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=!n||busy};
- const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>SD.test(f.name)),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: the name must contain _spotdown.org (download from spotdown.org)`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
+ const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>SD.test(f.name)&&!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: the name must contain _spotdown.org (download from spotdown.org) and not have a number in brackets like (1)`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
  const dz=q("#dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove("over")};
@@ -1167,7 +1172,7 @@ function uploadModal(startMode="upload"){
  };
 }
 async function doUpload(list,o,prog){
- list=list.filter(f=>SD.test(f.name));
+ list=list.filter(f=>SD.test(f.name)&&!DUPN.test(clean(f.name)));
  const seen=new Set(songs.map(x=>x.key||x.title.toLowerCase())),todo=[],byKey=new Map(songs.map(x=>[x.key||x.title.toLowerCase(),x.id])),idOf=new Map();let dup=0;
  for(const f of list){const k=keyOf(f.name);if(seen.has(k)){dup++;if(byKey.has(k))idOf.set(f,byKey.get(k));continue}seen.add(k);todo.push(f)}
  if(!todo.length&&!(o.keepDups&&idOf.size))throw new Error(`Nothing to upload: ${dup} song${dup>1?"s":""} already exist.`);
@@ -1223,6 +1228,11 @@ function editSong(s){
   await updateDoc(doc(db,"songs",s.id),d);toast("Saved");
  });
 }
+async function delSongsBulk(list){
+ if(list.some(s=>s.id==queue[qi])){audio.pause();audio.removeAttribute("src");queue=[];qi=-1}
+ let n=0;
+ await pool(list,4,async s=>{try{const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));await tx("readwrite",x=>x.delete(s.id));have.delete(s.id);n++}catch(e){console.error(s.title,e)}});
+ playerUI();return n}
 async function delSong(s){
  if(!await confirmBox("Delete song?",`"${esc(s.title)}" will be removed for everyone. This can't be undone.`))return;
  if(queue[qi]==s.id){audio.pause();audio.removeAttribute("src");queue=[];qi=-1}
