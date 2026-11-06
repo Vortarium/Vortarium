@@ -1088,9 +1088,9 @@ async function plAddMany(p,ids){
  if(p.ownerId===me.uid)await plUpdate(p,{songIds:[...(p.songIds||[]),...add]});
  else{await updateDoc(doc(db,"shared_playlists",p.id),{songIds:arrayUnion(...add)});if(p.public)updateDoc(doc(db,"public_playlists",p.id),{songIds:arrayUnion(...add)}).catch(()=>{})}
  toast(`Added ${add.length} song${add.length==1?"":"s"} to ${p.name}`)}
-async function makePlaylist(ids,name,dsc,cover){
+async function makePlaylist(ids,name,dsc,cover,owner){owner=owner||me.uid;
  const cv=cover instanceof File?await uploadFile("",cover,400):{url:""},id=crypto.randomUUID();
- await setDoc(doc(db,"users",me.uid,"playlists",id),{uuid:id,name,description:dsc||"",public:false,ownerId:me.uid,songIds:ids,coverUrl:cv.url,coverPath:"",createdAt:serverTimestamp()});
+ await setDoc(doc(db,"users",owner,"playlists",id),{uuid:id,name,description:dsc||"",public:false,ownerId:owner,songIds:ids,coverUrl:cv.url,coverPath:"",createdAt:serverTimestamp()});
  return id}
 async function selAction(a,e){
  if(a=="done"){exitSel();return render()}
@@ -1169,6 +1169,7 @@ function uploadModal(startMode="upload"){
  <div class="note" id="sdn">${I.info}<span>Recommended: download songs from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a> for the best results. Your own MP3s and other audio files work too, no special file name needed. The <b style="color:#fff">_spotdown.org</b> tag is removed from titles automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
  <div class="fld" id="afld"><label>Artists (optional)</label><div class="chipin" id="ach"><input placeholder="Type a name and press Enter"></div><div class="hint">Added to the artists found in each file's tags and filename.</div></div>
+ ${isMod()?`<div class="fld" id="asfld"><label>Upload as username (optional)</label><input type="text" id="asu" list="asl" autocomplete="off" spellcheck="false" placeholder="Leave empty to upload as yourself"><datalist id="asl">${Object.values(users).filter(u=>u.username).map(u=>`<option value="${esc(u.username)}">`).join("")}</datalist><div class="hint">Moderator only. Songs (and the new playlist, if you create one) are posted under this account. Use their username, not their display name.</div></div>`:""}
  <div class="fld" id="tfld"><label>Title (optional, single song only)</label><input type="text" id="ut" maxlength="120" placeholder="Use the file name"></div>
  <div id="plbox" style="display:none"><div style="display:flex;gap:14px;align-items:flex-start"><div class="cvr" id="plcv" style="width:96px;height:96px;box-shadow:none;flex-shrink:0"></div><div style="flex:1;min-width:0"><div class="fld"><label>Playlist name</label><input type="text" id="pn" maxlength="120" placeholder="My new playlist"></div><div class="fld"><label>Description</label><textarea id="pdesc" maxlength="300" placeholder="Add an optional description" style="height:64px"></textarea></div></div></div><div class="hint" style="margin:-2px 0 14px">Tap the square to choose a playlist cover. Every song in this batch goes into this new playlist.</div></div>
  <div class="fld" id="cfld"><label>Song cover (optional)</label><div style="display:flex;gap:14px;align-items:center"><div class="cvr" id="ucv" style="width:72px;height:72px;box-shadow:none"></div><span class="hint" style="margin:0">Otherwise each file's own embedded cover is used.</span></div></div>
@@ -1187,7 +1188,7 @@ function uploadModal(startMode="upload"){
   const LY=x=="lyrics"||x=="covers";
   if(x=="covers")q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Cover check</b> goes through every song that has no cover, looks it up online by title and artist (only confident matches are used) and saves it on the song. Songs that already have a cover are skipped.</span>`;
   else if(LY)q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Lyric check</b> goes through every song that doesn't have lyrics saved yet, looks them up online (with timestamps when available) and saves them on the server for everyone. Songs where nothing is found are marked as having no lyrics. Songs that already have lyrics are skipped.</span>`;
-  ["#dz","#sdn","#afld","#cfld"].forEach(k=>q(k).style.display=LY?"none":"");
+  ["#dz","#sdn","#afld","#cfld"].forEach(k=>q(k).style.display=LY?"none":"");const af=q("#asfld");if(af)af.style.display=x=="upload"||x=="playlist"?"":"none";
   q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
   const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&mode!="covers"&&!n)||busy};
@@ -1203,8 +1204,10 @@ function uploadModal(startMode="upload"){
   const pg=q("#pg"),bar=pg.firstChild,res=q("#res");pg.style.display="block";res.style.display="none";
   const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"||mode=="covers"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
   const o={artists:chips.get(),title:q("#ut").value.trim(),cover:cvp.get() instanceof File?cvp.get():null,ft:q("#ct").checked,fa:q("#ca").checked,fc:q("#cc").checked,explicit:q("#cx").checked};
-  let html="";
+  let html="",asUid=null;
   try{
+   const asv=((q("#asu")?.value)||"").trim().replace(/^@/,"").toLowerCase();
+   if(asv&&isMod()&&(mode=="upload"||mode=="playlist")){const u=Object.values(users).find(x=>(x.username||"").toLowerCase()==asv);if(!u)throw new Error(`No user with the username "${asv}".`);asUid=u.id}
    if(mode=="covers"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doCoverCheck(prog);
     html=`<b>${r.found}</b> cover${r.found==1?"":"s"} found • ${r.none} with no match${r.skipped?` • ${r.skipped} already had a cover`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
     toast(`Cover check: ${r.found} found`)}
@@ -1214,12 +1217,12 @@ function uploadModal(startMode="upload"){
    else if(mode=="check"){const r=await doCheck(files,o,prog);
     html=`<b>${r.upd}</b> song${r.upd==1?"":"s"} updated${r.same?` • ${r.same} already up to date`:""}${r.nf?` • ${r.nf} not found in your uploads`:""}${r.notMine?` • ${r.notMine} belong to someone else`:""}${r.fail?` • ${r.fail} failed`:""}`;
     toast(`Upload check: ${r.upd} updated`)}
-   else{const r=await doUpload(files,{...o,keepDups:mode=="playlist"},prog);
-    html=`<b>${r.done}</b> song${r.done==1?"":"s"} uploaded${r.dup?` • ${r.dup} duplicate${r.dup>1?"s":""} skipped`:""}${r.fail?` • ${r.fail} failed`:""}`;
+   else{const r=await doUpload(files,{...o,keepDups:mode=="playlist",asUid},prog);
+    html=`${asUid?`As <b>@${esc(users[asUid].username)}</b> • `:""}<b>${r.done}</b> song${r.done==1?"":"s"} uploaded${r.dup?` • ${r.dup} duplicate${r.dup>1?"s":""} skipped`:""}${r.fail?` • ${r.fail} failed`:""}`;
     toast(`Uploaded ${r.done} song${r.done!=1?"s":""}`);
     if(mode=="playlist"){
      if(!r.ids.length)html+=` • no playlist created (nothing to add)`;
-     else{const pn=q("#pn").value.trim()||"New playlist #"+(pls.filter(p=>p.ownerId==me.uid).length+1);newPl=await makePlaylist(r.ids,pn,q("#pdesc").value.trim(),plcv.get());html+=` • playlist <b>${esc(pn)}</b> created with ${r.ids.length} song${r.ids.length==1?"":"s"}`;toast("Playlist created")}}}
+     else{const pn=q("#pn").value.trim()||"New playlist #"+(pls.filter(p=>p.ownerId==(asUid||me.uid)).length+1);const npid=await makePlaylist(r.ids,pn,q("#pdesc").value.trim(),plcv.get(),asUid);if(!asUid)newPl=npid;html+=` • playlist <b>${esc(pn)}</b> created with ${r.ids.length} song${r.ids.length==1?"":"s"}`;toast("Playlist created")}}}
    res.innerHTML=html;res.style.display="block";finished=true;files=[];sum();q("#go").disabled=false;q("#go").textContent="Done";q("#cn").style.display="none";
   }catch(e){q("#fmsg").textContent=fsMsg(e);q("#fmsg").className="msg err";toast(fsMsg(e));q("#go").disabled=false;q("#go").innerHTML=goLbl(mode)}
   busy=false;
@@ -1239,7 +1242,7 @@ async function doUpload(list,o,prog){
    if(!cu&&tags.pic)try{cu=(await uploadFile("",tags.pic,400)).url}catch{}
    const artists=buildArtists(file.name,tags,o.artists);
    const ext=file.name.split(".").pop().toLowerCase(),N=Math.ceil(file.size/CH),r=doc(db,"songs",crypto.randomUUID());
-   await setDoc(r,{uuid:r.id,title:clean((todo.length==1&&o.title)||clean(file.name).replace(/\.[^.]+$/,"")),key:keyOf(file.name),ownerId:me.uid,artists,artist:artists.join(", "),explicit:!!o.explicit,coverUrl:cu,duration:d,size:file.size,mime:file.type||MIME[ext]||"audio/mpeg",chunkCount:N,ready:false,createdAt:serverTimestamp()});
+   await setDoc(r,{uuid:r.id,title:clean((todo.length==1&&o.title)||clean(file.name).replace(/\.[^.]+$/,"")),key:keyOf(file.name),ownerId:o.asUid||me.uid,artists,artist:artists.join(", "),explicit:!!o.explicit,coverUrl:cu,duration:d,size:file.size,mime:file.type||MIME[ext]||"audio/mpeg",chunkCount:N,ready:false,createdAt:serverTimestamp()});
    for(let i=0;i<N;i+=3)await Promise.all([...Array(Math.min(3,N-i))].map((_,k)=>{const j=i+k;return b64(file.slice(j*CH,(j+1)*CH)).then(data=>setDoc(doc(db,"songs",r.id,"chunks",String(j).padStart(4,"0")),{i:j,data}))}));
       await updateDoc(r,{ready:true});idOf.set(file,r.id);done++;
   }catch(e){fail++;console.error(file.name,e)}
