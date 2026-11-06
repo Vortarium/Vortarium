@@ -943,7 +943,7 @@ function render(){
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
-  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
+  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>${canSeeWrapped(v.id)?`<button class="pill sm" id="vwrap" style="background:linear-gradient(135deg,#1ed760,#7a5cff 60%,#ff5ca8);color:#000">${I.note}Wrapped</button>`:""}`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
@@ -951,17 +951,19 @@ function render(){
  }else if(v.t=="artists"){
   hdrh=`<div class="stick"></div>`;const all=[...allArtists().values()].sort((a,b)=>a.name.localeCompare(b.name));
   h=`<div class="sec"><h2>Artists</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(all.length?artistCards(all):`<div class="empty">No artists yet.</div>`);
+ }else if(v.t=="wrapped"&&v.id&&v.id!=me.uid&&!canSeeWrapped(v.id)){
+  h=mut[v.id]===undefined&&users[v.id]?.showWrapped&&following.has(v.id)?`<div class="empty"><b>Loading…</b></div>`:`<div class="empty"><b>This Wrapped is private</b>${esc(uname(v.id))} only shares it with followers who follow each other.</div>`;
  }else if(v.t=="wrapped"){
-  const Y=new Date().getFullYear(),w=(users[me.uid]?.wrapped||{})[Y]||{};
+  const uid=v.id||me.uid,own=uid==me.uid,Y=new Date().getFullYear(),w=(users[uid]?.wrapped||{})[Y]||{};
   const tm=x=>x<60?`${Math.round(x)} sec`:`${Math.round(x/60).toLocaleString()} min`;
   const ts=Object.entries(w.songs||{}).map(([id,x])=>[song(id),x]).filter(x=>x[0]).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const ta=Object.entries(w.artists||{}).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const mins=Math.floor((w.sec||0)/60);
   const row=(i,cov,t,sub,x,at)=>`<div class="wrow"${at||""}><span class="wn">${i+1}</span>${cov}<div class="tx"><b>${esc(t)}</b>${sub?`<small>${sub}</small>`:""}</div><span class="wm">${tm(x)}</span></div>`;
-  h=`<div class="wrap"><div class="wy">${Y}</div><div class="wsub">Your Wrapped</div>
+  h=`<div class="wrap"><div class="wy">${Y}</div><div class="wsub">${own?"Your Wrapped":esc(uname(uid))+"'s Wrapped"}</div>
   <div class="wtot"><b>${mins.toLocaleString()}</b><span>minutes listened</span></div>
-  <div class="sec"><h2>Top 5 songs</h2></div>${ts.length?ts.map(([s,x],i)=>row(i,art(s.coverUrl,"wart"),s.title,credit(s,false),x)).join(""):`<div class="empty" style="padding:20px 0">Listen to some songs and your top 5 will show up here.</div>`}
-  <div class="sec"><h2>Top 5 artists</h2></div>${ta.length?ta.map(([n,x],i)=>row(i,initials(n,48),n,"",x,` data-artist="${esc(n)}" style="cursor:pointer"`)).join(""):`<div class="empty" style="padding:20px 0">Your top artists will show up here.</div>`}</div>`;
+  <div class="sec"><h2>Top 5 songs</h2></div>${ts.length?ts.map(([s,x],i)=>row(i,art(s.coverUrl,"wart"),s.title,credit(s,false),x)).join(""):`<div class="empty" style="padding:20px 0">${own?"Listen to some songs and your top 5 will show up here.":"Nothing to show yet."}</div>`}
+  <div class="sec"><h2>Top 5 artists</h2></div>${ta.length?ta.map(([n,x],i)=>row(i,initials(n,48),n,"",x,` data-artist="${esc(n)}" style="cursor:pointer"`)).join(""):`<div class="empty" style="padding:20px 0">${own?"Your top artists will show up here.":"Nothing to show yet."}</div>`}</div>`;
  }else if(v.t=="settings"){
   const u=users[me.uid];
   h=`<div class="sec"><h2>Account settings</h2></div><div class="setrow">${avatar(u)}<div class="tx"><div style="font-weight:700;font-size:18px">${esc(u.displayName)}</div><div style="color:#b3b3b3">@${esc(u.username)}</div></div></div>
@@ -976,6 +978,7 @@ function render(){
  hdr.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){view={...view,f:c.dataset.hf};homeN=60;render()}};
  updNav();playerUI(1);
  if(v.t=="user")loadFollowers(v.id);
+ if((v.t=="user"||v.t=="wrapped")&&v.id&&v.id!=me.uid)loadMutual(v.id);
  if(v.t=="pl"||v.t=="liked")fillMore();
 }
 let srMore=false;
@@ -1005,6 +1008,7 @@ function mainClick(e){
  const sa=t.closest("[data-sel]");if(sa){if(!sa.disabled)selAction(sa.dataset.sel,e);return}
  if(selOk()){const sr_=t.closest(".row");if(sr_){toggleSel(sr_.dataset.id);return}}
  const mo=t.closest("[data-more]");if(mo){e.stopPropagation();const r=mo.getBoundingClientRect();return songMenu(e,song(mo.dataset.more),Math.max(8,r.left-170),r.bottom)}
+ const vw=t.closest("#vwrap");if(vw)return go({t:"wrapped",id:view.id});
  const fl=t.closest("[data-follow]");if(fl)return toggleFollow(fl.dataset.follow);
  const hf=t.closest("[data-hf]");if(hf){view={...view,f:hf.dataset.hf};homeN=60;return render()}
  const sg=t.closest("[data-go]");if(sg)return go({t:sg.dataset.go});
@@ -1328,8 +1332,8 @@ async function delPl(p){if(!await confirmBox("Delete playlist?",`"${esc(p.name)}
 function toggleLike(id){const r=doc(db,"users",me.uid,"likes",id);likes.has(id)?deleteDoc(r):setDoc(r,{at:serverTimestamp()})}
 function editProfile(){
  const u=users[me.uid];
- form("Profile details",[{type:"avatar",value:u.photoUrl},{label:"Display name",value:u.displayName,max:30}],"Save",async([p,n])=>{
-  if(!n)throw new Error("Display name can't be empty.");const d={displayName:n};
+ form("Profile details",[{type:"avatar",value:u.photoUrl},{label:"Display name",value:u.displayName,max:30},{type:"check",label:"Show your wrapped to your followers",sub:"Followers you follow back get a Wrapped button on your profile to see your stats",value:!!u.showWrapped}],"Save",async([p,n,sw])=>{
+  if(!n)throw new Error("Display name can't be empty.");const d={displayName:n,showWrapped:!!sw};
   if(p instanceof File)d.photoUrl=(await uploadFile("",p,320)).url;else if(p==="")d.photoUrl="";
   await updateDoc(doc(db,"users",me.uid),d);toast("Profile updated");
  });
@@ -1431,6 +1435,11 @@ async function toggleFollow(id){
  }catch(e){toast(fsMsg(e))}
  render();
 }
+/* mutual follow: I follow them (following set) and they follow me (a followers entry under my account) */
+let mut={},mutAt={};
+const canSeeWrapped=id=>!!id&&id!=me?.uid&&!!users[id]?.showWrapped&&following.has(id)&&mut[id]===true;
+function loadMutual(id){if(Date.now()-(mutAt[id]||0)<15000)return;mutAt[id]=Date.now();
+ getDoc(doc(db,"users",me.uid,"followers",id)).then(d=>{const m=d.exists(),ch=mut[id]!==m;mut[id]=m;if(ch&&(view.t=="user"||view.t=="wrapped")&&view.id==id)render()}).catch(()=>{})}
 function loadFollowers(id){
  const put=()=>{const e=$("#fcnt");if(e&&view.t=="user"&&view.id==id&&fcount[id]!=null)e.textContent=fcount[id]+" follower"+(fcount[id]==1?"":"s")};
  put();if(Date.now()-(fcAt[id]||0)<15000)return;fcAt[id]=Date.now();
