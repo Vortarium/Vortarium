@@ -512,7 +512,7 @@ html.phone .lyl .ll{font-size:22px}
 import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAnalytics} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-analytics.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,collection,doc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,collection,doc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 try{getAnalytics(app)}catch{}
@@ -759,7 +759,7 @@ onAuthStateChanged(auth,u=>{
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  unsubs.push(onSnapshot(collection(db,"users"),s=>{users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd()}));
- unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[];songs=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}if(x.ready&&DUPN.test(x.title||"")&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}return x}).filter(x=>x.ready&&!DUPN.test(x.title||"")).sort((a,b)=>ms(b)-ms(a));if(rmQ.length)delSongsBulk(rmQ);built&&(renderSide(),render(),playerUI())}));
+ unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[];songs=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}if(x.ready&&DUPN.test(x.title||"")&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}return x}).filter(x=>x.ready&&!DUPN.test(x.title||"")).sort((a,b)=>ms(b)-ms(a));if(rmQ.length)delSongsBulk(rmQ);built&&(renderSide(),render(),playerUI());clearTimeout(cvT);cvT=setTimeout(fillCovers,2500)}));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"playlists"),s=>{ownPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("sharedWith","array-contains",u.uid)),s=>{sharedPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("ownerId","==",u.uid)),s=>{ownShared=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
@@ -887,8 +887,9 @@ let ctxPl=null;
 
 /* ---------- views ---------- */
 const keyOf=n=>clean0(n).replace(/\.[^.]+$/,"").toLowerCase();
+const inAnyPl=id=>pls.some(p=>canAdd(p)&&(p.songIds||[]).includes(id));
 const likeIc=id=>likes.has(id)?I.added:I.add;
-const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button><button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
+const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>${inAnyPl(s.id)?`<button class="hb inpl on" data-pick="${s.id}" title="In your playlists. Click to manage">${I.added}</button>`:""}<button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
 const topRows=l=>{topShown=l;return `<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Views</span><span></span><span class="dur">${I.clock}</span></div>`+l.map((s,i)=>rowHTML(s,i).replace(/<span class="da">.*?<\/span>/,`<span class="da">${vtxt(viewsOf(s))}</span>`).replace('<div class="row ','<div data-top="1" class="row ').replace('<div class="tw">',`<div class="tw" data-v="${vtxt(viewsOf(s))}">`)).join("")};
 const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+(opt.lim?list.slice(0,opt.lim):list).map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
 const songCards=l=>`<div class="grid">${l.map(s=>`<div class="card" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
@@ -897,7 +898,7 @@ const artistCards=l=>`<div class="grid">${l.map(a=>`<div class="card" data-artis
 const plSongs=p=>(p.songIds||[]).map(song).filter(Boolean);
 const hero=(type,title,meta,a,desc,cls="")=>`<div class="hero ${cls}">${a}<div style="min-width:0"><div class="ty">${type}</div><h1>${title}</h1>${desc?`<div class="ds">${desc}</div>`:""}<div class="meta">${meta}</div></div></div>`;
 const sum=l=>`${l.length} song${l.length==1?"":"s"}${l.length?", "+fmtLong(l.reduce((a,s)=>a+(s.duration||0),0)):""}`;
-const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button>${x}${["all","pl","liked"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
+const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button>${x}${["all","pl","liked","user"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
 const viewKey=()=>view.t+":"+(view.id||view.name||"");
 const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
 const setHc=c=>$("#mainbox").style.setProperty("--hc",c||"#535353");
@@ -993,16 +994,23 @@ function sr(){
  const ar=[...allArtists().values()].filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
  const p=pls.filter(x=>x.name.toLowerCase().includes(q)),qu=q.replace(/^@/,""),u=Object.values(users).filter(x=>qu&&((x.displayName||"").toLowerCase().includes(qu)||(x.username||"").toLowerCase().includes(qu))).sort((a,b)=>{const sc=x=>(x.username||"").toLowerCase()==qu||(x.displayName||"").toLowerCase()==qu?0:(x.username||"").toLowerCase().startsWith(qu)||(x.displayName||"").toLowerCase().startsWith(qu)?1:2;return sc(a)-sc(b)});
  const f=view.f||"all",n=view.n||10;srMore=false;
- const lim=(arr,key)=>{const on=f=="all"||f==key,l=on?arr.slice(0,n):[];if(on&&arr.length>n)srMore=true;return l};
+ /* All tab: 10 songs and 6 of everything else, with a More button that opens that section. Other tabs load 10 more on scroll. */
+const lim=(arr,key)=>{if(f=="all"){const c=key=="songs"?10:6;return arr.slice(0,c)}if(f!=key)return[];if(arr.length>n)srMore=true;return arr.slice(0,n)};
+const more=(arr,key)=>f=="all"&&arr.length>(key=="songs"?10:6)?`<button class="pill dark sm" data-sf="${key}" style="margin-left:auto">More</button>`:"";
+const sec=(t,arr,key,first)=>`<div class="sec" ${first?'style="margin-top:12px"':""}><h2>${t}</h2>${more(arr,key)}</div>`;
  const sS=lim(s,"songs"),arS=lim(ar,"artists"),uS=lim(u,"users"),pS=lim(p,"playlists");
  const hd=`<div class="stick"></div><div class="chips" style="padding:0">${[["all","All"],["artists","Artists"],["users","Users"],["songs","Songs"],["playlists","Playlists"]].map(([k,t])=>`<button class="chip ${f==k?"on":""}" data-sf="${k}">${t}</button>`).join("")}</div>`;
  if($("#hdr").dataset.sf!=f+"|"){$("#hdr").innerHTML=hd;$("#hdr").dataset.sf=f+"|"}
- el.innerHTML=(arS.length?`<div class="sec" style="margin-top:12px"><h2>Artists</h2></div>`+artistCards(arS):"")+(uS.length?`<div class="sec"><h2>Profiles</h2></div><div class="grid">${uS.map(x=>`<div class="card" data-u="${x.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(x).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(x.displayName||x.username||"")}</div><div class="s">Profile • @${esc(x.username||"")}${x.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`:"")+(sS.length?`<div class="sec"><h2>Songs</h2></div>`+rows(sS):"")+(pS.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pS):"")||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
+ const parts=[[pS,p,"playlists","Playlists",x=>plCards(x)],[arS,ar,"artists","Artists",x=>artistCards(x)],[uS,u,"users","Profiles",x=>`<div class="grid">${x.map(y=>`<div class="card" data-u="${y.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(y).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(y.displayName||y.username||"")}</div><div class="s">Profile • @${esc(y.username||"")}${y.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`],[sS,s,"songs","Songs",x=>rows(x)]];
+ let first=true;const out=parts.filter(x=>x[0].length).map(([l,all,key,t,fn])=>{const h=sec(t,all,key,first)+fn(l);first=false;return h}).join("");
+ el.innerHTML=out||`<div class="empty"><b>No results for "${esc(view.q)}"</b>Check the spelling or try a different word.</div>`;
 }
 
 /* ---------- click handling ---------- */
 function mainClick(e){
  const t=e.target;
+ const msf=t.closest("#sr [data-sf]");if(msf){view.f=msf.dataset.sf;view.n=10;delete $("#hdr").dataset.sf;$("#mainbox").scrollTop=0;return sr()}
+ const pk=t.closest("[data-pick]");if(pk){e.stopPropagation();return likeClick(pk.dataset.pick,pk)}
  if(t.closest("#shbig")){toggleShuffle();return}
  if(t.closest("#selbtn")){selMode=!selMode;sel.clear();render();return}
  const sa=t.closest("[data-sel]");if(sa){if(!sa.disabled)selAction(sa.dataset.sel,e);return}
@@ -1012,7 +1020,7 @@ function mainClick(e){
  const fl=t.closest("[data-follow]");if(fl)return toggleFollow(fl.dataset.follow);
  const hf=t.closest("[data-hf]");if(hf){view={...view,f:hf.dataset.hf};homeN=60;return render()}
  const sg=t.closest("[data-go]");if(sg)return go({t:sg.dataset.go});
- const lk=t.closest("[data-like]");if(lk)return toggleLike(lk.dataset.like);
+ const lk=t.closest("[data-like]");if(lk)return likeClick(lk.dataset.like,lk);
  const ppl=t.closest("[data-playpl]");if(ppl){e.stopPropagation();const p=pls.find(x=>x.id==ppl.dataset.playpl);ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;return playFirst(plSongs(p))}
  const ar=t.closest("[data-artist]");if(ar)return go({t:"artist",name:ar.dataset.artist});
  const us=t.closest("[data-u]");if(us)return go({t:"user",id:us.dataset.u});
@@ -1047,7 +1055,7 @@ function songMenu(e,s,ax,ay){
  artistsOf(s).slice(0,4).forEach(a=>items.push([I.user+"Go to "+esc(a),()=>go({t:"artist",name:a})]));
  items.push([I.note+"Uploaded by "+esc(uname(s.ownerId)),()=>go({t:"user",id:s.ownerId})]);
  if(inPl)items.push("-",[I.x+"Remove from this playlist",()=>plUpdate(inPl,{songIds:(inPl.songIds||[]).filter(z=>z!=s.id)})]);
- if(o||isMod())items.push("-",[I.pen+"Edit details",()=>editSong(s)],[I.trash+"Delete song",()=>delSong(s),"x"]);
+ if(o||isMod())items.push("-",[I.pen+"Edit details",()=>editSong(s)],[I.sync+(s.coverUrl?"Regenerate cover art":"Find cover art"),()=>manualCover(s)],[I.trash+"Delete song",()=>delSong(s),"x"]);
  items.push("-",...(o?[]:[[I.info+"Report problem",()=>reportSong(s)]]),[I.share+"Copy song info",()=>copyInfo(s)]);
  menu(x,y,items);
 }
@@ -1064,9 +1072,9 @@ function plMenu(e,p){
 }
 
 /* ---------- multi-select (all songs, playlists, liked songs) ---------- */
-const selOk=()=>selMode&&["all","pl","liked"].includes(view.t);
+const selOk=()=>selMode&&["all","pl","liked","user"].includes(view.t);
 function exitSel(){selMode=false;sel.clear()}
-const selList=()=>view.t=="all"?songs:view.t=="liked"?songs.filter(s=>likes.has(s.id)):view.t=="pl"?plSongs(pls.find(p=>p.id==view.id)||{}):[];
+const selList=()=>view.t=="all"?songs:view.t=="liked"?songs.filter(s=>likes.has(s.id)):view.t=="pl"?plSongs(pls.find(p=>p.id==view.id)||{}):view.t=="user"?songs.filter(s=>s.ownerId==view.id):[];
 function selBarHTML(){
  if(!selOk())return"";
  const n=sel.size,allMine=n>0&&[...sel].every(id=>{const x=song(id);return x&&mine(x)}),p=view.t=="pl"?pls.find(x=>x.id==view.id):null,canRm=view.t=="liked"||(p&&p.ownerId==me.uid),tot=selList().length;
@@ -1156,7 +1164,7 @@ async function filesFromDrop(dt){
 function uploadModal(startMode="upload"){
  let mode=startMode,files=[],busy=false,finished=false,newPl=null;
  const {m,close}=openModal(`<div class="mh"><h2>Add songs</h2><button class="ib mclose" title="Close">${I.x}</button></div>
- <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button>`:""}</div>
+ <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button><button data-m="covers">${I.note}Cover check</button>`:""}</div>
  <div class="note" id="nt"></div>
  <div class="note" id="sdn">${I.info}<span>Recommended: download songs from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a> for the best results. Your own MP3s and other audio files work too, no special file name needed. The <b style="color:#fff">_spotdown.org</b> tag is removed from titles automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
@@ -1170,18 +1178,19 @@ function uploadModal(startMode="upload"){
  <div class="mf"><span class="msg" id="fmsg"></span><button class="ghost" id="cn">Cancel</button><button class="pill green" id="go" disabled>Upload</button></div>`,"xl",()=>{if(busy)toast("Still working in the background…")});
  const q=s=>m.querySelector(s);
  const chips=chipInput(q("#ach"),[]),cvp=coverPicker(q("#ucv"),"",I.img),plcv=coverPicker(q("#plcv"),"",I.note);
- const goLbl=x=>x=="lyrics"?`${I.mic}Start lyric check`:x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
+ const goLbl=x=>x=="lyrics"?`${I.mic}Start lyric check`:x=="covers"?`${I.sync}Start cover check`:x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
  const files_in=document.createElement("input");files_in.type="file";files_in.multiple=true;files_in.accept="audio/*,.zip,application/zip";files_in.hidden=true;
  const dir_in=document.createElement("input");dir_in.type="file";dir_in.multiple=true;dir_in.webkitdirectory=true;dir_in.hidden=true;
  m.append(files_in,dir_in);
  const setMode=x=>{mode=x;m.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m==x));
   q("#nt").innerHTML=I.info+(x=="check"?`<span><b style="color:#fff">Upload check</b> doesn't upload any audio. Each file is matched by title to songs <i>you</i> already uploaded, and their title, artists and cover are refreshed from the new data. Much faster.</span>`:x=="playlist"?`<span>Uploads the songs like normal, then puts <b style="color:#fff">all of them</b> into a brand new playlist you can name and customize below. Songs that already exist are added to it too instead of being uploaded again.</span>`:`<span>Audio is stored on the server so everyone can listen. Songs with a title that already exists are skipped. Original artists are saved from the file tags.</span>`);
-  const LY=x=="lyrics";
-  if(LY)q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Lyric check</b> goes through every song that doesn't have lyrics saved yet, looks them up online (with timestamps when available) and saves them on the server for everyone. Songs where nothing is found are marked as having no lyrics. Songs that already have lyrics are skipped.</span>`;
+  const LY=x=="lyrics"||x=="covers";
+  if(x=="covers")q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Cover check</b> goes through every song that has no cover, looks it up online by title and artist (only confident matches are used) and saves it on the song. Songs that already have a cover are skipped.</span>`;
+  else if(LY)q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Lyric check</b> goes through every song that doesn't have lyrics saved yet, looks them up online (with timestamps when available) and saves them on the server for everyone. Songs where nothing is found are marked as having no lyrics. Songs that already have lyrics are skipped.</span>`;
   ["#dz","#sdn","#afld","#cfld"].forEach(k=>q(k).style.display=LY?"none":"");
   q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
-  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&!n)||busy};
+  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&mode!="covers"&&!n)||busy};
  const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: names with a number in brackets like (1) are treated as copies`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
@@ -1190,13 +1199,16 @@ function uploadModal(startMode="upload"){
  m.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{if(!busy){setMode(b.dataset.m)}});
  q("#cn").onclick=close;setMode(mode);
  q("#go").onclick=async()=>{
-  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||(mode!="lyrics"&&!files.length))return;busy=true;q("#go").disabled=true;
+  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||(mode!="lyrics"&&mode!="covers"&&!files.length))return;busy=true;q("#go").disabled=true;
   const pg=q("#pg"),bar=pg.firstChild,res=q("#res");pg.style.display="block";res.style.display="none";
-  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
+  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"||mode=="covers"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
   const o={artists:chips.get(),title:q("#ut").value.trim(),cover:cvp.get() instanceof File?cvp.get():null,ft:q("#ct").checked,fa:q("#ca").checked,fc:q("#cc").checked,explicit:q("#cx").checked};
   let html="";
   try{
-   if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
+   if(mode=="covers"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doCoverCheck(prog);
+    html=`<b>${r.found}</b> cover${r.found==1?"":"s"} found • ${r.none} with no match${r.skipped?` • ${r.skipped} already had a cover`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
+    toast(`Cover check: ${r.found} found`)}
+   else if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
     html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.marked?` • ${r.marked} marked explicit`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
     toast(`Lyric check: ${r.found} found${r.marked?`, ${r.marked} marked explicit`:""}`)}
    else if(mode=="check"){const r=await doCheck(files,o,prog);
@@ -1265,8 +1277,11 @@ async function doCheck(list,o,prog){
 function editSong(s){
  form("Edit details",[{type:"cover",value:s.coverUrl},{label:"Title",value:s.title},{type:"chips",label:"Original artists",value:artistsOf(s),hint:"Everyone who is part of this song. They're shown before the uploader and used in search."},{type:"check",label:"Explicit",sub:"Contains swear words or mature language, so listeners are told beforehand",value:!!s.explicit}],"Save",async([c,t,a,x])=>{
   if(!t)throw new Error("Title can't be empty.");const d={title:clean(t)||t,artists:a,artist:a.join(", "),explicit:!!x};
-  if(c instanceof File)d.coverUrl=(await uploadFile("",c,400)).url;else if(c==="")d.coverUrl="";
+  if(c instanceof File){d.coverUrl=(await uploadFile("",c,400)).url;d.coverAuto=false}else if(c===""){d.coverUrl="";d.coverAuto=false}
   await updateDoc(doc(db,"songs",s.id),d);toast("Saved");
+  const nm=d.title!=s.title||d.artist!=(s.artist||"");
+  if(nm&&!(c instanceof File)&&c!==""&&(!s.coverUrl||s.coverAuto))autoCover({...s,...d},true).then(ok=>ok&&toast("Cover art updated")).catch(()=>{});
+  if(d.title!=s.title||d.artist!=(s.artist||"")){delete lyr[s.id];rescanLyrics({...s,...d},true)}
  });
 }
 async function delSongsBulk(list){
@@ -1329,6 +1344,21 @@ async function sharePl(p){
  };
 }
 async function delPl(p){if(!await confirmBox("Delete playlist?",`"${esc(p.name)}" will be removed from Your Library.`))return;await rm(p.coverPath);await deleteDoc(doc(db,"users",me.uid,"playlists",p.id));if(p.public)await deleteDoc(doc(db,"public_playlists",p.id)).catch(()=>{});if((p.sharedWith||[]).length){await deleteDoc(doc(db,"shared_playlists",p.id)).catch(()=>{});(p.sharedWith||[]).forEach(id=>deleteDoc(doc(db,"users",id,"notifications",`${me.uid}_${p.id}`)).catch(()=>{}))}if(view.id==p.id){view={t:"home"};hist=[];fwd=[];render()}toast("Playlist deleted")}
+/* + saves to Liked Songs; once saved the check opens a floating list to toggle the song in Liked Songs and any of your playlists */
+function likeClick(id,el){if(!likes.has(id))return toggleLike(id);openPicker(id,el)}
+async function plRemoveSong(p,sid){
+ if(p.ownerId===me.uid)return plUpdate(p,{songIds:(p.songIds||[]).filter(x=>x!=sid)});
+ await updateDoc(doc(db,"shared_playlists",p.id),{songIds:arrayRemove(sid)});
+ if(p.public)updateDoc(doc(db,"public_playlists",p.id),{songIds:arrayRemove(sid)}).catch(()=>{})}
+function openPicker(id,el){
+ const r=el.getBoundingClientRect(),x=r.left-190,y=r.bottom+6,own=pls.filter(canAdd);
+ const inS=new Set(own.filter(p=>(p.songIds||[]).includes(id)).map(p=>p.id));let liked=likes.has(id);
+ const ck=on=>on?I.added:`<span style="width:20px;height:20px;border:2px solid #727272;border-radius:50%;display:inline-block;box-sizing:border-box"></span>`;
+ const draw=()=>{const m=menu(x,y,[[ck(liked)+"Liked Songs",async()=>{liked=!liked;draw();try{await(liked?setDoc(doc(db,"users",me.uid,"likes",id),{at:serverTimestamp()}):deleteDoc(doc(db,"users",me.uid,"likes",id)))}catch(e){toast(fsMsg(e))}},"",1],"-",
+  ...own.map(p=>[ck(inS.has(p.id))+esc(p.name)+(p.ownerId!=me.uid?` <span style="color:#b3b3b3;font-size:12px">• shared</span>`:""),async()=>{const had=inS.has(p.id);had?inS.delete(p.id):inS.add(p.id);draw();try{const cur=pls.find(z=>z.id==p.id)||p;had?await plRemoveSong(cur,id):await plAddSong(cur,id)}catch(e){had?inS.add(p.id):inS.delete(p.id);draw();toast(fsMsg(e))}},"",1]),
+  ...(own.length?[]:[[`<span style="color:#b3b3b3">No playlists yet</span>`,()=>{},"",1]])],260);
+  m.style.maxHeight="60vh";m.style.overflowY="auto"};
+ draw()}
 function toggleLike(id){const r=doc(db,"users",me.uid,"likes",id);likes.has(id)?deleteDoc(r):setDoc(r,{at:serverTimestamp()})}
 function editProfile(){
  const u=users[me.uid];
@@ -1490,7 +1520,7 @@ function markPlaying(){const id=curId(),pl=!audio.paused;document.querySelectorA
 function playerUI(skipPanel){
  if(!built)return;const s=song(curId());
  $("#pl").innerHTML=s?`${art(s.coverUrl)}<div class="tx"><div class="tt" data-npo="1">${esc(s.title)}</div><div class="by">${credit(s)}</div></div><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>`:"";
- $("#pl").onclick=e=>{const l=e.target.closest("[data-pl-like]");if(l)return toggleLike(l.dataset.plLike);if(phone)return openNP();const a=e.target.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});const u=e.target.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});if(e.target.closest("[data-npo]")||e.target.closest(".art")){panel="np";$("#app").classList.remove("nopanel");renderPanel()}};
+ $("#pl").onclick=e=>{const l=e.target.closest("[data-pl-like]");if(l)return likeClick(l.dataset.plLike,l);if(phone)return openNP();const a=e.target.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});const u=e.target.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});if(e.target.closest("[data-npo]")||e.target.closest(".art")){panel="np";$("#app").classList.remove("nopanel");renderPanel()}};
  const pp=audio.paused;$("#bpp").innerHTML=pp?I.play:I.pause;$("#bpp").title=pp?"Play":"Pause";
  $("#bsh").classList.toggle("on",shuffle);$("#bsh").title=shuffle?"Disable shuffle":"Enable shuffle";
  $("#brp").classList.toggle("on",repeat>0);$("#brp").title=["Enable repeat","Enable repeat one","Disable repeat"][repeat];$("#brp").innerHTML=repeat==2?I.rep1:I.rep;
@@ -1500,6 +1530,62 @@ function playerUI(skipPanel){
  document.title=s&&!pp?`${s.title} • ${artistsOf(s)[0]||uname(s.ownerId)}`:"Spotify";
  markPlaying();if(!skipPanel)renderPanel();syncNP();
 }
+
+/* ---------- cover art lookup (iTunes Search API: free, no key) ---------- */
+const nrm=t=>String(t||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+/* Both services block normal browser requests (no CORS), so they are called with script tags (JSONP). iTunes rate limits hard (403),
+   so Deezer is the main source (generous limit) and iTunes only a backup. Requests are spaced out so a big batch can't trip a limit. */
+function jsonp(url,param){return new Promise((res,rej)=>{const cb="cv"+Math.random().toString(36).slice(2),sc=document.createElement("script");let t;
+ const end=()=>{clearTimeout(t);delete window[cb];sc.remove()};
+ window[cb]=d=>{end();res(d)};sc.onerror=()=>{end();rej(new Error("Cover service unreachable"))};t=setTimeout(()=>{end();rej(new Error("Cover service timed out"))},12000);
+ sc.src=url+"&"+param+"="+cb;document.head.appendChild(sc)})}
+let cvChain=Promise.resolve();const cvGate=()=>cvChain=cvChain.then(()=>new Promise(r=>setTimeout(r,450)));
+async function dzSearch(q){await cvGate();const d=await jsonp("https://api.deezer.com/search?"+new URLSearchParams({q,limit:"15",output:"jsonp"}),"callback");
+ if(d?.error)throw new Error("Deezer: "+(d.error.message||d.error.type||"error"));
+ return(d.data||[]).map(x=>({trackName:x.title,artistName:x.artist?.name||"",collectionArtistName:"",trackTimeMillis:(x.duration||0)*1000,artworkUrl100:x.album?.cover_xl||x.album?.cover_big||""}))}
+async function itSearch(term){await cvGate();const d=await jsonp("https://itunes.apple.com/search?"+new URLSearchParams({term,media:"music",entity:"song",limit:"15"}),"callback");return d.results||[]}
+async function coverSearch(q){try{return await dzSearch(q)}catch(e){console.warn("Deezer failed, trying iTunes",e);return await itSearch(q)}}
+/* a wrong cover is worse than none, so a result needs a matching title and (when known) a matching artist */
+function bestCover(res,t,a,d){
+ const nt=nrm(t),na=nrm(a);let best=null,bs=0;
+ for(const x of res){if(!x.artworkUrl100)continue;const rt=nrm(x.trackName),ra=nrm(x.artistName),rc=nrm(x.collectionArtistName);
+  let sc=0;if(rt==nt)sc+=3;else if(rt.startsWith(nt+" ")||nt.startsWith(rt+" "))sc+=1;else continue;
+  if(na){if(ra.includes(na)||na.includes(ra)||rc.includes(na))sc+=3;else continue}
+  const dd=(x.trackTimeMillis||0)/1000;if(d>0&&dd&&Math.abs(dd-d)<=6)sc+=1;else if(!na)continue;
+  if(sc>bs){bs=sc;best=x}}
+ return best}
+async function findCover(s){
+ const d=Math.round(s.duration||0),ar=artistsOf(s)[0]||"",tn=(s.title||"").replace(/[\(\[][^\)\]]*[\)\]]/g,"").replace(/\s{2,}/g," ").trim()||s.title||"";
+ const c=[];if(/ - /.test(tn)){const[a,...t]=tn.split(" - ");c.push([t.join(" - ").trim(),a.trim()])}c.push([tn,ar]);
+ for(const [t,a] of c){if(!t)continue;const x=bestCover(await coverSearch((a?a+" ":"")+t),t,a,d);if(x)return x.artworkUrl100.replace(/\d+x\d+bb\.\w+$/,"600x600bb.jpg")}
+ return null}
+/* save a small copy like normal covers; if the image host blocks reading it, just keep the link */
+async function coverData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"c.jpg",{type:b.type||"image/jpeg"}),400)).url}catch{return url}}
+const cvSig=s=>(s.title||"")+"|"+artistsOf(s).join(",");
+/* looks the cover up and saves it on the song. clear: remove an old auto cover when nothing matches the new name */
+async function autoCover(s,clear){
+ const u=await findCover(s);
+ if(u){const cu=await coverData(u);await updateDoc(doc(db,"songs",s.id),{coverUrl:cu,coverAuto:true,coverFor:cvSig(s)});return true}
+ if(clear&&s.coverAuto)await updateDoc(doc(db,"songs",s.id),{coverUrl:"",coverAuto:false,coverFor:""});
+ return false}
+async function manualCover(s){
+ if(s.coverUrl&&!s.coverAuto&&!await confirmBox("Replace cover?","This song has a cover that was set by hand. Replace it with the one found online?","Replace"))return;
+ toast("Looking for cover art…",1);
+ try{toast(await autoCover(s)?"Cover art updated":"No matching cover found")}catch(e){console.error(e);toast("Couldn't reach the cover service")}}
+const cvTry=(()=>{try{return JSON.parse(localStorage.getItem("cvTry")||"{}")}catch{return{}}})();
+let cvBusy=false,cvT=0,cvPause=0;
+/* your own songs: missing covers are found automatically, and automatic covers are redone when the song gets renamed (by you or the moderator) */
+async function fillCovers(){
+ if(cvBusy||!me||!songs.length||Date.now()<cvPause)return;cvBusy=true;
+ try{const todo=songs.filter(s=>mine(s)&&((!s.coverUrl&&cvTry[s.id]!=cvSig(s))||(s.coverAuto&&s.coverFor&&s.coverFor!=cvSig(s)&&cvTry[s.id]!=cvSig(s)))).slice(0,25);
+  await pool(todo,1,async s=>{if(Date.now()<cvPause)return;try{await autoCover(s,true);cvTry[s.id]=cvSig(s)}catch(e){console.warn("cover",s.title,e);cvPause=Date.now()+5*60*1000}});
+  if(todo.length)try{localStorage.setItem("cvTry",JSON.stringify(cvTry))}catch{}}
+ finally{cvBusy=false}}
+async function doCoverCheck(prog){
+ const todo=songs.filter(s=>!s.coverUrl);let found=0,none=0,fail=0,n=0;const skipped=songs.length-todo.length;
+ if(!todo.length)return{found,none,skipped,fail};prog(0,todo.length);
+ await pool(todo,3,async s=>{try{await autoCover(s)?found++:none++}catch(e){fail++;console.error(s.title,e)}prog(++n,todo.length)});
+ return{found,none,skipped,fail}}
 
 /* ---------- lyrics (LRCLIB lookup, saved to the server in the "lyrics" collection) ---------- */
 const lyr={};let lyIdx=-1;
@@ -1534,9 +1620,16 @@ async function ensureLyrics(s){
   lyr[id]=L;autoExplicit(s,L);
  }catch(e){console.error(e);lyr[id]={status:"error"}}
  lyRender(id)}
+async function rescanLyrics(s,quiet){
+ if(!s)return;const id=s.id;lyr[id]={status:"loading"};lyRender(id);
+ try{const d=await findLyrics(s);await setDoc(doc(db,"lyrics",id),lyDoc(d));
+  const L={status:d.status,synced:d.synced||"",plain:d.plain||""};if(L.synced)L.lines=parseLrc(L.synced);lyr[id]=L;autoExplicit(s,L);
+  quiet||toast(d.status=="found"?"Lyrics updated":"No lyrics found")}
+ catch(e){console.error(e);lyr[id]={status:"error"};quiet||toast("Couldn't rescan lyrics")}
+ lyRender(id)}
 function lyHTML(s){
  if(!s)return `<div class="noplay">Pick a song to see its lyrics.</div>`;
- const L=lyr[s.id],head=`<div class="lyh"><div class="nt">${esc(s.title)}</div><div class="na">${esc(artistsOf(s).join(", ")||uname(s.ownerId))}</div></div>`;
+ const L=lyr[s.id],head=`<div class="lyh"><div class="nt">${esc(s.title)}</div><div class="na">${esc(artistsOf(s).join(", ")||uname(s.ownerId))}</div>${isMod()?`<button class="pill sm dark" id="lyrescan" style="margin-top:10px">${I.sync}Rescan lyrics</button>`:""}</div>`;
  if(!L||L.status=="loading")return head+`<div class="noplay">Looking for lyrics…</div>`;
  if(L.status=="error")return head+`<div class="noplay">Couldn't reach the lyrics service.<br><button class="pill sm dark" id="lyretry" style="margin-top:12px">Try again</button></div>`;
  if(L.status!="found")return head+`<div class="noplay">No lyrics found for this song.</div>`;
@@ -1587,6 +1680,7 @@ function renderPanel(){
  if(panel=="ly"){if(s&&!lyr[s.id])ensureLyrics(s);r.querySelector(".rb").innerHTML=lyHTML(s)+(s?npctl:"");lyIdx=-1}
  const w=(id,f)=>{const e=r.querySelector("#"+id);if(e)e.onclick=f};
  w("rhl",()=>{panel=panel=="ly"?"np":"ly";panelSig="";renderPanel();playerUI(1)});
+ w("lyrescan",()=>{if(s&&lyr[s.id]?.status!="loading")rescanLyrics(s)});
  w("lyretry",()=>{if(s){delete lyr[s.id];panelSig="";renderPanel()}});
  w("rhx",()=>{if(phone)closeNP();else{$("#app").classList.add("nopanel");playerUI(1)}});
  const sk2=r.querySelector("#sk2");if(sk2)sk2.oninput=()=>{if(audio.duration)audio.currentTime=sk2.value/1000*audio.duration;sk2.style.setProperty("--p",sk2.value/10+"%")};
@@ -1600,7 +1694,7 @@ function renderPanel(){
  w("qclr",()=>{queue=queue.slice(0,qi+1);panelSig="";renderPanel()});
  r.onclick=e=>{const t=e.target;
   const ll=t.closest("[data-t]");if(ll){audio.currentTime=+ll.dataset.t;if(audio.paused)audio.play();return}
-  const l=t.closest("[data-pl-like]");if(l)return toggleLike(l.dataset.plLike);
+  const l=t.closest("[data-pl-like]");if(l)return likeClick(l.dataset.plLike,l);
   const rm=t.closest("[data-qrm]");if(rm){queue.splice(+rm.dataset.qrm,1);panelSig="";return renderPanel()}
   const a=t.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});
   const u=t.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});
