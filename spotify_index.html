@@ -690,6 +690,8 @@ const VC_MS=60000;
 const vcKey=()=>"spot_vc_"+(me?.uid||"");
 const vcLoad=()=>{try{return JSON.parse(localStorage.getItem(vcKey())||"{}")}catch{return{}}};
 const vcSave=m=>{try{const n=Date.now();for(const k in m)if(n-m[k]>VC_MS)delete m[k];localStorage.setItem(vcKey(),JSON.stringify(m))}catch{}};
+/* a view counts only after 10 seconds of real playback of the same play (skipping away and coming back restarts the timer) */
+const VIEW_SEC=10;let vwId=null,vwSec=0,vwDone=false;
 const countView=id=>{if(!me||!id)return;const m=vcLoad(),n=Date.now();if(m[id]&&n-m[id]<VC_MS)return;m[id]=n;vcSave(m);updateDoc(doc(db,"songs",id),{views:increment(1)}).catch(()=>{})};
 const mergePl=()=>{
  /* shared_playlists is the source of truth for songs of any playlist that is shared (collaborators add there) */
@@ -830,7 +832,7 @@ function flushListen(){const n=Math.floor(pendSec);if(n<1||!me)return;const by=p
  for(const id in by){const sec=Math.round(by[id]*10)/10;if(sec<=0)continue;sg[id]=increment(sec);const s=song(id);const names=s?(artistsOf(s).length?artistsOf(s):[uname(s.ownerId)]):[];names.forEach(a=>{ag[a]=increment(sec)})}
  if(Object.keys(sg).length)w.songs=sg;if(Object.keys(ag).length)w.artists=ag;
  setDoc(doc(db,"users",me.uid),{listenSec:increment(n),wrapped:{[Y]:w}},{merge:true}).catch(()=>{pendSec+=n;for(const id in by)pendBy[id]=(pendBy[id]||0)+by[id]})}
-audio.addEventListener("timeupdate",()=>{const t=audio.currentTime,d=t-lastT;lastT=t;if(!audio.paused&&!audio.ended&&d>0&&d<2){pendSec+=d;const id=curId();if(id)pendBy[id]=(pendBy[id]||0)+d;if(pendSec>=60)flushListen()}});
+audio.addEventListener("timeupdate",()=>{const t=audio.currentTime,d=t-lastT;lastT=t;if(!audio.paused&&!audio.ended&&d>0&&d<2){pendSec+=d;const id=curId();if(id)pendBy[id]=(pendBy[id]||0)+d;if(pendSec>=60)flushListen();if(id&&id==vwId&&!vwDone){vwSec+=d;if(vwSec>=VIEW_SEC){vwDone=true;countView(id)}}}});
 audio.addEventListener("seeked",()=>{lastT=audio.currentTime});
 audio.addEventListener("pause",flushListen);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)flushListen()});addEventListener("pagehide",flushListen);
@@ -1455,11 +1457,11 @@ async function loadCur(){const s=song(queue[qi]);if(!s)return;const tok=++loadTo
  clearTimeout(tt);if($("#toast").textContent=="Loading…")$("#toast").style.display="none";
  if(tok!=loadTok)return;
  const old=cur;cur=URL.createObjectURL(b);audio.src=cur;if(old)URL.revokeObjectURL(old);
- audio.play().catch(()=>{});countView(s.id);mediaMeta(s);playerUI();renderPanel();
+ audio.play().catch(()=>{});vwId=s.id;vwSec=0;vwDone=false;mediaMeta(s);playerUI();renderPanel();
  if(repeat!=2)prefetch(queue[qi+1])}
 function next(auto){
  if(!queue.length)return;
- if(auto&&repeat==2){countView(curId());audio.currentTime=0;return audio.play()}
+ if(auto&&repeat==2){vwSec=0;vwDone=false;audio.currentTime=0;return audio.play()}
  if(qi+1<queue.length)qi++;
  else if(repeat==1){if(shuffle){qi=-1;shuffleUpcoming()}qi=0}
  else if(auto){audio.pause();return playerUI()}
