@@ -615,26 +615,25 @@ function buildArtists(filename,tags,extra=[]){
  if(!a.length&&/ - /.test(base))a.push(...splitArtists(base.split(" - ")[0]));
  a.push(...featFromTitle(tags.title||base),...extra);
  return dedupe(a)}
-const idb=new Promise((res,rej)=>{const r=indexedDB.open("spotify_local",1);r.onupgradeneeded=()=>r.result.createObjectStore("audio");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
 const CH=6e5,b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result.split(",")[1]);f.readAsDataURL(b)});
-const tx=async(m,f)=>{const d=await idb;return new Promise((res,rej)=>{try{const r=f(d.transaction("audio",m).objectStore("audio"));r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}})};
-/* in-memory copy of downloaded songs: used when IndexedDB is unavailable, full or evicted on some devices */
-const mem=new Map();
-async function fetchSongBlob(id){const s=song(id);if(!s)throw new Error("song not found");
- const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
- if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
- const parts=p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u});
- return new Blob(parts,{type:s.mime||"audio/mpeg"})}
+/* Songs are streamed on demand: clicking a song asks the server for its chunks and plays them right away.
+   Nothing is stored on disk. Only the current song and the prefetched next one stay in memory (small LRU). */
+/* songs are never stored permanently: clear anything saved by older versions */
+try{indexedDB.deleteDatabase("spotify_local");indexedDB.deleteDatabase("spotify_offline")}catch{}
+const mem=new Map(),pending=new Map(),MEMMAX=3;
+function fetchSongBlob(id){
+ if(pending.has(id))return pending.get(id);
+ const pr=(async()=>{const s=song(id);if(!s)throw new Error("song not found");
+  const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
+  if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
+  const parts=p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u});
+  return new Blob(parts,{type:s.mime||"audio/mpeg"})})();
+ pending.set(id,pr);pr.then(()=>pending.delete(id),()=>pending.delete(id));return pr}
+function remember(id,b){mem.delete(id);mem.set(id,b);while(mem.size>MEMMAX)mem.delete(mem.keys().next().value)}
 async function getBlob(id){
- if(mem.has(id))return mem.get(id);
- try{const b=await tx("readonly",x=>x.get(id));if(b){mem.set(id,b);return b}}catch{}
- /* not stored locally (or storage failed): pull it from the server again */
- const b=await fetchSongBlob(id);mem.set(id,b);
- tx("readwrite",x=>x.put(b,id)).then(()=>have.add(id)).catch(()=>{});
- return b}
-const have=new Set(),dling=new Set();
-tx("readonly",x=>x.getAllKeys()).then(k=>{k.forEach(x=>have.add(x));built&&render()});
-navigator.storage?.persist?.();
+ if(mem.has(id)){const b=mem.get(id);remember(id,b);return b}
+ const b=await fetchSongBlob(id);remember(id,b);return b}
+const prefetch=id=>{if(id&&!mem.has(id)&&song(id))getBlob(id).catch(()=>{})};
 const durOf=f=>new Promise(r=>{const a=new Audio(URL.createObjectURL(f));a.onloadedmetadata=()=>r(a.duration||0);a.onerror=()=>r(0)});
 const ms=d=>d?.createdAt?.toMillis?.()??Date.now();
 const colorCache={};
@@ -809,7 +808,7 @@ function buildApp(){
  audio.onvolumechange=volUI;
  $("#bfs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
  $("#bnp").onclick=()=>setPanel("np");$("#bq").onclick=()=>setPanel("q");$("#bly").onclick=()=>setPanel("ly");
- $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
+ $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="pl"||view.t=="liked")&&m.scrollTop+m.clientHeight>m.scrollHeight-500)moreRows();if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=60;render()}};
  $("#main").onclick=mainClick;$("#main").oncontextmenu=mainCtx;
  $("#bnav").onclick=e=>{const b=e.target.closest("[data-nav]");if(!b)return;const a=$("#app"),n=b.dataset.nav;
   if(n=="lib"){if(!a.classList.contains("tablib"))startSkel(true);a.classList.add("tablib");a.classList.remove("npopen");renderSide();$("#lib").scrollTop=0;updNav();return}
@@ -886,18 +885,17 @@ let ctxPl=null;
 
 /* ---------- views ---------- */
 const keyOf=n=>clean0(n).replace(/\.[^.]+$/,"").toLowerCase();
-const stateIc=id=>have.has(id)?I.dldone:dling.has(id)?I.dling:I.dl;
 const likeIc=id=>likes.has(id)?I.added:I.add;
-const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${have.has(s.id)?"":"nd"} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button><button class="hb dl ${have.has(s.id)?"on":""}" data-dl="${s.id}" title="${have.has(s.id)?"Downloaded":"Download to play"}">${stateIc(s.id)}</button><button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
+const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button><button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
 const topRows=l=>{topShown=l;return `<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Views</span><span></span><span class="dur">${I.clock}</span></div>`+l.map((s,i)=>rowHTML(s,i).replace(/<span class="da">.*?<\/span>/,`<span class="da">${vtxt(viewsOf(s))}</span>`).replace('<div class="row ','<div data-top="1" class="row ').replace('<div class="tw">',`<div class="tw" data-v="${vtxt(viewsOf(s))}">`)).join("")};
-const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+list.map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
-const songCards=l=>`<div class="grid">${l.map(s=>`<div class="card ${have.has(s.id)?"":"nd"}" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<button class="hb dl cdl ${have.has(s.id)?"on":""}" data-dl="${s.id}" title="${have.has(s.id)?"Downloaded":"Download to play"}">${stateIc(s.id)}</button><div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
+const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+(opt.lim?list.slice(0,opt.lim):list).map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
+const songCards=l=>`<div class="grid">${l.map(s=>`<div class="card" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const plCards=l=>`<div class="grid">${l.map(p=>`<div class="card" data-pl="${p.id}">${art(p.coverUrl)}<div class="t">${esc(p.name)}</div><div class="s">By ${esc(uname(p.ownerId))}</div><button class="pp" data-playpl="${p.id}" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const artistCards=l=>`<div class="grid">${l.map(a=>`<div class="card" data-artist="${esc(a.name)}">${initials(a.name)}<div class="t">${esc(a.name)}</div><div class="s">Artist • ${a.n} song${a.n==1?"":"s"}</div></div>`).join("")}</div>`;
 const plSongs=p=>(p.songIds||[]).map(song).filter(Boolean);
 const hero=(type,title,meta,a,desc,cls="")=>`<div class="hero ${cls}">${a}<div style="min-width:0"><div class="ty">${type}</div><h1>${title}</h1>${desc?`<div class="ds">${desc}</div>`:""}<div class="meta">${meta}</div></div></div>`;
 const sum=l=>`${l.length} song${l.length==1?"":"s"}${l.length?", "+fmtLong(l.reduce((a,s)=>a+(s.duration||0),0)):""}`;
-const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button><button class="ib sm2" id="dlall" title="Download all">${I.dl}</button>${x}${["all","pl","liked"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
+const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button>${x}${["all","pl","liked"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
 const viewKey=()=>view.t+":"+(view.id||view.name||"");
 const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
 const setHc=c=>$("#mainbox").style.setProperty("--hc",c||"#535353");
@@ -935,11 +933,11 @@ function render(){
   sr();$("#mainbox").classList.add("plain");return;
  }else if(v.t=="liked"){
   const l=songs.filter(s=>likes.has(s.id));setHc("#4a3fb5");hdrh=hdrFor("Liked Songs");
-  h=hero("Playlist","Liked Songs",`${avatar(users[me.uid])}<b>${esc(uname(me.uid))}</b><span class="dim">• ${sum(l)}</span>`,`<div class="art liked">${F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div>`)+barH()+rows(l,{empty:"Songs you like will appear here. Use the + next to any song."});
+  h=hero("Playlist","Liked Songs",`${avatar(users[me.uid])}<b>${esc(uname(me.uid))}</b><span class="dim">• ${sum(l)}</span>`,`<div class="art liked">${F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div>`)+barH()+rows(l,{empty:"Songs you like will appear here. Use the + next to any song.",lim:v.n||10});
  }else if(v.t=="pl"){
   const p=pls.find(x=>x.id==v.id);if(!p){view={t:"home"};return render()}
   const l=plSongs(p),o=p.ownerId===me.uid;hdrh=hdrFor(p.name);domColor(p.coverUrl,c=>{if(view.id==p.id)setHc(c)});
-  h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
+  h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{lim:v.n||10,empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
@@ -972,12 +970,17 @@ function render(){
  const w=(id,f)=>{const e=$("#"+id);if(e)e.onclick=f};
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>signOut(auth));
  w("plmore",e=>plMenu(e,pls.find(x=>x.id==v.id)));
- const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);w("dlall",()=>downloadAll(shown));
+ const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);
  hdr.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){view={...view,f:c.dataset.hf};homeN=60;render()}};
  updNav();playerUI(1);
  if(v.t=="user")loadFollowers(v.id);
+ if(v.t=="pl"||v.t=="liked")fillMore();
 }
 let srMore=false;
+/* playlists and Liked Songs render 10 rows at a time and add 10 more as you scroll to the bottom */
+function appendRows(a,b){const html=shown.slice(a,b).map((x,k)=>rowHTML(x,a+k)).join(""),sb=document.querySelector("#main .selbar");sb?sb.insertAdjacentHTML("beforebegin",html):$("#main").insertAdjacentHTML("beforeend",html)}
+function moreRows(){const n=view.n||10;if(n>=shown.length)return false;view.n=n+10;appendRows(n,view.n);return true}
+function fillMore(){const mb=$("#mainbox");let i=0;while(i++<6&&mb.scrollHeight<=mb.clientHeight+300&&moreRows());}
 function sr(){
  const q=(view.q||"").toLowerCase().trim(),el=$("#sr");if(!el)return;
  if(!q){const ar=[...allArtists().values()].sort((a,b)=>b.n-a.n).slice(0,12);return el.innerHTML=`<div class="sec" style="margin-top:12px"><h2>Search</h2></div><div class="empty" style="padding:24px 0">Find songs, artists, playlists and people.</div>`+(ar.length?`<div class="sec"><h2>Browse artists</h2></div>`+artistCards(ar):"")}
@@ -1003,7 +1006,6 @@ function mainClick(e){
  const fl=t.closest("[data-follow]");if(fl)return toggleFollow(fl.dataset.follow);
  const hf=t.closest("[data-hf]");if(hf){view={...view,f:hf.dataset.hf};homeN=60;return render()}
  const sg=t.closest("[data-go]");if(sg)return go({t:sg.dataset.go});
- const dl=t.closest("[data-dl]");if(dl)return download(dl.dataset.dl);
  const lk=t.closest("[data-like]");if(lk)return toggleLike(lk.dataset.like);
  const ppl=t.closest("[data-playpl]");if(ppl){e.stopPropagation();const p=pls.find(x=>x.id==ppl.dataset.playpl);ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;return playFirst(plSongs(p))}
  const ar=t.closest("[data-artist]");if(ar)return go({t:"artist",name:ar.dataset.artist});
@@ -1032,8 +1034,7 @@ function menu(x,y,items,w){
 }
 function songMenu(e,s,ax,ay){
  if(!s)return;const x=ax??e.clientX,y=ay??e.clientY;const o=mine(s),inPl=view.t=="pl"&&pls.find(p=>p.id==view.id&&p.ownerId==me.uid);
- const items=[[have.has(s.id)?I.trash+"Remove download":I.dl+"Download",()=>have.has(s.id)?undownload(s.id):download(s.id)],
- [I.qnext+"Play next",()=>{if(qi<0)return toast("Play something first");queue.splice(qi+1,0,s.id);toast("Playing next");renderPanel()}],
+ const items=[[I.qnext+"Play next",()=>{if(qi<0)return toast("Play something first");queue.splice(qi+1,0,s.id);toast("Playing next");renderPanel()}],
  [I.queueadd+"Add to queue",()=>{queue.push(s.id);toast("Added to queue");renderPanel()}],
  [(likes.has(s.id)?I.check:I.add)+(likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"),()=>toggleLike(s.id)],
  [`${I.plus}Add to playlist<span style="margin-left:auto">${I.chev}</span>`,()=>addToPlaylistMenu(x,y,s),"",1],"-"];
@@ -1051,7 +1052,7 @@ function addToPlaylistMenu(x,y,s){
 }
 function plMenu(e,p){
  if(!p)return;const r=e.currentTarget?.getBoundingClientRect?.();const x=e.clientX||r?.left,y=e.clientY||r?.bottom;
- const it=[[I.play+"Play",()=>{ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;playFirst(plSongs(p))}],[I.dl+"Download all",()=>downloadAll(plSongs(p))]];
+ const it=[[I.play+"Play",()=>{ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;playFirst(plSongs(p))}]];
  if(p.ownerId==me.uid)it.push("-",[I.share+((p.sharedWith||[]).length?`Shared with ${(p.sharedWith||[]).length} • manage`:"Share with followers"),()=>sharePl(p)],[(p.public?I.lock+"Make private":I.globe+"Make public"),()=>plUpdate(p,{public:!p.public})],[I.pen+"Edit details",()=>editPl(p)],[I.trash+"Delete playlist",()=>delPl(p),"x"]);
  menu(x,y,it);
 }
@@ -1064,7 +1065,7 @@ function selBarHTML(){
  if(!selOk())return"";
  const n=sel.size,allMine=n>0&&[...sel].every(id=>{const x=song(id);return x&&mine(x)}),p=view.t=="pl"?pls.find(x=>x.id==view.id):null,canRm=view.t=="liked"||(p&&p.ownerId==me.uid),tot=selList().length;
  const b=(a,ic,t,x="")=>`<button class="sb2 ${x}" data-sel="${a}" ${n||a=="all"||a=="done"?"":"disabled"}>${ic}<span>${t}</span></button>`;
- return `<div class="selbar"><b class="sc">${n?n+" selected":"Select songs"}</b>${b("all",I.check,n&&n>=tot?"None":"All")}${b("pl",I.plus,"Add to playlist")}${canRm?b("rm",I.trash,"Remove","x"):""}${b("like",I.add,"Like")}${b("q",I.queueadd,"Queue")}${b("dl",I.dl,"Download")}${allMine?b("delall",I.trash,"Delete all","x"):""}${b("done",I.x,"Done")}</div>`}
+ return `<div class="selbar"><b class="sc">${n?n+" selected":"Select songs"}</b>${b("all",I.check,n&&n>=tot?"None":"All")}${b("pl",I.plus,"Add to playlist")}${canRm?b("rm",I.trash,"Remove","x"):""}${b("like",I.add,"Like")}${b("q",I.queueadd,"Queue")}${allMine?b("delall",I.trash,"Delete all","x"):""}${b("done",I.x,"Done")}</div>`}
 function updSelBar(){const b=document.querySelector(".selbar");if(b)b.outerHTML=selBarHTML()}
 function toggleSel(id){if(!id)return;sel.has(id)?sel.delete(id):sel.add(id);const r=document.querySelector(`.row[data-id="${id}"]`);if(r){r.classList.toggle("selected",sel.has(id));r.querySelector(".ck")?.classList.toggle("on",sel.has(id))}updSelBar()}
 async function plAddMany(p,ids){
@@ -1082,9 +1083,8 @@ async function selAction(a,e){
  if(a=="all"){const l=selList();if(l.length&&sel.size>=l.length)sel.clear();else l.forEach(s=>sel.add(s.id));return render()}
  const ss=[...sel].map(song).filter(Boolean),ids=ss.map(s=>s.id);if(!ids.length)return;
  try{
-  if(a=="q"){const d=ids.filter(id=>have.has(id));if(!d.length)return toast("Download these songs first");queue.push(...d);panelSig="";renderPanel();toast(`Added ${d.length} to queue`)}
+  if(a=="q"){queue.push(...ids);panelSig="";renderPanel();toast(`Added ${ids.length} to queue`)}
   else if(a=="like"){const n=ids.filter(id=>!likes.has(id));await Promise.all(n.map(id=>setDoc(doc(db,"users",me.uid,"likes",id),{at:serverTimestamp()})));toast(n.length?`Saved ${n.length} to Liked Songs`:"Already in Liked Songs")}
-  else if(a=="dl"){await downloadAll(ss)}
   else if(a=="delall"){const own=ss.filter(mine);if(!own.length||own.length!=ss.length)return toast("You can only delete songs you own");
    if(!await confirmBox(`Delete ${own.length} song${own.length==1?"":"s"}?`,`${own.length==1?"This song":"These "+own.length+" songs"} will be permanently removed from the server for everyone. This can't be undone.`,"Delete all"))return;
    toast(`Deleting ${own.length} song${own.length==1?"":"s"}…`,1);const n=await delSongsBulk(own);toast(`Deleted ${n} song${n==1?"":"s"}`)}
@@ -1223,8 +1223,7 @@ async function doUpload(list,o,prog){
    const ext=file.name.split(".").pop().toLowerCase(),N=Math.ceil(file.size/CH),r=doc(db,"songs",crypto.randomUUID());
    await setDoc(r,{uuid:r.id,title:clean((todo.length==1&&o.title)||clean(file.name).replace(/\.[^.]+$/,"")),key:keyOf(file.name),ownerId:me.uid,artists,artist:artists.join(", "),explicit:!!o.explicit,coverUrl:cu,duration:d,size:file.size,mime:file.type||MIME[ext]||"audio/mpeg",chunkCount:N,ready:false,createdAt:serverTimestamp()});
    for(let i=0;i<N;i+=3)await Promise.all([...Array(Math.min(3,N-i))].map((_,k)=>{const j=i+k;return b64(file.slice(j*CH,(j+1)*CH)).then(data=>setDoc(doc(db,"songs",r.id,"chunks",String(j).padStart(4,"0")),{i:j,data}))}));
-   await tx("readwrite",x=>x.put(file,r.id));have.add(r.id);
-   await updateDoc(r,{ready:true});idOf.set(file,r.id);done++;
+      await updateDoc(r,{ready:true});idOf.set(file,r.id);done++;
   }catch(e){fail++;console.error(file.name,e)}
   prog(++n,todo.length);
  });
@@ -1267,13 +1266,13 @@ function editSong(s){
 async function delSongsBulk(list){
  if(list.some(s=>s.id==queue[qi])){audio.pause();audio.removeAttribute("src");queue=[];qi=-1}
  let n=0;
- await pool(list,4,async s=>{try{const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));await tx("readwrite",x=>x.delete(s.id));have.delete(s.id);n++}catch(e){console.error(s.title,e)}});
+ await pool(list,4,async s=>{try{const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));mem.delete(s.id);n++}catch(e){console.error(s.title,e)}});
  playerUI();return n}
 async function delSong(s){
  if(!await confirmBox("Delete song?",`"${esc(s.title)}" will be removed for everyone. This can't be undone.`))return;
  if(queue[qi]==s.id){audio.pause();audio.removeAttribute("src");queue=[];qi=-1}
  if(!mine(s))await setDoc(doc(db,"users",s.ownerId,"notifications",`${me.uid}_del_${s.id}`),{type:"removed",fromUid:me.uid,songId:s.id,songTitle:s.title,read:false,createdAt:serverTimestamp()}).catch(()=>{});
- const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));await tx("readwrite",x=>x.delete(s.id));have.delete(s.id);playerUI();toast("Song deleted");
+ const cs=await getDocs(collection(db,"songs",s.id,"chunks"));await Promise.all(cs.docs.map(d=>deleteDoc(d.ref)));await deleteDoc(doc(db,"songs",s.id));mem.delete(s.id);playerUI();toast("Song deleted");
 }
 function newPlaylist(addId){
  form("Create playlist",[{type:"cover"},{label:"Name",value:"My playlist #"+(pls.filter(p=>p.ownerId==me.uid).length+1)},{label:"Description",type:"textarea",ph:"Add an optional description"},{type:"check",label:"Public playlist",sub:"Anyone signed in can open it"}],"Create",async([c,n,dsc,pub])=>{
@@ -1438,24 +1437,26 @@ function loadFollowers(id){
 
 /* ---------- player ---------- */
 let pt,ctxKey="";const savePrefs=()=>{clearTimeout(pt);pt=setTimeout(()=>updateDoc(doc(db,"users",me.uid),{prefs:{shuffle,repeat,vol:audio.volume}}).catch(()=>{}),600)};
-function playFrom(list,i){const s=list[i];if(!s)return;if(!have.has(s.id))return toast("Download this song first (the arrow icon)");queue=list.filter(x=>have.has(x.id)).map(x=>x.id);qi=queue.indexOf(s.id);if(shuffle)shuffleUpcoming();ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;loadCur()}
-function playFirst(l){const d=l.filter(s=>have.has(s.id));d.length?playFrom(d,0):toast("Download songs first (the arrow icon)")}
+const rndI=n=>Math.floor(Math.random()*n);
+function playFrom(list,i){const s=list[i];if(!s)return;
+ if(shuffle){queue=[s.id,...list.filter(x=>x.id!=s.id).map(x=>x.id)];qi=0;shuffleUpcoming()}
+ else{queue=list.map(x=>x.id);qi=i}
+ ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;loadCur()}
+/* play button: with shuffle on it starts on a random song instead of the first one */
+function playFirst(l){if(!l.length)return toast("Nothing to play here yet");playFrom(l,shuffle?rndI(l.length):0)}
 function togglePlay(){if(audio.src)audio.paused?audio.play():audio.pause();else playFirst(shown.length?shown:songs)}
 function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Math.floor(Math.random()*(i-qi));[queue[i],queue[j]]=[queue[j],queue[i]]}}
 function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI();savePrefs()}
-let cur=null;
-async function loadCur(){const s=song(queue[qi]);if(!s)return;
- if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;let b;try{b=await getBlob(s.id)}catch(e){return toast("Couldn't load this song: "+e.message)}
- have.add(s.id);
- if(cur)URL.revokeObjectURL(cur);cur=URL.createObjectURL(b);audio.src=cur;audio.play().catch(()=>{});countView(s.id);mediaMeta(s);playerUI();renderPanel()}
-async function download(id,quiet){const s=song(id);if(!s||have.has(id)||dling.has(id))return;dling.add(id);render();
- try{const b=await fetchSongBlob(id);mem.set(id,b);
-  try{await tx("readwrite",x=>x.put(b,id))}catch(e){console.warn("IndexedDB save failed, keeping in memory",e)}
-  have.add(id);quiet||toast("Downloaded "+s.title)}
- catch(e){toast("Download failed: "+e.message)}finally{dling.delete(id);render()}}
-async function downloadAll(l){const t=l.filter(s=>!have.has(s.id));if(!t.length)return toast("Everything here is already downloaded");
- for(let k=0;k<t.length;k++){toast(`Downloading ${k+1}/${t.length}…`,1);await download(t[k].id,1)}toast("Downloaded "+t.length+" songs")}
-async function undownload(id){mem.delete(id);await tx("readwrite",x=>x.delete(id)).catch(()=>{});have.delete(id);if(queue[qi]==id)audio.pause();render();toast("Removed from this device")}
+let cur=null,loadTok=0;
+async function loadCur(){const s=song(queue[qi]);if(!s)return;const tok=++loadTok;
+ if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;
+ const cached=mem.has(s.id);let tt;if(!cached)tt=setTimeout(()=>toast("Loading…",1),350);
+ let b;try{b=await getBlob(s.id)}catch(e){clearTimeout(tt);if(tok==loadTok)toast("Couldn't load this song: "+e.message);return}
+ clearTimeout(tt);if($("#toast").textContent=="Loading…")$("#toast").style.display="none";
+ if(tok!=loadTok)return;
+ const old=cur;cur=URL.createObjectURL(b);audio.src=cur;if(old)URL.revokeObjectURL(old);
+ audio.play().catch(()=>{});countView(s.id);mediaMeta(s);playerUI();renderPanel();
+ if(repeat!=2)prefetch(queue[qi+1])}
 function next(auto){
  if(!queue.length)return;
  if(auto&&repeat==2){countView(curId());audio.currentTime=0;return audio.play()}
@@ -1467,13 +1468,13 @@ function next(auto){
 }
 function prev(){
  if(audio.src&&audio.currentTime>3){audio.currentTime=0;return}
- let pid=null;while(played.length){const c=played.pop();if(song(c)&&have.has(c)){pid=c;break}}
+ let pid=null;while(played.length){const c=played.pop();if(song(c)){pid=c;break}}
  savePlayed();
  if(!pid){if(audio.src)audio.currentTime=0;return}
  if(!queue.length){queue=[pid];qi=0}else if(queue[qi-1]==pid)qi--;else queue.splice(Math.max(qi,0),0,pid);
  skipPush=true;loadCur();
 }
-function playHist(id){if(!have.has(id))return toast("Download this song first (the arrow icon)");if(qi<0||!queue.length){queue=[id];qi=0}else{queue.splice(qi+1,0,id);qi++}loadCur()}
+function playHist(id){if(qi<0||!queue.length){queue=[id];qi=0}else{queue.splice(qi+1,0,id);qi++}loadCur()}
 function markPlaying(){const id=curId(),pl=!audio.paused;document.querySelectorAll(".row").forEach(r=>{const c=r.dataset.id==id;r.classList.toggle("cur",c);r.classList.toggle("playing",c&&pl)})}
 function playerUI(skipPanel){
  if(!built)return;const s=song(curId());
