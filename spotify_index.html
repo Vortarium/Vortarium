@@ -527,6 +527,10 @@ html.phone .lybox .lyl{padding-bottom:22vh}
 .npout{display:flex;align-items:center;gap:8px;margin-top:4px}
 .npout .ib{width:36px;height:36px;color:#b3b3b3}.npout .ib.on{color:#1ed760}
 .npout span{font-size:12px;color:#b3b3b3;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html.phone #player{z-index:5}
+/* the mini-player progress line was also styling the full-screen seek bar (absolute + untouchable); reset it there */
+html.phone .npctl .seek{position:static;left:auto;right:auto;bottom:auto;pointer-events:auto;gap:8px}
+html.phone .npctl .seek span{display:block}
 </style>
 </head>
 <body>
@@ -1549,7 +1553,8 @@ const rndI=n=>Math.floor(Math.random()*n);
 function playFrom(list,i){const s=list[i];if(!s)return;
  if(shuffle){queue=[s.id,...list.filter(x=>x.id!=s.id).map(x=>x.id)];qi=0;shuffleUpcoming()}
  else{queue=list.map(x=>x.id);qi=i}
- ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;loadCur()}
+ ctxKey=viewKey();ctxName=viewTitle();ctxPl=view.t=="pl"?view.id:null;loadCur();
+ if(phone&&!$("#app").classList.contains("npopen"))openNP()}
 /* play button: with shuffle on it starts on a random song instead of the first one */
 function playFirst(l){if(!l.length)return toast("Nothing to play here yet");playFrom(l,shuffle?rndI(l.length):0)}
 function togglePlay(){if(audio.src)audio.paused?audio.play():audio.pause();else playFirst(shown.length?shown:songs)}
@@ -1706,9 +1711,9 @@ function lyTick(){
  if(panel!="ly")return;const s=song(curId()),L=s&&lyr[s.id];if(!L?.lines?.length)return;
  const t=audio.currentTime+.15;let lo=0,hi=L.lines.length-1,i=-1;
  while(lo<=hi){const m=(lo+hi)>>1;if(L.lines[m].t<=t){i=m;lo=m+1}else hi=m-1}
- if(i==lyIdx)return;lyIdx=i;const el=$("#lyl");if(!el)return;
+ if(i==lyIdx)return;lyIdx=i;const el=$("#lyl");if(!el)return;const follow=!lyKeep&&Date.now()-lyUser>20000;lyKeep=false;
  el.querySelector(".ll.on")?.classList.remove("on");const n=el.querySelector(`[data-li="${i}"]`);if(!n)return;
- n.classList.add("on");const rb=$("#lybox")||$("#right .rb");rb.scrollTo({top:n.offsetTop-rb.clientHeight/2+n.clientHeight/2,behavior:"smooth"})}
+ n.classList.add("on");if(!follow)return;const rb=$("#lybox")||$("#right .rb");rb.scrollTo({top:n.offsetTop-rb.clientHeight/2+n.clientHeight/2,behavior:"smooth"})}
 /* Vortarium only: scan every song and look up lyrics for the ones that don't have any yet */
 async function doLyricCheck(prog){
  const ex=new Map();(await getDocs(collection(db,"lyrics"))).forEach(d=>ex.set(d.id,d.data()));
@@ -1726,7 +1731,7 @@ async function doLyricCheck(prog){
  return{found,none,skipped,fail,marked}}
 
 /* ---------- right panel: big player + queue ---------- */
-let panelSig="";
+let panelSig="",lyUser=0,lyKeep=false;
 function renderPanel(){
  const r=$("#right");if(!r)return;const s=song(curId());
  const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,phone,pset.hist,pset.small,songs.length,lyr[s?.id]?.status].join("~");
@@ -1738,8 +1743,9 @@ function renderPanel(){
  const big=s?`${s.coverUrl?`<img class="npcov ${pset.small?"sm":""}" src="${esc(s.coverUrl)}">`:`<div class="npcov ${pset.small?"sm":""}">${I.note}</div>`}
   <div class="npi"><div class="tx"><div class="nt">${esc(s.title)}</div><div class="na">${xb(s)}${A.length?A.map(n=>`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`).join(", "):`<span class="ar" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`}</div><div class="npv">${vtxt(viewsOf(s))} • Uploaded by <span class="ar" data-u="${s.ownerId}" style="cursor:pointer">${esc(uname(s.ownerId))}</span></div></div><button class="hb" id="npsh" title="Copy song info">${I.share}</button><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}" style="width:36px;height:36px">${likeIc(s.id)}</button></div>`
   :`<div class="npcov ${pset.small?"sm":""}">${I.note}</div><div class="noplay" style="padding:18px 0 4px">Pick a song to see it here.</div>`;
- const npctl=`<div class="npctl"><div class="seek"><span id="tc2">0:00</span><input type="range" id="sk2" min="0" max="1000" value="0"><span id="td2">0:00</span></div><div class="ctl"><button id="bsh2" title="Shuffle">${I.shuf}</button><button id="bpv2" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp2" title="Play">${I.play}</button><button id="bnx2" class="sk2" title="Next">${I.next}</button><button id="brp2" title="Repeat">${I.rep}</button></div>${phone?`<div class="npout"><button class="ib ${outId?"on":""}" id="bout" title="Speakers and headphones">${I.spk}</button><span id="outlbl">${esc(outLbl)}</span></div>`:""}</div>`;
- r.innerHTML=`${phone&&s&&s.coverUrl?`<img class="npbg" alt="" src="${esc(s.coverUrl)}"><div class="npshade"></div>`:""}<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button><button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
+ const npctl=`<div class="npctl"><div class="seek"><span id="tc2">0:00</span><input type="range" id="sk2" min="0" max="1000" value="0"><span id="td2">0:00</span></div><div class="ctl"><button id="bsh2" title="Shuffle">${I.shuf}</button><button id="bpv2" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp2" title="Play">${I.play}</button><button id="bnx2" class="sk2" title="Next">${I.next}</button><button id="brp2" title="Repeat">${I.rep}</button></div></div>`;
+ const sv0=r.querySelector(".rb"),svTop=sv0?sv0.scrollTop:0,lb0=r.querySelector("#lybox"),lbTop=lb0?lb0.scrollTop:0,sameView=!!sv0&&r.dataset.sid==(s?.id||"")&&r.dataset.pn==panel;
+ r.innerHTML=`${phone&&s&&s.coverUrl?`<img class="npbg" alt="" src="${esc(s.coverUrl)}"><div class="npshade"></div>`:""}<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button>${phone?`<button class="ib ${outId?"on":""}" id="bout" title="${outLbl?"Playing on "+esc(outLbl):"Speakers and headphones"}">${I.spk}</button>`:""}<button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
  <div class="rb">${big}${s?npctl:""}
  <div class="qh" id="qsec" style="display:flex;justify-content:space-between;align-items:center"><span>Next in queue</span>${nxt.length?`<button class="qa" id="qclr">Clear queue</button>`:""}</div>
  ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?"Nothing else is queued up.":"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
@@ -1747,6 +1753,9 @@ function renderPanel(){
  if(panel=="ly"){if(s&&!lyr[s.id])ensureLyrics(s);
   if(phone){const q=r.querySelector("#qsec");q&&q.insertAdjacentHTML("beforebegin",`<div class="lybox" id="lybox">${lyHTML(s)}</div>`)}
   else r.querySelector(".rb").innerHTML=lyHTML(s)+(s?npctl:"");lyIdx=-1}
+ r.dataset.sid=s?.id||"";r.dataset.pn=panel;
+ {const rb=r.querySelector(".rb");if(rb){["pointerdown","wheel","touchmove"].forEach(ev=>rb.addEventListener(ev,()=>{lyUser=Date.now()},{passive:true}));
+  if(sameView){rb.scrollTop=svTop;const lb=r.querySelector("#lybox");if(lb)lb.scrollTop=lbTop;lyKeep=true}}}
  const w=(id,f)=>{const e=r.querySelector("#"+id);if(e)e.onclick=f};
  w("rhl",()=>{panel=panel=="ly"?"np":"ly";panelSig="";renderPanel();playerUI(1)});
  w("lyrescan",()=>{if(s&&lyr[s.id]?.status!="loading")rescanLyrics(s)});
@@ -1777,7 +1786,7 @@ function renderPanel(){
 
 /* ---------- speaker / bluetooth output ---------- */
 let outId="",outLbl="";
-const outSet=(id,l)=>{outId=id;outLbl=l;const b=$("#bout");if(b)b.classList.toggle("on",!!id);const e=$("#outlbl");if(e)e.textContent=l};
+const outSet=(id,l)=>{outId=id;outLbl=l;const b=$("#bout");if(b){b.classList.toggle("on",!!id);b.title=l?"Playing on "+l:"Speakers and headphones"}};
 /* iPhone Safari shows the system AirPlay / Bluetooth picker; Chrome shows its own output list. Browsers can't pair Bluetooth themselves. */
 async function chooseOutput(){
  if(typeof audio.webkitShowPlaybackTargetPicker=="function"){try{audio.webkitShowPlaybackTargetPicker();return}catch{}}
@@ -1815,7 +1824,7 @@ function mediaMeta(s){
 (function initMedia(){
  if("mediaSession" in navigator){
   const h=[["play",()=>mediaAct("play")],["pause",()=>mediaAct("pause")],["previoustrack",()=>mediaAct("prev")],["nexttrack",()=>mediaAct("next")],["stop",()=>mediaAct("stop")],
-   ["seekto",d=>{if(audio.duration&&d.seekTime!=null)audio.currentTime=d.seekTime}],["seekbackward",d=>{audio.currentTime=Math.max(0,audio.currentTime-(d.seekOffset||10))}],["seekforward",d=>{audio.currentTime=Math.min(audio.duration||0,audio.currentTime+(d.seekOffset||10))}]];
+   ["seekto",d=>{if(audio.duration&&d.seekTime!=null)audio.currentTime=d.seekTime}],["seekbackward",null],["seekforward",null]];
   h.forEach(([a,f])=>{try{navigator.mediaSession.setActionHandler(a,f)}catch{}});
  }
  const K={MediaPlayPause:"toggle",MediaPlay:"play",MediaPause:"pause",MediaTrackNext:"next",MediaTrackPrevious:"prev",MediaStop:"stop"};
