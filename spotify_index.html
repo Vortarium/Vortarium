@@ -1080,6 +1080,7 @@ function render(){
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
+  domColor(artistPic(nm),c=>{if(c&&view.t=="artist"&&view.name==v.name)setHc(c)});
   h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${vtxt(totalViews(l))} total`,"u")+barH(isMod()?`<button class="pill dark sm" id="arscan">${I.sync}Find picture</button><button class="pill dark sm" id="arup">${I.up}Upload picture</button>${artistPic(nm)?`<button class="pill dark sm" id="arrm">${I.trash}Remove</button>`:""}`:"")+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
  }else if(v.t=="artists"){
   hdrh=`<div class="stick"></div>`;const all=[...allArtists().values()].sort((a,b)=>a.name.localeCompare(b.name));
@@ -1108,7 +1109,7 @@ function render(){
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>signOut(auth));
  w("plmore",e=>plMenu(e,pls.find(x=>x.id==v.id)));
  w("arscanall",scanAllArtists);
- w("arscan",async()=>{const n=curArtist();toast("Looking for a picture…",1);try{toast(await scanArtist(n)?"Picture found":"No exact match found. You can upload one instead.")}catch(e){console.warn(e);toast("Couldn't reach the picture service")}});
+ w("arscan",async()=>{const n=curArtist();toast("Looking for a picture…",1);try{toast(await scanArtist(n)?"Picture found":"No exact match found. You can upload one instead.")}catch(e){console.warn(e);toast("Couldn't reach the picture service ("+(e.message||"unknown error")+")")}});
  w("arup",()=>pickArtistPic(curArtist()));
  w("arrm",async()=>{const n=curArtist();if(await confirmBox("Remove picture","Remove this artist's picture?","Remove"))deleteDoc(doc(db,"artists",akey(n))).catch(()=>toast("Couldn't remove it"))});
  const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);
@@ -1130,8 +1131,8 @@ function sr(){
  const ar=[...allArtists().values()].filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>b.n-a.n);
  const p=pls.filter(x=>x.name.toLowerCase().includes(q)),qu=q.replace(/^@/,""),u=Object.values(users).filter(x=>qu&&((x.displayName||"").toLowerCase().includes(qu)||(x.username||"").toLowerCase().includes(qu))).sort((a,b)=>{const sc=x=>(x.username||"").toLowerCase()==qu||(x.displayName||"").toLowerCase()==qu?0:(x.username||"").toLowerCase().startsWith(qu)||(x.displayName||"").toLowerCase().startsWith(qu)?1:2;return sc(a)-sc(b)});
  const f=view.f||"all",n=view.n||10;srMore=false;
- /* All tab: 10 songs and 6 of everything else, with a More button that opens that section. Other tabs load 10 more on scroll. */
-const lim=(arr,key)=>{if(f=="all"){const c=key=="songs"?10:6;return arr.slice(0,c)}if(f!=key)return[];if(arr.length>n)srMore=true;return arr.slice(0,n)};
+ /* All tab: 10 songs and 6 of everything else, with a More button that opens that section. The other tabs show every result. */
+const lim=(arr,key)=>{if(f=="all"){const c=key=="songs"?10:6;return arr.slice(0,c)}if(f!=key)return[];return arr};
 const more=(arr,key)=>f=="all"&&arr.length>(key=="songs"?10:6)?`<button class="pill dark sm" data-sf="${key}" style="margin-left:auto">More</button>`:"";
 const sec=(t,arr,key,first)=>`<div class="sec" ${first?'style="margin-top:12px"':""}><h2>${t}</h2>${more(arr,key)}</div>`;
  const sS=lim(s,"songs"),arS=lim(ar,"artists"),uS=lim(u,"users"),pS=lim(p,"playlists");
@@ -1302,7 +1303,7 @@ async function filesFromDrop(dt){
 function uploadModal(startMode="upload"){
  let mode=startMode,files=[],busy=false,finished=false,newPl=null;
  const {m,close}=openModal(`<div class="mh"><h2>Add songs</h2><button class="ib mclose" title="Close">${I.x}</button></div>
- <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button><button data-m="covers">${I.note}Cover check</button>`:""}</div>
+ <div class="seg"><button data-m="upload">${I.up}Upload songs</button><button data-m="playlist">${I.plus}Upload to new playlist</button><button data-m="check">${I.sync}Upload check</button>${isMod()?`<button data-m="lyrics">${I.mic}Lyric check</button><button data-m="covers">${I.note}Cover check</button><button data-m="artists">${I.user}Artist picture check</button>`:""}</div>
  <div class="note" id="nt"></div>
  <div class="note" id="sdn">${I.info}<span>Recommended: download songs from <a href="https://spotdown.org" target="_blank" rel="noopener noreferrer">spotdown.org</a> for the best results. Your own MP3s and other audio files work too, no special file name needed. The <b style="color:#fff">_spotdown.org</b> tag is removed from titles automatically.</span></div>
  <div class="dz" id="dz">${I.up}<b>Drag and drop audio here</b><span>MP3, M4A, FLAC, WAV, OGG, ZIP archives or whole folders</span><div class="btns"><button class="pill sm" id="pf">${I.plus}Choose files</button><button class="pill sm dark" id="pd">${I.folder}Choose folder</button></div><div id="dzs"></div></div>
@@ -1317,19 +1318,20 @@ function uploadModal(startMode="upload"){
  <div class="mf"><span class="msg" id="fmsg"></span><button class="ghost" id="cn">Cancel</button><button class="pill green" id="go" disabled>Upload</button></div>`,"xl",()=>{if(busy)toast("Still working in the background…")});
  const q=s=>m.querySelector(s);
  const chips=chipInput(q("#ach"),[]),cvp=coverPicker(q("#ucv"),"",I.img),plcv=coverPicker(q("#plcv"),"",I.note);
- const goLbl=x=>x=="lyrics"?`${I.mic}Start lyric check`:x=="covers"?`${I.sync}Start cover check`:x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
+ const goLbl=x=>x=="artists"?`${I.sync}Start artist picture check`:x=="lyrics"?`${I.mic}Start lyric check`:x=="covers"?`${I.sync}Start cover check`:x=="check"?`${I.sync}Run upload check`:x=="playlist"?`${I.plus}Upload & create playlist`:`${I.up}Upload`;
  const files_in=document.createElement("input");files_in.type="file";files_in.multiple=true;files_in.accept="audio/*,.zip,application/zip";files_in.hidden=true;
  const dir_in=document.createElement("input");dir_in.type="file";dir_in.multiple=true;dir_in.webkitdirectory=true;dir_in.hidden=true;
  m.append(files_in,dir_in);
  const setMode=x=>{mode=x;m.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.m==x));
   q("#nt").innerHTML=I.info+(x=="check"?`<span><b style="color:#fff">Upload check</b> doesn't upload any audio. Each file is matched by title to songs <i>you</i> already uploaded, and their title, artists and cover are refreshed from the new data. Much faster.</span>`:x=="playlist"?`<span>Uploads the songs like normal, then puts <b style="color:#fff">all of them</b> into a brand new playlist you can name and customize below. Songs that already exist are added to it too instead of being uploaded again.</span>`:`<span>Audio is stored on the server so everyone can listen. Songs with a title that already exists are skipped. Original artists are saved from the file tags.</span>`);
-  const LY=x=="lyrics"||x=="covers";
+  const LY=x=="lyrics"||x=="covers"||x=="artists";
   if(x=="covers")q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Cover check</b> goes through every song that has no cover, looks it up online by title and artist (only confident matches are used) and saves it on the song. Songs that already have a cover are skipped.</span>`;
+  else if(x=="artists")q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Artist picture check</b> goes through every artist that has no picture yet, looks it up online by name (only exact name matches are used) and saves it for everyone. Artists that already have a picture are skipped. Artists with no match can be given a picture by hand on their own page.</span>`;
   else if(LY)q("#nt").innerHTML=I.info+`<span><b style="color:#fff">Lyric check</b> goes through every song that doesn't have lyrics saved yet, looks them up online (with timestamps when available) and saves them on the server for everyone. Songs where nothing is found are marked as having no lyrics. Songs that already have lyrics are skipped.</span>`;
   ["#dz","#sdn","#afld","#cfld"].forEach(k=>q(k).style.display=LY?"none":"");const af=q("#asfld");if(af)af.style.display=x=="upload"||x=="playlist"?"":"none";
   q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
-  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&mode!="covers"&&!n)||busy};
+  const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&mode!="covers"&&mode!="artists"&&!n)||busy};
  const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: names with a number in brackets like (1) are treated as copies`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
@@ -1338,9 +1340,9 @@ function uploadModal(startMode="upload"){
  m.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{if(!busy){setMode(b.dataset.m)}});
  q("#cn").onclick=close;setMode(mode);
  q("#go").onclick=async()=>{
-  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||(mode!="lyrics"&&mode!="covers"&&!files.length))return;busy=true;q("#go").disabled=true;
+  if(finished){close();if(newPl)go({t:"pl",id:newPl});return}if(busy||(mode!="lyrics"&&mode!="covers"&&mode!="artists"&&!files.length))return;busy=true;q("#go").disabled=true;
   const pg=q("#pg"),bar=pg.firstChild,res=q("#res");pg.style.display="block";res.style.display="none";
-  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"||mode=="covers"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
+  const prog=(d,t)=>{bar.style.width=(d/t*100)+"%";const vb=mode=="check"||mode=="lyrics"||mode=="covers"||mode=="artists"?"Checking":"Uploading";q("#go").textContent=`${vb} ${d}/${t}…`;toast(`${vb} ${d}/${t}…`,1)};
   const o={artists:chips.get(),title:q("#ut").value.trim(),cover:cvp.get() instanceof File?cvp.get():null,ft:q("#ct").checked,fa:q("#ca").checked,fc:q("#cc").checked,explicit:q("#cx").checked};
   let html="",asUid=null;
   try{
@@ -1349,6 +1351,9 @@ function uploadModal(startMode="upload"){
    if(mode=="covers"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doCoverCheck(prog);
     html=`<b>${r.found}</b> cover${r.found==1?"":"s"} found • ${r.none} with no match${r.skipped?` • ${r.skipped} already had a cover`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
     toast(`Cover check: ${r.found} found`)}
+   else if(mode=="artists"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doArtistCheck(prog);
+    html=`<b>${r.found}</b> artist picture${r.found==1?"":"s"} found • ${r.none} with no exact match${r.skipped?` • ${r.skipped} already had a picture`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}${r.stopped?" • stopped early: couldn't reach the picture services":""}`;
+    toast(`Artist picture check: ${r.found} found`)}
    else if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
     html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.marked?` • ${r.marked} marked explicit`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
     toast(`Lyric check: ${r.found} found${r.marked?`, ${r.marked} marked explicit`:""}`)}
@@ -1714,13 +1719,25 @@ const artistPic=n=>artistDocs[akey(n)]?.photoUrl||"";
 async function dzArtist(name){await cvGate();const d=await jsonp("https://api.deezer.com/search/artist?"+new URLSearchParams({q:name,limit:"10",output:"jsonp"}),"callback");
  if(d?.error)throw new Error("Deezer: "+(d.error.message||d.error.type||"error"));return d.data||[]}
 async function adbArtist(name){const r=await fetch("https://www.theaudiodb.com/api/v1/json/2/search.php?s="+encodeURIComponent(name));if(!r.ok)throw new Error("AudioDB "+r.status);return(await r.json()).artists||[]}
-/* a wrong face is worse than a letter, so only an exact name match counts (the most popular one if several share the name) */
+/* Wikipedia allows normal browser requests, so it works even when the script-tag lookups are blocked */
+async function wikiArtist(name){
+ const nn=nrm(name),r=await fetch("https://en.wikipedia.org/w/api.php?"+new URLSearchParams({action:"query",list:"search",srsearch:name+" musician OR band OR singer OR rapper",srlimit:"5",format:"json",origin:"*"}));
+ if(!r.ok)throw new Error("Wikipedia "+r.status);
+ for(const h of((await r.json()).query?.search)||[]){
+  if(nrm(h.title.replace(/\s*\([^)]*\)\s*$/,""))!=nn)continue;
+  const s=await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(h.title.replace(/ /g,"_")));if(!s.ok)continue;const d=await s.json();
+  if(d.thumbnail?.source&&/singer|rapper|musician|band|duo|group|DJ|producer|songwriter|vocalist|composer/i.test((d.description||"")+" "+(d.extract||"").slice(0,200)))return d.thumbnail.source}
+ return null}
+/* a wrong face is worse than a letter, so only an exact name match counts (the most popular one if several share the name).
+   Each service is tried in turn; it only counts as unreachable when none of them answered. */
 async function findArtistPic(name){
- const nn=nrm(name);let err=null;
- try{const hit=(await dzArtist(name)).filter(x=>nrm(x.name)==nn&&(x.picture_xl||x.picture_big)&&!/\/artist\/\//.test(x.picture_xl||x.picture_big)).sort((a,b)=>(b.nb_fan||0)-(a.nb_fan||0))[0];
-  if(hit)return{url:hit.picture_xl||hit.picture_big,source:"deezer"}}catch(e){err=e}
- try{const a=(await adbArtist(name)).find(x=>nrm(x.strArtist)==nn&&x.strArtistThumb);if(a)return{url:a.strArtistThumb,source:"theaudiodb"};err=null}catch(e){err=err||e}
- if(err)throw err;return null}
+ const nn=nrm(name);let answered=false,err=null;
+ const srcs=[
+  ["deezer",async()=>{const hit=(await dzArtist(name)).filter(x=>nrm(x.name)==nn&&(x.picture_xl||x.picture_big)&&!/\/artist\/\//.test(x.picture_xl||x.picture_big)).sort((a,b)=>(b.nb_fan||0)-(a.nb_fan||0))[0];return hit?(hit.picture_xl||hit.picture_big):null}],
+  ["theaudiodb",async()=>{const a=(await adbArtist(name)).find(x=>nrm(x.strArtist)==nn&&x.strArtistThumb);return a?a.strArtistThumb:null}],
+  ["wikipedia",()=>wikiArtist(name)]];
+ for(const [source,fn] of srcs){try{const url=await fn();answered=true;if(url)return{url,source}}catch(e){console.warn("artist picture source failed:",source,e);err=err||e}}
+ if(!answered)throw err||new Error("No picture service answered");return null}
 /* saved as a small copy; if the image host blocks reading it, the link is kept instead */
 async function artistData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"a.jpg",{type:b.type||"image/jpeg"}),240)).url}catch{return url}}
 const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,at:Date.now(),by:me.uid});
@@ -1740,6 +1757,12 @@ async function scanAllArtists(){
    try{(await scanArtist(a.name))?f++:none++;cf=0}catch(e){fail++;cf++;console.warn("artist picture",a.name,e);if(cf>=5)break}}}
  finally{arScan=false}
  toast(cf>=5?`Stopped: couldn't reach the picture services (${f} found so far)`:`Done: ${f} found, ${none} not found${fail?`, ${fail} failed`:""}`)}
+async function doArtistCheck(prog){
+ if(!songsFull)throw new Error("Still loading the library, try again in a moment.");
+ const all=[...allArtists().values()],todo=all.filter(a=>!artistPic(a.name)),skipped=all.length-todo.length;let found=0,none=0,fail=0,cf=0,n=0,stopped=false;
+ if(!todo.length)return{found,none,skipped,fail,stopped};prog(0,todo.length);
+ for(const a of todo){try{(await scanArtist(a.name))?found++:none++;cf=0}catch(e){fail++;cf++;console.warn("artist picture",a.name,e);if(cf>=5){stopped=true;break}}prog(++n,todo.length)}
+ return{found,none,skipped,fail,stopped}}
 function pickArtistPic(name){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.onchange=async()=>{const f=inp.files[0];if(!f)return;try{await saveArtistPic(name,(await uploadFile("",f,240)).url,"manual");toast("Picture saved")}catch(e){toast(e.message||"Couldn't save that picture")}};inp.click()}
 const curArtist=()=>view.t=="artist"?(songsBy(view.name).flatMap(artistsOf).find(a=>a.toLowerCase()==view.name.toLowerCase())||view.name):"";
 async function autoCover(s,clear){
