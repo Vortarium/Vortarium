@@ -531,6 +531,19 @@ html.phone #player{z-index:5}
 /* the mini-player progress line was also styling the full-screen seek bar (absolute + untouchable); reset it there */
 html.phone .npctl .seek{position:static;left:auto;right:auto;bottom:auto;pointer-events:auto;gap:8px}
 html.phone .npctl .seek span{display:block}
+/* Daily Mix covers */
+.dmcov{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;margin-bottom:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);background:#282828}
+.dmcov .art{width:100%;height:100%;margin:0;border-radius:0;box-shadow:none;aspect-ratio:auto}
+.dmshade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(0,0,0,.72) 100%)}
+.dmlab{position:absolute;left:12px;bottom:14px;color:#fff;font-weight:900;line-height:1;text-shadow:0 2px 10px rgba(0,0,0,.5)}
+.dmlab span{display:block;font-size:clamp(13px,1.6vw,19px)}.dmlab b{display:block;font-size:clamp(24px,3.4vw,40px);margin-top:3px;letter-spacing:-1px}
+.dmbar{position:absolute;left:0;right:0;bottom:0;height:6px;background:var(--dc)}
+.hero .dmcov{width:232px;height:232px;flex:none;margin:0;border-radius:4px}
+.hero .dmcov .art{width:100%;height:100%}
+.hero .dmcov .dmlab span{font-size:20px}.hero .dmcov .dmlab b{font-size:46px}
+html.phone .hero .dmcov{width:min(62vw,240px);height:min(62vw,240px)}
+html.phone .hero .dmcov .art{width:100%;height:100%}
+.art.round{object-fit:cover}
 </style>
 </head>
 <body>
@@ -698,7 +711,7 @@ let booting=true,bootSide=true,songsFull=false,usersFull=false,bootTok=0,bootT=0
 const loadingView=()=>booting||(!songsFull&&!(view.t=="home"&&(view.f||"all")!="mine"));
 /* many Firestore listeners fire at startup; this merges their renders into one */
 let rfT=0;const refresh=()=>{if(rfT)return;rfT=setTimeout(()=>{rfT=0;if(!me||!built)return;render();playerUI()},30)};
-function startSkel(side){clearTimeout(skelT);skel=true;skelSide=!!side;skelT=setTimeout(()=>{skel=false;skelSide=false;if(built){renderSide();render()}},1000+Math.random()*800)}
+function startSkel(side){clearTimeout(skelT);skel=true;skelSide=!!side;skelT=setTimeout(()=>{skel=false;skelSide=false;if(built){renderSide();render()}},100+Math.random()*400)}
 const skTx=(w,h=12)=>`<div class="sk" style="width:${w};height:${h}px"></div>`;
 const skCard=()=>`<div class="skc"><div class="sk sq"></div>${skTx("80%")}${skTx("55%",10)}</div>`;
 const skRow=()=>`<div class="skr"><div class="sk" style="width:40px;height:40px;flex:none"></div><div style="flex:1">${skTx("45%")}<div style="height:8px"></div>${skTx("25%",10)}</div>${skTx("40px",10)}</div>`;
@@ -795,7 +808,7 @@ onAuthStateChanged(auth,u=>{
  pendSec=0;pendBy={};me=u;unsubs.forEach(f=>f());unsubs=[];audio.pause();
  const tok=++bootTok,live=()=>tok==bootTok;
  clearTimeout(bootT);booting=true;bootSide=true;songsFull=false;usersFull=false;
- if(!u){users={};setSongs([]);pls=[];ownPl=[];pubPl=[];sharedPl=[];ownShared=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
+ if(!u){users={};artistDocs={};setSongs([]);pls=[];ownPl=[];pubPl=[];sharedPl=[];ownShared=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  /* safety net: never leave skeletons up forever if the network is slow or a listener fails */
@@ -809,7 +822,7 @@ onAuthStateChanged(auth,u=>{
    songsFull=true;booting=false;
    if(!s.metadata.fromCache)try{localStorage.setItem("spot_boot_"+u.uid,"1")}catch{}
    if(rmQ.length)delSongsBulk(rmQ);built&&refresh();clearTimeout(cvT);cvT=setTimeout(fillCovers,20000)}));
-  (window.requestIdleCallback||(f=>setTimeout(f,300)))(()=>{if(live())unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))))})};
+  (window.requestIdleCallback||(f=>setTimeout(f,300)))(()=>{if(live())unsubs.push(onSnapshot(collection(db,"artists"),s=>{artistDocs={};s.forEach(d=>artistDocs[d.id]=d.data());built&&refresh()},()=>{}));if(live())unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))))})};
 
  /* small, fast things first: your own profile, your library list, likes, follows, notifications */
  getDoc(doc(db,"users",u.uid)).then(d=>{if(!live()||usersFull)return;if(d.exists()&&d.data().displayName){users[d.id]={id:d.id,...d.data()};upd()}else startFull()}).catch(()=>startFull());
@@ -876,7 +889,7 @@ function buildApp(){
  audio.onvolumechange=volUI;
  $("#bfs").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
  $("#bnp").onclick=()=>setPanel("np");$("#bq").onclick=()=>setPanel("q");$("#bly").onclick=()=>setPanel("ly");
- $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="pl"||view.t=="liked")&&m.scrollTop+m.clientHeight>m.scrollHeight-500)moreRows();if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=36;render()}};
+ $("#mainbox").onscroll=e=>{const m=e.target;m.classList.toggle("scrolled",m.scrollTop>230);if(view.t=="search"&&srMore&&m.scrollTop+m.clientHeight>m.scrollHeight-500){view.n=(view.n||10)+10;sr()}if((view.t=="pl"||view.t=="liked"||view.t=="mix"||view.t=="recent")&&m.scrollTop+m.clientHeight>m.scrollHeight-500)moreRows();if((view.t=="home"||view.t=="all")&&homeN<songs.length&&m.scrollTop+m.clientHeight>m.scrollHeight-700){homeN+=36;render()}};
  $("#main").onclick=mainClick;$("#main").oncontextmenu=mainCtx;
  $("#bnav").onclick=e=>{const b=e.target.closest("[data-nav]");if(!b)return;const a=$("#app"),n=b.dataset.nav;
   if(n=="lib"){if(!a.classList.contains("tablib"))startSkel(true);a.classList.add("tablib");a.classList.remove("npopen");renderSide();$("#lib").scrollTop=0;updNav();return}
@@ -923,7 +936,7 @@ function renderTop(){
 }
 const avatar=(u,c="av")=>u?.photoUrl?`<img class="${c}" decoding="async" src="${esc(u.photoUrl)}">`:`<span class="${c}">${esc((u?.displayName||"?")[0].toUpperCase())}</span>`;
 const art=(url,cls="")=>url?`<img class="art ${cls}" draggable="false" loading="lazy" decoding="async" src="${esc(url)}">`:`<div class="art ${cls}">${I.note}</div>`;
-const initials=(n,sz=40)=>`<div class="art round" style="background:#${["3d3d8f","8f3d5e","3d8f6a","8f6a3d","5e3d8f","3d6a8f"][[...n].reduce((a,c)=>a+c.charCodeAt(0),0)%6]};color:#fff;font-weight:900;font-size:${/*sz*/""}40px">${esc(n[0]?.toUpperCase()||"?")}</div>`;
+const initials0=(n,sz=40)=>`<div class="art round" style="background:#${["3d3d8f","8f3d5e","3d8f6a","8f6a3d","5e3d8f","3d6a8f"][[...n].reduce((a,c)=>a+c.charCodeAt(0),0)%6]};color:#fff;font-weight:900;font-size:${/*sz*/""}40px">${esc(n[0]?.toUpperCase()||"?")}</div>`;
 const curId=()=>queue[qi];
 
 function renderSide(){
@@ -958,7 +971,50 @@ const likeIc=id=>likes.has(id)?I.added:I.add;
 const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>${inAnyPl(s.id)?`<button class="hb inpl on" data-pick="${s.id}" title="In your playlists. Click to manage">${I.added}</button>`:""}<button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
 const topRows=l=>{topShown=l;return `<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Views</span><span></span><span class="dur">${I.clock}</span></div>`+l.map((s,i)=>rowHTML(s,i).replace(/<span class="da">.*?<\/span>/,`<span class="da">${vtxt(viewsOf(s))}</span>`).replace('<div class="row ','<div data-top="1" class="row ').replace('<div class="tw">',`<div class="tw" data-v="${vtxt(viewsOf(s))}">`)).join("")};
 const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+(opt.lim?list.slice(0,opt.lim):list).map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
-const songCards=l=>`<div class="grid">${l.map(s=>`<div class="card" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
+/* ---------- listening history + Daily Mix ---------- */
+const dayKey=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const rng=seed=>{let a=0;for(let i=0;i<seed.length;i++)a=(Math.imul(31,a)+seed.charCodeAt(i))|0;return()=>{a=a+0x6D2B79F5|0;let x=Math.imul(a^a>>>15,1|a);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296}};
+const MIXC=["#e8115b","#1ed760","#509bf5"];
+/* how much each song has been listened to: saved listening time (this year + last year) plus the recent play history */
+const listenScores=()=>{const m=new Map(),W=users[me.uid]?.wrapped||{},Y=new Date().getFullYear();[Y,Y-1].forEach((y,k)=>{const sg=W[y]?.songs||{};for(const id in sg)if(song(id))m.set(id,(m.get(id)||0)+sg[id]*(k?.5:1))});played.forEach((id,i)=>{if(song(id))m.set(id,(m.get(id)||0)+20+i*.5)});return m};
+const recentIds=()=>{const out=[],seen=new Set();for(const id of [curId(),...played.slice().reverse()]){if(id&&!seen.has(id)&&song(id)){seen.add(id);out.push(id)}}return out};
+let dmMemo=null;
+/* 3 mixes of 100 songs, created once per day: ~70% songs you've listened to, ~30% unheard songs that are similar (same artists, same uploader, or in the same playlists) */
+function dailyMixes(){
+ if(!songsFull||!songs.length||!me)return null;
+ const day=dayKey(),k=me.uid+day;if(dmMemo&&dmMemo.k==k)return dmMemo.mixes;
+ const ck="spot_dm_"+me.uid;let c=null;try{c=JSON.parse(localStorage.getItem(ck)||"null")}catch{}
+ if(c&&c.day==day&&Array.isArray(c.mixes)&&c.mixes.length&&c.mixes.some(m=>m.ids.some(id=>song(id)))){dmMemo={k,mixes:c.mixes};return c.mixes}
+ const R=rng(k),sc=listenScores(),all=songs.slice(),heard=all.filter(s=>sc.has(s.id)).sort((a,b)=>sc.get(b.id)-sc.get(a.id));
+ const artOf=s=>artistsOf(s).length?artistsOf(s).map(x=>x.toLowerCase()):["~"+s.ownerId];
+ const plMap=new Map();pls.forEach(p=>(p.songIds||[]).forEach(id=>{if(!plMap.has(id))plMap.set(id,[]);plMap.get(id).push(p.id)}));
+ const mkCluster=ss=>{const A=new Set(),O=new Set(),P=new Set();ss.forEach(s=>{artOf(s).forEach(x=>A.add(x));O.add(s.ownerId);(plMap.get(s.id)||[]).forEach(x=>P.add(x))});return s=>(artOf(s).some(x=>A.has(x))?3:0)+(O.has(s.ownerId)?1.2:0)+((plMap.get(s.id)||[]).some(x=>P.has(x))?2:0)};
+ const wpick=(arr,wf)=>{let tot=0;const w=arr.map(x=>{const v=Math.max(1e-4,wf(x));tot+=v;return v});let r=R()*tot;for(let i=0;i<arr.length;i++){r-=w[i];if(r<=0)return arr[i]}return arr[arr.length-1]};
+ const total=Math.min(100,all.length),used=new Set(),seedUsed=new Set(),mixes=[];
+ for(let n=1;n<=3;n++){
+  const p0=heard.filter(s=>!used.has(s.id)),pool=p0.length>=10?p0:heard;
+  let sd=(pool.length?pool.slice(0,30):all).filter(s=>!seedUsed.has(s.id));if(!sd.length)sd=all;
+  const seed=wpick(sd,s=>Math.sqrt(sc.get(s.id)||1));seedUsed.add(seed.id);
+  const relSeed=mkCluster([seed]),L=Math.min(pool.length,Math.round(total*.7));
+  const lp=pool.map(s=>({s,k:relSeed(s)*2+Math.log(1+(sc.get(s.id)||0))+R()*2})).sort((a,b)=>b.k-a.k).slice(0,L).map(x=>x.s);
+  const picks=new Set(lp.map(s=>s.id));picks.add(seed.id);
+  const relC=mkCluster([seed,...lp.slice(0,25)]);
+  const rec=all.filter(s=>!picks.has(s.id)).map(s=>({s,k:relC(s)+R()*1.5+(sc.has(s.id)?-2:0)+(used.has(s.id)?-4:0)})).sort((a,b)=>b.k-a.k).slice(0,Math.max(0,total-picks.size)).map(x=>x.s.id);
+  const ids=[...picks,...rec].slice(0,total);
+  for(let i=ids.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}
+  ids.forEach(id=>used.add(id));mixes.push({n,seed:seed.id,ids})}
+ dmMemo={k,mixes};try{localStorage.setItem(ck,JSON.stringify({day,mixes}))}catch{}
+ return mixes}
+const mixSongs=n=>{const mx=dailyMixes(),m=mx&&mx.find(x=>x.n==n);if(!m)return{list:[],cover:"",artists:"",seed:null};
+ const list=m.ids.map(song).filter(Boolean),cnt=new Map();list.forEach(s=>(artistsOf(s).length?artistsOf(s):[uname(s.ownerId)]).forEach(a=>cnt.set(a,(cnt.get(a)||0)+1)));
+ const top=[...cnt].sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+ return{list,seed:song(m.seed),cover:song(m.seed)?.coverUrl||list.find(s=>s.coverUrl)?.coverUrl||"",artists:top.length?top.join(", ")+" and more":""}};
+const dmCover=(n,cv)=>`<div class="dmcov" style="--dc:${MIXC[n-1]||"#1ed760"}">${art(cv)}<div class="dmshade"></div><div class="dmlab"><span>Daily Mix</span><b>0${n}</b></div><i class="dmbar"></i></div>`;
+const dmSection=()=>{if(!songs.length)return"";const mx=dailyMixes();
+ if(!mx)return`<div class="sec"><h2>Daily Mix</h2></div><div class="grid">${[0,1,2].map(()=>`<div class="card"><div class="sk" style="aspect-ratio:1;border-radius:6px;margin-bottom:12px"></div></div>`).join("")}</div>`;
+ return`<div class="sec"><h2>Daily Mix</h2></div><div class="grid">${mx.map(m=>{const x=mixSongs(m.n);return`<div class="card" data-mix="${m.n}">${dmCover(m.n,x.cover)}<div class="t">Daily Mix ${m.n}</div><div class="s">${esc(x.artists)}</div><button class="pp" data-playmix="${m.n}" title="Play">${I.play}</button></div>`}).join("")}</div>`};
+const initials=(n,sz)=>{const p=artistPic(n);return p?`<img class="art round" draggable="false" loading="lazy" decoding="async" alt="" src="${esc(p)}">`:initials0(n,sz)};
+const songCards=(l,tag)=>`<div class="grid"${tag?` data-list="${tag}"`:""}>${l.map(s=>`<div class="card" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const plCards=l=>`<div class="grid">${l.map(p=>`<div class="card" data-pl="${p.id}">${art(p.coverUrl)}<div class="t">${esc(p.name)}</div><div class="s">By ${esc(uname(p.ownerId))}</div><button class="pp" data-playpl="${p.id}" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const artistCards=l=>`<div class="grid">${l.map(a=>`<div class="card" data-artist="${esc(a.name)}">${initials(a.name)}<div class="t">${esc(a.name)}</div><div class="s">Artist • ${a.n} song${a.n==1?"":"s"}</div></div>`).join("")}</div>`;
 const plSongs=p=>(p.songIds||[]).map(song).filter(Boolean);
@@ -966,7 +1022,7 @@ const hero=(type,title,meta,a,desc,cls="")=>`<div class="hero ${cls}">${a}<div s
 const sum=l=>`${l.length} song${l.length==1?"":"s"}${l.length?", "+fmtLong(l.reduce((a,s)=>a+(s.duration||0),0)):""}`;
 const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button>${x}${["all","pl","liked","user"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
 const viewKey=()=>view.t+":"+(view.id||view.name||"");
-const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
+const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",mix:"Daily Mix "+view.id,recent:"Recently played",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
 const setHc=c=>$("#mainbox").style.setProperty("--hc",c||"#535353");
 const hdrFor=title=>`<div class="stick"></div><div class="hp"><button class="big" id="hdrplay" title="Play">${I.play}</button><b>${esc(title)}</b></div>`;
 
@@ -985,11 +1041,14 @@ function render(){
    const tiles=[`<div class="qt" data-k="liked"><div class="art liked">${F('<path d="M12 21s-8-5.3-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.7-8 11-8 11z"/>')}</div><b>Liked Songs</b></div>`,...pls.slice(0,7).map(p=>`<div class="qt" data-pl="${p.id}">${art(p.coverUrl)}<b>${esc(p.name)}</b><button class="qp" data-playpl="${p.id}" title="Play">${I.play}</button></div>`)];
    shown=songs;
    const ar=[...allArtists().values()].sort((a,b)=>b.n-a.n).slice(0,8);
+   const rec=recentIds().map(song).filter(Boolean);
    h=`<div class="quick">${tiles.join("")}</div>`+
-    (songs.length?`<div class="sec"><h2>Recently added</h2><button data-go="all">Show all</button></div>`+songCards(songs.slice(0,8)):"")+
-    (pls.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pls.slice(0,8)):"")+
+    (pls.length>7?`<div class="sec"><h2>More playlists</h2><button data-hf="playlists">Show all</button></div>`+plCards(pls.slice(7,15)):"")+
+    dmSection()+
+    (rec.length?`<div class="sec"><h2>Recently played</h2><button data-go="recent">View more</button></div>`+songCards(rec.slice(0,8),"recent"):"")+
     (ar.length?`<div class="sec"><h2>Artists</h2><button data-go="artists">Show all</button></div>`+artistCards(ar):"")+
-    (myS.length?`<div class="sec"><h2>Your uploads</h2><button data-hf="mine">Show all</button></div>`+songCards(myS.slice(0,8)):"");
+    (myS.length?`<div class="sec"><h2>Your uploads</h2><button data-hf="mine">Show all</button></div>`+songCards(myS.slice(0,8)):"")+
+    (songs.length?`<div class="sec"><h2>Recently added</h2><button data-go="all">Show all</button></div>`+songCards(songs.slice(0,8)):"");
   }else if(f=="songs"){shown=songs;h=`<div class="sec"><h2>Songs</h2><span style="color:#b3b3b3">${songs.length} total</span></div>`+songCards(songs.slice(0,homeN))}
   else if(f=="playlists")h=`<div class="sec"><h2>Playlists</h2></div>`+(pls.length?plCards(pls):`<div class="empty">No playlists yet. Use the + in Your Library to create one.</div>`);
   else{shown=myS;h=`<div class="sec"><h2>My uploads</h2><span style="color:#b3b3b3">${myS.length} songs</span></div>`+(myS.length?songCards(myS):`<div class="empty">You haven't uploaded anything yet.<br><button class="pill green" id="e1">${I.up}Upload songs</button></div>`)}
@@ -1007,6 +1066,13 @@ function render(){
   const p=pls.find(x=>x.id==v.id);if(!p){view={t:"home"};return render()}
   const l=plSongs(p),o=p.ownerId===me.uid;hdrh=hdrFor(p.name);domColor(p.coverUrl,c=>{if(view.id==p.id)setHc(c)});
   h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{lim:v.n||10,empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
+ }else if(v.t=="mix"){
+  const mx=mixSongs(+v.id),l=mx.list;if(!l.length){view={t:"home"};return render()}
+  setHc(MIXC[v.id-1]||"#535353");hdrh=hdrFor("Daily Mix "+v.id);
+  h=hero("Made for "+esc(uname(me.uid)),"Daily Mix "+v.id,`<span class="dim">${sum(l)}</span>`,dmCover(+v.id,mx.cover),esc(mx.artists))+barH()+rows(l,{lim:v.n||10,empty:"Nothing here yet."});
+ }else if(v.t=="recent"){
+  const l=recentIds().map(song).filter(Boolean);setHc("#3a4a6b");hdrh=hdrFor("Recently played");
+  h=hero("History","Recently played",`<span class="dim">${sum(l)}</span>`,`<div class="art">${I.clock}</div>`)+barH()+rows(l,{lim:v.n||10,empty:"Songs you listen to will show up here."});
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
@@ -1014,10 +1080,10 @@ function render(){
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
-  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${vtxt(totalViews(l))} total`,"u")+barH()+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
+  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${vtxt(totalViews(l))} total`,"u")+barH(isMod()?`<button class="pill dark sm" id="arscan">${I.sync}Find picture</button><button class="pill dark sm" id="arup">${I.up}Upload picture</button>${artistPic(nm)?`<button class="pill dark sm" id="arrm">${I.trash}Remove</button>`:""}`:"")+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
  }else if(v.t=="artists"){
   hdrh=`<div class="stick"></div>`;const all=[...allArtists().values()].sort((a,b)=>a.name.localeCompare(b.name));
-  h=`<div class="sec"><h2>Artists</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(all.length?artistCards(all):`<div class="empty">No artists yet.</div>`);
+  h=`<div class="sec"><h2>Artists</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(isMod()&&all.length?`<div style="margin:0 0 14px"><button class="pill dark sm" id="arscanall">${I.sync}Scan all artist pictures</button></div>`:"")+(all.length?artistCards(all):`<div class="empty">No artists yet.</div>`);
  }else if(v.t=="wrapped"&&v.id&&v.id!=me.uid&&!canSeeWrapped(v.id)){
   h=mut[v.id]===undefined&&users[v.id]?.showWrapped&&following.has(v.id)?`<div class="empty"><b>Loading…</b></div>`:`<div class="empty"><b>This Wrapped is private</b>${esc(uname(v.id))} only shares it with followers who follow each other.</div>`;
  }else if(v.t=="wrapped"){
@@ -1041,6 +1107,10 @@ function render(){
  const w=(id,f)=>{const e=$("#"+id);if(e)e.onclick=f};
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>signOut(auth));
  w("plmore",e=>plMenu(e,pls.find(x=>x.id==v.id)));
+ w("arscanall",scanAllArtists);
+ w("arscan",async()=>{const n=curArtist();toast("Looking for a picture…",1);try{toast(await scanArtist(n)?"Picture found":"No exact match found. You can upload one instead.")}catch(e){console.warn(e);toast("Couldn't reach the picture service")}});
+ w("arup",()=>pickArtistPic(curArtist()));
+ w("arrm",async()=>{const n=curArtist();if(await confirmBox("Remove picture","Remove this artist's picture?","Remove"))deleteDoc(doc(db,"artists",akey(n))).catch(()=>toast("Couldn't remove it"))});
  const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);
  hdr.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){view={...view,f:c.dataset.hf};homeN=HN0;render()}};
  updNav();playerUI(1);
@@ -1087,12 +1157,14 @@ function mainClick(e){
  const hf=t.closest("[data-hf]");if(hf){view={...view,f:hf.dataset.hf};homeN=HN0;return render()}
  const sg=t.closest("[data-go]");if(sg)return go({t:sg.dataset.go});
  const lk=t.closest("[data-like]");if(lk)return likeClick(lk.dataset.like,lk);
+ const pmx=t.closest("[data-playmix]");if(pmx){e.stopPropagation();const n=pmx.dataset.playmix;ctxPl=null;ctxKey="mix:"+n;ctxName="Daily Mix "+n;return playFirst(mixSongs(+n).list)}
+ const mcd=t.closest("[data-mix]");if(mcd)return go({t:"mix",id:mcd.dataset.mix});
  const ppl=t.closest("[data-playpl]");if(ppl){e.stopPropagation();const p=pls.find(x=>x.id==ppl.dataset.playpl);ctxPl=p.id;ctxKey="pl:"+p.id;ctxName=p.name;return playFirst(plSongs(p))}
  const ar=t.closest("[data-artist]");if(ar)return go({t:"artist",name:ar.dataset.artist});
  const us=t.closest("[data-u]");if(us)return go({t:"user",id:us.dataset.u});
  const kk=t.closest("[data-k=liked]");if(kk)return go({t:"liked"});
  const row=t.closest(".row");if(row?.dataset.top)return playFrom(topShown,+row.dataset.i);if(row)return playFrom(shown,+row.dataset.i);
- const sc=t.closest("[data-song]");if(sc){const l=shown.length&&shown.some(s=>s.id==sc.dataset.song)?shown:songs;return playFrom(l,l.findIndex(s=>s.id==sc.dataset.song))}
+ const sc=t.closest("[data-song]");if(sc){let l=shown.length&&shown.some(s=>s.id==sc.dataset.song)?shown:songs;if(sc.parentElement?.dataset.list=="recent")l=recentIds().map(song).filter(Boolean);return playFrom(l,l.findIndex(s=>s.id==sc.dataset.song))}
  const pc=t.closest("[data-pl]");if(pc)return go({t:"pl",id:pc.dataset.pl});
 }
 function mainCtx(e){
@@ -1635,6 +1707,41 @@ async function findCover(s){
 async function coverData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"c.jpg",{type:b.type||"image/jpeg"}),400)).url}catch{return url}}
 const cvSig=s=>(s.title||"")+"|"+artistsOf(s).join(",");
 /* looks the cover up and saves it on the song. clear: remove an old auto cover when nothing matches the new name */
+/* ---------- artist pictures (saved in the "artists" collection; only the Vortarium account can change them) ---------- */
+let artistDocs={};
+const akey=n=>{const k=nrm(n).replace(/ /g,"_");return k||"x"+[...String(n)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)};
+const artistPic=n=>artistDocs[akey(n)]?.photoUrl||"";
+async function dzArtist(name){await cvGate();const d=await jsonp("https://api.deezer.com/search/artist?"+new URLSearchParams({q:name,limit:"10",output:"jsonp"}),"callback");
+ if(d?.error)throw new Error("Deezer: "+(d.error.message||d.error.type||"error"));return d.data||[]}
+async function adbArtist(name){const r=await fetch("https://www.theaudiodb.com/api/v1/json/2/search.php?s="+encodeURIComponent(name));if(!r.ok)throw new Error("AudioDB "+r.status);return(await r.json()).artists||[]}
+/* a wrong face is worse than a letter, so only an exact name match counts (the most popular one if several share the name) */
+async function findArtistPic(name){
+ const nn=nrm(name);let err=null;
+ try{const hit=(await dzArtist(name)).filter(x=>nrm(x.name)==nn&&(x.picture_xl||x.picture_big)&&!/\/artist\/\//.test(x.picture_xl||x.picture_big)).sort((a,b)=>(b.nb_fan||0)-(a.nb_fan||0))[0];
+  if(hit)return{url:hit.picture_xl||hit.picture_big,source:"deezer"}}catch(e){err=e}
+ try{const a=(await adbArtist(name)).find(x=>nrm(x.strArtist)==nn&&x.strArtistThumb);if(a)return{url:a.strArtistThumb,source:"theaudiodb"};err=null}catch(e){err=err||e}
+ if(err)throw err;return null}
+/* saved as a small copy; if the image host blocks reading it, the link is kept instead */
+async function artistData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"a.jpg",{type:b.type||"image/jpeg"}),240)).url}catch{return url}}
+const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,at:Date.now(),by:me.uid});
+async function scanArtist(name){
+ const f=await findArtistPic(name);
+ if(f){await saveArtistPic(name,await artistData(f.url),f.source);return true}
+ if(!artistPic(name))await setDoc(doc(db,"artists",akey(name)),{name,miss:true,at:Date.now(),by:me.uid});
+ return false}
+let arScan=false;
+async function scanAllArtists(){
+ if(!isMod()||arScan)return;
+ const list=[...allArtists().values()].filter(a=>{const d=artistDocs[akey(a.name)];return!d?.photoUrl&&!(d?.miss&&Date.now()-(d.at||0)<14*864e5)});
+ if(!list.length)return toast("Every artist already has a picture or was checked in the last 2 weeks");
+ if(!await confirmBox("Scan artist pictures",`Look up pictures for ${list.length} artist${list.length==1?"":"s"}? This can take a few minutes. Keep this tab open until it finishes.`,"Scan"))return;
+ arScan=true;let f=0,none=0,fail=0,cf=0,i=0;
+ try{for(const a of list){i++;toast(`Scanning artist pictures… ${i}/${list.length} (${f} found)`,1);
+   try{(await scanArtist(a.name))?f++:none++;cf=0}catch(e){fail++;cf++;console.warn("artist picture",a.name,e);if(cf>=5)break}}}
+ finally{arScan=false}
+ toast(cf>=5?`Stopped: couldn't reach the picture services (${f} found so far)`:`Done: ${f} found, ${none} not found${fail?`, ${fail} failed`:""}`)}
+function pickArtistPic(name){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.onchange=async()=>{const f=inp.files[0];if(!f)return;try{await saveArtistPic(name,(await uploadFile("",f,240)).url,"manual");toast("Picture saved")}catch(e){toast(e.message||"Couldn't save that picture")}};inp.click()}
+const curArtist=()=>view.t=="artist"?(songsBy(view.name).flatMap(artistsOf).find(a=>a.toLowerCase()==view.name.toLowerCase())||view.name):"";
 async function autoCover(s,clear){
  const u=await findCover(s);
  if(u){const cu=await coverData(u);await updateDoc(doc(db,"songs",s.id),{coverUrl:cu,coverAuto:true,coverFor:cvSig(s)});return true}

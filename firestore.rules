@@ -83,6 +83,12 @@ service cloud.firestore {
                                 && get(/databases/$(database)/documents/songs/$(songId)).data.ownerId == request.auth.uid);
     }
 
+    // artist pictures (found online or uploaded by hand): anyone signed in can see them, only the Vortarium moderator can change them
+    match /artists/{artistKey} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isMod();
+    }
+
     match /songs/{songId} {
       allow read: if request.auth != null;
       // the moderator may upload on behalf of another user (ownerId is that user)
