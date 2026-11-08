@@ -1352,7 +1352,7 @@ function uploadModal(startMode="upload"){
     html=`<b>${r.found}</b> cover${r.found==1?"":"s"} found • ${r.none} with no match${r.skipped?` • ${r.skipped} already had a cover`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
     toast(`Cover check: ${r.found} found`)}
    else if(mode=="artists"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doArtistCheck(prog);
-    html=`<b>${r.found}</b> artist picture${r.found==1?"":"s"} found • ${r.none} with no exact match${r.skipped?` • ${r.skipped} already had a picture`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}${r.stopped?" • stopped early: couldn't reach the picture services":""}`;
+    html=`<b>${r.found}</b> artist picture${r.found==1?"":"s"} found • ${r.none} with no exact match${r.skipped?` • ${r.skipped} already had a picture`:""}${r.removed?` • ${r.removed} grey placeholder${r.removed==1?"":"s"} removed (now a letter unless another picture was found)`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}${r.stopped?" • stopped early: couldn't reach the picture services":""}`;
     toast(`Artist picture check: ${r.found} found`)}
    else if(mode=="lyrics"){if(!isMod())throw new Error("Only the Vortarium account can run this.");const r=await doLyricCheck(prog);
     html=`<b>${r.found}</b> song${r.found==1?"":"s"} got lyrics • ${r.none} with no lyrics found${r.skipped?` • ${r.skipped} already had lyrics`:""}${r.marked?` • ${r.marked} marked explicit`:""}${r.fail?` • ${r.fail} failed (run it again)`:""}`;
@@ -1645,11 +1645,37 @@ async function loadCur(){const s=song(queue[qi]);if(!s)return;const tok=++loadTo
  clearTimeout(tt);if($("#toast").textContent=="Loading…")$("#toast").style.display="none";
  if(tok!=loadTok)return;
  const old=cur;cur=URL.createObjectURL(b);audio.src=cur;if(old)URL.revokeObjectURL(old);
- audio.play().catch(()=>{});vwId=s.id;vwSec=0;vwDone=false;mediaMeta(s);playerUI();renderPanel();
+ audio.play().catch(()=>{});vwId=s.id;vwSec=0;vwDone=false;mediaMeta(s);ensureEndless();playerUI();renderPanel();
  if(repeat!=2){prefetch(queue[qi+1]);prefetch(queue[qi+2])}}
+/* ---------- endless queue ----------
+   When fewer than 10 songs are left, songs that fit what was just played are added (same artists, same uploader, same playlists,
+   songs you listen to a lot or like), skipping anything already queued or played recently. Not used with repeat-all, which loops instead. */
+const QMIN=10;
+function recommendNext(n){
+ const recent=[];for(let i=Math.min(qi,queue.length-1);i>=0&&recent.length<12;i--){const s=song(queue[i]);if(s)recent.push(s)}
+ if(!recent.length||!songs.length)return[];
+ const plMap=new Map();pls.forEach(p=>(p.songIds||[]).forEach(id=>{if(!plMap.has(id))plMap.set(id,[]);plMap.get(id).push(p.id)}));
+ const artOf=s=>artistsOf(s).length?artistsOf(s).map(x=>x.toLowerCase()):["~"+s.ownerId];
+ const A=new Map(),O=new Map(),P=new Map(),add=(m,k,w)=>m.set(k,(m.get(k)||0)+w);
+ recent.forEach((s,i)=>{const w=1-i*.07;artOf(s).forEach(x=>add(A,x,w));add(O,s.ownerId,w);(plMap.get(s.id)||[]).forEach(x=>add(P,x,w))});
+ const sc=listenScores(),inQ=new Set(queue),lastIds=new Set([...played.slice(-15),...queue.slice(Math.max(0,qi-8),qi+1)]);
+ const score=s=>{let a=0;artOf(s).forEach(x=>{a=Math.max(a,A.get(x)||0)});let p=0;(plMap.get(s.id)||[]).forEach(x=>{p=Math.max(p,P.get(x)||0)});
+  return Math.min(a,2)*2+Math.min(O.get(s.ownerId)||0,3)*.4+Math.min(p,2)*1.2+Math.log(1+(sc.get(s.id)||0))*.35+(likes.has(s.id)?.8:0)+Math.random()*1.6};
+ let pool=songs.filter(s=>!inQ.has(s.id));if(pool.length<n)pool=songs.filter(s=>!lastIds.has(s.id));
+ const ranked=pool.map(s=>({s,k:score(s)})).sort((a,b)=>b.k-a.k).slice(0,Math.max(n*3,30));
+ const out=[],key=s=>artOf(s)[0];let la=null,lb=null;
+ for(const r of ranked){if(out.length>=n)break;const k=key(r.s);if(k==la&&k==lb)continue;out.push(r.s);lb=la;la=k}
+ for(const r of ranked){if(out.length>=n)break;if(!out.includes(r.s))out.push(r.s)}
+ return out}
+function ensureEndless(force){
+ if(!me||!queue.length||qi<0||repeat==1)return;
+ const ahead=Math.max(0,queue.length-qi-1);if(ahead>=QMIN&&!force)return;
+ const add=recommendNext(QMIN*2-ahead);if(!add.length)return;
+ queue.push(...add.map(s=>s.id));panelSig=""}
 function next(auto){
  if(!queue.length)return;
  if(auto&&repeat==2){vwSec=0;vwDone=false;audio.currentTime=0;return audio.play()}
+ if(qi+1>=queue.length)ensureEndless(true);
  if(qi+1<queue.length)qi++;
  else if(repeat==1){if(shuffle){qi=-1;shuffleUpcoming()}qi=0}
  else if(auto){audio.pause();return playerUI()}
@@ -1730,17 +1756,19 @@ async function wikiArtist(name){
  return null}
 /* a wrong face is worse than a letter, so only an exact name match counts (the most popular one if several share the name).
    Each service is tried in turn; it only counts as unreachable when none of them answered. */
+/* Deezer answers with a grey silhouette when it has no photo of an artist: that is treated as "no picture" */
+const dzDefault=u=>/\/artist\/\/|d41d8cd98f00b204e9800998ecf8427e/.test(u||"");
 async function findArtistPic(name){
  const nn=nrm(name);let answered=false,err=null;
  const srcs=[
-  ["deezer",async()=>{const hit=(await dzArtist(name)).filter(x=>nrm(x.name)==nn&&(x.picture_xl||x.picture_big)&&!/\/artist\/\//.test(x.picture_xl||x.picture_big)).sort((a,b)=>(b.nb_fan||0)-(a.nb_fan||0))[0];return hit?(hit.picture_xl||hit.picture_big):null}],
+  ["deezer",async()=>{const hit=(await dzArtist(name)).filter(x=>nrm(x.name)==nn&&(x.picture_xl||x.picture_big)&&!dzDefault(x.picture_xl||x.picture_big)).sort((a,b)=>(b.nb_fan||0)-(a.nb_fan||0))[0];return hit?(hit.picture_xl||hit.picture_big):null}],
   ["theaudiodb",async()=>{const a=(await adbArtist(name)).find(x=>nrm(x.strArtist)==nn&&x.strArtistThumb);return a?a.strArtistThumb:null}],
   ["wikipedia",()=>wikiArtist(name)]];
  for(const [source,fn] of srcs){try{const url=await fn();answered=true;if(url)return{url,source}}catch(e){console.warn("artist picture source failed:",source,e);err=err||e}}
  if(!answered)throw err||new Error("No picture service answered");return null}
 /* saved as a small copy; if the image host blocks reading it, the link is kept instead */
 async function artistData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"a.jpg",{type:b.type||"image/jpeg"}),240)).url}catch{return url}}
-const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,at:Date.now(),by:me.uid});
+const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,ck:1,at:Date.now(),by:me.uid});
 async function scanArtist(name){
  const f=await findArtistPic(name);
  if(f){await saveArtistPic(name,await artistData(f.url),f.source);return true}
@@ -1759,10 +1787,21 @@ async function scanAllArtists(){
  toast(cf>=5?`Stopped: couldn't reach the picture services (${f} found so far)`:`Done: ${f} found, ${none} not found${fail?`, ${fail} failed`:""}`)}
 async function doArtistCheck(prog){
  if(!songsFull)throw new Error("Still loading the library, try again in a moment.");
- const all=[...allArtists().values()],todo=all.filter(a=>!artistPic(a.name)),skipped=all.length-todo.length;let found=0,none=0,fail=0,cf=0,n=0,stopped=false;
- if(!todo.length)return{found,none,skipped,fail,stopped};prog(0,todo.length);
- for(const a of todo){try{(await scanArtist(a.name))?found++:none++;cf=0}catch(e){fail++;cf++;console.warn("artist picture",a.name,e);if(cf>=5){stopped=true;break}}prog(++n,todo.length)}
- return{found,none,skipped,fail,stopped}}
+ const all=[...allArtists().values()],chk=all.filter(a=>{const d=artistDocs[akey(a.name)];return d?.photoUrl&&d.source=="deezer"&&!d.ck});
+ let todo=all.filter(a=>!artistPic(a.name));const skipped=all.length-todo.length;
+ let found=0,none=0,fail=0,cf=0,n=0,removed=0,stopped=false,tot=chk.length+todo.length;
+ if(!tot)return{found,none,skipped,fail,removed,stopped};prog(0,tot);
+ /* pictures saved earlier may be Deezer's grey "no photo" figure: those are removed so the artist shows a letter again (and gets looked up elsewhere below) */
+ for(const a of chk){
+  try{const nn=nrm(a.name),ex=(await dzArtist(a.name)).filter(x=>nrm(x.name)==nn);
+   if(ex.length&&ex.every(x=>dzDefault(x.picture_xl||x.picture_big))){await deleteDoc(doc(db,"artists",akey(a.name)));removed++;todo.push(a);tot++}
+   else await setDoc(doc(db,"artists",akey(a.name)),{ck:1},{merge:true});cf=0}
+  catch(e){fail++;cf++;console.warn("artist picture check",a.name,e);if(cf>=5){stopped=true;break}}
+  prog(++n,tot)}
+ if(!stopped)for(const a of todo){
+  try{(await scanArtist(a.name))?found++:none++;cf=0}catch(e){fail++;cf++;console.warn("artist picture",a.name,e);if(cf>=5){stopped=true;break}}
+  prog(++n,tot)}
+ return{found,none,skipped:skipped-0,fail,removed,stopped}}
 function pickArtistPic(name){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.onchange=async()=>{const f=inp.files[0];if(!f)return;try{await saveArtistPic(name,(await uploadFile("",f,240)).url,"manual");toast("Picture saved")}catch(e){toast(e.message||"Couldn't save that picture")}};inp.click()}
 const curArtist=()=>view.t=="artist"?(songsBy(view.name).flatMap(artistsOf).find(a=>a.toLowerCase()==view.name.toLowerCase())||view.name):"";
 async function autoCover(s,clear){
@@ -1878,7 +1917,7 @@ function renderPanel(){
  r.innerHTML=`${phone&&s&&s.coverUrl?`<img class="npbg" alt="" src="${esc(s.coverUrl)}"><div class="npshade"></div>`:""}<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button>${phone?`<button class="ib ${outId?"on":""}" id="bout" title="${outLbl?"Playing on "+esc(outLbl):"Speakers and headphones"}">${I.spk}</button>`:""}<button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
  <div class="rb">${big}${s?npctl:""}
  <div class="qh" id="qsec" style="display:flex;justify-content:space-between;align-items:center"><span>Next in queue</span>${nxt.length?`<button class="qa" id="qclr">Clear queue</button>`:""}</div>
- ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?"Nothing else is queued up.":"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
+ ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(repeat!=1?`<div class="noplay" style="padding:10px 0">More songs like these keep playing automatically</div>`:moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?(repeat!=1?"More songs like this are added automatically when this one ends.":"Nothing else is queued up."):"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
  ${pset.hist?`<div class="qh">Recently played</div>${hist.length?hist.map(x=>`<div class="qi" data-hs="${x.id}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div></div>`).join(""):`<div class="noplay" style="padding:12px 0">Nothing yet.</div>`}`:""}</div>`;
  if(panel=="ly"){if(s&&!lyr[s.id])ensureLyrics(s);
   if(phone){const q=r.querySelector("#qsec");q&&q.insertAdjacentHTML("beforebegin",`<div class="lybox" id="lybox">${lyHTML(s)}</div>`)}
