@@ -8,8 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Spotify</title>
-<link rel="icon" type="image/png" href="spotify_favicon.png">
-<link rel="apple-touch-icon" href="spotify_favicon.png">
+<link rel="icon" type="image/x-icon" href="spotify.ico">
+<link rel="shortcut icon" type="image/x-icon" href="spotify.ico">
+<link rel="apple-touch-icon" href="spotify.ico">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -554,7 +555,7 @@ html.phone .hero .dmcov .art{width:100%;height:100%}
 <script type="module">
 import {initializeApp,deleteApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,orderBy,limit,collection,doc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,orderBy,limit,collection,doc,writeBatch,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 /* local cache: after the first visit the library comes straight from IndexedDB and only changes are downloaded */
@@ -673,6 +674,22 @@ const mem=new Map(),pending=new Map(),MEMMAX=8;
    decoded by the browser itself, and kept out of the Firestore disk cache), instead of one slow stream decoded in a JavaScript loop.
    If that ever fails it falls back to the old way. */
 const FS_REST="https://firestore.googleapis.com/v1/projects/"+app.options.projectId+"/databases/(default)/documents";
+/* fast uploads: chunk writes go straight to the Firestore REST commit endpoint over many parallel HTTP requests (bypasses the SDK's single ordered write stream and its local cache) */
+const UP_MAX=16;let upActive=0;const upQ=[];
+const upSlot=()=>new Promise(r=>{if(upActive<UP_MAX){upActive++;r()}else upQ.push(r)});
+const upFree=()=>{const n=upQ.shift();if(n)n();else upActive--};
+const FS_NAME="projects/"+app.options.projectId+"/databases/(default)/documents/";
+async function restCommit(writes){
+ let err;
+ for(let t=0;t<5;t++){
+  let st=0;
+  try{
+   const tok=await auth.currentUser.getIdToken(t>0),r=await fetch(FS_REST+":commit",{method:"POST",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify({writes})});
+   if(r.ok)return;st=r.status;err=new Error("Upload failed ("+st+")");
+   if(![401,408,409,429,500,502,503,504].includes(st))throw err;
+  }catch(e){err=e;if(st&&![401,408,409,429,500,502,503,504].includes(st))throw e}
+  await new Promise(r=>setTimeout(r,400*2**t+Math.random()*300))}
+ throw err}
 async function chunkRest(id,j,tok){
  const url=FS_REST+"/songs/"+id+"/chunks/"+String(j).padStart(4,"0");
  for(let a=0;;a++){
@@ -705,7 +722,7 @@ const prefetch=id=>{if(id&&!mem.has(id)&&song(id))getBlob(id).catch(()=>{})};
 let hvT=0,hvId="";
 document.addEventListener("pointerover",e=>{if(e.pointerType!="mouse")return;const el=e.target.closest?.("[data-song],[data-id]"),id=el&&(el.dataset.song||el.dataset.id)||"";if(id===hvId)return;hvId=id;clearTimeout(hvT);
  if(id&&song(id)&&!mem.has(id))hvT=setTimeout(()=>{if(!pending.size)prefetch(id)},350)},{passive:true});
-const durOf=f=>new Promise(r=>{const a=new Audio(URL.createObjectURL(f));a.onloadedmetadata=()=>r(a.duration||0);a.onerror=()=>r(0)});
+const durOf=f=>new Promise(r=>{const u=URL.createObjectURL(f),a=new Audio();a.preload="metadata";const end=v=>{clearTimeout(t);a.removeAttribute("src");URL.revokeObjectURL(u);r(v)},t=setTimeout(()=>end(0),8000);a.onloadedmetadata=()=>end(isFinite(a.duration)?a.duration:0);a.onerror=()=>end(0);a.src=u});
 const ms=d=>d?.createdAt?.toMillis?.()??Date.now();
 const colorCache={};
 function domColor(url,cb){if(!url)return cb(null);if(colorCache[url])return cb(colorCache[url]);const i=new Image();i.onload=()=>{try{const c=document.createElement("canvas");c.width=c.height=12;const x=c.getContext("2d");x.drawImage(i,0,0,12,12);const d=x.getImageData(0,0,12,12).data;let r=0,g=0,b=0,n=0;for(let k=0;k<d.length;k+=4){const m=Math.max(d[k],d[k+1],d[k+2]),l=Math.min(d[k],d[k+1],d[k+2]);const w=1+(m-l)/40;r+=d[k]*w;g+=d[k+1]*w;b+=d[k+2]*w;n+=w}r/=n;g/=n;b/=n;const k=Math.min(1,150/Math.max(r,g,b,1));colorCache[url]=`rgb(${r*k|0},${g*k|0},${b*k|0})`;cb(colorCache[url])}catch{cb(null)}};i.onerror=()=>cb(null);i.src=url}
@@ -1417,7 +1434,7 @@ async function doUpload(list,o,prog){
  if(!todo.length&&!(o.keepDups&&idOf.size))throw new Error(`Nothing to upload: ${dup} song${dup>1?"s":""} already exist.`);
  const cv=o.cover?await uploadFile("",o.cover,400):{};
  let done=0,fail=0,n=0;if(todo.length)prog(0,todo.length);
- await pool(todo,10,async file=>{
+ await pool(todo,16,async file=>{
   try{
    if(file.size>30e6)throw new Error("over 30 MB");
    const [d,tags]=await Promise.all([durOf(file),readTags(file)]);let cu=cv.url||"";
@@ -1425,8 +1442,11 @@ async function doUpload(list,o,prog){
    const artists=buildArtists(file.name,tags,o.artists);
    const ext=file.name.split(".").pop().toLowerCase(),N=Math.ceil(file.size/CH),r=doc(db,"songs",crypto.randomUUID());
    await setDoc(r,{uuid:r.id,title:clean((todo.length==1&&o.title)||clean(file.name).replace(/\.[^.]+$/,"")),key:keyOf(file.name),ownerId:o.asUid||me.uid,artists,artist:artists.join(", "),explicit:!!o.explicit,coverUrl:cu,duration:d,size:file.size,mime:file.type||MIME[ext]||"audio/mpeg",chunkCount:N,ready:false,createdAt:serverTimestamp()});
-   for(let i=0;i<N;i+=3)await Promise.all([...Array(Math.min(3,N-i))].map((_,k)=>{const j=i+k;return b64(file.slice(j*CH,(j+1)*CH)).then(data=>setDoc(doc(db,"songs",r.id,"chunks",String(j).padStart(4,"0")),{i:j,data}))}));
-      await updateDoc(r,{ready:true});idOf.set(file,r.id);done++;
+   /* chunks go up 3 per request, every request in parallel (16 in flight across all files); the last request also flips ready:true once the rest have landed */
+   const per=3,groups=[];for(let i=0;i<N;i+=per)groups.push([...Array(Math.min(per,N-i))].map((_,k)=>i+k));
+   const send=async(g,last)=>{await upSlot();try{const parts=await Promise.all(g.map(j=>b64(file.slice(j*CH,(j+1)*CH)))),w=g.map((j,k)=>({update:{name:FS_NAME+"songs/"+r.id+"/chunks/"+String(j).padStart(4,"0"),fields:{i:{integerValue:String(j)},data:{stringValue:parts[k]}}}}));if(last)w.push({update:{name:FS_NAME+"songs/"+r.id,fields:{ready:{booleanValue:true}}},updateMask:{fieldPaths:["ready"]},currentDocument:{exists:true}});await restCommit(w)}finally{upFree()}};
+   if(groups.length){await Promise.all(groups.slice(0,-1).map(g=>send(g,false)));await send(groups[groups.length-1],true)}else await updateDoc(r,{ready:true});
+   idOf.set(file,r.id);done++;
   }catch(e){fail++;console.error(file.name,e)}
   prog(++n,todo.length);
  });
