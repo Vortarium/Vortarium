@@ -666,13 +666,32 @@ const CH=6e5,b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.re
    Nothing is stored on disk. Only the current song and the prefetched next one stay in memory (small LRU). */
 /* songs are never stored permanently: clear anything saved by older versions */
 try{indexedDB.deleteDatabase("spotify_local");indexedDB.deleteDatabase("spotify_offline")}catch{}
-const mem=new Map(),pending=new Map(),MEMMAX=4;
+const mem=new Map(),pending=new Map(),MEMMAX=8;
+/* Songs are stored as many base64 chunks. They are downloaded in parallel straight from the Firestore REST endpoint (several at once,
+   decoded by the browser itself, and kept out of the Firestore disk cache), instead of one slow stream decoded in a JavaScript loop.
+   If that ever fails it falls back to the old way. */
+const FS_REST="https://firestore.googleapis.com/v1/projects/"+app.options.projectId+"/databases/(default)/documents";
+async function chunkRest(id,j,tok){
+ const url=FS_REST+"/songs/"+id+"/chunks/"+String(j).padStart(4,"0");
+ for(let a=0;;a++){
+  try{const r=await fetch(url,{headers:{Authorization:"Bearer "+tok}});if(!r.ok)throw new Error("HTTP "+r.status);
+   const v=(await r.json()).fields?.data?.stringValue;if(v==null)throw new Error("empty chunk");
+   return await(await fetch("data:application/octet-stream;base64,"+v)).blob()}
+  catch(e){if(a>=2)throw e;await new Promise(r=>setTimeout(r,300*(a+1)))}}}
+async function restChunks(id,N,tok){
+ const out=new Array(N);let nx=0;
+ await Promise.all(Array.from({length:Math.min(8,N)},async()=>{while(nx<N){const j=nx++;out[j]=await chunkRest(id,j,tok)}}));
+ return out}
+async function sdkChunks(id,s){
+ const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
+ if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
+ return p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u})}
 function fetchSongBlob(id){
  if(pending.has(id))return pending.get(id);
  const pr=(async()=>{const s=song(id);if(!s)throw new Error("song not found");
-  const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
-  if(p.length!=s.chunkCount)throw new Error("song data is incomplete");
-  const parts=p.map(c=>{const t=atob(c.data),u=new Uint8Array(t.length);for(let k=0;k<t.length;k++)u[k]=t.charCodeAt(k);return u});
+  let parts;
+  try{parts=await restChunks(id,s.chunkCount,await auth.currentUser.getIdToken())}
+  catch(e){console.warn("fast song load failed, using the slower way",e);parts=await sdkChunks(id,s)}
   return new Blob(parts,{type:s.mime||"audio/mpeg"})})();
  pending.set(id,pr);pr.then(()=>pending.delete(id),()=>pending.delete(id));return pr}
 function remember(id,b){mem.delete(id);mem.set(id,b);while(mem.size>MEMMAX)mem.delete(mem.keys().next().value)}
@@ -680,6 +699,10 @@ async function getBlob(id){
  if(mem.has(id)){const b=mem.get(id);remember(id,b);return b}
  const b=await fetchSongBlob(id);remember(id,b);return b}
 const prefetch=id=>{if(id&&!mem.has(id)&&song(id))getBlob(id).catch(()=>{})};
+/* on a computer, resting the mouse on a song for a moment starts loading it, so the click feels instant */
+let hvT=0,hvId="";
+document.addEventListener("pointerover",e=>{if(e.pointerType!="mouse")return;const el=e.target.closest?.("[data-song],[data-id]"),id=el&&(el.dataset.song||el.dataset.id)||"";if(id===hvId)return;hvId=id;clearTimeout(hvT);
+ if(id&&song(id)&&!mem.has(id))hvT=setTimeout(()=>{if(!pending.size)prefetch(id)},350)},{passive:true});
 const durOf=f=>new Promise(r=>{const a=new Audio(URL.createObjectURL(f));a.onloadedmetadata=()=>r(a.duration||0);a.onerror=()=>r(0)});
 const ms=d=>d?.createdAt?.toMillis?.()??Date.now();
 const colorCache={};
