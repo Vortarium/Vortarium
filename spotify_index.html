@@ -1006,31 +1006,41 @@ const MIXC=["#e8115b","#1ed760","#509bf5"];
 const listenScores=()=>{const m=new Map(),W=users[me.uid]?.wrapped||{},Y=new Date().getFullYear();[Y,Y-1].forEach((y,k)=>{const sg=W[y]?.songs||{};for(const id in sg)if(song(id))m.set(id,(m.get(id)||0)+sg[id]*(k?.5:1))});played.forEach((id,i)=>{if(song(id))m.set(id,(m.get(id)||0)+20+i*.5)});return m};
 const recentIds=()=>{const out=[],seen=new Set();for(const id of [curId(),...played.slice().reverse()]){if(id&&!seen.has(id)&&song(id)){seen.add(id);out.push(id)}}return out};
 let dmMemo=null;
-/* 3 mixes of 100 songs, created once per day: ~70% songs you've listened to, ~30% unheard songs that are similar (same artists, same uploader, or in the same playlists) */
+/* 3 mixes of 100 songs each, created once per day and completely random. Every slot picks a random source: your most listened songs, songs from your playlists, songs sharing an artist with those, or songs by other uploaders you've only briefly listened to */
 function dailyMixes(){
- if(!songsFull||!songs.length||!me)return null;
+ if(!songsFull||!usersFull||bootSide||!songs.length||!me)return null;
  const day=dayKey(),k=me.uid+day;if(dmMemo&&dmMemo.k==k)return dmMemo.mixes;
- const ck="spot_dm_"+me.uid;let c=null;try{c=JSON.parse(localStorage.getItem(ck)||"null")}catch{}
- if(c&&c.day==day&&Array.isArray(c.mixes)&&c.mixes.length&&c.mixes.some(m=>m.ids.some(id=>song(id)))){dmMemo={k,mixes:c.mixes};return c.mixes}
- const R=rng(k),sc=listenScores(),all=songs.slice(),heard=all.filter(s=>sc.has(s.id)).sort((a,b)=>sc.get(b.id)-sc.get(a.id));
- const artOf=s=>artistsOf(s).length?artistsOf(s).map(x=>x.toLowerCase()):["~"+s.ownerId];
- const plMap=new Map();pls.forEach(p=>(p.songIds||[]).forEach(id=>{if(!plMap.has(id))plMap.set(id,[]);plMap.get(id).push(p.id)}));
- const mkCluster=ss=>{const A=new Set(),O=new Set(),P=new Set();ss.forEach(s=>{artOf(s).forEach(x=>A.add(x));O.add(s.ownerId);(plMap.get(s.id)||[]).forEach(x=>P.add(x))});return s=>(artOf(s).some(x=>A.has(x))?3:0)+(O.has(s.ownerId)?1.2:0)+((plMap.get(s.id)||[]).some(x=>P.has(x))?2:0)};
- const wpick=(arr,wf)=>{let tot=0;const w=arr.map(x=>{const v=Math.max(1e-4,wf(x));tot+=v;return v});let r=R()*tot;for(let i=0;i<arr.length;i++){r-=w[i];if(r<=0)return arr[i]}return arr[arr.length-1]};
- const total=Math.min(100,all.length),used=new Set(),seedUsed=new Set(),mixes=[];
+ const ck="spot_dm2_"+me.uid;let c=null;try{c=JSON.parse(localStorage.getItem(ck)||"null")}catch{}
+ if(c&&c.day==day&&Array.isArray(c.mixes)&&c.mixes.length==3&&c.mixes.every(m=>Array.isArray(m.ids)&&m.ids.some(id=>song(id)))){dmMemo={k,mixes:c.mixes};return c.mixes}
+ const all=songs.slice(),sc=listenScores(),total=Math.min(100,all.length);
+ const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+ const artOf=s=>(artistsOf(s).length?artistsOf(s):[uname(s.ownerId)]).map(x=>String(x).toLowerCase());
+ /* source 1: most listened to */
+ const heard=all.filter(s=>sc.has(s.id)).sort((a,b)=>sc.get(b.id)-sc.get(a.id));
+ const top=heard.slice(0,Math.max(30,Math.ceil(heard.length*.4)));
+ /* source 2: songs in your playlists (playlists you own or are in) */
+ const plIds=new Set();pls.forEach(p=>{if(canAdd(p)||p.ownerId==me.uid)(p.songIds||[]).forEach(id=>plIds.add(id))});
+ const inPl=all.filter(s=>plIds.has(s.id));
+ /* source 3: songs sharing an artist with your top songs or playlist songs */
+ const known=new Set([...top,...inPl].map(s=>s.id)),ka=new Set();[...top,...inPl].forEach(s=>artOf(s).forEach(x=>ka.add(x)));
+ const similar=all.filter(s=>!known.has(s.id)&&artOf(s).some(x=>ka.has(x)));
+ /* source 4: songs by other uploaders you've only briefly listened to (or barely heard) */
+ const secs=heard.map(s=>sc.get(s.id)).sort((x,y)=>x-y),med=secs.length?secs[Math.floor(secs.length/2)]:0,brief=Math.min(90,med||90);
+ let disc=all.filter(s=>s.ownerId!=me.uid&&sc.has(s.id)&&sc.get(s.id)<=brief);
+ if(disc.length<20)disc=disc.concat(all.filter(s=>s.ownerId!=me.uid&&!sc.has(s.id)));
+ const srcs=[top,inPl,similar,disc].filter(x=>x.length);if(!srcs.length)srcs.push(all);
+ const used=new Set(),mixes=[];
  for(let n=1;n<=3;n++){
-  const p0=heard.filter(s=>!used.has(s.id)),pool=p0.length>=10?p0:heard;
-  let sd=(pool.length?pool.slice(0,30):all).filter(s=>!seedUsed.has(s.id));if(!sd.length)sd=all;
-  const seed=wpick(sd,s=>Math.sqrt(sc.get(s.id)||1));seedUsed.add(seed.id);
-  const relSeed=mkCluster([seed]),L=Math.min(pool.length,Math.round(total*.7));
-  const lp=pool.map(s=>({s,k:relSeed(s)*2+Math.log(1+(sc.get(s.id)||0))+R()*2})).sort((a,b)=>b.k-a.k).slice(0,L).map(x=>x.s);
-  const picks=new Set(lp.map(s=>s.id));picks.add(seed.id);
-  const relC=mkCluster([seed,...lp.slice(0,25)]);
-  const rec=all.filter(s=>!picks.has(s.id)).map(s=>({s,k:relC(s)+R()*1.5+(sc.has(s.id)?-2:0)+(used.has(s.id)?-4:0)})).sort((a,b)=>b.k-a.k).slice(0,Math.max(0,total-picks.size)).map(x=>x.s.id);
-  const ids=[...picks,...rec].slice(0,total);
-  for(let i=ids.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]]}
-  ids.forEach(id=>used.add(id));mixes.push({n,seed:seed.id,ids})}
- dmMemo={k,mixes};try{localStorage.setItem(ck,JSON.stringify({day,mixes}))}catch{}
+  const q=srcs.map(x=>shuf(x.filter(s=>!used.has(s.id)))),ids=[],mine=new Set();
+  while(ids.length<total){
+   const live=q.filter(x=>x.length);if(!live.length)break;
+   const s=live[Math.floor(Math.random()*live.length)].pop();
+   if(!mine.has(s.id)){mine.add(s.id);ids.push(s.id)}}
+  if(ids.length<total)shuf(all).forEach(s=>{if(ids.length<total&&!mine.has(s.id)){mine.add(s.id);ids.push(s.id)}});
+  const fin=shuf(ids);fin.forEach(id=>used.add(id));
+  const seed=fin.find(id=>song(id)?.coverUrl)||fin[0];
+  mixes.push({n,seed,ids:fin})}
+ dmMemo={k,mixes};try{localStorage.setItem(ck,JSON.stringify({day,mixes}));localStorage.removeItem("spot_dm_"+me.uid)}catch{}
  return mixes}
 const mixSongs=n=>{const mx=dailyMixes(),m=mx&&mx.find(x=>x.n==n);if(!m)return{list:[],cover:"",artists:"",seed:null};
  const list=m.ids.map(song).filter(Boolean),cnt=new Map();list.forEach(s=>(artistsOf(s).length?artistsOf(s):[uname(s.ownerId)]).forEach(a=>cnt.set(a,(cnt.get(a)||0)+1)));
