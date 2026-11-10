@@ -643,8 +643,12 @@ const clean0=n=>n.replace(/_spotdown\.org/gi,"").replace(/\s{2,}/g," ").trim();
 /* titles never contain underscores: they become spaces (clean0 keeps the raw file key stable for duplicate detection) */
 const clean=n=>clean0(n).replace(/_/g," ").replace(/\s{2,}/g," ").trim();
 const fixedT=new Set();
-/* songs with a number in brackets in the name, like "Song (2)", are copies and get removed automatically */
+/* names with a number in brackets, like "Song (2)", are only treated as copies when the same title AND the same artists already exist; otherwise they are unique songs and kept as they are */
 const DUPN=/\(\s*\d+\s*\)/;
+const nbT=t=>clean(String(t||"")).replace(DUPN,"").replace(/\s{2,}/g," ").trim().toLowerCase();
+const aKeyOf=a=>[...new Set((a||[]).map(v=>String(v).toLowerCase().trim()).filter(Boolean))].sort().join("|");
+const sArtOf=x=>x.artists&&x.artists.length?x.artists:String(x.artist||"").split(/\s*,\s*/);
+const copyIds=arr=>{const seen=new Set(),out=new Set(),dn=[];for(const x of arr){if(DUPN.test(x.title||""))dn.push(x);else seen.add(nbT(x.title)+"|"+aKeyOf(sArtOf(x)))}for(const x of dn){const k=nbT(x.title)+"|"+aKeyOf(sArtOf(x));if(seen.has(k))out.add(x.id);else seen.add(k)}return out};
 const SD=/_spotdown\.org/i;
 const AUD=/\.(mp3|m4a|wav|ogg|oga|flac|aac|opus|webm|wma)$/i;
 const MIME={mp3:"audio/mpeg",m4a:"audio/mp4",wav:"audio/wav",ogg:"audio/ogg",oga:"audio/ogg",flac:"audio/flac",aac:"audio/aac",opus:"audio/ogg",webm:"audio/webm",wma:"audio/x-ms-wma"};
@@ -753,7 +757,7 @@ function openNP(){const a=$("#app");if(a.classList.contains("npopen"))return;pan
 function closeNP(){const a=$("#app");if(!a.classList.contains("npopen"))return;if(history.state?.np)history.back();else a.classList.remove("npopen")}
 addEventListener("popstate",()=>$("#app")?.classList.remove("npopen"));
 function updNav(){const b=$("#bnav");if(!b)return;const lib=$("#app").classList.contains("tablib"),c=lib?"lib":view.t=="search"?"search":view.t=="home"?"home":"";b.querySelectorAll("[data-nav]").forEach(x=>x.classList.toggle("on",x.dataset.nav==c))}
-function syncNP(){const b=$("#bpp2");if(!b)return;b.innerHTML=audio.paused?I.play:I.pause;$("#bsh2")?.classList.toggle("on",shuffle);const rp=$("#brp2");if(rp){rp.classList.toggle("on",repeat>0);rp.innerHTML=repeat==2?I.rep1:I.rep}syncSeek()}
+function syncNP(){const b=$("#bpp2");if(!b)return;b.innerHTML=uiPaused()?I.play:I.pause;$("#bsh2")?.classList.toggle("on",shuffle);const rp=$("#brp2");if(rp){rp.classList.toggle("on",repeat>0);rp.innerHTML=repeat==2?I.rep1:I.rep}syncSeek()}
 function syncSeek(){const k=$("#sk2");if(!k)return;const d=audio.duration||0;k.value=d?audio.currentTime/d*1000:0;k.style.setProperty("--p",k.value/10+"%");$("#tc2").textContent=fmt(audio.currentTime);$("#td2").textContent=fmt(d)}
 let skel=false,skelSide=false,skelT=0;
 /* startup state: skeletons show until real data arrives; non-home views wait for the full library */
@@ -868,7 +872,7 @@ onAuthStateChanged(auth,u=>{
  let fullStarted=false;
  const startFull=()=>{if(fullStarted||!live())return;fullStarted=true;
   unsubs.push(onSnapshot(collection(db,"users"),s=>{usersFull=true;users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd()}));
-  unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[];setSongs(s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}if(x.ready&&DUPN.test(x.title||"")&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}return x}).filter(x=>x.ready&&!DUPN.test(x.title||"")).sort((a,b)=>ms(b)-ms(a)));
+  unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[],raw=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}return x}),cp=copyIds(raw.filter(x=>x.ready));raw.forEach(x=>{if(x.ready&&cp.has(x.id)&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}});setSongs(raw.filter(x=>x.ready&&!cp.has(x.id)).sort((a,b)=>ms(b)-ms(a)));
    songsFull=true;booting=false;
    if(!s.metadata.fromCache)try{localStorage.setItem("spot_boot_"+u.uid,"1")}catch{}
    if(rmQ.length)delSongsBulk(rmQ);built&&refresh();clearTimeout(cvT);cvT=setTimeout(fillCovers,20000)}));
@@ -889,7 +893,7 @@ onAuthStateChanged(auth,u=>{
   /* first visit on this device: show the newest songs right away while the full library downloads */
   getDocs(query(collection(db,"songs"),orderBy("createdAt","desc"),limit(40))).then(async s=>{
    if(!live()||songsFull)return;
-   const l=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_"))x.title=clean(x.title)||x.title;return x}).filter(x=>x.ready&&!DUPN.test(x.title||"")).sort((a,b)=>ms(b)-ms(a));
+   const l=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_"))x.title=clean(x.title)||x.title;return x}).filter(x=>x.ready),cp=copyIds(l);l.splice(0,l.length,...l.filter(x=>!cp.has(x.id)).sort((a,b)=>ms(b)-ms(a)));
    setSongs(l);startFull();
    await Promise.all([...new Set(l.map(x=>x.ownerId))].filter(i=>i&&!users[i]).slice(0,12).map(i=>getDoc(doc(db,"users",i)).then(d=>{if(d.exists()&&live()&&!usersFull)users[d.id]={id:d.id,...d.data()}}).catch(()=>{})));
    if(!live()||songsFull)return;booting=false;built&&refresh();
@@ -949,7 +953,7 @@ function buildApp(){
   updNav()};
  renderSide();renderTop();render();playerUI();renderPanel();volUI();updNav();
 }
-function volUI(){const v=$("#vl");if(!v)return;const z=audio.muted||audio.volume==0;v.value=z?0:audio.volume*100;v.style.setProperty("--p",v.value+"%");$("#bmu").innerHTML=z?I.vol0:I.vol;$("#bmu").title=z?"Unmute":"Mute"}
+function volUI(){const v=$("#vl");if(!v||fadeT)return;const z=audio.muted||audio.volume==0;v.value=z?0:audio.volume*100;v.style.setProperty("--p",v.value+"%");$("#bmu").innerHTML=z?I.vol0:I.vol;$("#bmu").title=z?"Unmute":"Mute"}
 function setPanel(p){const a=$("#app");if(!a.classList.contains("nopanel")&&panel==p&&innerWidth>=1180)a.classList.add("nopanel");else{a.classList.remove("nopanel");if(innerWidth<1180)a.classList.remove("nopanel");panel=p}renderPanel();$("#bnp").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="np");$("#bq").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="q");$("#bly").classList.toggle("on",!a.classList.contains("nopanel")&&panel=="ly")}
 audio.ontimeupdate=()=>{const sk=$("#sk");if(!sk||!audio.duration)return;sk.value=audio.currentTime/audio.duration*1000;sk.style.setProperty("--p",sk.value/10+"%");$("#tc").textContent=fmt(audio.currentTime);$("#td").textContent=fmt(audio.duration);syncSeek();lyTick();
  if("mediaSession" in navigator&&Date.now()-(audio._ps||0)>1000){audio._ps=Date.now();try{navigator.mediaSession.setPositionState({duration:audio.duration,playbackRate:audio.playbackRate,position:Math.min(audio.currentTime,audio.duration)})}catch{}}};
@@ -1018,7 +1022,7 @@ let ctxPl=null;
 const keyOf=n=>clean0(n).replace(/\.[^.]+$/,"").toLowerCase();
 const inAnyPl=id=>pls.some(p=>canAdd(p)&&(p.songIds||[]).includes(id));
 const likeIc=id=>likes.has(id)?I.added:I.add;
-const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!audio.paused?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>${inAnyPl(s.id)?`<button class="hb inpl on" data-pick="${s.id}" title="In your playlists. Click to manage">${I.added}</button>`:""}<button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
+const rowHTML=(s,i)=>`<div class="row ${curId()==s.id?"cur":""} ${curId()==s.id&&!uiPaused()?"playing":""} ${selOk()&&sel.has(s.id)?"selected":""}" draggable="true" data-id="${s.id}" data-i="${i}"><div class="n">${selOk()?`<span class="ck ${sel.has(s.id)?"on":""}">${I.check}</span>`:`<span class="num">${i+1}</span><span class="eq"><i></i><i></i><i></i><i></i></span><span class="rp">${I.play}</span>`}</div><div class="c1">${art(s.coverUrl)}<div class="tw"><div class="tt">${esc(s.title)}</div><div class="by">${credit(s)}</div></div></div><span class="da">${dateOf(s)}</span><div class="ac"><button class="hb like ${likes.has(s.id)?"on":""}" data-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>${inAnyPl(s.id)?`<button class="hb inpl on" data-pick="${s.id}" title="In your playlists. Click to manage">${I.added}</button>`:""}<button class="hb mo" data-more="${s.id}" title="More options">${I.more}</button></div><span class="dur">${fmt(s.duration)}</span></div>`;
 const topRows=l=>{topShown=l;return `<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Views</span><span></span><span class="dur">${I.clock}</span></div>`+l.map((s,i)=>rowHTML(s,i).replace(/<span class="da">.*?<\/span>/,`<span class="da">${vtxt(viewsOf(s))}</span>`).replace('<div class="row ','<div data-top="1" class="row ').replace('<div class="tw">',`<div class="tw" data-v="${vtxt(viewsOf(s))}">`)).join("")};
 const rows=(list,opt={})=>{shown=list;return list.length?`<div class="th"><span class="hn">#</span><span>Title</span><span class="dac">Date added</span><span></span><span class="dur">${I.clock}</span></div>`+(opt.lim?list.slice(0,opt.lim):list).map(rowHTML).join(""):`<div class="empty">${opt.empty||"Nothing here yet."}</div>`};
 /* ---------- listening history + Daily Mix ---------- */
@@ -1393,7 +1397,7 @@ function uploadModal(startMode="upload"){
   q("#tfld").style.display=x=="check"||LY?"none":"";q("#plbox").style.display=x=="playlist"?"":"none";q("#copts").style.display=x=="check"?"":"none";q("#xopt").style.display=x=="check"||LY?"none":"";q("#go").innerHTML=goLbl(x);sum()};
  const sum=()=>{const n=files.length;q("#dzs").innerHTML=n?`<div class="cnt">${n} audio file${n==1?"":"s"} ready<button id="clr">Clear</button></div><div class="fl">${files.slice(0,40).map(f=>`<div>${esc(f.name)}</div>`).join("")}${n>40?`<div>…and ${n-40} more</div>`:""}</div>`:"";
   const c=q("#clr");if(c)c.onclick=()=>{if(!busy){files=[];sum()}};q("#go").disabled=(mode!="lyrics"&&mode!="covers"&&mode!="artists"&&!n)||busy};
- const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all.filter(f=>!DUPN.test(clean(f.name))),bad=all.length-a.length;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: names with a number in brackets like (1) are treated as copies`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
+ const add=async list=>{q("#fmsg").textContent="Reading files…";try{const all=await expand([...list]),a=all,bad=0;const seen=new Set(files.map(f=>f.name+f.size));a.forEach(f=>{if(!seen.has(f.name+f.size))files.push(f)});q("#fmsg").textContent=!all.length?"No audio files found.":bad?`${bad} file${bad==1?"":"s"} skipped: names with a number in brackets like (1) are treated as copies`:""}catch(e){q("#fmsg").textContent="Couldn't read that archive."}sum()};
  files_in.onchange=()=>{add(files_in.files);files_in.value=""};dir_in.onchange=()=>{add(dir_in.files);dir_in.value=""};
  q("#pf").onclick=()=>files_in.click();q("#pd").onclick=()=>dir_in.click();
  const dz=q("#dz");dz.ondragover=e=>{e.preventDefault();dz.classList.add("over")};dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove("over")};
@@ -1434,8 +1438,13 @@ function uploadModal(startMode="upload"){
 }
 async function doUpload(list,o,prog){
  if(!songsFull)throw new Error("Still loading the library, try again in a moment.");
- list=list.filter(f=>!DUPN.test(clean(f.name)));
- const seen=new Set(songs.map(x=>x.key||x.title.toLowerCase())),todo=[],byKey=new Map(songs.map(x=>[x.key||x.title.toLowerCase(),x.id])),idOf=new Map();let dup=0;
+ /* "(#)" files: skip only if a song with the same title (without the number) AND the same artists already exists, here or in this batch */
+ const fb=f=>nbT(f.name.replace(/\.[^.]+$/,"")),artOf=async f=>{let t={};try{t=await readTags(f)||{}}catch{}return aKeyOf(buildArtists(f.name,t,o.artists))},drop=new Set(),dn=list.filter(f=>DUPN.test(clean(f.name)));
+ if(dn.length){const have=new Set(songs.map(x=>nbT(x.title)+"|"+aKeyOf(sArtOf(x)))),bases=new Set(dn.map(fb));
+  for(const f of list)if(!DUPN.test(clean(f.name))&&bases.has(fb(f)))have.add(fb(f)+"|"+await artOf(f));
+  for(const f of dn){const k=fb(f)+"|"+await artOf(f);if(have.has(k))drop.add(f);else have.add(k)}
+  list=list.filter(f=>!drop.has(f))}
+ const seen=new Set(songs.map(x=>x.key||x.title.toLowerCase())),todo=[],byKey=new Map(songs.map(x=>[x.key||x.title.toLowerCase(),x.id])),idOf=new Map();let dup=drop.size;
  for(const f of list){const k=keyOf(f.name);if(seen.has(k)){dup++;if(byKey.has(k))idOf.set(f,byKey.get(k));continue}seen.add(k);todo.push(f)}
  if(!todo.length&&!(o.keepDups&&idOf.size))throw new Error(`Nothing to upload: ${dup} song${dup>1?"s":""} already exist.`);
  const cv=o.cover?await uploadFile("",o.cover,400):{};
@@ -1717,7 +1726,22 @@ function playFrom(list,i){const s=list[i];if(!s)return;
  if(phone&&!$("#app").classList.contains("npopen"))openNP()}
 /* play button: with shuffle on it starts on a random song instead of the first one */
 function playFirst(l){if(!l.length)return toast("Nothing to play here yet");playFrom(l,shuffle?rndI(l.length):0)}
-function togglePlay(){if(audio.src)audio.paused?audio.play():audio.pause();else playFirst(shown.length?shown:songs)}
+/* pausing fades the song out over ~0.9s with a soft start and a long, gentle tail (like a reverb out) instead of cutting off; the play/pause button flips instantly, and pressing it again mid-fade brings the song back */
+let fadeT=0;const canVol=(()=>{try{const a=new Audio();a.volume=.5;return a.volume==.5}catch{return false}})();
+const uiPaused=()=>audio.paused||!!fadeT;
+function fadePause(ms=900){
+ if(fadeT){clearInterval(fadeT);fadeT=0;if(audio._fv!=null)audio.volume=audio._fv;audio._fv=null;volUI();playerUI();return}
+ if(audio.paused)return;
+ if(!canVol||document.hidden||audio.muted||audio.volume==0)return audio.pause();
+ const v0=audio.volume,src=audio.src,t0=performance.now();audio._fv=v0;
+ const end=()=>{clearInterval(fadeT);fadeT=0;audio.volume=v0;audio._fv=null;volUI();playerUI()};
+ fadeT=setInterval(()=>{
+  if(audio.src!=src||audio.paused)return end();
+  const k=Math.min(1,(performance.now()-t0)/ms);
+  if(k>=1){audio.pause();return end()}
+  audio.volume=v0*Math.pow(.5+.5*Math.cos(Math.PI*k),1.6)},20);
+ playerUI()}
+function togglePlay(){if(audio.src)audio.paused?audio.play():fadePause();else playFirst(shown.length?shown:songs)}
 function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Math.floor(Math.random()*(i-qi));[queue[i],queue[j]]=[queue[j],queue[i]]}}
 function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI();savePrefs()}
 let cur=null,loadTok=0;
@@ -1774,12 +1798,12 @@ function prev(){
  skipPush=true;loadCur();
 }
 function playHist(id){if(qi<0||!queue.length){queue=[id];qi=0}else{queue.splice(qi+1,0,id);qi++}loadCur()}
-function markPlaying(){const id=curId(),pl=!audio.paused;document.querySelectorAll(".row").forEach(r=>{const c=r.dataset.id==id;r.classList.toggle("cur",c);r.classList.toggle("playing",c&&pl)})}
+function markPlaying(){const id=curId(),pl=!uiPaused();document.querySelectorAll(".row").forEach(r=>{const c=r.dataset.id==id;r.classList.toggle("cur",c);r.classList.toggle("playing",c&&pl)})}
 function playerUI(skipPanel){
  if(!built)return;const s=song(curId());
  $("#pl").innerHTML=s?`${art(s.coverUrl)}<div class="tx"><div class="tt" data-npo="1">${esc(s.title)}</div><div class="by">${credit(s)}</div></div><button class="hb ${likes.has(s.id)?"on":""}" data-pl-like="${s.id}" title="${likes.has(s.id)?"Remove from Liked Songs":"Save to Liked Songs"}">${likeIc(s.id)}</button>`:"";
  $("#pl").onclick=e=>{const l=e.target.closest("[data-pl-like]");if(l)return likeClick(l.dataset.plLike,l);if(phone)return openNP();const a=e.target.closest("[data-artist]");if(a)return go({t:"artist",name:a.dataset.artist});const u=e.target.closest("[data-u]");if(u)return go({t:"user",id:u.dataset.u});if(e.target.closest("[data-npo]")||e.target.closest(".art")){panel="np";$("#app").classList.remove("nopanel");renderPanel()}};
- const pp=audio.paused;$("#bpp").innerHTML=pp?I.play:I.pause;$("#bpp").title=pp?"Play":"Pause";
+ const pp=uiPaused();$("#bpp").innerHTML=pp?I.play:I.pause;$("#bpp").title=pp?"Play":"Pause";
  $("#bsh").classList.toggle("on",shuffle);$("#bsh").title=shuffle?"Disable shuffle":"Enable shuffle";
  $("#brp").classList.toggle("on",repeat>0);$("#brp").title=["Enable repeat","Enable repeat one","Disable repeat"][repeat];$("#brp").innerHTML=repeat==2?I.rep1:I.rep;
  const sb=$("#shbig");if(sb)sb.classList.toggle("on",shuffle);
@@ -2058,7 +2082,7 @@ function mediaAct(n){
  if(mediaAct.g==g&&t-mediaAct.t<250)return;mediaAct.g=g;mediaAct.t=t;
  if(!built)return;
  if(n=="play"){audio.src?audio.play():playFirst(shown.length?shown:songs)}
- else if(n=="pause")audio.pause();
+ else if(n=="pause")fadePause();
  else if(n=="toggle")togglePlay();
  else if(n=="next")next(false);
  else if(n=="prev")prev();
@@ -2082,7 +2106,7 @@ function mediaMeta(s){
  const K={MediaPlayPause:"toggle",MediaPlay:"play",MediaPause:"pause",MediaTrackNext:"next",MediaTrackPrevious:"prev",MediaStop:"stop"};
  document.addEventListener("keydown",e=>{
   const a=K[e.code]||K[e.key];if(a){e.preventDefault();return mediaAct(a)}
-  if(e.code=="Space"&&!/INPUT|TEXTAREA/.test(e.target.tagName)&&audio.src){e.preventDefault();audio.paused?audio.play():audio.pause()}
+  if(e.code=="Space"&&!/INPUT|TEXTAREA/.test(e.target.tagName)&&audio.src){e.preventDefault();audio.paused?audio.play():fadePause()}
  });
 })();
 
