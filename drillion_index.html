@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drillion</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0e0814;--pn:#2b1d38;--pn2:#3d2a4f;--hi:#ffc83a;--ok:#59d8ff;--bad:#ff6b6b;--tx:#f6ead2;--mu:#b9a6c9;
+--bx:0 -4px 0 0 var(--ink),0 4px 0 0 var(--ink),-4px 0 0 0 var(--ink),4px 0 0 0 var(--ink)}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font:18px/1.45 'Share Tech Mono',ui-monospace,monospace;color:var(--tx);background:#1b1224;overflow-x:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0}
+main{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:16px 18px 120px}
+h1{font:700 clamp(38px,10vw,58px)/1 'Share Tech Mono',monospace;text-align:center;color:var(--hi);letter-spacing:3px;margin:8px 0 22px;
+ text-shadow:0 4px 0 #d8841a,0 8px 0 #8a4a12,4px 0 0 var(--ink),-4px 0 0 var(--ink),0 -4px 0 var(--ink),4px 12px 0 var(--ink),-4px 12px 0 var(--ink),0 14px 0 var(--ink)}
+h2{font:700 22px 'Share Tech Mono',monospace;text-align:center}
+section{display:none}section.on{display:flex;flex-direction:column;gap:14px}
+.pn{background:var(--pn);padding:16px;box-shadow:var(--bx),inset 0 4px 0 0 var(--pn2),inset 0 -4px 0 0 #1d1228}
+input{font:inherit;font-size:18px;background:#150d1f;color:var(--tx);border:0;padding:12px 14px;width:100%;outline:none;
+ box-shadow:var(--bx),inset 0 3px 0 0 #0a0610}
+input:focus{box-shadow:0 -4px 0 0 var(--hi),0 4px 0 0 var(--hi),-4px 0 0 0 var(--hi),4px 0 0 0 var(--hi),inset 0 3px 0 0 #0a0610}
+#pw{font-family:ui-monospace,Consolas,Menlo,monospace;letter-spacing:2px}
+::placeholder{color:#7d6a8e}
+button{font:700 14px 'Share Tech Mono',monospace;letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:#3a1f08;background:var(--hi);border:0;padding:14px 16px;
+ box-shadow:var(--bx),inset 0 4px 0 0 #ffe9a0,inset 0 -5px 0 0 #c98a1e}
+button:hover{filter:brightness(1.1)}
+button:active{transform:translateY(3px);box-shadow:var(--bx),inset 0 3px 0 0 #c98a1e,inset 0 -2px 0 0 #ffe9a0}
+button.alt{background:var(--ok);color:#06283a;box-shadow:var(--bx),inset 0 4px 0 0 #b8f0ff,inset 0 -5px 0 0 #2a96c0}
+button.ghost{background:#4a3563;color:var(--tx);box-shadow:var(--bx),inset 0 4px 0 0 #6a4d8a,inset 0 -5px 0 0 #2f2044}
+button:focus-visible{outline:3px dashed #fff;outline-offset:4px}
+.row{display:flex;gap:14px;align-items:center}.row>*{flex:1}.between{justify-content:space-between}
+.pwrow{display:flex;gap:14px}.pwrow button{flex:0}
+.err{color:var(--bad);text-align:center;min-height:24px}.sub{text-align:center;color:var(--ok)}
+#stats{text-align:center}#stats b{font:700 20px 'Share Tech Mono',monospace;color:var(--hi);display:block}#stats small{color:var(--mu);display:block;font-size:16px}
+#legend{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;text-align:center;font-size:12px;line-height:1.3;color:var(--mu)}
+#legend img{width:30px;display:block;margin:0 auto 4px}
+img{image-rendering:pixelated}
+#hud{padding:10px 14px}#kbadge{font:700 14px 'Share Tech Mono',monospace;color:var(--hi);text-align:center}#dep{text-align:right;color:var(--ok);font-size:15px}
+#tbar{height:16px;background:#150d1f;box-shadow:var(--bx);margin-bottom:16px;position:relative}
+#tbar i{display:block;height:100%;background:var(--ok);transition:width .1s linear}
+#tbar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 10px,#150d1f 10px 12px)}
+#tbar.low i{background:var(--bad)}
+#q{font-size:23px;line-height:1.35;text-align:center;white-space:pre-wrap;min-height:64px}
+#ans{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;width:min(560px,calc(100% - 36px));z-index:3;padding:12px;align-items:stretch}
+#ans button{flex:0}
+#qcard,#hud,#ans{transition:opacity .25s}
+.busy #qcard,.busy #ans,.busy #hud{opacity:0;pointer-events:none}
+#res{display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center}
+#res:has(.card){position:fixed;inset:0;z-index:5;background:rgba(10,6,16,.78);justify-content:center;padding:22px;overflow:auto}
+.card{width:min(520px,100%);display:flex;flex-direction:column;gap:12px;align-items:center;padding:20px}
+#res .big{width:80px}
+#res canvas{width:100%;image-rendering:pixelated;background:#150d1f;box-shadow:var(--bx)}
+.labels{display:flex;width:100%}.labels img{width:22px;margin:auto}
+.lr{display:flex;gap:10px;padding:6px 0;border-bottom:2px dashed #4a3563}.lr b{width:32px}.lr span{flex:1}.lr em{font-style:normal;color:var(--hi)}.lr.me{color:var(--ok)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+body{font:500 20px/1.5 'Share Tech Mono',ui-monospace,monospace;text-shadow:0 2px 0 rgba(0,0,0,.5);text-rendering:geometricPrecision}
+h1{text-shadow:0 4px 0 #d8841a,0 8px 0 #8a4a12,0 0 24px rgba(255,200,58,.45),4px 12px 0 var(--ink),-4px 12px 0 var(--ink);animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px)}}
+h2{font:700 28px 'Share Tech Mono',monospace}
+input{font-size:21px;font-weight:500}
+button{font:700 18px 'Share Tech Mono',monospace;letter-spacing:3px;text-shadow:0 1px 0 rgba(255,255,255,.35)}
+#kbadge{font:700 18px 'Share Tech Mono',monospace}#dep{font-size:17px}
+#q{font:600 28px/1.3 'Share Tech Mono',monospace;text-shadow:0 3px 0 #000}
+#legend{font-size:15px}#stats b{font:700 26px 'Share Tech Mono',monospace}
+.lr{align-items:center;text-align:left}.lr span{line-height:1.2}.lr small{display:block;color:var(--mu);font-size:14px;margin-top:2px}
+.card{max-height:92vh;overflow:auto}
+.ore{font:700 46px 'Share Tech Mono',monospace;letter-spacing:3px;text-shadow:0 4px 0 #000,0 0 18px currentColor}
+input:disabled{opacity:1;color:var(--hi)}
+#ac{position:absolute;top:-36px;left:14px;background:var(--ok);color:#06283a;font:700 16px 'Share Tech Mono',monospace;padding:3px 10px;box-shadow:var(--bx);display:none;animation:fl 1.4s ease-out both}
+@keyframes fl{0%{transform:translateY(10px);opacity:0}20%{opacity:1}100%{transform:translateY(-6px);opacity:1}}
+#res #bell{image-rendering:auto;background:transparent;box-shadow:none}
+</style></head><body>
+<canvas id="bg"></canvas>
+<main>
+<h1>DRILLION</h1>
+<section id="auth" class="pn on">
+ <p class="sub">Seven questions. The rarer your answers, the deeper you dig.</p>
+ <input id="un" placeholder="Username" maxlength="16" autocomplete="username">
+ <div class="pwrow"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><button id="eye" type="button" class="ghost">Show</button></div>
+ <div class="row"><button id="login">Log in</button><button id="signup" class="alt">Sign up</button></div>
+ <p id="aerr" class="err"></p>
+</section>
+<section id="menu" class="pn">
+ <div id="stats"></div>
+ <button data-m="daily">Daily dig</button>
+ <button data-m="inf">Infinite dig</button>
+ <div class="row"><input id="keyin" maxlength="4" placeholder="Key (ABCD)"><button data-m="key" class="alt">Play key</button></div>
+ <p id="merr" class="err"></p>
+ <div id="legend"></div>
+ <div class="row"><button id="lbbtn" class="alt">Leaders</button><button id="mute" class="ghost">Sound on</button><button id="out" class="ghost">Log out</button></div>
+</section>
+<section id="play">
+ <div id="hud" class="pn row between"><button id="back" class="ghost" style="flex:0">Menu</button><span id="kbadge"></span><span id="dep"></span></div>
+ <div id="qcard" class="pn"><div id="tbar"><i></i></div><p id="q"></p></div>
+ <div id="ans" class="pn row" style="display:none"><input id="inp" maxlength="60" placeholder="Type your answer" autocomplete="off"><span id="ac">autocorrected</span><button id="go">Drill!</button></div>
+ <div id="res"></div>
+</section>
+<section id="lb" class="pn"></section>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+import {getFirestore,doc,getDoc,setDoc,deleteDoc,collection,query,where,orderBy,limit,getDocs,writeBatch,increment,serverTimestamp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+const app=initializeApp({apiKey:"AIzaSyBLuTHVuEEF2CU-JDLvXcaAfBPQ7MXSnwM",authDomain:"drillion-4fe85.firebaseapp.com",projectId:"drillion-4fe85",storageBucket:"drillion-4fe85.firebasestorage.app",messagingSenderId:"494287035038",appId:"1:494287035038:web:d746cff34a1f725077b98f"});
+const auth=getAuth(app),db=getFirestore(app);
+const MODEL='gemini-3.5-flash-lite'; // change here if your model id differs
+
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const fmt=n=>Math.round(n).toLocaleString(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const _s1='8orc9yy';
+const TIERS=[
+ {n:'Pebble',p:1,d:4,c:['#9a9a9a','#555','#d8d8d8']},
+ {n:'Rock',p:5,d:15,c:['#9b7653','#4a3524','#c9a07a']},
+ {n:'Coal',p:15,d:35,c:['#3a3a48','#111','#6a6a80']},
+ {n:'Iron',p:45,d:60,c:['#d0a898','#6b4a40','#f4dccf']},
+ {n:'Gold',p:80,d:90,c:['#ffcc33','#a06a00','#fff4a8']},
+ {n:'Diamond',p:120,d:120,c:['#6df0ff','#2a7fb0','#ffffff']}];
+const STAGES=[['Topsoil',0],['Clay',40],['Gravel',100],['Copper rock',170],['Coal seam',250],['Iron strata',340],['Gem caverns',440],['Magma veins',560],['Amethyst deep',680],['Molten core',780]];
+const stage=m=>STAGES.reduce((a,s,i)=>m>=s[1]?i:a,0);
+const _t403='3Sw3dNQdj+zmeep+0N',_tcgd='Rb9IUzrk73WjgrOU0b';const _s2='97nr8zb93';
+
+/* ---------- pixel art ---------- */
+const INK='#140e1c';
+const E=(x,cx,cy,rx,ry,col)=>{x.fillStyle=col;for(let j=-ry;j<=ry;j++)for(let i=-rx;i<=rx;i++)if(i*i/(rx*rx||1)+j*j/(ry*ry||1)<=1)x.fillRect(cx+i,cy+j,1,1)};
+const GS=[
+ ['...oooo...','..ocaaao..','.ocaaaaabo','ocaaaaaabo','oaaaaaaabo','obaaaaabbo','.obbbbbbo.','..oooooo..'],
+ ['..ooooo...','.ocaaaaoo.','ocaaaaaabo','oaaaabaabo','oaaabbaabo','obaaabbbbo','.obbbbbbo.','..oooooo..'],
+ ['..oooooo..','.oaaaaaao.','oacaaaaaao','oaaaaabaao','oaaabaaaao','obaaaabbbo','.obbbbbbo.','..oooooo..'],
+ ['..oooooo..','.occcccco.','occaaaaabo','oaaaaaaabo','obbbbbbbbo','.oooooooo.'],
+ ['...oooo...','.ooccaaoo.','occaaaaaao','ocaaaaabbo','oaaaaabbbo','.obbbbbbo.','..oooooo..'],
+ ['..oooooo..','.ocwcaaao.','occccaaabo','oooooooooo','.oaaabbbo.','..oabbbo..','...obbo...','....oo....']];
+const GC=[['#9aa0a8','#5c6270','#d6dae2'],['#a67c52','#5e3e24','#d2a374'],['#33333f','#15151c','#7a7a90'],['#aab4c4','#5c6678','#eef4ff'],['#ffc83a','#b8741a','#fff3a0'],['#5ae0ff','#2a78c8','#e8fcff']];
+
+
+const cv=$('#bg'),g=cv.getContext('2d'),lc=document.createElement('canvas'),lg=lc.getContext('2d');let W,H;
+function size(){const P=Math.max(2,Math.round(innerHeight/380));W=Math.ceil(innerWidth/P);H=Math.ceil(innerHeight/P);cv.width=lc.width=W;cv.height=lc.height=H}
+addEventListener('resize',size);size();
+const TS=32,RM=3; // tile pixels, meters per tile row
+const _tu0n='=Yz1nYvYo+w76HL2/T';
+const hash=(a,b)=>{let h=Math.imul(a,374761393)^Math.imul(b,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967295};
+const px=(x,y,w,h,c)=>{g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))};
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const mix=(a,b,t)=>{const x=rgb(a),y=rgb(b);return'#'+x.map((v,i)=>Math.round(v+(y[i]-v)*t).toString(16).padStart(2,'0')).join('')};
+const ramp=(st,n)=>Array.from({length:n},(_,i)=>{const f=i/(n-1)*(st.length-1)*.9999,k=f|0;return mix(st[k],st[k+1],f-k)});
+const disc=(x,y,r,c)=>{r=Math.round(r);for(let j=-r;j<=r;j++){const w=Math.sqrt(r*r-j*j)|0;px(x-w,y+j,w*2,1,c)}};
+const TP=[['#7a4a2a','#4e2c16','#9a6238','#c88e58'],['#a8623a','#6e3a22','#c47e4c','#e8a470'],['#7a7468','#4a463e','#9a9484','#c4bea8'],['#5d6173','#393c4c','#7d8299','#aab0c8'],['#3e3c48','#1c1a24','#585668','#8a88a0'],['#7a4038','#4a2220','#9a584c','#d08a78'],['#3a4668','#202844','#566490','#8aa0d0'],['#5a2230','#2e0f1a','#84343a','#ff7a2a'],['#4a2f6e','#2a1844','#6c46a0','#c08aff'],['#d8700f','#a8420a','#ffa828','#fff0a0']];
+const OC={coal:['#0a0a10','#2a2a38','#4a4a60','#b0b0d0'],cu:['#6a3a1a','#d8783a','#ffb06a','#fff0c0'],fe:['#5a2a20','#a8584a','#d8907a','#ffd8c8'],au:['#8a5a00','#e8a820','#ffd84a','#fff8b0'],sap:['#14308a','#2a6ad8','#6ab0ff','#e8f4ff'],em:['#0a5a2a','#20b050','#70e890','#e8fff0'],ruby:['#6a0a1a','#d82040','#ff7a8a','#fff0f0'],am:['#3a1070','#8a40d8','#c890ff','#f8e8ff'],dia:['#2a78b8','#5ae0ff','#b8f6ff','#ffffff'],rock:['#2e3040','#5a5e72','#8a8ea8','#c8ccdc'],bone:['#a89878','#e8dcc0','#fff8e8','#ffffff']};
+const ORE=[0,'bone','cu','coal','fe','au','sap','ruby','am','dia'],GL=[['#1a7aa0','#4fd8ff','#c8f6ff'],['#a02a7a','#ff5ab8','#ffc0e8'],['#2a8a3a','#6af070','#d0ffd0']];
+const chunk=(x,cx,cy,rx,ry,c)=>{x.globalAlpha=.35;E(x,cx+1,cy+ry,rx+2,2,'#000');x.globalAlpha=1;E(x,cx,cy,rx+1,ry+1,'#120c18');E(x,cx,cy,rx,ry,c[0]);E(x,cx-1,cy-1,rx-1,ry-1,c[1]);E(x,cx-1,cy-2,Math.max(1,rx-3),Math.max(1,ry-3),c[2]);x.fillStyle=c[3];x.fillRect(cx-rx+2,cy-ry+1,2,1);x.fillRect(cx-rx+2,cy-ry+2,1,1)};
+const crys=(x,cx,by,h,w,c)=>{x.globalAlpha=.35;E(x,cx+1,by,w+3,2,'#000');x.globalAlpha=1;for(let j=0;j<h;j++){const hw=j<h*.35?Math.round(w*j/(h*.35)):w,y=by-h+j;x.fillStyle='#120c18';x.fillRect(cx-hw-1,y,hw*2+3,1);x.fillStyle=c[1];x.fillRect(cx-hw,y,hw+1,1);x.fillStyle=c[0];x.fillRect(cx+1,y,hw,1);x.fillStyle=c[2];x.fillRect(cx-(hw>>1)-1,y,1,1)}x.fillStyle='#120c18';x.fillRect(cx-w-1,by,w*2+3,1);x.fillStyle=c[3];x.fillRect(cx-1,by-h+1,1,2);x.fillRect(cx-w+1,by-(h>>1),1,2)};
+const RAMPS=TP.map(p=>ramp([p[1],p[0],p[2],p[3]],9).map(rgb));
+const sfl=m=>{let f=0;for(let k=1;k<STAGES.length;k++)f+=Math.max(0,Math.min(1,(m-(STAGES[k][1]-12))/24));return f};
+const mkTile=(s,c0,r0)=>{const p=TP[s],v=Math.min(7,hash(c0,r0)*8|0);
+ const c=document.createElement('canvas');c.width=c.height=TS;const x=c.getContext('2d'),R=rng(c0*7919+r0*104729+s*13),ra=R()*6,rb=R()*6,d=(X,Y,w,h,col)=>{x.fillStyle=col;x.fillRect(X,Y,w,h)},rp=ramp([p[1],p[0],p[2],p[3]],9),ri=n=>n*R()|0;
+ const im=x.createImageData(TS,TS);for(let j=0;j<TS;j++)for(let i=0;i<TS;i++){const wx=c0*TS+i,wy=r0*TS+j,m=wy/TS*RM+Math.sin(wx*.07)*7+Math.sin(wx*.19+wy*.1)*3,sf=sfl(m),s0=Math.min(9,sf|0),s1=Math.min(9,s0+1),fr=sf-s0,fb=Math.sin(wx*.045+Math.sin(wy*.05)*2)*.5+Math.sin(wy*.06+Math.sin(wx*.04)*2)*.5+Math.sin((wx+wy)*.11)*.25+Math.sin((wx-wy)*.17)*.15,st=Math.sin(wy*.33+Math.sin(wx*.03)*3)>.92?-.14:0,n=Math.min(.999,Math.max(0,.45+fb*.2+st+(hash(wx>>1,wy>>1)-.5)*.25+(hash(wx,wy)-.5)*.12)),k=(j*TS+i)*4,a=RAMPS[s0][n*9|0],b2=RAMPS[s1][n*9|0];for(let q=0;q<3;q++)im.data[k+q]=a[q]+(b2[q]-a[q])*fr;im.data[k+3]=255}x.putImageData(im,0,0);
+ for(let k=0;k<9;k++){const X=ri(30),Y=ri(30);d(X,Y,2,1,rp[8]);d(X,Y+1,2,1,rp[0])}
+ if(v==7){E(x,16,18,12,10,'#0b0712');E(x,16,19,11,9,'#1a1226');for(let i=-10;i<=10;i++)d(16+i,9+(i*i/12|0),1,1,rp[7]);
+  if(s<7){const g3=GL[s<4?0:s<6?1:2];for(let k=0;k<3;k++){const X=9+k*7,Y=28-ri(3);x.globalAlpha=.25;E(x,X,Y-5,6,5,g3[2]);x.globalAlpha=1;d(X,Y-4,1,4,'#e8e0d0');E(x,X,Y-5,3,2,g3[1]);E(x,X,Y-6,2,1,g3[2]);d(X-1,Y-6,1,1,'#fff')}}
+  else{E(x,16,28,10,3,'#ff6a1a');E(x,16,27,8,2,'#ffc050');d(12,26,4,1,'#fff0b0')}}
+ else if(s==0){if(v==3){let X=2+ri(6),Y=6+ri(8);for(let i=0;i<20+ri(6);i++){d(X,Y,1,2,'#3a2410');d(X,Y,1,1,'#8a6438');X=Math.min(31,X+1);Y=Math.max(2,Math.min(28,Y+(R()<.5?1:-1)*(R()<.6?1:0)))}}
+  else if(v==4){const X=4+ri(8),Y=10+ri(14);for(let i=0;i<11;i++){const yy=Y+Math.round(Math.sin(i*.9)*3);d(X+i*2,yy,3,3,'#a85a5a');d(X+i*2,yy,3,1,'#f0a8a8');d(X+i*2,yy+2,3,1,'#7a3a3a')}d(X+21,Y+1,1,1,INK)}
+  else chunk(x,6+ri(20),8+ri(16),2+ri(3),2+ri(2),OC.rock)}
+ else if(v>=3){const n=Math.min(3,v-2),o=ORE[s];x.globalAlpha=1;
+  if(s>=6&&s<=9){const cl=s==6?[OC.sap,OC.em]:[s==7?OC.ruby:s==8?OC.am:OC.dia];if(s>=7&&v<5)x.globalAlpha=1;
+   for(let k=0;k<n;k++){const X=8+k*8+ri(3),Y=20+ri(8),col=cl[(k+ri(2))%cl.length],hh=s==9?13:9;if(s==9){x.globalAlpha=.3;E(x,X,Y-6,9,9,'#5ae0ff');x.globalAlpha=1}crys(x,X,Y,hh+ri(4),s==9?4:3,col);crys(x,X-5,Y+3,6,2,col);crys(x,X+5,Y+3,5,2,col)}}
+  else for(let k=0;k<n;k++){const X=7+ri(18),Y=9+ri(14);if(s==1){chunk(x,X,Y,5,2,OC.bone);d(X-4,Y-1,2,3,OC.bone[1]);d(X+4,Y-1,2,3,OC.bone[1])}else{chunk(x,X,Y,4+ri(3),3+ri(2),OC.rock);chunk(x,X-1-ri(2),Y-1,2+ri(2),2,OC[o]);chunk(x,X+2+ri(3),Y+1,2,1+ri(2),OC[o]);if(R()<.5)chunk(x,X+ri(5)-2,Y+4,2,1,OC[o]);for(let q=0;q<8;q++)d(X-8+ri(17),Y-6+ri(13),1,1,q%2?OC[o][1]:OC[o][2]);d(X-2,Y-3,1,1,'#fff')}}}
+ if(v<3&&s>0&&s<7){const n=5+ri(5);for(let q=0;q<n;q++){const X=3+ri(26),Y=3+ri(26);
+  if(s==1){d(X,Y,3,1,rp[8]);d(X+1,Y+1,2,1,rp[0])}
+  else if(s==2)chunk(x,X,Y,1+ri(2),1+ri(2),OC.rock);
+  else if(s==3){d(X,Y,2,1,'#6a3a1a');d(X,Y+1,1,1,'#ffb06a')}
+  else if(s==4){d(X,Y,2,2,'#0a0a10');d(X,Y,1,1,'#6a6a80')}
+  else if(s==5){d(X,Y,1,3+ri(3),'#5a2a20');d(X,Y,1,1,'#d8907a')}
+  else{d(X,Y,1,1,GL[1][1]);d(X,Y-1,1,1,GL[1][2])}}}
+ if(s>=7&&v<3){let X=3+ri(4),Y=6+ri(18);for(const X1=X+16+ri(8);X<X1;X++){d(X,Y,1,2,'#ff8a2a');d(X,Y,1,1,'#ffe07a');Y=Math.max(2,Math.min(28,Y+(R()<.4?(R()<.5?-1:1):0)))}}
+
+ return c};
+const TC=new Map(),tileAt=(s,c,r)=>{const k=c+','+r;let t=TC.get(k);if(!t){t=mkTile(s,c,r);TC.set(k,t)}return t};
+const GCV=[0,1,2,3,4,5].map(t=>{const c=document.createElement('canvas');c.width=c.height=24;const x=c.getContext('2d'),sp=(X,Y)=>{x.fillStyle='#fff';x.fillRect(X-1,Y,3,1);x.fillRect(X,Y-1,1,3)};
+ if(t==0){chunk(x,12,13,6,5,['#4a4e58','#8a909c','#b8bec8','#e8ecf2']);chunk(x,6,18,3,2,['#4a4e58','#8a909c','#b8bec8','#e8ecf2'])}
+ else if(t==1){chunk(x,12,13,9,7,['#4a3524','#8a6542','#b8946a','#e0c8a0']);x.fillStyle='#3a281a';x.fillRect(9,8,1,6);x.fillRect(10,13,4,1);x.fillRect(15,10,1,5)}
+ else if(t==2){chunk(x,12,13,9,7,OC.coal);chunk(x,7,17,3,3,OC.coal);x.fillStyle='#b0b0d0';x.fillRect(14,9,2,1)}
+ else if(t==3){chunk(x,12,13,9,6,OC.fe);x.fillStyle='#c8d0dc';x.fillRect(7,11,9,1);x.fillRect(8,15,8,1);sp(16,8)}
+ else if(t==4){chunk(x,8,15,5,4,OC.au);chunk(x,15,12,6,5,OC.au);chunk(x,14,18,4,3,OC.au);sp(7,9);sp(19,7)}
+ else{x.globalAlpha=.3;E(x,12,13,11,11,'#5ae0ff');x.globalAlpha=1;crys(x,12,21,15,6,OC.dia);crys(x,5,22,8,2,OC.dia);crys(x,19,22,7,2,OC.dia);sp(9,8);sp(16,13)}
+ return c});
+const GU=GCV.map(c=>c.toDataURL());
+function drawGem(x,t,X,Y,s){x.imageSmoothingEnabled=false;x.drawImage(GCV[t],X,Y,24*s,24*s)}
+
+
+function outline(c,col){const x=c.getContext('2d'),w=c.width,h=c.height,d=x.getImageData(0,0,w,h),s=new Uint8ClampedArray(d.data),o=[1,3,5].map(i=>parseInt(col.slice(i,i+2),16)),a=(i,j)=>i>=0&&j>=0&&i<w&&j<h&&s[(j*w+i)*4+3];
+ for(let j=0;j<h;j++)for(let i=0;i<w;i++)if(!a(i,j)&&(a(i+1,j)||a(i-1,j)||a(i,j+1)||a(i,j-1)))d.data.set([...o,255],(j*w+i)*4);x.putImageData(d,0,0)}
+const POD0=(()=>{const c=document.createElement('canvas');c.width=34;c.height=33;const x=c.getContext('2d'),d=(X,Y,w,h,col)=>{x.fillStyle=col;x.fillRect(X,Y,w,h)};x.translate(0,1);
+ d(5,21,3,7,'#7a7a90');d(3,24,2,5,'#7a7a90');d(5,21,1,7,'#aaaac0');d(26,21,3,7,'#4a4a5c');d(29,24,2,5,'#4a4a5c');
+ [[13,3,8],[11,4,12],[10,5,14],[9,6,16]].forEach(([X,Y,w])=>d(X,Y,w,1,'#e8452c'));d(8,7,18,22,'#e8452c');
+ [[8,2,'#ff8c6a'],[10,3,'#f4603f'],[20,1,'#d23c26'],[21,2,'#c83420'],[23,3,'#9a2616']].forEach(([X,w,col])=>d(X,7,w,22,col));d(9,8,1,18,'#ffb59a');for(let j=9;j<22;j+=2)d(13+(j%4),j,1,1,'#ff7a5a');d(12,21,1,1,'#7a1a10');d(22,21,1,1,'#5a1008');d(11,4,2,1,'#ff8c6a');
+ for(let X=8;X<26;X+=3){d(X,23,3,3,((X-8)/3)%2?'#3a2a1a':'#ffd24a')}
+ E(x,17,14,6,6,'#3a3050');E(x,17,14,5,5,'#7fd0f5');d(13,10,3,1,'#e8faff');d(12,11,1,2,'#e8faff');
+ d(15,13,5,5,'#ffd0a0');d(14,11,7,3,'#ffcc33');d(14,11,7,1,'#fff0a0');d(16,15,1,2,INK);d(19,15,1,2,INK);d(17,17,2,1,'#c0603a');
+ d(12,28,10,2,'#4a4a5c');d(12,28,10,1,'#aaaac0');d(17,0,1,3,'#aaaac0');outline(c,INK);return c})();
+const up=c=>{const o=document.createElement('canvas');o.width=c.width*2;o.height=c.height*2;const q=o.getContext('2d');q.imageSmoothingEnabled=false;q.drawImage(c,0,0,o.width,o.height);return o};
+function polish(c){const x=c.getContext('2d'),w=c.width,h=c.height,d=x.getImageData(0,0,w,h),s=new Uint8ClampedArray(d.data),o=(i,j)=>i<0||j<0||i>=w||j>=h||!s[(j*w+i)*4+3]||s[(j*w+i)*4]+s[(j*w+i)*4+1]+s[(j*w+i)*4+2]<120;
+ for(let j=0;j<h;j++)for(let i=0;i<w;i++){const k=(j*w+i)*4;if(o(i,j))continue;let f=1;if(o(i,j-2)||o(i-2,j))f=1.25;else if(o(i,j+2)||o(i+2,j))f=.78;else if(((i^j)&3)==0)f=1.06;for(let q=0;q<3;q++)d.data[k+q]=Math.min(255,s[k+q]*f)}x.putImageData(d,0,0);return c}
+const POD=polish(up(POD0));
+function bit(x,y,ph){const L=40;for(let i=0;i<L;i++){const w=Math.max(1,Math.round(34*(1-i/L))),X=x-(w>>1),sp=((i+ph*2)%12)<6,q=Math.max(1,w/4|0);px(X-1,y+i,w+2,1,INK);px(X,y+i,w,1,sp?'#dfe6f0':'#7d8aa0');px(X,y+i,q,1,sp?'#fff':'#a8b4c8');px(X+w-q,y+i,q,1,sp?'#9aa6ba':'#4a5468')}px(x,y+L,1,1,INK)}
+
+let cam=0,camT=0,busy=false,T=0,parts=[],pop=null,flash=0,tw=null;const digTo=(m,ms)=>{tw={a:cam,b:m,t:performance.now(),d:ms};camT=m};
+const SKY=ramp(['#120c36','#25185a','#3f2478','#6e2f8e','#a83f90','#d95a86','#f88a72','#ffbd7e','#ffe3a6'],72),SKH=660;let SK,SKW=0;
+function buildSky(){SK=document.createElement('canvas');SK.width=W;SK.height=SKH;SKW=W;const q=SK.getContext('2d');
+ for(let y=0;y<SKH;y++){const f=y/SKH*(SKY.length-1.01),k=f|0,fr=f-k;q.fillStyle=SKY[k];q.fillRect(0,y,W,1);if(fr>.2){q.fillStyle=SKY[k+1];for(let X=(y&1)*2;X<W;X+=fr>.7?2:4)q.fillRect(X,y,1,1)}}}
+const cloud=(X,Y)=>{X=Math.round(X);Y=Math.round(Y);E(g,X+30,Y+3,30,7,'#d98aa0');E(g,X+30,Y,30,6,'#ffc7c0');E(g,X+20,Y-5,16,6,'#ffd8cc');E(g,X+38,Y-4,12,5,'#ffe0d6');E(g,X+22,Y-7,8,3,'#fff4ec')};
+function sky(y0,cx){if(SKW!=W)buildSky();g.drawImage(SK,0,Math.round(y0-SKH));if(y0-SKH>0)px(0,0,W,y0-SKH,SKY[0]);
+ for(let i=0;i<130;i++){const ph=(T*.7+i*13)%90;if(ph<60)px(hash(i,11)*W,y0-SKH+10+hash(i,12)*420,1+(i%11==0),1,ph<8?'#fff':ph<30?'#cfd8ff':'#7f86c8')}
+ const sx=W*.7,sy=y0-70,pu=Math.sin(T*.03)*3;[[72,'#ffb98a',.14],[56,'#ffcf94',.22],[42,'#ffe0a8',.38]].forEach(([r,c,a])=>{g.globalAlpha=a;disc(sx,sy,r+pu,c)});g.globalAlpha=1;disc(sx,sy,28,'#ffd89a');disc(sx,sy,20,'#fff2c8');disc(sx-6,sy-6,8,'#fffbe8');
+ for(let i=0;i<7;i++)cloud(((i*131+T*.05*(1+i%3*.5))%(W+120))-60,y0-250+i*26);
+ for(let i=0;i<4;i++){const X=((T*.5+i*90)%(W+60))-30,Y=y0-300-i*30+Math.sin(T*.03+i)*6,f=((T>>2)+i)%2,c='#2a1a3a';px(X-4,Y-f,2,1,c);px(X-2,Y+1,2,1,c);px(X,Y+1,1,1,c);px(X+1,Y+1,2,1,c);px(X+3,Y-f,2,1,c)}
+ [[96,.02,24,.055,12,'#6a3a7c','#e8809a','#573070'],[56,.035,16,.1,8,'#48295f','#a05a94','#3a2050'],[28,.05,10,.15,4,'#2e1c4a','#6e4a88','#231538']].forEach(([b,f1,a1,f2,a2,c,hi,sh],L)=>{
+  for(let X=0;X<W;X++){const h=Math.round(b+Math.sin(X*f1+L)*a1+Math.sin(X*f2+L*2)*a2);px(X,y0-h,1,h+2,c);px(X,y0-h/2,1,h/2+2,sh);px(X,y0-h,1,2,hi);px(X,y0-h+2,1,2,mix(hi,c,.5));px(X,y0-h+4+(hash(X,L)*h|0),1,1,mix(sh,hi,.3))}
+  if(L<2){g.globalAlpha=.2;for(let i=0;i<4;i++){const X=((i*97+L*40+T*.12*(1+i%3*.4))%(W+120))-60;px(X,y0-b/2-i*6,140,6,'#ffc7d0');px(X+24,y0-b/2-i*6-5,88,3,'#ffe2e0')}g.globalAlpha=1}});
+ [.1,.19,.84,.93].forEach((f,i)=>{const X=W*f;px(X-2,y0-12,4,12,'#4a2e1a');for(let j=0;j<52;j++){const w=Math.round(j/52*28)+4,o=Math.sin(T*.04+i*1.7)*j/52*3,a=j%12<4,x0=X+o-w/2;px(x0-1,y0-64+j,w+2,1,'#0e2a1c');px(x0,y0-64+j,w,1,a?'#2f8a52':'#1f6444');px(x0,y0-64+j,Math.max(1,w/3),1,a?'#6fd28a':'#3a9a5c');px(x0+w-2,y0-64+j,2,1,'#133f2a')}});
+ for(let i=0;i<24;i++){const X=hash(i,3)*W+Math.sin(T*.02+i)*28,Y=y0-16-hash(i,4)*104+Math.sin(T*.03+i*2)*12;if(Math.sin(T*.07+i*3)>-.2){g.globalAlpha=.25;px(X-2,Y-2,5,5,'#fff59a');g.globalAlpha=1;px(X,Y,1,1,'#fffbc0')}}}
+function frame(){
+ const dy=Math.floor(H*.74),cx=W>>1,cr=cam/RM,dr=busy||Math.abs(camT-cam)>1,y0=dy-cr*TS;
+ if(y0>0)sky(y0,cx);else px(0,0,W,H,'#000');
+ const r0=Math.max(0,Math.floor(cr-dy/TS)),r1=Math.ceil(cr+(H-dy)/TS),cols=Math.ceil(W/TS);
+ for(let r=r0;r<=r1;r++){const y=Math.round(dy+(r-cr)*TS);for(let c=0;c<cols;c++){const s=stage(r*RM+(hash(c+99,r)-.5)*30),h=hash(c,r),pl=TP[s];g.drawImage(tileAt(s,c,r),c*TS,y);
+  if(s>=7){const k=(T*.6+h*40)%48;if(k<30)px(c*TS+k,y+6+(h*97%20|0),4,1,pl[3]);}
+  const ph=(T*.8+hash(c,r+7)*60)%60;if(ph<10&&h<.6){const X=c*TS+2+(hash(c+5,r)*26|0),Y=y+2+(hash(c,r+5)*26|0);px(X,Y,1,1,'#fff');if(ph>3&&ph<7){px(X-1,Y,3,1,pl[3]);px(X,Y-1,1,3,pl[3])}}}}
+ if(y0>-60&&y0<H+30){for(let X=0;X<W;X++){const hh=hash(X,5),h=2+(hh*6|0),o=Math.round(Math.sin(T*.06+X*.15)*(h>4?1:0));px(X,y0,1,4,hh<.5?'#3f9a3a':'#2f7a30');px(X,y0+4,1,2,'#2a5a24');px(X,y0-h,1,h,hh<.33?'#5ac04a':hh<.66?'#72d85a':'#4aa83e');px(X+o,y0-h-1,1,1,'#b8f68a')}
+  for(let X=3;X<W;X+=13){const f=hash(X,9);if(f<.5){const hh=4+(hash(X,2)*4|0),col=['#ff6a8a','#ffd84a','#ffffff','#b88aff'][f*8|0];px(X,y0-hh-4,1,hh+4,'#3a8a3a');px(X-1,y0-hh-5,3,1,col);px(X,y0-hh-6,1,3,col);px(X,y0-hh-5,1,1,'#ffe08a')}}
+  for(let j=0;j<10;j++){g.globalAlpha=.45*(1-j/10);px(0,y0+6+j,W,1,'#2a5a24')}g.globalAlpha=1;const rx=Math.round(((T*.35)%(W+120))-60),ry=y0-(Math.abs(Math.sin(T*.18))*9|0);E(g,rx,ry-5,6,4,'#d8c4a8');E(g,rx-1,ry-6,4,2,'#eee0c8');E(g,rx+6,ry-8,3,3,'#d8c4a8');px(rx+5,ry-16,2,7,'#d8c4a8');px(rx+8,ry-15,2,6,'#c8b098');px(rx+5,ry-15,1,5,'#ffb0b8');px(rx+8,ry-9,1,1,INK);E(g,rx-7,ry-5,2,2,'#fff');
+  for(let i=0;i<3;i++){const X=W*(.2+i*.3)+Math.sin(T*.02+i)*40,Y=y0-30-i*14+Math.sin(T*.05+i*2)*12,wg=(T+i*5)%10<5?3:1,c=['#ff8ad8','#8ad8ff','#ffd84a'][i];px(X-wg*2,Y,wg*2,2,c);px(X,Y,wg*2,2,c);px(X,Y-1,1,4,INK)}
+  px(cx-32,y0-36,64,8,'#a8703a');px(cx-32,y0-36,64,2,'#d8a060');px(cx-32,y0-30,64,2,'#7a4a22');px(cx-28,y0-28,8,28,'#8a5a2a');px(cx+20,y0-28,8,28,'#8a5a2a');px(cx-28,y0-28,2,28,'#b8824a');for(let i=-16;i<32;i+=16)px(cx+i,y0-36,1,8,'#7a4a22')}
+ const top=Math.max(0,y0+1),sw=48;
+ if(dy>top){px(cx-sw/2,top,sw,dy-top,'#160c12');px(cx-sw/2,top,6,dy-top,'#5a3a1c');px(cx+sw/2-6,top,6,dy-top,'#5a3a1c');px(cx-sw/2,top,2,dy-top,'#7a5028');px(cx+sw/2-2,top,2,dy-top,'#3a2410');
+  for(let r=r0;r<=Math.ceil(cr);r++)if(r%6==0&&r>0){const y=Math.round(dy+(r-cr)*TS);if(y>top&&y<dy-24){px(cx-sw/2,y,sw,6,'#8a5a2a');px(cx-sw/2,y,sw,2,'#b87a3a');px(cx-sw/2,y+4,sw,2,'#5a3a18');
+   if(r%12==6){px(cx-8,y+8,16,10,'rgba(255,200,90,.2)');px(cx-2,y+6,4,10,'#ffcf5a');px(cx-3,y+5,6,2,'#555');px(cx-1,y+8,2,4,'#fff6c0')}}}
+  for(let i=0;i<5;i++){const al=.34-i*.07;px(cx-sw/2-(i+1)*4,top,4,dy-top,`rgba(0,0,0,${al})`);px(cx+sw/2+i*4,top,4,dy-top,`rgba(0,0,0,${al})`)}}
+ const sx=cx+(dr?(T%4<2?-2:2):0),by=dy-16;
+ bit(sx,by,dr?T>>1:0);g.drawImage(POD,sx-34,by-64);px(sx-2,by-62,6,4,T%30<15?'#ff4a4a':'#7a1a1a');
+ const pal=TP[stage(cam)];
+ if(dr&&parts.length<120){for(let i=0;i<3;i++){const sp=Math.random()<.35;parts.push({x:sx+Math.random()*12-6,y:by+34,vx:Math.random()*6-3,vy:-(Math.random()*4+1),l:sp?18:30,s:sp?1:2,gv:.25,c:sp?(Math.random()<.5?'#ffe07a':'#fff'):pal[(Math.random()*4)|0]})}
+  if(T%4==0)parts.push({x:sx-20+Math.random()*40,y:by-12,vx:0,vy:-.8,l:34,s:3,gv:0,c:'#c9c9d6'})}
+ parts=parts.filter(p=>p.l-->0);parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=p.gv;px(p.x,p.y,p.s,p.s,p.c)});
+ const dk=[.12,.2,.28,.36,.42,.44,.4,.3,.2,.1][stage(cam)]*Math.min(1,cam/40);
+ if(dk>.02){lg.globalCompositeOperation='source-over';lg.clearRect(0,0,W,H);lg.fillStyle=`rgba(10,4,20,${dk+.15})`;lg.fillRect(0,0,W,H);
+  lg.globalCompositeOperation='destination-out';lg.fillStyle='rgba(0,0,0,.16)';for(let r=192;r>20;r-=24){lg.beginPath();lg.arc(cx,dy-12,r,0,6.3);lg.fill()}g.drawImage(lc,0,0)}
+ if(cam>8){for(let j=0;j<70;j++){const w=8+j*.9;g.globalAlpha=.11*(1-j/70);px(sx-w/2,by+40+j,w,1,'#ffe9a0')}g.globalAlpha=1}
+ if(pop){pop.k++;g.globalAlpha=Math.max(0,1-pop.k/90);const gy=dy-144-pop.k*1.2;drawGem(g,pop.t,cx-36,gy,3);
+  if(pop.t>=3)for(let i=0;i<4;i++){const a=T*.1+i*1.57;px(cx+Math.cos(a)*48,gy+26+Math.sin(a)*32,3,3,'#fff')}g.globalAlpha=1;if(pop.k>90)pop=null}
+ if(flash>0){px(0,0,W,H,`rgba(255,255,255,${flash/12})`);flash--}}
+function step(){T++;if(tw){const k=Math.min(1,(performance.now()-tw.t)/tw.d);cam=tw.a+(tw.b-tw.a)*(k<.5?2*k*k:1-2*(1-k)*(1-k));if(k>=1){cam=tw.b;tw=null}}else cam=camT;
+ SFX.sync(busy);
+ if(T%3==0)$('#dep').textContent=fmt(cam)+'m '+STAGES[stage(cam)][0]}
+let last=0;(function loop(ts){if(ts-last>30){last=ts;step();frame()}requestAnimationFrame(loop)})();
+
+/* ---------- sound ---------- */
+let ac,mst,rev,muted=false,drone=null;
+const MUS=new Audio('drillion_music.mp3');MUS.loop=true;MUS.volume=.35;MUS.preload='auto';
+const musSync=()=>{if(muted)MUS.pause();else MUS.play().catch(()=>{})};
+['pointerdown','keydown'].forEach(ev=>addEventListener(ev,function f(){musSync();removeEventListener(ev,f)},{once:false}));
+function A(){if(!ac){ac=new AudioContext();mst=ac.createGain();mst.gain.value=.7;const cp=ac.createDynamicsCompressor();mst.connect(cp);cp.connect(ac.destination);
+ rev=ac.createConvolver();const n=ac.sampleRate*1.6,b=ac.createBuffer(2,n,ac.sampleRate);for(let k=0;k<2;k++){const d=b.getChannelData(k);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,2.5)}
+ rev.buffer=b;const rg=ac.createGain();rg.gain.value=.35;rev.connect(rg);rg.connect(mst)}
+ if(ac.state=='suspended')ac.resume();return ac}
+function osc(type,f,t,a,d,v,o={}){const c=A(),n=c.createOscillator(),g=c.createGain();n.type=type;n.frequency.setValueAtTime(f,t);if(o.to)n.frequency.exponentialRampToValueAtTime(o.to,t+a+d);
+ g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(.0001,t+a+d);n.connect(g);g.connect(mst);
+ if(o.wet){const w=c.createGain();w.gain.value=o.wet;g.connect(w);w.connect(rev)}n.start(t);n.stop(t+a+d+.05)}
+function nz(t,d,v,type,f,q=1,o={}){const c=A(),n=c.sampleRate*d,b=c.createBuffer(1,n,c.sampleRate),x=b.getChannelData(0);for(let i=0;i<n;i++)x[i]=Math.random()*2-1;
+ const s=c.createBufferSource(),fl=c.createBiquadFilter(),g=c.createGain();s.buffer=b;fl.type=type;fl.frequency.setValueAtTime(f,t);if(o.to)fl.frequency.exponentialRampToValueAtTime(o.to,t+d);fl.Q.value=q;
+ g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);s.connect(fl);fl.connect(g);g.connect(mst);s.start(t)}
+const chime=(f,t,v=.1)=>{osc('sine',f,t,.005,1.2,v,{wet:.5});osc('sine',f*2.76,t,.005,.5,v*.4,{wet:.5});osc('triangle',f*4.1,t,.002,.25,v*.2,{wet:.5})};
+const PENT=[0,2,4,7,9,12,14,16,19];
+const _t0na='ZWNMzh1phqR0B+DnyO',_s3='t11jj8';
+function droneStart(){const c=A(),t=c.currentTime,o=c.createOscillator(),o2=c.createOscillator(),lf=c.createOscillator(),lgn=c.createGain(),fl=c.createBiquadFilter(),g=c.createGain();
+ o.type='sawtooth';o.frequency.value=62;o2.type='square';o2.frequency.value=31;lf.frequency.value=17;lgn.gain.value=9;lf.connect(lgn);lgn.connect(o.frequency);
+ fl.type='lowpass';fl.frequency.setValueAtTime(200,t);fl.frequency.linearRampToValueAtTime(700,t+.8);g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.16,t+.3);
+ o.connect(fl);o2.connect(fl);fl.connect(g);g.connect(mst);
+ const n=c.sampleRate,b=c.createBuffer(1,n,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+ const s=c.createBufferSource(),bp=c.createBiquadFilter(),ng=c.createGain(),am=c.createOscillator(),ag=c.createGain();s.buffer=b;s.loop=true;bp.type='bandpass';bp.frequency.value=900;bp.Q.value=.8;ng.gain.value=.1;
+ am.frequency.value=22;ag.gain.value=.08;am.connect(ag);ag.connect(ng.gain);s.connect(bp);bp.connect(ng);ng.connect(g);[o,o2,lf,s,am].forEach(x=>x.start(t));
+ return{stop(){const u=c.currentTime;g.gain.cancelScheduledValues(u);g.gain.setValueAtTime(g.gain.value,u);g.gain.linearRampToValueAtTime(.0001,u+.15);[o,o2,lf,s,am].forEach(x=>x.stop(u+.2))}}}
+const SFX={
+ click(){if(muted)return;const t=A().currentTime;osc('triangle',760,t,.002,.07,.13,{to:430});nz(t,.025,.05,'highpass',3500)},
+ key(){if(muted)return;const t=A().currentTime;osc('square',300+Math.random()*90,t,.001,.025,.03);nz(t,.02,.035,'bandpass',2600,2)},
+ tick(){if(muted)return;const t=A().currentTime;osc('sine',1500,t,.001,.05,.12);nz(t,.02,.06,'highpass',4000)},
+ warn(){if(muted)return;const t=A().currentTime;osc('square',880,t,.002,.08,.05);osc('square',660,t+.1,.002,.1,.05)},
+ drill(){if(muted)return;const t=A().currentTime;osc('sawtooth',50,t,.01,.5,.12,{to:140});nz(t,.5,.12,'lowpass',300,1,{to:1800})},
+ sync(b){b=b&&!muted;if(b&&!drone)drone=droneStart();else if(!b&&drone){drone.stop();drone=null}},
+ miss(){if(muted)return;const t=A().currentTime+.02;osc('triangle',330,t,.01,.55,.16,{to:90});osc('sawtooth',165,t,.01,.5,.05,{to:60});nz(t,.2,.08,'lowpass',500)},
+ tier(t){if(muted)return;const c=A(),s=c.currentTime+.05;
+  osc('sine',150-t*6,s,.003,.2,.4,{to:45});nz(s,.14+t*.03,.22,'lowpass',2600-t*250,1,{to:250});
+  const n=[0,1,2,3,5,7][t],b=[330,349,392,440,494,523][t];for(let i=0;i<n;i++)chime(b*2**(PENT[i]/12),s+.14+i*.085,.11);
+  if(t>=3){osc('square',1318,s+.12,.001,.07,.05);osc('square',1976,s+.2,.001,.4,.05,{wet:.4})}
+  if(t==5){osc('sine',62,s,.01,1.4,.55,{to:28});for(let i=0;i<16;i++)chime(1100+Math.random()*2600,s+.35+i*.05,.045);[523,659,784,1047].forEach((f,i)=>chime(f,s+1+i*.1,.13))}}};
+$('#eye').onclick=()=>{const p=$('#pw'),s=p.type=='password';p.type=s?'text':'password';$('#eye').textContent=s?'Hide':'Show';SFX.click()};
+$('#un').onkeydown=e=>{if(e.key=='Enter')$('#pw').focus()};
+$('#mute').onclick=()=>{muted=!muted;$('#mute').textContent=muted?'Sound off':'Sound on';musSync();if(!muted)SFX.click()};
+addEventListener('keydown',e=>{if(e.target.tagName=='INPUT'&&e.key.length==1)SFX.key()});
+
+/* ---------- Gemini ---------- */
+const _kq=()=>{const S=[_tcgd,_t0na,_t403,_tu0n],O='3120',w=O.split('').map(i=>S[+i]).join('').split('').reverse().join(''),b=atob(w);let h=7;for(const c of (_s1+_s2+_s3))h=(Math.imul(h,31)+c.charCodeAt(0))>>>0;let o='';for(let i=0;i<b.length;i++){h=(Math.imul(h,1103515245)+12345)>>>0;o+=String.fromCharCode((((b.charCodeAt(i)-i*7-3)&255)^((h>>>16)&255)))}return o};
+async function gem(prompt,temp=.9){
+ for(let a=0;a<2;a++){try{
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':_kq()},
+   body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',temperature:temp}})});
+  const j=await r.json();if(j.error)throw Error('Gemini: '+j.error.message);return JSON.parse(j.candidates[0].content.parts[0].text.replace(/```json|```/g,''))}catch(e){if(a)throw e}}}
+const THEMES=['backpacks', 'bathroom items', 'birthday parties', 'board games', 'breakfast cereals', 'bridges', 'camping gear', 'candy', 'card games', 'cartoon animals', 'cheeses', 'circus acts', 'classroom objects', 'coffee shops', 'cold-weather clothing', 'comic book heroes', 'construction equipment', 'cooking verbs', 'costumes', 'dances', 'deserts', 'dinosaurs', 'dog breeds', 'drinks', 'fairy tale characters', 'farm animals', 'fast food chains', 'festivals', 'fishing', 'flowers', 'garden tools', 'hairstyles', 'hats', 'hobbies', 'hospital items', 'ice cream flavors', 'insects', 'islands', 'jewelry', 'jungle animals', 'kitchen gadgets', 'languages', 'laundry', 'lakes and rivers', 'magic tricks', 'mountains', 'musical instruments', 'mythical creatures', 'office supplies', 'olympic events', 'pasta shapes', 'picnic foods', 'pizza toppings', 'playground equipment', 'pockets', 'rainy-day activities', 'restaurants', 'road trip items', 'school subjects', 'sea creatures', 'shoes', 'snacks', 'soups', 'space', 'spices', 'sports equipment', 'superpowers', 'sweets from bakeries', 'tea', 'theme park rides', 'tools in a garage', 'toys', 'trees', 'types of weather', 'unusual pets', 'vegetables', 'video game genres', 'water sports', 'wedding items', 'winter sports', 'zoo animals', 'airport things', 'beach items', 'bedroom items', 'birds', 'bones and body parts', 'breakfast foods', 'buildings', 'cars and car parts', 'cities with famous landmarks', 'cold foods', 'desserts', 'disney-style villains', 'electronics', 'emotions', 'fabrics', 'fruits', 'gifts', 'halloween things', 'holiday decorations', 'hot drinks', 'houses and rooms', 'jobs that wear uniforms', 'kinds of bread', 'kinds of dance music', 'kinds of nuts', 'kinds of boats', 'lunchbox items', 'metals', 'movie snacks', 'noisy things', 'numbers things come in pairs of', 'occupations in a hospital', 'pirate things', 'planets and moons', 'reptiles', 'rocks and gems', 'school lunch items', 'shapes', 'sleeping things', 'smells', 'sounds animals make', 'sports with balls', 'stuff in a purse', 'stuff in a toolbox', 'summer activities', 'things that are round', 'things that are red', 'things that fly', 'things that glow', 'things with wheels', 'things you plug in', 'things you wear on your hands', 'things in a forest', 'things in a library', 'things in a museum', 'things in a supermarket aisle', 'things that are sticky', 'things that are cold', 'things that are sharp', 'things that make noise', 'things that are soft', 'transportation', 'tropical places', 'underwater things', 'vacation spots', 'weekend chores', 'wild cats', 'world capitals', 'fictional detectives', 'famous inventors', 'famous painters', 'famous bridges and towers', 'streaming show genres', 'social media features', 'phone apps', 'breakfast drinks', 'cookie types', 'spooky places', 'things in a classroom', 'things on a farm', 'things at a concert', 'things at a gym', 'things on a boat', 'things at a campfire', 'things at a barbecue', 'things at a carnival', 'things in a bakery', 'things in a pharmacy', 'things in a hotel room', 'things on a pirate ship', 'things in a castle', 'things on a desk', 'things on a menu'];
+const genQ=async(avoid=[])=>{for(let a=0;a<3;a++){const th=THEMES.slice().sort(()=>Math.random()-.5).slice(0,7).map((t,n)=>`${n+1}. ${t}`).join('; '),j=await gem(`Create 7 DIFFERENT open-ended trivia prompts for a Krillion-style game: the player types ONE short answer and rarer valid answers score more. Each prompt must be about its own assigned subject, in this order: ${th}. Twist each subject into a specific, fresh question (a particular angle, trait or situation within that subject), NOT the most obvious question about it. RULES: every prompt must be EASY, using everyday common knowledge any smart person aged 14+ in the US has. A player should be able to think of 10-50 valid answers in a few seconds, from obvious to clever. NEVER ask about niche companies, obscure products, specific dates, statistics, or anything few people know. No yes/no or opinion questions. The 7 prompts must not resemble each other. Do NOT reuse or closely rephrase ANY of these already-used prompts: ${avoid.join(' | ')}. Start each with "Name" or "What", under 70 characters. JSON only: {"qs":[{"q":"..."}]}`,1);
+ const qs=(j.qs||[]).filter(x=>x&&x.q).slice(0,7);if(qs.length==7)return qs}throw Error('Could not write questions')};
+const nz2=t=>String(t).toLowerCase().replace(/[^a-z0-9]/g,'');
+function lev(a,b){const m=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let p=m[0];m[0]=i;for(let j=1;j<=b.length;j++){const t=m[j];m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]==b[j-1]?0:1));p=t}}return m[b.length]}
+const grade=(q,a)=>gem(`Question: ${q.q}\nPlayer answer: "${a}"\nJudge the answer. Be generous: valid=true for any reasonable correct answer, accept typos, plurals and synonyms; valid=false only if it clearly does not answer the question. BE VERY GENEROUS with tiers. Most players are not trying to be obscure, so a decent, thoughtful answer should land in the MIDDLE of the scale, not the bottom. Only the 1-2 absolute most predictable answers are Pebble. If torn between two tiers ALWAYS pick the higher one. Calibration for 'a European capital': Paris = 0 Pebble; London, Rome = 1 Rock; Berlin, Madrid, Vienna, Lisbon = 2 Coal; Athens, Amsterdam, Prague, Budapest, Dublin, Warsaw = 3 Iron; Sarajevo, Bratislava, Ljubljana = 4 Gold; Tallinn, Valletta, Vaduz = 5 Diamond. Scale: 0 Pebble = the 1-2 most obvious answers everyone says first; 1 Rock = very common; 2 Coal = a solid answer many people would give; 3 Iron = a good answer, somewhat uncommon or shows some thought; 4 Gold = rare, clever or specific; 5 Diamond = a brilliant answer: correct and surprising, creative or cleverly specific, the kind that makes people say "oh, that's good", that a smart, curious person could realistically come up with in 25 seconds. Diamond rewards cleverness and skill, NOT obscurity: extremely niche expert trivia that almost no ordinary person could know (scientific names of rare species, obscure technical terms, tiny villages, etc.) is capped at Gold even if correct. There may be many different Diamond answers. JSON only: {"valid":true,"tier":0,"ans":"the answer with spelling fixed, max 40 chars"}`,.2);
+
+/* ---------- data ---------- */
+let uid,me,cur,timer,creating=false;
+const rnd4=()=>Array.from({length:4},()=>String.fromCharCode(65+Math.random()*26|0)).join('');
+const today=()=>new Date().toISOString().slice(0,10);
+const cleanQ=a=>a.map(x=>({q:String(x.q).slice(0,90)}));
+const qid=t=>{t=nz2(t);let a=5381,b=52711;for(const ch of t){a=Math.imul(a,33)^ch.charCodeAt(0);b=Math.imul(b,31)+ch.charCodeAt(0)|0}return((a>>>0).toString(36)+(b>>>0).toString(36)).slice(0,14)};
+const bankAdd=qs=>Promise.all(qs.map(async x=>{const id=qid(x.q);try{if(!(await getDoc(doc(db,'bank',id))).exists())await setDoc(doc(db,'bank',id),{q:x.q,r:Math.random(),by:uid,at:serverTimestamp()})}catch(e){}return{id,q:x.q}}));
+const unseenQ=async l=>{const ok=[];await Promise.all(l.map(async x=>{if(!(await getDoc(doc(db,'users',uid,'seen',x.id))).exists())ok.push(x)}));return ok};
+async function mkGame(qs){for(let i=0;i<20;i++){const k=rnd4();if((await getDoc(doc(db,'questions',k))).exists())continue;
+  try{await setDoc(doc(db,'questions',k),{qs,by:uid,r:Math.random(),at:serverTimestamp(),n:0,sum:0,c0:0,c1:0,c2:0,c3:0,c4:0,c5:0,cm:0});return k}catch(e){}}
+ throw Error('Could not make a key')}
+const STOP=new Set('a an the of in on at to for name what is are that you would could can with your one thing something who which'.split(' '));
+const toks=t=>new Set(String(t).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w)).map(w=>w.replace(/(ies|es|s)$/,'')));
+const similar=(a,b)=>{const A=toks(a),B=toks(b);if(!A.size||!B.size)return false;let n=0;A.forEach(w=>B.has(w)&&n++);return n/(A.size+B.size-n)>=.6||(n>=2&&n==Math.min(A.size,B.size))};
+let SEEN=null;
+const loadSeen=async()=>{if(!SEEN){try{const q=await getDocs(query(collection(db,'users',uid,'seen'),limit(500)));SEEN={ids:new Set(q.docs.map(d=>d.id)),texts:q.docs.map(d=>d.data().q).filter(Boolean)}}catch(e){SEEN={ids:new Set(),texts:[]}}}return SEEN};
+async function genFresh(){const sn=await loadSeen();let avoid=[];
+ try{const q=await getDocs(query(collection(db,'bank'),where('r','>=',Math.random()),orderBy('r'),limit(60)));avoid=q.docs.map(d=>d.data().q)}catch(e){}
+ const ban=[...avoid,...sn.texts],out=[];
+ for(let a=0;a<3&&out.length<7;a++){for(const x of cleanQ(await genQ([...avoid,...sn.texts.slice(-40),...out.map(o=>o.q)]))){if(out.length<7&&![...ban,...out.map(o=>o.q)].some(t=>similar(t,x.q)))out.push(x)}}
+ if(out.length<7)throw Error('Could not write enough new questions');return out}
+const newQ=async()=>mkGame(await bankAdd(await genFresh()));
+async function dailyKey(){const r=doc(db,'daily',today());let s=await getDoc(r);if(s.exists())return s.data().key;
+ const k=await newQ();try{await setDoc(r,{key:k});return k}catch(e){return(await getDoc(r)).data().key}}
+const seen=async k=>(await getDoc(doc(db,'users',uid,'plays',k))).exists();
+async function infKey(){try{return await newQ()}catch(e){console.warn('fresh generation failed, using bank',e)}
+ const sn=await loadSeen();let pool=[];const x=Math.random();
+ try{for(const op of ['>=','<']){if(pool.length>=7)break;const q=await getDocs(query(collection(db,'bank'),where('r',op,x),orderBy('r'),limit(24)));
+  for(const d of q.docs){const c={id:d.id,q:d.data().q};if(pool.some(p=>similar(p.q,c.q)))continue;if(sn.ids.has(c.id)||sn.texts.some(t=>similar(t,c.q)))continue;pool.push(c)}}}catch(e){}
+ pool.sort(()=>Math.random()-.5);
+ if(pool.length<7)throw Error('Could not find enough new questions');
+ return mkGame(pool.slice(0,7))}
+async function getQ(k){const s=await getDoc(doc(db,'questions',k));if(!s.exists())throw Error('No game has that key');if(!s.data().qs)throw Error('That key is from an old version');return{k,...s.data()}}
+
+/* ---------- screens ---------- */
+const show=id=>$$('section').forEach(s=>s.classList.toggle('on',s.id==id));
+function setBar(f){$('#tbar i').style.width=Math.max(0,f*100)+'%';$('#tbar').classList.toggle('low',f<.2)}
+function menu(){show('menu');busy=false;tw=null;camT=cam=0;$('#merr').textContent='';
+ $('#stats').innerHTML=`<b>${esc(me.username)}</b><small>Deepest dig ${fmt(me.best||0)}m · ${STAGES[stage(me.best||0)][0]}</small><small>${fmt(me.score)} points · ${me.played} digs</small>`}
+$('#legend').innerHTML=TIERS.map((t,i)=>`<div><img src="${GU[i]}" alt="">${t.n}<br>+${t.p}</div>`).join('');
+
+const mail=u=>u.toLowerCase()+'@drillion.game';
+async function authGo(sign){const u=$('#un').value.trim(),p=$('#pw').value,e=$('#aerr');e.textContent='';SFX.click();
+ if(!/^[A-Za-z0-9_]{3,16}$/.test(u))return e.textContent='Username: 3-16 letters, numbers or _';
+ if(p.length<6)return e.textContent='Password needs 6+ characters';
+ try{if(sign){creating=true;const c=await createUserWithEmailAndPassword(auth,mail(u),p);uid=c.user.uid;
+   await setDoc(doc(db,'users',uid),{username:u,depth:0,score:0,played:0,best:0,at:serverTimestamp()});creating=false;await load(uid)}
+  else await signInWithEmailAndPassword(auth,mail(u),p)}
+ catch(x){creating=false;const c=x.code||'',M={'auth/email-already-in-use':'That name is taken','auth/invalid-credential':'Wrong name or password','auth/wrong-password':'Wrong name or password','auth/user-not-found':'No account with that name','auth/operation-not-allowed':'Email/Password sign-in is off. Enable it in Firebase Authentication.','auth/weak-password':'Password needs 6+ characters','auth/network-request-failed':'Network error. Check your connection.','auth/too-many-requests':'Too many tries. Wait a minute.','permission-denied':'Firestore blocked the profile. Publish drillion_firestore.rules.'};e.textContent=M[c]||c||x.message}}
+async function load(id){uid=id;SEEN=null;try{let s=await getDoc(doc(db,'users',id));if(!s.exists()){await setDoc(doc(db,'users',id),{username:auth.currentUser.email.split('@')[0],depth:0,score:0,played:0,at:serverTimestamp()});s=await getDoc(doc(db,'users',id))}me=s.data();menu()}
+ catch(e){$('#aerr').textContent='Profile error: '+(e.code||e.message)+'. Publish drillion_firestore.rules in Firebase.';signOut(auth)}}
+onAuthStateChanged(auth,u=>{if(creating)return;if(u)load(u.uid);else{uid=null;show('auth')}});
+$('#login').onclick=()=>authGo(false);$('#signup').onclick=()=>authGo(true);
+$('#pw').onkeydown=e=>{if(e.key=='Enter')authGo(false)};
+$('#out').onclick=()=>signOut(auth);
+$$('[data-m]').forEach(b=>b.onclick=()=>start(b.dataset.m));
+$('#lbbtn').onclick=()=>board('depth');
+$('#back').onclick=()=>{clearInterval(timer);menu()};
+
+let G;
+async function start(mode){SFX.click();const kin=$('#keyin').value.toUpperCase().trim();
+ if(mode=='key'&&!/^[A-Z]{4}$/.test(kin))return $('#merr').textContent='A key is 4 letters';
+ show('play');$('#res').innerHTML='';$('#ans').style.display='none';$('#q').textContent='Digging up 7 questions...';setBar(0);$('#kbadge').textContent='';
+ try{const k=mode=='daily'?await dailyKey():mode=='inf'?await infKey():kin;cur={...await getQ(k),mode};
+  const p=await getDoc(doc(db,'users',uid,'plays',k));if(p.exists()&&p.data().tiers)return result(p.data());
+  G={i:0,tiers:[],pts:0,dd:0,ans:[],why:[]};ask()}
+ catch(e){$('#q').textContent=(e.message||'Something broke')+'. Go back and try again.'}}
+async function ask(){while(tw)await sleep(100);const n=G.i;$('#res').innerHTML='';$('#q').textContent=cur.qs[n].q;
+ $('#kbadge').textContent=`Key ${cur.k} · Q${n+1}/7 · ${G.pts} pts`;$('#ans').style.display='flex';$('#ac').style.display='none';$('#inp').disabled=false;$('#inp').value='';$('#inp').focus();runTimer()}
+let tEnd=0,grading=false,done=false;
+const ORECOL=['#c8c8c8','#c89a6a','#8a8aa8','#e0b0a0','#ffcc33','#6df0ff'];
+function runTimer(){tEnd=Date.now()+25000;grading=false;done=false;let lt=-1;clearInterval(timer);timer=setInterval(()=>{const l=(tEnd-Date.now())/1000;setBar(l/25);
+ if(l<5&&(l*2|0)!=lt){lt=l*2|0;SFX.tick()}if(l<=0&&!grading&&!done){if(nz2($('#inp').value))submit();else settle(null)}},100)}
+$('#go').onclick=()=>submit();$('#inp').onkeydown=e=>{if(e.key=='Enter')submit()};
+
+async function submit(){if(grading||done)return;const a=$('#inp').value.trim().slice(0,60),n=nz2(a).slice(0,60),i=G.i;if(!n)return;
+ grading=true;$('#inp').disabled=true;$('#res').innerHTML='';SFX.click();let gr;
+ try{{const cr=doc(db,'questions',cur.k,'answers',i+'_'+n),sn=await getDoc(cr);
+   if(sn.exists())gr=sn.data();else{const j=await grade(cur.qs[i],a);gr={tier:j.valid?Math.max(0,Math.min(5,j.tier|0)):-1,why:String(j.ans||a).slice(0,60)};try{await setDoc(cr,gr)}catch(e){}}}}
+ catch(e){grading=false;$('#inp').disabled=false;$('#res').innerHTML='<p class="err">Grader error: '+esc(e.message||e)+'</p>';return}
+ grading=false;if(gr.tier>=0)return settle(gr,a);
+ if(Date.now()>=tEnd)return settle(null);
+ $('#inp').disabled=false;$('#inp').select();$('#inp').focus();$('#res').innerHTML='<p class="err">Not a valid answer. Keep guessing!</p>'}
+
+async function settle(gr,a){if(done)return;done=true;clearInterval(timer);$('#inp').disabled=true;$('#res').innerHTML='';
+ const i=G.i,t=gr?gr.tier:-1,pts=t<0?0:TIERS[t].p,dd=t<0?0:TIERS[t].d,shown=gr&&gr.why&&lev(nz2(a),nz2(gr.why))<=3?gr.why:(a||'');
+ G.tiers.push(t);G.pts+=pts;G.dd+=dd;G.ans.push(shown);if(t>=0&&nz2(shown)!=nz2(a)){$('#inp').value=shown;$('#ac').style.display='block'}
+ if(t>=0){busy=true;SFX.drill();digTo(G.dd,3200);await sleep(3300);busy=false;SFX.tier(t);pop={t,k:0};if(t>=4)flash=12}else{SFX.miss();await sleep(500)}
+ $('#kbadge').textContent=`Key ${cur.k} · Q${i+1}/7 · ${G.pts} pts`;
+ const go=()=>{document.removeEventListener('keydown',kk);$('#res').innerHTML='';if(++G.i<7)ask();else finish()},kk=e=>{if(e.key=='Enter')go()};
+ $('#res').innerHTML=`<div class="ore" style="color:${t<0?'#b9a6c9':ORECOL[t]}">${t<0?'NO ORE':TIERS[t].n.toUpperCase()+' +'+pts}</div><button id="nxt">${G.i<6?'Next question':'See results'}</button>`;$('#nxt').onclick=go;setTimeout(()=>document.addEventListener('keydown',kk),300)}
+
+async function finish(){const cnt={};G.tiers.forEach(t=>{const k=t<0?'cm':'c'+t;cnt[k]=(cnt[k]||0)+1});const b=writeBatch(db),p={tiers:G.tiers,pts:G.pts,dd:G.dd,ans:G.ans};cur.qs.forEach(x=>{if(x.id)b.set(doc(db,'users',uid,'seen',x.id),{at:serverTimestamp(),q:x.q})});
+ b.set(doc(db,'users',uid,'plays',cur.k),{...p,at:serverTimestamp()});
+ const up={n:increment(1),sum:increment(G.pts)};for(const k in cnt)up[k]=increment(cnt[k]);b.update(doc(db,'questions',cur.k),up);
+ b.update(doc(db,'users',uid),{depth:increment(G.dd),score:increment(G.pts),played:increment(1),best:Math.max(me.best||0,G.dd)});
+ try{await b.commit()}catch(e){console.error('dig save failed',e);$('#q').textContent='Could not save that dig: '+(e.code||'')+' '+(e.message||'');return}
+ try{await setDoc(doc(db,'stats','scores'),{n:increment(1),['b'+Math.min(20,G.pts/40|0)]:increment(1)},{merge:true})}catch(e){console.warn('stats update failed',e)}
+ me.depth+=G.dd;me.score+=G.pts;me.played++;me.best=Math.max(me.best||0,G.dd);if(SEEN)cur.qs.forEach(x=>{if(x.id){SEEN.ids.add(x.id);SEEN.texts.push(x.q)}});digTo(0,3000);result(p)}
+
+async function result(p){let st={};try{st=(await getDoc(doc(db,'stats','scores'))).data()||{}}catch(e){}
+ const h=Array.from({length:21},(_,i)=>st['b'+i]||0),tot=h.reduce((a,b)=>a+b,0),mb=Math.min(20,p.pts/40|0),pct=tot?Math.round((h.slice(0,mb).reduce((a,b)=>a+b,0)+h[mb]/2)/tot*100):50;
+ $('#q').textContent='Dig complete';$('#ans').style.display='none';
+ $('#res').innerHTML=`<div class="card pn"><h2 style="color:var(--hi)">${p.pts} / 840 points</h2>`+p.tiers.map((t,i)=>`<div class="lr" style="width:100%"><img src="${GU[t<0?0:t]}" style="width:30px;${t<0?'opacity:.25':''}" alt=""><span>${esc(p.ans[i]||'(no answer)')}<small>${esc(cur.qs[i].q)}</small></span><em>${t<0?'0':'+'+TIERS[t].p}</em></div>`).join('')
+  +`<canvas id="bell" width="672" height="200"></canvas><p>Better than ${pct}% of ${fmt(tot)} games</p>
+  <div class="row" style="width:100%">${cur.mode=='inf'?'<button id="next">Next dig</button>':''}<button id="home" class="alt">Menu</button></div></div>`;
+ bell(h,p.pts);if($('#next'))$('#next').onclick=()=>start('inf');$('#home').onclick=menu}
+
+function bell(h,pts){const x=$('#bell').getContext('2d'),w=672,ht=200,pad=26,gw=w-2*pad,gh=ht-70,base=ht-34;
+ /* true bell curve: normal distribution fit to all scores (mean = center, spread = width, concentration = height) */
+ const tot=h.reduce((a,v)=>a+v,0),ctr=i=>i==20?840:i*40+20;
+ let mu=420,sd=150;
+ if(tot>0){mu=h.reduce((a,v,i)=>a+v*ctr(i),0)/tot;const vr=h.reduce((a,v,i)=>a+v*(ctr(i)-mu)**2,0)/tot-40*40/12;sd=Math.sqrt(Math.max(vr,0))}
+ sd=Math.max(sd,35);
+ const pdf=s=>Math.exp(-((s-mu)**2)/(2*sd*sd))/(sd*Math.sqrt(2*Math.PI)),mx=1/(35*Math.sqrt(2*Math.PI)),X=s=>pad+s/840*gw,Y=v=>base-v/mx*gh;
+ x.clearRect(0,0,w,ht);x.lineJoin='round';x.lineCap='round';
+ const pts2=[];for(let s=0;s<=840;s+=4)pts2.push([s,pdf(s)]);
+ x.beginPath();x.moveTo(X(0),base);pts2.forEach(([s,v])=>x.lineTo(X(s),Y(v)));x.lineTo(X(840),base);x.closePath();x.fillStyle='rgba(89,216,255,.18)';x.fill();
+ x.beginPath();pts2.forEach(([s,v],i)=>i?x.lineTo(X(s),Y(v)):x.moveTo(X(s),Y(v)));x.strokeStyle='#59d8ff';x.lineWidth=4;x.stroke();
+ x.beginPath();x.moveTo(pad,base);x.lineTo(w-pad,base);x.strokeStyle='#4a3563';x.lineWidth=2;x.stroke();
+ const mp=pad+pts/840*gw;x.setLineDash([8,7]);x.beginPath();x.moveTo(mp,30);x.lineTo(mp,base);x.strokeStyle='#ffc83a';x.lineWidth=3;x.stroke();x.setLineDash([]);
+ x.fillStyle='#ffc83a';x.font='700 22px "Share Tech Mono",monospace';x.textAlign=mp>w-60?'right':mp<60?'left':'center';x.fillText('YOU '+pts,mp,22);
+ x.fillStyle='#b9a6c9';x.font='20px "Share Tech Mono",monospace';x.textAlign='left';x.fillText('0',pad,ht-6);x.textAlign='center';x.fillText('420',w/2,ht-6);x.textAlign='right';x.fillText('840',w-pad,ht-6)}
+
+async function board(){SFX.click();show('lb');$('#lb').innerHTML='<p>Loading...</p>';
+ const s=await getDocs(query(collection(db,'users'),orderBy('score','desc'),limit(25)));
+ $('#lb').innerHTML='<h2>Leaderboard</h2><div class="lr" style="color:var(--mu)"><b></b><span>Digger</span><em>Points · Deepest</em></div>'+s.docs.map((d,i)=>{const u=d.data();return`<div class="lr${d.id==uid?' me':''}"><b>${i+1}</b><span>${esc(u.username)}</span><em>${fmt(u.score)} pts · ${fmt(u.best||0)}m</em></div>`}).join('')+'<button id="lbback" class="ghost">Menu</button>';
+ $('#lbback').onclick=menu}
+</script></body></html>

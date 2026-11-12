@@ -899,7 +899,7 @@
 
         // 2) POPULAR LEADERBOARD — the projects ranked right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
-        const POPULAR = ['spotify', 'dash', 'numerus', 'splendid', 'rpg'];
+        const POPULAR = ['spotify', 'dash', 'drillion', 'numerus', 'splendid'];
 
         // 3) Should popular projects ALSO show up again in the "All projects" list?
         const SHOW_POPULAR_IN_ALL = true;
@@ -914,6 +914,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'drillion',        name: 'Drillion',         img: 'drillion.png',         date: 'NOV 2026',
+              blurb: 'Answer seven open-ended questions and drill deeper the rarer your answers are. Dig for ore, climb the leaderboards and see how you stack up on the bell curve.' },
             { prefix: 'numerus',         name: 'Numerus',          img: 'numerus.png',          date: 'NOV 2026',
               blurb: 'A minimalist number-guessing duel. Face a human or a robot over 10 rounds of estimation questions and see who lands closest.' },
             { prefix: 'jewelfish',       name: 'Jewelfish',        img: 'jewelfish.png',        date: 'OCT 2026',
@@ -1130,6 +1132,16 @@
         // Newest first. Version rules: new game +0.1.0, normal update +0.0.1,
         // whole-site overhaul / mass game release / breakthrough change +1.0.0. Dates are MM/DD/YYYY.
         const CHANGELOG = [
+            { v: '2.5.0', date: '11/11/2026',
+              desc: 'Drillion is out, a new project: a trivia game where rarer answers dig deeper.',
+              bullets: [
+                'New project: Drillion',
+                'Answer seven open-ended questions, each with 25 seconds, and rarer answers earn better ore: Pebble, Rock, Coal, Iron, Gold and Diamond',
+                'Play the Daily dig, an endless Infinite dig, or a friend\'s game with its 4-letter key',
+                'Every dig ends with a bell curve showing how your score compares to everyone else\'s',
+                'Account system with sign up and log in, plus a leaderboard for points and deepest dig',
+                'Drillion added at #3 on the Popular list, pushing Numerus, Splendid down and Dragoneer off the list'
+            ]},
             { v: '2.4.0', date: '10/25/2026',
               desc: 'Jewelfish is out, a new project: a video editor that runs in your browser.',
               bullets: [
