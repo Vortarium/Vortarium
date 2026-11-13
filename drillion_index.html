@@ -313,7 +313,7 @@ const genQ=async(avoid=[])=>{for(let a=0;a<3;a++){const th=THEMES.slice().sort((
  const qs=(j.qs||[]).filter(x=>x&&x.q).slice(0,7);if(qs.length==7)return qs}throw Error('Could not write questions')};
 const nz2=t=>String(t).toLowerCase().replace(/[^a-z0-9]/g,'');
 function lev(a,b){const m=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let p=m[0];m[0]=i;for(let j=1;j<=b.length;j++){const t=m[j];m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]==b[j-1]?0:1));p=t}}return m[b.length]}
-const grade=(q,a)=>gem(`Question: ${q.q}\nPlayer answer: "${a}"\nJudge the answer. Be generous: valid=true for any reasonable correct answer, accept typos, plurals and synonyms; valid=false only if it clearly does not answer the question. BE VERY GENEROUS with tiers. Most players are not trying to be obscure, so a decent, thoughtful answer should land in the MIDDLE of the scale, not the bottom. Only the 1-2 absolute most predictable answers are Pebble. If torn between two tiers ALWAYS pick the higher one. Calibration for 'a European capital': Paris = 0 Pebble; London, Rome = 1 Rock; Berlin, Madrid, Vienna, Lisbon = 2 Coal; Athens, Amsterdam, Prague, Budapest, Dublin, Warsaw = 3 Iron; Sarajevo, Bratislava, Ljubljana = 4 Gold; Tallinn, Valletta, Vaduz = 5 Diamond. Scale: 0 Pebble = the 1-2 most obvious answers everyone says first; 1 Rock = very common; 2 Coal = a solid answer many people would give; 3 Iron = a good answer, somewhat uncommon or shows some thought; 4 Gold = rare, clever or specific; 5 Diamond = a brilliant answer: correct and surprising, creative or cleverly specific, the kind that makes people say "oh, that's good", that a smart, curious person could realistically come up with in 25 seconds. Diamond rewards cleverness and skill, NOT obscurity: extremely niche expert trivia that almost no ordinary person could know (scientific names of rare species, obscure technical terms, tiny villages, etc.) is capped at Gold even if correct. There may be many different Diamond answers. JSON only: {"valid":true,"tier":0,"ans":"the answer with spelling fixed, max 40 chars"}`,.2);
+const grade=(q,a)=>gem(`Question: ${q.q}\nPlayer answer: "${a}"\n\nSTEP 1 - VALIDITY. valid=true if the answer is a reasonable, correct or defensible answer to the question. Accept typos, plurals, abbreviations, synonyms, brand names, creative-but-fair readings, and loosely related answers. valid=false ONLY if it clearly does not answer the question (gibberish, wrong category, or a plain factual error). When unsure, valid=true.\n\nSTEP 2 - RARITY TIER (0-5). Silently imagine 100 different random people answering this exact question, and estimate what share of them would give the same answer as the player. Then pick the tier by that share:\n0 Pebble: said by about 20%+ of people (only the 1-2 most obvious answers)\n1 Rock: about 8-20% (very common)\n2 Coal: about 4-8% (common, solid)\n3 Iron: about 2-4% (less common, shows some thought)\n4 Gold: about 0.5-2% (rare, specific or clever)\n5 Diamond: under 0.5% (a standout: valid, and specific, surprising or clever, yet something a smart curious person could think of in 25 seconds)\n\nRULES: (a) Spread answers EVENLY over all six tiers; each tier should come up about equally often across many players, so do NOT default to Pebble. Pebble is rare. (b) Specific beats generic: a precise variant, named example, or unusual angle ranks higher than a broad category word for the same idea (e.g. 'dog' is lower than 'Basenji'; 'fruit' is lower than 'persimmon'). (c) A thoughtful answer should land around Coal to Gold. (d) If torn between two tiers ALWAYS pick the higher one. (e) Diamond is its own full tier, not a one-in-a-million miracle: any valid answer that is distinctive, clever or well-chosen deserves it. The only cap: pure expert trivia almost nobody could know (Latin species names, obscure jargon, tiny villages) tops out at Gold. (f) Lazy, vague or overly broad answers stay at Pebble/Rock.\nCalibration for 'a European capital': Paris = 0; London, Rome = 1; Berlin, Madrid, Vienna = 2; Lisbon, Athens, Prague, Dublin = 3; Budapest, Warsaw, Bratislava = 4; Tallinn, Valletta, Vaduz, Ljubljana = 5.\n\nJSON only: {"valid":true,"tier":0,"ans":"the answer with spelling fixed, max 40 chars"}`,.4);
 
 /* ---------- data ---------- */
 let uid,me,cur,timer,creating=false;
@@ -371,40 +371,42 @@ $('#login').onclick=()=>authGo(false);$('#signup').onclick=()=>authGo(true);
 $('#pw').onkeydown=e=>{if(e.key=='Enter')authGo(false)};
 $('#out').onclick=()=>signOut(auth);
 $$('[data-m]').forEach(b=>b.onclick=()=>start(b.dataset.m));
-$('#lbbtn').onclick=()=>board('depth');
-$('#back').onclick=()=>{clearInterval(timer);menu()};
+$('#lbbtn').onclick=()=>board('score');
+$('#back').onclick=()=>{if($('#back').textContent=='Abort'&&!confirm('Abort this dig? Your score will not count.'))return;run++;grading=false;done=true;clearInterval(timer);menu()};
 
-let G;
+let G,run=0;
 async function start(mode){SFX.click();const kin=$('#keyin').value.toUpperCase().trim();
  if(mode=='key'&&!/^[A-Z]{4}$/.test(kin))return $('#merr').textContent='A key is 4 letters';
+ const R=++run;$('#back').textContent='Abort';
  show('play');$('#res').innerHTML='';$('#ans').style.display='none';$('#q').textContent='Digging up 7 questions...';setBar(0);$('#kbadge').textContent='';
- try{const k=mode=='daily'?await dailyKey():mode=='inf'?await infKey():kin;cur={...await getQ(k),mode};
-  const p=await getDoc(doc(db,'users',uid,'plays',k));if(p.exists()&&p.data().tiers)return result(p.data());
+ try{const k=mode=='daily'?await dailyKey():mode=='inf'?await infKey():kin;if(R!==run)return;const qd=await getQ(k);if(R!==run)return;cur={...qd,mode};
+  const p=await getDoc(doc(db,'users',uid,'plays',k));if(R!==run)return;if(p.exists()&&p.data().tiers)return result(p.data());
   G={i:0,tiers:[],pts:0,dd:0,ans:[],why:[]};ask()}
- catch(e){$('#q').textContent=(e.message||'Something broke')+'. Go back and try again.'}}
-async function ask(){while(tw)await sleep(100);const n=G.i;$('#res').innerHTML='';$('#q').textContent=cur.qs[n].q;
+ catch(e){if(R!==run)return;$('#q').textContent=(e.message||'Something broke')+'. Go back and try again.'}}
+async function ask(){const R=run;while(tw)await sleep(100);if(R!==run)return;const n=G.i;$('#res').innerHTML='';$('#q').textContent=cur.qs[n].q;
  $('#kbadge').textContent=`Key ${cur.k} · Q${n+1}/7 · ${G.pts} pts`;$('#ans').style.display='flex';$('#ac').style.display='none';$('#inp').disabled=false;$('#inp').value='';$('#inp').focus();runTimer()}
 let tEnd=0,grading=false,done=false;
 const ORECOL=['#c8c8c8','#c89a6a','#8a8aa8','#e0b0a0','#ffcc33','#6df0ff'];
-function runTimer(){tEnd=Date.now()+25000;grading=false;done=false;let lt=-1;clearInterval(timer);timer=setInterval(()=>{const l=(tEnd-Date.now())/1000;setBar(l/25);
+function runTimer(){tEnd=Date.now()+25000;grading=false;done=false;let lt=-1;clearInterval(timer);timer=setInterval(()=>{if(grading||done)return;const l=(tEnd-Date.now())/1000;setBar(l/25);
  if(l<5&&(l*2|0)!=lt){lt=l*2|0;SFX.tick()}if(l<=0&&!grading&&!done){if(nz2($('#inp').value))submit();else settle(null)}},100)}
 $('#go').onclick=()=>submit();$('#inp').onkeydown=e=>{if(e.key=='Enter')submit()};
 
-async function submit(){if(grading||done)return;const a=$('#inp').value.trim().slice(0,60),n=nz2(a).slice(0,60),i=G.i;if(!n)return;
- grading=true;$('#inp').disabled=true;$('#res').innerHTML='';SFX.click();let gr;
+async function submit(){if(grading||done)return;const a=$('#inp').value.trim().slice(0,60),n=nz2(a).slice(0,60),i=G.i,R=run;if(!n)return;
+ grading=true;const pausedAt=Date.now();$('#inp').disabled=true;$('#res').innerHTML='';SFX.click();let gr;
  try{{const cr=doc(db,'questions',cur.k,'answers',i+'_'+n),sn=await getDoc(cr);
    if(sn.exists())gr=sn.data();else{const j=await grade(cur.qs[i],a);gr={tier:j.valid?Math.max(0,Math.min(5,j.tier|0)):-1,why:String(j.ans||a).slice(0,60)};try{await setDoc(cr,gr)}catch(e){}}}}
- catch(e){grading=false;$('#inp').disabled=false;$('#res').innerHTML='<p class="err">Grader error: '+esc(e.message||e)+'</p>';return}
- grading=false;if(gr.tier>=0)return settle(gr,a);
+ catch(e){if(R!==run)return;tEnd+=Date.now()-pausedAt;grading=false;$('#inp').disabled=false;$('#res').innerHTML='<p class="err">Grader error: '+esc(e.message||e)+'</p>';return}
+ if(R!==run)return;
+ tEnd+=Date.now()-pausedAt;grading=false;if(gr.tier>=0)return settle(gr,a);
  if(Date.now()>=tEnd)return settle(null);
  $('#inp').disabled=false;$('#inp').select();$('#inp').focus();$('#res').innerHTML='<p class="err">Not a valid answer. Keep guessing!</p>'}
 
-async function settle(gr,a){if(done)return;done=true;clearInterval(timer);$('#inp').disabled=true;$('#res').innerHTML='';
+async function settle(gr,a){if(done)return;const R=run;done=true;clearInterval(timer);$('#inp').disabled=true;$('#res').innerHTML='';
  const i=G.i,t=gr?gr.tier:-1,pts=t<0?0:TIERS[t].p,dd=t<0?0:TIERS[t].d,shown=gr&&gr.why&&lev(nz2(a),nz2(gr.why))<=3?gr.why:(a||'');
  G.tiers.push(t);G.pts+=pts;G.dd+=dd;G.ans.push(shown);if(t>=0&&nz2(shown)!=nz2(a)){$('#inp').value=shown;$('#ac').style.display='block'}
- if(t>=0){busy=true;SFX.drill();digTo(G.dd,3200);await sleep(3300);busy=false;SFX.tier(t);pop={t,k:0};if(t>=4)flash=12}else{SFX.miss();await sleep(500)}
+ if(t>=0){busy=true;SFX.drill();digTo(G.dd,3200);await sleep(3300);if(R!==run)return;busy=false;SFX.tier(t);pop={t,k:0};if(t>=4)flash=12}else{SFX.miss();await sleep(500);if(R!==run)return}
  $('#kbadge').textContent=`Key ${cur.k} · Q${i+1}/7 · ${G.pts} pts`;
- const go=()=>{document.removeEventListener('keydown',kk);$('#res').innerHTML='';if(++G.i<7)ask();else finish()},kk=e=>{if(e.key=='Enter')go()};
+ const go=()=>{document.removeEventListener('keydown',kk);if(R!==run)return;$('#res').innerHTML='';if(++G.i<7)ask();else finish()},kk=e=>{if(R!==run)return document.removeEventListener('keydown',kk);if(e.key=='Enter')go()};
  $('#res').innerHTML=`<div class="ore" style="color:${t<0?'#b9a6c9':ORECOL[t]}">${t<0?'NO ORE':TIERS[t].n.toUpperCase()+' +'+pts}</div><button id="nxt">${G.i<6?'Next question':'See results'}</button>`;$('#nxt').onclick=go;setTimeout(()=>document.addEventListener('keydown',kk),300)}
 
 async function finish(){const cnt={};G.tiers.forEach(t=>{const k=t<0?'cm':'c'+t;cnt[k]=(cnt[k]||0)+1});const b=writeBatch(db),p={tiers:G.tiers,pts:G.pts,dd:G.dd,ans:G.ans};cur.qs.forEach(x=>{if(x.id)b.set(doc(db,'users',uid,'seen',x.id),{at:serverTimestamp(),q:x.q})});
@@ -417,7 +419,7 @@ async function finish(){const cnt={};G.tiers.forEach(t=>{const k=t<0?'cm':'c'+t;
 
 async function result(p){let st={};try{st=(await getDoc(doc(db,'stats','scores'))).data()||{}}catch(e){}
  const h=Array.from({length:21},(_,i)=>st['b'+i]||0),tot=h.reduce((a,b)=>a+b,0),mb=Math.min(20,p.pts/40|0),pct=tot?Math.round((h.slice(0,mb).reduce((a,b)=>a+b,0)+h[mb]/2)/tot*100):50;
- $('#q').textContent='Dig complete';$('#ans').style.display='none';
+ $('#back').textContent='Menu';$('#q').textContent='Dig complete';$('#ans').style.display='none';
  $('#res').innerHTML=`<div class="card pn"><h2 style="color:var(--hi)">${p.pts} / 840 points</h2>`+p.tiers.map((t,i)=>`<div class="lr" style="width:100%"><img src="${GU[t<0?0:t]}" style="width:30px;${t<0?'opacity:.25':''}" alt=""><span>${esc(p.ans[i]||'(no answer)')}<small>${esc(cur.qs[i].q)}</small></span><em>${t<0?'0':'+'+TIERS[t].p}</em></div>`).join('')
   +`<canvas id="bell" width="672" height="200"></canvas><p>Better than ${pct}% of ${fmt(tot)} games</p>
   <div class="row" style="width:100%">${cur.mode=='inf'?'<button id="next">Next dig</button>':''}<button id="home" class="alt">Menu</button></div></div>`;
@@ -439,8 +441,9 @@ function bell(h,pts){const x=$('#bell').getContext('2d'),w=672,ht=200,pad=26,gw=
  x.fillStyle='#ffc83a';x.font='700 22px "Share Tech Mono",monospace';x.textAlign=mp>w-60?'right':mp<60?'left':'center';x.fillText('YOU '+pts,mp,22);
  x.fillStyle='#b9a6c9';x.font='20px "Share Tech Mono",monospace';x.textAlign='left';x.fillText('0',pad,ht-6);x.textAlign='center';x.fillText('420',w/2,ht-6);x.textAlign='right';x.fillText('840',w-pad,ht-6)}
 
-async function board(){SFX.click();show('lb');$('#lb').innerHTML='<p>Loading...</p>';
- const s=await getDocs(query(collection(db,'users'),orderBy('score','desc'),limit(25)));
- $('#lb').innerHTML='<h2>Leaderboard</h2><div class="lr" style="color:var(--mu)"><b></b><span>Digger</span><em>Points · Deepest</em></div>'+s.docs.map((d,i)=>{const u=d.data();return`<div class="lr${d.id==uid?' me':''}"><b>${i+1}</b><span>${esc(u.username)}</span><em>${fmt(u.score)} pts · ${fmt(u.best||0)}m</em></div>`}).join('')+'<button id="lbback" class="ghost">Menu</button>';
+async function board(mode='score'){SFX.click();show('lb');$('#lb').innerHTML='<p>Loading...</p>';
+ const dep=mode=='depth',s=await getDocs(query(collection(db,'users'),orderBy(dep?'depth':'score','desc'),limit(25)));
+ $('#lb').innerHTML=`<h2>${dep?'Depth':'Points'} Leaderboard</h2><div class="row"><button id="tbs" class="${dep?'ghost':'alt'}">Points</button><button id="tbd" class="${dep?'alt':'ghost'}">Depth</button></div><div class="lr" style="color:var(--mu)"><b></b><span>Digger</span><em>${dep?'Total depth · Deepest dig':'Points · Digs'}</em></div>`+s.docs.map((d,i)=>{const u=d.data();return`<div class="lr${d.id==uid?' me':''}"><b>${i+1}</b><span>${esc(u.username)}</span><em>${dep?fmt(u.depth||0)+'m · '+fmt(u.best||0)+'m':fmt(u.score)+' pts · '+fmt(u.played||0)}</em></div>`}).join('')+'<button id="lbback" class="ghost">Menu</button>';
+ $('#tbs').onclick=()=>board('score');$('#tbd').onclick=()=>board('depth');
  $('#lbback').onclick=menu}
 </script></body></html>
