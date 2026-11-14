@@ -1797,17 +1797,20 @@ function playFirst(l){if(!l.length)return toast("Nothing to play here yet");play
 /* pausing fades the song out over ~0.9s with a soft start and a long, gentle tail (like a reverb out) instead of cutting off; the play/pause button flips instantly, and pressing it again mid-fade brings the song back */
 let fadeT=0;const canVol=(()=>{try{const a=new Audio();a.volume=.5;return a.volume==.5}catch{return false}})();
 const uiPaused=()=>audio.paused||!!fadeT;
-function fadePause(ms=900){
- if(fadeT){clearInterval(fadeT);fadeT=0;if(audio._fv!=null)audio.volume=audio._fv;audio._fv=null;volUI();playerUI();return}
+let fadeH=0;
+function fadePause(ms=500){
+ if(fadeT){clearTimeout(fadeH);clearInterval(fadeT);fadeT=0;if(audio._fv!=null)audio.volume=audio._fv;audio._fv=null;volUI();playerUI();return}
  if(audio.paused)return;
- if(!canVol||document.hidden||audio.muted||audio.volume==0)return audio.pause();
+ if(!canVol||document.hidden||audio.muted||audio.volume==0){audio.pause();playerUI();return}
  const v0=audio.volume,src=audio.src,t0=performance.now();audio._fv=v0;
- const end=()=>{clearInterval(fadeT);fadeT=0;audio.volume=v0;audio._fv=null;volUI();playerUI()};
+ const end=()=>{clearTimeout(fadeH);clearInterval(fadeT);fadeT=0;audio.volume=v0;audio._fv=null;volUI();playerUI()};
+ /* hard stop: the pause lands at 0.5s even if timers get throttled */
+ fadeH=setTimeout(()=>{if(fadeT&&audio.src==src&&!audio.paused)audio.pause();if(fadeT)end()},ms+30);
  fadeT=setInterval(()=>{
   if(audio.src!=src||audio.paused)return end();
   const k=Math.min(1,(performance.now()-t0)/ms);
   if(k>=1){audio.pause();return end()}
-  audio.volume=v0*Math.pow(.5+.5*Math.cos(Math.PI*k),1.6)},20);
+  audio.volume=v0*Math.pow(.5+.5*Math.cos(Math.PI*k),1.6)},16);
  playerUI()}
 function togglePlay(){if(audio.src)audio.paused?audio.play():fadePause();else playFirst(shown.length?shown:songs)}
 function shuffleUpcoming(){for(let i=queue.length-1;i>qi+1;i--){const j=qi+1+Math.floor(Math.random()*(i-qi));[queue[i],queue[j]]=[queue[j],queue[i]]}}
