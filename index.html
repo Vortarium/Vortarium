@@ -891,7 +891,7 @@
 
         // 1) TRENDING BANNER — the big banner at the top.
         //    Put the `prefix` of any project below. Set to null to hide the banner.
-        const TRENDING = 'spotify';
+        const TRENDING = 'pirates';
 
         //    Which part of the thumbnail stays in view on the wide banner
         //    (e.g. 'center', 'top', 'bottom', 'center 30%').
@@ -899,7 +899,7 @@
 
         // 2) POPULAR LEADERBOARD — the projects ranked right under the banner, in this order.
         //    Use the `prefix` of each game. Add or remove as you like.
-        const POPULAR = ['spotify', 'dash', 'drillion', 'numerus', 'splendid'];
+        const POPULAR = ['pirates', 'spotify', 'dash', 'drillion', 'numerus'];
 
         // 3) Should popular projects ALSO show up again in the "All projects" list?
         const SHOW_POPULAR_IN_ALL = true;
@@ -914,6 +914,8 @@
         //   blurb  → (optional) one-line description, shown on the trending banner
         //   warn   → (optional) true shows the little red ! warning next to the date
         const games = [
+            { prefix: 'pirates',         name: 'Pirates',          img: 'pirates.png',          date: 'NOV 2026',
+              blurb: 'Sail an endless chain of islands, dig up buried treasure, fight barbarian camps and bosses, and survive the night with your crew.' },
             { prefix: 'drillion',        name: 'Drillion',         img: 'drillion.png',         date: 'NOV 2026',
               blurb: 'Answer seven open-ended questions and drill deeper the rarer your answers are. Dig for ore, climb the leaderboards and see how you stack up on the bell curve.' },
             { prefix: 'numerus',         name: 'Numerus',          img: 'numerus.png',          date: 'NOV 2026',
