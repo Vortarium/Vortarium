@@ -119,6 +119,14 @@ service cloud.firestore {
             && request.resource.data.hp < resource.data.hp));
       allow delete: if signedIn();
     }
+    match /looted/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid;
+    }
+    match /harv/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid;
+    }
     match /shopbuys/{id} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.by == request.auth.uid;
