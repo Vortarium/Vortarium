@@ -313,6 +313,7 @@ const firebaseConfig={apiKey:"AIzaSyAvz2qwlDHS5PZZabMkHA6QGsMupz0S8sA",authDomai
 try{
  const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
  const mail=u=>u.trim().toLowerCase()+'@pirates.local',uid=()=>auth.currentUser.uid;
+function watchB(coll,key,size,cb){let un=null,tm=null,dead=false;const go=()=>{if(dead)return;if(un)un();const b=Math.floor(Date.now()/size);un=onSnapshot(query(collection(db,coll),where('ik','in',[key+'|'+(b-1),key+'|'+b])),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)});tm=setTimeout(go,(b+1)*size-Date.now()+800)};go();return()=>{dead=true;if(un)un();clearTimeout(tm)}}
  window.__fbres({
   async signup(u,p){return (await createUserWithEmailAndPassword(auth,mail(u),p)).user},
   async login(u,p){return (await signInWithEmailAndPassword(auth,mail(u),p)).user},
@@ -350,16 +351,16 @@ try{
   buildSet(d){return setDoc(doc(db,'builds',d.id),d)},
   buildHp(id,hp){return updateDoc(doc(db,'builds',id),{hp})},
   lootSet(id,d){return setDoc(doc(db,'looted',id),d)},
-  harvSet(id,d){return setDoc(doc(db,'harv',id),d)},
+  harvSet(id,d){return setDoc(doc(db,'harv',id),Object.assign({ik:d.isl+'|'+Math.floor(d.t/1800000)},d))},
   watchLoot(key,cb){return onSnapshot(query(collection(db,'looted'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
-  watchHarv(key,cb){return onSnapshot(query(collection(db,'harv'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
+  watchHarv(key,cb){return watchB('harv',key,1800000,cb)},
   buildDel(id){return deleteDoc(doc(db,'builds',id))},
   watchBuilds(key,cb){return onSnapshot(query(collection(db,'builds'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
   watchShop(key,cb){return onSnapshot(query(collection(db,'shopbuys'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(Object.assign({id:d.id},d.data())));cb(a)})},
   shopBuy(id,d){const r=doc(db,'shopbuys',id);return runTransaction(db,async tx=>{const s=await tx.get(r);if(s.exists())return false;tx.set(r,d);return true})},
   logMeta(key,meta){return setDoc(doc(db,'islands',key),{meta},{merge:true})},
-  ekillSet(id,d){return setDoc(doc(db,'ekills',id),d)},
-  watchEkills(key,cb){return onSnapshot(query(collection(db,'ekills'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
+  ekillSet(id,d){return setDoc(doc(db,'ekills',id),Object.assign({ik:d.isl+'|'+Math.floor(d.t/1200000)},d))},
+  watchEkills(key,cb){return watchB('ekills',key,1200000,cb)},
   lootCount(key){return updateDoc(doc(db,'islands',key),{'meta.looted':increment(1)})},
   setTotal(key,n){return updateDoc(doc(db,'islands',key),{'meta.total':n})},
   watchIslands(cb){return onSnapshot(collection(db,'islands'),snap=>{const o={};snap.forEach(d=>{const m=d.data().meta||{};o[d.id]={looted:m.looted||0,total:m.total||0}});cb(o)})},
@@ -448,7 +449,7 @@ function loadSave(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null
 let cloudT=0,cloudStr=null;
 function pubProfile(){let gc=0,ch=0;for(const g of GEMS)gc+=S.gems[g.id]||0;for(const k in S.isl)ch+=Object.keys((S.isl[k]&&S.isl[k].ch)||{}).length;return{nickname:S.name,avatar:S.avatar,networth:networth(),gems:gc,chestsOpened:ch,updated:Date.now()}}
 function save(force){try{if(S){if(typeof P!=='undefined'&&worldReady&&!CAVE.on&&CUR.key)S.pos={x:P.x,z:P.z,isl:CUR.key};if(worldReady)S.time=TD;const o=Object.assign({},S);delete o.chests;o.savedAt=Date.now();const str=JSON.stringify(o);localStorage.setItem(SAVE_KEY,str);
- if(FB&&UID&&S.made){cloudStr=str;const n=Date.now();if(force===true||n-cloudT>60000){cloudT=n;const s=cloudStr;cloudStr=null;FB.saveSave(s,pubProfile()).catch(e=>console.warn('cloud save failed',e))}}}}catch(e){}}
+ if(FB&&UID&&S.made){cloudStr=str;const n=Date.now();if(force===true||n-cloudT>180000){cloudT=n;const s=cloudStr;cloudStr=null;FB.saveSave(s,pubProfile()).catch(e=>console.warn('cloud save failed',e))}}}}catch(e){}}
 function networth(){let n=0;for(const g of GEMS)n+=(S.gems[g.id]||0)*g.value;for(const c of COS)n+=(S.cos[c.id]||0)*c.value;for(const k in(S.items||{}))n+=(S.items[k]||0)*((ITEMS[k]&&ITEMS[k].v)||0);return n+S.tokensSpent*50000000}
 function gemsValue(){let n=0;for(const g of GEMS)n+=(S.gems[g.id]||0)*g.value;return n}
 
@@ -1776,15 +1777,15 @@ function mpTick(dt,t){
  if(MP.rawSrc!==MP.raw){MP.rawSrc=MP.raw;MP.others=MP.raw.filter(d=>d.uid!==UID&&now-d.t<120000);MP.live=MP.others.length>0}
  const others=MP.others||[];
  const mvd=Math.hypot(P.x-(MP.lx||0),P.z-(MP.lz||0))+Math.abs(P.y-(MP.lyy||0))+Math.abs(P.face-(MP.lf||0));
- if(MP.live?(now-MP.lastPos>100&&(mvd>.015||now-MP.lastPos>2000)):now-MP.lastBeat>30000){MP.lastPos=MP.lastBeat=now;MP.lx=P.x;MP.lz=P.z;MP.lyy=P.y;MP.lf=P.face;FB.presenceSet(mpSelf()).catch(()=>{})}
+ if(!document.hidden&&now-(MP.lastW||0)>250&&(MP.live?(now-MP.lastPos>600&&(mvd>.3||now-MP.lastPos>10000)):now-MP.lastBeat>30000)){MP.lastW=MP.lastPos=MP.lastBeat=now;MP.lx=P.x;MP.lz=P.z;MP.lyy=P.y;MP.lf=P.face;FB.presenceSet(mpSelf()).catch(()=>{})}
  const seen={},pn=performance.now();
  for(const d of others){if(d.cv!==cv)continue;seen[d.uid]=1;let r=MP.remote[d.uid];const sig=d._sig||(d._sig=JSON.stringify([d.avatar,d.eq,d.nick]));
   if(!r||r.sig!==sig){const old=r;if(old)scene.remove(old.av.group);const av=buildAvatar(Object.assign(AVDEF(),d.avatar),d.eq);av.group.add(nameTag(d.nick||'Pirate'));av.group.position.set(d.x,d.y,d.z);scene.add(av.group);r=MP.remote[d.uid]={av,sig,ph:0,nick:d.nick,buf:old?old.buf:[]};if(!old)toast((d.nick||'A pirate')+' is on this island')}
   if(r.lt!==d.t||r.lx!==d.x||r.lz!==d.z||r.ly!==d.y){r.lt=d.t;r.lx=d.x;r.lz=d.z;r.ly=d.y;r.buf.push({t:pn,x:d.x,y:d.y,z:d.z,f:d.face});if(r.buf.length>8)r.buf.shift()}}
  for(const k in MP.remote){if(!seen[k]){scene.remove(MP.remote[k].av.group);delete MP.remote[k];continue}
-  const r=MP.remote[k],g=r.av.group,b=r.buf;if(!b.length)continue;const rt=pn-130;let i=b.length-1;while(i>0&&b[i-1].t>rt)i--;const A=b[Math.max(0,i-1)],Bq=b[i];let px,py,pz,pf;
+  const r=MP.remote[k],g=r.av.group,b=r.buf;if(!b.length)continue;const rt=pn-700;let i=b.length-1;while(i>0&&b[i-1].t>rt)i--;const A=b[Math.max(0,i-1)],Bq=b[i];let px,py,pz,pf;
   if(A===Bq||rt<=A.t){px=A.x;py=A.y;pz=A.z;pf=A.f}
-  else if(rt>=Bq.t){const p=b.length>1?b[b.length-2]:Bq,dv=Math.max(.05,(Bq.t-p.t)/1000),ex=Math.min(.22,(rt-Bq.t)/1000);px=Bq.x+(Bq.x-p.x)/dv*ex;py=Bq.y;pz=Bq.z+(Bq.z-p.z)/dv*ex;pf=Bq.f}
+  else if(rt>=Bq.t){const p=b.length>1?b[b.length-2]:Bq,dv=Math.max(.05,(Bq.t-p.t)/1000),ex=Math.min(.5,(rt-Bq.t)/1000);px=Bq.x+(Bq.x-p.x)/dv*ex;py=Bq.y;pz=Bq.z+(Bq.z-p.z)/dv*ex;pf=Bq.f}
   else{const u=(rt-A.t)/(Bq.t-A.t);px=A.x+(Bq.x-A.x)*u;py=A.y+(Bq.y-A.y)*u;pz=A.z+(Bq.z-A.z)*u;let df=Bq.f-A.f;df=Math.atan2(Math.sin(df),Math.cos(df));pf=A.f+df*u}
   const ox=g.position.x,oz=g.position.z;g.position.set(px,py,pz);let d=pf-g.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));g.rotation.y+=d*Math.min(1,dt*14);
   const sp=Math.hypot(px-ox,pz-oz)/Math.max(dt,.001);r.sp=(r.sp||0)+(Math.min(sp,9)-(r.sp||0))*Math.min(1,dt*8);r.ph+=r.sp*dt*1.5;
@@ -2319,7 +2320,7 @@ function mkEnemy(x,z,o){const s=o.scale||1,boss=!!o.boss;o.tier=o.tier||0;
  if(boss){const fur=bx(1.1,.18,.7,0x4a3322,0,1.55,0,g);fur.scale.set(1,1,1)}
  g.position.set(x,terrH(x,z),z);WG.add(g);
  const e=Object.assign({g,av,x,z,hx:x,hz:z,hp:o.hp,max:o.hp,cd:0,state:'guard',t:Math.random()*2,gy:terrH(x,z),ph:0,spd:0,face:Math.random()*6.28,ranged,patrol:null,hit:0,atk:0,fled:0,speed:3},o);
- X.EN.push(e);return e}
+ if(!e.boss&&!e.vet&&((Math.sin(x*12.9898+z*78.233)*43758.5453)%1+1)%1<.22){e.vet=1;e.hp=e.max=Math.round(e.hp*1.8);e.dmg=Math.round((e.dmg||3)*1.5);e.scale=(e.scale||1)*1.12;e.g.scale.multiplyScalar(1.12)}e.speed=(e.speed||3)*2;X.EN.push(e);return e}
 function killEnemy(e){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);X.corpses.push({g:e.g,t:0,s:e.scale||1});addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xffd166,2,.5);SX.enemyDie&&SX.enemyDie();
  giveLoot(e.boss?'Boss Loot':'Barbarian Loot',e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5));toast(e.boss?'Boss defeated!':'Barbarian down')}
 function alertAllies(e){for(const a of X.EN){if(a===e||a.state!=='guard'&&a.state!=='return')continue;if(Math.hypot(a.x-e.x,a.z-e.z)<14){a.state='alert';a.t=0}}}
@@ -2815,7 +2816,7 @@ mkBuild=function(d){const m=mkMesh(d.type,d.col,d),g=m.g;g.position.set(d.x,d.y,
 const pendHp={};
 function damageBuild(b,dmg){const d=b.d,mx=hpMax(d.type),cur=d.hp==null?mx:d.hp,nh=Math.max(0,cur-dmg);d.hp=nh;SX.hitWood&&SX.hitWood();addFx(new THREE.Vector3(d.x,d.y+1.2,d.z),0xd8c08a,1.2,.2);
  if(nh<=0){SX.breakBuild&&SX.breakBuild();bdel(d.id);return}pendHp[d.id]=nh}
-setInterval(()=>{for(const id in pendHp){const nh=pendHp[id];delete pendHp[id];if(online()&&FB.buildHp)FB.buildHp(id,nh).catch(()=>{});else if(!online()){const b=B[id];if(b){b.d.hp=nh;bset(b.d)}}}},800);
+setInterval(()=>{for(const id in pendHp){const nh=pendHp[id];delete pendHp[id];if(online()&&FB.buildHp)FB.buildHp(id,nh).catch(()=>{});else if(!online()){const b=B[id];if(b){b.d.hp=nh;bset(b.d)}}}},4000);
 const bbh=bulletHit;window.bulletHit=function(p){for(const id in B){const b=B[id],d=b.d;if(d.owner===UID||d.owner==='local')continue;const dx=p.x-d.x,dz=p.z-d.z;if(dx*dx+dz*dz>25)continue;const ca=Math.cos(d.ry),sa=Math.sin(d.ry),lx=dx*ca+dz*sa,lz=-dx*sa+dz*ca,m=b.m;
   if(Math.abs(lx)<m.hx&&Math.abs(lz)<m.hz+.1&&p.y>d.y-.2&&p.y<d.y+m.hh+.1){damageBuild(b,PISTOL_DMG);return'wood'}}return bbh(p)};
 /* ---- placement pose + blueprint ghost ---- */
@@ -2988,7 +2989,7 @@ const mt={};const M=c=>mt[c]||(mt[c]=new THREE.MeshLambertMaterial({color:c}));
 function bx(g,w,h,d,c,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c));m.position.set(x,y,z);g.add(m);return m}
 const CP=[],cpG=new THREE.SphereGeometry(.09,6,5),cpM=new THREE.MeshBasicMaterial({color:0xffb060});
 const caveMul=()=>{const layer=(CUR.info.seed+CAVE.idx)%5;return{layer,mul:1.5+layer*.7+(CAVE.idx%3)*.3}};
-function mk(x,z,o){const m=X.barbAvatar({kind:o.kind||'sword',boss:o.boss,tier:Math.min(3,o.layer||0),scale:o.s});m.g.position.set(x,0,z);CAVE.group.add(m.g);const k=o.kind||'sword';CEN.push(Object.assign({g:m.g,av:m.av,x,z,hx:x,hz:z,hp:o.hp,max:o.hp,cd:0,ph:0,t:0,spd:0,state:'idle',ranged:k==='bow'||k==='gun'},o))}
+function mk(x,z,o){o.speed=(o.speed||3)*2;if(!o.boss&&Math.random()<.22){o.hp=Math.round(o.hp*1.8);o.dmg=Math.round((o.dmg||4)*1.5);o.s=(o.s||1)*1.12}const m=X.barbAvatar({kind:o.kind||'sword',boss:o.boss,tier:Math.min(3,o.layer||0),scale:o.s});m.g.position.set(x,0,z);CAVE.group.add(m.g);const k=o.kind||'sword';CEN.push(Object.assign({g:m.g,av:m.av,x,z,hx:x,hz:z,hp:o.hp,max:o.hp,cd:0,ph:0,t:0,spd:0,state:'idle',ranged:k==='bow'||k==='gun'},o))}
 window.PX.CEN=CEN;let spT=20;
 function caveSpawn(dt){if(!CAVE.on||!CAVE.data)return;spT-=dt;if(spT>0)return;spT=3.5;const cd=CAVE.data,N=CAVE.N,cm=caveMul();if(CEN.filter(e=>!e.boss).length>=20+cm.layer*4)return;
  for(let k=0;k<40;k++){const x=4+Math.floor(Math.random()*(N-8)),y=4+Math.floor(Math.random()*(N-8));if(cd.g[y*N+x])continue;const p=caveC2W(x,y);if(Math.hypot(p[0]-P.x,p[1]-P.z)<20||Math.hypot(x-cd.ex,y-cd.ey)<12)continue;const kind=['sword','axe','spear','bow','gun'][Math.floor(Math.random()*(cm.layer>=2?5:4))];
@@ -3145,7 +3146,7 @@ const brw=rollWeather;window.rollWeather=function(silent){const blk=Math.floor((
 const bms=mpSelf;window.mpSelf=function(){const o=bms();o.toff=X.todOff||0;o.tts=X.todTs||0;if(X.sl){o.sl=1;o.slt=X.sl}return o};
 let sleepPos=null;const forceP=()=>{MP.lastPos=0;MP.lx=1e9};
 function wake(){X.sl=0;sleepPos=null;forceP()}
-function sleepers(){const now=Date.now(),g=(X.onl||[]).filter(d=>d.uid!==UID&&now-d.t<45000);if(g.length||X.onlOk){let k=X.sl?1:0;for(const d of g)if(d.sl&&now-d.slt<600000)k++;return{k,n:g.length+1}}const o=MP.others||[];let k=X.sl?1:0;for(const d of o)if(d.sl&&now-d.slt<60000)k++;return{k,n:o.length+1}}
+function sleepers(){const now=Date.now(),g=(X.onl||[]).filter(d=>d.uid!==UID&&now-d.t<150000);if(g.length||X.onlOk){let k=X.sl?1:0;for(const d of g)if(d.sl&&now-d.slt<600000)k++;return{k,n:g.length+1}}const o=MP.others||[];let k=X.sl?1:0;for(const d of o)if(d.sl&&now-d.slt<60000)k++;return{k,n:o.length+1}}
 const isNight=()=>TD>.72||TD<.26;
 async function doSkip(){if(X.skipping)return;if(X.gclk&&Date.now()-X.gclk.ts<8000){wake();return}X.skipping=true;busy=true;await fadeTo(1,900);const cur=globalTD(),tgt=.27;X.todOff=((X.todOff||0)+((tgt-cur+1)%1)*1440)%1440;X.todTs=Date.now();TD=globalTD();HP.v=maxHP();X.sl=0;sleepPos=null;forceP();if(FB&&UID)FB.clockSet({off:X.todOff,ts:X.todTs,by:UID}).catch(()=>{});await new Promise(r=>setTimeout(r,600));await fadeTo(0,1200);busy=false;X.skipping=false;toast('The night is skipped — everyone wakes up rested')}
 X.sleep=function(){if(!isNight()){toast('You can only sleep at night');SX.deny&&SX.deny();return}if(X.sl)return;X.sl=Date.now();sleepPos=[P.x,P.z,HP.v];SX.sleep&&SX.sleep();forceP()};
@@ -3238,25 +3239,25 @@ function mkSpider(){const g=new THREE.Group(),bd=0x1b1512,lgc=0x2a211c;
  for(const s of[-1,1])for(const r of[0,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.035,6,5),eyeM);e.position.set(s*.08,.52+r*.07,.36);g.add(e)}
  const legs=[];for(let i=0;i<8;i++){const s=i<4?-1:1,k=i%4,p=new THREE.Group();p.position.set(s*.22,.45,.25-k*.2);p.rotation.y=-s*(.6-k*.4);const a=new THREE.Mesh(new THREE.CylinderGeometry(.03,.025,.7,5),L(lgc));a.rotation.z=s*-1.0;a.position.set(s*.3,.2,0);p.add(a);const b=new THREE.Mesh(new THREE.CylinderGeometry(.022,.012,.65,5),L(lgc));b.rotation.z=s*.35;b.position.set(s*.62,-.1,0);p.add(b);g.add(p);legs.push(p)}
  g.userData={legs};return g}
-const TY={zombie:{hp:22,spd:2.7,dmg:3,s:1,h:2.1,mk:mkZombie,n:'a zombie'},skeleton:{hp:15,spd:3.1,dmg:3,s:1,h:2.0,mk:mkSkeleton,n:'a skeleton'},spider:{hp:11,spd:5.4,dmg:2,s:1,h:.9,mk:mkSpider,n:'a spider'}};
+const TY={zombie:{hp:22,spd:5.4,dmg:3,s:1,h:2.1,mk:mkZombie,n:'a zombie'},skeleton:{hp:15,spd:6.2,dmg:3,s:1,h:2.0,mk:mkSkeleton,n:'a skeleton'},spider:{hp:11,spd:10.8,dmg:2,s:1,h:.9,mk:mkSpider,n:'a spider'}};
 const night=()=>{const t=globalTD();return t>.72||t<.26};
 let spT=2,slots=null,slotKey='',deadN={},wkN=null,unsubN=null;
 const dayNo=()=>Math.floor((Date.now()/1000+(X.todOff||0))/1440+((window.PX&&0)||0)+(TD<.26?-1:0));
-function buildSlots(){const dn=dayNo(),key=CUR.key+'|'+dn;if(slots&&slotKey===key)return;slotKey=key;slots=[];const n=CUR.key==='0,0'?44:16,rnd=mulberry(hash2(hashStr(CUR.key),dn,55)||5);
- for(let i=0;i<n;i++){for(let k=0;k<40;k++){const x=(rnd()*2-1)*(HALF-90),z=(rnd()*2-1)*(HALF-90),h=terrH(x,z),r=rnd();if(h<WATER+1.2)continue;slots.push({x,z,ty:r<.42?'zombie':r<.72?'skeleton':'spider',gid:'n'+i+'d'+dn,live:null});break}}}
-function slotSpawn(){if(!slots)return;for(const sl of slots){if(sl.live&&NM.indexOf(sl.live)>=0)continue;sl.live=null;if(deadN[sl.gid])continue;if(NM.length>=14)return;const d=Math.hypot(sl.x-P.x,sl.z-P.z);if(d>46||d<24)continue;
-  const T=TY[sl.ty],g=T.mk();g.position.set(sl.x,terrH(sl.x,sl.z),sl.z);scene.add(g);const e={g,ty:sl.ty,T,x:sl.x,z:sl.z,hp:T.hp,max:T.hp,cd:0,ph:Math.random()*6,a:0,hit:0,sh:2,face:0,gid:sl.gid};NM.push(e);sl.live=e}}
+function buildSlots(){const dn=dayNo(),key=CUR.key+'|'+dn;if(slots&&slotKey===key)return;slotKey=key;slots=[];const n=CUR.key==='0,0'?88:32,rnd=mulberry(hash2(hashStr(CUR.key),dn,55)||5);
+ for(let i=0;i<n;i++){for(let k=0;k<40;k++){const x=(rnd()*2-1)*(HALF-90),z=(rnd()*2-1)*(HALF-90),h=terrH(x,z),r=rnd();if(h<WATER+1.2)continue;const v=rnd();slots.push({x,z,ty:r<.42?'zombie':r<.72?'skeleton':'spider',gid:'n'+i+'d'+dn,live:null,v:v<.2?0:v<.55?1:v<.8?2:v<.94?3:4});break}}}
+function slotSpawn(){if(!slots)return;for(const sl of slots){if(sl.live&&NM.indexOf(sl.live)>=0)continue;sl.live=null;if(deadN[sl.gid])continue;if(NM.length>=28)return;const d=Math.hypot(sl.x-P.x,sl.z-P.z);if(d>46||d<24)continue;
+  const VAR=[{k:.85,hp:.5,dm:.7,sp:1.25,vl:0},{k:1,hp:1,dm:1,sp:1,vl:0},{k:1.2,hp:2,dm:1.7,sp:1,vl:1},{k:1.5,hp:4,dm:2.5,sp:.85,vl:2},{k:1.85,hp:8,dm:3.5,sp:1.05,vl:4}][sl.v||1],B0=TY[sl.ty],T=Object.assign({},B0,{hp:Math.round(B0.hp*VAR.hp),dmg:Math.max(1,Math.round(B0.dmg*VAR.dm)),spd:B0.spd*VAR.sp,h:B0.h*VAR.k}),g=B0.mk();g.scale.setScalar(VAR.k);g.position.set(sl.x,terrH(sl.x,sl.z),sl.z);scene.add(g);const e={g,ty:sl.ty,T,scl:VAR.k,vl:VAR.vl,x:sl.x,z:sl.z,hp:T.hp,max:T.hp,cd:0,ph:Math.random()*6,a:0,hit:0,sh:2,face:0,gid:sl.gid};NM.push(e);sl.live=e}}
 function watchN(){if(!FB||!UID||wkN===CUR.key)return;wkN=CUR.key;try{unsubN&&unsubN()}catch(e){}deadN={};unsubN=FB.watchEkills(CUR.key,a=>{for(const d of a)if(d.g&&d.g[0]==='n')deadN[d.g]=1;for(const e of NM.slice())if(e.gid&&deadN[e.gid])remove(e,true)})}
 function spawn(){const ty=['zombie','zombie','skeleton','spider'][Math.floor(Math.random()*4)],T=TY[ty];
  for(let k=0;k<12;k++){const a=Math.random()*6.283,d=22+Math.random()*16,x=P.x+Math.sin(a)*d,z=P.z+Math.cos(a)*d,h=terrH(x,z);if(h<WATER+.9)continue;
   const g=T.mk();g.position.set(x,h,z);scene.add(g);NM.push({g,ty,T,x,z,hp:T.hp,max:T.hp,cd:0,ph:Math.random()*6,a:0,hit:0,sh:2+Math.random()*2,face:a});return}}
 function remove(e,burn){const i=NM.indexOf(e);if(i>=0)NM.splice(i,1);scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()});if(burn)addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xff9a2e,2,.5)}
-function die(e){if(e.gid){deadN[e.gid]=1;if(FB&&UID)FB.ekillSet(CUR.key+'|'+e.gid,{isl:CUR.key,g:e.gid,t:Date.now(),by:UID}).catch(()=>{})}remove(e);addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xaaff99,2,.5);SX.enemyDie&&SX.enemyDie();if(Math.random()<.5)giveLoot('Night Drop',1+Math.floor(Math.random()*2))}
+function die(e){if(e.gid){deadN[e.gid]=1;if(FB&&UID)FB.ekillSet(CUR.key+'|'+e.gid,{isl:CUR.key,g:e.gid,t:Date.now(),by:UID}).catch(()=>{})}remove(e);addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xaaff99,2,.5);SX.enemyDie&&SX.enemyDie();if(Math.random()<.5||e.vl)giveLoot('Night Drop',1+Math.floor(Math.random()*2)+(e.vl||0))}
 function arrow(e){const o=new THREE.Vector3(e.x,e.g.position.y+1.4,e.z),tg=new THREE.Vector3(P.x+(Math.random()-.5),P.y+1.1,P.z+(Math.random()-.5)),dir=tg.sub(o).normalize();
  const m=new THREE.Mesh(new THREE.CylinderGeometry(.018,.018,.9,5).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:0xd8c08a}));m.position.copy(o);m.lookAt(o.clone().add(dir));scene.add(m);X.EP.push({m,v:dir.multiplyScalar(30),life:2.2,dmg:3,by:'a skeleton archer'});SX.bowShot&&SX.bowShot()}
 function nmTick(dt){if(!running||CAVE.on||HP.dead){if(CAVE.on&&NM.length)for(const e of NM.slice())remove(e);return}
  const nt=night();
- if(nt){watchN();buildSlots();spT-=dt;if(spT<=0){spT=1.2;slotSpawn()}}
+ if(nt){watchN();buildSlots();spT-=dt;if(spT<=0){spT=.6;slotSpawn()}}
  for(const e of NM.slice()){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);
   if(!nt&&Math.random()<dt*.8){remove(e,true);continue}
   if(d>70){remove(e);continue}
@@ -3271,9 +3272,9 @@ function nmTick(dt){if(!running||CAVE.on||HP.dead){if(CAVE.on&&NM.length)for(con
   if(e.ty==='spider'){u.legs.forEach((l,i)=>{l.rotation.z=Math.sin(e.ph+i*1.3)*.25*(mv?1:.1)});}
   else{const sw=Math.sin(e.ph)*.7*(mv?1:0);u.lg.rotation.x=sw;u.rg.rotation.x=-sw;if(e.ty==='zombie'){u.la.rotation.x=-1.35+Math.sin(e.ph*.5)*.15;u.ra.rotation.x=-1.35-Math.sin(e.ph*.5)*.15}}
   const now=performance.now()/1000;
-  if(e.ty!=='skeleton'&&d<1.5+(e.ty==='spider'?.3:.2)&&now>e.cd&&!HP.dead){e.cd=now+(e.ty==='spider'?.9:1.3);hurt(T.dmg,T.n);SX.swing&&SX.swing()}
+  if(e.ty!=='skeleton'&&d<(1.5+(e.ty==='spider'?.3:.2))*(e.scl||1)&&now>e.cd&&!HP.dead){e.cd=now+(e.ty==='spider'?.9:1.3);hurt(T.dmg,T.n);SX.swing&&SX.swing()}
   }}
-const pbh=bulletHit;window.bulletHit=function(p){if(!CAVE.on)for(const e of NM){const T=e.T,r=e.ty==='spider'?.75:.5;if(Math.hypot(p.x-e.x,p.z-e.z)<r&&p.y>e.g.position.y-.05&&p.y<e.g.position.y+T.h){addFx(p.clone(),0x66cc55,1.2,.2);SX.enemyHit&&SX.enemyHit();e.hp-=PISTOL_DMG;if(e.hp<=0)die(e);return'wood'}}return pbh(p)};
+const pbh=bulletHit;window.bulletHit=function(p){if(!CAVE.on)for(const e of NM){const T=e.T,r=(e.ty==='spider'?.75:.5)*(e.scl||1);if(Math.hypot(p.x-e.x,p.z-e.z)<r&&p.y>e.g.position.y-.05&&p.y<e.g.position.y+T.h){addFx(p.clone(),0x66cc55,1.2,.2);SX.enemyHit&&SX.enemyHit();e.hp-=PISTOL_DMG;if(e.hp<=0)die(e);return'wood'}}return pbh(p)};
 const pll=window.loadIsland;window.loadIsland=function(info){for(const e of NM.slice())remove(e);slots=null;wkN=null;return pll.apply(this,arguments)};
 const pu=window.update;window.update=function(dt){pu(dt);try{nmTick(dt)}catch(er){if(!X._nm){X._nm=1;console.error(er)}}};
 })();
@@ -3341,14 +3342,12 @@ const pu=window.update;window.update=function(dt){pu(dt);try{
 </script>
 
 <script>
-(function(){'use strict';const X=window.PX;let started=false,lastSl=-1;
-function go(){if(started||!FB||!UID||!FB.watchClock)return;started=true;
- FB.watchClock(d=>{if(d)X.gclk=d});
- FB.watchOnline(a=>{X.onl=a;X.onlOk=true});
- const beat=()=>{if(!FB||!UID)return;FB.onlineBeat({uid:UID,nick:S.name||'',t:Date.now(),sl:X.sl?1:0,slt:X.sl||0,isl:CUR.key}).catch(()=>{});lastSl=X.sl?1:0};
- beat();setInterval(beat,15000);setInterval(()=>{if((X.sl?1:0)!==lastSl)beat()},700);
- addEventListener('pagehide',()=>{try{FB.onlineClear()}catch(e){}})}
-setInterval(go,1500)})();
+(function(){'use strict';const X=window.PX;let un=null,tmr=null,lastSl=-1,clk=false;const night=()=>TD>.72||TD<.26;
+const beat=()=>{if(!FB||!UID)return;FB.onlineBeat({uid:UID,nick:S.name||'',t:Date.now(),sl:X.sl?1:0,slt:X.sl||0,isl:CUR.key}).catch(()=>{});lastSl=X.sl?1:0};
+function tick(){if(!FB||!UID||!FB.watchClock||!S||!S.made)return;if(!clk){clk=true;FB.watchClock(d=>{if(d)X.gclk=d})}
+ if(night()&&!document.hidden){if(!un){un=FB.watchOnline(a=>{X.onl=a;X.onlOk=true});beat();tmr=setInterval(beat,60000)}if((X.sl?1:0)!==lastSl)beat()}
+ else if(un&&!night()){un();un=null;clearInterval(tmr);X.onl=[];X.onlOk=false;try{FB.onlineClear()}catch(e){}}}
+setInterval(tick,1500);addEventListener('pagehide',()=>{try{FB.onlineClear()}catch(e){}})})();
 </script>
 
 <script>
