@@ -131,5 +131,28 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.by == request.auth.uid;
     }
+    // Shared kills so barbarians and animals die for everyone (one doc per enemy per respawn window).
+    match /ekills/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.by == request.auth.uid
+        && request.resource.data.isl is string && request.resource.data.g is string;
+    }
+
+    // Global world clock (night skips) shared by every player on every island.
+    match /world/{id} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.off is number
+        && request.resource.data.ts is number;
+      allow delete: if false;
+    }
+    // Online roster + sleep votes (heartbeat every ~15s, one doc per player).
+    match /online/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.t is number;
+      allow delete: if isOwner(uid);
+    }
   }
 }
