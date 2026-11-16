@@ -1232,7 +1232,10 @@ function genCave(isl,idx){const N=CAVE.N,r=mulberry(hash2(isl.seed,idx,777)||5);
  const pr=rooms[rooms.length-1];let pc=[pr[0],pr[1]];if(g[pc[1]*N+pc[0]]){pc=[ex,ey]}return{g,ex,ey,chs,rooms,arches:arches.filter(a=>!g[a[1]*N+a[0]]),portal:pc}}
 function placeCaves(info){
  const rnd=mulberry(info.seed^0x5ca1e);CAVE.mouths=[];CAVE.cdata=[];let n=0,tries=0;const want=(2+(rnd()<.45?1:0))*Math.ceil(DF/1.5);
- while(n<want&&tries<6000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<3||h>40)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl<.6||sl>2.6)continue;if(!clearOf(x,z,5))continue;
+ // Cave entrances used to require a fairly narrow hillside-slope range. Most
+ // generated islands do not have enough terrain in that range, so the loop
+ // could finish with zero caves. Accept level-to-moderate ground as well.
+ while(n<want&&tries<24000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<1.2||h>40)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>4.5)continue;if(!clearOf(x,z,5))continue;
   if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<110))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue;
   const gx=terrH(x+2,z)-terrH(x-2,z),gz=terrH(x,z+2)-terrH(x,z-2),face=Math.atan2(-gx,-gz);// faces downhill
   const g=new THREE.Group();g.position.set(x,h,z);g.rotation.y=face;WG.add(g);
@@ -1669,12 +1672,12 @@ function groundAt(x,z,py,useC){let best=heightAt(x,z);supp=null;if(!useC)return 
  nearC(x,z,c=>{const s=surfAt(c,x,z);if(s!==null&&s<=py+STEP_H&&s>best){best=s;supp=c}});
  for(const o of OB){const s=obSurf(o,x,z);if(s===null)continue;if(o.fl){if(py>=s-1.2&&py<=s+3&&s!==best&&!(supp&&supp.fl&&supp.y1>s)){best=s;supp=o}}else if(s<=py+.95&&s>best){best=s;supp=o}}return best}
 function topAt(x,z){let b=heightAt(x,z);nearC(x,z,c=>{if(c.h>50)return;const s=surfAt(c,x,z);if(s!==null&&s>b)b=s});for(const o of OB){const s=obSurf(o,x,z);if(s!==null&&s>b&&o.y1-o.y0<30)b=s}return b}
-function pushOut(nx,nz,py){for(let it=0;it<3;it++){let moved=false;
+function pushOut(nx,nz,py,ignoreBuildingWalls=false){for(let it=0;it<3;it++){let moved=false;
   nearC(nx,nz,c=>{const dx=nx-c.x,dz=nz-c.z,d=Math.hypot(dx,dz);let rb;
    if(c.k==='d'){const rel=(py+STEP_H-c.y)/c.h;if(rel>=1)return;rb=(rel<=0?c.r:c.r*Math.sqrt(1-rel*rel))+.05}
    else{if(py+STEP_H>=c.y+c.h)return;rb=c.r+.32}
    if(d<rb){if(d<1e-4){nx=c.x+rb}else{nx=c.x+dx/d*rb;nz=c.z+dz/d*rb}moved=true}});
-  for(const o of OB){const dx=nx-o.cx,dz=nz-o.cz;if(dx*dx+dz*dz>(o.r+.7)*(o.r+.7))continue;let lx=dx*o.ca+dz*o.sa,lz=-dx*o.sa+dz*o.ca;const m=.28;if(Math.abs(lx)>=o.hx+m||Math.abs(lz)>=o.hz+m)continue;
+  if(!ignoreBuildingWalls)for(const o of OB){const dx=nx-o.cx,dz=nz-o.cz;if(dx*dx+dz*dz>(o.r+.7)*(o.r+.7))continue;let lx=dx*o.ca+dz*o.sa,lz=-dx*o.sa+dz*o.ca;const m=.28;if(Math.abs(lx)>=o.hx+m||Math.abs(lz)>=o.hz+m)continue;
    const cl=clamp(lx,-o.hx+.001,o.hx-.001),s=o.y0+(o.y1-o.y0)*((cl+o.hx)/(2*o.hx));if(py+STEP_H>=s)continue;
    const px=o.hx+m-Math.abs(lx),pz=o.hz+m-Math.abs(lz);if(px<pz)lx=(lx<0?-1:1)*(o.hx+m);else lz=(lz<0?-1:1)*(o.hz+m);nx=o.cx+lx*o.ca-lz*o.sa;nz=o.cz+lx*o.sa+lz*o.ca;moved=true}
   if(!moved)break}
@@ -2309,7 +2312,7 @@ function barbAvatar(o){const cfg=Object.assign(AVDEF(),{skin:pickA(SKINS),hair:p
  const eq={hat:(boss||Math.random()<.5)?tierGear('hat',boss?2:Math.min(1,t>>1)):null,tunic:tierGear('tunic',boss?2:Math.min(1,t)),pants:tierGear('pants',0),boots:tierGear('boots',0)};let av;try{av=buildAvatar(cfg,eq)}catch(er){av=buildAvatar(AVDEF(),{})}
  const g=av.group;g.scale.setScalar(o.scale||1);const k=o.kind||'sword';if(k==='gun'){const wm=toolMesh('pistol');wm.position.y=-.295;av.arms[1].el.add(wm)}else{const wm=weaponMesh(k);wm.position.y=-.295;if(k==='bow')wm.rotation.y=Math.PI/2;av.arms[1].el.add(wm)}return{g,av}}
 X.barbAvatar=barbAvatar;
-function mkEnemy(x,z,o){const s=o.scale||1,boss=!!o.boss;o.tier=o.tier||0;
+function mkEnemy(x,z,o){o=Object.assign({},o);const s=o.scale||1,boss=!!o.boss;o.tier=o.tier||0;const hpScale=Math.max(.5,(Number(PISTOL_DMG)||1)*.5);o.hp=Math.max(1,Math.round((Number(o.hp)||1)*hpScale));
  const cfg=Object.assign(AVDEF(),{skin:pickA(SKINS),hair:pickA(BHAIR),hairStyle:pickA(['mohawk','long','short','braid','wavy','ponytail']),gender:'m',build:'broad',eye:EYES[0],beard:pickA(['full','pirate','goatee','stubble','mustache']),acc:Math.random()<.35?[pickA(['scar','eyepatch'])]:[]});
  const eq={hat:(boss||Math.random()<.5)?tierGear('hat',boss?2:Math.min(1,o.tier>>1)):null,tunic:tierGear('tunic',boss?2:Math.min(1,o.tier)),pants:tierGear('pants',0),boots:tierGear('boots',0)};
  let av;try{av=buildAvatar(cfg,eq)}catch(er){av=buildAvatar(AVDEF(),{})}
@@ -2345,7 +2348,7 @@ function astar(nv,sx,sz,tx,tz){const n=nv.n,h=nv.h,G=new Float32Array(n*n).fill(
   for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const ni=ci+di,nj=cj+dj;if(ni<0||nj<0||ni>=n||nj>=n)continue;const ni2=nj*n+ni;if(closed[ni2])continue;if(Math.abs(h[ni2]-h[cur])>.62)continue;
    if(di&&dj&&(Math.abs(h[cj*n+ni]-h[cur])>.62||Math.abs(h[nj*n+ci]-h[cur])>.62))continue;const g=G[cur]+(di&&dj?1.41:1)+Math.abs(h[ni2]-h[cur])*.5;if(g<G[ni2]){G[ni2]=g;from[ni2]=cur;F[ni2]=g+hf(ni,nj);open.push(ni2)}}}
  return null}
-function moveE(e,dx,dz,sp,dt){const d=Math.hypot(dx,dz)||1;let nx=e.x+dx/d*sp*dt,nz=e.z+dz/d*sp*dt;const py=e.gy;const r=pushOut(nx,nz,py);nx=r[0];nz=r[1];if(terrH(nx,nz)<WATER+.15)return 0;e.x=nx;e.z=nz;const ty=topAt(nx,nz);if(ty-e.gy<=.7)e.gy=ty;return sp}
+function moveE(e,dx,dz,sp,dt){const d=Math.hypot(dx,dz)||1;let nx=e.x+dx/d*sp*dt,nz=e.z+dz/d*sp*dt;const py=e.gy;const r=pushOut(nx,nz,py,true);nx=r[0];nz=r[1];if(terrH(nx,nz)<WATER+.15)return 0;e.x=nx;e.z=nz;const ty=topAt(nx,nz);if(ty-e.gy<=.7)e.gy=ty;return sp}
 function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now;
  for(let i=X.corpses.length-1;i>=0;i--){const c=X.corpses[i];c.t+=dt;c.g.rotation.x=-Math.min(1.45,c.t*3.2);c.g.position.y-=dt*.12;if(c.t>2.2){WG.remove(c.g);X.corpses.splice(i,1)}}
  for(let i=X.EP.length-1;i>=0;i--){const p=X.EP[i];p.life-=dt;if(p.g)p.v.y-=p.g*dt;p.m.position.addScaledVector(p.v,dt);if(p.spin)p.m.rotation.x+=dt*14;const hy=p.m.position.y;
