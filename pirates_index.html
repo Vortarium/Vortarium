@@ -1235,7 +1235,7 @@ function placeCaves(info){
  // Cave entrances used to require a fairly narrow hillside-slope range. Most
  // generated islands do not have enough terrain in that range, so the loop
  // could finish with zero caves. Accept level-to-moderate ground as well.
- while(n<want&&tries<24000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<1.2||h>40)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>4.5)continue;if(!clearOf(x,z,5))continue;
+ while(n<want&&tries<24000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<WATER+1.0||h>55)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>8.5)continue;if(!clearOf(x,z,5))continue;
   if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<110))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue;
   const gx=terrH(x+2,z)-terrH(x-2,z),gz=terrH(x,z+2)-terrH(x,z-2),face=Math.atan2(-gx,-gz);// faces downhill
   const g=new THREE.Group();g.position.set(x,h,z);g.rotation.y=face;WG.add(g);
@@ -1249,7 +1249,13 @@ function placeCaves(info){
   const cd=genCave(info,n);CAVE.cdata.push(cd);CAVE.mouths.push({x,z,y:h,face,idx:n,ox:x+Math.sin(face)*3.5,oz:z+Math.cos(face)*3.5});n++}
  return CAVE.cdata.reduce((a,c)=>a+c.chs.length,0)}
 function enterCave(idx){
- const info=CUR.info,cd=CAVE.cdata[idx],N=CAVE.N,CSZ=CAVE.CS;
+ // Validate the generated layout before changing the surface-world state.
+ const info=CUR&&CUR.info,cd=Number.isInteger(idx)?CAVE.cdata[idx]:null,N=CAVE.N,CSZ=CAVE.CS;
+ if(!info||!cd||!cd.g||cd.g.length!==N*N||!Number.isFinite(cd.ex)||!Number.isFinite(cd.ey)){
+  console.error('[Caves] Cannot enter cave: generated cave data is missing or invalid.',idx,cd);
+  if(typeof toast==='function')toast('This cave could not load. Try another entrance or regenerate the island.');
+  return false;
+ }
  CAVE.saved={x:P.x,y:P.y,z:P.z,chests:chests.slice(),spots:spots.slice(),CG,bl:bullets.length};chests.length=0;spots.length=0;CG=new Map();
  CAVE.on=true;CAVE.idx=idx;CAVE.grid=cd.g;CAVE.data=cd;WG.visible=false;water.visible=false;sky.visible=false;for(const k in beacons)beacons[k].g.visible=false;
  const grp=new THREE.Group();scene.add(grp);CAVE.group=grp;const rnd=mulberry(hash2(info.seed,idx,4242)||3),disp=[];
@@ -1300,7 +1306,7 @@ function exitCave(){
  CAVE.on=false;CAVE.grid=null;CAVE.group=null;chests.length=0;sv.chests.forEach(c=>chests.push(c));spots.length=0;sv.spots.forEach(s=>spots.push(s));CG=sv.CG;
  WG.visible=true;water.visible=true;sky.visible=true;for(const k in beacons)beacons[k].g.visible=true;lantern.intensity=0;
  const m=CAVE.mouths[CAVE.idx];P.x=m.ox;P.z=m.oz;P.y=topAt(P.x,P.z)+.2;P.vx=P.vz=P.vy=0;
- MAPINFO={canvas:mapCanvas,ox:-HALF,oz:-HALF,span:WORLD,R:70};CAVE.saved=null;CAVE.idx=-1}
+ MAPINFO={canvas:mapCanvas,ox:-HALF,oz:-HALF,span:WORLD,R:70};CAVE.saved=null;CAVE.idx=-1;CAVE.portal=null}
 /* ============================ PIRATE SHIP ============================ */
 let BOAT=null;
 function clothTex(skull){const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');x.fillStyle='#e9dfc4';x.fillRect(0,0,256,256);const r=mulberry(7);
@@ -1989,7 +1995,22 @@ function doWarp(d){const w=S.wp[d];if(!w){warp=null;return}
  if(CAVE.on)exitCave();P.x=w.x;P.z=w.z;P.y=topAt(w.x,w.z)+.3;P.vy=0;P.vx=P.vz=0;const f=$('flash');f.style.transition='none';f.style.opacity=.9;void f.offsetWidth;f.style.transition='opacity .7s';f.style.opacity=0;SX.warpEnd()}
 
 /* ============================ INTERACTION / LOOT ============================ */
-async function caveTrans(fn){if(busy)return;busy=true;SX.caveIn();await fadeTo(1,450);fn();await fadeTo(0,650);busy=false}
+async function caveTrans(fn){
+ if(busy)return;
+ busy=true;
+ try{
+  SX.caveIn();
+  await fadeTo(1,450);
+  const result=fn();
+  if(result&&typeof result.then==='function')await result;
+ }catch(err){
+  console.error('[Caves] Cave transition failed:',err);
+  if(typeof toast==='function')toast('The cave failed to load. Please try again.');
+ }finally{
+  try{await fadeTo(0,650)}catch(err){console.error('[Caves] Could not restore fade:',err)}
+  busy=false;
+ }
+}
 function findTarget(){
  if(tool===4){const hc=nearHarvest();if(hc)return{key:'Q',text:(hc.kind===2?'Hold Q to mine':'Hold Q to chop'),harv:hc}}
  {const bag=nearBag();if(bag){if(tool===1)return{key:'Q',text:'Pick up '+(bag.by||'a pirate')+'\'s dropped loot',act:()=>pickBag(bag)};return{key:'1',text:'Switch to hand to pick up loot'}}}
@@ -2990,7 +3011,7 @@ window.drawMini=function(){if(sx===null||CAVE.on||Math.hypot(P.x-sx,P.z-sz)>20){
 const CEN=[];let lastGrp=null;
 const mt={};const M=c=>mt[c]||(mt[c]=new THREE.MeshLambertMaterial({color:c}));
 function bx(g,w,h,d,c,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c));m.position.set(x,y,z);g.add(m);return m}
-const CP=[],cpG=new THREE.SphereGeometry(.09,6,5),cpM=new THREE.MeshBasicMaterial({color:0xffb060});
+const CP=[],CTRP=[],cpG=new THREE.SphereGeometry(.09,6,5),cpM=new THREE.MeshBasicMaterial({color:0xffb060});
 const caveMul=()=>{const layer=(CUR.info.seed+CAVE.idx)%5;return{layer,mul:1.5+layer*.7+(CAVE.idx%3)*.3}};
 function mk(x,z,o){o.speed=(o.speed||3)*2;if(!o.boss&&Math.random()<.22){o.hp=Math.round(o.hp*1.8);o.dmg=Math.round((o.dmg||4)*1.5);o.s=(o.s||1)*1.12}const m=X.barbAvatar({kind:o.kind||'sword',boss:o.boss,tier:Math.min(3,o.layer||0),scale:o.s});m.g.position.set(x,0,z);CAVE.group.add(m.g);const k=o.kind||'sword';CEN.push(Object.assign({g:m.g,av:m.av,x,z,hx:x,hz:z,hp:o.hp,max:o.hp,cd:0,ph:0,t:0,spd:0,state:'idle',ranged:k==='bow'||k==='gun'},o))}
 window.PX.CEN=CEN;let spT=20;
@@ -3000,14 +3021,22 @@ function caveSpawn(dt){if(!CAVE.on||!CAVE.data)return;spT-=dt;if(spT>0)return;sp
 const be=enterCave;
 window.enterCave=function(idx){be(idx);CEN.length=0;if(!CAVE.on)return;const cd=CAVE.data,N=CAVE.N,rnd=mulberry(hash2(CUR.info.seed,idx,777)||5),cm=caveMul();
  const open=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!cd.g[y*N+x]){const p=caveC2W(x,y);open.push({p,d:Math.hypot(x-cd.ex,y-cd.ey)})}
- if(!open.length)return;const dng=rnd()<.55,n=dng?20:12,far=open.filter(o=>o.d>12),kinds=['sword','axe','spear','bow','gun'];
+ if(!open.length)return;const dng=idx!==0,n=dng?34:14,far=open.filter(o=>o.d>12),kinds=['sword','axe','spear','bow','gun'];
  for(let i=0;i<n&&far.length;i++){const o=far[Math.floor(rnd()*far.length)],kind=kinds[Math.floor(rnd()*(cm.layer>=2?5:4))];mk(o.p[0],o.p[1],{s:1.05,layer:cm.layer,hp:Math.round((20+rnd()*30)*cm.mul*1.4),dmg:4+cm.layer*1.8,speed:2.9+cm.layer*.15,kind})}
- if(dng){open.sort((a,b)=>b.d-a.d);const o=open[0];mk(o.p[0],o.p[1],{s:2.6,layer:cm.layer,hp:Math.min(1000,Math.round((100+rnd()*500)*(1+cm.layer*.15))),dmg:9+cm.layer*2,speed:3,boss:1,kind:'axe',name:'Dungeon Warlord'});toast('A dungeon — something huge lurks in the deep…')}};
-const bx2=exitCave;window.exitCave=function(){CEN.length=0;for(const p of CP)CAVE.group&&CAVE.group.remove(p.m);CP.length=0;bx2()};
+ if(dng){
+  const bossSpots=far.slice().sort((a,b)=>b.d-a.d);
+  for(let b=0;b<Math.min(4,bossSpots.length);b++){const o=bossSpots[Math.floor((b+.5)*bossSpots.length/Math.min(4,bossSpots.length))];mk(o.p[0],o.p[1],{s:2.25+b*.12,layer:cm.layer,hp:Math.min(1600,Math.round((260+rnd()*220)*(1+cm.layer*.2))),dmg:10+cm.layer*2,speed:3.1,boss:1,kind:['axe','spear','gun','sword'][b],name:['Dungeon Warlord','Barbarian Champion','Cave Overlord','War Chief'][b]})}
+  // Scatter visible spike traps through open dungeon corridors and chambers.
+  const trapSpots=far.filter((o,i)=>i%2===0).sort(()=>rnd()-.5).slice(0,Math.min(26,far.length));
+  for(const o of trapSpots){const g=new THREE.Group();g.position.set(o.p[0],caveFloor(o.p[0],o.p[1])+.04,o.p[1]);CAVE.group.add(g);bx(g,1.8,.12,1.8,0x39343a,0,.05,0);for(let q=0;q<5;q++){const sp=new THREE.Mesh(new THREE.ConeGeometry(.17,.75,5),M(0x9b9da5));sp.position.set(-.65+q*.325,.47,0);g.add(sp)}const glow=new THREE.Mesh(new THREE.CircleGeometry(.9,16).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xd94b3d,transparent:true,opacity:.18,side:THREE.DoubleSide}));glow.position.y=.12;g.add(glow);CTRP.push({g,x:o.p[0],z:o.p[1],cd:0})}
+  toast('Dungeon entered — four bosses, barbarian guards, and hidden traps await!')
+ }else{toast('Cave entered — barbarian guards are roaming the tunnels.')}};
+const bx2=exitCave;window.exitCave=function(){CEN.length=0;for(const p of CP)CAVE.group&&CAVE.group.remove(p.m);CP.length=0;for(const t of CTRP)CAVE.group&&CAVE.group.remove(t.g);CTRP.length=0;bx2()};
 function kill(e){const i=CEN.indexOf(e);if(i>=0)CEN.splice(i,1);CAVE.group&&CAVE.group.remove(e.g);SX.enemyDie&&SX.enemyDie();giveLoot(e.boss?'Dungeon Boss Loot':'Guardian Loot',e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5));toast(e.boss?'Dungeon boss defeated!':'Guardian down')}
 const bb=bulletHit;window.bulletHit=function(p){if(CAVE.on)for(const e of CEN)if(Math.hypot(p.x-e.x,p.z-e.z)<.6*e.s&&p.y>caveFloor(e.x,e.z)-.2&&p.y<caveFloor(e.x,e.z)+2.4*e.s){e.hp-=PISTOL_DMG;SX.enemyHit&&SX.enemyHit();addFx(p.clone(),0xff4455,1.4,.2);if(e.state==='idle')e.state='chase';if(e.hp<=0)kill(e);return'wood'}return bb(p)};
 const bu=update;window.update=function(dt){bu(dt);if(!CAVE.on||HP.dead||!running)return;const now=performance.now()/1000;
  for(let i=CP.length-1;i>=0;i--){const p=CP[i];p.life-=dt;p.m.position.addScaledVector(p.v,dt);if(Math.hypot(p.m.position.x-P.x,p.m.position.z-P.z)<.6&&Math.abs(p.m.position.y-(P.y+1))<1.1){hurt(p.dmg,'a guardian');p.life=0}else if(caveSolid(p.m.position.x,p.m.position.z))p.life=0;if(p.life<=0){CAVE.group&&CAVE.group.remove(p.m);CP.splice(i,1)}}
+ for(const tr of CTRP){tr.cd=Math.max(0,tr.cd-dt);if(tr.cd<=0&&Math.hypot(P.x-tr.x,P.z-tr.z)<1.35&&Math.abs(P.y-caveFloor(tr.x,tr.z))<2){tr.cd=1.8;hurt(12,'a dungeon spike trap');addFx(new THREE.Vector3(tr.x,caveFloor(tr.x,tr.z)+.5,tr.z),0xff5544,1.8,.35)}}
  for(const e of CEN){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz),rng=e.kind==='bow'||e.kind==='gun',ag=e.boss?26:16;let mv=0;
   const step=(ax,az,sp)=>{const nx=e.x+ax/(Math.hypot(ax,az)||1)*sp*dt,nz=e.z+az/(Math.hypot(ax,az)||1)*sp*dt;if(caveH(nx,nz)<50){e.x=nx;e.z=nz;mv=sp}else if(caveH(nx,e.z)<50){e.x=nx;mv=sp}else if(caveH(e.x,nz)<50){e.z=nz;mv=sp}};
   if(e.state==='idle'&&d<ag){e.state='chase'}else if(e.state!=='idle'&&d>ag*2.2)e.state='idle';
@@ -3137,8 +3166,8 @@ const bU4=window.update;window.update=function(dt){bU4(dt);migrate();autoSell(dt
 </script>
 <script>
 (function(){'use strict';let pcd=0;const bu=window.update;window.update=function(dt){bu(dt);if(!CAVE.on||!CAVE.portal)return;const pt=CAVE.portal;pt.tr.rotation.z+=dt*1.2;pt.g.children[1].scale.setScalar(4.5+Math.sin(performance.now()/300)*.4);
- if(pcd>0){pcd-=dt;return}if(busy||HP.dead||!running)return;if(Math.hypot(P.x-pt.x,P.z-pt.z)<1.5&&Math.abs(P.y-caveFloor(pt.x,pt.z))<2.6){const n=CAVE.cdata.length,tgt=(CAVE.idx+1+Math.floor(Math.random()*(n-1)))%n;pcd=4;toast('The portal pulls you through…');
-  caveTrans(()=>{exitCave();enterCave(tgt);const cd=CAVE.cdata[tgt];if(cd&&cd.portal){const pc=caveC2W(cd.portal[0],cd.portal[1]);P.x=pc[0]+3;P.z=pc[1];P.y=caveFloor(P.x,P.z)+.3;P.vy=0;if(caveSolid(P.x,P.z)){P.x=pc[0];P.z=pc[1]+3}}})}}})();
+ if(pcd>0){pcd-=dt;return}if(busy||HP.dead||!running)return;if(Math.hypot(P.x-pt.x,P.z-pt.z)<1.5&&Math.abs(P.y-caveFloor(pt.x,pt.z))<2.6){const n=CAVE.cdata.length,tgt=n>1?(CAVE.idx+1)%n:CAVE.idx;pcd=4;toast('The portal pulls you through…');
+  caveTrans(()=>{const target=CAVE.cdata[tgt];if(!target)throw new Error('Dungeon cave data is missing');exitCave();CAVE.portal=null;enterCave(tgt);if(!CAVE.on||!CAVE.group)throw new Error('Dungeon cave failed to initialize');if(target.portal){const pc=caveC2W(target.portal[0],target.portal[1]);P.x=pc[0]+3;P.z=pc[1];P.y=caveFloor(P.x,P.z)+.3;P.vy=0;if(caveSolid(P.x,P.z)){P.x=pc[0];P.z=pc[1]+3}}})}}})();
 </script>
 <script>
 (function(){'use strict';const X=window.PX;const $q=id=>document.getElementById(id);
