@@ -1231,12 +1231,12 @@ function genCave(isl,idx){const N=CAVE.N,r=mulberry(hash2(isl.seed,idx,777)||5);
   cand++;if(r()<.3)chs.push([x,y,10+Math.floor(r()*41)])}
  const pr=rooms[rooms.length-1];let pc=[pr[0],pr[1]];if(g[pc[1]*N+pc[0]]){pc=[ex,ey]}return{g,ex,ey,chs,rooms,arches:arches.filter(a=>!g[a[1]*N+a[0]]),portal:pc}}
 function placeCaves(info){
- const rnd=mulberry(info.seed^0x5ca1e);CAVE.mouths=[];CAVE.cdata=[];let n=0,tries=0;const want=(2+(rnd()<.45?1:0))*Math.ceil(DF/1.5);
+ const rnd=mulberry(info.seed^0x5ca1e);CAVE.mouths=[];CAVE.cdata=[];let n=0,tries=0;const want=Math.max(2,(2+(rnd()<.45?1:0))*Math.ceil(DF/1.5));
  // Cave entrances used to require a fairly narrow hillside-slope range. Most
  // generated islands do not have enough terrain in that range, so the loop
  // could finish with zero caves. Accept level-to-moderate ground as well.
- while(n<want&&tries<24000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<WATER+1.0||h>55)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>8.5)continue;if(!clearOf(x,z,5))continue;
-  if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<110))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue;
+ while(n<want&&tries<60000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<WATER+.5||h>60)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>12)continue;if(!clearOf(x,z,3))continue;
+  if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<75))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue;
   const gx=terrH(x+2,z)-terrH(x-2,z),gz=terrH(x,z+2)-terrH(x,z-2),face=Math.atan2(-gx,-gz);// faces downhill
   const g=new THREE.Group();g.position.set(x,h,z);g.rotation.y=face;WG.add(g);
   const rm=new THREE.MeshLambertMaterial({color:0x6a6a70,flatShading:true}),blk=new THREE.MeshBasicMaterial({color:0x020204});
@@ -3008,6 +3008,9 @@ window.drawMini=function(){if(sx===null||CAVE.on||Math.hypot(P.x-sx,P.z-sz)>20){
 <script>
 /* ---- dungeons: cave guardians + underground boss ---- */
 (function(){'use strict';
+// This extension runs in its own script scope. Keep the shared game namespace
+// local to this IIFE; without it mk() throws before enemies or traps are made.
+const X=window.PX=window.PX||{};
 const CEN=[];let lastGrp=null;
 const mt={};const M=c=>mt[c]||(mt[c]=new THREE.MeshLambertMaterial({color:c}));
 function bx(g,w,h,d,c,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c));m.position.set(x,y,z);g.add(m);return m}
@@ -3019,18 +3022,53 @@ function caveSpawn(dt){if(!CAVE.on||!CAVE.data)return;spT-=dt;if(spT>0)return;sp
  for(let k=0;k<40;k++){const x=4+Math.floor(Math.random()*(N-8)),y=4+Math.floor(Math.random()*(N-8));if(cd.g[y*N+x])continue;const p=caveC2W(x,y);if(Math.hypot(p[0]-P.x,p[1]-P.z)<20||Math.hypot(x-cd.ex,y-cd.ey)<12)continue;const kind=['sword','axe','spear','bow','gun'][Math.floor(Math.random()*(cm.layer>=2?5:4))];
   mk(p[0],p[1],{s:1.05,layer:cm.layer,hp:Math.round((20+Math.random()*30)*cm.mul*1.4),dmg:4+cm.layer*1.8,speed:2.9+cm.layer*.15,kind});break}}
 const be=enterCave;
-window.enterCave=function(idx){be(idx);CEN.length=0;if(!CAVE.on)return;const cd=CAVE.data,N=CAVE.N,rnd=mulberry(hash2(CUR.info.seed,idx,777)||5),cm=caveMul();
- const open=[];for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!cd.g[y*N+x]){const p=caveC2W(x,y);open.push({p,d:Math.hypot(x-cd.ex,y-cd.ey)})}
- if(!open.length)return;const dng=idx!==0,n=dng?34:14,far=open.filter(o=>o.d>12),kinds=['sword','axe','spear','bow','gun'];
- for(let i=0;i<n&&far.length;i++){const o=far[Math.floor(rnd()*far.length)],kind=kinds[Math.floor(rnd()*(cm.layer>=2?5:4))];mk(o.p[0],o.p[1],{s:1.05,layer:cm.layer,hp:Math.round((20+rnd()*30)*cm.mul*1.4),dmg:4+cm.layer*1.8,speed:2.9+cm.layer*.15,kind})}
+window.enterCave=function(idx){
+ // Always build the cave first. A failed base load must not leave stale mobs.
+ CEN.length=0;CTRP.length=0;
+ const loaded=be(idx);
+ if(loaded===false||!CAVE.on||!CAVE.group||!CAVE.data||!CAVE.data.g)return false;
+ const cd=CAVE.data,N=CAVE.N,rnd=mulberry(hash2(CUR.info.seed,idx,777)||5),cm=caveMul();
+ const open=[];
+ for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(!cd.g[y*N+x]){
+  const p=caveC2W(x,y);open.push({p,d:Math.hypot(x-cd.ex,y-cd.ey),x,y});
+ }
+ if(!open.length){console.error('[Dungeon] Generated cave has no open cells',idx);return true}
+ const dng=idx!==0,far=open.filter(o=>o.d>12);
+ // Use a shuffled copy and consume positions so enemies and bosses never stack.
+ const candidates=(far.length?far:open.filter(o=>o.d>5)).slice();
+ for(let i=candidates.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
+ const kinds=['sword','axe','spear','bow','gun'];
+ const regularCount=dng?34:14;
+ let spawned=0;
+ for(let i=0;i<Math.min(regularCount,candidates.length);i++){
+  const o=candidates[i],kind=kinds[Math.floor(rnd()*(cm.layer>=2?5:4))];
+  try{mk(o.p[0],o.p[1],{s:1.05,layer:cm.layer,hp:Math.round((20+rnd()*30)*cm.mul*1.4),dmg:4+cm.layer*1.8,speed:2.9+cm.layer*.15,kind});spawned++}
+  catch(err){console.error('[Dungeon] Could not create guardian:',err);break}
+ }
  if(dng){
-  const bossSpots=far.slice().sort((a,b)=>b.d-a.d);
-  for(let b=0;b<Math.min(4,bossSpots.length);b++){const o=bossSpots[Math.floor((b+.5)*bossSpots.length/Math.min(4,bossSpots.length))];mk(o.p[0],o.p[1],{s:2.25+b*.12,layer:cm.layer,hp:Math.min(1600,Math.round((260+rnd()*220)*(1+cm.layer*.2))),dmg:10+cm.layer*2,speed:3.1,boss:1,kind:['axe','spear','gun','sword'][b],name:['Dungeon Warlord','Barbarian Champion','Cave Overlord','War Chief'][b]})}
-  // Scatter visible spike traps through open dungeon corridors and chambers.
-  const trapSpots=far.filter((o,i)=>i%2===0).sort(()=>rnd()-.5).slice(0,Math.min(26,far.length));
-  for(const o of trapSpots){const g=new THREE.Group();g.position.set(o.p[0],caveFloor(o.p[0],o.p[1])+.04,o.p[1]);CAVE.group.add(g);bx(g,1.8,.12,1.8,0x39343a,0,.05,0);for(let q=0;q<5;q++){const sp=new THREE.Mesh(new THREE.ConeGeometry(.17,.75,5),M(0x9b9da5));sp.position.set(-.65+q*.325,.47,0);g.add(sp)}const glow=new THREE.Mesh(new THREE.CircleGeometry(.9,16).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xd94b3d,transparent:true,opacity:.18,side:THREE.DoubleSide}));glow.position.y=.12;g.add(glow);CTRP.push({g,x:o.p[0],z:o.p[1],cd:0})}
-  toast('Dungeon entered — four bosses, barbarian guards, and hidden traps await!')
- }else{toast('Cave entered — barbarian guards are roaming the tunnels.')}};
+  // Four distinct boss positions, selected from the deepest available cells.
+  const bossSpots=far.slice().sort((a,b)=>b.d-a.d).filter(o=>!candidates.slice(0,regularCount).some(q=>q.x===o.x&&q.y===o.y));
+  for(let b=0;b<Math.min(4,bossSpots.length);b++){
+   const o=bossSpots[Math.floor((b+.5)*bossSpots.length/Math.min(4,bossSpots.length))];
+   try{mk(o.p[0],o.p[1],{s:2.25+b*.12,layer:cm.layer,hp:Math.min(1600,Math.round((260+rnd()*220)*(1+cm.layer*.2))),dmg:10+cm.layer*2,speed:3.1,boss:1,kind:['axe','spear','gun','sword'][b],name:['Dungeon Warlord','Barbarian Champion','Cave Overlord','War Chief'][b]})}
+   catch(err){console.error('[Dungeon] Could not create boss:',err);break}
+  }
+  // Traps are placed independently of enemy creation so a mob error cannot
+  // prevent the dungeon from receiving its hazards.
+  const trapSpots=far.filter((o,i)=>i%3===0).slice(0,Math.min(26,far.length));
+  for(const o of trapSpots){
+   try{
+    const g=new THREE.Group();g.position.set(o.p[0],caveFloor(o.p[0],o.p[1])+.04,o.p[1]);CAVE.group.add(g);
+    bx(g,1.8,.12,1.8,0x39343a,0,.05,0);
+    for(let q=0;q<5;q++){const sp=new THREE.Mesh(new THREE.ConeGeometry(.17,.75,5),M(0x9b9da5));sp.position.set(-.65+q*.325,.47,0);g.add(sp)}
+    const glow=new THREE.Mesh(new THREE.CircleGeometry(.9,16).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xd94b3d,transparent:true,opacity:.18,side:THREE.DoubleSide}));glow.position.y=.12;g.add(glow);
+    CTRP.push({g,x:o.p[0],z:o.p[1],cd:0});
+   }catch(err){console.error('[Dungeon] Could not create trap:',err)}
+  }
+  toast(`Dungeon loaded — ${CEN.length} enemies and ${CTRP.length} spike traps`);
+ }else toast(`Cave loaded — ${CEN.length} guardians roaming the tunnels`);
+ return true;
+};
 const bx2=exitCave;window.exitCave=function(){CEN.length=0;for(const p of CP)CAVE.group&&CAVE.group.remove(p.m);CP.length=0;for(const t of CTRP)CAVE.group&&CAVE.group.remove(t.g);CTRP.length=0;bx2()};
 function kill(e){const i=CEN.indexOf(e);if(i>=0)CEN.splice(i,1);CAVE.group&&CAVE.group.remove(e.g);SX.enemyDie&&SX.enemyDie();giveLoot(e.boss?'Dungeon Boss Loot':'Guardian Loot',e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5));toast(e.boss?'Dungeon boss defeated!':'Guardian down')}
 const bb=bulletHit;window.bulletHit=function(p){if(CAVE.on)for(const e of CEN)if(Math.hypot(p.x-e.x,p.z-e.z)<.6*e.s&&p.y>caveFloor(e.x,e.z)-.2&&p.y<caveFloor(e.x,e.z)+2.4*e.s){e.hp-=PISTOL_DMG;SX.enemyHit&&SX.enemyHit();addFx(p.clone(),0xff4455,1.4,.2);if(e.state==='idle')e.state='chase';if(e.hp<=0)kill(e);return'wood'}return bb(p)};
