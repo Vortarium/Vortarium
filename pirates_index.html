@@ -540,7 +540,9 @@ function watchB(coll,key,size,cb){let un=null,tm=null,dead=false;const go=()=>{i
   async login(u,p){return (await signInWithEmailAndPassword(auth,mail(u),p)).user},
   async logout(){await signOut(auth)},
   async loadSave(){const s=await getDoc(doc(db,'users',uid()));return s.exists()?s.data():null},
-  async saveSave(str,pub){await setDoc(doc(db,'users',uid()),{save:str,savedAt:Date.now(),nickname:pub.nickname});await setDoc(doc(db,'players',uid()),pub)},
+  async saveSave(str,pub){await Promise.all([setDoc(doc(db,'users',uid()),{save:str,savedAt:Date.now(),nickname:pub.nickname}),setDoc(doc(db,'players',uid()),pub)])},
+  watchSave(cb){return onSnapshot(doc(db,'users',uid()),s=>cb(s.metadata.hasPendingWrites,s.exists()?s.data():null))},
+  homeGet(u){return getDoc(doc(db,'homes',u)).then(s=>s.exists()?s.data():null)},
   async deleteSave(){const u=uid();await deleteDoc(doc(db,'users',u));await deleteDoc(doc(db,'players',u));await deleteDoc(doc(db,'presence',u))},
   async logIsland(info,chestCount){const r=doc(db,'islands',info.key),s=await getDoc(r);
    if(!s.exists())await setDoc(r,{key:info.key,name:info.name,seed:info.seed,gx:info.gx,gy:info.gy,biomes:info.bio,chestCount:chestCount||0,createdBy:uid(),createdAt:Date.now(),visits:1,lastVisit:Date.now(),discoverers:[uid()]});
@@ -578,9 +580,9 @@ function watchB(coll,key,size,cb){let un=null,tm=null,dead=false;const go=()=>{i
   buildSet(d){return setDoc(doc(db,'builds',d.id),d)},
   buildHp(id,hp){return updateDoc(doc(db,'builds',id),{hp})},
   lootSet(id,d){return setDoc(doc(db,'looted',id),d)},
-  harvSet(id,d){return setDoc(doc(db,'harv',id),Object.assign({ik:d.isl+'|'+Math.floor(d.t/1800000)},d))},
+  harvSet(id,d){return setDoc(doc(db,'harv',id),Object.assign({},d,{ik:d.isl+'|perm'}))},
   watchLoot(key,cb){return onSnapshot(query(collection(db,'looted'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
-  watchHarv(key,cb){return watchB('harv',key,1800000,cb)},
+  watchHarv(key,cb){return onSnapshot(query(collection(db,'harv'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
   buildDel(id){return deleteDoc(doc(db,'builds',id))},
   watchBuilds(key,cb){return onSnapshot(query(collection(db,'builds'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
   watchShop(key,cb){return onSnapshot(query(collection(db,'shopbuys'),where('isl','==',key)),snap=>{const a=[];snap.forEach(d=>a.push(Object.assign({id:d.id},d.data())));cb(a)})},
@@ -673,15 +675,59 @@ const SLOT_NAME={hat:'Hat',tunic:'Tunic',pants:'Pants',boots:'Boots'};
 const SLOT_PL={hat:'Hats',tunic:'Tunics',pants:'Pants',boots:'Boots'};
 const HOME='0,0';
 let S=null;
-function defaultSave(){return{name:'Pirate',made:false,mats:{},items:{},mtLv:0,avatar:{skin:'#e0ac69',hair:'#3b2a1a',hairStyle:'short',gender:'m',build:'avg',eye:'#2a1a10',beard:'none',acc:[]},gems:{},cos:{},eq:{hat:null,tunic:null,pants:null,boots:null},tokensSpent:0,shop:false,wp:Array(10).fill(null),pos:null,isl:{},cur:HOME,time:.38}}
-function loadSave(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);const s=Object.assign(defaultSave(),o);
+function defaultSave(){return{name:'Pirate',made:false,mats:{},items:{},mtLv:0,avatar:{skin:'#e0ac69',hair:'#3b2a1a',hairStyle:'short',gender:'m',build:'avg',eye:'#2a1a10',beard:'none',acc:[]},gems:{},cos:{},eq:{hat:null,tunic:null,pants:null,boots:null},tokensSpent:0,chestsOpened:0,shop:false,wp:Array(10).fill(null),pos:null,isl:{},cur:HOME,time:.38}}
+function loadSave(){try{const t=localStorage.getItem(SAVE_KEY);if(!t)return null;const o=JSON.parse(t);const s=Object.assign(defaultSave(),o);unpackHome(s);
  s.isl=s.isl||{};if(o.chests&&!Object.keys(s.isl).length)s.isl[HOME]={disc:1,n:0,ch:o.chests};delete s.chests;
  s.wp=(s.wp||[]).slice(0,10);while(s.wp.length<10)s.wp.push(null);for(let i=0;i<10;i++){if(s.wp[i]&&!s.wp[i].isl)s.wp[i]=null;if(i>=1&&i<=3)s.wp[i]=null}
  if(s.pos&&!s.pos.isl)s.pos=null;if(!s.cur)s.cur=HOME;return s}catch(e){return null}}
-let cloudT=0,cloudStr=null;
-function pubProfile(){let gc=0,ch=0;for(const g of GEMS)gc+=S.gems[g.id]||0;for(const k in S.isl)ch+=Object.keys((S.isl[k]&&S.isl[k].ch)||{}).filter(q=>q[0]!=='@').length;return{nickname:S.name,avatar:S.avatar,networth:networth(),gems:gc,chestsOpened:ch,updated:Date.now()}}
-function save(force){try{if(S){if(typeof P!=='undefined'&&worldReady&&!CAVE.on&&CUR.key)S.pos={x:P.x,z:P.z,isl:CUR.key};if(worldReady)S.time=TD;const o=Object.assign({},S);delete o.chests;o.savedAt=Date.now();const str=JSON.stringify(o);localStorage.setItem(SAVE_KEY,str);
- if(FB&&UID&&S.made){cloudStr=str;const n=Date.now();if(force===true||n-cloudT>180000){cloudT=n;const s=cloudStr;cloudStr=null;FB.saveSave(s,pubProfile()).catch(e=>console.warn('cloud save failed',e))}}}}catch(e){}}
+function pubProfile(){let gc=0;for(const g of GEMS)gc+=S.gems[g.id]||0;return{nickname:S.name,avatar:S.avatar,networth:networth(),gems:gc,chestsOpened:Math.max(0,Math.floor(Number(S.chestsOpened)||0)),updated:Date.now()}}
+/* ---- compact terraform codec (home th/tp): keeps the cloud save + public home doc small enough to always fit ---- */
+function packPairs(a){if(!a||!a.length)return'';const pr=[];for(let i=0;i+1<a.length;i+=2){if(!Number.isInteger(a[i])||!Number.isInteger(a[i+1])||a[i]<0)return null;pr.push([a[i],a[i+1]])}
+ pr.sort((x,y)=>x[0]-y[0]);const by=[],vi=n=>{while(n>=128){by.push((n%128)|128);n=Math.floor(n/128)}by.push(n)};let prev=0;
+ for(const q of pr){vi(q[0]-prev);prev=q[0];vi(q[1]<0?-2*q[1]-1:2*q[1])}
+ let t='';for(let i=0;i<by.length;i+=8192)t+=String.fromCharCode.apply(null,by.slice(i,i+8192));return btoa(t)}
+function unpackPairs(z){if(!z)return[];const b=atob(z),out=[];let i=0,prev=0;const rd=()=>{let n=0,m=1,c;do{c=b.charCodeAt(i++);n+=(c&127)*m;m*=128}while((c&128)&&i<b.length);return n};
+ while(i<b.length){prev+=rd();const q=rd();out.push(prev,(q%2)?-(q+1)/2:q/2)}return out}
+function packHome(o){if(o.home&&(o.home.th||o.home.tp)){const h=Object.assign({},o.home),a=packPairs(h.th),b=packPairs(h.tp);if(a!==null&&b!==null){h.thz=a;h.tpz=b;delete h.th;delete h.tp;o.home=h}}return o}
+function unpackHome(s){if(s.home&&s.home.thz!==undefined){const h=Object.assign({},s.home);h.th=unpackPairs(h.thz);h.tp=unpackPairs(h.tpz);delete h.thz;delete h.tpz;s.home=h}return s}
+/* ---- cloud sync ---- */
+const DEV=(()=>{try{let d=localStorage.getItem('pirates_dev_id');if(!d){d=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('pirates_dev_id',d)}return d}catch(e){return'd'+Math.random().toString(36).slice(2)}})();
+let cloudT=0,cloudStr=null,cloudKey=null,cloudTm=null,cloudBusy=false,cloudAgain=false,cloudFail=0,cloudAt=0,cloudSeenAt=0,cloudWatchOn=false,cloudBigWarn=false;
+function stab(v){if(v===null||typeof v!=='object')return JSON.stringify(v);if(Array.isArray(v))return'['+v.map(stab).join(',')+']';return'{'+Object.keys(v).sort().filter(k=>v[k]!==undefined).map(k=>JSON.stringify(k)+':'+stab(v[k])).join(',')+'}'}
+function cloudKeyOf(o){const c=Object.assign({},o);delete c.pos;delete c.time;delete c.savedAt;delete c.dev;delete c.chests;return stab(c)}
+function markSynced(t){cloudAt=t;try{localStorage.setItem(SAVE_KEY+'_cloudAt',String(t))}catch(e){}}
+function cloudSchedule(now){if(cloudBusy){cloudAgain=true;return}if(cloudTm&&!now)return;clearTimeout(cloudTm);cloudTm=setTimeout(cloudPush,now?0:1200)}
+async function cloudPush(){cloudTm=null;if(!FB||!UID||!cloudStr)return;if(cloudBusy){cloudAgain=true;return}
+ const str=cloudStr,key=cloudKey2,at=cloudAt2;if(str.length>=900000){if(!cloudBigWarn){cloudBigWarn=true;try{toast('Your save is too large to sync to the cloud!')}catch(e){}}return}
+ cloudBusy=true;cloudStr=null;cloudT=Date.now();
+ try{await FB.saveSave(str,pubProfile());cloudKey=key;cloudFail=0;markSynced(at)}
+ catch(e){console.warn('cloud save failed',e);cloudFail++;if(!cloudStr)cloudStr=str;if(cloudFail===3){try{toast('Cloud save is failing — retrying…')}catch(er){}}setTimeout(()=>cloudSchedule(true),Math.min(30000,1500*cloudFail*cloudFail))}
+ cloudBusy=false;if(cloudAgain){cloudAgain=false;cloudSchedule(true)}}
+let cloudKey2='',cloudAt2=0;
+function save(force){try{if(S){if(typeof P!=='undefined'&&worldReady&&!CAVE.on&&CUR.key)S.pos={x:P.x,z:P.z,isl:CUR.key};if(worldReady)S.time=TD;const o=Object.assign({},S);delete o.chests;packHome(o);o.savedAt=Date.now();o.dev=DEV;const str=JSON.stringify(o);localStorage.setItem(SAVE_KEY,str);
+ if(FB&&UID&&S.made){const key=cloudKeyOf(o),changed=key!==cloudKey;
+  if(changed||force===true||Date.now()-cloudT>180000){cloudStr=str;cloudKey2=key;cloudAt2=o.savedAt;cloudSchedule(force===true)}
+  else if(!cloudBusy&&!cloudTm&&!cloudStr)markSynced(o.savedAt)}}}catch(e){}}
+/* when another device pushed newer progress while this one is open, merge it in live */
+function mergeMax(x,y){if(x===undefined)return y;if(typeof x==='number'&&typeof y==='number')return Math.max(x,y);if(x&&y&&typeof x==='object'&&typeof y==='object'&&!Array.isArray(x)&&!Array.isArray(y)){const o=Object.assign({},x);for(const k in y)o[k]=mergeMax(x[k],y[k]);return o}return x}
+function mergeSaveObjs(base,other){const o=Object.assign({},base);o.isl=mergeMax(base.isl||{},other.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv'])o[k]=Math.max(base[k]||0,other[k]||0);o.savedAt=Date.now();return o}
+function pickSave(cloud,local,localRaw,syncedAt){
+ if(!cloud||!cloud.save)return localRaw;let c;try{c=JSON.parse(cloud.save)}catch(e){return localRaw}
+ const cs=c.savedAt||cloud.savedAt||0;cloudSeenAt=cs;cloudKey=null;
+ if(!local)return cloud.save;const ls=local.savedAt||0;
+ if(cs>ls)return ls>syncedAt?JSON.stringify(mergeSaveObjs(c,local)):cloud.save;
+ return(syncedAt>=cs||local.dev===c.dev)?localRaw:JSON.stringify(mergeSaveObjs(local,c))}
+function adoptRemote(r){try{
+ const n=Object.assign(defaultSave(),r);unpackHome(n);n.isl=mergeMax(n.isl||{},S.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv'])n[k]=Math.max(n[k]||0,S[k]||0);
+ n.pos=S.pos;n.cur=S.cur;n.time=S.time;n.curW=S.curW;if(typeof CUR!=='undefined'&&CUR&&CUR.key===HOME)n.home=S.home;
+ for(const k of Object.keys(S))if(!(k in n)&&k!=='chests')delete S[k];Object.assign(S,n);
+ if(typeof CUR!=='undefined'&&CUR&&CUR.key){const rec=S.isl[CUR.key];if(rec){rec.ch=rec.ch||{};CUR.rec=rec;S.chests=rec.ch}}
+ cloudKey=cloudKeyOf(r);markSynced(r.savedAt||0);try{localStorage.setItem(SAVE_KEY,JSON.stringify(Object.assign({},r,{savedAt:r.savedAt})))}catch(e){}
+ try{updateHeader(true);if(invOpen)renderInv()}catch(e){}try{toast('Synced progress from another device')}catch(e){}
+ }catch(e){console.warn('adoptRemote failed',e)}}
+function startCloudWatch(){if(cloudWatchOn||!FB||!FB.watchSave)return;cloudWatchOn=true;
+ FB.watchSave((pending,d)=>{if(pending||!d||!d.save||!S||!S.made)return;let r;try{r=JSON.parse(d.save)}catch(e){return}
+  if(r.dev===DEV)return;const t=r.savedAt||0;if(t<=cloudSeenAt)return;cloudSeenAt=t;adoptRemote(r)})}
 function networth(){let n=0;for(const g of GEMS)n+=(S.gems[g.id]||0)*g.value;for(const c of COS)n+=(S.cos[c.id]||0)*c.value;for(const k in(S.items||{}))n+=(S.items[k]||0)*((ITEMS[k]&&ITEMS[k].v)||0);return n+S.tokensSpent*50000000}
 function gemsValue(){let n=0;for(const g of GEMS)n+=(S.gems[g.id]||0)*g.value;return n}
 
@@ -1112,11 +1158,12 @@ async function doAuth(){
   FB=await Promise.race([FBP,new Promise((_,j)=>setTimeout(()=>j(new Error('Could not reach Firebase. Check your connection.')),8000))]);
   const user=authMode==='signup'?await FB.signup(u,p):await FB.login(u,p);
   UID=user.uid;SAVE_KEY='pirates_treasure_save_v2_'+UID;
-  const cloud=await FB.loadSave();let local=null;try{local=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')}catch(e){}
-  if(cloud&&cloud.save&&(!local||(cloud.savedAt||0)>(local.savedAt||0)))localStorage.setItem(SAVE_KEY,cloud.save);
+  const cloud=await FB.loadSave();let local=null;const localRaw=localStorage.getItem(SAVE_KEY);try{local=JSON.parse(localRaw||'null')}catch(e){}
+  const picked=pickSave(cloud,local,localRaw,+(localStorage.getItem(SAVE_KEY+'_cloudAt')||0));if(picked)localStorage.setItem(SAVE_KEY,picked);
+  cloudAt=+(localStorage.getItem(SAVE_KEY+'_cloudAt')||0);startCloudWatch();
   $('auth').hidden=true;$('auPass').value='';$('auPass2').value='';
   const sv=loadSave();
-  if(sv&&sv.made){S=sv;$('loading').hidden=false;enterWorld()}else{$('menu').hidden=false;buildMenu()}
+  if(sv&&sv.made){S=sv;$('loading').hidden=false;enterWorld();setTimeout(()=>{try{save()}catch(e){}},4000)}else{$('menu').hidden=false;buildMenu()}
  }catch(e){console.error(e);authErr(fbMsg(e))}
  $('auGo').disabled=false}
 $('auGo').onclick=doAuth;
@@ -1237,7 +1284,15 @@ let renderer,scene,camera,sun,hemi,lantern,water,sky,worldReady=false,mapCanvas,
 let CUR={key:HOME,info:null,rec:null};
 const TD0={v:.38};let TD=.38;function globalTD(){if(window.PX&&PX.fixTD!=null)return PX.fixTD;return((Date.now()/1000+((window.PX&&PX.todOff)||0))%1440)/1440}
 const WEATHER={type:'clear',cover:.3,dark:0,precip:0,blood:0,tCover:.3,tDark:0,tPrecip:0,tBlood:0,hour:-1,thunder:8,lock:0};
-const PIX={max:1,cur:1,t:0,n:0},CHUNKS=[],FOGC=new THREE.Color();
+const PIX={max:1,cur:1,min:.5,dd:1,t:0,n:0,avg:16},CHUNKS=[],FOGC=new THREE.Color();
+const LDQ=()=>!!(window.PX&&window.PX.gfx&&window.PX.gfx.ld);
+/* ---- wind: shared by vegetation sway and rain slant (stronger in storms) ---- */
+const WIND={t:{value:0},s:{value:.4},d:{value:new THREE.Vector2(.8,.6)}};
+const WIND_K={trunk:'pow(clamp(position.y/2.4,0.,1.),2.)*isy*.1',blob:'isc*(.1+.07*clamp(position.y*.5+.5,0.,1.))',cone:'isc*(.06+.05*clamp(position.y/2.,0.,1.))',blob2:'isc*(.07+.05*clamp(position.y*.5+.5,0.,1.))',cone2:'isc*(.05+.04*clamp(position.y/2.,0.,1.))',grass:'pow(clamp(position.y/.6,0.,1.),2.)*isy*.2',small:'isc*(.05+.05*clamp(position.y*.5+.5,0.,1.))',shrub:'isc*(.09+.06*clamp(position.y+.5,0.,1.))',fern:'pow(clamp((position.y+.4)/.8,0.,1.),2.)*isc*.4'};
+function windMat(m,kind){const expr=WIND_K[kind]||'0.';
+ m.onBeforeCompile=sh=>{sh.uniforms.uWT=WIND.t;sh.uniforms.uWS=WIND.s;sh.uniforms.uWD=WIND.d;
+  sh.vertexShader='uniform float uWT,uWS;uniform vec2 uWD;\n'+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n#ifdef USE_INSTANCING\n{vec3 ip=instanceMatrix[3].xyz;float isc=length(instanceMatrix[0].xyz),isy=length(instanceMatrix[1].xyz),ph=ip.x*.31+ip.z*.23,ws=min(uWS,2.2);\n float g=sin(uWT*1.25+ph)+.55*sin(uWT*2.7+ph*1.9)+.25*sin(uWT*5.3+ph*3.1);float amt='+expr+';\n vec3 wo=vec3(uWD.x,0.,uWD.y)*amt*ws*(.55+.45*g)+vec3(-uWD.y,0.,uWD.x)*amt*ws*.25*sin(uWT*1.9+ph*2.3);\n mvPosition.xyz+=(viewMatrix*vec4(wo,0.)).xyz;gl_Position=projectionMatrix*mvPosition;}\n#endif')};
+ m.customProgramCacheKey=()=>'wind_'+kind;return m}
 const GLSL_NOISE='uniform sampler2D uNoise;float noise3(vec3 x){vec3 p=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);vec2 uv=p.xy+vec2(37.0,17.0)*p.z+f.xy;vec2 t=texture2D(uNoise,(uv+0.5)/256.0).xy;return mix(t.x,t.y,f.z);}float fbm3(vec3 p){float a=.5,s=0.0;for(int i=0;i<3;i++){s+=a*noise3(p);p=p*2.02+vec3(1.7,9.2,3.1);a*=.5;}return s;}float fbm2(vec3 p){float a=.5,s=0.0;for(int i=0;i<2;i++){s+=a*noise3(p);p=p*2.02+vec3(1.7,9.2,3.1);a*=.5;}return s;}';
 const SKY_VS='varying vec3 vp;void main(){vp=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 const SKY_FS='varying vec3 vp;uniform vec3 uSun,uCam,uTop,uHor,uSunCol,uTint;uniform float uTime,uCover,uDark,uNight,uFlash;'+GLSL_NOISE+
@@ -1268,11 +1323,11 @@ const WATER_FS=WAVES+'uniform sampler2D uNoise;uniform sampler2D uHT;uniform vec
 'float foam=(1.0-smoothstep(0.0,0.9,depth))*(0.55+0.45*sin(depth*16.0-uTime*1.8+n2.x*7.0));foam+=smoothstep(0.17,0.28,vH)*0.45*(0.5+n1.x);foam=clamp(foam,0.0,1.0);col=mix(col,vec3(0.95,0.98,1.0)*max(uAmb,0.35),foam*0.85);'+
 'float al=clamp(mix(0.62,0.96,1.0-sh*0.65)+foam*0.3,0.0,1.0);if(cameraPosition.y<uLevel){col*=vec3(0.45,0.8,1.0);al=0.55;}col*=vec3(1.0,uTint,uTint);'+
 'float fd=smoothstep(uFogN,uFogF,length(cameraPosition-vW));col=mix(col,uFog,fd);gl_FragColor=vec4(col,al);}';
-const RAIN_VS='attribute vec4 rnd;uniform vec3 uC;uniform float uT,uInt,uLen;uniform vec2 uWind;varying float vA;void main(){float box=64.0;vec3 p;p.x=uC.x+(fract(rnd.x-uC.x/box)-0.5)*box;p.z=uC.z+(fract(rnd.y-uC.z/box)-0.5)*box;float fall=mod(rnd.z*60.0+uT*(26.0+rnd.w*14.0),60.0);p.y=uC.y+30.0-fall;p.x+=(30.0-fall)*uWind.x*0.02;p.y+=position.x*uLen;p.x-=position.x*uWind.x*uLen*0.03;vA=step(rnd.w,uInt)*(0.35+0.4*rnd.w);gl_Position=projectionMatrix*viewMatrix*vec4(p,1.0);}';
+const RAIN_VS='attribute vec4 rnd;uniform vec3 uC;uniform float uT,uInt,uLen,uGround;uniform vec2 uWind;varying float vA;void main(){float box=56.0,H=48.0;vec3 p;p.x=uC.x+(fract(rnd.x-uC.x/box)-0.5)*box;p.z=uC.z+(fract(rnd.y-uC.z/box)-0.5)*box;float spd=22.0+rnd.w*11.0;float fall=mod(rnd.z*H+uT*spd,H);p.y=uC.y+26.0-fall;vec2 dr=uWind*0.1;p.xz+=dr*fall;vec3 dir=normalize(vec3(dr.x,1.0,dr.y));p+=dir*position.x*uLen*(0.7+rnd.w*0.6);float dist=length(p.xz-uC.xz);float edge=1.0-smoothstep(box*0.34,box*0.5,dist);float nr=smoothstep(1.2,3.5,length(p-uC));float gnd=step(uGround,p.y);vA=step(rnd.w,uInt)*(0.22+0.42*rnd.w)*edge*nr*gnd*(1.0-0.65*position.x);gl_Position=projectionMatrix*viewMatrix*vec4(p,1.0);}';
 const SNOW_VS='attribute vec4 rnd;uniform vec3 uC;uniform float uT,uInt,uSize;varying float vA;void main(){float box=64.0;vec3 p;p.x=uC.x+(fract(rnd.x-uC.x/box)-0.5)*box;p.z=uC.z+(fract(rnd.y-uC.z/box)-0.5)*box;float fall=mod(rnd.z*40.0+uT*(2.0+rnd.w*2.5),40.0);p.y=uC.y+22.0-fall;p.x+=sin(uT*0.7+rnd.z*30.0)*0.9;p.z+=cos(uT*0.6+rnd.x*30.0)*0.9;vec4 mv=viewMatrix*vec4(p,1.0);vA=step(rnd.w,uInt);gl_PointSize=uSize*(0.6+rnd.w)*(260.0/-mv.z);gl_Position=projectionMatrix*mv;}';
 
 function initEngine(){
- renderer=new THREE.WebGLRenderer({antialias:devicePixelRatio<2,powerPreference:'high-performance'});PIX.max=Math.min(devicePixelRatio,1.25);PIX.cur=PIX.max;
+ renderer=new THREE.WebGLRenderer({antialias:devicePixelRatio<2&&!(()=>{try{return JSON.parse(localStorage.getItem('pirates_gfx_v1')||'{}').ld===true}catch(e){return false}})(),powerPreference:'high-performance'});PIX.max=Math.min(devicePixelRatio,1.25);PIX.cur=PIX.max;
  renderer.setPixelRatio(PIX.cur);renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;renderer.shadowMap.autoUpdate=false;
  $('gameWrap').appendChild(renderer.domElement);
  scene=new THREE.Scene();scene.fog=new THREE.Fog(0xbfdff5,90,380);
@@ -1321,14 +1376,14 @@ function updateSky(dt,t){
  u.uTop.value.setRGB(top[0],top[1],top[2]);u.uHor.value.setRGB(hor[0],hor[1],hor[2]);u.uSunCol.value.setRGB(sunC[0]*dayF,sunC[1]*dayF,sunC[2]*dayF);u.uSun.value.copy(SUNV);
  u.uTime.value=t;u.uCover.value=W.cover;u.uDark.value=dk;u.uNight.value=night;u.uCam.value.copy(camera.position);
  u.uTint.value.setRGB(1+.25*W.blood,1-.5*W.blood,1-.5*W.blood);
- flashT=Math.max(0,flashT-dt*2.4);u.uFlash.value=flashT*.55;
- const fog=FOGC.setRGB(hor[0],hor[1],hor[2]);if(!CAVE.on){scene.fog.color.copy(fog);scene.fog.near=lerpN(90,15,Math.max(W.precip,dk*.6));scene.fog.far=lerpN(380,150,Math.max(W.precip,dk*.5));renderer.setClearColor(fog)}
+ flashT=Math.max(0,flashT-dt*2.4);u.uFlash.value=Math.max(flashT*.55,((window.PX&&window.PX.flash)||0)*.8);
+ const fog=FOGC.setRGB(hor[0],hor[1],hor[2]);if(!CAVE.on){scene.fog.color.copy(fog);{const FD=(LDQ()?.55:1)*PIX.dd;scene.fog.near=lerpN(90,15,Math.max(W.precip,dk*.6))*FD;scene.fog.far=lerpN(380,150,Math.max(W.precip,dk*.5))*FD}renderer.setClearColor(fog)}
  const sg=sun;const dayDir=e>.02;
  sg.color.setRGB(dayDir?sunC[0]:.5,dayDir?sunC[1]:.6,dayDir?sunC[2]:.95);sg.intensity=dayDir?(.78*dayF*(1-dk*.6)+.04):.35*night;
  sg.position.set(P.x+(dayDir?SUNV.x:-SUNV.x)*120,P.y+(dayDir?SUNV.y:-SUNV.y)*120+8,P.z+(dayDir?SUNV.z:-SUNV.z)*120);sg.target.position.set(P.x,P.y,P.z);sg.target.updateMatrixWorld();if(CAVE.on)sg.intensity=0;
- if(!CAVE.on){hemi.intensity=.17+.19*dayF*(1-dk*.3)+.05*night;hemi.color.setRGB(top[0]*.5+.4,top[1]*.5+.4,top[2]*.5+.45);hemi.groundColor.setRGB(.29*(.3+.7*dayF),.35*(.3+.7*dayF),.23*(.3+.7*dayF))}
+ if(!CAVE.on){hemi.intensity=.17+.19*dayF*(1-dk*.3)+.05*night+((window.PX&&window.PX.flash)||0)*.9;hemi.color.setRGB(top[0]*.5+.4,top[1]*.5+.4,top[2]*.5+.45);hemi.groundColor.setRGB(.29*(.3+.7*dayF),.35*(.3+.7*dayF),.23*(.3+.7*dayF))}
  const wu=waterMat.uniforms;wu.uTime.value=t;wu.uAmb.value=.18+.82*dayF*(1-dk*.4);wu.uFog.value.copy(fog);wu.uFogN.value=scene.fog.near;wu.uFogF.value=scene.fog.far;wu.uTint.value=1-.55*W.blood;
- if(W.type==='heavy'||W.type==='blood'){W.thunder-=dt;if(W.thunder<=0){W.thunder=7+Math.random()*12;flashT=1;SX.thunder()}}}
+ if((W.type==='heavy'||W.type==='blood')&&!(window.PX&&window.PX.stormSys)){W.thunder-=dt;if(W.thunder<=0){W.thunder=7+Math.random()*12;flashT=1;SX.thunder()}}}
 function lerpN(a,b,t){return a+(b-a)*t}
 function clockStr(){const m=Math.floor(TD*1440),h=Math.floor(m/60)%24,mm=m%60;return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0')}
 
@@ -1390,7 +1445,7 @@ function tileGeo(t,l){if(t.geo[l])return t.geo[l];const st=1<<l,xs=[],zs=[],ix=[
  sk(xs.map(i=>t.j0*N1+i),xs.map(i=>sb+(i-t.i0)));sk(xs.map(i=>t.j1*N1+i),xs.map(i=>sb+W+(i-t.i0)));
  sk(zs.map(j=>j*N1+t.i0),zs.map(j=>sb+2*W+(j-t.j0)));sk(zs.map(j=>j*N1+t.i1),zs.map(j=>sb+3*W+(j-t.j0)));
  const g=new THREE.BufferGeometry(),S2=TTILES.shared;g.setAttribute('position',S2.position);g.setAttribute('color',S2.color);g.setAttribute('tw',S2.tw);g.setAttribute('normal',S2.normal);g.setIndex(ix);g.boundingSphere=t.sph;DISP.push(g);t.geo[l]=g;return g}
-function updateTerrainLOD(){if(CAVE.on||!TTILES.length||!WG)return;const fogF=(scene.fog?scene.fog.far:375)*1.12+30,thr=[50,115,225];
+function updateTerrainLOD(){if(CAVE.on||!TTILES.length||!WG)return;const fogF=(scene.fog?scene.fog.far:375)*1.12+30,thr=LDQ()?[32,72,140]:[50,115,225];
  for(const t of TTILES){const d=Math.max(0,Math.hypot(t.cx-P.x,t.cz-P.z)-t.r);
   if(d>fogF){if(t.mesh)t.mesh.visible=false;continue}
   let l=3;for(let q=0;q<3;q++)if(d<thr[q]){l=q;break}
@@ -1401,7 +1456,7 @@ function updateTerrainLOD(){if(CAVE.on||!TTILES.length||!WG)return;const fogF=(s
 
 /* ============================ SCATTER (flora) ============================ */
 let SL=null;const TRUNKC=['#6b4a2b','#5c3f24','#7a5632'];
-const INST={},REGEN=100*3600*1000;let ADDLOG=null;
+const INST={},REGEN=Infinity;let ADDLOG=null;
 function plant(t,x,h,z,rnd,B,bi){
  const L=SL,snap={};for(const k in L)snap[k]=L[k].length;
  ADDLOG=[];plant0(t,x,h,z,rnd,B,bi);const log=ADDLOG;ADDLOG=null;
@@ -1453,6 +1508,7 @@ function scatter(info){
   if(!t){let r2=rnd();for(const e of B.cov){if(r2<e[1]){t=e[0];break}r2-=e[1]*.3}if(!t)continue;if(t==='grass'&&rnd()>.55)continue}
   plant(t,x,h,z,rnd,B,bi)}
  const mat=new THREE.MeshLambertMaterial(),fmat=new THREE.MeshLambertMaterial({flatShading:true}),gmat=new THREE.MeshLambertMaterial({flatShading:true,emissive:0x353535}),bmat=new THREE.MeshBasicMaterial();
+ const mkW=(o,k)=>windMat(new THREE.MeshLambertMaterial(o),k),mTrunk=mkW({},'trunk'),mGrass=mkW({},'grass'),mSmall=mkW({},'small'),mBlob=mkW({flatShading:true},'blob'),mCone=mkW({flatShading:true},'cone'),mGB=mkW({flatShading:true,emissive:0x353535},'blob2'),mGC=mkW({flatShading:true,emissive:0x353535},'cone2');
  const MAXD=new Map([[SL.grass,75],[SL.small,68],[SL.ember,95],[SL.cactus,275],[SL.gblob,275],[SL.gcone,275],[SL.trunk,180],[SL.rock,238]]);
  const mk=(geo,m,list,sh)=>{if(!list.length)return;DISP.push(geo);const maxD=MAXD.get(list)||380,T=64,gr=new Map();
   list.forEach(o=>{const tx=Math.floor((o.x+HALF)/T),tz=Math.floor((o.z+HALF)/T),k=tx*64+tz;let a=gr.get(k);if(!a){a=[];a.tx=tx;a.tz=tz;gr.set(k,a)}a.push(o)});
@@ -1461,16 +1517,16 @@ function scatter(info){
    arr.forEach((o,i)=>{d.position.set(o.x,o.y,o.z);d.rotation.set(o.rx||0,o.ry||0,o.rz||0);d.scale.set(o.sx,o.sy,o.sz);d.updateMatrix();im.setMatrixAt(i,d.matrix);c.set(o.c);im.setColorAt(i,c);if(o.eid)(INST[o.eid]||(INST[o.eid]=[])).push({im,i});sy+=o.y});
    im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;im.castShadow=false;im.receiveShadow=true;im.frustumCulled=false;WG.add(im);
    CHUNKS.push({im,cx:(arr.tx+.5)*T-HALF,cy:sy/arr.length,cz:(arr.tz+.5)*T-HALF,r:T*.71+12,maxD,sh})})};
- mk(new THREE.CylinderGeometry(.16,.28,2.4,7).translate(0,1.2,0),mat,SL.trunk,true);
- mk(new THREE.IcosahedronGeometry(1,1),fmat,SL.blob,true);
- mk(new THREE.ConeGeometry(1,2,8).translate(0,1,0),fmat,SL.cone,true);
+ mk(new THREE.CylinderGeometry(.16,.28,2.4,7).translate(0,1.2,0),mTrunk,SL.trunk,true);
+ mk(new THREE.IcosahedronGeometry(1,1),mBlob,SL.blob,true);
+ mk(new THREE.ConeGeometry(1,2,8).translate(0,1,0),mCone,SL.cone,true);
  mk(new THREE.CylinderGeometry(.28,.32,1,8).translate(0,.5,0),mat,SL.cactus,true);
  mk(new THREE.DodecahedronGeometry(1,0),fmat,SL.rock,true);
  mk(new THREE.CylinderGeometry(.3,1.4,1,7).translate(0,.5,0),fmat,SL.spire,true);
- mk(new THREE.ConeGeometry(.07,.6,3).translate(0,.3,0),mat,SL.grass,false);
- mk(new THREE.IcosahedronGeometry(1,0),mat,SL.small,false);
- mk(new THREE.IcosahedronGeometry(1,1),gmat,SL.gblob,false);
- mk(new THREE.ConeGeometry(1,2,5).translate(0,1,0),gmat,SL.gcone,false);
+ mk(new THREE.ConeGeometry(.07,.6,3).translate(0,.3,0),mGrass,SL.grass,false);
+ mk(new THREE.IcosahedronGeometry(1,0),mSmall,SL.small,false);
+ mk(new THREE.IcosahedronGeometry(1,1),mGB,SL.gblob,false);
+ mk(new THREE.ConeGeometry(1,2,5).translate(0,1,0),mGC,SL.gcone,false);
  mk(new THREE.IcosahedronGeometry(1,0),bmat,SL.ember,false)}
 
 /* ============================ CHESTS / DIG SPOTS ============================ */
@@ -1498,7 +1554,7 @@ function placeSpots(info){
 
 const _fr=new THREE.Frustum(),_m4=new THREE.Matrix4(),_sp=new THREE.Sphere();
 function updateChunks(){if(CAVE.on||!CHUNKS.length)return;camera.updateMatrixWorld();_m4.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_fr.setFromProjectionMatrix(_m4);
- for(const c of CHUNKS){const dx=c.cx-P.x,dz=c.cz-P.z,d=Math.sqrt(dx*dx+dz*dz)-c.r;_sp.center.set(c.cx,c.cy,c.cz);_sp.radius=c.r+10;const vis=d<c.maxD&&_fr.intersectsSphere(_sp);c.im.visible=vis;c.im.castShadow=vis&&c.sh&&d<60}}
+ const _cdk=(LDQ()?.55:1)*PIX.dd;for(const c of CHUNKS){const dx=c.cx-P.x,dz=c.cz-P.z,d=Math.sqrt(dx*dx+dz*dz)-c.r;_sp.center.set(c.cx,c.cy,c.cz);_sp.radius=c.r+10;const vis=d<c.maxD*_cdk&&_fr.intersectsSphere(_sp);c.im.visible=vis;c.im.castShadow=vis&&c.sh&&d<60}}
 /* ============================ CAVES ============================ */
 const CAVE={on:false,N:120,CS:2.5,ox:6000,oz:0,grid:null,group:null,idx:-1,data:null,saved:null,mouths:[],cdata:[],mapC:null,lights:[]};
 function caveW2C(x,z){return[Math.floor((x-CAVE.ox)/CAVE.CS+CAVE.N/2),Math.floor((z-CAVE.oz)/CAVE.CS+CAVE.N/2)]}
@@ -1678,7 +1734,7 @@ function placeBoat(info){
 function updateBoat(t){if(!BOAT||!BOAT.group)return;const g=BOAT.group;g.position.y=BOAT.deckY+Math.sin(t*.9)*.03;const f=g.userData.flag;if(f){const p=f.geometry.attributes.position,b=g.userData.flagBase;for(let i=0;i<p.count;i++){const x=b[i*3]+1.6;p.setZ(i,Math.sin(x*2.2-t*5)*.28*(x/3.2))}p.needsUpdate=true}
  const w=g.userData.wheel;if(w)w.rotation.x=Math.sin(t*.4)*.15}
 /* ============================ PRECIPITATION + WILDLIFE ============================ */
-const PU={uC:{value:new THREE.Vector3()},uT:{value:0},rI:{value:0},sI:{value:0},uLen:{value:.9},uWind:{value:new THREE.Vector2(2,1)},uSize:{value:.3},uCol:{value:new THREE.Color(.7,.78,.9)}};
+const PU={uC:{value:new THREE.Vector3()},uT:{value:0},rI:{value:0},sI:{value:0},uLen:{value:.9},uWind:{value:new THREE.Vector2(2,1)},uGround:{value:-999},uSize:{value:.3},uCol:{value:new THREE.Color(.7,.78,.9)}};
 let rainMesh=null,snowMesh=null,FF=null,BF=[],SW={},lifeInit=false,birdT=3,cricketT=1,rainSnd=null;
 function dropGeo(N,pairs){const rnd=new Float32Array(N*(pairs?2:1)*4),pos=new Float32Array(N*(pairs?2:1)*3);for(let i=0;i<N;i++){const a=Math.random(),b=Math.random(),c=Math.random(),d=Math.random();for(let k=0;k<(pairs?2:1);k++){const o=(i*(pairs?2:1)+k);rnd[o*4]=a;rnd[o*4+1]=b;rnd[o*4+2]=c;rnd[o*4+3]=d;pos[o*3]=k}}
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('rnd',new THREE.BufferAttribute(rnd,4));return g}
@@ -1686,15 +1742,15 @@ function butterflyTex(){const c=document.createElement('canvas');c.width=c.heigh
 function makeSwarm(N,col,size,tex,hOff,spd,rule,additive){const g=new THREE.BufferGeometry(),pos=new Float32Array(N*3);g.setAttribute('position',new THREE.BufferAttribute(pos,3));
  const m=new THREE.Points(g,new THREE.PointsMaterial({color:col,size,map:tex||null,transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,sizeAttenuation:true}));m.frustumCulled=false;scene.add(m);
  const o={m,N,pos,ang:new Float32Array(N),ph:new Float32Array(N),ok:new Uint8Array(N),hOff,spd,rule};for(let i=0;i<N;i++){o.ang[i]=Math.random()*6.28;o.ph[i]=Math.random()*6.28}return o}
-function stepSwarm(S,dt,t,on){S.m.visible=!!on&&!CAVE.on;if(!S.m.visible)return;
+function stepSwarm(S,dt,t,on){S.m.visible=!!on&&!CAVE.on&&!LDQ();if(!S.m.visible)return;
  for(let i=0;i<S.N;i++){let x=S.pos[i*3],z=S.pos[i*3+2];
   if(!S.ok[i]||Math.hypot(x-P.x,z-P.z)>48){let tries=0,nx,nz,good=false;do{const a=Math.random()*6.28,r=5+Math.random()*38;nx=P.x+Math.cos(a)*r;nz=P.z+Math.sin(a)*r;good=S.rule(nx,nz);tries++}while(tries<5&&!good);if(good){x=nx;z=nz;S.ok[i]=1}else{S.ok[i]=0;x=P.x+999;z=P.z}}
   S.ang[i]+=Math.sin(t*1.3+S.ph[i]*3)*2.2*dt;x+=Math.cos(S.ang[i])*S.spd*dt;z+=Math.sin(S.ang[i])*S.spd*dt;S.pos[i*3]=x;S.pos[i*3+2]=z;S.pos[i*3+1]=terrH(x,z)+S.hOff(i,t)}
  S.m.geometry.attributes.position.needsUpdate=true}
 const landOK=(x,z)=>terrH(x,z)>.5,warmOK=(x,z)=>terrH(x,z)>.5&&!biomeObj(x,z).cold&&!biomeObj(x,z).sandy;
 function initLife(){if(lifeInit)return;lifeInit=true;
- const rm=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uC:PU.uC,uT:PU.uT,uInt:PU.rI,uLen:PU.uLen,uWind:PU.uWind,uCol:PU.uCol},vertexShader:RAIN_VS,fragmentShader:'uniform vec3 uCol;varying float vA;void main(){gl_FragColor=vec4(uCol,vA*0.6);}'});
- rainMesh=new THREE.LineSegments(dropGeo(4200,true),rm);rainMesh.frustumCulled=false;rainMesh.renderOrder=6;scene.add(rainMesh);
+ const rm=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uC:PU.uC,uT:PU.uT,uInt:PU.rI,uLen:PU.uLen,uWind:PU.uWind,uCol:PU.uCol,uGround:PU.uGround},vertexShader:RAIN_VS,fragmentShader:'uniform vec3 uCol;varying float vA;void main(){gl_FragColor=vec4(uCol,vA*0.6);}'});
+ rainMesh=new THREE.LineSegments(dropGeo(6500,true),rm);rainMesh.frustumCulled=false;rainMesh.renderOrder=6;scene.add(rainMesh);
  const sm=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uC:PU.uC,uT:PU.uT,uInt:PU.sI,uSize:PU.uSize},vertexShader:SNOW_VS,fragmentShader:'varying float vA;void main(){float d=length(gl_PointCoord-0.5);gl_FragColor=vec4(1.0,1.0,1.0,(1.0-smoothstep(0.15,0.5,d))*vA*0.9);}'});
  snowMesh=new THREE.Points(dropGeo(3000,false),sm);snowMesh.frustumCulled=false;snowMesh.renderOrder=6;scene.add(snowMesh);
  const N=150,g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));g.setAttribute('color',new THREE.BufferAttribute(new Float32Array(N*3),3));
@@ -1709,13 +1765,16 @@ function updateLife(dt,t){
  if(!lifeInit)return;const W=WEATHER,cold=!CAVE.on&&biomeObj(P.x,P.z).cold,p=CAVE.on?0:W.precip;
  PU.uC.value.copy(camera.position);PU.uT.value=t;
  const tr=cold?0:p,ts=cold?Math.max(p,W.type==='cloud'?.3:0):0,k=Math.min(1,dt*2);PU.rI.value+=(tr-PU.rI.value)*k;PU.sI.value+=(ts-PU.sI.value)*k;
- PU.uCol.value.setRGB(.7+.1*W.blood,.78-.7*W.blood,.9-.8*W.blood);PU.uWind.value.set(2+Math.sin(t*.2)*1.4+(W.type==='heavy'||W.type==='blood'?4:0),1);PU.uLen.value=W.type==='heavy'?1.3:.9;
+ const stormy=W.type==='heavy'||W.type==='blood',fl=(window.PX&&window.PX.flash)||0;
+ {const wt=CAVE.on?0:(.3+W.cover*.28+W.precip*.5+(stormy?1.2:0));WIND.s.value+=(wt*(.9+.2*Math.sin(t*.17))-WIND.s.value)*Math.min(1,dt*.5);WIND.t.value=t;const ga=.9+Math.sin(t*.023)*.6+Math.sin(t*.071)*.25;WIND.d.value.set(Math.cos(ga),Math.sin(ga))}
+ {const wr=Math.min(WIND.s.value,1.6)*2.2;PU.uWind.value.set(WIND.d.value.x*wr,WIND.d.value.y*wr)}
+ PU.uCol.value.setRGB(.7+.1*W.blood+fl*.5,.78-.7*W.blood+fl*.5,.9-.8*W.blood+fl*.5);PU.uLen.value=.55+W.precip*.5+(stormy?.35:0);PU.uGround.value=CAVE.on?-999:terrH(P.x,P.z)-.2;
  rainMesh.visible=PU.rI.value>.01&&camera.position.y>WATER;snowMesh.visible=PU.sI.value>.01&&camera.position.y>WATER;
  const night=skyMat.uniforms.uNight.value,calm=p<.25;
  // fireflies
- const on=night>.3&&calm&&!CAVE.on;stepSwarm(FF,dt,t,on);if(on){for(let i=0;i<FF.N;i++){const g=Math.pow(.5+.5*Math.sin(t*(1.4+FF.ph[i]*.3)+FF.ph[i]*9),3);FF.col[i*3]=g;FF.col[i*3+1]=g*.95;FF.col[i*3+2]=g*.35}FF.m.geometry.attributes.color.needsUpdate=true}
+ const on=night>.3&&calm&&!CAVE.on&&!LDQ();stepSwarm(FF,dt,t,on);if(on){for(let i=0;i<FF.N;i++){const g=Math.pow(.5+.5*Math.sin(t*(1.4+FF.ph[i]*.3)+FF.ph[i]*9),3);FF.col[i*3]=g;FF.col[i*3+1]=g*.95;FF.col[i*3+2]=g*.35}FF.m.geometry.attributes.color.needsUpdate=true}
  // butterflies
- const bon=night<.5&&calm&&!CAVE.on;for(const b of BF){b.s.visible=bon;if(!bon)continue;
+ const bon=night<.5&&calm&&!CAVE.on&&!LDQ();for(const b of BF){b.s.visible=bon;if(!bon)continue;
   if(!b.ok||Math.hypot(b.x-P.x,b.z-P.z)>50){let g=false,nx=0,nz=0;for(let tr2=0;tr2<5&&!g;tr2++){const a=Math.random()*6.28,r=6+Math.random()*38;nx=P.x+Math.cos(a)*r;nz=P.z+Math.sin(a)*r;g=warmOK(nx,nz)}if(g){b.x=nx;b.z=nz;b.ok=1}else{b.ok=0;b.s.visible=false;continue}}
   b.ang+=Math.sin(t*.9+b.ph*2)*1.6*dt;b.x+=Math.cos(b.ang)*1.5*dt;b.z+=Math.sin(b.ang)*1.5*dt;b.s.position.set(b.x,terrH(b.x,b.z)+1.1+Math.sin(t*1.7+b.ph)*.5,b.z);const fl=.25+.75*Math.abs(Math.sin(t*13+b.ph));b.s.scale.set(.5*fl,.42,1)}
  stepSwarm(SW.bees,dt,t,bon);stepSwarm(SW.dfly,dt,t,bon);stepSwarm(SW.ants,dt,t,calm&&night<.7);
@@ -2100,6 +2159,8 @@ function mpTick(dt,t){
 const HP={v:20,dead:false,inv:0,hurtT:0,shown:'',by:null},HPB=[2,4,7,10];
 const BAGS={},PVP={},DROP_TTL=3*3600*1000;
 function maxHP(){let m=20;for(const sl of SLOTS){const id=S.eq&&S.eq[sl],c=id&&COS_BY_ID[id];if(c)m+=HPB[c.tier]}return m}
+/* fall damage: nothing under 15 m, then 1 hp that climbs quickly with height */
+function fallHit(d,gh,cave){if(!(d>15)||HP.dead)return;if(!cave&&gh<WATER-.2)return;const ex=d-15,dmg=Math.max(1,Math.round(1+ex*.4+(ex/12)*(ex/12)));hurt(dmg,'a deadly fall');try{toast('Fall damage: -'+dmg)}catch(e){}}
 function hurt(dmg,by){if(HP.dead||Date.now()<HP.inv)return;HP.v=Math.max(0,HP.v-dmg);HP.hurtT=performance.now()/1000;HP.by=by||HP.by;const h=$('hurt');h.style.transition='none';h.style.opacity=.9;void h.offsetWidth;h.style.transition='opacity .45s';h.style.opacity=0}
 function hitRemotePlayer(p){if(CAVE.on&&!Object.keys(MP.remote).length)return false;for(const k in MP.remote){const g=MP.remote[k].av.group.position,dx=p.x-g.x,dz=p.z-g.z;if(dx*dx+dz*dz<.55*.55&&p.y>g.y&&p.y<g.y+1.95){pvpHit(k);return true}}return false}
 function pvpHit(uid){const e=PVP[uid]||(PVP[uid]={n:0,t:null});e.n+=PISTOL_DMG;addFx(new THREE.Vector3(MP.remote[uid].av.group.position.x,P.y+1.3,MP.remote[uid].av.group.position.z),0xff4455,1.4,.2);
@@ -2320,7 +2381,7 @@ function findTarget(){
  let bs=null;bd=2.4*2.4;for(const s of spots){const dx=s.x-P.x,dz=s.z-P.z,d=dx*dx+dz*dz;if(d<bd){bd=d;bs=s}}
  if(bs){if(isOpen(bs.id))return{key:'Q',lock:1,text:'Already dug · refills in '+remain(bs.id),act:()=>SX.dull()};if(tool===3)return{key:'Q',text:'Hold Q to dig',spot:bs};return{key:'3',text:'Equip shovel to dig'}}
  return null}
-function openChest(c){if(window.PX&&PX.lootTaken&&PX.lootTaken(c.id)){toast('Already looted');return}c.opening=true;S.chests[c.id]=Date.now();c.wasOpen=true;SX.chestOpen();const cl=window.PX&&PX.lootClaim?PX.lootClaim(c.id):Promise.resolve(true);setTimeout(()=>{cl.then(ok=>{c.opening=false;if(ok)giveLoot(c.rolls?'Cave Chest':'Treasure Chest',c.rolls||1+Math.floor(Math.random()*10));else toast('Someone else looted it first')})},800)}
+function openChest(c){if(window.PX&&PX.lootTaken&&PX.lootTaken(c.id)){toast('Already looted');return}c.opening=true;S.chests[c.id]=Date.now();c.wasOpen=true;SX.chestOpen();const cl=window.PX&&PX.lootClaim?PX.lootClaim(c.id):Promise.resolve(true);setTimeout(()=>{cl.then(ok=>{c.opening=false;if(ok){S.chestsOpened=(Math.floor(Number(S.chestsOpened)||0))+1;giveLoot(c.rolls?'Cave Chest':'Treasure Chest',c.rolls||1+Math.floor(Math.random()*10));save(true)}else toast('Someone else looted it first')})},800)}
 function randCos(){let r=Math.random(),t=0,a=0;for(let i=0;i<4;i++){a+=RAR[i].p;if(r<a){t=i;break}t=i}const slot=SLOTS[Math.floor(Math.random()*4)];const pool=COS.filter(c=>c.slot===slot&&c.tier===t);return pool[Math.floor(Math.random()*pool.length)]}
 /* every roll independently tests EVERY gem against its own odds */
 function rollChances(n,withCos){const gained={},cos=[];for(let i=0;i<n;i++){if(withCos&&Math.random()<.001)cos.push(randCos());const ord=rollChances.o||(rollChances.o=GEMS.slice().sort((a,b)=>b.odds-a.odds));for(const g of ord){if(Math.random()*g.odds<1){gained[g.id]=(gained[g.id]||0)+1;break}}}return{gained,cos}}
@@ -2407,11 +2468,11 @@ function update(dt){
  if(cave){P.x=nx;P.z=nz}else{P.x=clamp(nx,-HALF+4,HALF-4);P.z=clamp(nz,-HALF+4,HALF-4)}
  /* vertical */
  const wasG=P.grounded;
- if(swimMode){const target=WATER-.95+Math.sin(t*2.1)*.04;P.y+=(target-P.y)*Math.min(1,dt*7);P.vy=0;P.vyPre=0;P.grounded=false;supp=null}
- else{P.vy-=26*dt;P.vyPre=P.vy;const oy0=P.y;P.y+=P.vy*dt;if(P.vy>0){const hl=headLimit(P.x,P.z,oy0);if(hl!==null&&P.y>hl){P.y=hl;P.vy=0}}const gh=groundAt(P.x,P.z,P.y,P.vy<=.01);
-  if(P.y<=gh){if(!wasG&&P.vyPre<-6&&frameN>3)SX.land(surfaceNow(),clamp(-P.vyPre/16,0,1));P.y=gh;P.vy=0;P.grounded=true}
+ if(swimMode){const target=WATER-.95+Math.sin(t*2.1)*.04;P.y+=(target-P.y)*Math.min(1,dt*7);P.vy=0;P.vyPre=0;P.grounded=false;supp=null;P.fallTop=null}
+ else{P.vy-=26*dt;P.vyPre=P.vy;const oy0=P.y;if(wasG||P.fallTop==null||Math.abs(oy0-(P._ly==null?oy0:P._ly))>6)P.fallTop=oy0;P.y+=P.vy*dt;if(P.y>P.fallTop)P.fallTop=P.y;if(P.vy>0){const hl=headLimit(P.x,P.z,oy0);if(hl!==null&&P.y>hl){P.y=hl;P.vy=0}}const gh=groundAt(P.x,P.z,P.y,P.vy<=.01);
+  if(P.y<=gh){if(!wasG&&P.vyPre<-6&&frameN>3){SX.land(surfaceNow(),clamp(-P.vyPre/16,0,1));fallHit((P.fallTop==null?P.y:P.fallTop)-gh,gh,cave)}P.fallTop=null;P.y=gh;P.vy=0;P.grounded=true}
   else if(wasG&&P.vy<=0&&P.y-gh<.35&&!keys.Space){P.y=gh;P.vy=0;P.grounded=true}else P.grounded=false}
- const spd=Math.hypot(P.vx,P.vz);if(spd>.4){P.face=Math.atan2(P.vx,P.vz)}
+ P._ly=P.y;const spd=Math.hypot(P.vx,P.vz);if(spd>.4){P.face=Math.atan2(P.vx,P.vz)}
  if(act&&(tool===2||tool===3&&digSpot))P.face=Math.atan2(-sinY,-cosY);
  P.walk+=spd*dt*(swimMode?(swimMode===2?1.1:.9):P.grounded?1.35:.45);
  const nowW=!cave&&P.y<WATER+.35;if(nowW&&!wasWater&&frameN>5)SX.splash(.8);wasWater=nowW;
@@ -2451,12 +2512,12 @@ function update(dt){
  updateBullets(dt);mpTick(dt,t);hbTick(t,dt);hpTick(dt,t);harvTick(dt);updateBeacons(t,dt);updateBoat(t);updateSky(dt,t);updateLife(dt,t);
  sky.position.copy(camera.position);water.visible=!cave;const sn=2.2;waterMat.uniforms.uOff.value.set(Math.round(P.x/sn)*sn,Math.round(P.z/sn)*sn);
  /* hud */
- if(frameN%4===0)drawMini();if(frameN%8===0)refreshWpBar();
+ if(frameN%(LDQ()?10:4)===0)drawMini();if(frameN%8===0)refreshWpBar();
  nwT+=dt;if(nwT>.3){nwT=0;updateHeader(false);const B=cave?{name:'Cave'}:biomeObj(P.x,P.z);$('biomeLbl').textContent=B.name+'  ·  '+clockStr()+(cave?'':'  ·  '+WNAME[WEATHER.type])}
- saveT+=dt;if(saveT>15){saveT=0;save()}
+ saveT+=dt;if(saveT>6){saveT=0;save()}
  {const ph=!(running&&!locked&&!invOpen&&!SEA.open&&!busy);if(ph!==update._ph){update._ph=ph;$('pause').hidden=ph}}}
-function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);frameN++;update(dt);renderer.shadowMap.needsUpdate=(frameN%4)===0;renderer.render(scene,camera);
- if(frameN>40){PIX.t+=dt;PIX.n++;if(PIX.t>1.5){const avg=PIX.t/PIX.n*1000;PIX.t=0;PIX.n=0;let np=PIX.cur;if(avg>20&&PIX.cur>.5)np=Math.max(.5,PIX.cur-.15);else if(avg<14&&PIX.cur<PIX.max)np=Math.min(PIX.max,PIX.cur+.1);if(Math.abs(np-PIX.cur)>.001){PIX.cur=np;renderer.setPixelRatio(np)}}}
+function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);frameN++;update(dt);renderer.shadowMap.needsUpdate=!LDQ()&&(frameN%(PIX.avg>22?8:4))===0;renderer.render(scene,camera);
+ if(frameN>40){PIX.t+=dt;PIX.n++;if(PIX.t>1.2){const avg=PIX.t/PIX.n*1000;PIX.t=0;PIX.n=0;PIX.avg=avg;let np=PIX.cur;if(avg>20&&PIX.cur>PIX.min+.001)np=Math.max(PIX.min,PIX.cur-.15);else if(avg>24&&PIX.dd>.6)PIX.dd=Math.max(.6,PIX.dd-.06);else if(avg<14){if(PIX.dd<1)PIX.dd=Math.min(1,PIX.dd+.04);else if(PIX.cur<PIX.max)np=Math.min(PIX.max,PIX.cur+.1)}if(Math.abs(np-PIX.cur)>.001){PIX.cur=np;renderer.setPixelRatio(np)}}}
 
  if(invOpen&&PV.mounted){const t=performance.now()/1000;if(PV.av){PV.av.group.rotation.y+=dt*.6;animAvatar(PV.av,dt,t,0,0,true,0,0)}PV.r.render(PV.scene,PV.cam)}}
 
@@ -3330,7 +3391,7 @@ function hbBrush(cx,cz,dt){const Ht=HTERR(),R=TB.size,i0=Math.max(1,Math.floor((
   else if(tl==='reset'){nh=h+(HB0[k]-h)*q;if(w>.3)delete EDP[k]}else if(PCODE[tl]&&w>.3)EDP[k]=PCODE[tl];
   if(nh!==h){nh=clamp(nh,-9,45);Ht[k]=nh;const dv=Math.round((nh-HB0[k])*20);if(dv)EDH[k]=dv;else delete EDH[k]}}
  for(let j=j0-1;j<=j1+1;j++)for(let i=i0-1;i<=i1+1;i++)if(i>=0&&j>=0&&i<=SEG&&j<=SEG)hbCv(j*N1+i);hbFlush(i0-1,i1+1,j0-1,j1+1);TB.edited=true}
-function hbSaveT(){const hs=HS(),th=[],tp=[];for(const k in EDH)th.push(+k,EDH[k]);for(const k in EDP)tp.push(+k,EDP[k]);hs.th=th;hs.tp=tp;save();hbMap()}
+function hbSaveT(){const hs=HS(),th=[],tp=[];for(const k in EDH)th.push(+k,EDH[k]);for(const k in EDP)tp.push(+k,EDP[k]);hs.th=th;hs.tp=tp;save(true);hbMap();try{window.PX&&PX.pubHome&&PX.pubHome()}catch(e){}}
 /* ---- aim helpers ---- */
 const _o=new THREE.Vector3(),_dv=new THREE.Vector3();
 function hbAim(maxD){camera.getWorldPosition(_o);camera.getWorldDirection(_dv);const sf=(x,z)=>Math.max(terrH(x,z),WATER);let prev=0;for(let t=1;t<(maxD||70);t+=.75){const x=_o.x+_dv.x*t,y=_o.y+_dv.y*t,z=_o.z+_dv.z*t;if(Math.abs(x)>HALF-2||Math.abs(z)>HALF-2)return null;
@@ -3677,9 +3738,9 @@ const bL=loadIsland;window.loadIsland=function(info){clearNW();bL(info);if(info.
  let placed=0;for(let t=0;t<400&&placed<7;t++){const x=(rnd()*2-1)*(HALF-40),z=(rnd()*2-1)*(HALF-40),h=terrH(x,z);if(h>WATER+.15&&h<1.4){const g=gullMesh();g.position.set(x,h+.22,z);g.rotation.y=rnd()*6.28;g.userData.wl.rotation.z=.9;g.userData.wr.rotation.z=-.9;g.userData.ph=rnd()*6;WG.add(g);NW.gulls.push({g,fly:0,x,z,h});placed++}}
  /* shrubs, ferns, fallen logs */
  const shrubs=[],ferns=[],logs=[];for(let t=0;t<900&&shrubs.length<110;t++){const x=(rnd()*2-1)*(HALF-30),z=(rnd()*2-1)*(HALF-30),h=terrH(x,z),B=biomeObj(x,z);if(h<.7||B.sandy)continue;shrubs.push([x,h,z,.7+rnd()*.7,rnd()*6.28]);if(rnd()<.55)ferns.push([x+rnd()*2,terrH(x+1,z),z+rnd()*2,.6+rnd()*.6,rnd()*6.28]);if(rnd()<.12)logs.push([x,h,z,rnd()*3.14])}
- const sg=new THREE.IcosahedronGeometry(.5,1),sm=new THREE.MeshLambertMaterial({color:0xffffff}),sI=new THREE.InstancedMesh(sg,sm,shrubs.length*3),d=new THREE.Object3D(),col=new THREE.Color();let k=0;
+ const sg=new THREE.IcosahedronGeometry(.5,1),sm=windMat(new THREE.MeshLambertMaterial({color:0xffffff}),'shrub'),sI=new THREE.InstancedMesh(sg,sm,shrubs.length*3),d=new THREE.Object3D(),col=new THREE.Color();let k=0;
  shrubs.forEach(s=>{for(let j=0;j<3;j++){d.position.set(s[0]+Math.cos(j*2.1+s[4])*.35*s[3],s[1]+.3*s[3]+j*.04,s[2]+Math.sin(j*2.1+s[4])*.35*s[3]);d.scale.set(s[3]*(.8+j*.1),s[3]*.65,s[3]*(.8+j*.1));d.rotation.set(j,s[4],0);d.updateMatrix();sI.setMatrixAt(k,d.matrix);col.setHSL(.27+rnd()*.07,.55,.2+rnd()*.12);sI.setColorAt(k,col);k++}});sI.castShadow=true;WG.add(sI);NW.decor.push(sI);
- const fg=new THREE.ConeGeometry(.1,.8,4),fI=new THREE.InstancedMesh(fg,new THREE.MeshLambertMaterial({color:0x3f8a35}),ferns.length*5);k=0;ferns.forEach(f=>{for(let j=0;j<5;j++){d.position.set(f[0],f[1]+.3,f[2]);d.scale.set(f[3],f[3],f[3]);d.rotation.set(Math.cos(j*1.26)*.6,f[4],Math.sin(j*1.26)*.6);d.updateMatrix();fI.setMatrixAt(k++,d.matrix)}});WG.add(fI);NW.decor.push(fI);
+ const fg=new THREE.ConeGeometry(.1,.8,4),fI=new THREE.InstancedMesh(fg,windMat(new THREE.MeshLambertMaterial({color:0x3f8a35}),'fern'),ferns.length*5);k=0;ferns.forEach(f=>{for(let j=0;j<5;j++){d.position.set(f[0],f[1]+.3,f[2]);d.scale.set(f[3],f[3],f[3]);d.rotation.set(Math.cos(j*1.26)*.6,f[4],Math.sin(j*1.26)*.6);d.updateMatrix();fI.setMatrixAt(k++,d.matrix)}});WG.add(fI);NW.decor.push(fI);
  const lg=new THREE.CylinderGeometry(.22,.26,2.6,9),lI=new THREE.InstancedMesh(lg,new THREE.MeshLambertMaterial({color:0x5a4228}),Math.max(1,logs.length));logs.forEach((l,i)=>{d.position.set(l[0],l[1]+.22,l[2]);d.scale.set(1,1,1);d.rotation.set(0,l[3],Math.PI/2);d.updateMatrix();lI.setMatrixAt(i,d.matrix)});lI.count=logs.length;lI.castShadow=true;WG.add(lI);NW.decor.push(lI);
  const mg=new THREE.BoxGeometry(.05,.05,.22);for(let i=0;i<5;i++){const im=new THREE.InstancedMesh(mg,new THREE.MeshLambertMaterial({color:0xc8dde8}),14);im.frustumCulled=false;im.visible=false;WG.add(im);NW.minn.push({im,cx:0,cz:0,ok:false,seed:rnd()*100,flee:0})}}catch(e){console.error('nature',e)}};
 const dm=new THREE.Object3D();
@@ -3738,7 +3799,7 @@ X.lootTaken=id=>{const t=LOOT[id]||S.chests[id]||S.chests[PK[id]];return !!t&&Da
 X.lootMark=id=>{S.chests[id]=Date.now();if(FB&&UID){const k=CUR.key;FB.lootSet(eid(id),{isl:k,cid:id,by:UID,t:Date.now()}).then(()=>FB.lootCount(k).catch(()=>{})).catch(()=>{})}};
 X.lootClaim=async id=>{if(!FB||!UID)return true;try{const k=CUR.key;await FB.lootSet(eid(id),{isl:k,cid:id,by:UID,t:Date.now()});FB.lootCount(k).catch(()=>{});return true}catch(e){return false}};
 X.harvMark=id=>{if(FB&&UID)FB.harvSet(eid(id),{isl:CUR.key,hid:id,by:UID,t:Date.now()}).catch(()=>{})};
-function applyHarv(){for(const id in HARV){if(Date.now()-HARV[id]>30*60000)continue;const L=INST[id];if(L)for(const r of L){r.im.setMatrixAt(r.i,ZM);r.im.instanceMatrix.needsUpdate=true}for(const arr of CG.values())for(const c of arr.slice())if(c.eid===id&&!c.cut){c.cut=true;removeC(c)}}}
+function applyHarv(){for(const id in HARV){const L=INST[id];if(L)for(const r of L){r.im.setMatrixAt(r.i,ZM);r.im.instanceMatrix.needsUpdate=true}for(const arr of CG.values())for(const c of arr.slice())if(c.eid===id&&!c.cut){c.cut=true;removeC(c)}}}
 function watchWorld(){if(!FB||!UID||wKey===CUR.key)return;wKey=CUR.key;try{uL&&uL();uH&&uH()}catch(e){}for(const k in LOOT)delete LOOT[k];for(const k in HARV)delete HARV[k];
  uL=FB.watchLoot(CUR.key,l=>{l.forEach(d=>{LOOT[d.cid]=d.t;if(!S.chests[d.cid]||S.chests[d.cid]<d.t)S.chests[d.cid]=d.t})});uH=FB.watchHarv(CUR.key,l=>{l.forEach(d=>HARV[d.hid]=d.t);applyHarv()})}
 /* ===== more sounds ===== */
@@ -4911,11 +4972,14 @@ const isPublic=()=>true;/* every player's home gets a pedestal; 'Only me' homes 
 /* ----- publish my home so other players can see/visit it ----- */
 let lastSig='',lastT=0,wasPub=null;
 function payload(){const h=DEFH();h.perm=h.perm||{visit:'all',build:0};const o={uid:UID,nick:((S&&S.name)||'Pirate').slice(0,16),visit:h.perm.visit||'all',build:h.perm.build?1:0,biome:h.biome|0,tod:h.tod,nat:h.nat?1:0,weather:h.weather||'clear',pw:h.pw||{},ts:Date.now()};
- const th=h.th||[],tp=h.tp||[];if(h.perm.visit!=='me'&&th.length+tp.length<60000){o.th=th;o.tp=tp}return o}
-function publish(){try{if(!FB||!UID||!S||!S.made||!FB.homeSet)return;const pub=isPublic();
- if(pub){const p=payload(),sig=JSON.stringify(Object.assign({},p,{ts:0}));if(sig!==lastSig&&Date.now()-lastT>15000){lastSig=sig;lastT=Date.now();wasPub=true;FB.homeSet(p).catch(()=>{})}}
- }catch(e){}}
-setTimeout(publish,8000);setInterval(publish,20000);window.addEventListener('beforeunload',publish);
+ const th=h.th||[],tp=h.tp||[];
+ if(h.perm.visit!=='me'){const a=packPairs(th),b=packPairs(tp);if(a!==null&&b!==null){o.thz=a;o.tpz=b}else{o.th=th;o.tp=tp}}return o}
+let pubBusy=false,pubNext=0;
+function publish(){try{if(!FB||!UID||!S||!S.made||!FB.homeSet||pubBusy||Date.now()<pubNext)return;const pub=isPublic();
+ if(pub){const p=payload(),sig=JSON.stringify(Object.assign({},p,{ts:0}));if(sig!==lastSig){pubBusy=true;FB.homeSet(p).then(()=>{lastSig=sig;wasPub=true;lastT=Date.now()}).catch(e=>{console.warn('[home publish]',e);pubNext=Date.now()+20000}).then(()=>{pubBusy=false})}}
+ }catch(e){pubBusy=false}}
+window.PX=window.PX||{};window.PX.pubHome=()=>{pubNext=0;setTimeout(publish,400)};
+setTimeout(publish,1500);setInterval(publish,4000);window.addEventListener('beforeunload',publish);document.addEventListener('visibilitychange',()=>{if(document.hidden)publish()});
 /* ----- pedestal geometry ----- */
 function lbl(txt,sub){const c=document.createElement('canvas');c.width=512;c.height=160;const g=c.getContext('2d');g.textAlign='center';g.font='700 46px Cinzel,serif';g.lineWidth=8;g.strokeStyle='rgba(8,20,32,.95)';g.strokeText(txt,256,70);g.fillStyle='#ffe29a';g.fillText(txt,256,70);g.font='600 28px Inter,sans-serif';g.strokeText(sub,256,120);g.fillStyle='#9ff5e8';g.fillText(sub,256,120);
  const t=new THREE.CanvasTexture(c),m=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));m.scale.set(6.4,2,1);return m}
@@ -4938,7 +5002,7 @@ function mkPed(h,px,pz,gy){const g=new THREE.Group();g.position.set(px,gy,pz);g.
  for(let i=0;i<4;i++){const a=i*Math.PI/4*2+Math.PI/4;obs.push(addOB(px+Math.cos(a)*1.95,pz+Math.sin(a)*1.95,0,.22,.22,gy+1.75,gy+1.75,'stone'))}
  G.add(g);return{g,h,px,pz,disc,rune,ring,pil,orb}}
 function entries(){const m=new Map();for(const h of homes){if(h.uid)m.set(h.uid,h)}
- for(const p of plist){if(p.uid&&!m.has(p.uid))m.set(p.uid,{uid:p.uid,nick:String(p.nickname||'Pirate').slice(0,16),visit:'all',build:0,biome:0,tod:12,nat:0,weather:'clear',pw:{},th:[],tp:[]})}
+ for(const p of plist){if(p.uid&&!m.has(p.uid))m.set(p.uid,{uid:p.uid,nick:String(p.nickname||'Pirate').slice(0,16),visit:'all',build:0,biome:0,tod:12,nat:0,weather:'clear',pw:{},th:[],tp:[],pending:1})}
  if(isPublic()&&UID&&!m.has(UID))m.set(UID,Object.assign(payload(),{local:1}));
  else if(!isPublic()&&UID)m.delete(UID);
  return[...m.values()].sort((a,b)=>(a.uid===UID?-1:b.uid===UID?1:String(a.uid).localeCompare(String(b.uid))))}
@@ -4955,10 +5019,13 @@ const ol=window.loadIsland;window.loadIsland=function(info){kill();setHint(null)
  if(info&&info.key===HK2){const pv=X._pv;X._pv=null;if(pv){X.hv=pv.hv;X.hvUid=pv.uid}else{X.hv=null;X.hvUid=null}}
  if(info&&info.key!==CK)unwatch();
  const r=ol.apply(this,arguments);if(info&&info.key===CK){try{build();watch()}catch(e){console.error('[warp pads]',e)}}return r};
-function visit(e){const h=e.h;if(h.uid===UID){X._pv=null;travel(islandInfo(2,2),{});return}
- if(h.visit==='me'){setHint(null);try{toast(h.nick+'’s Home Island is private')}catch(er){}return}
- X._pv={uid:h.uid,hv:{biome:h.biome|0,tod:h.tod==null?12:h.tod,nat:h.nat?1:0,weather:h.weather||'clear',pw:h.pw||{speed:1,jump:1,lowg:0,fly:0,god:0,heal:0},perm:{visit:h.visit,build:h.build?1:0},th:h.th||[],tp:h.tp||[],nick:h.nick}};
- travel(islandInfo(2,2),{})}
+function visit(e){let h=e.h;if(h.uid===UID){X._pv=null;travel(islandInfo(2,2),{});return}
+ const go=h=>{if(!h||h.pending){setHint(null);try{toast((e.h.nick||'That player')+'’s Home Island hasn’t been published yet')}catch(er){}return}
+  if(h.visit==='me'){setHint(null);try{toast(h.nick+'’s Home Island is private')}catch(er){}return}
+  const th=h.thz!==undefined?unpackPairs(h.thz):(h.th||[]),tp=h.tpz!==undefined?unpackPairs(h.tpz):(h.tp||[]);
+  X._pv={uid:h.uid,hv:{biome:h.biome|0,tod:h.tod==null?12:h.tod,nat:h.nat?1:0,weather:h.weather||'clear',pw:h.pw||{speed:1,jump:1,lowg:0,fly:0,god:0,heal:0},perm:{visit:h.visit,build:h.build?1:0},th:th,tp:tp,nick:h.nick}};
+  travel(islandInfo(2,2),{})};
+ if(FB&&FB.homeGet){let done=false;const fin=d=>{if(done)return;done=true;go(d||h)};setTimeout(()=>fin(null),2500);FB.homeGet(h.uid).then(d=>fin(d)).catch(()=>fin(null))}else go(h)}
 window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||!running||!locked||invOpen||busy||HP.dead||SEA.open)return;const n=nearest();if(n){e.stopImmediatePropagation();e.preventDefault();setHint(null);visit(n)}},true);
 const pu=window.update;window.update=function(dt){pu(dt);try{
  if(CUR.key!==CK||!G){setHint(null);return}
@@ -5723,8 +5790,9 @@ function fire(target){
  bot.o.g.updateMatrixWorld(true);const p=new V3();bot.o.muzzle.getWorldPosition(p);
  const b=bullets.find(b=>!b.on);if(!b)return;b.on=true;b.t=target;b.life=1.4;b.m.visible=true;b.m.position.copy(p);
  bot.flashT=.07;bot.recoil=1;cue.shot();emit('smoke',p.x,p.y,p.z,3,.8,.8,.5,.12,-1)}
-const _tp=new V3();
+let _tp=null;
 function bulletsUpdate(dt){
+ if(!_tp)_tp=new V3();
  for(const b of bullets){if(!b.on)continue;b.life-=dt;const tg=b.t;
   _tp.set(tg.x,(tg.y||0)+(tg.h||1),tg.z);
   const d=b.m.position.distanceTo(_tp),st=70*dt;
