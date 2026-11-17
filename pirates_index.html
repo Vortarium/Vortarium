@@ -327,6 +327,9 @@ function watchB(coll,key,size,cb){let un=null,tm=null,dead=false;const go=()=>{i
   presenceSet(d){return setDoc(doc(db,'presence',uid()),d)},
   arenaSet(d){return setDoc(doc(db,'world','arena'),Object.assign({off:0,ts:Date.now()},d))},
   watchArena(cb){return onSnapshot(doc(db,'world','arena'),s=>cb(s.exists()?s.data():null))},
+  homeSet(d){return setDoc(doc(db,'homes',uid()),d)},
+  homeDel(){return deleteDoc(doc(db,'homes',uid()))},
+  watchHomes(cb){return onSnapshot(collection(db,'homes'),snap=>{const a=[];snap.forEach(d=>a.push(d.data()));cb(a)})},
   presenceClear(){try{return deleteDoc(doc(db,'presence',uid()))}catch(e){}},
   setBeacon(slot,d){const id=uid()+'_'+slot;return setDoc(doc(db,'beacons',id),Object.assign({id,owner:uid(),slot,hp:100,max:100,t:Date.now()},d))},
   delBeacon(slot){return deleteDoc(doc(db,'beacons',uid()+'_'+slot))},
@@ -1877,7 +1880,7 @@ function maxHP(){let m=20;for(const sl of SLOTS){const id=S.eq&&S.eq[sl],c=id&&C
 function hurt(dmg,by){if(HP.dead||Date.now()<HP.inv)return;HP.v=Math.max(0,HP.v-dmg);HP.hurtT=performance.now()/1000;HP.by=by||HP.by;const h=$('hurt');h.style.transition='none';h.style.opacity=.9;void h.offsetWidth;h.style.transition='opacity .45s';h.style.opacity=0}
 function hitRemotePlayer(p){if(CAVE.on&&!Object.keys(MP.remote).length)return false;for(const k in MP.remote){const g=MP.remote[k].av.group.position,dx=p.x-g.x,dz=p.z-g.z;if(dx*dx+dz*dz<.55*.55&&p.y>g.y&&p.y<g.y+1.95){pvpHit(k);return true}}return false}
 function pvpHit(uid){const e=PVP[uid]||(PVP[uid]={n:0,t:null});e.n+=PISTOL_DMG;addFx(new THREE.Vector3(MP.remote[uid].av.group.position.x,P.y+1.3,MP.remote[uid].av.group.position.z),0xff4455,1.4,.2);
- if(!e.t)e.t=setTimeout(()=>{e.t=null;const n=e.n;e.n=0;if(n&&FB)FB.sendHit(uid,n,S.name).catch(()=>{})},400)}
+ if(!e.t)e.t=setTimeout(()=>{e.t=null;const n=e.n;e.n=0;if(n&&FB&&CUR.key!=='2,3'&&CUR.key!=='2,2')FB.sendHit(uid,n,S.name).catch(()=>{})},400)}
 /* dropped loot bags */
 function makeBag(){const g=new THREE.Group(),m=M('#7a5230',{r:.8});g.add(sph(.38,m,0,.32,0,1,.9,1));g.add(sph(.15,m,0,.68,0));g.add(sph(.06,M('#e9c24e',{r:.3,m:.6}),0,.58,.14));
  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkW,color:0xffd34a,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false}));sp.scale.set(2.6,2.6,1);sp.position.y=.7;g.add(sp);return g}
@@ -2668,7 +2671,7 @@ X.builds=()=>Object.values(B).map(b=>b.d);
 X.onRaft=()=>{for(const id in B){const b=B[id];if(b.g.userData.raft){const s=b.g.userData.raft;if(Math.abs(P.x-b.d.x)<s&&Math.abs(P.z-b.d.z)<s&&P.y<WATER+1.6)return true}}return false};
 X.nearFire=()=>{for(const id in B){const b=B[id];if(b.d.type==='campfire'&&Date.now()-(b.d.lit||0)<4*H&&Math.hypot(P.x-b.d.x,P.z-b.d.z)<5)return true}return false};
 const online=()=>!!(FB&&UID);
-const bk=()=>CAVE.on&&CAVE.group?'cave:'+CUR.key+':'+CAVE.idx:CUR.key==='2,2'?'2,2:'+(UID||'local'):CUR.key;
+const bk=()=>CAVE.on&&CAVE.group?'cave:'+CUR.key+':'+CAVE.idx:CUR.key==='2,2'?'2,2:'+((window.PX&&window.PX.hvUid)||UID||'local'):CUR.key;
 function lb(){S.lb=S.lb||{};return S.lb[bk()]||(S.lb[bk()]=[])}
 function bset(d){if(online())return FB.buildSet(d);const a=lb(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);syncBuilds(a);save();return Promise.resolve()}
 function bdel(id){if(online())return FB.buildDel(id);S.lb[bk()]=lb().filter(x=>x.id!==id);syncBuilds(S.lb[bk()]);save();return Promise.resolve()}
@@ -3011,7 +3014,7 @@ const bU3=window.update;window.update=function(dt){bU3(dt);ensureLights();const 
  ghostTick();if(!(ft2%1<.03)){}handLabel()};
 /* ===== HOME ISLAND BUILDER (place / remove / terraform / settings) ===== */
 const HK='2,2',hbOn=()=>CUR&&CUR.key===HK&&!CAVE.on;
-const HS=()=>S.home||(S.home={biome:0,tod:12,nat:0,weather:'clear',pw:{speed:1,jump:1,lowg:0,fly:0,god:0,heal:0},perm:{visit:'me',build:0},th:[],tp:[]});
+const HS=()=>(window.PX&&window.PX.hv)||S.home||(S.home={biome:0,tod:12,nat:0,weather:'clear',pw:{speed:1,jump:1,lowg:0,fly:0,god:0,heal:0},perm:{visit:'me',build:0},th:[],tp:[]});
 let EDH={},EDP={},HB0=null,HBASE=null;
 function hbWrapSp(){if(X._spw||!X.spH)return;X._spw=1;const _spH=X.spH;X.spH=function(tag){const f=_spH.apply(this,arguments);if(tag!=='home')return f;HBASE=f;EDH={};EDP={};const hs=HS();for(let q=0;q+1<(hs.th||[]).length;q+=2)EDH[hs.th[q]]=hs.th[q+1];for(let q=0;q+1<(hs.tp||[]).length;q+=2)EDP[hs.tp[q]]=hs.tp[q+1];
  return(x,z)=>{let h=f(x,z);const k=Math.round((z+HALF)/STEP)*N1+Math.round((x+HALF)/STEP),d=EDH[k];return d?h+d/20:h}};}
@@ -3094,7 +3097,7 @@ const hbNm=t=>t.startsWith('nat_')?(NAT.find(a=>a[0]===t)||[0,t])[1]:(ITEMS[t]?I
 function hbPose(){const a=hbAim(60);if(!a)return null;const type=PL.type;let x=a.x,z=a.z,ry=PL.rot;const plat=/^plat_|^pwall$/.test(type),sn=PL.snap;
  if(sn){if(plat&&sn===4){const pc=type==='pwall'?'wall':type.split('_')[1];ry=Math.round(ry/(Math.PI/2))*(Math.PI/2);if(pc==='wall'||pc==='arch'){if(Math.abs(Math.cos(ry))>.5){x=Math.round(x/4)*4;z=Math.round((z-2)/4)*4+2}else{z=Math.round(z/4)*4;x=Math.round((x-2)/4)*4+2}}else{x=Math.round(x/4)*4;z=Math.round(z/4)*4}}else{x=Math.round(x/sn)*sn;z=Math.round(z/sn)*sn}}
  const y=Math.max(terrH(x,z),stackY(x,z),WATER)+PL.lift;return{x,z,y,ry,ok:Math.abs(x)<HALF-4&&Math.abs(z)<HALF-4}}
-function hbPlace(){if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
+function hbPlace(){if(hbVisitor()&&!HS().perm.build){hbVdeny();return}if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
  if(type==='pwall'||type==='deco_banner')d.col=paintIdx;if(type==='campfire'||type==='torch')d.lit=Date.now();SX.place&&SX.place();bset(d).catch(e=>toast('Build failed: '+((e&&(e.code||e.message))||'error')))}
 let hg=null,hgKey='',hl=null,ring=null,ringK='';
 function hbVis(){const home=hbOn()&&running&&!invOpen&&!busy&&!HP.dead&&!OV.kind&&!SEA.open&&locked;
@@ -3111,7 +3114,7 @@ let tAcc=0;
 function hbTick(dt){if(!VM||!VM.home){}else{const hv=hbOn()&&tool>=2&&tool<=4&&!P.third;if(hv){VM.m.forEach(m=>m&&(m.visible=false));if(VM.rod)VM.rod.visible=false}for(let n=2;n<=4;n++){const m=VM.home[n];if(m){m.visible=hv&&tool===n;if(m.visible){const u=m.userData;if(u.spin)u.spin.rotation.y+=dt*1.6;if(u.tip)u.tip.material.color.setHex(TCOL[TB.tool]||0xb8c0c8)}}}}
  try{hbVis()}catch(e){if(!X._hbv){X._hbv=1;console.error(e)}}
  if(!hbOn()||!running)return;
- if(TB.down&&tool===4&&locked&&!OV.kind){tAcc+=dt;if(tAcc>=.05){const a=hbAim(70);if(a)hbBrush(a.x,a.z,tAcc);tAcc=0}}
+ if(TB.down&&tool===4&&locked&&!OV.kind&&!hbVisitor()){tAcc+=dt;if(tAcc>=.05){const a=hbAim(70);if(a)hbBrush(a.x,a.z,tAcc);tAcc=0}}
  const pw=HS().pw;if(pw.god)HP.inv=Math.max(HP.inv||0,Date.now()+500);if(pw.heal&&!HP.dead)HP.v=Math.min(maxHP(),HP.v+dt*8);
  if(pw.speed>1&&locked){const nx=P.x+P.vx*dt*(pw.speed-1),nz=P.z+P.vz*dt*(pw.speed-1),po=pushOut(nx,nz,P.y);P.x=clamp(po[0],-HALF+4,HALF-4);P.z=clamp(po[1],-HALF+4,HALF-4)}
  if(pw.jump>1&&hbPG&&!P.grounded&&P.vy>8)P.vy*=pw.jump;if(pw.lowg>0&&!P.grounded)P.vy+=26*dt*pw.lowg;
@@ -3129,7 +3132,8 @@ IC.hbSet=hsv('<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M
 const HIC={2:IC.hbPlace,3:IC.hbRemove,4:IC.hbTerra,5:IC.hbSet},HNM={2:'Place',3:'Remove',4:'Terraform',5:'Settings'},ORG={2:'pistol',3:'shovel',4:'multitool',5:'rod'};
 function hbHotbar(){[2,3,4,5].forEach(n=>{const e=$q('slot'+n);if(!e)return;e.innerHTML='<i class="num">'+n+'</i>'+(hbOn()?HIC[n]:IC[ORG[n]]);e.title=hbOn()?HNM[n]:''})}
 window.__hbHotbar=hbHotbar;
-function hbOpen(kind){if(document.pointerLockElement)document.exitPointerLock();OV.kind=kind;TB.down=false;hbRender();hov.hidden=false}
+const hbVisitor=()=>!!(window.PX&&window.PX.hv),hbVdeny=()=>{toast('You are a visitor on '+((HS().nick)||'this')+'’s island');SX.deny&&SX.deny()};
+function hbOpen(kind){if(hbVisitor()&&!(kind==='cat'&&HS().perm.build)){hbVdeny();return}if(document.pointerLockElement)document.exitPointerLock();OV.kind=kind;TB.down=false;hbRender();hov.hidden=false}
 function hbClose(silent){OV.kind=null;hov.hidden=true;if(!silent)try{renderer.domElement.requestPointerLock()}catch(e){}}
 function hbGrid(){const it=hbCat().filter(a=>(OV.tab==='All'||a.c===OV.tab)&&(!OV.q||a.n.toLowerCase().includes(OV.q)));return it.map(a=>'<div class="hbc'+(PL.type===a.id?' on':'')+'" data-pick="'+a.id+'">'+hbIco(a.id)+'<b>'+esc(a.n)+'</b></div>').join('')||'<p>Nothing found.</p>'}
 function hbCat(){const out=[],cat={};RECIPES.forEach(r=>{if(r.out&&r.out.item)cat[r.out.item]=r.cat});const ok={camp:1,build:1,decor:1,traps:1,goods:1};for(const id in ITEMS){if(!PLACEABLE.test(id))continue;let c=cat[id];if(!ok[c])c=/^plat_|^pwall|^fence|^gate/.test(id)?'build':/^deco_|^fbed/.test(id)?'decor':/^trap_/.test(id)?'traps':/^bed|^campfire|^torch|^raft/.test(id)?'camp':'goods';out.push({id,n:ITEMS[id].n,c})}NAT.forEach(a=>out.push({id:a[0],n:a[1],c:a[2]}));return out}
@@ -3161,13 +3165,13 @@ window.addEventListener('keydown',e=>{if(!hbOn()||!running)return;
  if(e.code==='KeyQ'){const w=BOAT&&BOAT.wheel;if(w&&Math.hypot(w.x-P.x,w.z-P.z)<3.4&&Math.abs(P.y-w.y)<2.6){e.stopImmediatePropagation();e.preventDefault();openSea();return}
   if(tool===5){e.stopImmediatePropagation();e.preventDefault();hbOpen('set')}
   else if(tool===2){e.stopImmediatePropagation();e.preventDefault();hbOpen('cat')}
-  else if(tool===3){e.stopImmediatePropagation();e.preventDefault();const b=hbAimBuild();if(b){const c=hbBox(b).getCenter(new THREE.Vector3());for(let n=0;n<9;n++)addFx(new THREE.Vector3(c.x+(Math.random()-.5)*1.4,c.y+(Math.random()-.5)*1.2,c.z+(Math.random()-.5)*1.4),n%2?0xffffff:0xcfd8e0,1.3+Math.random(),.45+Math.random()*.3);SX.breakBuild&&SX.breakBuild();bdel(b.d.id)}else SX.deny&&SX.deny()}
+  else if(tool===3){e.stopImmediatePropagation();e.preventDefault();if(hbVisitor()&&!HS().perm.build){hbVdeny();return}const b=hbAimBuild();if(b){const c=hbBox(b).getCenter(new THREE.Vector3());for(let n=0;n<9;n++)addFx(new THREE.Vector3(c.x+(Math.random()-.5)*1.4,c.y+(Math.random()-.5)*1.2,c.z+(Math.random()-.5)*1.4),n%2?0xffffff:0xcfd8e0,1.3+Math.random(),.45+Math.random()*.3);SX.breakBuild&&SX.breakBuild();bdel(b.d.id)}else SX.deny&&SX.deny()}
   else if(tool===4){e.stopImmediatePropagation();e.preventDefault();toast('Press F to open the terraform menu')}return}
  if(tool===2){if(e.code==='KeyR'){PL.rot+=(e.shiftKey?-1:1)*(PL.type&&/^plat_|^pwall$/.test(PL.type)?Math.PI/2:Math.PI/12);e.stopImmediatePropagation()}
   else if(e.code==='KeyG'){const o=[0,.5,1,4];PL.snap=o[(o.indexOf(PL.snap)+1)%4];e.stopImmediatePropagation()}
   else if(e.code==='BracketRight'){PL.lift+=e.shiftKey?1:.25;e.stopImmediatePropagation()}else if(e.code==='BracketLeft'){PL.lift-=e.shiftKey?1:.25;e.stopImmediatePropagation()}
   else if(e.code==='KeyC'&&(PL.type==='pwall'||PL.type==='deco_banner')){paintIdx=(paintIdx+1)%PAINT.length;e.stopImmediatePropagation()}}},true);
-window.addEventListener('mousedown',e=>{if(e.button!==0||!hbOn()||!locked||!running||invOpen||busy||HP.dead||OV.kind)return;if(tool===2)hbPlace();else if(tool===5){hbOpen('set')}else if(tool===4){TB.down=true;TB.anchor=null;TB.edited=false;tAcc=.05}},true);
+window.addEventListener('mousedown',e=>{if(e.button!==0||!hbOn()||!locked||!running||invOpen||busy||HP.dead||OV.kind)return;if(tool===2)hbPlace();else if(tool===5){hbOpen('set')}else if(tool===4){if(hbVisitor()){hbVdeny();return}TB.down=true;TB.anchor=null;TB.edited=false;tAcc=.05}},true);
 window.addEventListener('mouseup',()=>{if(TB.down){TB.down=false;if(TB.edited){TB.edited=false;hbSaveT()}}},true);
 const _fk=X.fKey;X.fKey=function(e){if(hbOn()&&tool>=2&&tool<=4){if(e.repeat)return;if(tool===4)hbOpen('terra');else if(tool===2)hbPlace();return}return _fk.apply(this,arguments)};
 const _fg=window.fireGun;window.fireGun=function(){if(hbOn())return;return _fg.apply(this,arguments)};
@@ -3180,7 +3184,7 @@ const _ivm=window.initViewModels;window.initViewModels=function(){_ivm.apply(thi
  VM.home=[null,null,pl,rm,tr]};
 const _li=window.loadIsland;window.loadIsland=function(info){hbWrapSp();const r=_li.apply(this,arguments);try{hbLoaded(info)}catch(e){console.error('[home]',e)}return r};
 function hbLoaded(info){hbClose(true);TB.down=false;if(hg){scene.remove(hg);hg=null;hgKey=''}if(hl)hl.visible=false;if(ring)ring.visible=false;
- if(info.key===HK){const hs=HS(),Ht=HTERR();HB0=new Float32Array(N1*N1);for(let j=0;j<N1;j++)for(let i=0;i<N1;i++)HB0[j*N1+i]=HBASE?HBASE(-HALF+i*STEP,-HALF+j*STEP):Ht[j*N1+i];hbRecolor();if(hs.cw===undefined)hs.cw=S.curW||null;S.curW=null;TOOLN[2]=TOOLN[3]=TOOLN[4]=TOOLN[5]='hand';hbApply();setTimeout(hbApply,0)}
+ if(info.key===HK){const hs=HS(),Ht=HTERR();HB0=new Float32Array(N1*N1);for(let j=0;j<N1;j++)for(let i=0;i<N1;i++)HB0[j*N1+i]=HBASE?HBASE(-HALF+i*STEP,-HALF+j*STEP):Ht[j*N1+i];hbRecolor();{const _h=window.PX.hv;window.PX.hv=null;const sh=HS();window.PX.hv=_h;if(sh.cw===undefined)sh.cw=S.curW||null}S.curW=null;TOOLN[2]=TOOLN[3]=TOOLN[4]=TOOLN[5]='hand';hbApply();setTimeout(hbApply,0)}
  else{if(S.home&&S.home.cw!==undefined){S.curW=S.home.cw;delete S.home.cw}TOOLN[2]='pistol';TOOLN[3]='shovel';TOOLN[4]='shovel';TOOLN[5]='hand'}
  hbHotbar();if(P.av){P.av.tool=null;setAvatarTool(P.av,TOOLN[tool])}}
 const _hu2=window.update;window.update=function(dt){_hu2(dt);try{hbTick(dt)}catch(e){if(!X._hbt){X._hbt=1;console.error('[home]',e)}}};
@@ -4394,50 +4398,74 @@ function tick(dt){if(!C||!isChaos()||!WG){tHud(false);return}
  if(hot&&C.burn<=0){C.burn=.5;hurt(1,'molten lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,1.6,.4)}
  else if(!hot&&d<CH.Rr*1.15&&P.y>level-14&&C.warn<=0&&d<CH.Rr){C.warn=40;toast('Heat shimmers off the lava below…')}}
 })();
-/* ===== Community Island: Home warp pedestal (appears once your Home Island is public) ===== */
-(function(){'use strict';
-const CK='2,3',HK2='2,2',PX0=0,PZ0=-14;
-let G=null,parts=null,hintEl=null,tt=0;
+/* ===== Community Island: one warp pedestal per public Home Island (everyone's, not just yours) ===== */
+(function(){'use strict';const X=window.PX;
+const CK='2,3',HK2='2,2';
+let G=null,list=[],ents=[],obs=[],unH=null,hintEl=null,tt=0,homes=[];
 const isPublic=()=>!!(S&&S.home&&S.home.perm&&S.home.perm.visit&&S.home.perm.visit!=='me');
+/* ----- publish my home so other players can see/visit it ----- */
+let lastSig='',lastT=0,wasPub=null;
+function payload(){const h=S.home,o={uid:UID,nick:((S&&S.name)||'Pirate').slice(0,16),visit:h.perm.visit,build:h.perm.build?1:0,biome:h.biome|0,tod:h.tod,nat:h.nat?1:0,weather:h.weather||'clear',pw:h.pw||{},ts:Date.now()};
+ const th=h.th||[],tp=h.tp||[];if(th.length+tp.length<60000){o.th=th;o.tp=tp}return o}
+function publish(){try{if(!FB||!UID||!S||!S.made||!FB.homeSet)return;const pub=isPublic();
+ if(pub){const p=payload(),sig=JSON.stringify(Object.assign({},p,{ts:0}));if(sig!==lastSig&&Date.now()-lastT>15000){lastSig=sig;lastT=Date.now();wasPub=true;FB.homeSet(p).catch(()=>{})}}
+ else if(wasPub!==false){wasPub=false;lastSig='';FB.homeDel&&FB.homeDel().catch(()=>{})}}catch(e){}}
+setInterval(publish,20000);window.addEventListener('beforeunload',publish);
+/* ----- pedestal geometry ----- */
 function lbl(txt,sub){const c=document.createElement('canvas');c.width=512;c.height=160;const g=c.getContext('2d');g.textAlign='center';g.font='700 46px Cinzel,serif';g.lineWidth=8;g.strokeStyle='rgba(8,20,32,.95)';g.strokeText(txt,256,70);g.fillStyle='#ffe29a';g.fillText(txt,256,70);g.font='600 28px Inter,sans-serif';g.strokeText(sub,256,120);g.fillStyle='#9ff5e8';g.fillText(sub,256,120);
  const t=new THREE.CanvasTexture(c),m=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));m.scale.set(6.4,2,1);return m}
-function build(){kill();const gy=terrH(PX0,PZ0);G=new THREE.Group();G.position.set(PX0,gy,PZ0);G.scale.setScalar(.5);
- [[0,0,2.3,.23],[0,0,1.95,.43],[0,0,1.55,.58]].forEach(b=>addOB(PX0+b[0],PZ0+b[1],0,b[2],b[2],gy+b[3],gy+b[3],'stone'));
- for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;addOB(PX0+Math.cos(a)*1.95,PZ0+Math.sin(a)*1.95,0,.22,.22,gy+1.75,gy+1.75,'stone')}
- const stone=new THREE.MeshStandardMaterial({color:0x8d939c,roughness:.85}),dark=new THREE.MeshStandardMaterial({color:0x5d636d,roughness:.9}),
-  glow=new THREE.MeshStandardMaterial({color:0x4fd1c5,emissive:0x2ad8c8,emissiveIntensity:1.4,roughness:.3}),
-  gold=new THREE.MeshStandardMaterial({color:0xf2c14e,emissive:0x8a6a10,emissiveIntensity:.6,metalness:.6,roughness:.35});
- const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;G.add(m);return m};
- add(new THREE.CylinderGeometry(4.6,5,.45,36),dark,0,.22,0);
- add(new THREE.CylinderGeometry(3.9,4.2,.4,36),stone,0,.65,0);
- add(new THREE.CylinderGeometry(3.1,3.3,.3,36),stone,0,1,0);
- const ring=add(new THREE.TorusGeometry(3.45,.09,8,64),gold,0,1.22,0);ring.rotation.x=Math.PI/2;
- const disc=add(new THREE.CylinderGeometry(2.7,2.7,.12,36),glow,0,1.2,0);
- const rune=add(new THREE.TorusGeometry(2.0,.06,6,48),glow,0,1.3,0);rune.rotation.x=Math.PI/2;
- const rune2=add(new THREE.TorusGeometry(1.2,.05,6,40),glow,0,1.32,0);rune2.rotation.x=Math.PI/2;
- const pil=[];for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4,x=Math.cos(a)*3.9,z=Math.sin(a)*3.9;
-  add(new THREE.CylinderGeometry(.34,.42,2.8,8),stone,x,2,z);add(new THREE.CylinderGeometry(.46,.46,.2,8),gold,x,3.45,z);
-  const cr=add(new THREE.OctahedronGeometry(.42),glow,x,4.1,z);pil.push(cr)}
- const beam=add(new THREE.CylinderGeometry(2.4,2.4,7,28,1,true),new THREE.MeshBasicMaterial({color:0x6ff5e6,transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}),0,4.8,0);
- const orb=add(new THREE.IcosahedronGeometry(.55,1),new THREE.MeshBasicMaterial({color:0xcffff8}),0,3.4,0);
- const pts=[];for(let i=0;i<26;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.07,6,6),new THREE.MeshBasicMaterial({color:0x9ff5e8}));m.userData={a:Math.random()*6.28,r:.6+Math.random()*2,s:.7+Math.random()*1.2,y:Math.random()*5};G.add(m);pts.push(m)}
- const light=new THREE.PointLight(0x4fd1c5,1.6,22);light.position.set(0,3,0);G.add(light);
- const nm=(S&&S.name)||'Pirate',sp=lbl('Home Warp',nm+'’s Home Island');sp.position.set(0,6.6,0);G.add(sp);
- parts={disc,rune,rune2,pil,beam,orb,pts,light,ring};scene.add(G)}
-function kill(){if(!G)return;scene.remove(G);G.traverse(o=>{if(o.geometry)o.geometry.dispose()});G=null;parts=null}
+const stone=new THREE.MeshStandardMaterial({color:0x8d939c,roughness:.85}),dark=new THREE.MeshStandardMaterial({color:0x5d636d,roughness:.9}),
+ glow=new THREE.MeshStandardMaterial({color:0x4fd1c5,emissive:0x2ad8c8,emissiveIntensity:1.4,roughness:.3}),
+ gold=new THREE.MeshStandardMaterial({color:0xf2c14e,emissive:0x8a6a10,emissiveIntensity:.6,metalness:.6,roughness:.35}),
+ beamM=new THREE.MeshBasicMaterial({color:0x6ff5e6,transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+const gC=(a,b,h,s)=>new THREE.CylinderGeometry(a,b,h,s);
+const GEO={b1:gC(4.6,5,.45,28),b2:gC(3.9,4.2,.4,28),b3:gC(3.1,3.3,.3,28),ring:new THREE.TorusGeometry(3.45,.09,8,48),disc:gC(2.7,2.7,.12,28),rune:new THREE.TorusGeometry(2.0,.06,6,40),pil:gC(.34,.42,2.8,8),cap:gC(.46,.46,.2,8),cr:new THREE.OctahedronGeometry(.42),beam:gC(2.4,2.4,7,20,1,true),orb:new THREE.IcosahedronGeometry(.55,1)};
+function ringPos(n){const out=[];const rings=[[14,8],[24,14],[34,20],[44,26]];for(const [r,c] of rings){for(let i=0;i<c;i++){const a=-Math.PI/2+i*Math.PI*2/c;out.push([Math.cos(a)*r,Math.sin(a)*r])}}return out[n]}
+function mkPed(h,px,pz,gy){const g=new THREE.Group();g.position.set(px,gy,pz);g.scale.setScalar(.5);
+ const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);g.add(m);return m};
+ add(GEO.b1,dark,0,.22,0);add(GEO.b2,stone,0,.65,0);add(GEO.b3,stone,0,1,0);
+ const ring=add(GEO.ring,gold,0,1.22,0);ring.rotation.x=Math.PI/2;
+ const disc=add(GEO.disc,glow,0,1.2,0);const rune=add(GEO.rune,glow,0,1.3,0);rune.rotation.x=Math.PI/2;
+ const pil=[];for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4,x=Math.cos(a)*3.9,z=Math.sin(a)*3.9;add(GEO.pil,stone,x,2,z);add(GEO.cap,gold,x,3.45,z);pil.push(add(GEO.cr,glow,x,4.1,z))}
+ add(GEO.beam,beamM,0,4.8,0);const orb=add(GEO.orb,new THREE.MeshBasicMaterial({color:0xcffff8}),0,3.4,0);
+ const sp=lbl('Home Warp',h.nick+'’s Home Island');sp.position.set(0,6.6,0);g.add(sp);
+ const o=[[2.3,.23],[1.95,.43],[1.55,.58]].map(b=>addOB(px,pz,0,b[0],b[0],gy+b[1],gy+b[1],'stone'));obs.push(...o);
+ for(let i=0;i<4;i++){const a=i*Math.PI/4*2+Math.PI/4;obs.push(addOB(px+Math.cos(a)*1.95,pz+Math.sin(a)*1.95,0,.22,.22,gy+1.75,gy+1.75,'stone'))}
+ G.add(g);return{g,h,px,pz,disc,rune,ring,pil,orb}}
+function entries(){const m=new Map();for(const h of homes){if(h.uid&&(h.visit==='all'||h.uid===UID))m.set(h.uid,h)}
+ if(isPublic()&&UID&&!m.has(UID))m.set(UID,Object.assign(payload(),{local:1}));
+ else if(!isPublic()&&UID)m.delete(UID);
+ return[...m.values()].sort((a,b)=>(a.uid===UID?-1:b.uid===UID?1:String(a.uid).localeCompare(String(b.uid))))}
+function build(){kill();G=new THREE.Group();scene.add(G);list=entries();
+ list.forEach((h,i)=>{const p=ringPos(i);if(!p)return;ents.push(mkPed(h,p[0],p[1],terrH(p[0],p[1])))})}
+function kill(){for(const o of obs){const i=OB.indexOf(o);if(i>=0)OB.splice(i,1)}obs=[];ents=[];if(!G)return;scene.remove(G);G.traverse(o=>{if(o.isSprite){o.material.map&&o.material.map.dispose();o.material.dispose()}});G=null}
 function setHint(t){if(!hintEl){hintEl=document.createElement('div');hintEl.style.cssText='position:fixed;bottom:22%;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;background:#000a;color:#9ff5e8;border:1px solid #2a8f85;border-radius:8px;padding:7px 14px;font:600 13px Inter,sans-serif;display:none';document.body.appendChild(hintEl)}
  if(t){hintEl.textContent=t;hintEl.style.display='block'}else hintEl.style.display='none'}
-const near=()=>G&&G.visible&&CUR.key===CK&&Math.hypot(P.x-PX0,P.z-PZ0)<3.7&&Math.abs(P.y-G.position.y)<4;
-const ol=window.loadIsland;window.loadIsland=function(info){kill();setHint(null);const r=ol.apply(this,arguments);if(info&&info.key===CK){try{build()}catch(e){console.error('[warp pad]',e)}}return r};
-window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||!running||!locked||invOpen||busy||HP.dead||SEA.open)return;if(near()){e.stopImmediatePropagation();e.preventDefault();setHint(null);travel(islandInfo(2,2),{})}},true);
+function nearest(){if(!G||CUR.key!==CK)return null;let b=null,bd=3.7;for(const e of ents){const d=Math.hypot(P.x-e.px,P.z-e.pz);if(d<bd&&Math.abs(P.y-e.g.position.y)<4){bd=d;b=e}}return b}
+function unwatch(){try{unH&&unH()}catch(e){}unH=null}
+function watch(){if(unH||!FB||!FB.watchHomes)return;try{unH=FB.watchHomes(a=>{homes=a;if(CUR.key===CK)try{build()}catch(e){console.error('[warp pads]',e)}})}catch(e){}}
+const ol=window.loadIsland;window.loadIsland=function(info){kill();setHint(null);
+ if(info&&info.key===HK2){const pv=X._pv;X._pv=null;if(pv){X.hv=pv.hv;X.hvUid=pv.uid}else{X.hv=null;X.hvUid=null}}
+ if(info&&info.key!==CK)unwatch();
+ const r=ol.apply(this,arguments);if(info&&info.key===CK){try{build();watch()}catch(e){console.error('[warp pads]',e)}}return r};
+function visit(e){const h=e.h;if(h.uid===UID){X._pv=null;travel(islandInfo(2,2),{});return}
+ X._pv={uid:h.uid,hv:{biome:h.biome|0,tod:h.tod==null?12:h.tod,nat:h.nat?1:0,weather:h.weather||'clear',pw:h.pw||{speed:1,jump:1,lowg:0,fly:0,god:0,heal:0},perm:{visit:h.visit,build:h.build?1:0},th:h.th||[],tp:h.tp||[],nick:h.nick}};
+ travel(islandInfo(2,2),{})}
+window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||!running||!locked||invOpen||busy||HP.dead||SEA.open)return;const n=nearest();if(n){e.stopImmediatePropagation();e.preventDefault();setHint(null);visit(n)}},true);
 const pu=window.update;window.update=function(dt){pu(dt);try{
  if(CUR.key!==CK||!G){setHint(null);return}
- const on=isPublic();G.visible=on;if(!on){setHint(null);return}
- tt+=dt;const q=parts;q.disc.material.emissiveIntensity=1.2+Math.sin(tt*2.2)*.5;q.rune.rotation.z+=dt*.8;q.rune2.rotation.z-=dt*1.2;q.ring.rotation.z+=dt*.3;
- q.pil.forEach((c,i)=>{c.rotation.y+=dt*1.5;c.position.y=4.1+Math.sin(tt*2+i)*.18});q.orb.position.y=3.4+Math.sin(tt*1.7)*.25;q.orb.rotation.y+=dt;q.beam.material.opacity=.13+Math.sin(tt*3)*.04;q.light.intensity=1.4+Math.sin(tt*2.6)*.4;
- q.pts.forEach(m=>{const u=m.userData;u.y+=dt*u.s;if(u.y>6)u.y=0;u.a+=dt*.9;m.position.set(Math.cos(u.a)*u.r,1.4+u.y,Math.sin(u.a)*u.r)});
- setHint(near()&&!busy?'Press Q to warp to your Home Island':null)
+ /* own pedestal appears/disappears when you toggle visibility */
+ const want=entries();if(want.length!==list.length||(want[0]&&list[0]&&want[0].uid!==list[0].uid)){build()}
+ tt+=dt;const k=1.2+Math.sin(tt*2.2)*.5;glow.emissiveIntensity=k;beamM.opacity=.13+Math.sin(tt*3)*.04;
+ for(const e of ents){e.rune.rotation.z+=dt*.8;e.ring.rotation.z+=dt*.3;e.pil.forEach((c,i)=>{c.rotation.y+=dt*1.5;c.position.y=4.1+Math.sin(tt*2+i)*.18});e.orb.position.y=3.4+Math.sin(tt*1.7)*.25;e.orb.rotation.y+=dt}
+ const n=nearest();setHint(n&&!busy?(n.h.uid===UID?'Press Q to warp to your Home Island':'Press Q to visit '+n.h.nick+'’s Home Island'):null)
 }catch(er){if(!window.PX._pad){window.PX._pad=1;console.error('[warp pad]',er)}}};
+})();
+/* ===== Peace zones: no shooting / attacking on Community Island or Home Island ===== */
+(function(){'use strict';const safe=()=>CUR&&(CUR.key==='2,3'||CUR.key==='2,2');
+const fg=window.fireGun;window.fireGun=function(){if(safe())return;return fg.apply(this,arguments)};
+const bh=window.bulletHit;if(bh)window.bulletHit=function(){if(safe())return;return bh.apply(this,arguments)};
+let tt=0;const hu=window.hurt;if(hu)window.hurt=function(){if(CUR&&CUR.key==='2,3')return;return hu.apply(this,arguments)};
 })();
 /* ===== Colosseum fights: 10 rounds, enemy AI, regen, rewards, spectator weapon lock ===== */
 (function(){'use strict';const X=window.PX,A=X.arena,AK='1,2';
@@ -4552,7 +4580,7 @@ function start(){if(!FB||un1)return;un1=FB.watchOnline(a=>{roster=a;if(open)draw
 function show(v){open=v;m.style.display=v?'flex':'none';if(v){if(document.pointerLockElement)document.exitPointerLock();start();draw();setTimeout(()=>$('olIn').focus(),30)}else{$('olIn').blur();const c=document.querySelector('canvas');try{c&&c.requestPointerLock&&c.requestPointerLock()}catch(e){}}}
 window.addEventListener('keydown',e=>{
  if(open&&e.code==='Escape'){e.preventDefault();e.stopImmediatePropagation();show(false);return}
- if(e.target===$('olIn')){e.stopPropagation();if(e.code==='Enter'){const t=$('olIn').value.trim();if(t&&Date.now()-lastSend>800&&FB){lastSend=Date.now();$('olIn').value='';FB.chatSend({uid:FB._uid(),nick:S.name||'Pirate',text:t.slice(0,200),t:Date.now()}).catch(()=>{})}}else if(e.code==='Slash'&&!$('olIn').value){e.preventDefault();show(false)}return}
+ if(e.target===$('olIn')){e.stopPropagation();if(e.code==='Enter'){const t=$('olIn').value.trim();if(t&&Date.now()-lastSend>800&&FB){lastSend=Date.now();$('olIn').value='';FB.chatSend({uid:UID,nick:S.name||'Pirate',text:t.slice(0,200),t:Date.now()}).catch(()=>{})}}else if(e.code==='Slash'&&!$('olIn').value){e.preventDefault();show(false)}return}
  if(e.code==='Slash'&&!e.ctrlKey&&!e.altKey&&e.target.tagName!=='INPUT'&&FB&&UID){e.preventDefault();e.stopImmediatePropagation();show(!open)}
 },true);
 })();
