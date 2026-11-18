@@ -7,6 +7,16 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'vortarium@spotify-clone.app';
     }
 
+    // The artist page whose key matches this account's username belongs to that account.
+    // Same rule the app uses for artist keys: lower case, every run of characters that are not a-z or 0-9 becomes one "_".
+    // (the username comes from the sign-in email, which the user cannot change, so it can't be faked by editing a profile)
+    function myArtistKey() {
+      return request.auth.token.email.split('@')[0].lower().replace('[^a-z0-9]+', '_').replace('^_+|_+$', '');
+    }
+    function ownsArtist(artistKey) {
+      return request.auth != null && artistKey == myArtistKey();
+    }
+
     // profiles, likes and playlists all live under the user's own account
     match /users/{uid} {
       allow read: if request.auth != null;
@@ -55,11 +65,14 @@ service cloud.firestore {
     match /public_playlists/{playlistId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
-      // owner can edit anything; people the playlist is shared with may only change songIds (adding songs)
+      // owner can edit anything; people the playlist is shared with may only change songIds (adding songs);
+      // everyone else may only add exactly +1 to the view counter
       allow update: if request.auth != null
                     && (request.auth.uid == request.resource.data.ownerId
                         || (request.auth.uid in resource.data.get('sharedWith', [])
-                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['songIds'])));
+                            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['songIds']))
+                        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+                            && request.resource.data.views == resource.data.get('views', 0) + 1));
       allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
     }
 
@@ -91,10 +104,16 @@ service cloud.firestore {
                                 && get(/databases/$(database)/documents/songs/$(songId)).data.ownerId == request.auth.uid);
     }
 
-    // artist pictures (found online or uploaded by hand): anyone signed in can see them, only the Vortarium moderator can change them
+    // artist pictures and bios: anyone signed in can see them. The Vortarium moderator can change any artist;
+    // the account whose username matches the artist can change its own artist page (picture and bio only).
     match /artists/{artistKey} {
       allow read: if request.auth != null;
-      allow create, update, delete: if isMod();
+      allow create, update: if isMod()
+                            || (ownsArtist(artistKey)
+                                && request.resource.data.keys().hasOnly(['name', 'photoUrl', 'source', 'ck', 'at', 'by', 'bio', 'miss'])
+                                && request.resource.data.get('bio', '').size() <= 600
+                                && request.resource.data.get('photoUrl', '').size() < 700000);
+      allow delete: if isMod() || ownsArtist(artistKey);
     }
 
     match /songs/{songId} {

@@ -563,6 +563,29 @@ h1,h2,h3,h4,.sec h2,.mh h2,.auth h1,.hero h1,.rh .ttl,.libhead,.qh,.npcard h4,.w
 .npd.ps{background:#f5b942;animation:none}.npfl.ps{background:rgba(245,185,66,.14);border-color:rgba(245,185,66,.5)}.npfl.ps b{color:#f5b942}
 @keyframes npp{0%{box-shadow:0 0 0 0 rgba(30,215,96,.7)}70%{box-shadow:0 0 0 9px rgba(30,215,96,0)}100%{box-shadow:0 0 0 0 rgba(30,215,96,0)}}
 html.phone .npfl{position:static;max-width:none;margin:12px 0 0}
+
+/* ---- profile / artist bios ---- */
+.ubio{color:#fff;font-size:15px;line-height:1.45;margin:2px 0 10px;max-width:640px;word-break:break-word}
+/* ---- full screen lyrics ---- */
+#right.lyfull{display:flex!important;position:fixed;inset:0;z-index:2000;width:auto;height:auto;margin:0;border-radius:0;transform:none!important;visibility:visible!important;pointer-events:auto!important;padding-top:env(safe-area-inset-top);background:linear-gradient(180deg,color-mix(in srgb,var(--npc,#3a3a3a) 70%,#000) 0,#0b0b0b 90%)}
+#right.lyfull .rh{padding:18px 24px 8px;max-width:1100px;width:100%;margin:0 auto}
+#right.lyfull .rb{max-width:1100px;width:100%;margin:0 auto;padding:0 32px;text-align:center}
+#right.lyfull .lyh{margin:6px 0 26px}
+#right.lyfull .lyh .nt{font-size:clamp(22px,3vw,36px)}
+#right.lyfull .lyh .na{font-size:clamp(14px,1.6vw,20px)}
+#right.lyfull .lyl{padding-bottom:30vh}
+#right.lyfull .lyl .ll{font-size:clamp(26px,4.4vw,58px);line-height:1.25;padding:10px 0}
+#right.lyfull .lyl.plain{font-size:clamp(20px,2.4vw,30px)}
+#right.lyfull .npctl{display:block;position:fixed;left:0;right:0;bottom:0;z-index:3;margin:0;padding:16px 24px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,#000c 45%)}
+#right.lyfull .npctl .seek{display:flex;align-items:center;gap:10px;position:static;max-width:720px;margin:0 auto;width:100%}
+#right.lyfull .npctl .seek span{display:block}
+#right.lyfull .npctl .seek input{flex:1}
+#right.lyfull .npctl .ctl{display:flex;justify-content:center;align-items:center;gap:20px;margin-top:8px;width:auto}
+#right.lyfull .npctl .ctl button{display:flex}
+#right.lyfull .npctl .ctl .pp2{width:56px;height:56px;background:#fff;color:#000}
+#right.lyfull .npcov,#right.lyfull .npi,#right.lyfull #qsec,#right.lyfull #qsec~*{display:none!important}
+#right.lyfull .lybox{max-height:none;height:calc(100dvh - 230px);overflow-y:auto;margin:0}
+html.lyfs{overflow:hidden}
 </style>
 </head>
 <body>
@@ -571,12 +594,15 @@ html.phone .npfl{position:static;max-width:none;margin:12px 0 0}
 <script type="module">
 import {initializeApp,deleteApp} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,updatePassword,reauthenticateWithCredential,EmailAuthProvider} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,orderBy,limit,collection,doc,writeBatch,setDoc,getDoc,getDocs,updateDoc,deleteDoc,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import {getFirestore,initializeFirestore,persistentLocalCache,persistentMultipleTabManager,orderBy,limit,collection,doc,writeBatch,setDoc,getDoc,getDocs,updateDoc as updateDoc0,deleteDoc as deleteDoc0,onSnapshot,serverTimestamp,increment,arrayUnion,arrayRemove,query,where} from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const app=initializeApp({apiKey:"AIzaSyAJBXi0s776qLPIOsEVKT12bLyw3GH30uc",authDomain:"spotify-12bfc.firebaseapp.com",projectId:"spotify-12bfc",storageBucket:"spotify-12bfc.firebasestorage.app",messagingSenderId:"954774595834",appId:"1:954774595834:web:6b0b6a9f75acc9ee3ac143",measurementId:"G-ZBGWYEBF5C"});
 /* local cache: after the first visit the library comes straight from IndexedDB and only changes are downloaded */
 let db;try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1048576})})}catch{db=getFirestore(app)}
 const auth=getAuth(app);
+/* every write to a song goes through these two wrappers so the local library stays in step (see "fast data layer") */
+const updateDoc=(r,d,...a)=>{const p=updateDoc0(r,d,...a);try{if(/^songs\/[^/]+$/.test(r.path)){if(d&&typeof d.coverUrl=="string")lzSet("songs",r.id,"coverUrl",d.coverUrl);if(!(d&&"views" in d))p.then(()=>reconcileSoon(),()=>{})}}catch{}return p};
+const deleteDoc=r=>{const p=deleteDoc0(r);try{if(/^songs\/[^/]+$/.test(r.path))p.then(()=>dropSong(r.id),()=>{})}catch{}return p};
 /* analytics is not needed to show the app, so it loads a few seconds after startup */
 setTimeout(()=>import("https://www.gstatic.com/firebasejs/13.2.0/firebase-analytics.js").then(m=>m.getAnalytics(app)).catch(()=>{}),5000);
 
@@ -610,6 +636,7 @@ const I={
  vol:S('<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" style="fill:currentColor"/><path d="M15.5 9a4 4 0 010 6M18 6.5a8 8 0 010 11"/>'),
  vol0:S('<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" style="fill:currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
  full:S('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>'),
+ shrink:S('<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>'),
  share:S('<path d="M12 15V3M7.5 7.5L12 3l4.5 4.5M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>'),
  more:F('<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>'),
  note:S('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'),
@@ -710,6 +737,101 @@ async function restCommit(writes){
   }catch(e){err=e;if(st&&![401,408,409,429,500,502,503,504].includes(st))throw e}
   await new Promise(r=>setTimeout(r,400*2**t+Math.random()*300))}
  throw err}
+/* ===== fast data layer =====
+   Songs, users and public playlists are first read through the Firestore REST endpoint with a field projection that leaves out the big
+   embedded images (song covers, profile photos, playlist covers). The whole library arrives in one small response, so the app is usable
+   right away even on a slow phone. Each image is then fetched only when something on screen asks for it (batched 30 per request) and is
+   remembered on this device for a few hours. The regular realtime listeners start a moment later, in the background. */
+const PH_IMG="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const fv=v=>{if(!v)return null;
+ if("stringValue" in v)return v.stringValue;
+ if("integerValue" in v)return +v.integerValue;
+ if("doubleValue" in v)return v.doubleValue;
+ if("booleanValue" in v)return v.booleanValue;
+ if("timestampValue" in v){const t=Date.parse(v.timestampValue.replace(/(\.\d{3})\d+/,"$1"));return{toMillis:()=>t,toDate:()=>new Date(t),seconds:Math.floor(t/1000),nanoseconds:0}}
+ if("arrayValue" in v)return(v.arrayValue.values||[]).map(fv);
+ if("mapValue" in v){const o={},f=v.mapValue.fields||{};for(const k in f)o[k]=fv(f[k]);return o}
+ return null};
+const fdoc=d=>{const o={id:d.name.slice(d.name.lastIndexOf("/")+1)},f=d.fields||{};for(const k in f)o[k]=fv(f[k]);return o};
+async function restPost(path,body){let err;
+ for(let t=0;t<3;t++){
+  try{const tok=await auth.currentUser.getIdToken(t>0),r=await fetch(FS_REST+path,{method:"POST",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify(body)});
+   if(r.ok)return r.json();err=new Error("HTTP "+r.status);if(![401,429,500,503].includes(r.status))break}
+  catch(e){err=e}
+  await new Promise(r=>setTimeout(r,250*(t+1)))}
+ throw err}
+const restList=async(coll,fields,where)=>(await restPost(":runQuery",{structuredQuery:{from:[{collectionId:coll}],select:{fields:fields.map(f=>({fieldPath:f}))},...(where?{where}:{})}})).filter(x=>x.document).map(x=>fdoc(x.document));
+const SONG_F=["title","artists","artist","ownerId","duration","size","mime","chunkCount","ready","explicit","createdAt","views","key","uuid","imp","coverAuto","coverFor"];
+const USER_F=["username","displayName","createdAt","showWrapped","hideNow","now","prefs","listenSec","bio"];
+const PL_F=["uuid","name","description","public","ownerId","songIds","createdAt","sharedWith","views"];
+const READY_F={fieldFilter:{field:{fieldPath:"ready"},op:"EQUAL",value:{booleanValue:true}}};
+
+/* lazy images: reading o[field] returns what is known now and quietly asks for the rest */
+const lzMem=new Map(),LZ_TTL=6*36e5;
+const lzIdb=new Promise(r=>{try{const q=indexedDB.open("mellow_img",1);q.onupgradeneeded=()=>q.result.createObjectStore("c");q.onsuccess=()=>r(q.result);q.onerror=()=>r(null);q.onblocked=()=>r(null)}catch{r(null)}});
+const lzDbGet=async k=>{const d=await lzIdb;if(!d)return;return new Promise(r=>{try{const q=d.transaction("c").objectStore("c").get(k);q.onsuccess=()=>r(q.result);q.onerror=()=>r()}catch{r()}})};
+const lzDbPut=async(k,v)=>{const d=await lzIdb;if(!d)return;try{d.transaction("c","readwrite").objectStore("c").put({v,t:Date.now()},k)}catch{}};
+(async()=>{const d=await lzIdb;if(!d)return;try{const q=d.transaction("c").objectStore("c").count();q.onsuccess=()=>{if(q.result>1500)try{d.transaction("c","readwrite").objectStore("c").clear()}catch{}}}catch{}})();
+const lzKey=(c,i,f)=>c+"/"+i+"/"+f;
+function lzSet(c,i,f,v){const k=lzKey(c,i,f);if(lzMem.get(k)===v)return;lzMem.set(k,v);lzDbPut(k,v)}
+const lzPeek=(c,i,f,d)=>{const k=lzKey(c,i,f);return lzMem.has(k)?lzMem.get(k):d};
+const lzDirty=(()=>{let t=0;return()=>{clearTimeout(t);t=setTimeout(()=>{if(built){panelSig="";refresh()}},140)}})();
+const lzQ=new Map();let lzT=0;
+function lzAsk(c,i,f){const g=c+"|"+f;(lzQ.get(g)||lzQ.set(g,new Set()).get(g)).add(i);clearTimeout(lzT);lzT=setTimeout(lzFlush,20)}
+async function lzFetch(c,f,ids){
+ try{const r=await restPost(":batchGet",{documents:ids.map(i=>FS_NAME+c+"/"+i),mask:{fieldPaths:[f]}}),got=new Set();
+  for(const x of r){if(!x.found)continue;const o=fdoc(x.found),v=typeof o[f]=="string"?o[f]:"";got.add(o.id);lzSet(c,o.id,f,v)}
+  ids.forEach(i=>{if(!got.has(i))lzMem.set(lzKey(c,i,f),"")});lzDirty()}
+ catch(e){console.warn("image load failed",e)}}
+async function lzSplit(c,f,ids){const miss=[];
+ await Promise.all(ids.map(async i=>{const k=lzKey(c,i,f);if(lzMem.has(k))return;const h=await lzDbGet(k);if(h&&Date.now()-h.t<LZ_TTL)lzMem.set(k,h.v);else miss.push(i)}));
+ return miss}
+async function lzFlush(){const groups=[...lzQ];lzQ.clear();
+ for(const [g,set] of groups){const [c,f]=g.split("|"),ids=[...set].filter(i=>!lzMem.has(lzKey(c,i,f)));if(!ids.length)continue;
+  lzSplit(c,f,ids).then(miss=>{if(miss.length<ids.length)lzDirty();for(let a=0;a<miss.length;a+=30)lzFetch(c,f,miss.slice(a,a+30))})}}
+/* waits until these images are really known (used before anything that treats "no cover" as meaningful) */
+async function lzLoad(c,f,ids){const miss=await lzSplit(c,f,ids);for(let a=0;a<miss.length;a+=30)await lzFetch(c,f,miss.slice(a,a+30))}
+function mkLazy(o,c,f,ph){const k=lzKey(c,o.id,f);
+ if(lzMem.has(k)){o[f]=lzMem.get(k);return o}
+ let st=0;
+ Object.defineProperty(o,f,{enumerable:true,configurable:true,
+  get(){if(!st){st=1;lzAsk(c,o.id,f)}return lzMem.has(k)?lzMem.get(k):ph},
+  set(v){lzMem.set(k,v);st=2}});
+ return o}
+
+/* the song library: id -> document. Built from the REST list, the newest songs also arrive live from a small realtime query */
+let songRaw=new Map(),rbT=0,recT=0,recBusy=false;
+function songsChanged(){clearTimeout(rbT);rbT=setTimeout(rebuildSongs,60)}
+function rebuildSongs(){if(!me)return;
+ const rmQ=[],ready=[];
+ for(const x of songRaw.values()){
+  if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==me.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}
+  if(x.ready)ready.push(x)}
+ const cp=copyIds(ready);
+ ready.forEach(x=>{if(cp.has(x.id)&&x.ownerId==me.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}});
+ setSongs(ready.filter(x=>!cp.has(x.id)).sort((a,b)=>ms(b)-ms(a)));
+ songsFull=true;booting=false;
+ if(rmQ.length)delSongsBulk(rmQ);
+ built&&refresh();clearTimeout(cvT);cvT=setTimeout(fillCovers,20000)}
+function dropSong(id){songRaw.delete(id);mem.delete(id);headMem.delete(id);songsChanged()}
+function ingestSongsRest(list,t0){
+ const m=new Map();list.forEach(o=>{mkLazy(o,"songs","coverUrl",PH_IMG);m.set(o.id,o)});
+ songRaw.forEach((x,id)=>{if(x._src=="sdk"&&x._t>t0)m.set(id,x)}); /* a live update that arrived while the list was downloading wins */
+ songRaw=m;songsChanged()}
+function ingestSongsSdk(snap){let any=false;
+ snap.docChanges().forEach(c=>{if(c.type=="removed")return;const id=c.doc.id,x={id,...c.doc.data(),_src:"sdk",_t:Date.now()};
+  if(typeof x.coverUrl=="string")lzSet("songs",id,"coverUrl",x.coverUrl);
+  songRaw.set(id,x);any=true});
+ if(any)songsChanged()}
+async function reconcileSongs(){if(recBusy||!me)return;recBusy=true;const t0=Date.now(),tk=bootTok;
+ try{const l=await restList("songs",SONG_F,READY_F);if(tk==bootTok)ingestSongsRest(l,t0)}
+ catch(e){console.warn("library refresh failed",e)}
+ finally{recBusy=false}}
+const reconcileSoon=()=>{clearTimeout(recT);recT=setTimeout(reconcileSongs,1200)};
+/* songs added, renamed or removed by other people show up within a minute even when they are not among the newest */
+setInterval(()=>{if(!document.hidden&&me&&built)reconcileSongs()},60000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&me&&built)reconcileSoon()});
+
 async function chunkRest(id,j,tok){
  const url=FS_REST+"/songs/"+id+"/chunks/"+String(j).padStart(4,"0");
  for(let a=0;;a++){
@@ -719,7 +841,7 @@ async function chunkRest(id,j,tok){
   catch(e){if(a>=2)throw e;await new Promise(r=>setTimeout(r,300*(a+1)))}}}
 async function restChunks(id,N,tok){
  const out=new Array(N);let nx=0;
- await Promise.all(Array.from({length:Math.min(8,N)},async()=>{while(nx<N){const j=nx++;out[j]=await chunkRest(id,j,tok)}}));
+ await Promise.all(Array.from({length:Math.min(12,N)},async()=>{while(nx<N){const j=nx++;out[j]=await chunkRest(id,j,tok)}}));
  return out}
 async function sdkChunks(id,s){
  const q=await getDocs(collection(db,"songs",id,"chunks")),p=q.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
@@ -738,10 +860,52 @@ async function getBlob(id){
  if(mem.has(id)){const b=mem.get(id);remember(id,b);return b}
  const b=await fetchSongBlob(id);remember(id,b);return b}
 const prefetch=id=>{if(id&&!mem.has(id)&&song(id))getBlob(id).catch(()=>{})};
+/* Songs are stored as ~600 KB parts. mp3 songs start playing as soon as the first part has arrived (the rest streams in behind it);
+   other formats and browsers without MediaSource wait for the whole file like before. Resting on a song only loads its first part. */
+const headMem=new Map();
+const MSE_OK=()=>{try{return !!(window.MediaSource&&MediaSource.isTypeSupported("audio/mpeg"))}catch{return false}};
+const canStream=s=>!!s&&MSE_OK()&&/mpeg|mp3/i.test(s.mime||"audio/mpeg")&&s.chunkCount>1&&!(s.size&&s.size>12e6);
+function prefetchHead(id){const s=song(id);if(!s||!me||mem.has(id)||headMem.has(id))return;
+ if(!canStream(s))return prefetch(id);
+ const p=auth.currentUser.getIdToken().then(t=>chunkRest(id,0,t));headMem.set(id,p);p.catch(()=>headMem.delete(id));
+ while(headMem.size>6)headMem.delete(headMem.keys().next().value)}
+async function tryProgressive(s,tok){
+ if(!canStream(s))return false;
+ let tk;try{tk=await auth.currentUser.getIdToken()}catch{return false}
+ if(tok!=loadTok)return true;
+ const id=s.id,N=s.chunkCount,parts=new Array(N);let nx=0;
+ const pump=()=>{if(nx>=N)return;const j=nx++;parts[j]=(j==0&&headMem.get(id))||chunkRest(id,j,tk);parts[j].then(pump,pump)};
+ for(let i=0;i<Math.min(12,N);i++)pump();
+ const mse=new MediaSource(),url=URL.createObjectURL(mse),old=cur;cur=url;audio.src=url;if(old)URL.revokeObjectURL(old);
+ const opened=new Promise((res,rej)=>{mse.addEventListener("sourceopen",res,{once:true});setTimeout(()=>rej(new Error("MediaSource did not open")),4000)});
+ audio.play().catch(()=>{});vwId=s.id;vwSec=0;vwDone=false;mediaMeta(s);ensureEndless();playerUI();renderPanel();
+ let started=false;
+ try{
+  await opened;if(tok!=loadTok)return true;
+  const sb=mse.addSourceBuffer("audio/mpeg");if(s.duration>0)try{mse.duration=s.duration}catch{}
+  const blobs=[];
+  for(let j=0;j<N;j++){
+   const b=await parts[j];if(tok!=loadTok)return true;
+   blobs.push(b);const buf=await b.arrayBuffer();if(tok!=loadTok)return true;
+   await new Promise((res,rej)=>{sb.addEventListener("updateend",res,{once:true});sb.addEventListener("error",()=>rej(new Error("append failed")),{once:true});sb.appendBuffer(buf)});
+   started=true}
+  if(tok==loadTok&&mse.readyState=="open")mse.endOfStream();
+  remember(id,new Blob(blobs,{type:s.mime||"audio/mpeg"}));headMem.delete(id);
+  if(tok==loadTok&&repeat!=2){prefetch(queue[qi+1]);prefetch(queue[qi+2])}
+  return true}
+ catch(e){
+  console.warn("streaming playback failed",e);
+  if(tok!=loadTok)return true;
+  if(!started){const o=cur;cur="";audio.removeAttribute("src");if(o)URL.revokeObjectURL(o);return false}
+  const at=audio.currentTime,was=!audio.paused;
+  try{const b=await getBlob(id);if(tok!=loadTok)return true;const o=cur;cur=URL.createObjectURL(b);audio.src=cur;if(o)URL.revokeObjectURL(o);audio.currentTime=at;if(was)audio.play().catch(()=>{})}
+  catch(e2){if(tok==loadTok)toast("Couldn't load this song: "+e2.message)}
+  return true}}
 /* on a computer, resting the mouse on a song for a moment starts loading it, so the click feels instant */
 let hvT=0,hvId="";
 document.addEventListener("pointerover",e=>{if(e.pointerType!="mouse")return;const el=e.target.closest?.("[data-song],[data-id]"),id=el&&(el.dataset.song||el.dataset.id)||"";if(id===hvId)return;hvId=id;clearTimeout(hvT);
- if(id&&song(id)&&!mem.has(id))hvT=setTimeout(()=>{if(!pending.size)prefetch(id)},350)},{passive:true});
+ if(id&&song(id)&&!mem.has(id))hvT=setTimeout(()=>{if(!pending.size)prefetchHead(id)},150)},{passive:true});
+document.addEventListener("pointerdown",e=>{const el=e.target.closest?.("[data-song],[data-id]"),id=el&&(el.dataset.song||el.dataset.id);if(id&&song(id))prefetchHead(id)},{passive:true});
 const durOf=f=>new Promise(r=>{const u=URL.createObjectURL(f),a=new Audio();a.preload="metadata";const end=v=>{clearTimeout(t);a.removeAttribute("src");URL.revokeObjectURL(u);r(v)},t=setTimeout(()=>end(0),8000);a.onloadedmetadata=()=>end(isFinite(a.duration)?a.duration:0);a.onerror=()=>end(0);a.src=u});
 const ms=d=>d?.createdAt?.toMillis?.()??Date.now();
 const colorCache={};
@@ -775,7 +939,8 @@ let booting=true,bootSide=true,songsFull=false,usersFull=false,bootTok=0,bootT=0
 const loadingView=()=>booting||(!songsFull&&!(view.t=="home"&&(view.f||"all")!="mine"));
 /* many Firestore listeners fire at startup; this merges their renders into one */
 let rfT=0;const refresh=()=>{if(rfT)return;rfT=setTimeout(()=>{rfT=0;if(!me||!built)return;render();playerUI()},30)};
-function startSkel(side){clearTimeout(skelT);skel=true;skelSide=!!side;skelT=setTimeout(()=>{skel=false;skelSide=false;if(built){renderSide();render()}},100+Math.random()*400)}
+/* navigation renders straight away: the old version held a skeleton for 0.1-0.5 s on every click even when the data was already here */
+function startSkel(){}
 const skTx=(w,h=12)=>`<div class="sk" style="width:${w};height:${h}px"></div>`;
 const skCard=()=>`<div class="skc"><div class="sk sq"></div>${skTx("80%")}${skTx("55%",10)}</div>`;
 const skRow=()=>`<div class="skr"><div class="sk" style="width:40px;height:40px;flex:none"></div><div style="flex:1">${skTx("45%")}<div style="height:8px"></div>${skTx("25%",10)}</div>${skTx("40px",10)}</div>`;
@@ -787,7 +952,7 @@ function paintSkel(){
  let h;
  if(v.t=="home")h=`<div class="skq">${Array.from({length:6},()=>`<div class="sk" style="height:56px"></div>`).join("")}</div>`+sec+grid(6)+sec+grid(6);
  else if(["pl","liked","artist","user","all"].includes(v.t))h=hero+rows(8);
- else if(v.t=="artists"||v.t=="search")h=sec+grid(8)+sec+rows(4);
+ else if(v.t=="artists"||v.t=="users"||v.t=="search")h=sec+grid(8)+sec+rows(4);
  else h=sec+rows(6);
  $("#mainbox").classList.toggle("plain",["home","settings","artists","search","wrapped"].includes(v.t));
  m.innerHTML=`<div class="skel">${h}</div>`;
@@ -809,7 +974,8 @@ const countView=id=>{if(!me||!id)return;const m=vcLoad(),n=Date.now();if(m[id]&&
 const mergePl=()=>{
  /* shared_playlists is the source of truth for songs of any playlist that is shared (collaborators add there) */
  const sh=new Map(ownShared.map(p=>[p.id,p]));
- const own=ownPl.map(o=>{const s=sh.get(o.id);return s&&(o.sharedWith||[]).length?{...o,songIds:s.songIds||[]}:o});
+ const pv=new Map(pubPl.map(p=>[p.id,p.views|0]));
+ const own=ownPl.map(o=>{const s=sh.get(o.id);let r=s&&(o.sharedWith||[]).length?{...o,songIds:s.songIds||[]}:o;if(o.public&&pv.has(o.id)&&r.views!==pv.get(o.id))r={...r,views:pv.get(o.id)};return r});
  const seen=new Set(own.map(o=>o.id));
  const shr=sharedPl.filter(p=>!seen.has(p.id));shr.forEach(p=>seen.add(p.id));
  const a=pubPl.filter(p=>!seen.has(p.id));
@@ -831,7 +997,8 @@ const creditPlain=s=>[artistsOf(s).join(", "),uname(s.ownerId)].filter(Boolean).
 const xb=s=>s?.explicit?`<span class="xb" title="Explicit">E</span>`:"";
 const credit=(s,link=true)=>xb(s)+credit0(s,link);
 const credit0=(s,link=true)=>{const a=artistsOf(s);const A=a.map(n=>link?`<span class="ar" data-artist="${esc(n)}">${esc(n)}</span>`:esc(n)).join(", ");const U=link?`<span class="up" data-u="${s.ownerId}">${esc(uname(s.ownerId))}</span>`:esc(uname(s.ownerId));return A?`${A}<span class="bl">•</span>${U}`:U};
-const allArtists=()=>{const m=new Map();songs.forEach(s=>artistsOf(s).forEach(n=>{const k=n.toLowerCase();if(!m.has(k))m.set(k,{name:n,n:0});m.get(k).n++}));return m};
+let aaFor=null,aaMap=null;
+const allArtists=()=>{if(aaFor===songs&&aaMap)return aaMap;const m=new Map();songs.forEach(s=>artistsOf(s).forEach(n=>{const k=n.toLowerCase();if(!m.has(k))m.set(k,{name:n,n:0});m.get(k).n++}));aaFor=songs;aaMap=m;return m};
 const songsBy=n=>songs.filter(s=>artistsOf(s).some(a=>a.toLowerCase()==n.toLowerCase()));
 
 /* ---------- auth screens ---------- */
@@ -872,24 +1039,47 @@ onAuthStateChanged(auth,u=>{
  pendSec=0;pendBy={};me=u;unsubs.forEach(f=>f());unsubs=[];audio.pause();
  const tok=++bootTok,live=()=>tok==bootTok;
  clearTimeout(bootT);booting=true;bootSide=true;songsFull=false;usersFull=false;
- if(!u){users={};artistDocs={};setSongs([]);pls=[];ownPl=[];pubPl=[];sharedPl=[];ownShared=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
+ if(!u){users={};artistDocs={};songRaw=new Map();setSongs([]);pls=[];ownPl=[];pubPl=[];sharedPl=[];ownShared=[];likes=new Set();following=new Set();notifs=[];queue=[];qi=-1;return authScreen()}
  const upd=()=>{if(!me)return;if(!users[me.uid]?.displayName){return nameScreen()}
   if(!built)buildApp();else{renderSide();renderTop();render();renderPanel()}};
  /* safety net: never leave skeletons up forever if the network is slow or a listener fails */
  bootT=setTimeout(()=>{if(!live())return;booting=false;bootSide=false;built&&refresh()},7000);
 
- /* the big listeners (every user, every song) start after the first paint */
+ /* realtime listeners start after the first paint (the data itself arrives through the fast REST bootstrap further down) */
  let fullStarted=false;
- const startFull=()=>{if(fullStarted||!live())return;fullStarted=true;
-  unsubs.push(onSnapshot(collection(db,"users"),s=>{usersFull=true;users={};s.forEach(d=>users[d.id]={id:d.id,...d.data()});upd();{const w=$("#npw");if(w&&view.t=="user")w.innerHTML=npInner(view.id);const f=$("#npfr");if(f&&view.t=="home")f.outerHTML=friendsNow()}}));
-  unsubs.push(onSnapshot(collection(db,"songs"),s=>{const rmQ=[],raw=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_")){const t=clean(x.title);if(t){if(x.ownerId==u.uid&&!fixedT.has(x.id)){fixedT.add(x.id);updateDoc(doc(db,"songs",x.id),{title:t}).catch(()=>{})}x.title=t}}return x}),cp=copyIds(raw.filter(x=>x.ready));raw.forEach(x=>{if(x.ready&&cp.has(x.id)&&x.ownerId==u.uid&&!fixedT.has("d"+x.id)){fixedT.add("d"+x.id);rmQ.push(x)}});setSongs(raw.filter(x=>x.ready&&!cp.has(x.id)).sort((a,b)=>ms(b)-ms(a)));
-   songsFull=true;booting=false;
-   if(!s.metadata.fromCache)try{localStorage.setItem("spot_boot_"+u.uid,"1")}catch{}
-   if(rmQ.length)delSongsBulk(rmQ);built&&refresh();clearTimeout(cvT);cvT=setTimeout(fillCovers,20000)}));
-  (window.requestIdleCallback||(f=>setTimeout(f,300)))(()=>{if(live())unsubs.push(onSnapshot(collection(db,"artists"),s=>{artistDocs={};s.forEach(d=>artistDocs[d.id]=d.data());built&&refresh()},()=>{}));if(live())unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},e=>toast(fsMsg(e))))})};
+ const idle=f=>(window.requestIdleCallback||(g=>setTimeout(g,300)))(()=>{if(live())f()},{timeout:3000});
+ const startFull=quick=>{if(fullStarted||!live())return;fullStarted=true;
+  const go=()=>{if(!live())return;
+   /* users: only changes that matter on screen redraw the app; "now playing" ticks just refresh their own widgets */
+   unsubs.push(onSnapshot(collection(db,"users"),s=>{
+    let big=false;const ch=s.docChanges();
+    ch.forEach(c=>{const id=c.doc.id;
+     if(c.type=="removed"){delete users[id];big=true;return}
+     const o={id,...c.doc.data(),_full:1},old=users[id];
+     if(!old)big=true;
+     else if(old.displayName!==o.displayName||old.username!==o.username||(old.bio||"")!==(o.bio||"")||!!old.showWrapped!==!!o.showWrapped||!!old.hideNow!==!!o.hideNow||(o.photoUrl||"")!==(old._full?(old.photoUrl||""):lzPeek("users",id,"photoUrl",o.photoUrl||"")))big=true;
+     if(typeof o.photoUrl=="string")lzSet("users",id,"photoUrl",o.photoUrl);
+     users[id]=o});
+    const first=!usersFull;usersFull=true;
+    if(big||first||!built)upd();
+    else{const w=$("#npw");if(w&&view.t=="user")w.innerHTML=npInner(view.id);const f=$("#npfr");if(f&&view.t=="home")f.outerHTML=friendsNow()}
+   }));
+   /* the newest songs stay live; everything older is refreshed by the REST list every minute */
+   unsubs.push(onSnapshot(query(collection(db,"songs"),orderBy("createdAt","desc"),limit(30)),ingestSongsSdk,()=>{}));
+   unsubs.push(onSnapshot(collection(db,"artists"),s=>{artistDocs={};s.forEach(d=>artistDocs[d.id]=d.data());built&&refresh()},()=>{}));
+   unsubs.push(onSnapshot(collection(db,"public_playlists"),s=>{pubPl=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.coverUrl=="string")lzSet("public_playlists",x.id,"coverUrl",x.coverUrl);return x});mergePl()},e=>toast(fsMsg(e))))};
+  quick?go():idle(go)};
+ /* if the fast start ever fails, fall back to the plain listeners */
+ const startLegacy=()=>{startFull(1);unsubs.push(onSnapshot(collection(db,"songs"),s=>{songRaw=new Map(s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.coverUrl=="string")lzSet("songs",x.id,"coverUrl",x.coverUrl);return[x.id,x]}));songsChanged()}))};
+ const bootRest=()=>{const t0=Date.now();
+  const sP=restList("songs",SONG_F,READY_F).then(l=>{if(live())ingestSongsRest(l,t0)});
+  const uP=restList("users",USER_F).then(l=>{if(!live())return;
+   l.forEach(o=>{if(users[o.id]?._full)return;users[o.id]=mkLazy(o,"users","photoUrl","")});usersFull=true;upd()});
+  const pP=restList("public_playlists",PL_F).then(l=>{if(!live())return;pubPl=l.map(o=>mkLazy(o,"public_playlists","coverUrl",""));mergePl()});
+  return Promise.all([sP,uP,pP])};
 
  /* small, fast things first: your own profile, your library list, likes, follows, notifications */
- getDoc(doc(db,"users",u.uid)).then(d=>{if(!live()||usersFull)return;if(d.exists()&&d.data().displayName){users[d.id]={id:d.id,...d.data()};upd()}else startFull()}).catch(()=>startFull());
+ getDoc(doc(db,"users",u.uid)).then(d=>{if(!live())return;if(d.exists()&&d.data().displayName){users[d.id]={id:d.id,...d.data(),_full:1};upd()}else startFull(1)}).catch(()=>startFull(1));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"playlists"),s=>{ownPl=s.docs.map(d=>({id:d.id,...d.data()}));bootSide=false;mergePl()},e=>{bootSide=false;toast(fsMsg(e))}));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("sharedWith","array-contains",u.uid)),s=>{sharedPl=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
  unsubs.push(onSnapshot(query(collection(db,"shared_playlists"),where("ownerId","==",u.uid)),s=>{ownShared=s.docs.map(d=>({id:d.id,...d.data()}));mergePl()},()=>{}));
@@ -897,19 +1087,8 @@ onAuthStateChanged(auth,u=>{
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"following"),s=>{following=new Set(s.docs.map(d=>d.id));built&&refresh()},()=>{}));
  unsubs.push(onSnapshot(collection(db,"users",u.uid,"notifications"),s=>{notifs=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>ms(b)-ms(a));built&&updBell()},()=>{}));
 
- let seen=false;try{seen=!!localStorage.getItem("spot_boot_"+u.uid)}catch{}
- if(seen)startFull(); /* returning visit: the cache answers instantly, no need for a separate quick query */
- else{
-  /* first visit on this device: show the newest songs right away while the full library downloads */
-  getDocs(query(collection(db,"songs"),orderBy("createdAt","desc"),limit(40))).then(async s=>{
-   if(!live()||songsFull)return;
-   const l=s.docs.map(d=>{const x={id:d.id,...d.data()};if(typeof x.title=="string"&&x.title.includes("_"))x.title=clean(x.title)||x.title;return x}).filter(x=>x.ready),cp=copyIds(l);l.splice(0,l.length,...l.filter(x=>!cp.has(x.id)).sort((a,b)=>ms(b)-ms(a)));
-   setSongs(l);startFull();
-   await Promise.all([...new Set(l.map(x=>x.ownerId))].filter(i=>i&&!users[i]).slice(0,12).map(i=>getDoc(doc(db,"users",i)).then(d=>{if(d.exists()&&live()&&!usersFull)users[d.id]={id:d.id,...d.data()}}).catch(()=>{})));
-   if(!live()||songsFull)return;booting=false;built&&refresh();
-  }).catch(()=>startFull());
-  setTimeout(startFull,2500);
- }
+ bootRest().then(()=>{if(!live())return;booting=false;built&&refresh();startFull()}).catch(e=>{console.warn("fast start failed, using the regular listeners",e);if(live())startLegacy()});
+ setTimeout(()=>startFull(),3500);
 });
 
 /* ---------- app shell ---------- */
@@ -1087,6 +1266,11 @@ const dmCover=(n,cv)=>`<div class="dmcov" style="--dc:${MIXC[n-1]||"#1ed760"}">$
 const dmSection=()=>{if(!songs.length)return"";const mx=dailyMixes();
  if(!mx)return`<div class="sec"><h2>Daily Mix</h2></div><div class="grid">${[0,1,2].map(()=>`<div class="card"><div class="sk" style="aspect-ratio:1;border-radius:6px;margin-bottom:12px"></div></div>`).join("")}</div>`;
  return`<div class="sec"><h2>Daily Mix</h2></div><div class="grid">${mx.map(m=>{const x=mixSongs(m.n);return`<div class="card" data-mix="${m.n}">${dmCover(m.n,x.cover)}<div class="t">Daily Mix ${m.n}</div><div class="s">${esc(x.artists)}</div><button class="pp" data-playmix="${m.n}" title="Play">${I.play}</button></div>`}).join("")}</div>`};
+const userCards=l=>`<div class="grid">${l.map(y=>`<div class="card" data-u="${y.id}"><div style="display:flex;justify-content:center;margin-bottom:12px">${avatar(y).replace('class="av"','class="av round" style="width:100%;height:auto;aspect-ratio:1;font-size:56px"')}</div><div class="t">${esc(y.displayName||y.username||"")}</div><div class="s">Profile • @${esc(y.username||"")}${y.id==me.uid?" (you)":""}</div></div>`).join("")}</div>`;
+/* every account with a profile name, the busiest uploaders first */
+const usersList=()=>{const n=new Map();songs.forEach(x=>n.set(x.ownerId,(n.get(x.ownerId)||0)+1));
+ return Object.values(users).filter(u=>u.displayName).sort((a,b)=>(n.get(b.id)||0)-(n.get(a.id)||0)||String(a.displayName).localeCompare(String(b.displayName)))};
+const usersSec=()=>{const l=usersList();return l.length?`<div class="sec"><h2>Users</h2><button data-go="users">Show all</button></div>`+userCards(l.slice(0,8)):""};
 const initials=(n,sz)=>{const p=artistPic(n);return p?`<img class="art round" draggable="false" loading="lazy" decoding="async" alt="" src="${esc(p)}">`:initials0(n,sz)};
 const songCards=(l,tag)=>`<div class="grid"${tag?` data-list="${tag}"`:""}>${l.map(s=>`<div class="card" draggable="true" data-song="${s.id}">${art(s.coverUrl)}<div class="t">${esc(s.title)}</div><div class="s by">${credit(s)}</div><button class="pp" title="Play">${I.play}</button></div>`).join("")}</div>`;
 const plCards=l=>`<div class="grid">${l.map(p=>`<div class="card" data-pl="${p.id}">${art(p.coverUrl)}<div class="t">${esc(p.name)}</div><div class="s">By ${esc(uname(p.ownerId))}</div><button class="pp" data-playpl="${p.id}" title="Play">${I.play}</button></div>`).join("")}</div>`;
@@ -1096,7 +1280,7 @@ const hero=(type,title,meta,a,desc,cls="")=>`<div class="hero ${cls}">${a}<div s
 const sum=l=>`${l.length} song${l.length==1?"":"s"}${l.length?", "+fmtLong(l.reduce((a,s)=>a+(s.duration||0),0)):""}`;
 const barH=(x="")=>`<div class="bar"><button class="big" id="bigplay" title="Play">${I.play}</button><button class="ib ${shuffle?"on":""}" id="shbig" title="Enable shuffle">${I.shuf}</button>${x}${["all","pl","liked","user"].includes(view.t)?`<button class="pill dark sm" id="selbtn" style="margin-left:auto">${selMode?I.x+"Cancel":I.sel+"Select"}</button>`:""}</div>`;
 const viewKey=()=>view.t+":"+(view.id||view.name||"");
-const viewTitle=()=>({home:"Home",artists:"Artists",all:"All songs",search:"Search results",liked:"Liked Songs",mix:"Daily Mix "+view.id,recent:"Recently played",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
+const viewTitle=()=>({home:"Home",artists:"Artists",users:"Users",all:"All songs",search:"Search results",liked:"Liked Songs",mix:"Daily Mix "+view.id,recent:"Recently played",settings:"Settings",wrapped:"Wrapped"}[view.t]||(view.t=="pl"?pls.find(p=>p.id==view.id)?.name:view.t=="user"?uname(view.id):view.t=="artist"?view.name:"")||"");
 const setHc=c=>$("#mainbox").style.setProperty("--hc",c||"#535353");
 const hdrFor=title=>`<div class="stick"></div><div class="hp"><button class="big" id="hdrplay" title="Play">${I.play}</button><b>${esc(title)}</b></div>`;
 
@@ -1120,7 +1304,7 @@ function render(){
     (pls.length>7?`<div class="sec"><h2>More playlists</h2><button data-hf="playlists">Show all</button></div>`+plCards(pls.slice(7,15)):"")+
     dmSection()+
     (rec.length?`<div class="sec"><h2>Recently played</h2><button data-go="recent">View more</button></div>`+songCards(rec.slice(0,8),"recent"):"")+
-    (ar.length?`<div class="sec"><h2>Artists</h2><button data-go="artists">Show all</button></div>`+artistCards(ar):"")+
+    (ar.length?`<div class="sec"><h2>Artists</h2><button data-go="artists">Show all</button></div>`+artistCards(ar):"")+usersSec()+
     (myS.length?`<div class="sec"><h2>Your uploads</h2><button data-hf="mine">Show all</button></div>`+songCards(myS.slice(0,8)):"")+
     (songs.length?`<div class="sec"><h2>Recently added</h2><button data-go="all">Show all</button></div>`+songCards(songs.slice(0,8)):"");
   }else if(f=="songs"){shown=songs;h=`<div class="sec"><h2>Songs</h2><span style="color:#b3b3b3">${songs.length} total</span></div>`+songCards(songs.slice(0,homeN))}
@@ -1139,7 +1323,7 @@ function render(){
  }else if(v.t=="pl"){
   const p=pls.find(x=>x.id==v.id);if(!p){view={t:"home"};return render()}
   const l=plSongs(p),o=p.ownerId===me.uid;hdrh=hdrFor(p.name);domColor(p.coverUrl,c=>{if(view.id==p.id)setHc(c)});
-  h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{lim:v.n||10,empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
+  h=hero(p.public?"Public playlist":"Private playlist",esc(p.name),`${avatar(users[p.ownerId])}<b data-u="${p.ownerId}" style="cursor:pointer">${esc(uname(p.ownerId))}</b><span class="dim">• ${sum(l)} • ${p.public?vtxt(p.views|0)+" • ":""}${totalViews(l).toLocaleString()} song view${totalViews(l)==1?"":"s"}</span>`,art(p.coverUrl),p.description?esc(p.description):"")+barH(o?`<button class="ib" id="plmore" title="More options for ${esc(p.name)}">${I.more}</button>`:"")+rows(l,{lim:v.n||10,empty:o?"This playlist is empty. Right-click any song and choose Add to playlist.":"No songs in this playlist."});
  }else if(v.t=="mix"){
   const mx=mixSongs(+v.id),l=mx.list;if(!l.length){view={t:"home"};return render()}
   setHc(MIXC[v.id-1]||"#535353");hdrh=hdrFor("Daily Mix "+v.id);
@@ -1150,12 +1334,15 @@ function render(){
  }else if(v.t=="user"){
   const u=users[v.id];if(!u){view={t:"home"};return render()}
   const l=songs.filter(s=>s.ownerId==v.id),pp=pls.filter(p=>p.ownerId==v.id&&(p.public||p.ownerId==me.uid));hdrh=hdrFor(u.displayName);domColor(u.photoUrl,c=>{if(view.id==u.id)setHc(c)});const tv=totalViews(l),top=topSongs(l);
-  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u").replace(/<\/div><\/div>$/,m=>"</div>"+npFloat(v.id)+"</div>")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>${isMod()?`<button class="pill dark sm" id="upw">${I.pen}Change password</button>`:""}${canSeeWrapped(v.id)?`<button class="pill sm" id="vwrap" style="background:linear-gradient(135deg,#1ed760,#7a5cff 60%,#ff5ca8);color:#000">${I.note}Wrapped</button>`:""}`)+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."})+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"");
+  h=hero("Profile",esc(u.displayName),`<span class="dim">@${esc(u.username)} • ${l.length} upload${l.length==1?"":"s"}</span>`,avatar(u,"av big"),`${u.bio?`<div class="ubio">${esc(u.bio).replace(/\n/g,"<br>")}</div>`:""}${vtxt(tv)} total • <span id="fcnt">${fcount[v.id]!=null?fcount[v.id]+" follower"+(fcount[v.id]==1?"":"s"):""}</span> • ${Math.floor((u.listenSec||0)/60).toLocaleString()} minutes listened`,"u").replace(/<\/div><\/div>$/,m=>"</div>"+npFloat(v.id)+"</div>")+barH(v.id==me.uid?`<button class="ghost" id="edprof">${I.pen}Edit profile</button>`:`<button class="fbtn" data-follow="${v.id}">${following.has(v.id)?"Following":"Follow"}</button>${isMod()?`<button class="pill dark sm" id="upw">${I.pen}Change password</button>`:""}${canSeeWrapped(v.id)?`<button class="pill sm" id="vwrap" style="background:linear-gradient(135deg,#1ed760,#7a5cff 60%,#ff5ca8);color:#000">${I.note}Wrapped</button>`:""}`)+(pp.length?`<div class="sec"><h2>Playlists</h2></div>`+plCards(pp):"")+(top.length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(top):"")+`<div class="sec"><h2>Uploads</h2></div>`+rows(l,{empty:"No uploads yet."});
  }else if(v.t=="artist"){
   const l=songsBy(v.name),nm=l.flatMap(artistsOf).find(a=>a.toLowerCase()==v.name.toLowerCase())||v.name;hdrh=hdrFor(nm);
   setHc(["#3d3d8f","#8f3d5e","#3d8f6a","#8f6a3d","#5e3d8f","#3d6a8f"][[...nm].reduce((a,c)=>a+c.charCodeAt(0),0)%6]);
   domColor(artistPic(nm),c=>{if(c&&view.t=="artist"&&view.name==v.name)setHc(c)});
-  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${vtxt(totalViews(l))} total`,"u")+barH(isMod()?`<button class="pill dark sm" id="arscan">${I.sync}Find picture</button><button class="pill dark sm" id="arup">${I.up}Upload picture</button>${artistPic(nm)?`<button class="pill dark sm" id="arrm">${I.trash}Remove</button>`:""}`:"")+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
+  h=hero("Artist",esc(nm),`<span class="dim">${sum(l)}</span>`,initials(nm,96),`${artistBio(nm)?`<div class="ubio">${esc(artistBio(nm)).replace(/\n/g,"<br>")}</div>`:""}${vtxt(totalViews(l))} total`,"u")+barH(canEditArtist(nm)?`<button class="pill dark sm" id="arbio">${I.pen}Edit bio</button><button class="pill dark sm" id="arscan">${I.sync}Find picture</button><button class="pill dark sm" id="arup">${I.up}Upload picture</button>${artistPic(nm)?`<button class="pill dark sm" id="arrm">${I.trash}Remove</button>`:""}`:"")+(topSongs(l).length?`<div class="sec"><h2>Top songs</h2><span style="color:#b3b3b3">Most viewed</span></div>`+topRows(topSongs(l)):"")+`<div class="sec"><h2>All songs</h2></div>`+rows(l,{empty:"No songs credited to this artist yet."});
+ }else if(v.t=="users"){
+  hdrh=`<div class="stick"></div>`;const all=usersList();
+  h=`<div class="sec"><h2>Users</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(all.length?userCards(all):`<div class="empty">No users yet.</div>`);
  }else if(v.t=="artists"){
   hdrh=`<div class="stick"></div>`;const all=[...allArtists().values()].sort((a,b)=>a.name.localeCompare(b.name));
   h=`<div class="sec"><h2>Artists</h2><span style="color:#b3b3b3">${all.length} total</span></div>`+(isMod()&&all.length?`<div style="margin:0 0 14px"><button class="pill dark sm" id="arscanall">${I.sync}Scan all artist pictures</button></div>`:"")+(all.length?artistCards(all):`<div class="empty">No artists yet.</div>`);
@@ -1177,23 +1364,33 @@ function render(){
   h=`<div class="sec"><h2>Account settings</h2></div><div class="setrow">${avatar(u)}<div class="tx"><div style="font-weight:700;font-size:18px">${esc(u.displayName)}</div><div style="color:#b3b3b3">@${esc(u.username)}</div></div></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"><button class="pill" id="s1">${I.pen}Edit profile</button><button class="pill dark" id="s2">${I.lock}Change password</button><button class="pill dark" id="s3">Log out</button></div>`;
  }
- $("#mainbox").classList.toggle("plain",v.t=="home"||v.t=="settings"||v.t=="artists"||v.t=="wrapped");
+ $("#mainbox").classList.toggle("plain",v.t=="home"||v.t=="settings"||v.t=="artists"||v.t=="users"||v.t=="wrapped");
  hdr.innerHTML=hdrh;m.innerHTML=h+selBarHTML();m.classList.toggle("selm",selOk());
  const w=(id,f)=>{const e=$("#"+id);if(e)e.onclick=f};
  w("e1",()=>uploadModal());w("edprof",editProfile);w("s1",editProfile);w("s2",changePw);w("s3",()=>logout());
  w("plmore",e=>plMenu(e,pls.find(x=>x.id==v.id)));
  w("arscanall",scanAllArtists);
  w("upw",()=>userPwModal(view.id));
+ w("arbio",()=>editArtistBio(curArtist()));
  w("arscan",async()=>{const n=curArtist();toast("Looking for a picture…",1);try{toast(await scanArtist(n)?"Picture found":"No exact match found. You can upload one instead.")}catch(e){console.warn(e);toast("Couldn't reach the picture service ("+(e.message||"unknown error")+")")}});
  w("arup",()=>pickArtistPic(curArtist()));
- w("arrm",async()=>{const n=curArtist();if(await confirmBox("Remove picture","Remove this artist's picture?","Remove"))deleteDoc(doc(db,"artists",akey(n))).catch(()=>toast("Couldn't remove it"))});
+ w("arrm",async()=>{const n=curArtist();if(await confirmBox("Remove picture","Remove this artist's picture?","Remove"))setDoc(doc(db,"artists",akey(n)),{name:n,photoUrl:"",source:"",at:Date.now(),by:me.uid},{merge:true}).catch(()=>toast("Couldn't remove it"))});
  const bp=()=>{if(ctxKey==viewKey()&&audio.src)togglePlay();else playFirst(shown)};w("bigplay",bp);w("hdrplay",bp);
  hdr.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){view={...view,f:c.dataset.hf};homeN=HN0;render()}};
  updNav();playerUI(1);
  if(v.t=="user")loadFollowers(v.id);
  if((v.t=="user"||v.t=="wrapped")&&v.id&&v.id!=me.uid)loadMutual(v.id);
  if(v.t=="pl"||v.t=="liked")fillMore();
+ if(v.t=="pl")countPlView(v.id);
+ if(["pl","liked","all","user","artist"].includes(v.t)&&shown[0]&&!navigator.connection?.saveData)prefetchHead(shown[0].id);
 }
+/* a playlist view = someone other than the owner opening a public playlist (at most once per 10 minutes per person) */
+const plSeen=new Map();
+function countPlView(id){const p=pls.find(x=>x.id==id),n=Date.now();
+ if(!p||!p.public||!me||p.ownerId==me.uid||n-(plSeen.get(id)||0)<6e5)return;plSeen.set(id,n);
+ const k="spot_pv_"+me.uid;let m={};try{m=JSON.parse(localStorage.getItem(k)||"{}")}catch{}
+ if(m[id]&&n-m[id]<6e5)return;m[id]=n;for(const x in m)if(n-m[x]>6e5)delete m[x];try{localStorage.setItem(k,JSON.stringify(m))}catch{}
+ updateDoc(doc(db,"public_playlists",id),{views:increment(1)}).catch(()=>{})}
 let srMore=false;
 /* playlists and Liked Songs render 10 rows at a time and add 10 more as you scroll to the bottom */
 function appendRows(a,b){const html=shown.slice(a,b).map((x,k)=>rowHTML(x,a+k)).join(""),sb=document.querySelector("#main .selbar");sb?sb.insertAdjacentHTML("beforebegin",html):$("#main").insertAdjacentHTML("beforeend",html)}
@@ -1359,7 +1556,7 @@ function form(title,fields,ok,cb){
  const cov=fields.find(f=>f.type=="cover"||f.type=="avatar");
  const fh=(f,i)=>f.type=="cover"||f.type=="avatar"?"":f.type=="check"?`<label class="chk"><span class="tx"><b>${f.label}</b>${f.sub?`<small>${f.sub}</small>`:""}</span><input class="sw" type="checkbox" data-i="${i}" ${f.value?"checked":""}></label>`:
   f.type=="chips"?`<div class="fld"><label>${f.label}</label><div class="chipin" data-i="${i}"><input placeholder="${esc(f.ph||"Type a name and press Enter")}"></div>${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`:
-  f.type=="textarea"?`<div class="fld"><label>${f.label}</label><textarea data-i="${i}" placeholder="${esc(f.ph||"")}" maxlength="300">${esc(f.value||"")}</textarea></div>`:
+  f.type=="textarea"?`<div class="fld"><label>${f.label}</label><textarea data-i="${i}" placeholder="${esc(f.ph||"")}" maxlength="${f.max||300}">${esc(f.value||"")}</textarea></div>`:
   `<div class="fld"><label>${f.label}</label><input data-i="${i}" type="${f.type||"text"}" placeholder="${esc(f.ph||"")}" value="${esc(f.value||"")}" maxlength="${f.max||120}" ${f.type=="password"?'autocomplete="new-password"':""}>${f.hint?`<div class="hint">${f.hint}</div>`:""}</div>`;
  const {m,close}=openModal(`<div class="mh"><h2>${title}</h2><button class="ib mclose" title="Close">${I.x}</button></div><div class="mbody ${cov?"":"one"}">${cov?`<div><div class="cvr ${cov.type=="avatar"?"round":""}" id="cvr" tabindex="0"></div></div>`:""}<div>${fields.map(fh).join("")}</div></div><div class="mf"><span class="msg" id="fmsg"></span><button class="pill" id="mo">${ok}</button></div>`,cov?"":"sm");
  const cp=cov?coverPicker(m.querySelector("#cvr"),cov.value||"",cov.type=="avatar"?I.user:I.note):null;
@@ -1515,7 +1712,8 @@ async function doCheck(list,o,prog){
 }
 
 /* ---------- actions ---------- */
-function editSong(s){
+function editSong(s){lzLoad("songs","coverUrl",[s.id]).then(()=>editSong0(s))}
+function editSong0(s){
  form("Edit details",[{type:"cover",value:s.coverUrl},{label:"Title",value:s.title},{type:"chips",label:"Original artists",value:artistsOf(s),hint:"Everyone who is part of this song. They're shown before the uploader and used in search."},{type:"check",label:"Explicit",sub:"Contains swear words or mature language, so listeners are told beforehand",value:!!s.explicit}],"Save",async([c,t,a,x])=>{
   if(!t)throw new Error("Title can't be empty.");const d={title:clean(t)||t,artists:a,artist:a.join(", "),explicit:!!x};
   if(c instanceof File){d.coverUrl=(await uploadFile("",c,400)).url;d.coverAuto=false}else if(c===""){d.coverUrl="";d.coverAuto=false}
@@ -1558,7 +1756,7 @@ async function plUpdate(p,d){
  /* if the playlist was shared, our own copy may be stale (collaborators add to the shared doc), so refresh its songs too */
  await updateDoc(doc(db,"users",me.uid,"playlists",p.id),(p.sharedWith||[]).length?{...d,songIds:np.songIds||[]}:d);
  const m=doc(db,"public_playlists",p.id);
- if(np.public){const{id,...x}=np;await setDoc(m,x)}else if(p.public)await deleteDoc(m).catch(()=>{});
+ if(np.public){const{id,views,...x}=np;await setDoc(m,x,{merge:true})}else if(p.public)await deleteDoc(m).catch(()=>{});
  const sm=doc(db,"shared_playlists",p.id);
  if((np.sharedWith||[]).length){const{id,...x}=np;await setDoc(sm,x)}else if((p.sharedWith||[]).length)await deleteDoc(sm).catch(()=>{});
 }
@@ -1603,8 +1801,8 @@ function openPicker(id,el){
 function toggleLike(id){const r=doc(db,"users",me.uid,"likes",id);likes.has(id)?deleteDoc(r):setDoc(r,{at:serverTimestamp()})}
 function editProfile(){
  const u=users[me.uid];
- form("Profile details",[{type:"avatar",value:u.photoUrl},{label:"Display name",value:u.displayName,max:30},{type:"check",label:"Show your wrapped to your followers",sub:"Followers you follow back get a Wrapped button on your profile to see your stats",value:!!u.showWrapped},{type:"check",label:"Show what I'm listening to",sub:"A green Now playing box appears on your profile while you listen. Turn off to keep it private",value:!u.hideNow}],"Save",async([p,n,sw,sn])=>{
-  if(!n)throw new Error("Display name can't be empty.");const d={displayName:n,showWrapped:!!sw,hideNow:!sn,...(!sn?{now:null}:{})};npKey="";
+ form("Profile details",[{type:"avatar",value:u.photoUrl},{label:"Display name",value:u.displayName,max:30},{label:"Bio",type:"textarea",value:u.bio||"",ph:"Add a short bio that shows under your name",max:300},{type:"check",label:"Show your wrapped to your followers",sub:"Followers you follow back get a Wrapped button on your profile to see your stats",value:!!u.showWrapped},{type:"check",label:"Show what I'm listening to",sub:"A green Now playing box appears on your profile while you listen. Turn off to keep it private",value:!u.hideNow}],"Save",async([p,n,bio,sw,sn])=>{
+  if(!n)throw new Error("Display name can't be empty.");const d={displayName:n,bio:String(bio||"").slice(0,300),showWrapped:!!sw,hideNow:!sn,...(!sn?{now:null}:{})};npKey="";
   if(p instanceof File)d.photoUrl=(await uploadFile("",p,320)).url;else if(p==="")d.photoUrl="";
   await updateDoc(doc(db,"users",me.uid),d);toast("Profile updated");
  });
@@ -1818,7 +2016,10 @@ function toggleShuffle(){shuffle=!shuffle;if(shuffle)shuffleUpcoming();playerUI(
 let cur=null,loadTok=0;
 async function loadCur(){const s=song(queue[qi]);if(!s)return;const tok=++loadTok;
  if(lastId&&lastId!=s.id&&!skipPush){played.push(lastId);if(played.length>100)played.shift();savePlayed()}skipPush=false;lastId=s.id;
- const cached=mem.has(s.id);let tt;if(!cached)tt=setTimeout(()=>toast("Loading…",1),350);
+ const cached=mem.has(s.id);
+ if(!cached&&await tryProgressive(s,tok))return;
+ if(tok!=loadTok)return;
+ let tt;if(!cached)tt=setTimeout(()=>toast("Loading…",1),350);
  let b;try{b=await getBlob(s.id)}catch(e){clearTimeout(tt);if(tok==loadTok)toast("Couldn't load this song: "+e.message);return}
  clearTimeout(tt);if($("#toast").textContent=="Loading…")$("#toast").style.display="none";
  if(tok!=loadTok)return;
@@ -1920,6 +2121,11 @@ const cvSig=s=>(s.title||"")+"|"+artistsOf(s).join(",");
 let artistDocs={};
 const akey=n=>{const k=nrm(n).replace(/ /g,"_");return k||"x"+[...String(n)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7)};
 const artistPic=n=>artistDocs[akey(n)]?.photoUrl||"";
+const artistBio=n=>artistDocs[akey(n)]?.bio||"";
+/* the account whose username is this artist's name runs the artist's page (the moderator can edit any); firestore.rules checks the same thing */
+const canEditArtist=n=>{const un=users[me?.uid]?.username||"";return isMod()||(!!un&&akey(n)===akey(un))};
+function editArtistBio(nm){form("Artist bio",[{label:"Bio",type:"textarea",value:artistBio(nm),ph:"Tell listeners about this artist",max:500}],"Save",async([b])=>{
+ await setDoc(doc(db,"artists",akey(nm)),{name:nm,bio:b.slice(0,500),by:me.uid,at:Date.now()},{merge:true});toast("Bio saved")})}
 async function dzArtist(name){await cvGate();const d=await jsonp("https://api.deezer.com/search/artist?"+new URLSearchParams({q:name,limit:"10",output:"jsonp"}),"callback");
  if(d?.error)throw new Error("Deezer: "+(d.error.message||d.error.type||"error"));return d.data||[]}
 async function adbArtist(name){const r=await fetch("https://www.theaudiodb.com/api/v1/json/2/search.php?s="+encodeURIComponent(name));if(!r.ok)throw new Error("AudioDB "+r.status);return(await r.json()).artists||[]}
@@ -1946,11 +2152,11 @@ async function findArtistPic(name){
  if(!answered)throw err||new Error("No picture service answered");return null}
 /* saved as a small copy; if the image host blocks reading it, the link is kept instead */
 async function artistData(url){try{const r=await fetch(url);if(!r.ok)throw 0;const b=await r.blob();return(await uploadFile("",new File([b],"a.jpg",{type:b.type||"image/jpeg"}),240)).url}catch{return url}}
-const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,ck:1,at:Date.now(),by:me.uid});
+const saveArtistPic=(name,photoUrl,source)=>setDoc(doc(db,"artists",akey(name)),{name,photoUrl,source,ck:1,at:Date.now(),by:me.uid},{merge:true});
 async function scanArtist(name){
  const f=await findArtistPic(name);
  if(f){await saveArtistPic(name,await artistData(f.url),f.source);return true}
- if(!artistPic(name))await setDoc(doc(db,"artists",akey(name)),{name,miss:true,at:Date.now(),by:me.uid});
+ if(!artistPic(name))await setDoc(doc(db,"artists",akey(name)),{name,miss:true,at:Date.now(),by:me.uid},{merge:true});
  return false}
 let arScan=false;
 async function scanAllArtists(){
@@ -1996,18 +2202,27 @@ let cvBusy=false,cvT=0,cvPause=0;
 /* your own songs: missing covers are found automatically, and automatic covers are redone when the song gets renamed (by you or the moderator) */
 async function fillCovers(){
  if(cvBusy||!me||!songs.length||Date.now()<cvPause)return;cvBusy=true;
- try{const todo=songs.filter(s=>mine(s)&&((!s.coverUrl&&cvTry[s.id]!=cvSig(s))||(s.coverAuto&&s.coverFor&&s.coverFor!=cvSig(s)&&cvTry[s.id]!=cvSig(s)))).slice(0,25);
+ try{await lzLoad("songs","coverUrl",songs.filter(mine).map(s=>s.id));const todo=songs.filter(s=>mine(s)&&((!s.coverUrl&&cvTry[s.id]!=cvSig(s))||(s.coverAuto&&s.coverFor&&s.coverFor!=cvSig(s)&&cvTry[s.id]!=cvSig(s)))).slice(0,25);
   await pool(todo,1,async s=>{if(Date.now()<cvPause)return;try{await autoCover(s,true);cvTry[s.id]=cvSig(s)}catch(e){console.warn("cover",s.title,e);cvPause=Date.now()+5*60*1000}});
   if(todo.length)try{localStorage.setItem("cvTry",JSON.stringify(cvTry))}catch{}}
  finally{cvBusy=false}}
 async function doCoverCheck(prog){
- const todo=songs.filter(s=>!s.coverUrl);let found=0,none=0,fail=0,n=0;const skipped=songs.length-todo.length;
+ await lzLoad("songs","coverUrl",songs.map(s=>s.id));const todo=songs.filter(s=>!s.coverUrl);let found=0,none=0,fail=0,n=0;const skipped=songs.length-todo.length;
  if(!todo.length)return{found,none,skipped,fail};prog(0,todo.length);
  await pool(todo,3,async s=>{try{await autoCover(s)?found++:none++}catch(e){fail++;console.error(s.title,e)}prog(++n,todo.length)});
  return{found,none,skipped,fail}}
 
 /* ---------- lyrics (LRCLIB lookup, saved to the server in the "lyrics" collection) ---------- */
 const lyr={};let lyIdx=-1;
+/* full screen lyrics: the lyrics panel grows to cover the whole page (and the browser goes full screen where it allows it) */
+let lyFull=false,lyFsApi=false;
+function setLyFull(on){lyFull=!!on;const r=$("#right");if(!r)return;
+ r.classList.toggle("lyfull",lyFull);document.documentElement.classList.toggle("lyfs",lyFull);
+ if(lyFull){try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen){lyFsApi=true;document.documentElement.requestFullscreen().catch(()=>{lyFsApi=false})}}catch{lyFsApi=false}}
+ else if(lyFsApi&&document.fullscreenElement){lyFsApi=false;document.exitFullscreen?.().catch(()=>{})}
+ panelSig="";renderPanel();lyIdx=-1;setTimeout(lyTick,0)}
+document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&lyFull&&lyFsApi){lyFsApi=false;setLyFull(false)}});
+document.addEventListener("keydown",e=>{if(e.key=="Escape"&&lyFull&&!document.querySelector(".mbg"))setLyFull(false)});
 function parseLrc(t){const out=[];for(const ln of String(t||"").split("\n")){const m=[...ln.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];if(!m.length)continue;const x=ln.replace(/\[[^\]]*\]/g,"").trim();m.forEach(k=>out.push({t:+k[1]*60+ +k[2],x}))}return out.sort((a,b)=>a.t-b.t)}
 async function lrSearch(qs){const r=await fetch("https://lrclib.net/api/search?"+new URLSearchParams(qs));if(!r.ok)throw new Error("Lyrics service error "+r.status);return r.json()}
 const pickLy=(arr,d)=>{arr=(Array.isArray(arr)?arr:[]).filter(x=>x&&!x.instrumental&&(x.syncedLyrics||x.plainLyrics));if(d>0)arr=arr.filter(x=>!x.duration||Math.abs(x.duration-d)<=6);return arr.sort((a,b)=>(b.syncedLyrics?1:0)-(a.syncedLyrics?1:0))[0]||null};
@@ -2081,7 +2296,8 @@ async function doLyricCheck(prog){
 let panelSig="",lyUser=0,lyKeep=false;
 function renderPanel(){
  const r=$("#right");if(!r)return;const s=song(curId());
- const sig=[panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,phone,pset.hist,pset.small,songs.length,lyr[s?.id]?.status].join("~");
+ if(lyFull&&panel!="ly"){lyFull=false;r.classList.remove("lyfull");document.documentElement.classList.remove("lyfs");if(lyFsApi&&document.fullscreenElement){lyFsApi=false;document.exitFullscreen?.().catch(()=>{})}}
+ const sig=[lyFull,panel,curId(),s&&likes.has(s.id),queue.length,qi,queue.slice(qi+1,qi+11).join(","),queue[queue.length-1],played.length,s?.title,artistsOf(s).join("|"),s?.coverUrl?.length,viewsOf(s),ctxName,phone,pset.hist,pset.small,songs.length,lyr[s?.id]?.status].join("~");
  if(sig==panelSig)return;panelSig=sig;
  const A=artistsOf(s);
  const item=(x,i,c)=>`<div class="qi ${c?"cur":""}" data-qi="${i}">${art(x.coverUrl)}<div class="tx"><div class="tt">${esc(x.title)}</div><div class="by">${credit(x,false)}</div></div>${c?"":`<button class="hb" data-qrm="${i}" title="Remove from queue">${I.x}</button>`}</div>`;
@@ -2092,7 +2308,7 @@ function renderPanel(){
   :`<div class="npcov ${pset.small?"sm":""}">${I.note}</div><div class="noplay" style="padding:18px 0 4px">Pick a song to see it here.</div>`;
  const npctl=`<div class="npctl"><div class="seek"><span id="tc2">0:00</span><input type="range" id="sk2" min="0" max="1000" value="0"><span id="td2">0:00</span></div><div class="ctl"><button id="bsh2" title="Shuffle">${I.shuf}</button><button id="bpv2" class="sk2" title="Previous">${I.prev}</button><button class="pp2" id="bpp2" title="Play">${I.play}</button><button id="bnx2" class="sk2" title="Next">${I.next}</button><button id="brp2" title="Repeat">${I.rep}</button></div></div>`;
  const sv0=r.querySelector(".rb"),svTop=sv0?sv0.scrollTop:0,lb0=r.querySelector("#lybox"),lbTop=lb0?lb0.scrollTop:0,sameView=!!sv0&&r.dataset.sid==(s?.id||"")&&r.dataset.pn==panel;
- r.innerHTML=`${phone&&s&&s.coverUrl?`<img class="npbg" alt="" src="${esc(s.coverUrl)}"><div class="npshade"></div>`:""}<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button>${phone?`<button class="ib ${outId?"on":""}" id="bout" title="${outLbl?"Playing on "+esc(outLbl):"Speakers and headphones"}">${I.spk}</button>`:""}<button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
+ r.innerHTML=`${phone&&s&&s.coverUrl?`<img class="npbg" alt="" src="${esc(s.coverUrl)}"><div class="npshade"></div>`:""}<div class="rh"><button class="ttl ${ctxName?"lk":""}" id="rht">${esc(ctxName||"Now playing")}</button><button class="ib ${panel=="ly"?"on":""}" id="rhl" title="Lyrics">${I.mic}</button>${panel=="ly"?`<button class="ib ${lyFull?"on":""}" id="rhfs" title="${lyFull?"Exit full screen":"Full screen lyrics"}">${lyFull?I.shrink:I.full}</button>`:""}${phone?`<button class="ib ${outId?"on":""}" id="bout" title="${outLbl?"Playing on "+esc(outLbl):"Speakers and headphones"}">${I.spk}</button>`:""}<button class="ib" id="rhc" title="Customize">${I.tune}</button>${s?`<button class="ib" id="rhm" title="More options">${I.more}</button>`:""}<button class="ib" id="rhx" title="Close">${phone?I.chevd:I.x}</button></div>
  <div class="rb">${big}${s?npctl:""}
  <div class="qh" id="qsec" style="display:flex;justify-content:space-between;align-items:center"><span>Next in queue</span>${nxt.length?`<button class="qa" id="qclr">Clear queue</button>`:""}</div>
  ${nxt.length?nxt.map(([x,i])=>item(x,i)).join("")+(repeat!=1?`<div class="noplay" style="padding:10px 0">More songs like these keep playing automatically</div>`:moreN>0?`<div class="noplay" style="padding:10px 0">+ ${moreN} more in queue</div>`:""):`<div class="noplay" style="padding:16px 0">${s?(repeat!=1?"More songs like this are added automatically when this one ends.":"Nothing else is queued up."):"Your queue is empty."}<br>Choose Add to queue from a song's menu.</div>`}
@@ -2105,12 +2321,13 @@ function renderPanel(){
   if(sameView){rb.scrollTop=svTop;const lb=r.querySelector("#lybox");if(lb)lb.scrollTop=lbTop;lyKeep=true}}}
  const w=(id,f)=>{const e=r.querySelector("#"+id);if(e)e.onclick=f};
  w("rhl",()=>{panel=panel=="ly"?"np":"ly";panelSig="";renderPanel();playerUI(1)});
+ w("rhfs",()=>setLyFull(!lyFull));
  w("lyrescan",()=>{if(s&&lyr[s.id]?.status!="loading")rescanLyrics(s)});
  w("lyretry",()=>{if(s){delete lyr[s.id];panelSig="";renderPanel()}});
- w("rhx",()=>{if(phone)closeNP();else{$("#app").classList.add("nopanel");playerUI(1)}});
+ w("rhx",()=>{if(lyFull)return setLyFull(false);if(phone)closeNP();else{$("#app").classList.add("nopanel");playerUI(1)}});
  const sk2=r.querySelector("#sk2");if(sk2)sk2.oninput=()=>{if(audio.duration)audio.currentTime=sk2.value/1000*audio.duration;sk2.style.setProperty("--p",sk2.value/10+"%")};
  w("bpp2",()=>togglePlay());w("bnx2",()=>next(false));w("bpv2",()=>prev());w("bsh2",toggleShuffle);w("brp2",()=>{repeat=(repeat+1)%3;playerUI();savePrefs()});
- if(phone&&s)domColor(s.coverUrl,c=>{r.style.setProperty("--npc",c||"#3a3a3a")});
+ if((phone||lyFull)&&s)domColor(s.coverUrl,c=>{r.style.setProperty("--npc",c||"#3a3a3a")});
  w("rht",()=>{const k=ctxKey.split(":");if(k[0]=="pl")go({t:"pl",id:k[1]});else if(k[0]=="liked")go({t:"liked"});else if(k[0]=="artist")go({t:"artist",name:k.slice(1).join(":")});else if(k[0]=="user")go({t:"user",id:k[1]});else go({t:k[0]=="search"?"home":k[0]})});
  w("rhm",e=>{const b=e.currentTarget.getBoundingClientRect();s&&songMenu(e,s,b.left-120,b.bottom+6)});
  w("rhc",e=>{const b=e.currentTarget.getBoundingClientRect(),ck=on=>on?I.check:"<span style='width:16px;display:inline-block'></span>";
@@ -2166,8 +2383,8 @@ function mediaMeta(s){
  const put=src=>{try{navigator.mediaSession.metadata=new MediaMetadata({...base,artwork:src?[96,128,192,256,384,512].map(z=>({src,sizes:z+"x"+z,type:"image/jpeg"})):[]})}catch{}};
  put("");
  /* the lock screen needs a real image URL; the cover is stored as a data URL, so it is converted to a blob URL first (iOS builds the blurred lock-screen background from this image) */
- if(!s.coverUrl)return;
- fetch(s.coverUrl).then(r=>r.blob()).then(bl=>{if(curId()!=s.id)return;const u=URL.createObjectURL(bl);if(artObj)URL.revokeObjectURL(artObj);artObj=u;put(u)}).catch(()=>put(s.coverUrl))}
+ lzLoad("songs","coverUrl",[s.id]).then(()=>{const cu=s.coverUrl;if(!cu||cu===PH_IMG||curId()!=s.id)return;
+  fetch(cu).then(r=>r.blob()).then(bl=>{if(curId()!=s.id)return;const u=URL.createObjectURL(bl);if(artObj)URL.revokeObjectURL(artObj);artObj=u;put(u)}).catch(()=>put(cu))})}
 (function initMedia(){
  if("mediaSession" in navigator){
   const h=[["play",()=>mediaAct("play")],["pause",()=>mediaAct("pause")],["previoustrack",()=>mediaAct("prev")],["nexttrack",()=>mediaAct("next")],["stop",()=>mediaAct("stop")],
