@@ -1215,7 +1215,7 @@ const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3'};
 const SPDEF={
  '1,2':{tag:'arena',name:'Colosseum Isle',size:320,bio:[2],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:94},blurb:'A small island of sand and sea, crowned by one colossal arena. Fight ten rounds for glory, or watch from the stands.'},
  '2,2':{tag:'home',name:'Home Island',size:320,bio:[0],noScatter:1,spawn:{x:0,z:0},blurb:'Your own peaceful creative island. Set the time, the weather and who may visit.'},
- '3,2':{tag:'chaos',name:'Volcanic Chaos',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Five minutes of lava, tornados, tsunamis and earthquakes while you hunt volcanic crystals.'},
+ '3,2':{tag:'chaos',name:'Volcanic Chaos',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis and earthquakes while you hunt volcanic crystals.'},
  '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'}};
 for(const k in SPDEF)ALLKEYS.push(k);
 function islandInfo(gx,gy){let key=gx+','+gy;if(!ALLKEYS.includes(key)){key=HOME;gx=0;gy=0}if(islCache[key])return islCache[key];
@@ -4708,7 +4708,7 @@ X.events={mkTornado,start,stop,active:()=>!!EV.k,remain:()=>Math.max(0,EV.dur-EV
 const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
 const isChaos=()=>!!(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='chaos');
 /* ---------- layout (volcano is 2x the continent volcano: Rr 96 / Hp 108) ---------- */
-const CH={Rc:560,Rr:96,Rs:340,F:40,Pk:108,L0:56,over:0,tgt:0,level:56,DUR:300};
+const CH={Rc:560,Rr:96,Rs:340,F:40,Pk:108,L0:56,over:0,tgt:0,level:56,DUR:360};
 const NR=6,RAD0=CH.Rr*.97,RAD1=318,RA=[];for(let i=0;i<NR;i++)RA.push(.35+i*Math.PI*2/NR+(i%2?.12:-.1));
 const rTh=(i,r)=>RA[i]+.2*Math.sin(r*.021+i*1.9)+.09*Math.sin(r*.049+i*.7);
 const rW=r=>{const t=clamp((r-RAD0)/(RAD1-RAD0),0,1);return(8+7*t)*(1-ss(.88,1,t))};
@@ -4821,10 +4821,10 @@ function dlg(text,opts){document.exitPointerLock&&document.exitPointerLock();
 function talk(){if(CH.state==='run'){dlg('The mountain is awake and so are you. <b>'+fmt(Math.max(0,Math.ceil(CH.DUR-(performance.now()-CH.t0)/1000)))+'</b> left on the clock. Hold on to every second.',[{t:'Back to it.',fn:closeDlg}]);return}
  if(CH.state==='over'){dlg('The ash has claimed you. Your hunt is over.',[{t:'Leave.',fn:closeDlg}]);return}
  const last=CH.last?'<i>Your last hunt: '+CH.last.sc+' crystals'+(CH.last.tier?', '+['','low','medium','high'][CH.last.tier]+' reward.':', no reward.')+'</i><br><br>':'';
- dlg(last+'Welcome to <b>Volcanic Chaos</b>. Two hundred crystals are hidden across this island. A disaster strikes every thirty seconds, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Survive <b>five minutes</b> and your crystals are counted: <b>30 to 49</b> earns a chest of 100 gems, <b>50 to 99</b> a chest of 250 gems, and <b>100 or more</b> a chest of 750 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
+ dlg(last+'Welcome to <b>Volcanic Chaos</b>. Two hundred crystals are hidden across this island. A disaster strikes every thirty seconds, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Survive <b>six minutes</b> and your crystals are counted: <b>30 to 49</b> earns a chest of 100 gems, <b>50 to 99</b> a chest of 250 gems, and <b>100 or more</b> a chest of 750 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
   {t:'Start the hunt.',fn:()=>{closeDlg();startGame()}},{t:'Not yet.',fn:closeDlg}])}
 function startGame(){if(!C||CH.state!=='idle')return;CH.state='run';CH.t0=performance.now();CH.tgt=1;CH.score=0;CH.left=0;CH.sec=0;DIS.count=0;DIS.next=performance.now()/1000+30;MOB.acc=0;FL.t=0;FL.imm=0;bag=[];clearHaz();if(C.fence)C.fence.visible=false;
- try{X.fixSky(.5,'blood')}catch(e){}banner('THE VOLCANO OVERFLOWS','#ff7a3a');toast('The ropes fall away. Survive five minutes.')}
+ try{X.fixSky(.5,'blood')}catch(e){}banner('THE VOLCANO OVERFLOWS','#ff7a3a');toast('The ropes fall away. Survive six minutes.')}
 function endGame(){if(CH.state!=='run')return;CH.state='over';const sec=Math.floor((performance.now()-CH.t0)/1000);CH.sec=sec;CH.left=Math.max(0,CH.DUR-sec);clearHaz();CH.tgt=0;FL.t=0;try{X.fixSky(.5,'clear')}catch(e){}CH.best=Math.max(CH.best||0,sec);hudUpdate();banner('YOU FELL AFTER '+fmt(sec)+' · '+CH.score+' CRYSTALS','#ff9a4a');setTimeout(()=>tHud(false),7000)}
 function resetRun(){if(!C)return;for(const s of C.shards){if(s.got){s.got=0;C.G.add(s.g)}}CH.score=0;CH.over=0;CH.tgt=0;DIS.cur=null;DIS.count=0;DIS.next=0;MOB.acc=0;FL.t=0;FL.imm=0;if(C.fence)C.fence.visible=true;CH.state='idle'}
 function dockSpot(){const n=C&&C.npc;if(!n)return null;const ux=zc?zc.ux:0,uz=zc?zc.uz:1;
