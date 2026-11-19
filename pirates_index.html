@@ -1215,7 +1215,7 @@ const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3'};
 const SPDEF={
  '1,2':{tag:'arena',name:'Colosseum Isle',size:320,bio:[2],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:94},blurb:'A small island of sand and sea, crowned by one colossal arena. Fight ten rounds for glory, or watch from the stands.'},
  '2,2':{tag:'home',name:'Home Island',size:320,bio:[0],noScatter:1,spawn:{x:0,z:0},blurb:'Your own peaceful creative island. Set the time, the weather and who may visit.'},
- '3,2':{tag:'chaos',name:'Volcanic Chaos',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis and earthquakes while you hunt volcanic crystals.'},
+ '3,2':{tag:'chaos',name:'Volcanic Chaos',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis, dragons, lightning and more while you hunt volcanic crystals.'},
  '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'}};
 for(const k in SPDEF)ALLKEYS.push(k);
 function islandInfo(gx,gy){let key=gx+','+gy;if(!ALLKEYS.includes(key)){key=HOME;gx=0;gy=0}if(islCache[key])return islCache[key];
@@ -4382,10 +4382,10 @@ let bar=null;function mkBar(){bar=document.createElement('div');bar.id='dragBar'
 /* ---- damage ---- */
 X.hurtDragon=function(d,dmg,crit){if(d.dying)return;const s=d.s;s.hp=Math.max(0,s.hp-dmg*(crit?1.5:1));d.hit=.14;d.aggro=1;d.aggroT=20;SX.enemyHit&&SX.enemyHit();if(s.hp<=0)die(d)};
 function die(d){d.dying=.001;d.st='dying';d.jaw=1;toast(d.v.n+' is falling!');try{nz({d:2.2,f0:500,f1:60,q:.6,g:.2,type:'lowpass'});tn({f0:120,f1:40,d:2,g:.2,type:'sawtooth',lp:300})}catch(e){}}
-function finish(d){const s=d.s,r=S.isl[CUR.key]||(S.isl[CUR.key]={});(r.dg=r.dg||{})[s.i]=Date.now();
+function finish(d){const s=d.s;if(!s.evt){const r=S.isl[CUR.key]||(S.isl[CUR.key]={});(r.dg=r.dg||{})[s.i]=Date.now()}
  for(let k=0;k<14;k++)addFx(new THREE.Vector3(d.x+(Math.random()-.5)*14,d.y+Math.random()*6,d.z+(Math.random()-.5)*14),k%2?0xff7a22:0xffd166,5+Math.random()*4,.9+Math.random()*.6);
  const i=DR.indexOf(d);if(i>=0)DR.splice(i,1);disposeD(d);
- if(s.arena)clearBoulders();if(!s.arena){const rolls=100+Math.floor(Math.random()*151);giveLoot('Dragon Hoard',rolls)}toast(d.v.n+' has been slain!');save()}
+ if(s.arena)clearBoulders();if(!s.arena&&!s.evt){const rolls=100+Math.floor(Math.random()*151);giveLoot('Dragon Hoard',rolls)}toast(d.v.n+' has been slain!');save()}
 const pbh=window.bulletHit;window.bulletHit=function(p){if(!CAVE.on)for(const d of DR){if(d.dying)continue;for(const h of d.hs){if(p.distanceToSquared(h.p)<h.r*h.r){addFx(p.clone(),0xff9a40,1.6,.25);X.hurtDragon(d,PISTOL_DMG,h.head);return'wood'}}}return pbh(p)};
 X.dragonNear=function(x,y,z,r){const q=new THREE.Vector3(x,y,z);for(const d of DR){if(d.dying)continue;for(const h of d.hs)if(q.distanceToSquared(h.p)<(h.r+r)*(h.r+r))return{d,head:h.head}}return null};
 /* ---- per-frame ---- */
@@ -4400,14 +4400,14 @@ function dropB(i){const b=RB[i];scene.remove(b.m);if(b.mk)scene.remove(b.mk);RB.
 function clearBoulders(){for(let i=RB.length-1;i>=0;i--)dropB(i)}
 function boulderTick(dt){for(let i=RB.length-1;i>=0;i--){const b=RB[i],p=b.m.position;b.t+=dt;b.vy-=BG*dt;p.x+=b.vx*dt;p.y+=b.vy*dt;p.z+=b.vz*dt;b.m.rotation.x+=dt*3;b.m.rotation.z+=dt*2;
   const gy=Math.max(terrH(p.x,p.z),WATER);
-  if(!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<b.sc+.45&&p.y>P.y-b.sc*.6&&p.y<P.y+2+b.sc*.6){hurt(b.dmg,'a dragon boulder');addFx(p.clone(),0xa8895a,2,.4);dropB(i);continue}
-  if(p.y<=gy+b.sc*.5||b.t>7){addFx(new THREE.Vector3(p.x,gy+.6,p.z),0xa8895a,3.2,.5);if(!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<2.4&&P.y<gy+1.6)hurt(b.dmg,'a dragon boulder');X.shake(.25,.25);dropB(i)}}}
+  if(!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<b.sc+.45&&p.y>P.y-b.sc*.6&&p.y<P.y+2+b.sc*.6){hurtD(b.dmg,'a dragon boulder');addFx(p.clone(),0xa8895a,2,.4);dropB(i);continue}
+  if(p.y<=gy+b.sc*.5||b.t>7){addFx(new THREE.Vector3(p.x,gy+.6,p.z),0xa8895a,3.2,.5);if(!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<2.4&&P.y<gy+1.6)hurtD(b.dmg,'a dragon boulder');X.shake(.25,.25);dropB(i)}}}
 function lobBoulder(d){mouth(d);const o=Mo.clone();o.x+=(Math.random()-.5)*3;o.y+=(Math.random()-.5)*2;o.z+=(Math.random()-.5)*3;
  const a=Math.random()*6.283,rr=Math.sqrt(Math.random())*9,tx=P.x+Math.cos(a)*rr,tz=P.z+Math.sin(a)*rr,ty=Math.max(terrH(tx,tz),WATER),tf=1.7+Math.random()*.5;
  addBoulder(o.x,o.y,o.z,(tx-o.x)/tf,(ty-o.y)/tf+.5*BG*tf,(tz-o.z)/tf,1.2+Math.random()*.4,DM(d),false)}
-function rainBoulders(d,dt){const s=d.s;d.rA=(d.rA||0)+dt*5.5;let n=Math.floor(d.rA);d.rA-=n;
- for(;n>0;n--){let x,z;const a=Math.random()*6.283;if(Math.random()<.4){const r=Math.random()*7;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{const r=Math.sqrt(Math.random())*30;x=s.cx+Math.cos(a)*r;z=s.cz+Math.sin(a)*r}
-  const rr=Math.hypot(x-s.cx,z-s.cz);if(rr>31){x=s.cx+(x-s.cx)*31/rr;z=s.cz+(z-s.cz)*31/rr}
+function rainBoulders(d,dt){const s=d.s,cx0=s.evt?P.x:s.cx,cz0=s.evt?P.z:s.cz;d.rA=(d.rA||0)+dt*5.5;let n=Math.floor(d.rA);d.rA-=n;
+ for(;n>0;n--){let x,z;const a=Math.random()*6.283;if(Math.random()<.4){const r=Math.random()*7;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{const r=Math.sqrt(Math.random())*30;x=cx0+Math.cos(a)*r;z=cz0+Math.sin(a)*r}
+  const rr=Math.hypot(x-cx0,z-cz0);if(rr>31){x=cx0+(x-cx0)*31/rr;z=cz0+(z-cz0)*31/rr}
   addBoulder(x,Math.max(terrH(x,z),WATER)+46,z,0,0,0,1.5,DM(d),true)}}
 X.shake=function(mag,dur){shakeMag=Math.max(shakeMag,mag);shakeT=Math.max(shakeT,dur)};
 function ensurePools(){if(FP.a.length||!sparkW)return;const mk=(P2,n,col)=>{for(let i=0;i<n;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkW,color:col,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false}));s.visible=false;s.renderOrder=7;scene.add(s);P2.a.push({s,t:0,life:0,vx:0,vy:0,vz:0,sz:1})}};mk(FP,240,0xffa030);mk(WPp,90,0xffffff)}
@@ -4416,26 +4416,28 @@ function fxTick(dt){for(const p of FP.a){if(p.life<=0)continue;p.t+=dt;if(p.t>=p
  for(const p of WPp.a){if(p.life<=0)continue;p.t+=dt;if(p.t>=p.life){p.life=0;p.s.visible=false;continue}const k=p.t/p.life;p.s.position.x+=p.vx*dt;p.s.position.y+=p.vy*dt;p.s.position.z+=p.vz*dt;p.s.material.opacity=Math.sin(k*Math.PI)*.5;p.s.scale.set(p.sz,p.sz*.4,1)}
  for(let i=waves.length-1;i>=0;i--){const w=waves[i];w.t+=dt;const r=w.t*(w.sp||40);w.m.scale.set(r,r,1);w.m.material.opacity=.75*Math.max(0,1-w.t/(w.life||1.35));
   for(let q=0;q<3;q++){const a=Math.random()*6.283,px=w.x+Math.cos(a)*r,pz=w.z+Math.sin(a)*r;addFx(tv.set(px,terrH(px,pz)+1.2,pz).clone(),0xa8895a,3.5,.55)}
-  const dd=Math.hypot(P.x-w.x,P.z-w.z);if(!w.hit&&Math.abs(dd-r)<5&&!HP.dead&&swimMode===0&&P.y<terrH(P.x,P.z)+1.4){w.hit=true;hurt(w.dmg,'a dragon slam');P.vy=10;P.grounded=false;if(dd>.1){P.vx+=(P.x-w.x)/dd*14;P.vz+=(P.z-w.z)/dd*14}X.shake(1,.7)}
+  const dd=Math.hypot(P.x-w.x,P.z-w.z);if(!w.hit&&Math.abs(dd-r)<5&&!HP.dead&&swimMode===0&&P.y<terrH(P.x,P.z)+1.4){w.hit=true;hurtD(w.dmg,'a dragon slam');P.vy=10;P.grounded=false;if(dd>.1){P.vx+=(P.x-w.x)/dd*14;P.vz+=(P.z-w.z)/dd*14}X.shake(1,.7)}
   if(w.t>(w.life||1.35)){scene.remove(w.m);w.m.material.dispose();waves.splice(i,1)}}}
 function roar(){try{nz({d:1.6,f0:700,f1:120,q:.7,g:.16,type:'lowpass'});tn({f0:150,f1:70,d:1.5,g:.13,type:'sawtooth',lp:500});tn({f0:90,f1:50,d:1.6,g:.1,type:'square',lp:300,delay:.1})}catch(e){}}
 function boom(){try{nz({d:1.3,f0:260,f1:40,q:.7,g:.3,type:'lowpass'});tn({f0:70,f1:28,d:1.1,g:.3,type:'sine'})}catch(e){}}
 function go(d,st){d.st=st;d.stT=0}
-const DM=d=>d.s.hp<d.s.max*.5?4:2;/* arena dragon base damage (doubled in phase 2) */
-const CDV=(s,ph2)=>s.arena?2.5+Math.random()*2:(ph2?3:5)+Math.random()*3;
+const DM=d=>(d.s.arena||d.s.evt)?(d.s.hp<d.s.max*.5?4:2):1;/* arena + event dragon base damage (doubled in phase 2) */
+const hurtD=(dm,by)=>{X.big=1;try{hurt(dm,by)}finally{X.big=0}};
+const CDV=(s,ph2)=>s.arena?2.5+Math.random()*2:s.evt?4+Math.random()*3:(ph2?3:5)+Math.random()*3;
 function arenaRing(d){if(X.rockRing)X.rockRing({x:d.x,z:d.z,gy:X.arena.fl,scale:2,dmg:DM(d)*3/.8})}
 function arenaShockD(d){if(X.arenaShock)X.arenaShock({x:d.x,z:d.z,dmg:DM(d)*2.5});roar();X.shake(.6,.5)}
 function aimBoulder(d,off){mouth(d);const o=Mo.clone(),dx=P.x-o.x,dz=P.z-o.z,dist=Math.hypot(dx,dz)||1,ux=dx/dist,uz=dz/dist,tf=Math.max(.9,Math.min(2.2,dist/30)),lx=P.x+(P.vx||0)*tf*.7-uz*off,lz=P.z+(P.vz||0)*tf*.7+ux*off,ty=Math.max(terrH(lx,lz),WATER);
  addBoulder(o.x,o.y,o.z,(lx-o.x)/tf,(ty-o.y)/tf+.5*BG*tf,(lz-o.z)/tf,1.1,DM(d)*2,false)}
-function slamWave(d,gy,big){if(!ringGeo)ringGeo=new THREE.RingGeometry(.9,1,72).rotateX(-Math.PI/2);const m=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false,depthTest:false,fog:false,blending:THREE.AdditiveBlending}));m.position.set(d.x,gy+.5,d.z);m.renderOrder=9;m.scale.set(.1,.1,1);scene.add(m);waves.push({m,x:d.x,z:d.z,t:0,hit:false,dmg:d.s.arena?DM(d):(d.s.hp<d.s.max*.5?12:9),sp:big?48:40,life:big?2.1:1.35});
+function slamWave(d,gy,big){if(!ringGeo)ringGeo=new THREE.RingGeometry(.9,1,72).rotateX(-Math.PI/2);const m=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false,depthTest:false,fog:false,blending:THREE.AdditiveBlending}));m.position.set(d.x,gy+.5,d.z);m.renderOrder=9;m.scale.set(.1,.1,1);scene.add(m);waves.push({m,x:d.x,z:d.z,t:0,hit:false,dmg:(d.s.arena||d.s.evt)?DM(d):(d.s.hp<d.s.max*.5?12:9),sp:big?48:40,life:big?2.1:1.35});
  for(let k=0;k<18;k++)addFx(new THREE.Vector3(d.x+(Math.random()-.5)*10,gy+1+Math.random()*3,d.z+(Math.random()-.5)*10),0xb89a6a,6+Math.random()*4,.9);
  const dp=Math.hypot(P.x-d.x,P.z-d.z);X.shake(Math.max(0,1.3-dp/150),1.0);boom()}
 function mouth(d){const h=d.U.head;h.getWorldPosition(Mo);h.getWorldDirection(Dr);Mo.addScaledVector(Dr,3.0);Mo.y-=.15}
 function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=(ph2&&!s.arena)?1.25:1,sp=18*k2;let flapK=1,hovered=false;
  const gdx=P.x-d.x,gdz=P.z-d.z,dd=Math.hypot(gdx,gdz);d.stT+=dt;if(d.aggroT>0)d.aggroT-=dt;
  const aggro=d.st!=='dying'&&(dd<290||d.aggroT>0)&&dd<560&&!HP.dead;
- if(ph2&&!d.p2&&d.st!=='dying'){d.p2=1;toast(d.v.n+' is enraged!');roar()}
+ if(ph2&&!d.p2&&d.st!=='dying'){d.p2=1;if(!s.evt)toast(d.v.n+' is enraged!');roar()}
  const lx=Math.atan2(gdx,gdz),away=Math.atan2(-gdx,-gdz);
+ if(s.evt&&aggro&&d.st==='circle'){const kk=Math.min(1,dt*.12);s.cx+=(P.x-s.cx)*kk;s.cz+=(P.z-s.cz)*kk}
  /* ---- decide next attack ---- */
  if(d.st==='circle'){d.cd-=dt;if(aggro&&d.cd<=0){const r=Math.random();
   if(s.arena){if(r<.2){go(d,'tele');roar();d.fixT=new THREE.Vector3(P.x,P.y+1.1,P.z);toast('Fire incoming — move out of the way!')}
@@ -4447,6 +4449,14 @@ function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=(ph2&&!s.arena)?1.2
    else if(r<.92){go(d,'wind');toast('The dragon beats its wings — brace yourself!')}
    else if(r<.96)go(d,'climb');
    else{go(d,'stomp');roar();toast('The dragon rears up to stomp!')}}
+  else if(s.evt){const nr=dd<250;
+   if(r<.26){go(d,'tele');if(nr)roar();d.fixT=new THREE.Vector3(P.x,P.y+1.1,P.z)}
+   else if(r<.48){go(d,'volley');d.vN=0;d.vA=0;if(nr)roar()}
+   else if(r<.64){go(d,'rain');d.rA=0;if(nr)roar()}
+   else if(r<.84){go(d,'throw');d.fN=0;if(nr)roar()}
+   else if(r<.92){go(d,'wind')}
+   else if(r<.96)go(d,'climb');
+   else{go(d,'stomp');if(nr)roar()}}
   else if(r<.4){go(d,'tele');roar()}else if(r<.75)go(d,'climb');else{go(d,'wind');toast('The dragon beats its wings — brace yourself!')}}}
  let altT,spd=0;const oyaw=d.yaw||0;
  const hover=(tx,tz,v,fy,turn)=>{hovered=true;const ex=tx-d.x,ez=tz-d.z,ed=Math.hypot(ex,ez),vv=Math.min(v,ed*1.5);if(ed>.01){d.x+=ex/ed*vv*dt;d.z+=ez/ed*vv*dt}spd=vv;let da=fy-d.yaw;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;d.yaw+=Math.max(-turn*dt,Math.min(turn*dt,da))};
@@ -4466,8 +4476,8 @@ function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=(ph2&&!s.arena)?1.2
  else if(d.st==='shock'){hover(s.cx,s.cz,40,lx,2.4);altT=gY+8;const nw=ph2?3:2;
   if(d.fN<nw&&d.stT>1+d.fN){d.fN++;arenaShockD(d)}
   if(d.stT>1+nw+.4){go(d,'circle');d.cd=CDV(s,ph2)}}
- else if(d.st==='rain'){hover(s.cx,s.cz,30,lx,1.5);altT=gY+50;if(d.stT>1)rainBoulders(d,dt);if(d.stT>11.2){go(d,'circle');d.cd=CDV(s,ph2)}}
- else if(d.st==='stomp'){hover(s.cx,s.cz,48,lx,2.5);const gl=Math.max(terrH(s.cx,s.cz),WATER)+3.5;altT=d.stT<1.4?gl+30:gl;
+ else if(d.st==='rain'){hover(s.evt?P.x:s.cx,s.evt?P.z:s.cz,30,lx,1.5);altT=gY+50;if(d.stT>1)rainBoulders(d,dt);if(d.stT>(s.evt?7:11.2)){go(d,'circle');d.cd=CDV(s,ph2)}}
+ else if(d.st==='stomp'){const sx0=s.evt?P.x:s.cx,sz0=s.evt?P.z:s.cz;hover(sx0,sz0,48,lx,2.5);const gl=Math.max(terrH(sx0,sz0),WATER)+3.5;altT=d.stT<1.4?gl+30:gl;
   if(d.stT>1.4&&(d.y<gl+4||d.stT>2.8)){d.y=gl;slamWave(d,gl-3.5,true);go(d,'slam')}}
  else if(d.st==='climb'){hover(P.x+Math.sin(away+3.14)*28*0+Math.sin(Math.atan2(d.x-P.x,d.z-P.z))*30,P.z+Math.cos(Math.atan2(d.x-P.x,d.z-P.z))*30,32,lx,2);altT=P.y+52;if(d.stT>1.6){d.tgt={x:P.x+(P.vx||0)*.35,z:P.z+(P.vz||0)*.35};go(d,'dive');roar()}}
  else if(d.st==='dive'){const tx=d.tgt.x,tz=d.tgt.z,dh=Math.hypot(tx-d.x,tz-d.z);hover(tx,tz,54*k2,Math.atan2(tx-d.x,tz-d.z),4);altT=Math.max(terrH(tx,tz),WATER)+3.5;
@@ -4497,11 +4507,11 @@ function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=(ph2&&!s.arena)?1.2
  add(U.head,2.7,true);add(U.body,5.6);add(U.neck[3],2.4);add(U.tail[2],2.9);add(U.tail[6],2.2);add(U.wings[0].hand,4.6);add(U.wings[1].hand,4.6);
  /* ---- attack effects ---- */
  ensurePools();
- if(breathe){mouth(d);(s.arena&&d.fixT?tv.copy(d.fixT):tv.set(P.x,P.y+1.1,P.z)).sub(Mo);const dist=tv.length();if(dist>.1)tv.divideScalar(dist);d.aim.lerp(tv,Math.min(1,dt*(d.st==='tele'?4:(ph2?2.4:1.7)))).normalize();
+ if(breathe){mouth(d);((s.arena||s.evt)&&d.fixT?tv.copy(d.fixT):tv.set(P.x,P.y+1.1,P.z)).sub(Mo);const dist=tv.length();if(dist>.1)tv.divideScalar(dist);d.aim.lerp(tv,Math.min(1,dt*(d.st==='tele'?4:(ph2?2.4:1.7)))).normalize();
   if(d.st==='tele'&&Math.random()<dt*30)emit(FP,Mo.x,Mo.y,Mo.z,d.aim.x*8+(Math.random()-.5)*4,d.aim.y*8+Math.random()*3,d.aim.z*8+(Math.random()-.5)*4,.6,1.2);
   if(d.st==='fire'){const n=Math.ceil(dt*330);for(let q=0;q<n;q++){const sp2=48+Math.random()*14,o=Math.random()*1.4;emit(FP,Mo.x+d.aim.x*o,Mo.y+d.aim.y*o,Mo.z+d.aim.z*o,d.aim.x*sp2+(Math.random()-.5)*7,d.aim.y*sp2+(Math.random()-.5)*7,d.aim.z*sp2+(Math.random()-.5)*7,.85+Math.random()*.4,2.2+Math.random()*1.6)}
    d.fireCd-=dt;d.fireSnd-=dt;if(d.fireSnd<=0){d.fireSnd=.28;try{nz({d:.5,f0:1100,f1:320,q:.5,g:.09,type:'bandpass'})}catch(e){}}
-   tv.set(P.x,P.y+1.1,P.z).sub(Mo);const sd=tv.dot(d.aim);if(sd>2&&sd<80&&!HP.dead){const perp=Math.sqrt(Math.max(0,tv.lengthSq()-sd*sd));if(perp<2.4+sd*.13&&d.fireCd<=0){d.fireCd=.32;hurt(s.arena?DM(d):(ph2?4:3),'dragon fire');burnT=2.2;addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff7a22,2.4,.4)}}}}
+   tv.set(P.x,P.y+1.1,P.z).sub(Mo);const sd=tv.dot(d.aim);if(sd>2&&sd<80&&!HP.dead){const perp=Math.sqrt(Math.max(0,tv.lengthSq()-sd*sd));if(perp<2.4+sd*.13&&d.fireCd<=0){d.fireCd=.32;hurtD((s.arena||s.evt)?DM(d):(ph2?4:3),'dragon fire');burnT=2.2;addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff7a22,2.4,.4)}}}}
  else if(d.st==='wind'&&dd>.1){const ux=gdx/dd,uz=gdz/dd;
   if(dd<150&&!HP.dead){const str=(8+7*(1-dd/150))*k2,nx=P.x+ux*str*dt,nz2=P.z+uz*str*dt;if(Math.abs(nx)<HALF-3&&Math.abs(nz2)<HALF-3&&terrH(nx,nz2)<P.y+1.1){P.x=nx;P.z=nz2}}
   const n=Math.ceil(dt*200);for(let q=0;q<n;q++){const lat=(Math.random()-.5)*60,hgt=(Math.random()-.3)*22;emit(WPp,P.x-ux*45-uz*lat,P.y+hgt+2,P.z-uz*45+ux*lat,ux*85,(Math.random()-.5)*3,uz*85,.75,4+Math.random()*3)}
@@ -4712,7 +4722,7 @@ function tick(dt){
    if(d<24){const f=(1-d/24)*7*dt;P.x+=dx/d*f;P.z+=dz/d*f}
    EV.tm-=dt;if(d<9&&EV.tm<=0){EV.tm=.7;hurt(dmg(.1),'a tornado');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,2,.4)}}}
  else if(k==='tsunami'){EV.s+=52*dt;const g=EV.g;g.position.set(EV.dx*EV.s,0,EV.dz*EV.s);
-  if(!EV.hit&&running&&!HP.dead&&!CAVE.on){const ds=P.x*EV.dx+P.z*EV.dz;if(ds<EV.s+4&&ds>EV.s-64&&P.y<WATER+20){EV.hit=1;if(EV.chaos)BH(5,'the tsunami');else hurt(dmg(.3),'the tsunami');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcff6ff,5,.6);try{SX.splash&&SX.splash()}catch(e){}P.x+=EV.dx*10;P.z+=EV.dz*10;toast('The wave slams into you. Higher ground next time!')}}}
+  if(!EV.hit&&running&&!HP.dead&&!CAVE.on){const ds=P.x*EV.dx+P.z*EV.dz;if(ds<EV.s+4&&ds>EV.s-64&&P.y<WATER+20){EV.hit=1;if(EV.chaos)BH(10,'the tsunami');else hurt(dmg(.3),'the tsunami');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcff6ff,5,.6);try{SX.splash&&SX.splash()}catch(e){}P.x+=EV.dx*10;P.z+=EV.dz*10;toast('The wave slams into you. Higher ground next time!')}}}
  else{const I=fade;
   EV.tm-=dt;if(EV.tm<=0&&I>.5&&running&&!CAVE.on){EV.tm=EV.chaos?.22:.45;if(!rockG){rockG=new THREE.DodecahedronGeometry(.7,0);rockM=new THREE.MeshLambertMaterial({color:0x5a4a40,flatShading:true})}
    for(let q=0,nq=EV.chaos?2:1;q<nq;q++){const r=Math.random()<(EV.chaos?.35:.5)?(EV.chaos?5:4):(EV.chaos?26:14),a=Math.random()*6.283,x=P.x+Math.cos(a)*Math.random()*r,z=P.z+Math.sin(a)*Math.random()*r,h=terrH(x,z),m=new THREE.Mesh(rockG,rockM);if(EV.chaos)m.scale.setScalar(1.9);m.position.set(x,h+40,z);scene.add(m);EV.rocks.push({m,x,z,h,y:h+40,vy:0})}}
@@ -4830,7 +4840,7 @@ function tHud(show){if(!hud){hud=document.createElement('div');hud.style.cssText
 function hudSet(e,t,c){if(e.textContent!==t)e.textContent=t;if(c&&e.style.color!==c)e.style.color=c}
 function hudUpdate(){if(!hud)tHud(false);const e=hud._e,now=performance.now()/1000,fin=CH.state!=='run',el=fin?(CH.sec||0):(performance.now()-CH.t0)/1000,left=fin?(CH.left||0):Math.max(0,CH.DUR-el),fs=x=>fmt(Math.max(0,Math.ceil(x)));
  hudSet(e.sv,'TIME LEFT  '+fs(left),!fin&&left<=60?'#ff6a44':'#ffb36b');
- hudSet(e.sc,'CRYSTALS  '+CH.score+' / '+CH.total,CH.score>=100?'#fff0a0':CH.score>=50?'#ffe29a':CH.score>=30?'#ffd27a':'#ffb36b');
+ hudSet(e.sc,'CRYSTALS  '+CH.score+' / '+CH.total,CH.score>=55?'#fff0a0':CH.score>=40?'#ffe29a':CH.score>=30?'#ffd27a':'#ffb36b');
  hudSet(e.dn,fin?'DISASTERS OVER':DIS.cur?DIS.cur.n+(DIS.end-now>0?'  '+fs(DIS.end-now):''):'NEXT DISASTER  '+(DIS.next?fs(DIS.next-now):'--:--'),DIS.cur&&!fin?'#ff6a44':'#ffb36b');
  hudSet(e.dt,'DISASTERS  '+DIS.count+'    TORNADOES  '+TOR.length);
  hudSet(e.ms,'MONSTER SPAWNS  x'+Math.pow(2,Math.floor(el/60)),'#ffb36b')}
@@ -4844,18 +4854,18 @@ function dlg(text,opts){document.exitPointerLock&&document.exitPointerLock();
 function talk(){if(CH.state==='run'){dlg('The mountain is awake and so are you. <b>'+fmt(Math.max(0,Math.ceil(CH.DUR-(performance.now()-CH.t0)/1000)))+'</b> left on the clock. Hold on to every second.',[{t:'Back to it.',fn:closeDlg}]);return}
  if(CH.state==='over'){dlg('The ash has claimed you. Your hunt is over.',[{t:'Leave.',fn:closeDlg}]);return}
  const last=CH.last?'<i>Your last hunt: '+CH.last.sc+' crystals'+(CH.last.tier?', '+['','low','medium','high'][CH.last.tier]+' reward.':', no reward.')+'</i><br><br>':'';
- dlg(last+'Welcome to <b>Volcanic Chaos</b>. Two hundred crystals are hidden across this island. A disaster strikes every thirty seconds, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Survive <b>six minutes</b> and your crystals are counted: <b>30 to 49</b> earns a chest of 100 gems, <b>50 to 99</b> a chest of 250 gems, and <b>100 or more</b> a chest of 750 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
+ dlg(last+'Welcome to <b>Volcanic Chaos</b>. Three hundred crystals are hidden across this island, some of them high up on the volcano. A new disaster strikes every fifteen seconds, whether or not the last one has ended, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Survive <b>six minutes</b> and your crystals are counted: <b>30 to 39</b> crystals earns a chest of 200 gems, <b>40 to 54</b> a chest of 500 gems, and <b>55 or more</b> a chest of 1500 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
   {t:'Start the hunt.',fn:()=>{closeDlg();startGame()}},{t:'Not yet.',fn:closeDlg}])}
-function startGame(){if(!C||CH.state!=='idle')return;CH.state='run';CH.t0=performance.now();CH.tgt=1;CH.score=0;CH.left=0;CH.sec=0;DIS.count=0;DIS.next=performance.now()/1000+30;MOB.acc=0;FL.t=0;FL.imm=0;bag=[];clearHaz();if(C.fence)C.fence.visible=false;
+function startGame(){if(!C||CH.state!=='idle')return;CH.state='run';CH.t0=performance.now();CH.tgt=1;CH.score=0;CH.left=0;CH.sec=0;DIS.count=0;DIS.next=performance.now()/1000+15;MOB.acc=0;FL.t=0;FL.imm=0;bag=[];clearHaz();if(C.fence)C.fence.visible=false;
  try{X.fixSky(.5,'blood')}catch(e){}banner('THE VOLCANO OVERFLOWS','#ff7a3a');toast('The ropes fall away. Survive six minutes.')}
 function endGame(){if(CH.state!=='run')return;CH.state='over';const sec=Math.floor((performance.now()-CH.t0)/1000);CH.sec=sec;CH.left=Math.max(0,CH.DUR-sec);clearHaz();CH.tgt=0;FL.t=0;try{X.fixSky(.5,'clear')}catch(e){}CH.best=Math.max(CH.best||0,sec);hudUpdate();banner('YOU FELL AFTER '+fmt(sec)+' · '+CH.score+' CRYSTALS','#ff9a4a');setTimeout(()=>tHud(false),7000)}
 function resetRun(){if(!C)return;for(const s of C.shards){if(s.got){s.got=0;C.G.add(s.g)}}CH.score=0;CH.over=0;CH.tgt=0;DIS.cur=null;DIS.count=0;DIS.next=0;MOB.acc=0;FL.t=0;FL.imm=0;if(C.fence)C.fence.visible=true;CH.state='idle'}
 function dockSpot(){const n=C&&C.npc;if(!n)return null;const ux=zc?zc.ux:0,uz=zc?zc.uz:1;
  for(const q of[[3.4,0],[3.4,1.8],[3.4,-1.8],[2.6,3],[2.6,-3],[1.5,3.4]]){const x=n.x+ux*q[0]-uz*q[1],z=n.z+uz*q[0]+ux*q[1];if(terrH(x,z)>WATER+.9)return{x,z}}
  return{x:n.x+ux*2.6,z:n.z+uz*2.6}}
-function claim(sc){const tier=sc>=100?3:sc>=50?2:sc>=30?1:0;CH.last={sc,tier};
+function claim(sc){const tier=sc>=55?3:sc>=40?2:sc>=30?1:0;CH.last={sc,tier};
  if(!tier){banner('TIME! '+sc+' CRYSTALS','#ff9a4a');toast('You survived, but a chest needs at least 30 crystals.');return}
- const n=[0,100,250,750][tier],r=rollChances(n,false);applyLoot(r.gained,[]);
+ const n=[0,200,500,1500][tier],r=rollChances(n,false);applyLoot(r.gained,[]);
  showLoot(['','Low','Medium','High'][tier]+' Reward: chest of '+n+' gems',r.gained,[]);save();updateHeader(true);try{if(invOpen)renderInv()}catch(e){}
  banner(['','LOW','MEDIUM','HIGH'][tier]+' REWARD · '+sc+' CRYSTALS',['','#ffb36b','#ffd27a','#fff0a0'][tier])}
 async function winGame(){if(CH.state!=='run')return;CH.state='won';const sc=CH.score;CH.sec=CH.DUR;CH.left=0;clearHaz();CH.tgt=0;FL.t=0;try{X.fixSky(.5,'clear')}catch(e){}hudUpdate();
@@ -4890,11 +4900,12 @@ function dockTick(dt){const t=C.t;
 window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||!running||!locked||invOpen||busy||HP.dead||!C||!isChaos())return;if(C.npc&&Math.hypot(P.x-C.npc.x,P.z-C.npc.z)<4.8){e.stopImmediatePropagation();e.preventDefault();talk()}},true);
 const ol=window.loadIsland;window.loadIsland=function(info){C=null;CH.state='idle';try{resetArrays()}catch(e){}tHud(false);const r=ol.apply(this,arguments);if(info&&info.special&&info.special.tag==='chaos')try{build()}catch(e){console.error('[chaos build]',e)}return r};
 /* ---------- lava crystals: 100 glowing shards spread over the whole island, collected by touching ---------- */
-CH.score=0;CH.total=200;
+CH.score=0;CH.total=300;
 function buildShards(){const G=C.G,rnd=mulberry(0x51a9d5),pts=[],R0=CH.Rr*1.12,R1=CH.Rc-60;C.shards=[];
- for(let n=0;n<CH.total;n++){let best=null,bd=-1;
-  for(let k=0;k<120;k++){const a=rnd()*Math.PI*2,r=Math.sqrt(R0*R0+rnd()*(R1*R1-R0*R0)),x=Math.cos(a)*r,z=Math.sin(a)*r,h=terrH(x,z);
-   if(h<1.8||h>40||riverAt(x,z)<3.2||(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+8))continue;
+ const NV=Math.round(CH.total*.3);
+ for(let n=0;n<CH.total;n++){let best=null,bd=-1;const hi=n<NV;
+  for(let k=0;k<(hi?260:120);k++){const a=rnd()*Math.PI*2,r=hi?CH.Rr*(1.06+rnd()*1.5):Math.sqrt(R0*R0+rnd()*(R1*R1-R0*R0)),x=Math.cos(a)*r,z=Math.sin(a)*r,h=terrH(x,z);
+   if(hi){if(h<38||h>CH.Pk-3||riverAt(x,z)<3.2)continue}else if(h<1.8||h>40||riverAt(x,z)<3.2||(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+8))continue;
    let md=1e8;for(const p of pts)md=Math.min(md,Math.hypot(p.x-x,p.z-z));if(md>bd){bd=md;best={x,z,h}}}
   if(best)pts.push(best)}
  const core=new THREE.OctahedronGeometry(.5,0),shell=new THREE.OctahedronGeometry(.72,0);DISP.push(core,shell);
@@ -4914,26 +4925,30 @@ function slowMobs(){const a=X.NM;if(!a)return;for(const e of a){if(e.chs)continu
    tornado (permanent, wanders, pulls + slings you) · earthquake · tsunami · meteor shower · the floor is lava */
 const TOR=[],MET=[],LP=[],FL={t:0,d:1,vx:0,vz:0,imm:0},MOB={acc:0};let lpLast=null,bag=[];
 const BH=(d,by)=>{X.big=1;try{hurt(d,by)}finally{X.big=0}};
-const DKINDS=['tornado','quake','tsunami','meteor','lavafloor'],DNAME={tornado:'TORNADO',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA'};
+const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA'};
 function nextKind(){if(!bag.length){bag=DKINDS.slice();for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=bag[i];bag[i]=bag[j];bag[j]=t}}return bag.pop()}
 function resetArrays(){TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
 function dispose(o){o.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose()}})}
-function clearHaz(){try{X.events.stop(true)}catch(e){}
+function clearHaz(){try{evtClear()}catch(e){}try{X.events.stop(true)}catch(e){}
  for(const t of TOR){if(t.g.parent)t.g.parent.remove(t.g);try{dispose(t.g)}catch(e){}}TOR.length=0;
  for(const q of MET){if(q.m.parent)q.m.parent.remove(q.m);if(q.k&&q.k.parent)q.k.parent.remove(q.k)}MET.length=0;
  for(const p of LP)if(p.g.parent)p.g.parent.remove(p.g);LP.length=0;lpLast=null;
  if(C){C.met=null;C.lf=null}DIS.cur=null}
-function startDis(k,now){const E=X.events;
- if(k==='tornado'){if(!torSpawn()){DIS.next=now+3;return}DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('TORNADO','#cfc8c0');toast('A tornado touches down somewhere on the island. It will never leave.')}
- else if(k==='quake'||k==='tsunami'){if(!E.start(k,{chaos:1})){DIS.next=now+3;return}DIS.cur={k,n:DNAME[k]};DIS.end=now+E.remain()}
+function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
+ if(k==='tornado'){let nt=0;for(let q=0;q<3;q++)if(torSpawn())nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('3 TORNADOS','#cfc8c0');toast('Three tornados touch down across the island. They will never leave.')}
+ else if(k==='quake'||k==='tsunami'){if(!E.start(k,{chaos:1}))return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+E.remain()}
  else if(k==='meteor'){C.met={t:0,dur:24,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+24;banner('METEOR SHOWER','#ff8a4a');toast('Boulders are raining from the sky. Watch the red rings on the ground!')}
+ else if(k==='dragons'){if(C.ev.dr)return false;evDragons();DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.dragonT;banner('DRAGONS','#ff7a3a');toast('Ten dragons circle the island! Run far enough and they lose interest.')}
+ else if(k==='lavarise'){if(C.ev.lr)return false;C.ev.lr={t:0,b:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.lavaT;banner('LAVA RISE','#ff4a1a');toast('The ocean has turned to lava and it is rising! Climb the volcano!')}
+ else if(k==='lightning'){if(C.ev.lg)return false;C.ev.lg={t:0,acc:0,cd:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.lightT;banner('LIGHTNING STORM','#cfe0ff');toast('Lightning is striking all over the island!')}
+ else if(k==='arachno'){if(C.ev.ar)return false;C.ev.ar={t:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.spiderT;banner('ARACHNOPHOBIA','#9aff6a');toast('The spiders are huge, fast, and they spit more spiders!')}
  else{C.lf={t:0,dur:22};lpLast=null;DIS.cur={k,n:DNAME[k]};DIS.end=now+22;banner('THE FLOOR IS LAVA','#ff5a2a');toast('Keep moving! Lava follows your steps, and standing still burns.')}
- DIS.count++}
+ DIS.count++;return true}
 function endDis(){const E=X.events;if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')&&E.active())E.stop();if(DIS.cur.k==='meteor')C.met=null;if(DIS.cur.k==='lavafloor')C.lf=null}DIS.cur=null}
 function disTick(dt){if(!C||!isChaos())return;const E=X.events,now=performance.now()/1000;
  if(CH.state==='run'&&!HP.dead){
   if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')){if(E.active())DIS.end=now+E.remain();else endDis()}else if(now>=DIS.end)endDis()}
-  if(DIS.next&&now>=DIS.next){if(DIS.cur)endDis();DIS.next=now+30;startDis(nextKind(),now)}}
+  if(DIS.next&&now>=DIS.next){DIS.next=now+15;for(let q=0,ok=false;q<14&&!ok;q++)ok=startDis(nextKind(),now)}}
  else if(DIS.cur)endDis()}
 /* ---------- permanent tornados: random spots far from you, never leave, slowly drift ---------- */
 function torPick(far){for(let k=0;k<260;k++){const x=(Math.random()*2-1)*(HALF-120),z=(Math.random()*2-1)*(HALF-120),r=Math.hypot(x,z);
@@ -4979,7 +4994,7 @@ function metSpawn(){metInit();if(MET.length>160)return;let x=0,z=0,h=0,ok=false;
  const k=new THREE.Mesh(C.metMk,C.metMM);k.position.set(x,h+.18,z);k.scale.setScalar(s*.9);C.G.add(m);C.G.add(k);
  MET.push({m,k,sp,x,z,h,s,T,t:0,sx:x+ox,sy:h+H0,sz:z+oz,rest:0,rt:0})}
 function metTick(dt){if(!C)return;
- if(C.met){C.met.t+=dt;C.met.acc+=dt*8;let n=0;while(C.met.acc>=1&&n++<6){C.met.acc-=1;metSpawn()}}
+ if(C.met){C.met.t+=dt;C.met.acc+=dt*8;let n=0;while(C.met.acc>=1&&n++<6){C.met.acc-=1;metSpawn()}if(C.met.t>=C.met.dur)C.met=null}
  if(C.mSnd>0)C.mSnd-=dt;
  for(let i=MET.length-1;i>=0;i--){const q=MET[i];
   if(q.rest){q.rt-=dt;if(q.rt<=0){C.G.remove(q.m);MET.splice(i,1)}continue}
@@ -4997,11 +5012,52 @@ function lpDrop(x,z){lpInit();const h=terrH(x,z);if(h<WATER+.3)return;const g=ne
 function lavaTick(dt){if(!C)return;const LIFE=11;
  for(let i=LP.length-1;i>=0;i--){const p=LP[i];p.t+=dt;if(p.t>LIFE){C.G.remove(p.g);LP.splice(i,1);continue}
   const k=p.t<.35?p.t/.35:(p.t>LIFE-1.5?(LIFE-p.t)/1.5:1);p.g.scale.setScalar(Math.max(.01,k)*(1+Math.sin(p.t*5+p.x)*.04))}
- if(C.lf){C.lf.t+=dt}
+ if(C.lf){C.lf.t+=dt;if(C.lf.t>=C.lf.dur)C.lf=null}
  if(!running||HP.dead||CAVE.on||CH.state!=='run')return;
  if(C.lf){const gh=terrH(P.x,P.z);if(gh>WATER+.3&&P.y<gh+2.5&&(!lpLast||Math.hypot(P.x-lpLast.x,P.z-lpLast.z)>1.15)){lpDrop(P.x,P.z);lpLast={x:P.x,z:P.z}}}
  if(!LP.length)return;lpInit();C.lb-=dt;
  if(P.y<terrH(P.x,P.z)+1.5&&C.lb<=0){for(const p of LP){if(p.t>1.5&&Math.hypot(P.x-p.x,P.z-p.z)<1.5){C.lb=.5;BH(3,'molten ground');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4);break}}}}
+/* ---------- extra disasters: dragons, lava rise, lightning storm, arachnophobia (each runs on its own timer) ---------- */
+const EVC={dragons:10,dragonHp:450,dragonT:40,lavaT:30,lavaUp:100,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48};
+function evDragons(){const E=C.ev;if(E.dr)return;E.dr={t:0};
+ for(let k=0;k<EVC.dragons;k++){const a=k/EVC.dragons*6.283+Math.random()*.5,r=CH.Rr*1.5+Math.random()*(CH.Rc-CH.Rr*1.5-150),cx=Math.cos(a)*r,cz=Math.sin(a)*r;
+  try{const d=X.dragonSpawn({i:100+k,cx,cz,R:60+Math.random()*50,alt:44+Math.random()*16,dir:k%2?1:-1,v:Math.floor(Math.random()*6),hp:EVC.dragonHp,max:EVC.dragonHp,evt:1});d.cd=3+Math.random()*4}catch(e){console.error('[chaos dragons]',e)}}}
+function drEnd(){if(!C||!C.ev||!C.ev.dr)return;try{for(const d of(X.dragons||[]))addFx(new THREE.Vector3(d.x,d.y,d.z),0xff7a22,7,.9)}catch(e){}try{X.dragonClear()}catch(e){}C.ev.dr=null}
+function lgTick(dt){const L=C.ev.lg;L.t+=dt;L.acc+=dt/EVC.lightEvery;L.cd-=dt;let n=0;
+ while(L.acc>=1&&n++<4){L.acc-=1;let x=0,z=0,ok=false;
+  for(let k=0;k<8&&!ok;k++){const a=Math.random()*6.283;if(Math.random()<.3){const r=3+Math.random()*30;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{const r=Math.sqrt(Math.random())*(CH.Rc-50);x=Math.cos(a)*r;z=Math.sin(a)*r}
+   ok=terrH(x,z)>WATER+.3&&Math.hypot(x,z)<CH.Rc-30}
+  if(!ok)continue;
+  try{if(X.wx&&X.wx.strikeAt)X.wx.strikeAt(x,z);else addFx(new THREE.Vector3(x,terrH(x,z)+1,z),0xeaf2ff,8,.3)}catch(e){}
+  if(running&&!HP.dead&&!CAVE.on&&L.cd<=0&&Math.hypot(P.x-x,P.z-z)<3){L.cd=.5;BH(5,'lightning');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xeaf2ff,5,.4);try{X.shake&&X.shake(.8,.4)}catch(e){}}}
+ if(L.t>=EVC.lightT)C.ev.lg=null}
+function ocInit(){if(C.oc)return;C.ocTex=lavaTexC(40);const g=new THREE.PlaneGeometry(4200,4200).rotateX(-Math.PI/2);DISP.push(g);
+ C.oc=new THREE.Mesh(g,window.__lavaMat(new THREE.MeshBasicMaterial({map:C.ocTex,side:THREE.DoubleSide})));C.oc.renderOrder=1;C.oc.frustumCulled=false;C.oc.visible=false;C.G.add(C.oc)}
+function lrTick(dt){const L=C.ev.lr;L.t+=dt;ocInit();
+ const f=L.t<EVC.lavaT?L.t/EVC.lavaT:Math.max(0,1-(L.t-EVC.lavaT)/EVC.lavaDown),y=WATER+EVC.lavaUp*f;
+ if(L.t>=EVC.lavaT+EVC.lavaDown){C.oc.visible=false;C.ev.lr=null;return}
+ C.oc.visible=true;C.oc.position.y=y;C.ocTex.offset.set(C.t*.01,C.t*.007);try{water.visible=false}catch(e){}
+ if(running&&!HP.dead&&!CAVE.on){L.b-=dt;if(L.b<=0&&terrH(P.x,P.z)<y-.2&&P.y<y+.5){L.b=.5;hurt(1,'rising lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}}
+function arApply(e){if(e.ar)return;if(!e.chs){e.chs=1;e.T=Object.assign({},e.T,{spd:e.T.spd*.5})}e.ar=1;e.T0=e.T;e.scl0=e.scl||1;e.T=Object.assign({},e.T,{h:e.T.h*EVC.spiderSize,spd:e.T.spd*EVC.spiderSpeed});e.scl=e.scl0*EVC.spiderSize;e.g.scale.setScalar(e.scl)}
+function arSpawn(x,z,spit){const B=X.TY&&X.TY.spider;if(!B||terrH(x,z)<WATER+.5)return null;const g=B.mk();g.position.set(x,terrH(x,z),z);scene.add(g);
+ const e={g,ty:'spider',T:B,x,z,hp:B.hp,max:B.hp,cd:0,ph:Math.random()*6,a:0,hit:0,sh:2,face:0,spit:spit?1:0,mine:1};X.NM.push(e);return e}
+function arTick(dt){const A=C.ev.ar;A.t+=dt;
+ if(!A.init){A.init=1;for(let k=0;k<6;k++){const a=Math.random()*6.283,d=22+Math.random()*14;arSpawn(P.x+Math.cos(a)*d,P.z+Math.sin(a)*d,0)}}
+ let sp=0;for(const e of X.NM)if(e.spit)sp++;
+ for(const e of X.NM.slice()){if(e.ty!=='spider')continue;arApply(e);
+  e.spT=(e.spT==null?Math.random()*EVC.spitEvery:e.spT)-dt;
+  if(e.spT<=0){e.spT=EVC.spitEvery;const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1;
+   if(d<50&&sp<EVC.spitCap){for(let k=0;k<EVC.spitN;k++){const sc=(e.scl||1)*1.8,ox=e.x+dx/d*sc+(Math.random()-.5)*3,oz=e.z+dz/d*sc+(Math.random()-.5)*3;if(sp<EVC.spitCap&&arSpawn(ox,oz,1))sp++}
+    addFx(new THREE.Vector3(e.x+dx/d*(e.scl||1),e.g.position.y+(e.scl||1)*.6,e.z+dz/d*(e.scl||1)),0x9aff6a,2.4,.4)}}}
+ if(A.t>=EVC.spiderT)arEnd()}
+function arEnd(){if(!C||!C.ev||!C.ev.ar)return;C.ev.ar=null;
+ for(const e of X.NM.slice()){if(e.spit||e.mine){const i=X.NM.indexOf(e);if(i>=0)X.NM.splice(i,1);scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()});addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0x9aff6a,2,.5);continue}
+  if(e.ar){e.T=e.T0;e.scl=e.scl0;e.g.scale.setScalar(e.scl0);e.ar=0;e.spT=null}}}
+function evtClear(){if(!C||!C.ev)return;drEnd();arEnd();if(C.oc)C.oc.visible=false;C.ev={}}
+function evtTick(dt){if(!C)return;const E=C.ev||(C.ev={});
+ if(CH.state!=='run'||HP.dead){if(E.dr||E.ar||E.lr||E.lg)evtClear();return}
+ if(E.dr){E.dr.t+=dt;if(E.dr.t>=EVC.dragonT)drEnd()}
+ if(E.lg)lgTick(dt);if(E.lr)lrTick(dt);if(E.ar)arTick(dt)}
 /* ---------- monsters: spawn rate and cap double every minute survived ---------- */
 X.chaosMobs=function(dt,count,spawnFn){if(CH.state!=='run'||HP.dead||!running)return;
  const mins=Math.floor((performance.now()-CH.t0)/60000),mult=Math.pow(2,mins),cap=Math.min(80,10*mult),rate=.25*mult;
@@ -5010,7 +5066,7 @@ X.chaosMobs=function(dt,count,spawnFn){if(CH.state!=='run'||HP.dead||!running)re
 const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._ch1){X._ch1=1;console.error('[chaos]',e)}}};
 function tick(dt){if(!C||!isChaos()||!WG){tHud(false);return}
  dockTick(dt);
- slowMobs();shardTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);
+ slowMobs();shardTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);evtTick(dt);
  C.t+=dt;const t=performance.now()/1000;CH.over=clamp(CH.over+Math.sign(CH.tgt-CH.over)*Math.min(Math.abs(CH.tgt-CH.over),dt/45),0,1);
  const ez=CH.over*CH.over*(3-2*CH.over),Lmax=CH.Pk+.3,level=CH.L0+(Lmax-CH.L0)*ez,cr=lavaR(level);CH.level=level;window.__lavaNow={t:performance.now(),key:CUR.key,x:0,z:0,r:cr-.4,y:level,Rr:CH.Rr};
  C.lake.position.y=level;C.lake.scale.setScalar(cr);C.lakeTex.offset.set(t*.012,t*.008);C.riverTex.offset.y=-t*(.02+.07*CH.over);
@@ -6098,7 +6154,7 @@ function makeBolt(x,gy,z,dist,strokes,pow){
  const w0=.05+dist*.0028,cam=camera.position,tex=getBoltTex();
  const mk=(w,col,op)=>{const m=new THREE.Mesh(ribbon(segs,w,cam),new THREE.MeshBasicMaterial({map:tex,color:col,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false,fog:false,side:THREE.DoubleSide}));m.frustumCulled=false;m.renderOrder=8;scene.add(m);return m};
  const core=mk(w0*1.6,0xffffff,1),glow=mk(w0*9,0x8aa8ff,.5);
- st.bolts.push({core,glow,strokes,pow,end:strokes.reduce((m,s)=>Math.max(m,s.t0),0)+.7});if(st.bolts.length>3)killBolt(st.bolts.shift())}
+ st.bolts.push({core,glow,strokes,pow,end:strokes.reduce((m,s)=>Math.max(m,s.t0),0)+.7});if(st.bolts.length>8)killBolt(st.bolts.shift())}
 function killBolt(b){scene.remove(b.core);scene.remove(b.glow);b.core.geometry.dispose();b.glow.geometry.dispose();b.core.material.dispose();b.glow.material.dispose()}
 function makeStrokes(pow){const t=st.clock,out=[],n=2+Math.floor(rand()*3);let at=t;
  for(let k=0;k<n;k++){const s={t0:at,pk:pow*(k===0?1:.45+rand()*.5),tau:.05+rand()*.06,bolt:true};out.push(s);st.env.push(s);at+=.045+rand()*.09}
@@ -6122,6 +6178,7 @@ function strike(force,allowNear){
  if(kind!=='sheet')makeBolt(x,gy,z,dist,strokes,pow);
  if(kind==='near'){impact(x,gy,z);st.ovK=.5}
  thunder(dist,kind)}
+function strikeAt(x,z,quiet){const gy=Math.max(terrH(x,z),WATER),dist=Math.hypot(x-P.x,z-P.z),pow=.3,strokes=makeStrokes(pow);makeBolt(x,gy,z,dist,strokes,pow);if(dist<45)impact(x,gy,z);if(!quiet&&dist<420&&rand()<.2)thunder(dist,dist<90?'mid':'far')}
 function lightTick(dt){
  const stormy=(W.type==='heavy'||W.type==='blood')&&W.precip>.5,rainy=W.type==='rain'&&W.precip>.35;
  if(!CAVE.on&&(stormy||rainy)){st.ltT-=dt;if(st.ltT<=0){strike(null,stormy);st.ltT=stormy?(rand()<.28?.5+rand()*1.3:3+rand()*7):28+rand()*50}}else st.ltT=Math.max(st.ltT,2);
@@ -6154,7 +6211,7 @@ window.update=function(dt){bu.apply(this,arguments);
   /* base optimisation: shorter cloud ray-march when frames get slow (standard mode only) */
   if(!gfx.ld&&PIX.avg!==st.lastAvg){st.lastAvg=PIX.avg;if(PIX.avg>21)GFXU.cs.value=Math.max(4,GFXU.cs.value-1);else if(PIX.avg<13)GFXU.cs.value=Math.min(9,GFXU.cs.value+1)}
  }catch(e){if(!X._wxe){X._wxe=1;console.error('[weather]',e)}}};
-X.wx={strike:k=>strike(k||'near',true),setWet:v=>{st.wet=cl(+v||0,0,1)},puddles:()=>pAct.length,st,applyGfx};
+X.wx={strike:k=>strike(k||'near',true),strikeAt,setWet:v=>{st.wet=cl(+v||0,0,1)},puddles:()=>pAct.length,st,applyGfx};
 })();
 </script>
 
