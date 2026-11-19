@@ -710,7 +710,7 @@ function save(force){try{if(S){if(typeof P!=='undefined'&&worldReady&&!CAVE.on&&
   else if(!cloudBusy&&!cloudTm&&!cloudStr)markSynced(o.savedAt)}}}catch(e){}}
 /* when another device pushed newer progress while this one is open, merge it in live */
 function mergeMax(x,y){if(x===undefined)return y;if(typeof x==='number'&&typeof y==='number')return Math.max(x,y);if(x&&y&&typeof x==='object'&&typeof y==='object'&&!Array.isArray(x)&&!Array.isArray(y)){const o=Object.assign({},x);for(const k in y)o[k]=mergeMax(x[k],y[k]);return o}return x}
-function mergeSaveObjs(base,other){const o=Object.assign({},base);o.isl=mergeMax(base.isl||{},other.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv'])o[k]=Math.max(base[k]||0,other[k]||0);o.savedAt=Date.now();return o}
+function mergeSaveObjs(base,other){const o=Object.assign({},base);o.isl=mergeMax(base.isl||{},other.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv','arW'])o[k]=Math.max(base[k]||0,other[k]||0);o.savedAt=Date.now();return o}
 function pickSave(cloud,local,localRaw,syncedAt){
  if(!cloud||!cloud.save)return localRaw;let c;try{c=JSON.parse(cloud.save)}catch(e){return localRaw}
  const cs=c.savedAt||cloud.savedAt||0;cloudSeenAt=cs;cloudKey=null;
@@ -718,7 +718,7 @@ function pickSave(cloud,local,localRaw,syncedAt){
  if(cs>ls)return ls>syncedAt?JSON.stringify(mergeSaveObjs(c,local)):cloud.save;
  return(syncedAt>=cs||local.dev===c.dev)?localRaw:JSON.stringify(mergeSaveObjs(local,c))}
 function adoptRemote(r){try{
- const n=Object.assign(defaultSave(),r);unpackHome(n);n.isl=mergeMax(n.isl||{},S.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv'])n[k]=Math.max(n[k]||0,S[k]||0);
+ const n=Object.assign(defaultSave(),r);unpackHome(n);n.isl=mergeMax(n.isl||{},S.isl||{});for(const k of['chestsOpened','tokensSpent','mtLv','arW'])n[k]=Math.max(n[k]||0,S[k]||0);
  n.pos=S.pos;n.cur=S.cur;n.time=S.time;n.curW=S.curW;if(typeof CUR!=='undefined'&&CUR&&CUR.key===HOME)n.home=S.home;
  for(const k of Object.keys(S))if(!(k in n)&&k!=='chests')delete S[k];Object.assign(S,n);
  if(typeof CUR!=='undefined'&&CUR&&CUR.key){const rec=S.isl[CUR.key];if(rec){rec.ch=rec.ch||{};CUR.rec=rec;S.chests=rec.ch}}
@@ -2727,8 +2727,9 @@ function throwAt(e){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+1.5*sc,e.z)
  const gr=new THREE.Group(),wm=weaponMesh(e.kind==='spear'?'spear':'axe');wm.rotation.x=-Math.PI/2;wm.scale.setScalar(1.1);gr.add(wm);gr.position.copy(o);gr.lookAt(o.clone().add(v));scene.add(gr);X.EP.push({m:gr,v,life:3,g:16,spin:e.kind!=='spear',dmg:e.boss?Math.max(2,e.dmg):1+Math.floor(Math.random()*6),by:'a thrown '+(e.kind==='spear'?'spear':'axe')});SX.spearThrow&&SX.spearThrow()}
 let RKG=null,RKM=null;
 function rockRing(e){if(!RKG){RKG=new THREE.DodecahedronGeometry(.55,0);RKM=new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true})}
- const sc=e.scale||1,off=Math.random()*.4;for(let k=0;k<16;k++){const a=off+k/16*6.2832,m=new THREE.Mesh(RKG,RKM);m.position.set(e.x+Math.sin(a)*1.6*sc,e.gy+1.1,e.z+Math.cos(a)*1.6*sc);scene.add(m);X.EP.push({m,v:new THREE.Vector3(Math.sin(a)*15,0,Math.cos(a)*15),life:1.7,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'})}
+ const sc=e.scale||1,off=Math.random()*.4;for(let k=0;k<32;k++){const a=off+k/32*6.2832,m=new THREE.Mesh(RKG,RKM);m.position.set(e.x+Math.sin(a)*1.6*sc,e.gy+1.1,e.z+Math.cos(a)*1.6*sc);scene.add(m);X.EP.push({m,v:new THREE.Vector3(Math.sin(a)*15,0,Math.cos(a)*15),life:1.7,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'})}
  SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,e.gy+.4,e.z),0xb89a6a,6,.7)}
+X.rockRing=rockRing;
 function throwRock(e,spread){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+2.2*sc,e.z),a=Math.atan2(P.x-e.x,P.z-e.z)+spread,dist=Math.hypot(P.x-e.x,P.z-e.z),t=Math.max(.6,dist/18),v=new THREE.Vector3(Math.sin(a)*dist/t,(P.y+1-o.y)/t+.5*14*t,Math.cos(a)*dist/t);
  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.4,0),new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true}));m.position.copy(o);scene.add(m);X.EP.push({m,v,life:3,g:14,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'});SX.spearThrow&&SX.spearThrow()}
 /* ---- nav grid + A* so barbarians use stairs and walk around walls ---- */
@@ -4403,11 +4404,11 @@ function boulderTick(dt){for(let i=RB.length-1;i>=0;i--){const b=RB[i],p=b.m.pos
   if(p.y<=gy+b.sc*.5||b.t>7){addFx(new THREE.Vector3(p.x,gy+.6,p.z),0xa8895a,3.2,.5);if(!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<2.4&&P.y<gy+1.6)hurt(b.dmg,'a dragon boulder');X.shake(.25,.25);dropB(i)}}}
 function lobBoulder(d){mouth(d);const o=Mo.clone();o.x+=(Math.random()-.5)*3;o.y+=(Math.random()-.5)*2;o.z+=(Math.random()-.5)*3;
  const a=Math.random()*6.283,rr=Math.sqrt(Math.random())*9,tx=P.x+Math.cos(a)*rr,tz=P.z+Math.sin(a)*rr,ty=Math.max(terrH(tx,tz),WATER),tf=1.7+Math.random()*.5;
- addBoulder(o.x,o.y,o.z,(tx-o.x)/tf,(ty-o.y)/tf+.5*BG*tf,(tz-o.z)/tf,1.2+Math.random()*.4,1,false)}
+ addBoulder(o.x,o.y,o.z,(tx-o.x)/tf,(ty-o.y)/tf+.5*BG*tf,(tz-o.z)/tf,1.2+Math.random()*.4,DM(d),false)}
 function rainBoulders(d,dt){const s=d.s;d.rA=(d.rA||0)+dt*5.5;let n=Math.floor(d.rA);d.rA-=n;
  for(;n>0;n--){let x,z;const a=Math.random()*6.283;if(Math.random()<.4){const r=Math.random()*7;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{const r=Math.sqrt(Math.random())*30;x=s.cx+Math.cos(a)*r;z=s.cz+Math.sin(a)*r}
   const rr=Math.hypot(x-s.cx,z-s.cz);if(rr>31){x=s.cx+(x-s.cx)*31/rr;z=s.cz+(z-s.cz)*31/rr}
-  addBoulder(x,Math.max(terrH(x,z),WATER)+46,z,0,0,0,1.5,1,true)}}
+  addBoulder(x,Math.max(terrH(x,z),WATER)+46,z,0,0,0,1.5,DM(d),true)}}
 X.shake=function(mag,dur){shakeMag=Math.max(shakeMag,mag);shakeT=Math.max(shakeT,dur)};
 function ensurePools(){if(FP.a.length||!sparkW)return;const mk=(P2,n,col)=>{for(let i=0;i<n;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkW,color:col,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false}));s.visible=false;s.renderOrder=7;scene.add(s);P2.a.push({s,t:0,life:0,vx:0,vy:0,vz:0,sz:1})}};mk(FP,240,0xffa030);mk(WPp,90,0xffffff)}
 function emit(P2,x,y,z,vx,vy,vz,life,sz){const p=P2.a[P2.i++%P2.a.length];p.s.position.set(x,y,z);p.vx=vx;p.vy=vy;p.vz=vz;p.t=0;p.life=life;p.sz=sz;p.s.visible=true}
@@ -4420,36 +4421,58 @@ function fxTick(dt){for(const p of FP.a){if(p.life<=0)continue;p.t+=dt;if(p.t>=p
 function roar(){try{nz({d:1.6,f0:700,f1:120,q:.7,g:.16,type:'lowpass'});tn({f0:150,f1:70,d:1.5,g:.13,type:'sawtooth',lp:500});tn({f0:90,f1:50,d:1.6,g:.1,type:'square',lp:300,delay:.1})}catch(e){}}
 function boom(){try{nz({d:1.3,f0:260,f1:40,q:.7,g:.3,type:'lowpass'});tn({f0:70,f1:28,d:1.1,g:.3,type:'sine'})}catch(e){}}
 function go(d,st){d.st=st;d.stT=0}
-function slamWave(d,gy,big){if(!ringGeo)ringGeo=new THREE.RingGeometry(.9,1,72).rotateX(-Math.PI/2);const m=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false,depthTest:false,fog:false,blending:THREE.AdditiveBlending}));m.position.set(d.x,gy+.5,d.z);m.renderOrder=9;m.scale.set(.1,.1,1);scene.add(m);waves.push({m,x:d.x,z:d.z,t:0,hit:false,dmg:d.s.arena?1:(d.s.hp<d.s.max*.5?12:9),sp:big?48:40,life:big?2.1:1.35});
+const DM=d=>d.s.hp<d.s.max*.5?4:2;/* arena dragon base damage (doubled in phase 2) */
+const CDV=(s,ph2)=>s.arena?2.5+Math.random()*2:(ph2?3:5)+Math.random()*3;
+function arenaRing(d){if(X.rockRing)X.rockRing({x:d.x,z:d.z,gy:X.arena.fl,scale:2,dmg:DM(d)*3/.8})}
+function arenaShockD(d){if(X.arenaShock)X.arenaShock({x:d.x,z:d.z,dmg:DM(d)*2.5});roar();X.shake(.6,.5)}
+function aimBoulder(d,off){mouth(d);const o=Mo.clone(),dx=P.x-o.x,dz=P.z-o.z,dist=Math.hypot(dx,dz)||1,ux=dx/dist,uz=dz/dist,tf=Math.max(.9,Math.min(2.2,dist/30)),lx=P.x+(P.vx||0)*tf*.7-uz*off,lz=P.z+(P.vz||0)*tf*.7+ux*off,ty=Math.max(terrH(lx,lz),WATER);
+ addBoulder(o.x,o.y,o.z,(lx-o.x)/tf,(ty-o.y)/tf+.5*BG*tf,(lz-o.z)/tf,1.1,DM(d)*2,false)}
+function slamWave(d,gy,big){if(!ringGeo)ringGeo=new THREE.RingGeometry(.9,1,72).rotateX(-Math.PI/2);const m=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false,depthTest:false,fog:false,blending:THREE.AdditiveBlending}));m.position.set(d.x,gy+.5,d.z);m.renderOrder=9;m.scale.set(.1,.1,1);scene.add(m);waves.push({m,x:d.x,z:d.z,t:0,hit:false,dmg:d.s.arena?DM(d):(d.s.hp<d.s.max*.5?12:9),sp:big?48:40,life:big?2.1:1.35});
  for(let k=0;k<18;k++)addFx(new THREE.Vector3(d.x+(Math.random()-.5)*10,gy+1+Math.random()*3,d.z+(Math.random()-.5)*10),0xb89a6a,6+Math.random()*4,.9);
  const dp=Math.hypot(P.x-d.x,P.z-d.z);X.shake(Math.max(0,1.3-dp/150),1.0);boom()}
 function mouth(d){const h=d.U.head;h.getWorldPosition(Mo);h.getWorldDirection(Dr);Mo.addScaledVector(Dr,3.0);Mo.y-=.15}
-function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=ph2?1.25:1,sp=18*k2;let flapK=1,hovered=false;
+function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=(ph2&&!s.arena)?1.25:1,sp=18*k2;let flapK=1,hovered=false;
  const gdx=P.x-d.x,gdz=P.z-d.z,dd=Math.hypot(gdx,gdz);d.stT+=dt;if(d.aggroT>0)d.aggroT-=dt;
  const aggro=d.st!=='dying'&&(dd<290||d.aggroT>0)&&dd<560&&!HP.dead;
  if(ph2&&!d.p2&&d.st!=='dying'){d.p2=1;toast(d.v.n+' is enraged!');roar()}
  const lx=Math.atan2(gdx,gdz),away=Math.atan2(-gdx,-gdz);
  /* ---- decide next attack ---- */
  if(d.st==='circle'){d.cd-=dt;if(aggro&&d.cd<=0){const r=Math.random();
-  if(s.arena){if(r<.2){go(d,'tele');roar();d.fixT=new THREE.Vector3(P.x,P.y+1.1,P.z);toast('Fire incoming — move out of the way!')}else if(r<.34)go(d,'climb');else if(r<.4){go(d,'wind');toast('The dragon beats its wings — brace yourself!')}
-   else if(r<.62){go(d,'volley');d.vN=0;d.vA=0;roar();toast('Boulder barrage!')}else if(r<.81){go(d,'rain');d.rA=0;roar();toast('Boulders are raining down — watch the red rings!')}else{go(d,'stomp');roar();toast('The dragon rears up to stomp!')}}
+  if(s.arena){if(r<.2){go(d,'tele');roar();d.fixT=new THREE.Vector3(P.x,P.y+1.1,P.z);toast('Fire incoming — move out of the way!')}
+   else if(r<.37){go(d,'volley');d.vN=0;d.vA=0;roar();toast('Boulder barrage!')}
+   else if(r<.5){go(d,'rain');d.rA=0;roar();toast('Boulders are raining down — watch the red rings!')}
+   else if(r<.65){go(d,'throw');d.fN=0;roar();toast('The dragon hurls boulders at you!')}
+   else if(r<.77){go(d,'ring');d.fN=0;roar();toast('Rock ring — jump over the rocks!')}
+   else if(r<.87){go(d,'shock');d.fN=0;roar();toast('Shockwave — jump over it!')}
+   else if(r<.92){go(d,'wind');toast('The dragon beats its wings — brace yourself!')}
+   else if(r<.96)go(d,'climb');
+   else{go(d,'stomp');roar();toast('The dragon rears up to stomp!')}}
   else if(r<.4){go(d,'tele');roar()}else if(r<.75)go(d,'climb');else{go(d,'wind');toast('The dragon beats its wings — brace yourself!')}}}
  let altT,spd=0;const oyaw=d.yaw||0;
  const hover=(tx,tz,v,fy,turn)=>{hovered=true;const ex=tx-d.x,ez=tz-d.z,ed=Math.hypot(ex,ez),vv=Math.min(v,ed*1.5);if(ed>.01){d.x+=ex/ed*vv*dt;d.z+=ez/ed*vv*dt}spd=vv;let da=fy-d.yaw;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;d.yaw+=Math.max(-turn*dt,Math.min(turn*dt,da))};
  const gY=Math.max(terrH(d.x,d.z),WATER);
  if(d.st==='circle'){d.a=Math.atan2(d.z-s.cz,d.x-s.cx);const ta=d.a+s.dir*.4,tx=s.cx+Math.cos(ta)*s.R,tz=s.cz+Math.sin(ta)*s.R;let da=Math.atan2(tx-d.x,tz-d.z)-d.yaw;while(da>Math.PI)da-=6.283;while(da<-Math.PI)da+=6.283;d.yaw+=Math.max(-1.1*dt,Math.min(1.1*dt,da));d.x+=Math.sin(d.yaw)*sp*dt;d.z+=Math.cos(d.yaw)*sp*dt;spd=sp;altT=gY+s.alt+Math.sin(t*.3+d.ph)*5}
  else if(d.st==='tele'||d.st==='fire'||d.st==='wind'){const rr=d.st==='wind'?62:54;hover(P.x+Math.sin(away+Math.PI)*0+Math.sin(Math.atan2(d.x-P.x,d.z-P.z))*rr,P.z+Math.cos(Math.atan2(d.x-P.x,d.z-P.z))*rr,28,lx,1.9);altT=P.y+(d.st==='wind'?32:24);
-  if(d.st==='tele'&&d.stT>1.15){go(d,'fire')}else if(d.st==='fire'&&d.stT>2.9*(ph2?1.2:1)){go(d,'circle');d.cd=(ph2?3:5)+Math.random()*3}else if(d.st==='wind'&&d.stT>3.4){go(d,'circle');d.cd=(ph2?3:5)+Math.random()*3}}
+  if(d.st==='tele'&&d.stT>1.15){go(d,'fire')}else if(d.st==='fire'&&d.stT>2.9*(ph2?1.2:1)){go(d,'circle');d.cd=CDV(s,ph2)}else if(d.st==='wind'&&d.stT>3.4){go(d,'circle');d.cd=CDV(s,ph2)}}
   else if(d.st==='volley'){const ya=Math.atan2(d.x-P.x,d.z-P.z);hover(P.x+Math.sin(ya)*54,P.z+Math.cos(ya)*54,28,lx,1.9);altT=P.y+24;
   if(d.stT>.8&&d.vN<32){d.vA+=dt*20;let n=Math.min(32-d.vN,Math.floor(d.vA));d.vA-=n;d.vN+=n;for(;n>0;n--)lobBoulder(d)}
-  if(d.stT>3.2){go(d,'circle');d.cd=(ph2?3:5)+Math.random()*3}}
- else if(d.st==='rain'){hover(s.cx,s.cz,30,lx,1.5);altT=gY+50;if(d.stT>1)rainBoulders(d,dt);if(d.stT>11.2){go(d,'circle');d.cd=(ph2?3:5)+Math.random()*3}}
+  if(d.stT>3.2){go(d,'circle');d.cd=CDV(s,ph2)}}
+ else if(d.st==='throw'){const ya=Math.atan2(d.x-P.x,d.z-P.z);hover(P.x+Math.sin(ya)*46,P.z+Math.cos(ya)*46,28,lx,2);altT=P.y+20;const nb=ph2?6:4;
+  if(d.fN<nb&&d.stT>.8+d.fN*.55){d.fN++;for(let k=-1;k<=1;k++)aimBoulder(d,k*3.5)}
+  if(d.stT>.8+nb*.55+.6){go(d,'circle');d.cd=CDV(s,ph2)}}
+ else if(d.st==='ring'){hover(s.cx,s.cz,34,lx,2.2);altT=gY+16;const nr=ph2?2:1;
+  if(d.fN<nr&&d.stT>1.1+d.fN*1.3){d.fN++;arenaRing(d)}
+  if(d.stT>1.1+nr*1.3+.4){go(d,'circle');d.cd=CDV(s,ph2)}}
+ else if(d.st==='shock'){hover(s.cx,s.cz,40,lx,2.4);altT=gY+8;const nw=ph2?3:2;
+  if(d.fN<nw&&d.stT>1+d.fN){d.fN++;arenaShockD(d)}
+  if(d.stT>1+nw+.4){go(d,'circle');d.cd=CDV(s,ph2)}}
+ else if(d.st==='rain'){hover(s.cx,s.cz,30,lx,1.5);altT=gY+50;if(d.stT>1)rainBoulders(d,dt);if(d.stT>11.2){go(d,'circle');d.cd=CDV(s,ph2)}}
  else if(d.st==='stomp'){hover(s.cx,s.cz,48,lx,2.5);const gl=Math.max(terrH(s.cx,s.cz),WATER)+3.5;altT=d.stT<1.4?gl+30:gl;
   if(d.stT>1.4&&(d.y<gl+4||d.stT>2.8)){d.y=gl;slamWave(d,gl-3.5,true);go(d,'slam')}}
  else if(d.st==='climb'){hover(P.x+Math.sin(away+3.14)*28*0+Math.sin(Math.atan2(d.x-P.x,d.z-P.z))*30,P.z+Math.cos(Math.atan2(d.x-P.x,d.z-P.z))*30,32,lx,2);altT=P.y+52;if(d.stT>1.6){d.tgt={x:P.x+(P.vx||0)*.35,z:P.z+(P.vz||0)*.35};go(d,'dive');roar()}}
  else if(d.st==='dive'){const tx=d.tgt.x,tz=d.tgt.z,dh=Math.hypot(tx-d.x,tz-d.z);hover(tx,tz,54*k2,Math.atan2(tx-d.x,tz-d.z),4);altT=Math.max(terrH(tx,tz),WATER)+3.5;
   if(dh<6||d.stT>2.8){d.y=altT;slamWave(d,altT-3.5);go(d,'slam')}}
- else if(d.st==='slam'){altT=Math.max(terrH(d.x,d.z),WATER)+3.5;flapK=2;if(d.stT>1.0){go(d,'circle');d.cd=(ph2?3:5)+Math.random()*3}}
+ else if(d.st==='slam'){altT=Math.max(terrH(d.x,d.z),WATER)+3.5;flapK=2;if(d.stT>1.0){go(d,'circle');d.cd=CDV(s,ph2)}}
  else if(d.st==='dying'){d.dying+=dt;const k=d.dying;d.vy=-8-k*10;d.y+=d.vy*dt;d.yaw+=dt*.9*s.dir;d.x+=Math.sin(d.yaw)*sp*.5*dt;d.z+=Math.cos(d.yaw)*sp*.5*dt;spd=sp*.5;
   if(Math.random()<dt*14)addFx(new THREE.Vector3(d.x+(Math.random()-.5)*8,d.y+(Math.random()-.5)*3,d.z+(Math.random()-.5)*8),0xff6a1c,3.2,.7);
   if(d.y<Math.max(terrH(d.x,d.z),WATER)+3||k>6){finish(d);return false}}
@@ -4465,7 +4488,7 @@ function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=ph2?1.25:1,sp=18*k2
  for(let k=0;k<U.tail.length;k++){U.tail[k].rotation.y=Math.sin(t*1.3-k*.5+d.ph*.2)*.13;U.tail[k].rotation.x=Math.sin(d.ph-k*.45)*.05}
  const near=dd<260&&d.st!=='dying';let rel=lx-d.yaw;while(rel>Math.PI)rel-=6.283;while(rel<-Math.PI)rel+=6.283;rel=near&&Math.abs(rel)<2.2?Math.max(-.9,Math.min(.9,rel)):0;
  for(let k=0;k<U.neck.length;k++){const n=U.neck[k];n.rotation.y+=((near?rel/6:Math.sin(t*.7+k*.4)*.06)-n.rotation.y)*Math.min(1,dt*3);n.rotation.x=-.12+Math.sin(d.ph-k*.3)*.03}
- const breathe=d.st==='tele'||d.st==='fire',roarOpen=d.st==='slam'||d.st==='wind'||d.st==='volley'||d.st==='rain'||d.st==='stomp';
+ const breathe=d.st==='tele'||d.st==='fire',roarOpen=d.st==='slam'||d.st==='wind'||d.st==='volley'||d.st==='rain'||d.st==='stomp'||d.st==='throw'||d.st==='ring'||d.st==='shock';
  const hx=.62+(breathe?Math.max(-.5,Math.min(.8,-d.aim.y*1.3)):0);U.head.rotation.x+=(hx-U.head.rotation.x)*Math.min(1,dt*4);
  d.jaw+=((d.st==='dying'||breathe||roarOpen||(d.aggro&&Math.sin(t*1.1+d.ph)>.82)?.75:0)-d.jaw)*Math.min(1,dt*6);U.jaw.rotation.x=d.jaw;
  if(U.eyeGlow)for(const e of U.eyeGlow)e.material.opacity=.7+Math.sin(t*3+d.ph)*.3;
@@ -4478,7 +4501,7 @@ function pose(d,dt,t){const U=d.U,s=d.s,ph2=s.hp<s.max*.5,k2=ph2?1.25:1,sp=18*k2
   if(d.st==='tele'&&Math.random()<dt*30)emit(FP,Mo.x,Mo.y,Mo.z,d.aim.x*8+(Math.random()-.5)*4,d.aim.y*8+Math.random()*3,d.aim.z*8+(Math.random()-.5)*4,.6,1.2);
   if(d.st==='fire'){const n=Math.ceil(dt*330);for(let q=0;q<n;q++){const sp2=48+Math.random()*14,o=Math.random()*1.4;emit(FP,Mo.x+d.aim.x*o,Mo.y+d.aim.y*o,Mo.z+d.aim.z*o,d.aim.x*sp2+(Math.random()-.5)*7,d.aim.y*sp2+(Math.random()-.5)*7,d.aim.z*sp2+(Math.random()-.5)*7,.85+Math.random()*.4,2.2+Math.random()*1.6)}
    d.fireCd-=dt;d.fireSnd-=dt;if(d.fireSnd<=0){d.fireSnd=.28;try{nz({d:.5,f0:1100,f1:320,q:.5,g:.09,type:'bandpass'})}catch(e){}}
-   tv.set(P.x,P.y+1.1,P.z).sub(Mo);const sd=tv.dot(d.aim);if(sd>2&&sd<80&&!HP.dead){const perp=Math.sqrt(Math.max(0,tv.lengthSq()-sd*sd));if(perp<2.4+sd*.13&&d.fireCd<=0){d.fireCd=.32;hurt(s.arena?1:(ph2?4:3),'dragon fire');burnT=2.2;addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff7a22,2.4,.4)}}}}
+   tv.set(P.x,P.y+1.1,P.z).sub(Mo);const sd=tv.dot(d.aim);if(sd>2&&sd<80&&!HP.dead){const perp=Math.sqrt(Math.max(0,tv.lengthSq()-sd*sd));if(perp<2.4+sd*.13&&d.fireCd<=0){d.fireCd=.32;hurt(s.arena?DM(d):(ph2?4:3),'dragon fire');burnT=2.2;addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff7a22,2.4,.4)}}}}
  else if(d.st==='wind'&&dd>.1){const ux=gdx/dd,uz=gdz/dd;
   if(dd<150&&!HP.dead){const str=(8+7*(1-dd/150))*k2,nx=P.x+ux*str*dt,nz2=P.z+uz*str*dt;if(Math.abs(nx)<HALF-3&&Math.abs(nz2)<HALF-3&&terrH(nx,nz2)<P.y+1.1){P.x=nx;P.z=nz2}}
   const n=Math.ceil(dt*200);for(let q=0;q<n;q++){const lat=(Math.random()-.5)*60,hgt=(Math.random()-.3)*22;emit(WPp,P.x-ux*45-uz*lat,P.y+hgt+2,P.z-uz*45+ux*lat,ux*85,(Math.random()-.5)*3,uz*85,.75,4+Math.random()*3)}
@@ -4491,7 +4514,7 @@ function tick(dt){if(HP.dead){burnT=0}if(!running||HP.dead)return;
  if(frameD%30===0){for(const s of SLOTS){const alive=DR.find(d=>d.s===s),dist=Math.hypot(P.x-s.cx,P.z-s.cz);
    if(!alive&&!killedAt(s)&&dist<s.R+820)spawnD(s);else if(alive&&dist>s.R+1150&&!alive.dying){DR.splice(DR.indexOf(alive),1);disposeD(alive)}}}
  if(!bar)mkBar();const t=performance.now()/1000;let best=null,bd=1e9;
- for(const d of DR.slice()){if(pose(d,dt,t)===false)continue;const dd=Math.hypot(P.x-d.x,P.z-d.z);if(dd<bd){bd=dd;best=d}}
+ for(const d of DR.slice()){if(pose(d,(d.s.arena&&d.st!=='dying'&&d.s.hp<d.s.max*.5)?dt*2:dt,t)===false)continue;const dd=Math.hypot(P.x-d.x,P.z-d.z);if(dd<bd){bd=dd;best=d}}
  fxTick(dt);boulderTick(dt);if(burnT>0){if(swimMode>0)burnT=0;else{burnT-=dt;burnTick-=dt;if(burnTick<=0){burnTick=.7;hurt(1,'burning');addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff7a22,1.6,.35)}}}
  if(shakeT>0){shakeT-=dt;const k=Math.min(1,shakeT/.6)*shakeMag;camera.position.x+=(Math.random()-.5)*k*.6;camera.position.y+=(Math.random()-.5)*k*.6;camera.position.z+=(Math.random()-.5)*k*.6;if(shakeT<=0)shakeMag=0}
  if(best&&bd<340){bar.style.display='block';$('dbN').textContent=best.v.n.toUpperCase();$('dbF').style.width=(best.s.hp/best.s.max*100)+'%';$('dbT').textContent=Math.ceil(best.s.hp)+' / '+best.s.max+(CUR.info&&CUR.info.name?'   ·   '+CUR.info.name:'')}else bar.style.display='none'}
@@ -4608,7 +4631,7 @@ function askSpec(){dlg('The stands are open to all, and the whole arena is yours
 function askPlayer(){
  if(X.arenaBusy&&X.arenaBusy()){dlg('A champion is already fighting on the sand. <b>Wait for the fight to end</b>, or take a seat in the stands and watch.',[{t:'Watch from the stands instead.',fn:askSpec},{t:'Leave.',fn:closeDlg}]);return}
  if(!X.arenaBegin){dlg('The champions’ gates are still being forged. Come back soon, or take a seat in the stands in the meantime.',[{t:'Watch from the stands instead.',fn:askSpec},{t:'Leave.',fn:closeDlg}]);return}
- dlg('Ten rounds. Undead first, then barbarian hordes, then bosses, and at the very end, a dragon. <b>Die and you are out.</b> Armor and a loaded pistol are wise. Do you understand?',[
+ dlg('Ten rounds at first, and two more join the gauntlet every time you win. Undead first, then barbarian hordes, then bosses, and at the very end, a dragon. <b>Die and you are out.</b> Armor and a loaded pistol are wise. Do you understand?',[
   {t:'I understand.',fn:askOath},{t:'Not yet.',fn:closeDlg}])}
 function askOath(){dlg('The victor takes <b>1000 rewards</b> and <b>4 random armor pieces</b>. But once you step onto the sand, the gate stays shut: <b>the only way out is death or victory.</b> Do you swear the oath?',[
   {t:'I swear the oath.',fn:()=>{closeDlg();X.arenaBegin(A)}},{t:'I am not ready.',fn:closeDlg}])}
@@ -5083,8 +5106,15 @@ let tt=0;const hu=window.hurt;if(hu)window.hurt=function(){if(CUR&&CUR.key==='2,
 })();
 /* ===== Colosseum fights: 10 rounds, enemy AI, regen, rewards, spectator weapon lock ===== */
 (function(){'use strict';const X=window.PX,A=X.arena,AK='1,2';
-const F={on:false,round:0,st:'idle',t:0,mobs:[],hb:0,hud:null,lk:0},LV={active:0,uid:null,nick:'',round:0,ts:0};
-const ROUNDS=[{z:7,s:2,p:3},{z:8,s:4,p:5},{z:8,s:6,p:8},{z:10,s:8,p:11},{b:5,z:4,s:3,p:4},{b:4,bt:1},{b:5,bt:1,bw:2},{boss:1},{boss:2},{dragon:1}];
+const F={on:false,round:0,st:'idle',t:0,mobs:[],hb:0,hud:null,lk:0,list:null,total:10},LV={active:0,uid:null,nick:'',round:0,ts:0};
+const BASE=[{z:7,s:2,p:3,sec:'u',rd:1},{z:8,s:4,p:5,sec:'u',rd:2},{z:8,s:6,p:8,sec:'u',rd:3},{z:10,s:8,p:11,sec:'u',rd:4},{b:5,z:4,s:3,p:4,sec:'b',rd:5},{b:8,bt:1,sec:'b',rd:6},{b:15,bt:1,boss:1,sec:'b',rd:7},{boss:3,sec:'x',rd:8},{boss:4,b:10,bt:1,sec:'x',rd:9},{dragon:1,sec:'d',rd:10}];
+/* every full clear adds 2 rounds between the others: undead / barbarian / boss rounds in turn, each blending the rounds on either side of it; the dragon stays last */
+function buildRounds(w){const L=BASE.map(r=>Object.assign({},r)),secs=['u','b','x'],K=['z','s','p','b','boss'];
+ for(let k=0;k<w*2;k++){const sc=secs[k%3],idx=[];L.forEach((r,i)=>{if(r.sec===sc)idx.push(i)});if(!idx.length)continue;
+  const pos=idx[Math.floor(k/3)%idx.length],a=L[pos],b=L[pos+1]&&L[pos+1].sec===sc?L[pos+1]:null,n={sec:sc,add:1};
+  const src=b||a;for(const key of K){if(!src[key])continue;n[key]=b?Math.max(1,Math.round(src[key]*.85)):Math.ceil(src[key]*1.15)}
+  n.bt=src.bt||0;n.rd=b?Math.round((a.rd+b.rd)/2):a.rd;L.splice(pos+1,0,n)}
+ return L}
 const pickR=a=>a[Math.floor(Math.random()*a.length)];
 /* ---------- live state (so other players on the island know a fight is on) ---------- */
 X.arenaBusy=()=>!!(LV.active&&Date.now()-LV.ts<25000&&LV.uid!==UID);
@@ -5105,12 +5135,12 @@ function trapTick(dt){F.trT-=dt;if(F.trT<=0){F.trT=5;spawnTrap()}
   if(!HP.dead&&t.cd<=0&&Math.hypot(P.x-t.x,P.z-t.z)<1.2&&P.y<A.fl+1.3){t.cd=1.2;hurt(4,'an arena spike trap');SX.trapHit&&SX.trapHit()}}}
 function clearShock(){for(const q of F.sw){scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()}F.sw.length=0}
 X.arenaShock=function(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,sx=e.x+ux*2.5,sz=e.z+uz*2.5,
- m=new THREE.Mesh(new THREE.BoxGeometry(7,.45,.7),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
+ m=new THREE.Mesh(new THREE.BoxGeometry(35,.45,.7),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
  m.position.set(sx,A.fl+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);F.sw.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:Math.max(2,Math.round(e.dmg*1.2))})};
 function swTick(dt){for(let i=F.sw.length-1;i>=0;i--){const q=F.sw[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;q.m.position.set(q.x,A.fl+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
-  if(Math.random()<dt*40)addFx(new THREE.Vector3(q.x+(Math.random()-.5)*6*q.uz,A.fl+.6,q.z-(Math.random()-.5)*6*q.ux),0xb89a6a,2.4,.4);
+  if(Math.random()<dt*120)addFx(new THREE.Vector3(q.x+(Math.random()-.5)*35*q.uz,A.fl+.6,q.z-(Math.random()-.5)*35*q.ux),0xb89a6a,2.4,.4);
   const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
-  if(!q.hit&&!HP.dead&&Math.abs(al)<1.3&&Math.abs(lat)<3.7&&P.y<A.fl+1.3){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
+  if(!q.hit&&!HP.dead&&Math.abs(al)<1.3&&Math.abs(lat)<18.2&&P.y<A.fl+1.3){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
   if(q.t>2.4||Math.hypot(q.x,q.z)>36){scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose();F.sw.splice(i,1)}}}
 function wipe(){clearTraps();clearShock();for(const e of F.mobs){scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()})}F.mobs.length=0;
  for(const e of X.EN.slice()){if(e.arena){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(e.g.parent)e.g.parent.remove(e.g)}}
@@ -5154,16 +5184,16 @@ function aiMob(e,dt,now){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||.01,ux
  if(e.ty==='spider'){u.legs&&u.legs.forEach((l,i)=>{l.rotation.z=Math.sin(e.ph+i*1.3)*.25*(mv?1:.1)})}
  else{const sw=Math.sin(e.ph)*.7*(mv?1:0);if(u.lg){u.lg.rotation.x=sw;u.rg.rotation.x=-sw}if(e.ty==='zombie'&&u.la){u.la.rotation.x=-1.35+Math.sin(e.ph*.5)*.15;u.ra.rotation.x=-1.35-Math.sin(e.ph*.5)*.15}}}
 /* ---------- rounds ---------- */
-function startRound(){F.st='fight';const R=ROUNDS[F.round-1],rd=F.round,list=[];
+function startRound(){F.st='fight';const R=F.list[F.round-1],rd=R.rd||F.round,list=[];
  [['z','zombie'],['s','skeleton'],['p','spider']].forEach(k=>{for(let n=0;n<(R[k[0]]||0);n++)list.push(k[1])});
  const tot=list.length+(R.b||0)+(R.boss||0);let i=0;const pos=()=>{const a=(i++/Math.max(1,tot))*6.283+Math.random()*.4,r=24+Math.random()*5;return[Math.cos(a)*r,Math.sin(a)*r]};
  list.forEach(ty=>{const p=pos();mkMob(ty,p[0],p[1],rd)});
  for(let n=0;n<(R.b||0);n++){const p=pos(),kd=pickR(['sword','axe','club','spear']);{const e=X.mkEnemy(p[0],p[1],{hp:30+Math.floor(Math.random()*21),dmg:3+Math.floor(rd/2),speed:1.5,tier:R.bt||0,kind:kd,arena:1});e.speed=5.6;e.rk=pickR(['bow','gun'])}addFx(new THREE.Vector3(p[0],A.fl+1,p[1]),0xff7a30,2.5,.6)}
  for(let n=0;n<(R.boss||0);n++){const p=pos();{const e=X.mkEnemy(p[0],p[1],{boss:1,scale:2.2,hp:700+(rd-7)*400,dmg:8+rd,speed:1.5,tier:2,kind:'axe',arena:1,slow:.5,name:['Arena Warlord','Pit Champion'][n%2]});e.speed=4.8}addFx(new THREE.Vector3(p[0],A.fl+1,p[1]),0xff3a20,4,.9)}
- if(R.dragon){const d=X.dragonSpawn({i:0,cx:0,cz:0,R:62,alt:38,dir:1,v:Math.floor(Math.random()*6),hp:2000,max:2000,arena:1});d.aggroT=9999;d.aggro=1}
+ if(R.dragon){const d=X.dragonSpawn({i:0,cx:0,cz:0,R:62,alt:38,dir:1,v:Math.floor(Math.random()*6),hp:3000,max:3000,arena:1});d.aggroT=9999;d.aggro=1}
  banner(R.dragon?'THE DRAGON':'FIGHT!','#ff8a5a')}
-function roundClear(){clearTraps();HP.v=maxHP();if(F.round>=10){F.st='clear';F.t=2.5;return}F.st='clear';F.t=6;banner('ROUND '+F.round+' CLEARED','#7affb0');toast('Health fully restored. Next round soon.')}
-function victory(){const r=rollChances(1000,false),cos=[];for(let i=0;i<4;i++){const c=randCos();if(c)cos.push(c)}applyLoot(r.gained,cos);showLoot('Champion’s Reward: 1000 rewards + 4 armor pieces',r.gained,cos);save();updateHeader(true);
+function roundClear(){clearTraps();HP.v=maxHP();if(F.round>=F.total){F.st='clear';F.t=2.5;return}F.st='clear';F.t=6;banner('ROUND '+F.round+' CLEARED','#7affb0');toast('Health fully restored. Next round soon.')}
+function victory(){const w=S.arW|0,n=1000+100*w,k=Math.max(0,4-w),r=rollChances(n,false),cos=[];for(let i=0;i<k;i++){const c=randCos();if(c)cos.push(c)}applyLoot(r.gained,cos);S.arW=w+1;showLoot('Champion’s Reward: '+n+' rewards'+(k?' + '+k+' armor piece'+(k>1?'s':''):' (no more armor pieces)'),r.gained,cos);save();updateHeader(true);
  end('win');HP.v=maxHP();banner('CHAMPION OF THE COLOSSEUM','#ffe29a');toast('The gate swings open. You are free to leave.');A.mode='out';A.doorT=1;if(A.doorOB){const i=OB.indexOf(A.doorOB);if(i>=0)OB.splice(i,1)}}
 function tick(dt){
  if(A.mode==='out'&&!F.on&&A.doorT===1&&CUR.key===AK&&P.z>70){A.doorT=0;if(A.doorOB&&OB.indexOf(A.doorOB)<0)OB.push(A.doorOB)}
@@ -5178,14 +5208,14 @@ function tick(dt){
   for(const e of X.EN){if(!e.arena)continue;e.fled=1;e.hx=P.x;e.hz=P.z;if(e.state==='guard'||e.state==='return'||e.state==='heal'||(e.state==='alert'&&e.t>1.2)){e.state=e.ranged?'range':'charge';e.t=0}}
   for(const e of F.mobs.slice())aiMob(e,dt,now);
   if(!alive())roundClear()}
- else if(F.st==='clear'){F.t-=dt;if(F.t<=0){if(F.round>=10){victory();return}F.round++;F.st='intro';F.t=3.5;banner('ROUND '+F.round,'#ffe29a')}}
- const h=hud();h.style.display='block';h.textContent='ROUND '+F.round+' / 10'+(F.st==='fight'?'  ·  '+alive()+' LEFT':F.st==='clear'?'  ·  CLEARED':'')}
+ else if(F.st==='clear'){F.t-=dt;if(F.t<=0){if(F.round>=F.total){victory();return}F.round++;F.st='intro';F.t=3.5;banner('ROUND '+F.round,'#ffe29a')}}
+ const h=hud();h.style.display='block';h.textContent='ROUND '+F.round+' / '+F.total+(F.st==='fight'?'  ·  '+alive()+' LEFT':F.st==='clear'?'  ·  CLEARED':'')}
 /* ---------- begin ---------- */
 X.arenaBegin=async function(){if(F.on||busy)return;if(X.arenaBusy()){toast('A champion is already on the sand.');return}
  busy=true;try{await fadeTo(1,500);P.x=0;P.z=20;P.y=topAt(0,20)+.3;P.vx=P.vz=P.vy=0;P.grounded=true;
   A.mode='fighter';A.inside=true;A.doorT=0;if(A.doorOB&&OB.indexOf(A.doorOB)<0)OB.push(A.doorOB);
-  HP.v=maxHP();F.on=true;F.round=1;F.st='intro';F.t=4;F.hb=0;wipe();live(1);await fadeTo(0,600)}finally{busy=false}
- banner('ROUND 1','#ffe29a');toast('The gate is sealed. Survive all ten rounds.')};
+  HP.v=maxHP();F.list=buildRounds(S.arW|0);F.total=F.list.length;F.on=true;F.round=1;F.st='intro';F.t=4;F.hb=0;wipe();live(1);await fadeTo(0,600)}finally{busy=false}
+ banner('ROUND 1','#ffe29a');toast('The gate is sealed. Survive all '+F.total+' rounds.')};
 /* ---------- hooks ---------- */
 const bh=window.bulletHit;window.bulletHit=function(p){if(F.on)for(const e of F.mobs){const r=e.ty==='spider'?.75:.5;if(Math.hypot(p.x-e.x,p.z-e.z)<r&&p.y>e.g.position.y-.05&&p.y<e.g.position.y+e.T.h){addFx(p.clone(),0x66cc55,1.2,.2);SX.enemyHit&&SX.enemyHit();e.hp-=PISTOL_DMG;if(e.hp<=0)killMob(e);return'wood'}}if(F.on)for(let i=F.traps.length-1;i>=0;i--){const t=F.traps[i];if(Math.hypot(p.x-t.x,p.z-t.z)<1.05&&p.y>A.fl-.15&&p.y<A.fl+1.15){t.hp--;SX.enemyHit&&SX.enemyHit();addFx(new THREE.Vector3(t.x,A.fl+.5,t.z),0xcfd4da,1.2,.25);if(t.hp<=0){scene.remove(t.g);t.g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)o.material.dispose()});F.traps.splice(i,1);addFx(new THREE.Vector3(t.x,A.fl+.5,t.z),0xffb060,2.2,.4)}else t.g.scale.setScalar(.5+.5*t.hp/3);return'rock'}}return bh.apply(this,arguments)};
 const fg=window.fireGun;window.fireGun=function(){if(CUR.key===AK&&!F.on&&X.arenaBusy()){const n=performance.now();if(n-F.lk>1500){F.lk=n;toast('Spectators cannot use weapons while a fight is on.')}return}return fg.apply(this,arguments)};
