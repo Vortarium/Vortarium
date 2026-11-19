@@ -146,6 +146,27 @@ service cloud.firestore {
         && request.resource.data.isl is string && request.resource.data.g is string;
     }
 
+    // Live enemy sync: each player publishes the enemies they simulate (one doc per player, only while others are on the island).
+    match /elive/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.isl is string
+        && request.resource.data.d is string
+        && request.resource.data.d.size() < 200000;
+      allow delete: if isOwner(uid);
+    }
+    // Damage to enemies another player is simulating: sender writes, the enemy's owner reads and deletes.
+    match /edmg/{id} {
+      allow create: if signedIn()
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to is string
+        && request.resource.data.g is string
+        && request.resource.data.dmg is number
+        && request.resource.data.dmg >= 1 && request.resource.data.dmg <= 400;
+      allow read, delete: if signedIn() && resource.data.to == request.auth.uid;
+    }
+
     // Global world clock (night skips) shared by every player on every island.
     match /world/{id} {
       allow read: if signedIn();
