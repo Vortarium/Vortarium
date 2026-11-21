@@ -102,6 +102,14 @@ kbd{display:inline-block;min-width:22px;text-align:center;font:600 11px/1 var(--
 .lrow span{flex:1;font-weight:500}
 .lrow em{color:var(--gold2);font-style:normal;font-weight:600;font-variant-numeric:tabular-nums}
 .ltot{margin-top:11px;display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:#fff3c4}
+.stormFx{position:fixed;inset:0;z-index:11;pointer-events:none;opacity:0;transition:opacity .6s linear}
+.stormFx.acid{background:repeating-linear-gradient(78deg,rgba(0,0,0,0) 0 26px,rgba(170,255,90,.30) 26px 27px,rgba(0,0,0,0) 27px 47px),radial-gradient(ellipse at 50% 45%,rgba(90,200,40,.10),rgba(30,110,10,.50));background-size:47px 130px,100% 100%;animation:sfAc .26s linear infinite}
+@keyframes sfAc{to{background-position:-47px 130px,0 0}}
+.stormFx.blizzard{background:radial-gradient(circle,rgba(255,255,255,.95) 0 1.6px,rgba(255,255,255,0) 2.4px),radial-gradient(circle,rgba(255,255,255,.8) 0 1.2px,rgba(255,255,255,0) 2px),radial-gradient(ellipse at 50% 50%,rgba(215,232,255,.18) 35%,rgba(200,225,255,.62));background-size:53px 61px,37px 41px,100% 100%;animation:sfBz 1.1s linear infinite}
+@keyframes sfBz{to{background-position:-106px 183px,-74px 123px,0 0}}
+.stormFx.sand{background:repeating-linear-gradient(6deg,rgba(0,0,0,0) 0 11px,rgba(245,210,150,.34) 11px 12px,rgba(0,0,0,0) 12px 29px),linear-gradient(90deg,rgba(205,150,80,.58),rgba(176,124,60,.46));background-size:240px 29px,100% 100%;animation:sfSd .5s linear infinite}
+@keyframes sfSd{to{background-position:-480px 0,0 0}}
+#ghostScare{position:fixed;inset:0;z-index:60;display:none;pointer-events:none;background:#000}#ghostScare canvas{width:100%;height:100%;object-fit:cover;animation:gsz .22s ease-out}@keyframes gsz{from{transform:scale(.9)}to{transform:scale(1.25)}}
 #flash{position:fixed;inset:0;background:#fff;opacity:0;z-index:12;pointer-events:none}
 #uw{position:fixed;inset:0;background:rgba(20,90,150,.45);z-index:9;pointer-events:none}
 #pause{position:fixed;inset:0;z-index:20;background:rgba(4,10,18,.5);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;font:700 24px var(--disp);color:var(--gold);cursor:pointer;letter-spacing:6px;text-align:center;text-transform:uppercase}
@@ -1222,7 +1230,7 @@ const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3'};
 const SPDEF={
  '1,2':{tag:'arena',name:'Colosseum Isle',size:320,bio:[2],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:94},blurb:'A small island of sand and sea, crowned by one colossal arena. Fight ten rounds for glory, or watch from the stands.'},
  '2,2':{tag:'home',name:'Home Island',size:320,bio:[0],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'Your own peaceful creative island. Set the time, the weather and who may visit.'},
- '3,2':{tag:'chaos',name:'Volcanic Chaos',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis, dragons, lightning and more while you hunt volcanic crystals.'},
+ '3,2':{tag:'chaos',name:'Chaos Island',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis, dragons, lightning and more while you hunt volcanic crystals.'},
  '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'}};
 for(const k in SPDEF)ALLKEYS.push(k);
 function islandInfo(gx,gy){let key=gx+','+gy;if(!ALLKEYS.includes(key)){key=HOME;gx=0;gy=0}if(islCache[key])return islCache[key];
@@ -2178,7 +2186,7 @@ const BAGS={},PVP={},DROP_TTL=3*3600*1000;
 function maxHP(){let m=20;for(const sl of SLOTS){const id=S.eq&&S.eq[sl],c=id&&COS_BY_ID[id];if(c)m+=HPB[c.tier]}return m}
 /* fall damage: nothing under 10 m, then 1 hp that climbs quickly with height */
 function fallHit(d,gh,cave){if(!(d>10)||HP.dead)return;if(cave||CAVE.on||performance.now()<(window._cvGrace||0))return;if(!cave&&gh<WATER-.2)return;const ex=d-10,dmg=Math.max(1,Math.round(1+ex*.4+(ex/12)*(ex/12)));hurt(dmg,'a deadly fall');try{toast('Fall damage: -'+dmg)}catch(e){}}
-function hurt(dmg,by){if(HP.dead||Date.now()<HP.inv)return;HP.v=Math.max(0,HP.v-dmg);HP.hurtT=performance.now()/1000;HP.by=by||HP.by;const h=$('hurt');h.style.transition='none';h.style.opacity=.9;void h.offsetWidth;h.style.transition='opacity .45s';h.style.opacity=0}
+function hurt(dmg,by){if(HP.dead||Date.now()<HP.inv)return;if(dmg>10&&by&&/boss|boulder|thrown/i.test(by))dmg=5+Math.floor(Math.random()*6);HP.v=Math.max(0,HP.v-dmg);HP.hurtT=performance.now()/1000;HP.by=by||HP.by;const h=$('hurt');h.style.transition='none';h.style.opacity=.9;void h.offsetWidth;h.style.transition='opacity .45s';h.style.opacity=0}
 function hitRemotePlayer(p){if(CAVE.on&&!Object.keys(MP.remote).length)return false;for(const k in MP.remote){const g=MP.remote[k].av.group.position,dx=p.x-g.x,dz=p.z-g.z;if(dx*dx+dz*dz<.55*.55&&p.y>g.y&&p.y<g.y+1.95){pvpHit(k);return true}}return false}
 function pvpHit(uid){const e=PVP[uid]||(PVP[uid]={n:0,t:null});e.n+=PISTOL_DMG;addFx(new THREE.Vector3(MP.remote[uid].av.group.position.x,P.y+1.3,MP.remote[uid].av.group.position.z),0xff4455,1.4,.2);
  if(!e.t)e.t=setTimeout(()=>{e.t=null;const n=e.n;e.n=0;if(n&&FB&&CUR.key!=='2,3'&&CUR.key!=='2,2')FB.sendHit(uid,n,S.name).catch(()=>{})},400)}
@@ -2210,7 +2218,7 @@ async function die(){
  banner('You were defeated'+(by?' by '+by:''),'#ff6a6a');SX&&SX.locked&&SX.locked();
  await fadeTo(1,700);
  try{if(CAVE.on)exitCave();
-  /* respawn: your bed (spawn point) wherever it is, otherwise the main island. Works from every island, incl. Colosseum and Volcanic Chaos. */
+  /* respawn: your bed (spawn point) wherever it is, otherwise the main island. Works from every island, incl. Colosseum and Chaos Island. */
   const sp=S.spawn&&S.spawn.isl?S.spawn:null,dest=sp?sp.isl:HOME;
   for(let tr=0;tr<2&&CUR.key!==dest;tr++){busy=false;await travel(islandInfo(...dest.split(',').map(Number)),{silent:true})}
   if(sp&&CUR.key===dest){P.x=sp.x+1.5;P.z=sp.z;P.y=topAt(P.x,P.z)+.3;P.vy=0;P.vx=P.vz=0}
@@ -2730,7 +2738,7 @@ function killEnemy(e){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(X.deat
 function alertAllies(e){for(const a of X.EN){if(a===e||a.state!=='guard'&&a.state!=='return')continue;if(Math.hypot(a.x-e.x,a.z-e.z)<14){a.state='alert';a.t=0}}}
 function hurtEnemy(e,dmg){if(e.pp&&X.es){X.es.dmg(e,dmg);e.hit=.18;SX.enemyHit&&SX.enemyHit();return}e.hp-=dmg;e.hit=.18;SX.enemyHit&&SX.enemyHit();if(e.hp<=0){killEnemy(e);return}if(e.state==='guard'||e.state==='return'||e.state==='heal'){e.state='alert';e.t=0;alertAllies(e)}}
 function shootAt(e){const kk=e.rk||kk,sc=e.scale||1,o=new THREE.Vector3(e.x,e.g.position.y+1.4*sc,e.z),tg=new THREE.Vector3(P.x+(Math.random()-.5)*1.1,P.y+1.1,P.z+(Math.random()-.5)*1.1),dir=tg.sub(o).normalize();
- const m=new THREE.Mesh(kk==='gun'?bulGeo||new THREE.SphereGeometry(.06,6,5):new THREE.CylinderGeometry(.018,.018,.9,5).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:kk==='gun'?0xffd070:0xd8c08a}));m.position.copy(o);m.lookAt(o.clone().add(dir));scene.add(m);X.EP.push({m,v:dir.multiplyScalar(kk==='gun'?42:30),life:2.2,dmg:e.boss?Math.max(1,Math.round(e.dmg*.7)):(kk==='gun'&&e.arena?1+Math.floor(Math.random()*2):1+Math.floor(Math.random()*6)),by:kk==='gun'?'a barbarian gunner':'a barbarian archer'});kk==='gun'?(SX.gun&&SX.gun()):(SX.bowShot&&SX.bowShot())}
+ const m=new THREE.Mesh(kk==='gun'?bulGeo||new THREE.SphereGeometry(.06,6,5):new THREE.CylinderGeometry(.018,.018,.9,5).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:kk==='gun'?0xffd070:0xd8c08a}));m.position.copy(o);m.lookAt(o.clone().add(dir));scene.add(m);X.EP.push({m,v:dir.multiplyScalar(kk==='gun'?42:30),life:2.2,dmg:e.boss?Math.max(1,Math.round(e.dmg*.35)):(kk==='gun'&&e.arena?1+Math.floor(Math.random()*2):1+Math.floor(Math.random()*6)),by:kk==='gun'?'a barbarian gunner':'a barbarian archer'});kk==='gun'?(SX.gun&&SX.gun()):(SX.bowShot&&SX.bowShot())}
 function throwAt(e){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+1.5*sc,e.z),tg=new THREE.Vector3(P.x,P.y+1,P.z),dd=tg.clone().sub(o),dist=Math.hypot(dd.x,dd.z),t=Math.max(.5,dist/20),v=new THREE.Vector3(dd.x/t,dd.y/t+.5*16*t,dd.z/t);
  const gr=new THREE.Group(),wm=weaponMesh(e.kind==='spear'?'spear':'axe');wm.rotation.x=-Math.PI/2;wm.scale.setScalar(1.1);gr.add(wm);gr.position.copy(o);gr.lookAt(o.clone().add(v));scene.add(gr);X.EP.push({m:gr,v,life:3,g:16,spin:e.kind!=='spear',dmg:e.boss?Math.max(2,e.dmg):1+Math.floor(Math.random()*6),by:'a thrown '+(e.kind==='spear'?'spear':'axe')});SX.spearThrow&&SX.spearThrow()}
 let RKG=null,RKM=null;
@@ -2738,6 +2746,13 @@ function rockRing(e){if(!RKG){RKG=new THREE.DodecahedronGeometry(.55,0);RKM=new 
  const sc=e.scale||1,off=Math.random()*.4;for(let k=0;k<32;k++){const a=off+k/32*6.2832,m=new THREE.Mesh(RKG,RKM);m.position.set(e.x+Math.sin(a)*1.6*sc,e.gy+1.1,e.z+Math.cos(a)*1.6*sc);scene.add(m);X.EP.push({m,v:new THREE.Vector3(Math.sin(a)*15,0,Math.cos(a)*15),life:1.7,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'})}
  SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,e.gy+.4,e.z),0xb89a6a,6,.7)}
 X.rockRing=rockRing;
+X.WSW=[];
+function worldShock(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,sx=e.x+ux*2.5,sz=e.z+uz*2.5,m=new THREE.Mesh(new THREE.BoxGeometry(35,.45,.7),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
+ m.position.set(sx,e.gy+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);X.WSW.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:3+Math.floor(Math.random()*6)})}
+function wswTick(dt){for(let i=X.WSW.length-1;i>=0;i--){const q=X.WSW[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;const gy=topAt(q.x,q.z);q.m.position.set(q.x,gy+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
+  const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
+  if(!q.hit&&!HP.dead&&Math.abs(al)<1.3&&Math.abs(lat)<18.2&&P.y<gy+1.3){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
+  if(q.t>2.4){scene.remove(q.m);q.m.material.dispose();q.m.geometry.dispose();X.WSW.splice(i,1)}}}
 function throwRock(e,spread){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+2.2*sc,e.z),a=Math.atan2(P.x-e.x,P.z-e.z)+spread,dist=Math.hypot(P.x-e.x,P.z-e.z),t=Math.max(.6,dist/18),v=new THREE.Vector3(Math.sin(a)*dist/t,(P.y+1-o.y)/t+.5*14*t,Math.cos(a)*dist/t);
  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.4,0),new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true}));m.position.copy(o);scene.add(m);X.EP.push({m,v,life:3,g:14,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'});SX.spearThrow&&SX.spearThrow()}
 /* ---- nav grid + A* so barbarians use stairs and walk around walls ---- */
@@ -2761,6 +2776,7 @@ function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now
   if(!HP.dead&&Math.hypot(p.m.position.x-P.x,p.m.position.z-P.z)<.55&&hy>P.y&&hy<P.y+1.9){hurt(p.dmg,p.by);p.life=0}
   else if(hy<topAt(p.m.position.x,p.m.position.z)||p.life<=0){if(hy<topAt(p.m.position.x,p.m.position.z))SX.arrowThud&&SX.arrowThud();p.life=0}
   if(p.life<=0){scene.remove(p.m);X.EP.splice(i,1)}}
+ if(X.WSW.length)wswTick(dt);
  if(!X.EN.length||CAVE.on||HP.dead)return;
  for(const e of X.EN){const sc=e.scale||1,dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);
   if(d>110){e.g.visible=false;continue}e.g.visible=true;
@@ -2774,21 +2790,22 @@ function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now
     if(e.patrol){const px=e.patrol.x-e.x,pz=e.patrol.z-e.z;if(Math.hypot(px,pz)<.5){e.patrol=null;e.t=0}else{mv=moveE(e,px,pz,e.speed*.35,dt);want=Math.atan2(px,pz)}}else e.face+=Math.sin(t*.7+e.hx)*dt*.6;break;
    case 'alert':want=Math.atan2(dx,dz);if(e.t<.02)SX.roar&&SX.roar();if(e.t>.6){e.state=e.ranged?'range':'charge';e.t=0}break;
    case 'charge':{want=Math.atan2(dx,dz);if(d>ag*2.4||hd>48){e.state='return';e.t=0;break}
-    if(e.boss&&e.arena){if(now>(e.bcd||0)){const r=Math.random();e.bcd=now+3.2+Math.random()*2.8;
+    if(e.boss){if(now>(e.bcd||0)){const r=Math.random();e.bcd=now+3.2+Math.random()*2.8;
       if(d>16&&r<.65){e.state='gslam';e.t=0;e.fired=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}
       else if(d<10&&r<.3){e.state='slam';e.t=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}
       else if(d>5&&d<16&&r<.55){e.state='leap';e.t=0;e.hitL=0;e.lx=dx;e.lz=dz;SX.roar&&SX.roar();break}
       else if(d<28&&r<.9){e.state='rocks';e.t=0;e.fired=0;break}}}
     else if(e.boss&&now>(e.bcd||0)&&d<22){const r=Math.random();e.bcd=now+4+Math.random()*3;if(r<.35&&d<10){e.state='slam';e.t=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}else if(r<.65&&d>5){e.state='leap';e.t=0;e.hitL=0;e.lx=dx;e.lz=dz;SX.roar&&SX.roar();break}else if(d>6){e.state='rocks';e.t=0;e.fired=0;break}}
     if(e.arena&&e.rk&&d>8&&now>(e.rcd||0)&&Math.abs(P.y-e.gy)<4){e.rcd=now+(e.rk==='gun'?2.2:1.5);e.atk=.35;shootAt(e)}
+    if(e.boss&&d>6&&now>(e.bbcd||0)&&Math.abs(P.y-e.gy)<4){e.bbcd=now+2.2+Math.random();e.atk=.35;const ork=e.rk;e.rk='gun';try{shootAt(e)}finally{e.rk=ork}}
     if(e.thrower&&d>5&&d<17&&now>(e.cd2||0)&&Math.abs(P.y-e.gy)<4){e.cd2=now+3+Math.random()*2;e.atk=.35;throwAt(e)}
     let tx=P.x,tz=P.z;if(e.nav&&d>2){const w=navStep(e,now);if(w){tx=w[0];tz=w[1]}}
     const sameLvl=Math.abs(P.y-e.gy)<1.8;
     if(d>reach||!sameLvl){mv=moveE(e,tx-e.x,tz-e.z,e.speed*1.25*(e.arena&&e.rk&&d>13?.6:1),dt);run=1;want=Math.atan2(tx-e.x,tz-e.z)}else{e.state='windup';e.t=0;e.atk=0}break}
    case 'slam':want=Math.atan2(dx,dz);if(e.t>.9){addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();if(d<7.5&&P.y<e.gy+1.4&&!HP.dead)hurt(Math.round(e.dmg*1.6),'a boss slam');e.state='recover';e.t=-.4}break;
    case 'leap':{const ld=Math.hypot(e.lx,e.lz)||1;mv=moveE(e,e.lx/ld,e.lz/ld,17*(e.slow||1),dt);run=1;if(!e.hitL&&d<reach+.6&&!HP.dead){e.hitL=1;hurt(Math.round(e.dmg*1.2),'a boss charge')}if(e.t>.6){e.state='recover';e.t=-.2}break}
-   case 'rocks':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.6){e.fired=1;if(e.arena)rockRing(e);else for(let k=-1;k<=1;k++)throwRock(e,k*.18)}if(e.t>1.2){e.state='recover';e.t=-.1}break;
-   case 'gslam':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.9){e.fired=1;addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();X.arenaShock&&X.arenaShock(e)}if(e.t>1.4){e.state='recover';e.t=-.1}break;
+   case 'rocks':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.6){e.fired=1;rockRing(e)}if(e.t>1.2){e.state='recover';e.t=-.1}break;
+   case 'gslam':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.9){e.fired=1;addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();if(e.arena)X.arenaShock&&X.arenaShock(e);else worldShock(e)}if(e.t>1.4){e.state='recover';e.t=-.1}break;
    case 'windup':want=Math.atan2(dx,dz);if(e.t>(e.boss?.6:.38)){if(d<reach+.5&&!HP.dead){hurt(e.boss?e.dmg:1+Math.floor(Math.random()*6),e.boss?'a boss':'a barbarian');SX.swing&&SX.swing()}e.state='recover';e.t=0}break;
    case 'recover':if(e.t<.35)mv=moveE(e,-dx,-dz,e.speed*.5,dt);if(e.t>.6){e.state=d>ag*2.4?'return':'charge';e.t=0}break;
    case 'range':{want=Math.atan2(dx,dz);if(d>ag*2){e.state='return';break}
@@ -3196,7 +3213,7 @@ function mkMesh(type,colIdx,d){const g=new THREE.Group(),obs=[],ud={};let hx=1,h
   else if(piece==='pillar'){hx=hz=.5;hh=4;cyl(.38,.42,4,c,0,2,0,12);cyl(.5,.5,.25,tr,0,.12,0,12);cyl(.5,.5,.25,tr,0,3.88,0,12);cyl(.44,.38,.1,lt(c),0,3.7,0,12);obs.push({lx:0,lz:0,hx:.45,hz:.45,y0:4,y1:4})}
   else if(piece==='ramp'){hx=hz=2;hh=4;const L=Math.hypot(4,4);const sl=bxm(L,.3,4,c,0,2,0);sl.rotation.z=Math.atan2(4,4);for(const sz of[-1,1]){const side=bxm(L,.18,.16,tr,0,2.15,sz*1.95);side.rotation.z=Math.atan2(4,4)}for(let i=0;i<7;i++){const t=(i+1)/8,rg=bxm(.06,.04,3.9,tr,-2+t*4,t*4+.18,0);rg.rotation.z=Math.atan2(4,4)}obs.push({lx:0,lz:0,hx:2,hz:2,y0:.2,y1:4.2})}
   else if(piece==='stair'){hx=hz=2;hh=4;for(let k=0;k<8;k++){const h=(k+1)*.5;bxm(.5,h,4,k%2?c:lt(c),-1.75+k*.5,h/2,0);obs.push({lx:-1.75+k*.5,lz:0,hx:.25,hz:2,y0:h,y1:h})}for(const sz of[-1,1])bxm(4,.2,.16,tr,0,2.1,sz*1.95).rotation.z=Math.atan2(4,4)}
-  else if(piece==='roof'){hx=hz=2.2;hh=2.6;const rf=new THREE.Mesh(new THREE.ConeGeometry(3.15,2.6,4),bmx(c));rf.rotation.y=Math.PI/4;rf.position.y=1.3;rf.castShadow=true;g.add(rf);const base=bxm(4.4,.16,4.4,tr,0,.08,0);for(let i=0;i<5;i++){const r=new THREE.Mesh(new THREE.ConeGeometry(3.15*(1-i*.16),.08,4),bmx(i%2?tr:c));r.rotation.y=Math.PI/4;r.position.y=.4+i*.5;g.add(r)}}
+  else if(piece==='roof'){hx=hz=2.2;hh=2.6;const rf=new THREE.Mesh(new THREE.ConeGeometry(3.15,2.6,4),bmx(c));rf.rotation.y=Math.PI/4;rf.position.y=1.3;rf.castShadow=true;g.add(rf);const base=bxm(4.4,.16,4.4,tr,0,.08,0);for(let i=0;i<5;i++){const r=new THREE.Mesh(new THREE.ConeGeometry(3.15*(1-i*.16),.08,4),bmx(i%2?tr:c));r.rotation.y=Math.PI/4;r.position.y=.4+i*.5;g.add(r)}for(let k=0;k<6;k++){const t=(k+1)*.4334,w=Math.max(.2,2.227*(1-t/2.6));obs.push({lx:0,lz:0,hx:w,hz:w,y0:t,y1:t})}}
   }
  else if(P2[0]==='pwall'){const c=PAINT[(colIdx|0)%PAINT.length];hx=2;hz=.2;hh=4;bxm(4,4,.26,c,0,2,0);bxm(4.1,.18,.34,dk(c),0,.09,0);bxm(4.1,.18,.34,dk(c),0,3.95,0);bxm(.18,4,.34,dk(c),-2,2,0);bxm(.18,4,.34,dk(c),2,2,0);bxm(.12,3.6,.3,lt(c),0,2,0);obs.push({lx:0,lz:0,hx:2,hz:.2,y0:4,y1:4})}
  else if(P2[0]==='fbed'){const cc=FBC[P2[1]]||'#e0343c',r=mulberry(hsh((d&&d.id)||type)+7);hx=1.1;hz=.6;hh=.9;bxm(2.2,.4,1.2,0x6b4a2b,0,.2,0);bxm(2.3,.1,1.3,0x8a6a42,0,.42,0);bxm(2,.1,1,0x3a2a1a,0,.4,0);
@@ -3877,9 +3894,59 @@ Object.assign(SX,{
  rockChip(){nz({d:.07,f0:2200,f1:900,q:2,g:.1});tn({f0:320,f1:200,d:.06,g:.06,type:'square',lp:1200})},
  shriek(){tn({f0:700,f1:1500,d:.4,g:.06,type:'sawtooth',lp:1800})}});
 let amb=6;function ambient(dt){if(!running||HP.dead)return;amb-=dt;if(amb>0)return;amb=7+Math.random()*10;
- if(CAVE.on){Math.random()<.7?SX.caveDrip():SX.caveRumble();return}
+ if(CAVE.on){amb=3.5+Math.random()*6.5;window.PX.caveAmb();return}
  const wet=WEATHER.precip>.3,nearWater=terrH(P.x,P.z)<WATER+3;
  if(nearWater&&Math.random()<.5)SX.waveLap();else if(isNight()&&Math.random()<.5)SX.owl();else if(wet&&nearWater===false&&Math.random()<.4)SX.frog();else if(Math.random()<.4)SX.windGust();else SX.leafRustle()}
+/* ===== cave soundscape + ghost jumpscare ===== */
+(function(){'use strict';const X=window.PX;
+Object.assign(SX,{
+ caveDrip2(){tn({f0:1300,f1:620,d:.14,g:.05,type:'sine',wet:.7});tn({f0:1300,f1:620,d:.14,g:.025,type:'sine',wet:.8,delay:.22})},
+ caveStream(){nz({d:2.6,f0:2600,f1:3400,q:.8,g:.03,a:.9,type:'bandpass',wet:.4});for(let i=0;i<6;i++)tn({f0:1500+Math.random()*1800,f1:900,d:.05,g:.015,delay:Math.random()*2,wet:.5})},
+ caveWind(){nz({d:3.4,f0:260,f1:520,q:2.5,g:.07,a:1.4,type:'bandpass',wet:.6});nz({d:3.4,f0:700,f1:330,q:3,g:.04,a:1.6,type:'bandpass',wet:.6,delay:.4})},
+ caveBats(){for(let i=0;i<14;i++){const dl=i*.06+Math.random()*.04;nz({d:.05,f0:5000,type:'highpass',g:.05,delay:dl,wet:.3});if(i%3===0)tn({f0:5200+Math.random()*1800,f1:3800,d:.06,g:.012,delay:dl,wet:.4})}},
+ caveRockfall(){nz({d:.9,f0:1800,f1:300,q:.6,g:.1,a:.02,type:'lowpass',wet:.5});for(let i=0;i<9;i++){const dl=.05+Math.random()*1.1;tn({f0:240+Math.random()*300,f1:90,d:.07,g:.06,type:'square',lp:900,delay:dl,wet:.4});nz({d:.04,f0:2200,q:2,g:.05,delay:dl,wet:.4})}},
+ caveWhisper(){for(let i=0;i<5;i++)nz({d:.35,f0:2400+Math.random()*1400,f1:1800+Math.random()*900,q:6,g:.045,a:.1,type:'bandpass',delay:i*.3+Math.random()*.1,wet:.7})},
+ caveGroan(){tn({f0:75,f1:48,d:2.2,g:.12,type:'sawtooth',lp:360,a:.5,wet:.6});tn({f0:79,f1:50,d:2.2,g:.08,type:'sawtooth',lp:320,a:.6,wet:.6,det:14})},
+ caveSteps(){for(let i=0;i<5;i++){const dl=i*.55+Math.random()*.06;tn({f0:90,f1:45,d:.12,g:.1,type:'sine',delay:dl,wet:.5});nz({d:.07,f0:500,f1:200,q:1,g:.05,type:'lowpass',delay:dl,wet:.5})}},
+ caveScrape(){nz({d:1.5,f0:700,f1:1500,q:5,g:.06,a:.5,type:'bandpass',wet:.5});tn({f0:180,f1:260,d:1.4,g:.03,type:'sawtooth',lp:600,a:.4,wet:.5})},
+ caveBreath(){nz({d:1.3,f0:900,f1:500,q:.7,g:.07,a:.55,type:'bandpass',wet:.5});nz({d:1.5,f0:500,f1:900,q:.7,g:.05,a:.6,type:'bandpass',wet:.5,delay:1.5})},
+ caveCry(){tn({curve:[380,520,470,640,420,300],d:2.4,g:.05,type:'sine',a:.5,wet:.8});tn({curve:[392,540,486,660,436,310],d:2.4,g:.04,type:'sine',a:.5,wet:.8,det:25})},
+ caveKnock(){for(let i=0;i<3;i++){tn({f0:180,f1:100,d:.09,g:.14,type:'triangle',delay:i*.4,wet:.4});nz({d:.04,f0:1200,q:2,g:.08,delay:i*.4,wet:.4})}},
+ ghostScare(){nz({d:.5,f0:5200,f1:1200,q:.5,g:.5,a:.005,type:'bandpass'});tn({f0:900,f1:2100,d:.45,g:.28,type:'sawtooth',lp:3500,a:.004});tn({f0:960,f1:1750,d:.45,g:.2,type:'square',lp:3000,a:.004,det:60});tn({f0:60,f1:30,d:.6,g:.4,type:'sawtooth',lp:300,a:.004})}});
+const SCARY=['caveWhisper','caveGroan','caveSteps','caveScrape','caveBreath','caveCry','caveKnock'],
+ CALM=['caveDrip','caveDrip','caveDrip2','caveStream','caveWind','caveBats','caveRockfall','caveRumble'];
+const SC={armT:0,yaw0:0,cd:8,hist:[],el:null,drawn:false};
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function drawFace(cv){const w=cv.width=520,h=cv.height=720,c=cv.getContext('2d');
+ let g=c.createRadialGradient(w/2,h*.45,20,w/2,h*.45,h*.8);g.addColorStop(0,'#2a0d14');g.addColorStop(1,'#000');c.fillStyle=g;c.fillRect(0,0,w,h);
+ c.save();c.translate(w/2,h*.45);
+ c.strokeStyle='rgba(8,6,8,.85)';c.lineCap='round';
+ for(let i=0;i<46;i++){const a=-Math.PI/2+(Math.random()-.5)*2.6,r0=150+Math.random()*60,r1=300+Math.random()*180;c.lineWidth=2+Math.random()*7;c.beginPath();c.moveTo(Math.cos(a)*r0,Math.sin(a)*r0*1.25);c.quadraticCurveTo(Math.cos(a+.25)*(r0+r1)/2,Math.sin(a+.25)*(r0+r1)/2*1.25,Math.cos(a)*r1,Math.sin(a)*r1*1.25);c.stroke()}
+ const fg=c.createLinearGradient(0,-270,0,330);fg.addColorStop(0,'#dfe2d6');fg.addColorStop(.45,'#aab1a3');fg.addColorStop(1,'#3f443f');
+ c.fillStyle=fg;c.beginPath();c.moveTo(0,-270);c.bezierCurveTo(175,-262,205,-60,140,120);c.bezierCurveTo(112,240,60,312,0,336);c.bezierCurveTo(-60,312,-112,240,-140,120);c.bezierCurveTo(-205,-60,-175,-262,0,-270);c.fill();
+ for(const sx of[-1,1]){let r=c.createRadialGradient(sx*112,70,5,sx*112,70,95);r.addColorStop(0,'rgba(10,8,10,.75)');r.addColorStop(1,'rgba(10,8,10,0)');c.fillStyle=r;c.fillRect(sx*112-100,-30,200,200)}
+ for(const sx of[-1,1]){c.save();c.translate(sx*68,-48);c.rotate(sx*.22);
+  let r=c.createRadialGradient(0,0,4,0,0,62);r.addColorStop(0,'#000');r.addColorStop(.7,'#050305');r.addColorStop(1,'rgba(5,3,5,0)');c.fillStyle=r;c.beginPath();c.ellipse(0,0,56,78,0,0,6.283);c.fill();
+  c.fillStyle='#fff3d8';c.shadowColor='#ff5a3a';c.shadowBlur=18;c.beginPath();c.arc(0,6,5,0,6.283);c.fill();c.shadowBlur=0;c.restore()}
+ c.fillStyle='rgba(12,8,10,.9)';for(const sx of[-1,1]){c.beginPath();c.ellipse(sx*13,52,5,15,sx*.25,0,6.283);c.fill()}
+ c.save();c.translate(0,170);c.fillStyle='#000';c.beginPath();c.moveTo(-62,-24);c.bezierCurveTo(-72,60,-34,150,0,168);c.bezierCurveTo(34,150,72,60,62,-24);c.bezierCurveTo(32,-48,-32,-48,-62,-24);c.fill();
+ c.fillStyle='#c9c6b4';for(let i=0;i<7;i++){const x=-44+i*14.6,hh=14+Math.random()*16;c.beginPath();c.moveTo(x-6,-34+Math.abs(i-3)*3);c.lineTo(x+6,-34+Math.abs(i-3)*3);c.lineTo(x,-34+Math.abs(i-3)*3+hh);c.fill()}
+ for(let i=0;i<6;i++){const x=-34+i*13.6,hh=10+Math.random()*14;c.beginPath();c.moveTo(x-6,128-Math.abs(i-2.5)*8);c.lineTo(x+6,128-Math.abs(i-2.5)*8);c.lineTo(x,128-Math.abs(i-2.5)*8-hh);c.fill()}
+ c.restore();
+ c.strokeStyle='rgba(20,14,16,.7)';c.lineWidth=1.6;for(let i=0;i<14;i++){let x=(Math.random()-.5)*230,y=-230+Math.random()*470;c.beginPath();c.moveTo(x,y);for(let k=0;k<4;k++){x+=(Math.random()-.5)*34;y+=10+Math.random()*26;c.lineTo(x,y)}c.stroke()}
+ c.restore();
+ g=c.createRadialGradient(w/2,h/2,h*.25,w/2,h/2,h*.75);g.addColorStop(0,'rgba(80,0,0,0)');g.addColorStop(1,'rgba(60,0,0,.75)');c.fillStyle=g;c.fillRect(0,0,w,h)}
+function mkEl(){if(SC.el)return;const d=document.createElement('div');d.id='ghostScare';const cv=document.createElement('canvas');d.appendChild(cv);document.body.appendChild(d);try{drawFace(cv)}catch(e){console.error('[ghost]',e)}SC.el=d}
+X.caveAmb=function(){if(Math.random()<.38){SX[pick(SCARY)]();if(SC.cd<=0&&!SC.armT){mkEl();SC.armT=4.5;SC.yaw0=P.yaw;SC.hist=[]}}else SX[pick(CALM)]()};
+function scare(){SC.armT=0;SC.cd=25+Math.random()*20;SC.hist=[];mkEl();const d=SC.el,cv=d.firstChild;d.style.display='block';cv.style.animation='none';void cv.offsetWidth;cv.style.animation='';
+ try{SX.ghostScare()}catch(e){}try{window.hurt(1,'a cave ghost')}catch(e){console.error(e)}
+ setTimeout(()=>{d.style.display='none'},230)}
+function scTick(dt){SC.cd-=dt;if(!CAVE.on){SC.armT=0;return}if(SC.armT<=0)return;
+ if(!running||HP.dead){SC.armT=0;return}SC.armT-=dt;const now=performance.now()/1000;SC.hist.push({t:now,y:P.yaw});while(SC.hist.length&&now-SC.hist[0].t>.7)SC.hist.shift();
+ const TP=Math.PI*2,d=Math.abs(((P.yaw-SC.yaw0+Math.PI)%TP+TP)%TP-Math.PI),sp=SC.hist.length?Math.abs(P.yaw-SC.hist[0].y):0;
+ if(d>2.2&&sp>1.3&&locked&&!invOpen&&!busy)scare()}
+const pu=window.update;window.update=function(dt){pu(dt);try{scTick(dt)}catch(e){if(!X._gs){X._gs=1;console.error('[ghost]',e)}}};
+})();
 /* ===== boss telegraph hook ===== */
 X.hudTick=function(dt){syncTime();if(X.sl){const k=sleepers();if(!isNight()||Math.hypot(P.x-sleepPos[0],P.z-sleepPos[1])>1.2||HP.v<sleepPos[2]-.01||Date.now()-X.sl>600000){wake();toast('You got up')}else if(k.k>=k.n)doSkip()}
  const k=sleepers();if(k.k>0&&k.n>1&&isNight()){sm.style.display='block';sm.textContent=k.k+'/'+k.n+' players are asleep'+(X.sl?' — waiting for everyone…':' — join them to skip the night (hold a bed and press Q)')}else sm.style.display='none'};
@@ -3955,7 +4022,7 @@ function nmTick(dt){if(!running||CAVE.on||HP.dead){if(CAVE.on&&NM.length)for(con
   if(e.ty==='spider'){u.legs.forEach((l,i)=>{l.rotation.z=Math.sin(e.ph+i*1.3)*.25*(mv?1:.1)});}
   else{const sw=Math.sin(e.ph)*.7*(mv?1:0);u.lg.rotation.x=sw;u.rg.rotation.x=-sw;if(e.ty==='zombie'){u.la.rotation.x=-1.35+Math.sin(e.ph*.5)*.15;u.ra.rotation.x=-1.35-Math.sin(e.ph*.5)*.15}}
   const now=performance.now()/1000;
-  if(e.ty!=='skeleton'&&d<(1.5+(e.ty==='spider'?.3:.2))*(e.scl||1)&&now>e.cd&&(rt||!HP.dead)){e.cd=now+(e.ty==='spider'?.9:1.3);if(rt)rhit(rt.uid,1+Math.floor(Math.random()*3),T.n);else hurt(1+Math.floor(Math.random()*3),T.n);SX.swing&&SX.swing()}
+  if(e.ty!=='skeleton'&&d<(1.5+(e.ty==='spider'?.3:.2))*(e.scl||1)&&now>e.cd&&(rt||!HP.dead)){e.cd=now+(e.ty==='spider'?.9:1.3);if(rt)rhit(rt.uid,1+Math.floor(Math.random()*3),T.n);else if(e.mine||e.ar){X.big=1;try{hurt(2*(1+Math.floor(Math.random()*2)),T.n)}finally{X.big=0}}else hurt(1+Math.floor(Math.random()*3),T.n);SX.swing&&SX.swing()}
   }}
 const pbh=bulletHit;window.bulletHit=function(p){if(!CAVE.on)for(const e of NM){const T=e.T,r=(e.ty==='spider'?.75:.5)*(e.scl||1);if(Math.hypot(p.x-e.x,p.z-e.z)<r&&p.y>e.g.position.y-.05&&p.y<e.g.position.y+T.h){addFx(p.clone(),0x66cc55,1.2,.2);SX.enemyHit&&SX.enemyHit();if(e.pp){X.es&&X.es.dmg(e,PISTOL_DMG);return'wood'}e.hp-=PISTOL_DMG;if(e.hp<=0)die(e);return'wood'}}return pbh(p)};
 const rhit=(u,dm,n)=>{try{if(FB&&FB.sendHit)FB.sendHit(u,dm,n).catch(()=>{})}catch(er){}};
@@ -4441,7 +4508,7 @@ function roar(){try{nz({d:1.6,f0:700,f1:120,q:.7,g:.16,type:'lowpass'});tn({f0:1
 function boom(){try{nz({d:1.3,f0:260,f1:40,q:.7,g:.3,type:'lowpass'});tn({f0:70,f1:28,d:1.1,g:.3,type:'sine'})}catch(e){}}
 function go(d,st){d.st=st;d.stT=0}
 const DM=d=>(d.s.arena||d.s.evt)?(d.s.hp<d.s.max*.5?4:2):1;/* arena + event dragon base damage (doubled in phase 2) */
-const hurtD=(dm,by)=>{if(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='chaos')dm=1;X.big=1;try{hurt(dm,by)}finally{X.big=0}};
+const hurtD=(dm,by)=>{if(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='chaos')dm=Math.random()<.5?1:2;X.big=1;try{hurt(dm,by)}finally{X.big=0}};
 const CDV=(s,ph2)=>s.arena?2.5+Math.random()*2:s.evt?4+Math.random()*3:(ph2?3:5)+Math.random()*3;
 function arenaRing(d){if(X.rockRing)X.rockRing({x:d.x,z:d.z,gy:X.arena.fl,scale:2,dmg:DM(d)*3/.8})}
 function arenaShockD(d){if(X.arenaShock)X.arenaShock({x:d.x,z:d.z,dmg:DM(d)*2.5});roar();X.shake(.6,.5)}
@@ -4705,7 +4772,7 @@ function tick(dt){if(!running||tagNow()!=='arena'||!A.G){setHint(null);return}
  else if(A.mode==='spectator'){if(P.z<62)A.inside=true;setHint(A.inside&&P.z>46&&Math.abs(P.x)<12?'Walk out through the gate to stop spectating':null);if(A.inside&&P.z>69)leaveSpec();else if(!A.inside&&P.z>88)leaveSpec()}
  else setHint(null)}
 })();
-/* ===== Rare weather events: tornado, tsunami, earthquake. 1% each per weather block (same odds as blood rain). Volcanic Chaos runs them as its disasters. ===== */
+/* ===== Rare weather events: tornado, tsunami, earthquake. 1% each per weather block (same odds as blood rain). Chaos Island runs them as its disasters. ===== */
 (function(){'use strict';const X=window.PX;
 const NAMES={tornado:'TORNADO',tsunami:'TSUNAMI',quake:'EARTHQUAKE'},TAB={tornado:[.95,.8,.3,0],tsunami:[.92,.62,.5,0],quake:[.74,.4,0,0]};
 Object.assign(WTAB,TAB);Object.assign(WNAME,{tornado:'Tornado',tsunami:'Tsunami',quake:'Earthquake'});
@@ -4765,7 +4832,7 @@ const ol=window.loadIsland;window.loadIsland=function(){stop(true);return ol.app
 const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._ev1){X._ev1=1;console.error('[events]',e)}}};
 X.events={mkTornado,start,stop,active:()=>!!EV.k,remain:()=>Math.max(0,EV.dur-EV.t),names:NAMES,get kind(){return EV.k}};
 })();
-/* ===== CHUNK S2a: Volcanic Chaos island - 3x terrain, hellish badlands, giant volcano, lava lake + rivers, hitboxes ===== */
+/* ===== CHUNK S2a: Chaos Island island - 3x terrain, hellish badlands, giant volcano, lava lake + rivers, hitboxes ===== */
 (function(){'use strict';const X=window.PX=window.PX||{};
 const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
 const isChaos=()=>!!(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='chaos');
@@ -4815,7 +4882,7 @@ let HELL=null;const osc=window.scatter;window.scatter=function(info){if(!isChaos
 /* ---------- arrival point: the south dock ---------- */
 const ofs=window.findSpawn;window.findSpawn=function(info){const r=ofs.apply(this,arguments);if(isChaos()){let zl=null;for(let z=HALF-6;z>0;z-=1.5)if(terrH(0,z)>.9){zl=z;break}spawn={x:0,z:(zl==null?HALF*.8:zl)-16}}return r};
 /* ---------- everything on this island hurts for exactly 1 ---------- */
-const oh=window.hurt;window.hurt=function(d,by){if(isChaos()&&d>1&&!X.big)d=1;if(isChaos()&&window.__chDmg&&window.__chDmg!==1)d*=window.__chDmg;return oh.call(this,d,by)};
+const oh=window.hurt;window.hurt=function(d,by){if(isChaos()&&d>1&&!X.big)d=2;if(isChaos()&&window.__chDmg&&window.__chDmg!==1)d*=window.__chDmg;const r=oh.call(this,d,by);if(isChaos()&&HP.v<=0&&!HP.dead){try{die()}catch(e){console.error(e)}}return r};
 /* ---------- build: lava lake, lava rivers, rim boulders, basalt columns, glow, smoke ---------- */
 let C=null;const DIS={next:0,count:0,cur:null,end:0,sp:0};
 function glowTex(r,g,b){const N=128,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d'),gr=x.createRadialGradient(N/2,N/2,0,N/2,N/2,N/2);
@@ -4884,7 +4951,7 @@ function dlg(text,opts){document.exitPointerLock&&document.exitPointerLock();
 function talk(){if(CH.state==='run'){dlg('The mountain is awake and so are you. <b>'+fmt(Math.max(0,Math.ceil(CH.DUR-(performance.now()-CH.t0)/1000)))+'</b> left on the clock. Hold on to every second.',[{t:'Back to it.',fn:closeDlg}]);return}
  if(CH.state==='over'){dlg('The ash has claimed you. Your hunt is over.',[{t:'Leave.',fn:closeDlg}]);return}
  const last=CH.last?'<i>Your last hunt: '+CH.last.sc+' crystals'+(CH.last.tier?', '+['','low','medium','high'][CH.last.tier]+' reward.':', no reward.')+'</i><br><br>':'';
- dlg(last+'Welcome to <b>Volcanic Chaos</b>. Three hundred crystals are hidden across this island, some of them high up on the volcano. A new disaster strikes every twenty seconds, whether or not the last one has ended, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Three rare <b>blue gems</b> are scattered around the island. Each one gives you a random power-up for a short while.<br><br>Survive <b>six minutes</b> and your crystals are counted: <b>30 to 39</b> crystals earns a chest of 200 gems, <b>40 to 54</b> a chest of 500 gems, and <b>55 or more</b> a chest of 1500 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
+ dlg(last+'Welcome to <b>Chaos Island</b>. Three hundred crystals are hidden across this island, some of them high up on the volcano. A new disaster strikes every twenty seconds, whether or not the last one has ended, tornados never leave, and the monsters double their spawn rate every minute. <b>Everything here hurts.</b> Nothing on the island can be dug up or built on.<br><br>Three rare <b>blue gems</b> are scattered around the island. Each one gives you a random power-up for a short while.<br><br>Survive <b>six minutes</b> and your crystals are counted: <b>30 to 39</b> crystals earns a chest of 200 gems, <b>40 to 54</b> a chest of 500 gems, and <b>55 or more</b> a chest of 1500 gems. Fall before the clock runs out and you leave with nothing. Once you cross the rope there is no sailing away. Are you ready?',[
   {t:'Start the hunt.',fn:()=>{closeDlg();startGame()}},{t:'Not yet.',fn:closeDlg}])}
 function startGame(){if(!C||CH.state!=='idle')return;CH.state='run';CH.t0=performance.now();CH.tgt=1;CH.score=0;CH.left=0;CH.sec=0;DIS.count=0;DIS.next=performance.now()/1000+20;puClear();blueReset();MOB.acc=0;FL.t=0;FL.imm=0;bag=[];clearHaz();if(C.fence)C.fence.visible=false;
  try{X.fixSky(.5,'blood')}catch(e){}banner('THE VOLCANO OVERFLOWS','#ff7a3a');toast('The ropes fall away. Survive six minutes.')}
@@ -4932,10 +4999,11 @@ const ol=window.loadIsland;window.loadIsland=function(info){C=null;CH.state='idl
 /* ---------- lava crystals: 100 glowing shards spread over the whole island, collected by touching ---------- */
 CH.score=0;CH.total=300;
 function buildShards(){const G=C.G,rnd=mulberry(0x51a9d5),pts=[],R0=CH.Rr*1.12,R1=CH.Rc-60;C.shards=[];
- const NV=Math.round(CH.total*.3);
+ const NV=Math.round(CH.total*.1);
  for(let n=0;n<CH.total;n++){let best=null,bd=-1;const hi=n<NV;
-  for(let k=0;k<(hi?260:120);k++){const a=rnd()*Math.PI*2,r=hi?CH.Rr*(1.06+rnd()*1.5):Math.sqrt(R0*R0+rnd()*(R1*R1-R0*R0)),x=Math.cos(a)*r,z=Math.sin(a)*r,h=terrH(x,z);
+  for(let k=0;k<(hi?600:320);k++){const a=rnd()*Math.PI*2,r=hi?CH.Rr*(1.06+rnd()*1.5):Math.sqrt(R0*R0+rnd()*(R1*R1-R0*R0)),x=Math.cos(a)*r,z=Math.sin(a)*r,h=terrH(x,z);
    if(hi){if(h<38||h>CH.Pk-3||riverAt(x,z)<3.2)continue}else if(h<1.8||h>40||riverAt(x,z)<3.2||(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+8))continue;
+   {const lo=hi?clamp((h-38)/(CH.Pk-3-38),0,1):clamp((h-1.8)/38,0,1);if(rnd()>Math.pow(1-lo,2)*.97+.03)continue}
    let md=1e8;for(const p of pts)md=Math.min(md,Math.hypot(p.x-x,p.z-z));if(md>bd){bd=md;best={x,z,h}}}
   if(best)pts.push(best)}
  const core=new THREE.OctahedronGeometry(.5,0),shell=new THREE.OctahedronGeometry(.72,0);DISP.push(core,shell);
@@ -4947,11 +5015,11 @@ function buildShards(){const G=C.G,rnd=mulberry(0x51a9d5),pts=[],R0=CH.Rr*1.12,R
 function puClear(){CH.pu={spd:0,dmg:0,skip:0,bcn:0,bag:[]};window.__chSpd=1;window.__chDmg=1;if(C&&C.shards){for(const s of C.shards)if(s.rb)s.rb.visible=false;C.rbOn=false}}
 function blueReset(){if(!C||!C.blues)return;for(const s of C.blues){if(s.got){s.got=0;C.G.add(s.g)}s.bm.visible=false}}
 function buildBlues(rnd){const G=C.G,R0=CH.Rr*1.12,R1=CH.Rc-60;C.blues=[];
- const core=new THREE.OctahedronGeometry(.6,0),shell=new THREE.OctahedronGeometry(.86,0),bg=new THREE.CylinderGeometry(.1,.1,500,6,1,true);DISP.push(core,shell,bg);
+ const core=new THREE.OctahedronGeometry(.6,0),shell=new THREE.OctahedronGeometry(.86,0),bg=new THREE.CylinderGeometry(.7,.7,900,8,1,true);DISP.push(core,shell,bg);
  C.blueGlow=glowTex(80,170,255);
  const mc=new THREE.MeshBasicMaterial({color:0x2a8cff,fog:false}),mw=new THREE.MeshBasicMaterial({color:0xbfe4ff,wireframe:true,transparent:true,opacity:.85,fog:false}),
   ms=new THREE.SpriteMaterial({map:C.blueGlow,color:0x4aa8ff,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false}),
-  mb=new THREE.MeshBasicMaterial({color:0x4aa8ff,transparent:true,opacity:.6,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});
+  mb=new THREE.MeshBasicMaterial({color:0x6ab8ff,transparent:true,opacity:.95,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});
  const a0=rnd()*Math.PI*2,placed=[];
  for(let n=0;n<3;n++){let best=null;
   for(let k=0;k<400&&!best;k++){const a=a0+n*Math.PI*2/3+(rnd()-.5)*.7,r=Math.sqrt(R0*R0+rnd()*(R1*R1-R0*R0)),x=Math.cos(a)*r,z=Math.sin(a)*r,h=terrH(x,z);
@@ -4960,23 +5028,23 @@ function buildBlues(rnd){const G=C.G,R0=CH.Rr*1.12,R1=CH.Rc-60;C.blues=[];
    if(ok)best={x,z,h}}
   if(!best)continue;placed.push(best);
   const g=new THREE.Group(),c=new THREE.Mesh(core,mc),w=new THREE.Mesh(shell,mw),sp=new THREE.Sprite(ms),bm=new THREE.Mesh(bg,mb);
-  c.scale.y=1.7;w.scale.y=1.7;sp.scale.set(9,9,1);bm.position.y=245;bm.frustumCulled=false;bm.visible=false;g.add(c,w,sp,bm);
+  c.scale.y=1.7;w.scale.y=1.7;sp.scale.set(18,18,1);bm.position.y=445;bm.frustumCulled=false;bm.visible=false;g.add(c,w,sp,bm);
   g.position.set(best.x,best.h+1.5,best.z);G.add(g);C.blues.push({g,bm,x:best.x,z:best.z,y:best.h+1.5,ph:n*1.9,got:0})}}
 function puGive(now){const pu=CH.pu;if(!pu.bag.length){pu.bag=['speed','shield','skip','beacons'];for(let i=3;i>0;i--){const j=Math.floor(Math.random()*(i+1)),t=pu.bag[i];pu.bag[i]=pu.bag[j];pu.bag[j]=t}}
  const k=pu.bag.pop();
  if(k==='speed'){pu.spd=now+30;banner('SPEED BOOST','#6ab8ff');toast('Blue gem: you run 50% faster for 30 seconds!')}
  else if(k==='shield'){pu.dmg=now+30;banner('HALF DAMAGE','#6ab8ff');toast('Blue gem: all damage to you is halved for 30 seconds!')}
  else if(k==='skip'){pu.skip=1;banner('DISASTER WARD','#6ab8ff');toast('Blue gem: the next disaster will be cancelled!')}
- else{pu.bcn=now+30;banner('CRYSTAL SIGHT','#6ab8ff');toast('Blue gem: red crystals within 100 m now show beacons for 30 seconds!')}}
+ else{pu.bcn=now+30;banner('CRYSTAL SIGHT','#6ab8ff');toast('Blue gem: red crystals within 300 m now show beacons for 30 seconds!')}}
 function blueTick(dt){if(!C||!C.blues)return;const now=performance.now()/1000,live=CH.state==='run'&&running&&!HP.dead,pu=CH.pu||(CH.pu={spd:0,dmg:0,skip:0,bcn:0,bag:[]});
  window.__chSpd=live&&pu.spd>now?1.5:1;window.__chDmg=live&&pu.dmg>now?.5:1;
  for(const s of C.blues){if(s.got)continue;s.g.rotation.y+=dt*2.1;s.g.position.y=s.y+Math.sin(C.t*2.4+s.ph)*.3;
-  const dx=P.x-s.x,dz=P.z-s.z,d2=dx*dx+dz*dz;s.bm.visible=d2<50*50;
+  const dx=P.x-s.x,dz=P.z-s.z,d2=dx*dx+dz*dz;s.bm.visible=true;
   if(live&&d2<3*3&&Math.abs(P.y+.9-s.g.position.y)<3.6){s.got=1;C.G.remove(s.g);puGive(now);
    addFx(new THREE.Vector3(s.x,s.g.position.y,s.z),0x4aa8ff,4,.6);addFx(new THREE.Vector3(s.x,s.g.position.y+.4,s.z),0xe0f4ff,2,.4);try{SX.bell&&SX.bell()}catch(e){}hudUpdate()}}
  const bon=live&&pu.bcn>now;
- if(bon){if(!C.rbG){C.rbG=new THREE.CylinderGeometry(.09,.09,500,5,1,true);C.rbM=new THREE.MeshBasicMaterial({color:0xff3a1a,transparent:true,opacity:.6,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});DISP.push(C.rbG)}
-  for(const s of C.shards){if(s.got){if(s.rb)s.rb.visible=false;continue}const dx=P.x-s.x,dz=P.z-s.z,v=dx*dx+dz*dz<100*100;
+ if(bon){if(!C.rbG){C.rbG=new THREE.CylinderGeometry(.3,.3,500,6,1,true);C.rbM=new THREE.MeshBasicMaterial({color:0xff3a1a,transparent:true,opacity:.85,depthWrite:false,fog:false,blending:THREE.AdditiveBlending});DISP.push(C.rbG)}
+  for(const s of C.shards){if(s.got){if(s.rb)s.rb.visible=false;continue}const dx=P.x-s.x,dz=P.z-s.z,v=dx*dx+dz*dz<300*300;
    if(v&&!s.rb){const m=new THREE.Mesh(C.rbG,C.rbM);m.position.y=245;m.frustumCulled=false;s.g.add(m);s.rb=m}if(s.rb)s.rb.visible=v}}
  else if(C.rbOn){for(const s of C.shards)if(s.rb)s.rb.visible=false}
  C.rbOn=bon}
@@ -4992,9 +5060,9 @@ function slowMobs(){const a=X.NM;if(!a)return;for(const e of a){if(e.chs)continu
    tornado (permanent, wanders, pulls + slings you) · earthquake · tsunami · meteor shower · the floor is lava */
 const TOR=[],MET=[],LP=[],FL={t:0,d:1,vx:0,vz:0,imm:0},MOB={acc:0};let lpLast=null,bag=[];
 const BH=(d,by)=>{X.big=1;try{hurt(d,by)}finally{X.big=0}};
-const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA'};
+const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno','geyser','gas','surge','acid','blizzard','sandstorm'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA',geyser:'MAGMA GEYSERS',gas:'TOXIC GAS',surge:'MONSTER SURGE',acid:'ACID RAIN',blizzard:'BLIZZARD',sandstorm:'SANDSTORM'};
 function nextKind(){if(!bag.length){bag=DKINDS.slice();for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=bag[i];bag[i]=bag[j];bag[j]=t}}return bag.pop()}
-function resetArrays(){TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
+function resetArrays(){SHL.length=0;if(FXD)FXD.style.opacity=0;TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
 function dispose(o){o.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose()}})}
 function clearHaz(){try{evtClear()}catch(e){}try{X.events.stop(true)}catch(e){}
  for(const t of TOR){if(t.g.parent)t.g.parent.remove(t.g);try{dispose(t.g)}catch(e){}}TOR.length=0;
@@ -5002,13 +5070,19 @@ function clearHaz(){try{evtClear()}catch(e){}try{X.events.stop(true)}catch(e){}
  for(const p of LP)if(p.g.parent)p.g.parent.remove(p.g);LP.length=0;lpLast=null;
  if(C){C.met=null;C.lf=null}DIS.cur=null}
 function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
- if(k==='tornado'){let nt=0;for(let q=0;q<3;q++)if(torSpawn())nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('3 TORNADOS','#cfc8c0');toast('Three tornados touch down across the island. They will never leave.')}
+ if(k==='tornado'){let nt=0;for(let q=0;q<5;q++)if(torSpawn())nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('5 TORNADOS','#cfc8c0');toast('Five tornados touch down across the island. They will never leave.')}
  else if(k==='quake'||k==='tsunami'){if(!E.start(k,{chaos:1}))return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+E.remain()}
  else if(k==='meteor'){C.met={t:0,dur:24,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+24;banner('METEOR SHOWER','#ff8a4a');toast('Boulders are raining from the sky. Watch the red rings on the ground!')}
  else if(k==='dragons'){if(C.ev.dr)return false;evDragons();DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.dragonT;banner('DRAGONS','#ff7a3a');toast('Five dragons circle the island: one in each corner and one in the centre! Run far enough and they lose interest.')}
  else if(k==='lavarise'){if(C.ev.lr)return false;C.ev.lr={t:0,b:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.lavaT;banner('LAVA RISE','#ff4a1a');toast('The ocean has turned to lava and it is rising! Climb the volcano!')}
  else if(k==='lightning'){if(C.ev.lg)return false;C.ev.lg={t:0,acc:0,cd:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.lightT;banner('LIGHTNING STORM','#cfe0ff');toast('Lightning is striking all around you!')}
  else if(k==='arachno'){if(C.ev.ar)return false;C.ev.ar={t:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.spiderT;banner('ARACHNOPHOBIA','#9aff6a');toast('The spiders are huge and fast, and they spit out baby spiders!')}
+ else if(k==='geyser'){if(C.ev.gy)return false;C.ev.gy={t:0,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.geyserT;banner('MAGMA GEYSERS','#ff6a1c');toast('Red rings mark where magma is about to burst out of the ground. Get out of them!')}
+ else if(k==='gas'){if(C.ev.gs)return false;C.ev.gs={t:0,hit:0,warn:0};if(!gsStart()){C.ev.gs=null;return false}DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.gasT;banner('TOXIC GAS','#8cff3a');toast('Poison clouds are drifting toward you. Do not stand inside them!')}
+ else if(k==='surge'){if(C.ev.sg||!C.spawnFn)return false;C.ev.sg={t:0,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.surgeT;banner('MONSTER SURGE','#ff5a5a');toast('The island is flooding with monsters!')}
+ else if(k==='acid'){if(C.ev.ac||!shStart())return false;C.ev.ac={t:0,hit:0,sn:0,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.acidT;banner('ACID RAIN','#9aff3a');toast('Acid is raining down! Get under a stone shelter. The pale light pillars show where they are.')}
+ else if(k==='blizzard'){if(C.ev.bz)return false;C.ev.bz={t:0,hit:0,sn:0,cold:0,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.blizT;banner('BLIZZARD','#cfe8ff');toast('A blizzard is freezing the island! Warm up near the lava and its rivers, but do not touch it.')}
+ else if(k==='sandstorm'){if(C.ev.sd||!shStart())return false;C.ev.sd={t:0,hit:0,sn:0,s:performance.now(),a:Math.random()*6.283,w:Math.random()*50};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.sandT;banner('SANDSTORM','#e0b070');toast('A sandstorm is blowing you across the island! Get under a stone shelter to stop the wind.')}
  else{C.lf={t:0,dur:22};lpLast=null;DIS.cur={k,n:DNAME[k]};DIS.end=now+22;banner('THE FLOOR IS LAVA','#ff5a2a');toast('Keep moving! Lava follows your steps, and standing still burns.')}
  DIS.count++;return true}
 function endDis(){const E=X.events;if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')&&E.active())E.stop();if(DIS.cur.k==='meteor')C.met=null;if(DIS.cur.k==='lavafloor')C.lf=null}DIS.cur=null}
@@ -5039,14 +5113,16 @@ function flingDir(T){/* away from the funnel with a sideways spin, but never int
  if(!best)best={a:base,sp:70};return best}
 function torHit(dt){if(!running||HP.dead||CAVE.on||CH.state!=='run'){FL.t=0;return}
  if(FL.t>0){FL.t-=dt;const k=Math.max(0,FL.t/FL.d),m=.35+.65*k;P.vx=FL.vx*m;P.vz=FL.vz*m}
- FL.imm-=dt;if(FL.imm>0||!TOR.length)return;
+ FL.imm-=dt;if(!TOR.length)return;
  let T=null,bd=1e9;for(const q of TOR){const d=Math.hypot(q.x-P.x,q.z-P.z);if(d<bd){bd=d;T=q}}
+ C.tdT=(C.tdT||0)-dt;if(T&&T.t>=3&&bd<11&&C.tdT<=0&&P.y<terrH(P.x,P.z)+16){C.tdT=.4;BH(2,'a tornado');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,2,.3)}
+ if(FL.imm>0)return;
  const R=80;if(!T||bd>=R||T.t<3)return;const d=bd||1,dx=T.x-P.x,dz=T.z-P.z;
  /* slow tug at the edge, a hard grip up close */
  const f=(1.4+5.5*Math.pow(1-d/R,2)+(d<30?13*Math.pow(1-d/30,1.6):0))*dt;
  P.x+=dx/d*f-dz/d*f*.35;P.z+=dz/d*f+dx/d*f*.35;
  if(d<40&&!C.tw){C.tw=1;toast('The tornado is pulling you in. Run!')}if(d>60)C.tw=0;
- if(d<6.5){BH(5,'a tornado');const fd=flingDir(T);FL.vx=Math.cos(fd.a)*fd.sp;FL.vz=Math.sin(fd.a)*fd.sp;FL.d=FL.t=1.9;FL.imm=6;P.vy=25;P.grounded=false;P.y+=.6;
+ if(d<6.5){BH(6,'a tornado');const fd=flingDir(T);FL.vx=Math.cos(fd.a)*fd.sp;FL.vz=Math.sin(fd.a)*fd.sp;FL.d=FL.t=1.9;FL.imm=6;P.vy=25;P.grounded=false;P.y+=.6;
   addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,4,.6);toast('The tornado flings you across the island!');C.tw=0;try{X.shake&&X.shake(1,.5)}catch(e){}}}
 /* ---------- meteor shower: lots of boulders at random spots across the whole island ---------- */
 function metInit(){if(C.metG)return;C.metG=new THREE.DodecahedronGeometry(1,0);C.metMk=new THREE.RingGeometry(1.7,2.5,28).rotateX(-Math.PI/2);DISP.push(C.metG,C.metMk);
@@ -5085,14 +5161,14 @@ function lavaTick(dt){if(!C)return;const LIFE=11;
  if(!LP.length)return;lpInit();C.lb-=dt;
  if(P.y<terrH(P.x,P.z)+1.5&&C.lb<=0){for(const p of LP){if(p.t>1.5&&Math.hypot(P.x-p.x,P.z-p.z)<1.5){C.lb=.5;BH(3,'molten ground');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4);break}}}}
 /* ---------- extra disasters: dragons, lava rise, lightning storm, arachnophobia (each runs on its own timer) ---------- */
-const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48};
+const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48,geyserT:25,gasT:30,surgeT:20,acidT:25,blizT:30,sandT:30};
 function evDragons(){const E=C.ev;if(E.dr)return;E.dr={t:0};
  const DSP=[[0,0],[-1,-1],[1,-1],[-1,1],[1,1]];for(let k=0;k<EVC.dragons;k++){const cx=DSP[k%5][0]*CH.Rc*.55,cz=DSP[k%5][1]*CH.Rc*.55;
   try{const d=X.dragonSpawn({i:100+k,cx,cz,R:60+Math.random()*50,alt:44+Math.random()*16,dir:k%2?1:-1,v:Math.floor(Math.random()*6),hp:EVC.dragonHp,max:EVC.dragonHp,evt:1});d.cd=3+Math.random()*4}catch(e){console.error('[chaos dragons]',e)}}}
 function drEnd(){if(!C||!C.ev||!C.ev.dr)return;try{for(const d of(X.dragons||[]))addFx(new THREE.Vector3(d.x,d.y,d.z),0xff7a22,7,.9)}catch(e){}try{X.dragonClear()}catch(e){}C.ev.dr=null}
 function lgTick(dt){const L=C.ev.lg;L.t+=dt;L.acc+=dt/EVC.lightEvery;L.cd-=dt;let n=0;
  while(L.acc>=1&&n++<4){L.acc-=1;let x=0,z=0,ok=false;
-  for(let k=0;k<8&&!ok;k++){const a=Math.random()*6.283,r=Math.sqrt(Math.random())*100;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r;
+  for(let k=0;k<8&&!ok;k++){const a=Math.random()*6.283,r=Math.sqrt(Math.random())*50;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r;
    ok=terrH(x,z)>WATER+.3&&Math.hypot(x,z)<CH.Rc-30}
   if(!ok)continue;
   try{if(X.wx&&X.wx.strikeAt)X.wx.strikeAt(x,z);else addFx(new THREE.Vector3(x,terrH(x,z)+1,z),0xeaf2ff,8,.3)}catch(e){}
@@ -5104,7 +5180,7 @@ function lrTick(dt){const L=C.ev.lr;L.t+=dt;ocInit();
  const f=L.t<EVC.lavaT?L.t/EVC.lavaT:Math.max(0,1-(L.t-EVC.lavaT)/EVC.lavaDown),y=WATER+EVC.lavaUp*f;
  if(L.t>=EVC.lavaT+EVC.lavaDown){C.oc.visible=false;C.ev.lr=null;return}
  C.oc.visible=true;C.oc.position.y=y;C.ocTex.offset.set(C.t*.01,C.t*.007);try{water.visible=false}catch(e){}
- if(running&&!HP.dead&&!CAVE.on){L.b-=dt;if(L.b<=0&&terrH(P.x,P.z)<y-.2&&P.y<y+.5){L.b=.5;hurt(1,'rising lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}}
+ if(running&&!HP.dead&&!CAVE.on){L.b-=dt;if(L.b<=0&&terrH(P.x,P.z)<y-.2&&P.y<y+.5){L.b=.5;BH(2,'rising lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}}
 function arApply(e){if(e.ar)return;if(!e.chs){e.chs=1;e.T=Object.assign({},e.T,{spd:e.T.spd*.5})}e.ar=1;e.T0=e.T;e.scl0=e.scl||1;e.T=Object.assign({},e.T,{h:e.T.h*EVC.spiderSize,spd:e.T.spd*EVC.spiderSpeed});e.scl=e.scl0*EVC.spiderSize;e.g.scale.setScalar(e.scl)}
 function arSpawn(x,z,spit){const B=X.TY&&X.TY.spider;if(!B||terrH(x,z)<WATER+.5)return null;const g=B.mk();g.position.set(x,terrH(x,z),z);scene.add(g);
  const e={g,ty:'spider',T:B,x,z,hp:B.hp,max:B.hp,cd:0,ph:Math.random()*6,a:0,hit:0,sh:2,face:0,spit:spit?1:0,mine:1};if(spit){e.scl=.55;e.g.scale.setScalar(.55);e.hp=e.max=Math.max(1,Math.round(B.hp*.5))}X.NM.push(e);return e}
@@ -5120,20 +5196,93 @@ function arTick(dt){const A=C.ev.ar;A.t+=dt;
 function arEnd(){if(!C||!C.ev||!C.ev.ar)return;C.ev.ar=null;
  for(const e of X.NM.slice()){if(e.spit||e.mine){const i=X.NM.indexOf(e);if(i>=0)X.NM.splice(i,1);scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()});addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0x9aff6a,2,.5);continue}
   if(e.ar){e.T=e.T0;e.scl=e.scl0;e.g.scale.setScalar(e.scl0);e.ar=0;e.spT=null}}}
-function evtClear(){if(!C||!C.ev)return;drEnd();arEnd();if(C.oc)C.oc.visible=false;C.ev={}}
+/* ---------- magma geysers: telegraphed rings, then a column of lava that launches you ---------- */
+const GY=[];
+function gyInit(){if(C.gyG)return;metInit();C.gyG=new THREE.CylinderGeometry(1,1.6,1,14,1,true).translate(0,.5,0);DISP.push(C.gyG);C.gyM=new THREE.MeshBasicMaterial({color:0xff6a1c,transparent:true,opacity:.85,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,fog:false})}
+function gySpawn(){gyInit();if(GY.length>90)return;let x=0,z=0,h=0,ok=false;const near=Math.random()<.5;
+ for(let k=0;k<14&&!ok;k++){if(near){const a=Math.random()*6.283,r=3+Math.random()*24;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(CH.Rc-40);z=(Math.random()*2-1)*(CH.Rc-40)}
+  const r2=Math.hypot(x,z);h=terrH(x,z);ok=r2<CH.Rc-30&&r2>CH.Rr*.95&&h>1.2}
+ if(!ok)return;const k=new THREE.Mesh(C.metMk,C.metMM);k.position.set(x,h+.18,z);k.scale.setScalar(1.8);C.G.add(k);GY.push({k,m:null,x,z,h,t:0})}
+function gyTick(dt){const E=C.ev.gy;E.t+=dt;E.acc+=dt*3;let n=0;while(E.acc>=1&&n++<4){E.acc-=1;gySpawn()}if(E.t>=EVC.geyserT)C.ev.gy=null}
+function gyUpdate(dt){for(let i=GY.length-1;i>=0;i--){const q=GY[i];q.t+=dt;
+  if(q.t<1.5){q.k.scale.setScalar(1.8*(.9+.12*Math.sin(q.t*16)));continue}
+  if(!q.m){C.G.remove(q.k);const m=new THREE.Mesh(C.gyG,C.gyM.clone());m.position.set(q.x,q.h,q.z);C.G.add(m);q.m=m;addFx(new THREE.Vector3(q.x,q.h+1.5,q.z),0xff8a2a,5,.7);try{SX.stoneHit&&SX.stoneHit()}catch(e){}
+   if(running&&!HP.dead&&!CAVE.on&&Math.hypot(P.x-q.x,P.z-q.z)<3.4&&P.y<q.h+14){BH(4,'a magma geyser');P.vy=Math.max(P.vy,16);P.grounded=false;addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xff7a22,3,.5)}}
+  const f=(q.t-1.5)/.9;if(f>=1){C.G.remove(q.m);q.m.material.dispose();GY.splice(i,1);continue}
+  q.m.scale.set(2.1*(1-f*.3),40*Math.min(1,(f+.05)*5),2.1*(1-f*.3));q.m.material.opacity=.85*(1-f)}}
+function gyClear(){for(const q of GY){if(q.k.parent)q.k.parent.remove(q.k);if(q.m){if(q.m.parent)q.m.parent.remove(q.m);q.m.material.dispose()}}GY.length=0}
+/* ---------- toxic gas: slow green clouds that drift toward you and poison anything inside ---------- */
+const GS=[];
+function gsStart(){if(!C.gsM)C.gsM=new THREE.SpriteMaterial({map:C.glowT,color:0x8cff3a,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:.4,fog:false});
+ for(let n=0,tries=0;n<12&&tries<200;tries++){const a=Math.random()*6.283,r=22+Math.random()*40,x=P.x+Math.cos(a)*r,z=P.z+Math.sin(a)*r,h=terrH(x,z);if(h<WATER+.6||Math.hypot(x,z)>CH.Rc-30||Math.hypot(x,z)<CH.Rr*1.05)continue;
+  const g=new THREE.Group();for(let i=0;i<6;i++){const sp=new THREE.Sprite(C.gsM);const s=17+Math.random()*9;sp.scale.set(s,s,1);sp.position.set((Math.random()-.5)*10,(Math.random()-.3)*4,(Math.random()-.5)*10);g.add(sp)}
+  g.position.set(x,h+4,z);C.G.add(g);GS.push({g,x,z,w:Math.random()*50});n++}
+ return GS.length>0}
+function gsTick(dt){const E=C.ev.gs;E.t+=dt;const fade=Math.min(1,E.t/2,(EVC.gasT-E.t)/3);C.gsM.opacity=.4*Math.max(0,fade);E.hit-=dt;let inside=false;
+ for(const c of GS){const dx=P.x-c.x,dz=P.z-c.z,d=Math.hypot(dx,dz)||1,a=Math.atan2(dz,dx)+Math.sin(E.t*.5+c.w)*.7,nx=c.x+Math.cos(a)*2.6*dt,nz=c.z+Math.sin(a)*2.6*dt;
+  if(terrH(nx,nz)>WATER+.3&&Math.hypot(nx,nz)>CH.Rr*1.05&&Math.hypot(nx,nz)<CH.Rc-30){c.x=nx;c.z=nz}c.g.position.set(c.x,terrH(c.x,c.z)+4,c.z);
+  if(d<11&&P.y<terrH(c.x,c.z)+16)inside=true}
+ if(inside&&running&&!HP.dead&&!CAVE.on&&E.hit<=0){E.hit=.7;hurt(2,'toxic gas');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0x8cff3a,2,.4)}
+ if(E.t>=EVC.gasT)gsClear()}
+function gsClear(){for(const c of GS)if(c.g.parent)c.g.parent.remove(c.g);GS.length=0;if(C&&C.ev)C.ev.gs=null}
+/* ---------- monster surge: a burst of extra monsters around you ---------- */
+function sgTick(dt){const E=C.ev.sg;E.t+=dt;E.acc+=dt*6;let n=0;while(E.acc>=1&&n++<6){E.acc-=1;if(X.NM&&X.NM.length<70&&C.spawnFn)C.spawnFn()}if(E.t>=EVC.surgeT)C.ev.sg=null}
+function evtClear(){if(!C||!C.ev)return;drEnd();arEnd();gyClear();gsClear();shClear();if(FXD)FXD.style.opacity=0;if(C.oc)C.oc.visible=false;C.ev={}}
 function evtTick(dt){if(!C)return;const E=C.ev||(C.ev={});
- if(CH.state!=='run'||HP.dead){if(E.dr||E.ar||E.lr||E.lg)evtClear();return}
+ if(CH.state!=='run'||HP.dead){if(E.dr||E.ar||E.lr||E.lg||E.gy||E.gs||E.sg||E.ac||E.bz||E.sd||SHL.length||GY.length||GS.length)evtClear();return}
  if(E.dr){E.dr.t+=dt;if(E.dr.t>=EVC.dragonT)drEnd()}
- if(E.lg)lgTick(dt);if(E.lr)lrTick(dt);if(E.ar)arTick(dt)}
+ if(E.lg)lgTick(dt);if(E.lr)lrTick(dt);if(E.ar)arTick(dt);if(E.gy)gyTick(dt);if(E.gs)gsTick(dt);if(E.sg)sgTick(dt);if(E.ac)acTick(dt);if(E.bz)bzTick(dt);if(E.sd)sdTick(dt);if(!E.ac&&!E.sd&&SHL.length)shClear();fxUpdate();if(GY.length)gyUpdate(dt)}
+/* ---------- acid rain / blizzard / sandstorm (inspired by Natural Disaster Survival style games) ---------- */
+const SHL=[];let FXD=null,shT=0,shV=false;
+function shInit(){if(C.shG)return;C.shG=[new THREE.BoxGeometry(9,.7,9),new THREE.BoxGeometry(.8,6.4,.8).translate(0,.2,0),new THREE.CylinderGeometry(.7,.7,90,8,1,true).translate(0,45,0)];DISP.push(...C.shG);
+ C.shM=new THREE.MeshLambertMaterial({color:0x77706a,flatShading:true});C.shB=new THREE.MeshBasicMaterial({color:0x9ff0ff,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,fog:false})}
+function shStart(){if(SHL.length)return true;shInit();
+ for(let n=0,tries=0;n<4&&tries<300;tries++){const a=Math.random()*6.283,r=24+Math.random()*34,x=P.x+Math.cos(a)*r,z=P.z+Math.sin(a)*r,rr=Math.hypot(x,z);
+  if(rr<CH.Rr*1.15||rr>CH.Rc-40)continue;const h=terrH(x,z);if(h<WATER+.8||riverAt(x,z)<6)continue;
+  let hi=h,ok=true;for(const q of[[-4,-4],[4,-4],[-4,4],[4,4]]){const hh=terrH(x+q[0],z+q[1]);if(hh<WATER+.5||Math.abs(hh-h)>2.6){ok=false;break}if(hh>hi)hi=hh}
+  if(!ok)continue;let far=true;for(const o of SHL)if(Math.hypot(o.x-x,o.z-z)<20){far=false;break}if(!far)continue;
+  const g=new THREE.Group(),sl=new THREE.Mesh(C.shG[0],C.shM);sl.position.y=3.4;g.add(sl);
+  for(const q of[[-3.8,-3.8],[3.8,-3.8],[-3.8,3.8],[3.8,3.8]]){const pl=new THREE.Mesh(C.shG[1],C.shM);pl.position.set(q[0],0,q[1]);g.add(pl)}
+  g.add(new THREE.Mesh(C.shG[2],C.shB));g.position.set(x,hi,z);C.G.add(g);SHL.push({g,x,z,y:hi+3.05});n++}
+ return SHL.length>0}
+function shClear(){for(const o of SHL)if(o.g.parent)o.g.parent.remove(o.g);SHL.length=0}
+function sheltered(){const n=performance.now();if(n-shT<200)return shV;shT=n;let v=false;
+ for(const o of SHL)if(Math.abs(P.x-o.x)<4.4&&Math.abs(P.z-o.z)<4.4&&P.y<o.y-1&&P.y>o.y-6){v=true;break}
+ if(!v)try{const th=topAt(P.x,P.z);v=th>P.y+2.6&&th<P.y+14}catch(e){}
+ return shV=v}
+function fxUpdate(){const E=C.ev;let best=null,bs=-1;for(const k of['ac','bz','sd'])if(E[k]&&E[k].s>bs){bs=E[k].s;best=k}
+ if(!best){if(FXD)FXD.style.opacity=0;return}
+ const e=E[best],T=best==='ac'?EVC.acidT:best==='bz'?EVC.blizT:EVC.sandT,f=Math.max(0,Math.min(1,e.t/1.5,(T-e.t)/2)),mode=best==='ac'?'acid':best==='bz'?'blizzard':'sand';
+ if(!FXD){FXD=document.createElement('div');FXD.className='stormFx';document.body.appendChild(FXD)}
+ if(FXD.dataset.m!==mode){FXD.dataset.m=mode;FXD.className='stormFx '+mode}
+ let op=.55*f;if(best==='bz')op=(.4+.5*Math.min(1,e.cold/6))*f;else if(best==='ac'&&sheltered())op*=.45;FXD.style.opacity=op.toFixed(3)}
+const stormOn=()=>running&&!HP.dead&&!CAVE.on;
+function acTick(dt){const A=C.ev.ac;A.t+=dt;A.hit-=dt;A.sn-=dt;
+ if(A.sn<=0){A.sn=.5+Math.random()*.5;try{SX.campCrackle&&SX.campCrackle();SX.leafRustle&&SX.leafRustle()}catch(e){}}
+ if(stormOn()&&A.hit<=0&&!sheltered()){A.hit=1;BH(1,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Get under cover.')}}
+ if(A.t>=EVC.acidT)C.ev.ac=null}
+function bzWarm(){if(Math.hypot(P.x,P.z)<CH.Rr*1.2||riverAt(P.x,P.z)<7)return true;for(const p of LP)if(Math.hypot(P.x-p.x,P.z-p.z)<4)return true;return false}
+function bzTick(dt){const B=C.ev.bz;B.t+=dt;B.hit-=dt;B.sn-=dt;
+ if(B.sn<=0){B.sn=1.6+Math.random();try{SX.windGust&&SX.windGust()}catch(e){}}
+ if(stormOn()){if(bzWarm())B.cold=Math.max(0,B.cold-dt*4);else B.cold=Math.min(8,B.cold+dt);
+  if(B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(1,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Get close to the volcano or a lava river.')}}}
+ if(B.t>=EVC.blizT)C.ev.bz=null}
+function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t*.4+D.w)*.5*dt;
+ if(D.sn<=0){D.sn=1+Math.random()*.8;try{SX.windGust&&SX.windGust()}catch(e){}}
+ const f=Math.max(0,Math.min(1,D.t/1.5,(EVC.sandT-D.t)/2));
+ if(stormOn()&&!sheltered()){const sp=5*dt*f,nx=P.x+Math.cos(D.a)*sp,nz=P.z+Math.sin(D.a)*sp,r=Math.hypot(nx,nz);
+  if(terrH(nx,nz)>WATER+.3&&r>CH.Rr*1.1&&r<CH.Rc-30&&riverAt(nx,nz)>2){P.x=nx;P.z=nz}else D.a+=Math.PI*(.5+Math.random()*.4);
+  if(D.hit<=0){D.hit=1.5;BH(1,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Get under cover.')}}}
+ if(D.t>=EVC.sandT)C.ev.sd=null}
 /* ---------- monsters: spawn rate and cap double every minute survived ---------- */
-X.chaosMobs=function(dt,count,spawnFn){if(CH.state!=='run'||HP.dead||!running)return;
+X.chaosMobs=function(dt,count,spawnFn){if(C)C.spawnFn=spawnFn;if(CH.state!=='run'||HP.dead||!running)return;
  const mins=Math.floor((performance.now()-CH.t0)/60000),mult=Math.pow(2,mins),cap=Math.min(80,10*mult),rate=.25*mult;
  MOB.acc=Math.min(12,MOB.acc+rate*dt);let live=count;while(MOB.acc>=1){MOB.acc-=1;if(live<cap){spawnFn();live++}}};
 /* ---------- per-frame: overflow, lava glow, smoke, burn damage ---------- */
 const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._ch1){X._ch1=1;console.error('[chaos]',e)}}};
 function tick(dt){if(!C||!isChaos()||!WG){tHud(false);return}
  dockTick(dt);
- slowMobs();if(CH.state==='run'&&!HP.dead&&running){const mx=maxHP();if(HP.v<mx)HP.v=Math.min(mx,HP.v+dt*((performance.now()/1000-HP.hurtT>8)?(1/15-1/60):1/15))}shardTick(dt);blueTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);evtTick(dt);
+ slowMobs();if(CH.state==='run'&&!HP.dead&&running){const mx=maxHP();if(HP.v>0&&HP.v<mx)HP.v=Math.min(mx,HP.v+dt*((performance.now()/1000-HP.hurtT>8)?(1/15-1/60):1/15))}shardTick(dt);blueTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);evtTick(dt);
  C.t+=dt;const t=performance.now()/1000;CH.over=clamp(CH.over+Math.sign(CH.tgt-CH.over)*Math.min(Math.abs(CH.tgt-CH.over),dt/45),0,1);
  const ez=CH.over*CH.over*(3-2*CH.over),Lmax=CH.Pk+.3,level=CH.L0+(Lmax-CH.L0)*ez,cr=lavaR(level);CH.level=level;window.__lavaNow={t:performance.now(),key:CUR.key,x:0,z:0,r:cr-.4,y:level,Rr:CH.Rr};
  C.lake.position.y=level;C.lake.scale.setScalar(cr);C.lakeTex.offset.set(t*.012,t*.008);C.riverTex.offset.y=-t*(.02+.07*CH.over);
@@ -5143,9 +5292,9 @@ function tick(dt){if(!C||!isChaos()||!WG){tHud(false);return}
   const s=p.sm?30+k*90:2.4+(1-k)*3;p.sp.scale.set(s,s,1);p.sp.material.opacity=(p.sm?Math.sin(k*Math.PI)*.38:Math.sin(k*Math.PI)*.9)*a}
  if(!running||HP.dead||CAVE.on)return;
  C.burn-=dt;C.warn-=dt;const d=Math.hypot(P.x,P.z);let hot=false;
- if(d<cr-.4&&P.y<level+1.4)hot=true;
- else if(CH.over>.55){const ri=riverAt(P.x,P.z);if(ri<1&&P.y<terrH(P.x,P.z)+1.4)hot=true}
- if(hot&&C.burn<=0){C.burn=.5;hurt(1,'molten lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,1.6,.4)}
+ if(d<cr-.4&&P.y<level+1.4)hot=1;
+ else if(CH.over>.55){const ri=riverAt(P.x,P.z);if(ri<1&&P.y<terrH(P.x,P.z)+1.4)hot=2}
+ if(hot&&C.burn<=0){C.burn=.5;BH(hot===2?4:2,hot===2?'flowing lava':'molten lava');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,1.6,.4)}
  else if(!hot&&d<CH.Rr*1.15&&P.y>level-14&&C.warn<=0&&d<CH.Rr){C.warn=40;toast('Heat shimmers off the lava below…')}}
 })();
 /* ===== Community Island: one warp pedestal per public Home Island (everyone's, not just yours) ===== */
@@ -5230,7 +5379,7 @@ let tt=0;const hu=window.hurt;if(hu)window.hurt=function(){if(CUR&&CUR.key==='2,
 /* ===== Colosseum fights: 10 rounds, enemy AI, regen, rewards, spectator weapon lock ===== */
 (function(){'use strict';const X=window.PX,A=X.arena,AK='1,2';
 const F={on:false,round:0,st:'idle',t:0,mobs:[],hb:0,hud:null,lk:0,list:null,total:10,mode:'novice',hpM:1,dmgM:1,spdM:1,q:[]},LV={active:0,uid:null,nick:'',round:0,ts:0};
-const BASE=[{z:7,s:2,p:3,sec:'u',rd:1},{z:8,s:4,p:5,sec:'u',rd:2},{z:8,s:6,p:8,sec:'u',rd:3},{z:10,s:8,p:11,sec:'u',rd:4},{b:5,z:4,s:3,p:4,sec:'b',rd:5},{b:8,bt:1,sec:'b',rd:6},{b:15,bt:1,boss:1,sec:'b',rd:7},{boss:3,sec:'x',rd:8},{boss:4,b:10,bt:1,sec:'x',rd:9},{dragon:1,sec:'d',rd:10}];
+const BASE=[{z:7,s:2,p:3,sec:'u',rd:1},{z:8,s:4,p:5,sec:'u',rd:2},{z:8,s:6,p:8,sec:'u',rd:3},{z:10,s:8,p:11,sec:'u',rd:4},{b:5,z:4,s:3,p:4,sec:'b',rd:5},{b:6,bt:1,sec:'b',rd:6},{b:4,bt:1,boss:1,sec:'b',rd:7},{boss:2,b:2,bt:1,sec:'x',rd:8},{boss:3,b:3,bt:1,sec:'x',rd:9},{dragon:1,sec:'d',rd:10}];
 /* every full clear adds 2 rounds between the others: undead / barbarian / boss rounds in turn, each blending the rounds on either side of it; the dragon stays last */
 function buildRounds(w){const L=BASE.map(r=>Object.assign({},r)),secs=['u','b','x'],K=['z','s','p','b','boss'];
  for(let k=0;k<w*2;k++){const sc=secs[k%3],idx=[];L.forEach((r,i)=>{if(r.sec===sc)idx.push(i)});if(!idx.length)continue;
@@ -6477,7 +6626,7 @@ const bu=window.update;window.update=function(dt){bu(dt);try{
 </script>
 
 <script>
-/* ===== ENEMY SYNC: normal islands share live enemies; Colosseum spectators watch the fight; Volcanic Chaos stays per-player ===== */
+/* ===== ENEMY SYNC: normal islands share live enemies; Colosseum spectators watch the fight; Chaos Island stays per-player ===== */
 (function(){'use strict';const X=window.PX;
 const ES={docs:{},ent:new Map(),pend:{},key:null,un:null,unD:null,tP:0,tR:0,tF:0,pubOn:false};X.es=ES;
 const now=()=>performance.now();
