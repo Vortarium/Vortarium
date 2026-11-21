@@ -474,6 +474,7 @@ body.sceneOn #menu{background:linear-gradient(90deg,rgba(3,9,16,.74),rgba(3,9,16
      <div><kbd>Q</kbd><kbd>E</kbd><kbd>V</kbd><kbd>M</kbd></div><span>Open / dig &middot; inventory &middot; camera &middot; music</span>
      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>Hand &middot; pistol &middot; shovel</span>
      <div><kbd>4-0</kbd></div><span>Hold 5s to light a beacon &middot; tap to warp</span>
+     <div><kbd>H</kbd></div><span>Horse: feed apples &middot; mount &middot; dismount</span>
     </div>
    </div>
   </div>
@@ -2477,7 +2478,7 @@ function update(dt){
  const cave=CAVE.on,gT=cave?0:terrH(P.x,P.z),depth=cave?0:WATER-gT;
  swimMode=0;if(!cave&&P.y<WATER+.6){if(onRaft())swimMode=0;else if(depth>1.35)swimMode=(shift&&len>0)?2:1;else if(shift&&len>0&&depth>.7&&P.y<WATER+.3)swimMode=2}
  const sprint=act&&shift&&len>0&&!swimMode;
- let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
+ let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1)*(window.__horseMul||1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
  if(act){const tx=(-sinY*ky+cosY*kx)*sp,tz=(-cosY*ky-sinY*kx)*sp,a=Math.min(1,(P.grounded||swimMode?12:3)*dt);P.vx+=(tx-P.vx)*a;P.vz+=(tz-P.vz)*a;
   if(keys.Space&&P.grounded&&!swimMode){P.vy=9.2;P.grounded=false;SX.jump(surfaceNow())}}
  else{P.vx*=.8;P.vz*=.8}
@@ -2503,10 +2504,10 @@ function update(dt){
  const nowW=!cave&&P.y<WATER+.35;if(nowW&&!wasWater&&frameN>5)SX.splash(.8);wasWater=nowW;
  if((P.grounded||swimMode)&&spd>.8&&act){const st=Math.floor((P.walk-1.5708)/Math.PI);if(lastStep===null)lastStep=st;else if(st!==lastStep){lastStep=st;if(swimMode)SX.swim();else SX.step(surfaceNow(),sprint)}}
  /* avatar */
- if(P.av){const av=P.av;av.group.position.set(P.x,P.y,P.z);let d=P.face-av.group.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));av.group.rotation.y+=d*Math.min(1,dt*12);
-  if(P.third)animAvatar(av,dt,t,spd,sprint?1:0,P.grounded,P.vyPre,P.walk,{swim:swimMode,tool:TOOLN[tool],dig:digSpot?1:0})}
+ if(P.av){const av=P.av,hs=window.__horseSit||0;av.group.position.set(P.x,P.y+hs,P.z);let d=P.face-av.group.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));av.group.rotation.y+=d*Math.min(1,dt*12);
+  if(P.third)animAvatar(av,dt,t,hs?0:spd,hs?0:(sprint?1:0),hs?true:P.grounded,hs?0:P.vyPre,P.walk,{swim:swimMode,tool:TOOLN[tool],dig:digSpot?1:0})}
  /* camera: aim direction always equals the crosshair direction */
- const eye=swimMode?1.35:1.7;
+ const eye=(swimMode?1.35:1.7)+(window.__horseSit||0);
  camera.rotation.set(P.pitch,P.yaw,0,'YXZ');
  if(P.third){const dist=4.4,fx=-sinY*Math.cos(P.pitch),fy=Math.sin(P.pitch),fz=-cosY*Math.cos(P.pitch),hx=P.x+cosY*.55,hy=P.y+eye+.1,hz=P.z-sinY*.55;let dd=dist;
   for(let s=.5;s<=dist;s+=.45){const px=hx-fx*s,py=hy-fy*s,pz=hz-fz*s;if(!cave&&py<=topAt(px,pz)+.25||cave&&caveH(px,pz)>50||cave&&(py>8.6||py<.2)){dd=Math.max(.6,s-.5);break}}
@@ -3046,7 +3047,7 @@ window.update=function(dt){baseU(dt);ft+=dt;watchIsl();const now=Date.now();
 const baseDie=die;
 window.die=baseDie;
 /* ---------- shop ---------- */
-const SH_T=[1e4,1e5,1e6,1e7];let sold={},unsubS=null,shopKey=null;
+const SH_T=[1e3,1e4,1e5,1e6];let sold={},unsubS=null,shopKey=null;
 function stock(){const win=Math.floor(Date.now()/(24*H)),seed=hashStr(CUR.key),out=[];const pool=[];COS.forEach(c=>{if(!c.crafted)pool.push({t:'c',id:c.id,tier:c.tier})});W().forEach(w=>pool.push({t:'w',id:w.id,tier:w.tier}));
  for(let k=0;k<5;k++){const r=hash2(seed,win*13+k,7)/4294967295,it=pool[Math.floor((r*9973)%1*pool.length)];const m=1+((hash2(seed,win*13+k,9)>>>0)%90)/10;out.push({k,t:it.t,id:it.id,price:Math.round(SH_T[it.tier]*m),sid:CUR.key+'_'+win+'_'+k})}return out}
 function thumb(t,id,tier){const c=document.createElement('canvas');c.width=c.height=96;const x=c.getContext('2d'),col=RAR[Math.min(3,tier||0)].c;const g=x.createRadialGradient(48,40,6,48,48,64);g.addColorStop(0,col+'66');g.addColorStop(1,'#0a111c');x.fillStyle=g;x.fillRect(0,0,96,96);x.lineWidth=2.5;x.strokeStyle='#000a';x.lineJoin='round';
@@ -4342,6 +4343,7 @@ const RN={camp:'Old camp',yard:'Boneyard',village:'Ruined village',graves:'Grave
 for(const o of X.outposts||[])mk(o.x,o.z,'Huts / outposts',()=>{c.fillStyle='#c9a227';c.strokeStyle='#000';c.lineWidth=1.5;c.fillRect(-6,-6,12,12);c.strokeRect(-6,-6,12,12)},o.n);
 if(X.shop)mk(X.shop.x,X.shop.z,'Shop',()=>{c.fillStyle='#ffd166';c.strokeStyle='#000';c.lineWidth=3;c.font='bold 16px sans-serif';c.textAlign='center';c.strokeText('$',0,6);c.fillText('$',0,6)},'Shop');
 const cvd=(S.isl[CUR.key]||{}).cvd||{};for(const m of CAVE.mouths)if(cvd[m.idx])mk(m.x,m.z,'Caves discovered',()=>{c.fillStyle='#1a1020';c.strokeStyle='#b58cff';c.lineWidth=2;c.beginPath();c.arc(0,0,7,0,7);c.fill();c.stroke()},'Cave');
+{const hm=X.horseMap&&X.horseMap();if(hm)mk(hm.x,hm.z,'Your horse',()=>{c.fillStyle='#8a5a2b';c.strokeStyle='#fff';c.lineWidth=1.8;c.beginPath();c.arc(0,0,8,0,7);c.fill();c.stroke();c.fillStyle='#fff';c.font='bold 11px sans-serif';c.textAlign='center';c.fillText('H',0,4)},'Your horse')}
 if(BOAT)mk(BOAT.x,BOAT.z,'Your ship',()=>{c.fillStyle='#f4ead0';c.strokeStyle='#000';c.lineWidth=1.5;c.beginPath();c.moveTo(-9,4);c.lineTo(9,4);c.lineTo(5,-4);c.lineTo(-5,-4);c.closePath();c.fill();c.stroke();c.fillRect(-1,-12,2,9)},'Ship');
 for(const d of WSLOTS){const w=S.wp[d];if(w&&w.isl===CUR.key)mk(w.x,w.z,'Your beacons',()=>{dia(WPC[d])();c.fillStyle='#fff';c.font='bold 9px sans-serif';c.textAlign='center';c.fillText(d,0,3)},'Beacon '+d)}
 for(const id in HB){const b=HB[id];mk(b.x,b.z,'Enemy beacons',dia('#07000d'))}
