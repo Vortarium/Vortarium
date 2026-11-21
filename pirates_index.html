@@ -3555,9 +3555,20 @@ const fauna=[];X.fauna=fauna;
 const M=c=>new THREE.MeshLambertMaterial({color:c});
 function inst(geo,mat,pts,yo){const m=new THREE.InstancedMesh(geo,mat,pts.length),d=new THREE.Object3D();pts.forEach((p,i)=>{d.position.set(p[0],p[2]+(yo||0),p[1]);d.rotation.y=p[3]||0;d.updateMatrix();m.setMatrixAt(i,d.matrix)});WG.add(m);DISP.push(geo);return m}
 function pts(rnd,n,test){n=Math.round(n*Math.min(DF,3));const a=[];for(let t=0;t<n*30&&a.length<n;t++){const x=(rnd()*2-1)*(HALF-30),z=(rnd()*2-1)*(HALF-30),h=terrH(x,z);if(test(h,biomeObj(x,z),x,z))a.push([x,z,h,rnd()*6.28])}return a}
-function critter(x,z,col,s,kind){const g=X.mkCritter(kind,col,s);g.position.set(x,terrH(x,z),z);WG.add(g);fauna.push({g,x,z,a:Math.random()*6.28,t:Math.random()*4,kind,sp:kind==='crab'?1.2:2,hp:kind==='deer'?5:kind==='fox'?3:2,mv:false})}
+function critter(x,z,col,s,kind){const g=X.mkCritter(kind,col,s);g.position.set(x,terrH(x,z),z);WG.add(g);fauna.push({g,x,z,a:Math.random()*6.28,t:Math.random()*4,kind,sp:kind==='crab'?1.2:2,hp:({deer:5,fox:3,boar:4,goat:3,turtle:5})[kind]||2,mv:false})}
+/* every animal type: k = kind, c = colour, s = scale, n = how many per island, t = where it may spawn. The last four (boar, goat, turtle, duck) drop 1-3 raw meat. */
+const SPN=[
+ {k:'rabbit',c:0xcfc3b0,s:1,n:18,t:(h,B)=>h>.8&&!B.sandy},
+ {k:'deer',c:0x8a6a40,s:1.6,n:10,t:(h,B)=>h>.8&&!B.sandy},
+ {k:'crab',c:0xd2552a,s:.7,n:16,t:h=>h>WATER+.1&&h<.5},
+ {k:'fox',c:0xb35a2a,s:1,n:8,t:h=>h>.8},
+ {k:'boar',c:0x5a4636,s:1.1,n:10,t:(h,B)=>h>.8&&!B.sandy},
+ {k:'goat',c:0xe2dccd,s:1,n:8,t:(h,B)=>h>3.5&&!B.sandy},
+ {k:'turtle',c:0x5c8a4a,s:1,n:10,t:h=>h>WATER+.1&&h<.7},
+ {k:'duck',c:0x8a6a3a,s:.9,n:10,t:h=>h>WATER+.1&&h<1.4}];
+X.SPN=SPN;X.critter=critter;X.fCap=0;
 const baseLoad=loadIsland;
-window.loadIsland=function(info){fauna.length=0;if(info.special){baseLoad(info);return}baseLoad(info);try{const rnd=mulberry(info.seed^0xF10A);
+window.loadIsland=function(info){fauna.length=0;X.fCap=0;if(info.special){baseLoad(info);return}baseLoad(info);try{const rnd=mulberry(info.seed^0xF10A);
  inst(new THREE.CylinderGeometry(.05,.07,.9,5),M(0x3a7a2a),pts(rnd,40,(h,B)=>h>.6&&!B.cold&&!B.sandy),.45);
  inst(new THREE.SphereGeometry(.25,8,6),M(0xf2c230),pts(rnd,40,(h,B)=>h>.6&&!B.cold&&!B.sandy),.95);
  inst(new THREE.SphereGeometry(.35,8,6),M(0xe07a1a),pts(rnd,18,(h,B)=>h>.6&&!B.cold),.3);
@@ -3565,25 +3576,23 @@ window.loadIsland=function(info){fauna.length=0;if(info.special){baseLoad(info);
  inst(new THREE.SphereGeometry(.18,8,5),M(0xd23a3a),pts(rnd,30,(h,B)=>h>.6&&B.gt&&B.gt[2]<.4),.38);
  inst(new THREE.CylinderGeometry(.04,.04,.7,5),M(0x6b8a3a),pts(rnd,50,h=>h>WATER-.8&&h<WATER+.3),.35);
  inst(new THREE.ConeGeometry(.2,.5,6),M(0xff6f91),pts(rnd,40,h=>h<WATER-.5&&h>WATER-3),.25);
- pts(rnd,10,(h,B)=>h>.8&&!B.sandy).forEach(p=>critter(p[0],p[1],0xcfc3b0,1,'rabbit'));
- pts(rnd,6,(h,B)=>h>.8&&!B.sandy).forEach(p=>critter(p[0],p[1],0x8a6a40,1.6,'deer'));
- pts(rnd,10,h=>h>WATER+.1&&h<.5).forEach(p=>critter(p[0],p[1],0xd2552a,.7,'crab'));
- pts(rnd,5,h=>h>.8).forEach(p=>critter(p[0],p[1],0xb35a2a,1,'fox'))}catch(e){console.error('flora',e)}};
+ for(const d of SPN)pts(rnd,d.n,d.t).forEach(p=>critter(p[0],p[1],d.c,d.s,d.k));
+ X.fCap=fauna.length}catch(e){console.error('flora',e)}};
 const baseU=update;
 window.update=function(dt){baseU(dt);if(CAVE.on)return;const now=performance.now()/1000;const dead=[];
  for(const f of fauna){const dp=Math.hypot(P.x-f.x,P.z-f.z);f.t-=dt;f.ramCd=(f.ramCd||0)-dt;f.panic=Math.max(0,(f.panic||0)-dt);
-  const spd={rabbit:9,deer:10.5,fox:6.5,crab:2.6}[f.kind]||2,wsp={rabbit:1.6,deer:2.2,fox:2,crab:1}[f.kind]||1.5;let sp=wsp,mv=false;
+  const spd={rabbit:9,deer:10.5,fox:6.5,crab:2.6,boar:8,goat:9,turtle:1.4,duck:7}[f.kind]||2,wsp={rabbit:1.6,deer:2.2,fox:2,crab:1,boar:1.8,goat:2,turtle:.5,duck:1.2}[f.kind]||1.5;let sp=wsp,mv=false;
   if(f.kind==='deer'&&f.aggr===undefined)f.aggr=Math.random()<.3;
   if(f.state==='paw'){f.pt-=dt;f.a=Math.atan2(P.x-f.x,P.z-f.z);if(f.pt<=0){f.state='ram';f.rt=2.4}}
   else if(f.state==='ram'){f.a=Math.atan2(P.x-f.x,P.z-f.z);sp=11.5;mv=true;f.rt-=dt;if(dp<1.4&&!HP.dead){hurt(4,'a charging deer');SX.deerHit&&SX.deerHit();P.vx+=Math.sin(f.a)*9;P.vz+=Math.cos(f.a)*9;P.vy=Math.max(P.vy||0,4);f.state='flee';f.panic=2.5;f.ramCd=14}else if(f.rt<=0){f.state='flee';f.panic=2;f.ramCd=14}}
   else{
    let threat=null;if(f.kind==='rabbit'){for(const o of fauna)if(o.kind==='fox'&&Math.hypot(o.x-f.x,o.z-f.z)<11){threat=o;break}}
-   const fl=f.kind==='deer'?20:f.kind==='rabbit'?15:f.kind==='crab'?5:0;
+   const fl=({deer:20,rabbit:15,crab:5,goat:18,duck:12,boar:8,turtle:4})[f.kind]||0;
    if(f.kind==='deer'&&f.aggr&&f.ramCd<=0&&dp<14&&dp>5&&!HP.dead&&f.panic<=0){f.state='paw';f.pt=.8;SX.deerSnort&&SX.deerSnort()}
    else if((fl&&dp<fl)||f.panic>0||threat){const fx=threat&&dp>=fl?threat.x:P.x,fz=threat&&dp>=fl?threat.z:P.z;f.a=Math.atan2(f.x-fx,f.z-fz)+(f.kind==='rabbit'?Math.sin(now*6+f.x)*.9:Math.sin(now*3+f.z)*.2);sp=spd;mv=true;f.state='flee';if(f.kind==='rabbit'&&Math.random()<dt*2)SX.rabbitThump&&SX.rabbitThump()}
    else{f.state='idle';if(f.t<=0){f.t=1+Math.random()*3;f.a+=(Math.random()-.5)*2.5;f.mv=Math.random()<.55}mv=f.mv;
     if(f.kind==='fox'){let tg=null,bd=14;for(const r of fauna)if(r.kind==='rabbit'&&!r.dead){const d=Math.hypot(r.x-f.x,r.z-f.z);if(d<bd){bd=d;tg=r}}if(tg){f.a=Math.atan2(tg.x-f.x,tg.z-f.z);sp=spd;mv=true;if(bd<.9){tg.dead=1;dead.push(tg);addFx(new THREE.Vector3(tg.x,terrH(tg.x,tg.z)+.4,tg.z),0xffffff,1.2,.3);f.t=4;f.mv=false}}}}}
-  if(mv){const nx=f.x+Math.sin(f.a)*sp*dt,nz=f.z+Math.cos(f.a)*sp*dt,h=terrH(nx,nz);if(h>(f.kind==='crab'?WATER:WATER+.4)&&Math.abs(h-f.g.position.y)<.8){f.x=nx;f.z=nz}else f.a+=2}
+  if(mv){const nx=f.x+Math.sin(f.a)*sp*dt,nz=f.z+Math.cos(f.a)*sp*dt,h=terrH(nx,nz);if(h>(f.kind==='crab'||f.kind==='turtle'||f.kind==='duck'?WATER:WATER+.4)&&Math.abs(h-f.g.position.y)<.8){f.x=nx;f.z=nz}else f.a+=2}
   f.g.position.set(f.x,terrH(f.x,f.z),f.z);f.g.rotation.y=f.a}
  for(const d of dead){if(window.PX.deathFx)window.PX.deathFx(d.g,d.x,d.z,d.g.scale.x||1);else WG.remove(d.g);const i=fauna.indexOf(d);if(i>=0)fauna.splice(i,1)}};
 /* night stars + shooting stars */
@@ -3786,12 +3795,19 @@ X.mkCritter=function(kind,col,s){const g=new THREE.Group(),legs=[],u=g.userData;
  else if(kind==='deer'){S1(.3,mc,0,.9,0,.9,.85,1.8);const nk=new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,.6,7),mc);nk.position.set(0,1.25,.6);nk.rotation.x=.6;g.add(nk);S1(.14,mc,0,1.55,.85,.9,.9,1.4);S1(.05,M('#222'),0,1.55,1.02);for(const sx of[-1,1]){const a=new THREE.Mesh(new THREE.CylinderGeometry(.012,.02,.5,5),M('#d8c9a0'));a.position.set(sx*.12,1.85,.78);a.rotation.z=sx*-.4;g.add(a);const b=new THREE.Mesh(new THREE.CylinderGeometry(.01,.015,.25,5),M('#d8c9a0'));b.position.set(sx*.22,1.95,.78);b.rotation.z=sx*-.9;g.add(b)}S1(.09,wh,0,.95,-.55);for(let i=0;i<6;i++)S1(.04,wh,(i%3-1)*.14,1.05,(i<3?.1:-.2));leg(-.17,.45,.8,.05);leg(.17,.45,.8,.05);leg(-.17,-.45,.8,.05);leg(.17,-.45,.8,.05)}
  else if(kind==='fox'){S1(.2,mc,0,.42,0,.8,.8,1.7);S1(.13,mc,0,.5,.38,1,1,1.1);const sn=new THREE.Mesh(new THREE.ConeGeometry(.06,.18,6),mc);sn.position.set(0,.47,.55);sn.rotation.x=Math.PI/2;g.add(sn);S1(.025,M('#111'),0,.48,.64);for(const sx of[-1,1]){const e=new THREE.Mesh(new THREE.ConeGeometry(.05,.14,5),dk);e.position.set(sx*.07,.65,.36);g.add(e)}const tl=S1(.1,mc,0,.42,-.45,1,1,2.4);tl.rotation.x=-.4;S1(.07,wh,0,.38,-.68,1,1,1.4);S1(.1,wh,0,.4,.2,.7,.6,1);leg(-.08,.2,.3,.035);leg(.08,.2,.3,.035);leg(-.08,-.2,.3,.035);leg(.08,-.2,.3,.035)}
  else if(kind==='crab'){S1(.3,mc,0,.2,0,1.3,.55,1);for(const sx of[-1,1]){const st=new THREE.Mesh(new THREE.CylinderGeometry(.015,.015,.14,4),mc);st.position.set(sx*.13,.4,.2);g.add(st);S1(.04,M('#111'),sx*.13,.48,.2);const arm=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.3,5),mc);arm.position.set(sx*.38,.2,.3);arm.rotation.z=sx*1.1;arm.rotation.x=-.5;g.add(arm);S1(.1,mc,sx*.5,.26,.5,1.2,.7,1);S1(.05,dk,sx*.5,.26,.62)}for(let i=0;i<3;i++)for(const sx of[-1,1]){const l=new THREE.Mesh(new THREE.CylinderGeometry(.012,.01,.28,4),dk);l.position.set(sx*.4,.1,-.15+i*.14);l.rotation.z=sx*.9;g.add(l)}}
+ else if(kind==='boar'){S1(.32,mc,0,.55,0,.9,.8,1.5);S1(.2,mc,0,.55,.55,.9,.9,1.2);S1(.08,dk,0,.5,.78,1.3,.8,1);for(const sx of[-1,1]){const tk=new THREE.Mesh(new THREE.ConeGeometry(.025,.16,5),wh);tk.position.set(sx*.09,.45,.74);tk.rotation.x=-.9;g.add(tk);const e=new THREE.Mesh(new THREE.ConeGeometry(.05,.12,5),dk);e.position.set(sx*.12,.76,.5);g.add(e);S1(.025,M('#111'),sx*.1,.6,.7)}for(let i=0;i<5;i++)S1(.05,dk,0,.88-Math.abs(i-2)*.03,.3-i*.14,.6,.8,1.4);S1(.04,dk,0,.6,-.5,.7,.7,1.4);leg(-.14,.3,.34,.06);leg(.14,.3,.34,.06);leg(-.14,-.3,.34,.06);leg(.14,-.3,.34,.06)}
+ else if(kind==='goat'){S1(.25,mc,0,.7,0,.8,.8,1.6);const nk=new THREE.Mesh(new THREE.CylinderGeometry(.06,.09,.4,7),mc);nk.position.set(0,.95,.42);nk.rotation.x=.55;g.add(nk);S1(.12,mc,0,1.08,.56,.9,1,1.3);S1(.04,M('#222'),0,1.05,.72);S1(.04,wh,0,.9,.66,.7,1.8,.7);for(const sx of[-1,1]){const hn=new THREE.Mesh(new THREE.ConeGeometry(.03,.28,5),M('#bdb39a'));hn.position.set(sx*.07,1.24,.5);hn.rotation.x=-.7;hn.rotation.z=sx*-.2;g.add(hn);const e=new THREE.Mesh(new THREE.ConeGeometry(.04,.1,5),mc);e.position.set(sx*.14,1.12,.5);e.rotation.z=sx*-1.3;g.add(e)}S1(.05,wh,0,.8,-.42,.8,1,1.2);leg(-.12,.32,.62,.04);leg(.12,.32,.62,.04);leg(-.12,-.32,.62,.04);leg(.12,-.32,.62,.04)}
+ else if(kind==='turtle'){S1(.38,mc,0,.26,0,1.1,.55,1.3);S1(.3,dk,0,.34,0,1,.5,1.2);for(let i=0;i<5;i++)S1(.06,mc,(i%2?.12:-.12),.5,-.25+i*.14,1,.5,1);S1(.1,M('#8aa86a'),0,.22,.58,1,.9,1.3);S1(.025,M('#111'),.05,.26,.68);S1(.025,M('#111'),-.05,.26,.68);leg(-.34,.22,.12,.06,M('#8aa86a'));leg(.34,.22,.12,.06,M('#8aa86a'));leg(-.3,-.25,.12,.06,M('#8aa86a'));leg(.3,-.25,.12,.06,M('#8aa86a'))}
+ else if(kind==='duck'){S1(.2,mc,0,.3,0,.9,.8,1.4);S1(.1,M('#2f6f4a'),0,.55,.28);const bl=new THREE.Mesh(new THREE.ConeGeometry(.035,.14,6),M('#f0a020'));bl.position.set(0,.52,.42);bl.rotation.x=Math.PI/2;g.add(bl);S1(.02,M('#111'),.05,.58,.36);S1(.02,M('#111'),-.05,.58,.36);for(const sx of[-1,1])S1(.12,dk,sx*.15,.33,-.02,.3,.7,1.2);const tl=new THREE.Mesh(new THREE.ConeGeometry(.07,.16,5),dk);tl.position.set(0,.36,-.32);tl.rotation.x=-1.9;g.add(tl);leg(-.07,0,.16,.02,M('#f0a020'));leg(.07,0,.16,.02,M('#f0a020'))}
  g.scale.setScalar(s);return g};
 function faunaTick(dt,t){const F=X.fauna;if(!F||CAVE.on)return;for(const f of F){const ud=f.g.userData,px=f.px==null?f.x:f.px,pz=f.pz==null?f.z:f.pz,sp=Math.hypot(f.x-px,f.z-pz)/Math.max(dt,.001);f.px=f.x;f.pz=f.z;f.ph=(f.ph||0)+Math.min(sp,6)*dt*(f.kind==='rabbit'?5:3);
  if(ud.legs)ud.legs.forEach((l,i)=>{l.rotation.x=sp>.1?Math.sin(f.ph+(i%2?Math.PI:0)+(i>1?Math.PI/2:0))*.7:0});
  if(f.kind==='rabbit'&&sp>.1)f.g.position.y+=Math.abs(Math.sin(f.ph*.9))*.25;if(f.kind==='crab'&&sp>.1)f.g.rotation.y=f.a+Math.PI/2;
- if(f.kind==='crab'&&Math.random()<dt*.15&&Math.hypot(f.x-P.x,f.z-P.z)<14)SX.crabClick()}}
-const bBH=bulletHit;window.bulletHit=function(p){const F=X.fauna;if(F&&!CAVE.on)for(let i=0;i<F.length;i++){const f=F[i],r=(f.kind==='deer'?.55:.35)*(f.g.scale.x||1)+.15;if(Math.hypot(p.x-f.x,p.z-f.z)<r&&p.y>f.g.position.y-.1&&p.y<f.g.position.y+1.6*(f.g.scale.x||1)){f.hp-=PISTOL_DMG;SX.animalHit();addFx(p.clone(),0xff4455,1.1,.2);if(f.kind!=='fox'){f.a=Math.atan2(f.x-P.x,f.z-P.z);f.mv=true;f.sp=f.kind==='deer'?6:5}if(f.hp<=0){if(window.PX.deathFx)window.PX.deathFx(f.g,f.x,f.z,f.g.scale.x||1);else WG.remove(f.g);F.splice(i,1);S.items=S.items||{};S.items.meat=(S.items.meat||0)+(f.kind==='deer'?3:1);ITEMS.meat=ITEMS.meat||{n:'Raw Meat',v:14};toast('+'+(f.kind==='deer'?3:1)+' Raw Meat');save()}return'wood'}}return bBH(p)};
+ if(f.kind==='crab'&&Math.random()<dt*.15&&Math.hypot(f.x-P.x,f.z-P.z)<14)SX.crabClick()}
+ /* respawn trickle: wildlife slowly wanders back in near you until the island is back to its starting population */
+ X.fT=(X.fT||0)-dt;if(X.fT<=0){X.fT=5+Math.random()*4;if(X.fCap>0&&F.length<X.fCap&&X.SPN&&X.critter){let tot=0;for(const d of X.SPN)tot+=d.n;let q=Math.random()*tot,d=X.SPN[0];for(const e of X.SPN){q-=e.n;if(q<=0){d=e;break}}
+  for(let k=0;k<12;k++){const a=Math.random()*6.283,r=32+Math.random()*45,x=P.x+Math.cos(a)*r,z=P.z+Math.sin(a)*r;if(Math.abs(x)>HALF-30||Math.abs(z)>HALF-30)continue;const h=terrH(x,z);if(d.t(h,biomeObj(x,z))){X.critter(x,z,d.c,d.s,d.k);break}}}}}
+const bBH=bulletHit;window.bulletHit=function(p){const F=X.fauna;if(F&&!CAVE.on)for(let i=0;i<F.length;i++){const f=F[i],r=(f.kind==='deer'?.55:.35)*(f.g.scale.x||1)+.15;if(Math.hypot(p.x-f.x,p.z-f.z)<r&&p.y>f.g.position.y-.1&&p.y<f.g.position.y+1.6*(f.g.scale.x||1)){f.hp-=PISTOL_DMG;SX.animalHit();addFx(p.clone(),0xff4455,1.1,.2);if(f.kind!=='fox'){f.a=Math.atan2(f.x-P.x,f.z-P.z);f.mv=true;f.sp=f.kind==='deer'?6:5}if(f.hp<=0){if(window.PX.deathFx)window.PX.deathFx(f.g,f.x,f.z,f.g.scale.x||1);else WG.remove(f.g);F.splice(i,1);const mn=({boar:1,goat:1,turtle:1,duck:1})[f.kind]?1+Math.floor(Math.random()*3):f.kind==='deer'?3:1;S.items=S.items||{};S.items.meat=(S.items.meat||0)+mn;ITEMS.meat=ITEMS.meat||{n:'Raw Meat',v:14};toast('+'+mn+' Raw Meat');save()}return'wood'}}return bBH(p)};
 /* ---------- gulls, dolphins, minnows, shrubs ---------- */
 const NW=X.NW={gulls:[],dolph:null,minn:[],dolphT:6,gullT:6,decor:[]};
 function gullMesh(){const g=new THREE.Group(),w=M('#f4f4f0'),gr=M('#9aa2ab'),or=M('#f0a020');const b=new THREE.Mesh(new THREE.SphereGeometry(.2,10,8),w);b.scale.set(.8,.7,1.9);g.add(b);const h=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),w);h.position.set(0,.1,.38);g.add(h);const bk=new THREE.Mesh(new THREE.ConeGeometry(.03,.14,5),or);bk.rotation.x=Math.PI/2;bk.position.set(0,.08,.5);g.add(bk);const tl=new THREE.Mesh(new THREE.BoxGeometry(.2,.02,.2),w);tl.position.set(0,.04,-.4);g.add(tl);
@@ -3939,14 +3955,16 @@ function drawFace(cv){const w=cv.width=520,h=cv.height=720,c=cv.getContext('2d')
  c.restore();
  g=c.createRadialGradient(w/2,h/2,h*.25,w/2,h/2,h*.75);g.addColorStop(0,'rgba(80,0,0,0)');g.addColorStop(1,'rgba(60,0,0,.75)');c.fillStyle=g;c.fillRect(0,0,w,h)}
 function mkEl(){if(SC.el)return;const d=document.createElement('div');d.id='ghostScare';const cv=document.createElement('canvas');d.appendChild(cv);document.body.appendChild(d);try{drawFace(cv)}catch(e){console.error('[ghost]',e)}SC.el=d}
-X.caveAmb=function(){if(Math.random()<.38){SX[pick(SCARY)]();if(SC.cd<=0&&!SC.armT){mkEl();SC.armT=4.5;SC.yaw0=P.yaw;SC.hist=[]}}else SX[pick(CALM)]()};
+X.caveAmb=function(){if(Math.random()<.38)SX[pick(SCARY)]();else SX[pick(CALM)]()};
 function scare(){SC.armT=0;SC.cd=25+Math.random()*20;SC.hist=[];mkEl();const d=SC.el,cv=d.firstChild;d.style.display='block';cv.style.animation='none';void cv.offsetWidth;cv.style.animation='';
  try{SX.ghostScare()}catch(e){}try{window.hurt(1,'a cave ghost')}catch(e){console.error(e)}
  setTimeout(()=>{d.style.display='none'},230)}
-function scTick(dt){SC.cd-=dt;if(!CAVE.on){SC.armT=0;return}if(SC.armT<=0)return;
- if(!running||HP.dead){SC.armT=0;return}SC.armT-=dt;const now=performance.now()/1000;SC.hist.push({t:now,y:P.yaw});while(SC.hist.length&&now-SC.hist[0].t>.7)SC.hist.shift();
- const TP=Math.PI*2,d=Math.abs(((P.yaw-SC.yaw0+Math.PI)%TP+TP)%TP-Math.PI),sp=SC.hist.length?Math.abs(P.yaw-SC.hist[0].y):0;
- if(d>2.2&&sp>1.3&&locked&&!invOpen&&!busy)scare()}
+/* cave jumpscare: 1% chance every second spent in a cave plays the scare sound and whips the player's view around to look behind */
+function scTick(dt){SC.cd-=dt;
+ if(SC.turn>0){const st=Math.min(SC.turn,Math.PI*dt/.22);P.yaw+=st;SC.turn-=st}
+ if(!CAVE.on){SC.acc=0;return}if(!running||HP.dead||busy||invOpen||SC.turn>0)return;
+ SC.acc=(SC.acc||0)+dt;
+ while(SC.acc>=1){SC.acc-=1;if(Math.random()<.01){scare();SC.turn=Math.PI;SC.acc=0;break}}}
 const pu=window.update;window.update=function(dt){pu(dt);try{scTick(dt)}catch(e){if(!X._gs){X._gs=1;console.error('[ghost]',e)}}};
 })();
 /* ===== boss telegraph hook ===== */
@@ -4942,7 +4960,7 @@ function hudUpdate(){if(!hud)tHud(false);const e=hud._e,now=performance.now()/10
  hudSet(e.dn,fin?'DISASTERS OVER':DIS.cur?DIS.cur.n+(DIS.end-now>0?'  '+fs(DIS.end-now):''):'NEXT DISASTER  '+(DIS.next?fs(DIS.next-now):'--:--'),DIS.cur&&!fin?'#ff6a44':'#ffb36b');
  hudSet(e.dt,'DISASTERS  '+DIS.count+'    TORNADOES  '+TOR.length);
  hudSet(e.ms,'MONSTER SPAWNS  x'+Math.pow(2,Math.floor(el/60)),'#ffb36b');
- {const pu=CH.pu||{},a=[],sc=x=>Math.ceil(x)+'s';if(pu.spd>now)a.push('SPEED '+sc(pu.spd-now));if(pu.dmg>now)a.push('HALF DAMAGE '+sc(pu.dmg-now));if(pu.bcn>now)a.push('CRYSTAL SIGHT '+sc(pu.bcn-now));if(pu.skip)a.push('NEXT DISASTER CANCELLED');const t=a.length&&!fin?'POWER-UPS  '+a.join('   '):'';hudSet(e.pu,t,'#7cc4ff');e.pu.style.borderColor='#2f7fd0';e.pu.style.display=t?'':'none'}}
+ {const pu=CH.pu||{},a=[],sc=x=>x>1e8?'':' '+Math.ceil(x)+'s';if(pu.spd>now)a.push('SPEED'+sc(pu.spd-now));if(pu.dmg>now)a.push('HALF DAMAGE'+sc(pu.dmg-now));if(pu.bcn>now)a.push('CRYSTAL SIGHT'+sc(pu.bcn-now));if(pu.skip)a.push('NEXT DISASTER CANCELLED');const t=a.length&&!fin?'POWER-UPS  '+a.join('   '):'';hudSet(e.pu,t,'#7cc4ff');e.pu.style.borderColor='#2f7fd0';e.pu.style.display=t?'':'none'}}
 function setHint(t){if(!hint){hint=document.createElement('div');hint.style.cssText='position:fixed;bottom:22%;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;background:#000a;color:#ffe9b0;border:1px solid #a8431a;border-radius:8px;padding:7px 14px;font:600 13px Inter,sans-serif;display:none';document.body.appendChild(hint)}
  if(t){hint.textContent=t;hint.style.display='block'}else hint.style.display='none'}
 function closeDlg(){if(ov){ov.remove();ov=null}try{renderer.domElement.requestPointerLock()}catch(e){}}
@@ -5034,10 +5052,10 @@ function buildBlues(rnd){const G=C.G,R0=CH.Rr*1.12,R1=CH.Rc-60;C.blues=[];
   g.position.set(best.x,best.h+1.5,best.z);G.add(g);C.blues.push({g,bm,x:best.x,z:best.z,y:best.h+1.5,ph:n*1.9,got:0})}}
 function puGive(now){const pu=CH.pu;if(!pu.bag.length){pu.bag=['speed','shield','skip','beacons'];for(let i=3;i>0;i--){const j=Math.floor(Math.random()*(i+1)),t=pu.bag[i];pu.bag[i]=pu.bag[j];pu.bag[j]=t}}
  const k=pu.bag.pop();
- if(k==='speed'){pu.spd=now+30;banner('SPEED BOOST','#6ab8ff');toast('Blue gem: you run 50% faster for 30 seconds!')}
- else if(k==='shield'){pu.dmg=now+30;banner('HALF DAMAGE','#6ab8ff');toast('Blue gem: all damage to you is halved for 30 seconds!')}
+ if(k==='speed'){pu.spd=Infinity;banner('SPEED BOOST','#6ab8ff');toast('Blue gem: you run 50% faster for the rest of the run!')}
+ else if(k==='shield'){pu.dmg=Infinity;banner('HALF DAMAGE','#6ab8ff');toast('Blue gem: all damage to you is halved for the rest of the run!')}
  else if(k==='skip'){pu.skip=1;banner('DISASTER WARD','#6ab8ff');toast('Blue gem: the next disaster will be cancelled!')}
- else{pu.bcn=now+30;banner('CRYSTAL SIGHT','#6ab8ff');toast('Blue gem: red crystals within 300 m now show beacons for 30 seconds!')}}
+ else{pu.bcn=Infinity;banner('CRYSTAL SIGHT','#6ab8ff');toast('Blue gem: red crystals within 300 m now show beacons for the rest of the run!')}}
 function blueTick(dt){if(!C||!C.blues)return;const now=performance.now()/1000,live=CH.state==='run'&&running&&!HP.dead,pu=CH.pu||(CH.pu={spd:0,dmg:0,skip:0,bcn:0,bag:[]});
  window.__chSpd=live&&pu.spd>now?1.5:1;window.__chDmg=live&&pu.dmg>now?.5:1;
  for(const s of C.blues){if(s.got)continue;s.g.rotation.y+=dt*2.1;s.g.position.y=s.y+Math.sin(C.t*2.4+s.ph)*.3;
@@ -5136,13 +5154,14 @@ function metInit(){if(C.metG)return;C.metG=new THREE.DodecahedronGeometry(1,0);C
  C.metM=new THREE.MeshLambertMaterial({color:0x2e2321,emissive:0x6a2208,flatShading:true});
  C.metMM=new THREE.MeshBasicMaterial({color:0xff4a1a,transparent:true,opacity:.7,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3});
  C.metSM=new THREE.SpriteMaterial({map:C.glowT,color:0xff8a3a,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false});C.mSnd=0}
-function metSpawn(){metInit();if(MET.length>160)return;let x=0,z=0,h=0,ok=false;const near=Math.random()<.45;
+function metSpawn(fx,fz,nm){metInit();if(MET.length>160)return;let x=0,z=0,h=0,ok=false;const near=Math.random()<.45;
+ if(fx!=null){x=fx;z=fz;h=terrH(x,z);ok=Math.hypot(x,z)<CH.Rc-30&&h>1.2;if(!ok)return}else
  for(let k=0;k<14&&!ok;k++){if(near){const a=Math.random()*6.283,r=5+Math.random()*28;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(CH.Rc-40);z=(Math.random()*2-1)*(CH.Rc-40)}
   const r2=Math.hypot(x,z);h=terrH(x,z);ok=r2<CH.Rc-30&&r2>CH.Rr*.95&&h>1.2}
- if(!ok)return;const s=1.5+Math.random()*2.1,T=2+Math.random()*.5,ang=Math.random()*6.283,ox=Math.cos(ang)*60,oz=Math.sin(ang)*60,H0=140;
+ if(!ok)return;const s=1.5+Math.random()*2.1,T=fx!=null?1.5+Math.random()*.4:2+Math.random()*.5,ang=Math.random()*6.283,ox=Math.cos(ang)*60,oz=Math.sin(ang)*60,H0=140;
  const m=new THREE.Mesh(C.metG,C.metM);m.scale.set(s,s*.85,s*1.1);m.position.set(x+ox,h+H0,z+oz);const sp=new THREE.Sprite(C.metSM);sp.scale.set(6,6,1);m.add(sp);
  const k=new THREE.Mesh(C.metMk,C.metMM);k.position.set(x,h+.18,z);k.scale.setScalar(s*.9);C.G.add(m);C.G.add(k);
- MET.push({m,k,sp,x,z,h,s,T,t:0,sx:x+ox,sy:h+H0,sz:z+oz,rest:0,rt:0})}
+ MET.push({m,k,sp,x,z,h,s,T,t:0,sx:x+ox,sy:h+H0,sz:z+oz,rest:0,rt:0,nm})}
 function metTick(dt){if(!C)return;
  if(C.met){C.met.t+=dt;C.met.acc+=dt*8;let n=0;while(C.met.acc>=1&&n++<6){C.met.acc-=1;metSpawn()}if(C.met.t>=C.met.dur)C.met=null}
  if(C.mSnd>0)C.mSnd-=dt;
@@ -5152,7 +5171,7 @@ function metTick(dt){if(!C)return;
   if(f>=1){C.G.remove(q.k);q.m.remove(q.sp);q.m.position.set(q.x,q.h+q.s*.3,q.z);q.rest=1;q.rt=4+Math.random()*3;
    addFx(new THREE.Vector3(q.x,q.h+1.2,q.z),0xff8a2a,q.s*3.2,.7);addFx(new THREE.Vector3(q.x,q.h+2.4,q.z),0xffe0a0,q.s*1.8,.45);
    const dp=Math.hypot(P.x-q.x,P.z-q.z);if(dp<90&&C.mSnd<=0){C.mSnd=.12;try{SX.stoneHit&&SX.stoneHit()}catch(e){}}
-   if(running&&!HP.dead&&!CAVE.on&&dp<2.1*q.s&&P.y<q.h+q.s*2+2){BH(5,'a meteor');const d=dp||1;P.vy=Math.max(P.vy,9);P.grounded=false;P.vx+=(P.x-q.x)/d*14;P.vz+=(P.z-q.z)/d*14}}}}
+   if(running&&!HP.dead&&!CAVE.on&&dp<2.1*q.s&&P.y<q.h+q.s*2+2){BH(5,q.nm||'a meteor');const d=dp||1;P.vy=Math.max(P.vy,9);P.grounded=false;P.vx+=(P.x-q.x)/d*14;P.vz+=(P.z-q.z)/d*14}}}}
 /* ---------- the floor is lava: every step leaves molten ground; stand still and it burns you ---------- */
 function lpInit(){if(C.lpG)return;C.lpG=new THREE.CircleGeometry(1.55,16).rotateX(-Math.PI/2);C.lpGG=new THREE.CircleGeometry(3.2,16).rotateX(-Math.PI/2);DISP.push(C.lpG,C.lpGG);
  C.lpM=new THREE.MeshBasicMaterial({map:C.riverTex,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4});
@@ -5289,7 +5308,10 @@ function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t
 /* ---------- crab rave: giant dancing crabs everywhere, and crabrave.mp3 takes over the music for good ---------- */
 const omp=window.musicPlay;if(omp)window.musicPlay=function(){if(CR.on)return;return omp.apply(this,arguments)};
 function crAudio(){if(CR.on)return;CR.on=true;try{if(typeof bgm!=='undefined'&&bgm)bgm.pause()}catch(e){}
- if(!CR.au){const a=new Audio('crabrave.mp3');a.loop=true;a.volume=.7;a.preload='auto';a.addEventListener('error',()=>{CR.on=false;try{musicPlay()}catch(e){}});CR.au=a}
+ if(!CR.au){const a=new Audio('crabrave.mp3');a.loop=false;a.volume=.7;a.preload='auto';a.addEventListener('error',()=>{CR.on=false;try{musicPlay()}catch(e){}});
+  /* the song plays once: when it ends the normal music comes back, and a later crab rave starts it again from the top */
+  a.addEventListener('ended',()=>{if(CR.fade)return;CR.on=false;try{a.currentTime=0}catch(e){}try{musicPlay()}catch(e){}});CR.au=a}
+ try{CR.au.loop=false;CR.au.currentTime=0;CR.au.volume=.7}catch(e){}
  const pr=CR.au.play();if(pr&&pr.catch)pr.catch(()=>{const f=()=>{if(CR.on)CR.au.play().catch(()=>{});window.removeEventListener('pointerdown',f,true);window.removeEventListener('keydown',f,true)};window.addEventListener('pointerdown',f,true);window.addEventListener('keydown',f,true)})}
 function crFade(){if(CR.fade||!CR.au||!CR.on)return;CR.fade=true;const t0=performance.now(),v0=CR.au.volume;
  const iv=setInterval(()=>{const k=Math.min(1,(performance.now()-t0)/3000);try{CR.au.volume=Math.max(0,v0*(1-k))}catch(e){}
@@ -5309,21 +5331,47 @@ function crStart(){crInit();let n=0;
  for(let tries=0;n<28&&tries<900;tries++){let x,z;if(n<10){const a=Math.random()*6.283,r=26+Math.random()*80;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(HALF-120);z=(Math.random()*2-1)*(HALF-120)}
   const r=Math.hypot(x,z);if(r<CH.Rr*1.45||r>CH.Rc-70)continue;const h=terrH(x,z);if(h<1.8||h>34||riverAt(x,z)<4)continue;
   if(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+60)continue;if(Math.hypot(x-P.x,z-P.z)<22)continue;
-  const o=mkBigCrab();o.g.scale.setScalar(.01);o.g.position.set(x,h,z);C.G.add(o.g);CRB.push(Object.assign(o,{x,z,a:Math.random()*6.283,ph:Math.random()*6.283,t:0,cd:0}));n++}
+  const o=mkBigCrab();o.g.scale.setScalar(.01);o.g.position.set(x,h,z);C.G.add(o.g);CRB.push(Object.assign(o,{x,z,a:Math.random()*6.283,ph:Math.random()*6.283,t:0,cd:0,lt:2+Math.random()*4,rt:3+Math.random()*5,jt:5+Math.random()*9,jy:0,jv:0,jmp:0}));n++}
  return n>0}
-function crClear(){for(const c of CRB)if(c.g.parent){addFx(new THREE.Vector3(c.x,c.g.position.y+2,c.z),0xff7a4a,3,.5);c.g.parent.remove(c.g)}CRB.length=0}
+function crClear(){for(const c of CRB)if(c.g.parent){addFx(new THREE.Vector3(c.x,c.g.position.y+2,c.z),0xff7a4a,3,.5);c.g.parent.remove(c.g)}CRB.length=0;crpClear()}
+/* ---------- crab rave attacks: eye lasers, thrown rocks, and stomp jumps that shake the screen and call down rocks ---------- */
+const CRP=[];
+function crpInit(){if(C.crL)return;C.crL={lg:new THREE.BoxGeometry(.14,.14,2.6),lg2:new THREE.BoxGeometry(.4,.4,2.8),rg:new THREE.DodecahedronGeometry(1,0),lm:new THREE.MeshBasicMaterial({color:0xff2a2a}),lm2:new THREE.MeshBasicMaterial({color:0xff6a4a,transparent:true,opacity:.35,depthWrite:false}),rm:new THREE.MeshLambertMaterial({color:0x7a6a5a,flatShading:true})};DISP.push(C.crL.lg,C.crL.lg2,C.crL.rg)}
+function crpClear(){for(const o of CRP)if(o.m&&o.m.parent)o.m.parent.remove(o.m);CRP.length=0}
+function crLaser(c,sx,sy,sz){crpInit();const tx=P.x+(P.vx||0)*.25,ty=P.y+1.2,tz=P.z+(P.vz||0)*.25,m=new THREE.Group();m.add(new THREE.Mesh(C.crL.lg,C.crL.lm),new THREE.Mesh(C.crL.lg2,C.crL.lm2));m.position.set(sx,sy,sz);C.G.add(m);m.lookAt(tx,ty,tz);
+ const dx=tx-sx,dy=ty-sy,dz=tz-sz,dl=Math.hypot(dx,dy,dz)||1;CRP.push({m,k:'l',x:sx,y:sy,z:sz,vx:dx/dl*40,vy:dy/dl*40,vz:dz/dl*40,t:0});try{SX.zap&&SX.zap()}catch(e){}}
+function crRockThrow(c,sx,sy,sz,d){crpInit();const s=.55+Math.random()*.4,m=new THREE.Mesh(C.crL.rg,C.crL.rm);m.scale.set(s,s*.85,s*1.1);m.position.set(sx,sy,sz);C.G.add(m);
+ const tf=Math.max(.9,Math.min(2.2,d/22)),tx=P.x+(P.vx||0)*tf*.6,tz=P.z+(P.vz||0)*tf*.6,ty=terrH(tx,tz),GR=24;
+ CRP.push({m,k:'r',x:sx,y:sy,z:sz,vx:(tx-sx)/tf,vz:(tz-sz)/tf,vy:((ty-sy)+.5*GR*tf*tf)/tf,t:0,s})}
+function crpTick(dt){for(let i=CRP.length-1;i>=0;i--){const o=CRP[i];o.t+=dt;let dead=false;
+  if(o.k==='l'){o.x+=o.vx*dt;o.y+=o.vy*dt;o.z+=o.vz*dt;o.m.position.set(o.x,o.y,o.z);
+   if(stormOn()&&Math.hypot(P.x-o.x,P.y+1-o.y,P.z-o.z)<1.2){BH(3,'a crab laser');addFx(new THREE.Vector3(P.x,P.y+1.2,P.z),0xff4a3a,1.6,.3);dead=true}
+   else if(o.y<terrH(o.x,o.z)+.1){addFx(new THREE.Vector3(o.x,o.y+.2,o.z),0xff6a4a,1.2,.25);dead=true}else if(o.t>2.4)dead=true}
+  else{o.vy-=24*dt;o.x+=o.vx*dt;o.y+=o.vy*dt;o.z+=o.vz*dt;o.m.position.set(o.x,o.y,o.z);o.m.rotation.x+=dt*5;o.m.rotation.z+=dt*3.4;
+   const gh=terrH(o.x,o.z);if(o.y<=gh+.3||o.t>4){addFx(new THREE.Vector3(o.x,gh+.6,o.z),0xb59d80,2.4,.4);const dp=Math.hypot(P.x-o.x,P.z-o.z);if(dp<70){try{SX.stoneHit&&SX.stoneHit()}catch(e){}}
+    if(stormOn()&&dp<2.2&&P.y<gh+2.6){BH(4,'a thrown rock');const d=dp||1;P.vy=Math.max(P.vy,6);P.grounded=false;P.vx+=(P.x-o.x)/d*8;P.vz+=(P.z-o.z)/d*8}dead=true}}
+  if(dead){if(o.m.parent)o.m.parent.remove(o.m);CRP.splice(i,1)}}}
+function crStomp(c,d){const gh=terrH(c.x,c.z);addFx(new THREE.Vector3(c.x,gh+.8,c.z),0xb59d80,5,.6);try{X.shake&&X.shake(Math.max(0,1.1-d/80),.55)}catch(e){}if(d<100){try{SX.stoneHit&&SX.stoneHit()}catch(e){}}
+ if(stormOn()&&d<75){const n=2+(Math.random()<.5?1:0);for(let i=0;i<n;i++){const a=Math.random()*6.283,r=2+Math.random()*9;metSpawn(P.x+Math.cos(a)*r,P.z+Math.sin(a)*r,'a falling rock')}}}
 function crTick(dt){const E=C.ev.cr;E.t+=dt;const beat=C.t*2.083*6.283;
  for(const c of CRB){c.t+=dt;c.cd-=dt;const dx=P.x-c.x,dz=P.z-c.z,d=Math.hypot(dx,dz)||1,chase=d<48&&stormOn();let h;
   if(chase)h=Math.atan2(dz,dx);else{c.a+=Math.sin(c.t*.7+c.ph)*dt*.9;h=c.a}
   if(!chase||d>3.4){const sp=chase?4.6:2.4,nx=c.x+Math.cos(h)*sp*dt,nz=c.z+Math.sin(h)*sp*dt,r=Math.hypot(nx,nz);
    if(r>CH.Rr*1.4&&r<CH.Rc-60&&terrH(nx,nz)>1.3&&riverAt(nx,nz)>3){c.x=nx;c.z=nz}else c.a+=Math.PI*(.6+Math.random()*.8)}
-  const gh=terrH(c.x,c.z),bob=Math.abs(Math.sin(beat*.5+c.ph))*.55;c.g.position.set(c.x,gh+bob,c.z);c.g.rotation.y=-h;
+  const gh=terrH(c.x,c.z),bob=Math.abs(Math.sin(beat*.5+c.ph))*.55;
+  if(c.jmp){c.jv-=30*dt;c.jy+=c.jv*dt;if(c.jy<=0){c.jy=0;c.jmp=0;crStomp(c,d)}}
+  c.g.position.set(c.x,gh+bob+c.jy,c.z);c.g.rotation.y=-h;
+  if(stormOn()&&c.t>2&&E.t<EVC.crabT-1.5){c.lt-=dt;c.rt-=dt;c.jt-=dt;const ey=gh+bob+c.jy+3.9,fx=Math.cos(h)*1.6,fz=Math.sin(h)*1.6;
+   if(c.lt<=0&&d<62){c.lt=3+Math.random()*3.5;crLaser(c,c.x+fx,ey,c.z+fz)}
+   if(c.rt<=0&&d>7&&d<58){c.rt=4.5+Math.random()*5;crRockThrow(c,c.x+fx,gh+c.jy+3,c.z+fz,d)}
+   if(c.jt<=0&&!c.jmp&&d<75){c.jt=6+Math.random()*8;c.jmp=1;c.jv=14}}
   c.g.scale.setScalar(2.6*Math.max(.01,Math.min(1,c.t/1.5,(EVC.crabT-E.t)/1.2)));
   c.B.rotation.y=Math.sin(beat*.5+c.ph)*.35;c.B.rotation.z=Math.sin(beat*.5+c.ph*1.7)*.08;
   c.arms[0].rotation.z=.7+Math.sin(beat+c.ph)*.8;c.arms[1].rotation.z=-(.7+Math.sin(beat+c.ph+Math.PI)*.8);
   for(let i=0;i<c.legs.length;i++)c.legs[i].rotation.z=-.5+Math.sin(beat*2+i*1.1+c.ph)*.3;
   if(stormOn()&&d<4.4&&P.y<gh+4&&c.cd<=0){c.cd=1;BH(2,'a giant crab');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xff7a4a,1.8,.35);try{SX.crabClick&&SX.crabClick()}catch(e){}}}
  if(Math.random()<dt*2){try{SX.crabClick&&SX.crabClick()}catch(e){}}
+ crpTick(dt);
  if(E.t>=EVC.crabT){crClear();C.ev.cr=null}}
 /* ---------- sharknado: five shark-filled tornados that fire land sharks at you ---------- */
 function skInit(){if(C.skG)return;C.skG={body:new THREE.SphereGeometry(1,10,8),fin:new THREE.ConeGeometry(.32,.8,4),tail:new THREE.ConeGeometry(.4,1.1,4),eye:new THREE.SphereGeometry(.08,5,4),jaw:new THREE.BoxGeometry(.6,.06,.4)};DISP.push(...Object.values(C.skG));
@@ -5646,12 +5694,14 @@ function spawnJob(j,x,z,R,rd,nov){
  if(j==='gs'){mkMob('spider',x,z,rd,{sc:2.4,hpx:5,giant:1,spx:.85});return}
  if(j==='cr'){mkMob('crab',x,z,rd);return}
  if(j==='gc'){mkMob('crab',x,z,rd,{sc:3.2,hpx:10,gc:1,spx:.7});return}
- if(j==='b'){const kd=pickR(['sword','axe','club','spear']);{const e=X.mkEnemy(x,z,{hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM),dmg:3+Math.floor((nov?rd:Math.min(rd,12))/2),speed:1.5,tier:R.bt||0,kind:kd,arena:1});e.speed=5.6*F.spdM;e.rk=pickR(['bow','gun'])}addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6);return}
+ if(j==='b'||j==='bl'){const kd=pickR(['sword','axe','club','spear']),sm=j==='bl';{const o={hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM*(sm?.6:1)),dmg:3+Math.floor((nov?rd:Math.min(rd,12))/2),speed:1.5,tier:R.bt||0,kind:kd,arena:1};if(sm)o.scale=.6;const e=X.mkEnemy(x,z,o);e.speed=5.6*F.spdM;e.rk=pickR(['bow','gun'])}addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6);return}
  if(j==='boss'){const bi=F.bcnt++,v=bi%4,cap=F.mode==='captain';const e=X.mkEnemy(x,z,{boss:1,scale:2.2,hp:Math.round((R.bhp||(700+(rd-7)*400))*F.hpM),dmg:nov?8+rd:10+Math.min(rd,14),speed:1.5,tier:2,kind:nov?'axe':['axe','sword','spear','club'][v],arena:1,slow:.5,name:nov?['Arena Warlord','Pit Champion'][bi%2]:BVN[v]});e.speed=4.8*F.spdM;if(!nov)e.bv=cap?[v,(v+2)%4]:[v];addFx(new THREE.Vector3(x,A.fl+1,z),0xff3a20,4,.9);return}
  if(j==='dr'){const k=F.dcount++,hp=Math.round(3000*F.hpM),d=X.dragonSpawn({i:k,cx:0,cz:0,R:50+k*9,alt:36+k*5,dir:k%2?1:-1,v:Math.floor(Math.random()*6),hp,max:hp,arena:1});d.aggroT=9999;d.aggro=1}}
 function startRound(){F.st='fight';const R=F.list[F.round-1],rd=R.rd||F.round,nov=F.mode==='novice',jobs=[],add=(k,n)=>{for(let i=0;i<(n||0);i++)jobs.push(k)};
  F.dcount=0;F.bl.length&&clearExtra(false);
- [['z','zombie'],['s','skeleton'],['p','spider']].forEach(k=>add(k[1],R[k[0]]));add('gs',R.gs);add('cr',R.cr);add('gc',R.gc);add('b',R.b);
+ [['z','zombie'],['s','skeleton'],['p','spider']].forEach(k=>add(k[1],R[k[0]]));add('gs',R.gs);add('cr',R.cr);add('gc',R.gc);
+ /* rounds 8 and 9: Novice has no barbarians, Buccaneer sends little ones, Captain sends full-size ones */
+ {const r89=rd===8||rd===9;if(!(r89&&nov))add(r89&&F.mode==='buccaneer'?'bl':'b',R.b)}
  for(let i=jobs.length-1;i>0;i--){const k=Math.floor(Math.random()*(i+1)),t=jobs[i];jobs[i]=jobs[k];jobs[k]=t}
  const first=[];for(let i=0;i<(R.boss||0);i++)first.push('boss');for(let i=0;i<(R.dragon||0);i++)first.push('dr');
  F.q=first.concat(jobs);F.R=R;F.rd=rd;F.qT=.25;drainQ(nov?999:16);
