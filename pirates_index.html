@@ -4735,7 +4735,7 @@ function askPlayer(){
 function askTrial(m){const w1=S.arW|0,wb=S.arB|0,wc=S.arC|0;let t;
  if(m==='novice')t='<b>Trial of the Novice.</b> Ten rounds at first, and two more join the gauntlet every time you win. Undead first, then barbarian hordes, then bosses, and at the very end, a dragon. <b>Die and you are out.</b> Armor and a loaded pistol are wise.';
  else if(m==='buccaneer')t='<b>Trial of the Buccaneer.</b> Twenty rounds. Five of warm-up against the undead, five of chaos with undead and barbarians swarming together, eight boss rounds with warbands at their heels, then a dragon, then two dragons and a boss. Spike traps spring every 4 seconds. Foes have <b>25% more health</b> and hit <b>25% harder</b> than in the Novice trial.';
- else t='<b>Trial of the Captain.</b> Thirty rounds and the cruelest of all. Traps every 2 seconds and a <b>3 metre ring of lava</b> round the edge of the sand so you can never circle the wall. Giant spiders spawn baby spiders, giant crabs shake the ground and rain boulders, and the bosses have unique, deadly tricks. Foes have <b>double the health</b> of the Buccaneer trial, move <b>10% faster</b>, hit <b>40% harder</b> and fight smarter. Rounds 25 to 29 bring dragons and bosses, and the finale is 3 dragons, 3 bosses and 3 of every monster.';
+ else t='<b>Trial of the Captain.</b> Thirty rounds and the cruelest of all. Traps every 2 seconds and a <b>6 metre ring of lava</b> round the edge of the sand so you can never circle the wall. Giant spiders spawn baby spiders, giant crabs shake the ground and rain boulders, and the bosses have unique, deadly tricks. Foes have <b>double the health</b> of the Buccaneer trial, move <b>10% faster</b>, hit <b>40% harder</b> and fight smarter. Rounds 25 to 29 bring dragons and bosses, and the finale is 3 dragons, 3 bosses and 3 of every monster.';
  dlg(t+' Do you understand?',[{t:'I understand.',fn:()=>askOath(m)},{t:'Back.',fn:askPlayer},{t:'Not yet.',fn:closeDlg}])}
 function askOath(m){const w1=S.arW|0,wb=S.arB|0,wc=S.arC|0;
  const rw=m==='novice'?'<b>'+(1000+100*w1)+' rewards</b> and <b>'+Math.max(0,4-w1)+' random armor pieces</b>':m==='buccaneer'?'<b>'+(2500+200*wb)+' rewards</b>':'<b>'+(5000+500*wc)+' rewards</b>';
@@ -5444,12 +5444,12 @@ function rgTick(dt){for(let i=F.rg.length-1;i>=0;i--){const q=F.rg[i];q.r+=dt*15
 function lavaTex(){const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.fillStyle='#b32a05';g.fillRect(0,0,256,256);
  for(let i=0;i<220;i++){const x=Math.random()*256,y=Math.random()*256,r=5+Math.random()*20,gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,Math.random()<.5?'rgba(255,220,90,.9)':'rgba(255,130,25,.85)');gr.addColorStop(1,'rgba(255,90,10,0)');g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(6,6);return t}
-function mkLava(){const geo=new THREE.RingGeometry(29.6,32.6,96,1).rotateX(-Math.PI/2),tex=lavaTex(),m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5}));m.position.y=A.fl+.07;scene.add(m);F.lava={m,tex,geo}}
+function mkLava(){const geo=new THREE.RingGeometry(26.6,32.6,96,1).rotateX(-Math.PI/2),tex=lavaTex(),m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5}));m.position.y=A.fl+.07;scene.add(m);F.lava={m,tex,geo}}
 function clearExtra(all){for(const b of F.bl){scene.remove(b.m);scene.remove(b.k);b.m.material.dispose();b.k.material.dispose()}F.bl.length=0;
  for(const q of F.rg){scene.remove(q.m);q.m.material.dispose()}F.rg.length=0;
  if(all&&F.lava){scene.remove(F.lava.m);F.lava.geo.dispose();F.lava.tex.dispose();F.lava.m.material.dispose();F.lava=null}}
 function lavaTick(dt){if(!F.lava)return;F.lava.tex.offset.set(performance.now()/1000*.012,performance.now()/1000*.008);
- const r=Math.hypot(P.x,P.z);F.lvT-=dt;if(!HP.dead&&r>29.5&&r<33.2&&P.y<A.fl+1.2&&F.lvT<=0){F.lvT=.4;hurt(4,'the lava ring');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}
+ const r=Math.hypot(P.x,P.z);F.lvT-=dt;if(!HP.dead&&r>26.5&&r<33.2&&P.y<A.fl+1.2&&F.lvT<=0){F.lvT=.4;hurt(4,'the lava ring');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}
 /* ---------- boss variants ---------- */
 const BVN=['Shock Warlord','Warcaller','Earthbreaker','Meteor Caller'];
 function summonB(e){let n=0;for(const x of X.EN)if(x.arena&&!x.boss)n++;if(n>36)return;
@@ -5600,7 +5600,7 @@ function tick(dt){
 X.arenaBegin=async function(mode){mode=MODES[mode]?mode:'novice';if(F.on||busy)return;if(X.arenaBusy()){toast('A champion is already on the sand.');return}
  busy=true;try{await fadeTo(1,500);P.x=0;P.z=20;P.y=topAt(0,20)+.3;P.vx=P.vz=P.vy=0;P.grounded=true;
   A.mode='fighter';A.inside=true;A.doorT=0;if(A.doorOB&&OB.indexOf(A.doorOB)<0)OB.push(A.doorOB);
-  HP.v=maxHP();const M=MODES[mode];F.mode=mode;F.hpM=M.hpM;F.dmgM=M.dmgM;F.spdM=M.spdM;F.trEvery=M.trap;F.spR=M.spR;F.rmax=M.lava?29.3:31;F.ai=!!M.ai;F.bcnt=0;
+  HP.v=maxHP();const M=MODES[mode];F.mode=mode;F.hpM=M.hpM;F.dmgM=M.dmgM;F.spdM=M.spdM;F.trEvery=M.trap;F.spR=M.spR;F.rmax=M.lava?26.3:31;F.ai=!!M.ai;F.bcnt=0;
   F.list=mode==='novice'?buildRounds(S.arW|0):buildTrial(mode);F.total=F.list.length;F.on=true;F.round=1;F.st='intro';F.t=4;F.hb=0;wipe();F.trT=M.trap;if(M.lava)mkLava();live(1);await fadeTo(0,600)}finally{busy=false}
  banner('ROUND 1','#ffe29a');toast(M.n+': the gate is sealed. Survive all '+F.total+' rounds.')};
 /* ---------- hooks ---------- */
