@@ -3912,6 +3912,8 @@ Object.assign(SX,{
  caveBreath(){nz({d:1.3,f0:900,f1:500,q:.7,g:.07,a:.55,type:'bandpass',wet:.5});nz({d:1.5,f0:500,f1:900,q:.7,g:.05,a:.6,type:'bandpass',wet:.5,delay:1.5})},
  caveCry(){tn({curve:[380,520,470,640,420,300],d:2.4,g:.05,type:'sine',a:.5,wet:.8});tn({curve:[392,540,486,660,436,310],d:2.4,g:.04,type:'sine',a:.5,wet:.8,det:25})},
  caveKnock(){for(let i=0;i<3;i++){tn({f0:180,f1:100,d:.09,g:.14,type:'triangle',delay:i*.4,wet:.4});nz({d:.04,f0:1200,q:2,g:.08,delay:i*.4,wet:.4})}},
+ sharkLaunch(){nz({d:.35,f0:500,f1:1800,q:.8,g:.08,a:.05,type:'bandpass'});tn({f0:140,f1:80,d:.3,g:.08,type:'sawtooth',lp:500})},
+ sharkBite(){nz({d:.12,f0:2500,f1:400,q:1.2,g:.16});tn({f0:110,f1:50,d:.15,g:.18,type:'square',lp:600});for(let i=0;i<3;i++)nz({d:.03,f0:3200,q:3,g:.07,type:'highpass',delay:.02+i*.04})},
  ghostScare(){nz({d:.5,f0:5200,f1:1200,q:.5,g:.5,a:.005,type:'bandpass'});tn({f0:900,f1:2100,d:.45,g:.28,type:'sawtooth',lp:3500,a:.004});tn({f0:960,f1:1750,d:.45,g:.2,type:'square',lp:3000,a:.004,det:60});tn({f0:60,f1:30,d:.6,g:.4,type:'sawtooth',lp:300,a:.004})}});
 const SCARY=['caveWhisper','caveGroan','caveSteps','caveScrape','caveBreath','caveCry','caveKnock'],
  CALM=['caveDrip','caveDrip','caveDrip2','caveStream','caveWind','caveBats','caveRockfall','caveRumble'];
@@ -5060,14 +5062,15 @@ function slowMobs(){const a=X.NM;if(!a)return;for(const e of a){if(e.chs)continu
    tornado (permanent, wanders, pulls + slings you) · earthquake · tsunami · meteor shower · the floor is lava */
 const TOR=[],MET=[],LP=[],FL={t:0,d:1,vx:0,vz:0,imm:0},MOB={acc:0};let lpLast=null,bag=[];
 const BH=(d,by)=>{X.big=1;try{hurt(d,by)}finally{X.big=0}};
-const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno','geyser','gas','surge','acid','blizzard','sandstorm'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA',geyser:'MAGMA GEYSERS',gas:'TOXIC GAS',surge:'MONSTER SURGE',acid:'ACID RAIN',blizzard:'BLIZZARD',sandstorm:'SANDSTORM'};
+const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno','geyser','gas','surge','acid','blizzard','sandstorm','crabrave','sharknado'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA',geyser:'MAGMA GEYSERS',gas:'TOXIC GAS',surge:'MONSTER SURGE',acid:'ACID RAIN',blizzard:'BLIZZARD',sandstorm:'SANDSTORM',crabrave:'CRAB RAVE',sharknado:'SHARKNADO'};
 function nextKind(){if(!bag.length){bag=DKINDS.slice();for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=bag[i];bag[i]=bag[j];bag[j]=t}}return bag.pop()}
-function resetArrays(){SHL.length=0;if(FXD)FXD.style.opacity=0;TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
+function resetArrays(){SK.length=0;CRB.length=0;SHL.length=0;if(FXD)FXD.style.opacity=0;TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
 function dispose(o){o.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose()}})}
 function clearHaz(){try{evtClear()}catch(e){}try{X.events.stop(true)}catch(e){}
  for(const t of TOR){if(t.g.parent)t.g.parent.remove(t.g);try{dispose(t.g)}catch(e){}}TOR.length=0;
  for(const q of MET){if(q.m.parent)q.m.parent.remove(q.m);if(q.k&&q.k.parent)q.k.parent.remove(q.k)}MET.length=0;
  for(const p of LP)if(p.g.parent)p.g.parent.remove(p.g);LP.length=0;lpLast=null;
+ for(const q of SK)if(q.g.parent)q.g.parent.remove(q.g);SK.length=0;
  if(C){C.met=null;C.lf=null}DIS.cur=null}
 function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
  if(k==='tornado'){let nt=0;for(let q=0;q<5;q++)if(torSpawn())nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('5 TORNADOS','#cfc8c0');toast('Five tornados touch down across the island. They will never leave.')}
@@ -5080,9 +5083,11 @@ function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
  else if(k==='geyser'){if(C.ev.gy)return false;C.ev.gy={t:0,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.geyserT;banner('MAGMA GEYSERS','#ff6a1c');toast('Red rings mark where magma is about to burst out of the ground. Get out of them!')}
  else if(k==='gas'){if(C.ev.gs)return false;C.ev.gs={t:0,hit:0,warn:0};if(!gsStart()){C.ev.gs=null;return false}DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.gasT;banner('TOXIC GAS','#8cff3a');toast('Poison clouds are drifting toward you. Do not stand inside them!')}
  else if(k==='surge'){if(C.ev.sg||!C.spawnFn)return false;C.ev.sg={t:0,acc:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.surgeT;banner('MONSTER SURGE','#ff5a5a');toast('The island is flooding with monsters!')}
- else if(k==='acid'){if(C.ev.ac||!shStart())return false;C.ev.ac={t:0,hit:0,sn:0,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.acidT;banner('ACID RAIN','#9aff3a');toast('Acid is raining down! Get under a stone shelter. The pale light pillars show where they are.')}
- else if(k==='blizzard'){if(C.ev.bz)return false;C.ev.bz={t:0,hit:0,sn:0,cold:0,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.blizT;banner('BLIZZARD','#cfe8ff');toast('A blizzard is freezing the island! Warm up near the lava and its rivers, but do not touch it.')}
- else if(k==='sandstorm'){if(C.ev.sd||!shStart())return false;C.ev.sd={t:0,hit:0,sn:0,s:performance.now(),a:Math.random()*6.283,w:Math.random()*50};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.sandT;banner('SANDSTORM','#e0b070');toast('A sandstorm is blowing you across the island! Get under a stone shelter to stop the wind.')}
+ else if(k==='acid'){if(C.ev.ac)return false;const cl=clSpawn('ac');if(!cl.length)return false;C.ev.ac={t:0,hit:0,sn:0,ov:0,cl,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.acidT;banner('ACID RAIN','#9aff3a');toast('Green storm clouds are drifting over the island. Stay out from under them!')}
+ else if(k==='blizzard'){if(C.ev.bz)return false;const cl=clSpawn('bz');if(!cl.length)return false;C.ev.bz={t:0,hit:0,sn:0,cold:0,ov:0,cl,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.blizT;banner('BLIZZARD','#cfe8ff');toast('Blizzard clouds are drifting over the island. Keep out from under them, or warm up near the lava.')}
+ else if(k==='sandstorm'){if(C.ev.sd)return false;const cl=clSpawn('sd');if(!cl.length)return false;C.ev.sd={t:0,hit:0,sn:0,ov:0,cl,s:performance.now(),a:Math.random()*6.283,w:Math.random()*50};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.sandT;banner('SANDSTORM','#e0b070');toast('Dust clouds are drifting over the island. Do not get caught under one!')}
+ else if(k==='crabrave'){if(C.ev.cr)return false;if(!crStart())return false;C.ev.cr={t:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.crabT;banner('CRAB RAVE','#ff6a4a');toast('The giant crabs are throwing a rave! Dodge their claws.');crAudio()}
+ else if(k==='sharknado'){let nt=0;for(let q=0;q<5;q++)if(torSpawn(1))nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('SHARKNADO','#7fc4ff');toast('Five sharknados are hunting you! Land sharks are flying your way. Keep moving!')}
  else{C.lf={t:0,dur:22};lpLast=null;DIS.cur={k,n:DNAME[k]};DIS.end=now+22;banner('THE FLOOR IS LAVA','#ff5a2a');toast('Keep moving! Lava follows your steps, and standing still burns.')}
  DIS.count++;return true}
 function endDis(){const E=X.events;if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')&&E.active())E.stop();if(DIS.cur.k==='meteor')C.met=null;if(DIS.cur.k==='lavafloor')C.lf=null}DIS.cur=null}
@@ -5097,12 +5102,14 @@ function torPick(far){for(let k=0;k<260;k++){const x=(Math.random()*2-1)*(HALF-1
   if(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+90)continue;if(Math.hypot(x-P.x,z-P.z)<(far?170:90))continue;
   if(far){let ok=true;for(const t of TOR)if(Math.hypot(t.x-x,t.z-z)<120){ok=false;break}if(!ok)continue}
   return{x,z}}return far?torPick(false):null}
-function torSpawn(){const p=torPick(true);if(!p)return false;const g=X.events.mkTornado();g.scale.setScalar(.01);g.position.set(p.x,terrH(p.x,p.z),p.z);C.G.add(g);
- TOR.push({g,u:g.userData,x:p.x,z:p.z,a:Math.random()*6.283,t:0,w:Math.random()*100});return true}
+function torSpawn(sn){const p=sn?(torPick(false)||torPick(true)):torPick(true);if(!p)return false;const g=X.events.mkTornado();g.scale.setScalar(.01);g.position.set(p.x,terrH(p.x,p.z),p.z);C.G.add(g);
+ const T={g,u:g.userData,x:p.x,z:p.z,a:Math.random()*6.283,t:0,w:Math.random()*100,sn:sn?1:0,life:sn?EVC.sharkT:0,cd:2,sks:[]};
+ if(sn)for(let i=0;i<5;i++){const m=mkShark(2.1);g.add(m);T.sks.push({m,h:6+Math.random()*44,a:Math.random()*6.283,w:1.1+Math.random()*.8})}
+ TOR.push(T);return true}
 function torTick(dt){for(const T of TOR){T.t+=dt;T.a+=(Math.sin(T.t*.31+T.w)*.45+Math.sin(T.t*.083+T.w*2)*.25)*dt;
-  const nx=T.x+Math.cos(T.a)*5*dt,nz=T.z+Math.sin(T.a)*5*dt,r=Math.hypot(nx,nz);
+  let nx=T.x+Math.cos(T.a)*5*dt,nz=T.z+Math.sin(T.a)*5*dt;if(T.sn){const dx=P.x-T.x,dz=P.z-T.z,dd=Math.hypot(dx,dz)||1;nx+=dx/dd*2.2*dt;nz+=dz/dd*2.2*dt}const r=Math.hypot(nx,nz);
   if(r<CH.Rr*1.4||r>CH.Rc-60||terrH(nx,nz)<1.3||riverAt(nx,nz)<3)T.a+=Math.PI*(.6+Math.random()*.8);else{T.x=nx;T.z=nz}
-  T.g.position.set(T.x,terrH(T.x,T.z),T.z);const sc=Math.max(.01,Math.min(1,T.t/4));T.g.scale.setScalar(sc);
+  T.g.position.set(T.x,terrH(T.x,T.z),T.z);const sc=Math.max(.01,Math.min(1,T.t/4))*(T.sn?Math.max(.01,Math.min(1,T.life/3)):1);T.g.scale.setScalar(sc);
   if(Math.hypot(T.x-P.x,T.z-P.z)>650)continue;const u=T.u;
   u.L.forEach((m,i)=>{m.material.map.offset.x+=dt*(.8+i*.15);m.position.x=Math.sin(T.t*1.3+i*.5)*i*.35});
   for(let i=0;i<u.pd.length;i++){const d=u.pd[i];d.a+=dt*d.w;const rr=3.5+13*Math.pow(d.h/60,1.5);u.pp[i*3]=Math.cos(d.a)*rr;u.pp[i*3+1]=d.h;u.pp[i*3+2]=Math.sin(d.a)*rr}u.pg.attributes.position.needsUpdate=true}}
@@ -5161,7 +5168,7 @@ function lavaTick(dt){if(!C)return;const LIFE=11;
  if(!LP.length)return;lpInit();C.lb-=dt;
  if(P.y<terrH(P.x,P.z)+1.5&&C.lb<=0){for(const p of LP){if(p.t>1.5&&Math.hypot(P.x-p.x,P.z-p.z)<1.5){C.lb=.5;BH(3,'molten ground');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4);break}}}}
 /* ---------- extra disasters: dragons, lava rise, lightning storm, arachnophobia (each runs on its own timer) ---------- */
-const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48,geyserT:25,gasT:30,surgeT:20,acidT:25,blizT:30,sandT:30};
+const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48,geyserT:25,gasT:30,surgeT:20,acidT:25,blizT:30,sandT:30,crabT:40,sharkT:45};
 function evDragons(){const E=C.ev;if(E.dr)return;E.dr={t:0};
  const DSP=[[0,0],[-1,-1],[1,-1],[-1,1],[1,1]];for(let k=0;k<EVC.dragons;k++){const cx=DSP[k%5][0]*CH.Rc*.55,cz=DSP[k%5][1]*CH.Rc*.55;
   try{const d=X.dragonSpawn({i:100+k,cx,cz,R:60+Math.random()*50,alt:44+Math.random()*16,dir:k%2?1:-1,v:Math.floor(Math.random()*6),hp:EVC.dragonHp,max:EVC.dragonHp,evt:1});d.cd=3+Math.random()*4}catch(e){console.error('[chaos dragons]',e)}}}
@@ -5227,53 +5234,130 @@ function gsTick(dt){const E=C.ev.gs;E.t+=dt;const fade=Math.min(1,E.t/2,(EVC.gas
 function gsClear(){for(const c of GS)if(c.g.parent)c.g.parent.remove(c.g);GS.length=0;if(C&&C.ev)C.ev.gs=null}
 /* ---------- monster surge: a burst of extra monsters around you ---------- */
 function sgTick(dt){const E=C.ev.sg;E.t+=dt;E.acc+=dt*6;let n=0;while(E.acc>=1&&n++<6){E.acc-=1;if(X.NM&&X.NM.length<70&&C.spawnFn)C.spawnFn()}if(E.t>=EVC.surgeT)C.ev.sg=null}
-function evtClear(){if(!C||!C.ev)return;drEnd();arEnd();gyClear();gsClear();shClear();if(FXD)FXD.style.opacity=0;if(C.oc)C.oc.visible=false;C.ev={}}
+function evtClear(){if(!C||!C.ev)return;drEnd();arEnd();gyClear();gsClear();shClear();crClear();for(const k of['ac','bz','sd'])evEnd(k);if(FXD)FXD.style.opacity=0;if(C.oc)C.oc.visible=false;C.ev={}}
 function evtTick(dt){if(!C)return;const E=C.ev||(C.ev={});
- if(CH.state!=='run'||HP.dead){if(E.dr||E.ar||E.lr||E.lg||E.gy||E.gs||E.sg||E.ac||E.bz||E.sd||SHL.length||GY.length||GS.length)evtClear();return}
+ if(CH.state!=='run'||HP.dead){if(E.dr||E.ar||E.lr||E.lg||E.gy||E.gs||E.sg||E.ac||E.bz||E.sd||E.cr||CRB.length||SHL.length||GY.length||GS.length)evtClear();return}
  if(E.dr){E.dr.t+=dt;if(E.dr.t>=EVC.dragonT)drEnd()}
- if(E.lg)lgTick(dt);if(E.lr)lrTick(dt);if(E.ar)arTick(dt);if(E.gy)gyTick(dt);if(E.gs)gsTick(dt);if(E.sg)sgTick(dt);if(E.ac)acTick(dt);if(E.bz)bzTick(dt);if(E.sd)sdTick(dt);if(!E.ac&&!E.sd&&SHL.length)shClear();fxUpdate();if(GY.length)gyUpdate(dt)}
-/* ---------- acid rain / blizzard / sandstorm (inspired by Natural Disaster Survival style games) ---------- */
-const SHL=[];let FXD=null,shT=0,shV=false;
-function shInit(){if(C.shG)return;C.shG=[new THREE.BoxGeometry(9,.7,9),new THREE.BoxGeometry(.8,6.4,.8).translate(0,.2,0),new THREE.CylinderGeometry(.7,.7,90,8,1,true).translate(0,45,0)];DISP.push(...C.shG);
- C.shM=new THREE.MeshLambertMaterial({color:0x77706a,flatShading:true});C.shB=new THREE.MeshBasicMaterial({color:0x9ff0ff,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,fog:false})}
-function shStart(){if(SHL.length)return true;shInit();
- for(let n=0,tries=0;n<4&&tries<300;tries++){const a=Math.random()*6.283,r=24+Math.random()*34,x=P.x+Math.cos(a)*r,z=P.z+Math.sin(a)*r,rr=Math.hypot(x,z);
-  if(rr<CH.Rr*1.15||rr>CH.Rc-40)continue;const h=terrH(x,z);if(h<WATER+.8||riverAt(x,z)<6)continue;
-  let hi=h,ok=true;for(const q of[[-4,-4],[4,-4],[-4,4],[4,4]]){const hh=terrH(x+q[0],z+q[1]);if(hh<WATER+.5||Math.abs(hh-h)>2.6){ok=false;break}if(hh>hi)hi=hh}
-  if(!ok)continue;let far=true;for(const o of SHL)if(Math.hypot(o.x-x,o.z-z)<20){far=false;break}if(!far)continue;
-  const g=new THREE.Group(),sl=new THREE.Mesh(C.shG[0],C.shM);sl.position.y=3.4;g.add(sl);
-  for(const q of[[-3.8,-3.8],[3.8,-3.8],[-3.8,3.8],[3.8,3.8]]){const pl=new THREE.Mesh(C.shG[1],C.shM);pl.position.set(q[0],0,q[1]);g.add(pl)}
-  g.add(new THREE.Mesh(C.shG[2],C.shB));g.position.set(x,hi,z);C.G.add(g);SHL.push({g,x,z,y:hi+3.05});n++}
- return SHL.length>0}
-function shClear(){for(const o of SHL)if(o.g.parent)o.g.parent.remove(o.g);SHL.length=0}
-function sheltered(){const n=performance.now();if(n-shT<200)return shV;shT=n;let v=false;
- for(const o of SHL)if(Math.abs(P.x-o.x)<4.4&&Math.abs(P.z-o.z)<4.4&&P.y<o.y-1&&P.y>o.y-6){v=true;break}
- if(!v)try{const th=topAt(P.x,P.z);v=th>P.y+2.6&&th<P.y+14}catch(e){}
- return shV=v}
-function fxUpdate(){const E=C.ev;let best=null,bs=-1;for(const k of['ac','bz','sd'])if(E[k]&&E[k].s>bs){bs=E[k].s;best=k}
+ if(E.lg)lgTick(dt);if(E.lr)lrTick(dt);if(E.ar)arTick(dt);if(E.gy)gyTick(dt);if(E.gs)gsTick(dt);if(E.sg)sgTick(dt);if(E.ac)acTick(dt);if(E.bz)bzTick(dt);if(E.sd)sdTick(dt);if(E.cr)crTick(dt);if(!E.ac&&!E.sd&&SHL.length)shClear();fxUpdate();if(GY.length)gyUpdate(dt)}
+/* ---------- storm clouds: acid rain / blizzard / sandstorm only affect you while you are under a drifting cloud ---------- */
+const SHL=[],SK=[],CRB=[],CR={on:false,au:null};let FXD=null,shT=0,shV=false;
+function shClear(){for(const o of SHL)if(o.g&&o.g.parent)o.g.parent.remove(o.g);SHL.length=0}
+function sheltered(){const n=performance.now();if(n-shT<200)return shV;shT=n;let v=false;try{const th=topAt(P.x,P.z);v=th>P.y+2.6&&th<P.y+14}catch(e){}return shV=v}
+const stormOn=()=>running&&!HP.dead&&!CAVE.on;
+const CLC={ac:{c:0x6fae3a,cu:0x8cff3a,cuo:.16,po:.62},bz:{c:0xe4eefa,cu:0xdfeeff,cuo:.14,po:.6},sd:{c:0xb98a4c,cu:0xe0b070,cuo:.14,po:.6}};
+function clInit(){if(C.clT)return;C.clT={};for(const k in CLC){const o=CLC[k];C.clT[k]={sp:new THREE.SpriteMaterial({map:C.smokeT,color:o.c,transparent:true,depthWrite:false,opacity:0,fog:false}),cu:new THREE.MeshBasicMaterial({color:o.cu,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,fog:false})}}}
+function clPick(list,near){for(let k=0;k<300;k++){let x,z;if(near){const a=Math.random()*6.283,r=32+Math.random()*55;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(CH.Rc-60);z=(Math.random()*2-1)*(CH.Rc-60)}
+  if(Math.hypot(x,z)>CH.Rc-50)continue;let ok=true;for(const c of list)if(Math.hypot(c.x-x,c.z-z)<45){ok=false;break}if(ok)return{x,z}}return null}
+function clPlace(c){c.g.position.set(c.x,Math.max(terrH(c.x,c.z),WATER)+55,c.z)}
+function clMake(type,list,near){const p=clPick(list,near);if(!p)return;const R=26+Math.random()*10,M=C.clT[type],g=new THREE.Group();
+ for(let i=0;i<16;i++){const sp=new THREE.Sprite(M.sp),sz=R*(.9+Math.random()*.8);sp.scale.set(sz,sz*.55,1);const a=Math.random()*6.283,r=Math.sqrt(Math.random())*R*.85;sp.position.set(Math.cos(a)*r,(Math.random()-.5)*6,Math.sin(a)*r);g.add(sp)}
+ const geo=new THREE.CylinderGeometry(R,R,70,28,1,true).translate(0,-35,0);g.add(new THREE.Mesh(geo,M.cu));
+ const c={g,geo,x:p.x,z:p.z,R,a:Math.random()*6.283,w:Math.random()*50};list.push(c);C.G.add(g);clPlace(c)}
+function clSpawn(type){clInit();const list=[];for(let i=0;i<6;i++)clMake(type,list,i<2);return list}
+function clRemove(list){for(const c of list){if(c.g.parent)c.g.parent.remove(c.g);if(c.geo)c.geo.dispose()}list.length=0}
+function clMove(list,dt,f){let under=false;const ff=Math.max(.05,f),tn2=performance.now()/1000;
+ for(const c of list){c.a+=Math.sin(tn2*.3+c.w)*.4*dt;const nx=c.x+Math.cos(c.a)*4*dt,nz=c.z+Math.sin(c.a)*4*dt;if(Math.hypot(nx,nz)>CH.Rc-50)c.a=Math.atan2(-c.z,-c.x);else{c.x=nx;c.z=nz}
+  clPlace(c);c.g.scale.setScalar(ff);if(!under&&Math.hypot(P.x-c.x,P.z-c.z)<c.R*ff)under=true}return under}
+function clFade(type,f){const M=C.clT[type];M.sp.opacity=CLC[type].po*f;M.cu.opacity=CLC[type].cuo*f}
+const evF=(t,T)=>Math.max(0,Math.min(1,t/2,(T-t)/2.5));
+function evEnd(k){const e=C.ev&&C.ev[k];if(!e)return;if(e.cl)clRemove(e.cl);C.ev[k]=null}
+function fxUpdate(){const E=C.ev;let best=null,bs=-1;for(const k of['ac','bz','sd'])if(E[k]&&E[k].ov>.02&&E[k].s>bs){bs=E[k].s;best=k}
  if(!best){if(FXD)FXD.style.opacity=0;return}
- const e=E[best],T=best==='ac'?EVC.acidT:best==='bz'?EVC.blizT:EVC.sandT,f=Math.max(0,Math.min(1,e.t/1.5,(T-e.t)/2)),mode=best==='ac'?'acid':best==='bz'?'blizzard':'sand';
+ const mode=best==='ac'?'acid':best==='bz'?'blizzard':'sand';
  if(!FXD){FXD=document.createElement('div');FXD.className='stormFx';document.body.appendChild(FXD)}
  if(FXD.dataset.m!==mode){FXD.dataset.m=mode;FXD.className='stormFx '+mode}
- let op=.55*f;if(best==='bz')op=(.4+.5*Math.min(1,e.cold/6))*f;else if(best==='ac'&&sheltered())op*=.45;FXD.style.opacity=op.toFixed(3)}
-const stormOn=()=>running&&!HP.dead&&!CAVE.on;
-function acTick(dt){const A=C.ev.ac;A.t+=dt;A.hit-=dt;A.sn-=dt;
- if(A.sn<=0){A.sn=.5+Math.random()*.5;try{SX.campCrackle&&SX.campCrackle();SX.leafRustle&&SX.leafRustle()}catch(e){}}
- if(stormOn()&&A.hit<=0&&!sheltered()){A.hit=1;BH(1,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Get under cover.')}}
- if(A.t>=EVC.acidT)C.ev.ac=null}
+ FXD.style.opacity=Math.min(.95,E[best].ov).toFixed(3)}
+function acTick(dt){const A=C.ev.ac;A.t+=dt;A.hit-=dt;A.sn-=dt;const f=evF(A.t,EVC.acidT);clFade('ac',f);const u=clMove(A.cl,dt,f)&&stormOn(),sh=u&&sheltered();
+ A.ov+=((u?(sh?.25:.55):0)-A.ov)*Math.min(1,dt*3);
+ if(u&&A.sn<=0){A.sn=.5+Math.random()*.5;try{SX.campCrackle&&SX.campCrackle();SX.leafRustle&&SX.leafRustle()}catch(e){}}
+ if(u&&!sh&&A.hit<=0){A.hit=1;BH(1,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Step out from under the cloud.')}}
+ if(A.t>=EVC.acidT)evEnd('ac')}
 function bzWarm(){if(Math.hypot(P.x,P.z)<CH.Rr*1.2||riverAt(P.x,P.z)<7)return true;for(const p of LP)if(Math.hypot(P.x-p.x,P.z-p.z)<4)return true;return false}
-function bzTick(dt){const B=C.ev.bz;B.t+=dt;B.hit-=dt;B.sn-=dt;
- if(B.sn<=0){B.sn=1.6+Math.random();try{SX.windGust&&SX.windGust()}catch(e){}}
- if(stormOn()){if(bzWarm())B.cold=Math.max(0,B.cold-dt*4);else B.cold=Math.min(8,B.cold+dt);
-  if(B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(1,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Get close to the volcano or a lava river.')}}}
- if(B.t>=EVC.blizT)C.ev.bz=null}
-function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t*.4+D.w)*.5*dt;
- if(D.sn<=0){D.sn=1+Math.random()*.8;try{SX.windGust&&SX.windGust()}catch(e){}}
- const f=Math.max(0,Math.min(1,D.t/1.5,(EVC.sandT-D.t)/2));
- if(stormOn()&&!sheltered()){const sp=5*dt*f,nx=P.x+Math.cos(D.a)*sp,nz=P.z+Math.sin(D.a)*sp,r=Math.hypot(nx,nz);
+function bzTick(dt){const B=C.ev.bz;B.t+=dt;B.hit-=dt;B.sn-=dt;const f=evF(B.t,EVC.blizT);clFade('bz',f);const u=clMove(B.cl,dt,f)&&stormOn();
+ if(u&&!bzWarm())B.cold=Math.min(8,B.cold+dt);else B.cold=Math.max(0,B.cold-dt*(u?4:2));
+ B.ov+=((u?.4+.5*Math.min(1,B.cold/6):0)-B.ov)*Math.min(1,dt*3);
+ if(u&&B.sn<=0){B.sn=1.6+Math.random();try{SX.windGust&&SX.windGust()}catch(e){}}
+ if(u&&B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(1,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Leave the cloud, or get close to the volcano or a lava river.')}}
+ if(B.t>=EVC.blizT)evEnd('bz')}
+function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t*.4+D.w)*.5*dt;const f=evF(D.t,EVC.sandT);clFade('sd',f);const u=clMove(D.cl,dt,f)&&stormOn(),sh=u&&sheltered();
+ D.ov+=((u?(sh?.25:.55):0)-D.ov)*Math.min(1,dt*3);
+ if(u&&D.sn<=0){D.sn=1+Math.random()*.8;try{SX.windGust&&SX.windGust()}catch(e){}}
+ if(u&&!sh){const sp=5*dt,nx=P.x+Math.cos(D.a)*sp,nz=P.z+Math.sin(D.a)*sp,r=Math.hypot(nx,nz);
   if(terrH(nx,nz)>WATER+.3&&r>CH.Rr*1.1&&r<CH.Rc-30&&riverAt(nx,nz)>2){P.x=nx;P.z=nz}else D.a+=Math.PI*(.5+Math.random()*.4);
-  if(D.hit<=0){D.hit=1.5;BH(1,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Get under cover.')}}}
- if(D.t>=EVC.sandT)C.ev.sd=null}
+  if(D.hit<=0){D.hit=1.5;BH(1,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Step out from under the cloud.')}}}
+ if(D.t>=EVC.sandT)evEnd('sd')}
+/* ---------- crab rave: giant dancing crabs everywhere, and crabrave.mp3 takes over the music for good ---------- */
+const omp=window.musicPlay;if(omp)window.musicPlay=function(){if(CR.on)return;return omp.apply(this,arguments)};
+function crAudio(){if(CR.on)return;CR.on=true;try{if(typeof bgm!=='undefined'&&bgm)bgm.pause()}catch(e){}
+ if(!CR.au){const a=new Audio('crabrave.mp3');a.loop=true;a.volume=.7;a.preload='auto';a.addEventListener('error',()=>{CR.on=false;try{musicPlay()}catch(e){}});CR.au=a}
+ const pr=CR.au.play();if(pr&&pr.catch)pr.catch(()=>{const f=()=>{if(CR.on)CR.au.play().catch(()=>{});window.removeEventListener('pointerdown',f,true);window.removeEventListener('keydown',f,true)};window.addEventListener('pointerdown',f,true);window.addEventListener('keydown',f,true)})}
+function crFade(){if(CR.fade||!CR.au||!CR.on)return;CR.fade=true;const t0=performance.now(),v0=CR.au.volume;
+ const iv=setInterval(()=>{const k=Math.min(1,(performance.now()-t0)/3000);try{CR.au.volume=Math.max(0,v0*(1-k))}catch(e){}
+  if(k>=1){clearInterval(iv);try{CR.au.pause();CR.au.currentTime=0;CR.au.volume=.7}catch(e){}CR.on=false;CR.fade=false;try{musicPlay()}catch(e){}}},60)}
+setInterval(()=>{if(CR.on&&!CR.fade&&(HP.dead||CH.state!=='run'))crFade()},150);
+function crInit(){if(C.crG)return;C.crG={body:new THREE.SphereGeometry(1,12,9),eye:new THREE.CylinderGeometry(.06,.06,.5,5).translate(0,.25,0),ball:new THREE.SphereGeometry(.14,6,5),claw:new THREE.SphereGeometry(.5,8,6),leg:new THREE.BoxGeometry(.9,.1,.1).translate(.45,0,0),arm:new THREE.CylinderGeometry(.09,.09,.8,5).translate(0,.4,0)};DISP.push(...Object.values(C.crG));
+ C.crM={shell:new THREE.MeshLambertMaterial({color:0xd8472f,flatShading:true}),dk:new THREE.MeshLambertMaterial({color:0x8f2a1c,flatShading:true}),eye:new THREE.MeshBasicMaterial({color:0x111111})}}
+function mkBigCrab(){crInit();const g=new THREE.Group(),B=new THREE.Group();g.add(B);
+ const bd=new THREE.Mesh(C.crG.body,C.crM.shell);bd.scale.set(1.35,.62,1);bd.position.y=.75;B.add(bd);
+ const tp=new THREE.Mesh(C.crG.body,C.crM.dk);tp.scale.set(1,.3,.7);tp.position.set(0,1.05,-.05);B.add(tp);
+ const arms=[],legs=[];
+ for(const sx of[-1,1]){const pv=new THREE.Group();pv.position.set(sx*1.2,.85,.55);pv.add(new THREE.Mesh(C.crG.arm,C.crM.dk));const cl=new THREE.Mesh(C.crG.claw,C.crM.shell);cl.scale.set(1,.75,1.3);cl.position.y=.95;pv.add(cl);B.add(pv);arms.push(pv);
+  const es=new THREE.Mesh(C.crG.eye,C.crM.dk);es.position.set(sx*.35,.95,.7);B.add(es);const eb=new THREE.Mesh(C.crG.ball,C.crM.eye);eb.position.set(sx*.35,1.5,.7);B.add(eb);
+  for(let i=0;i<3;i++){const l=new THREE.Mesh(C.crG.leg,C.crM.dk);l.position.set(sx*1.0,.5,-.6+i*.45);if(sx<0)l.rotation.y=Math.PI;l.rotation.z=-.5;B.add(l);legs.push(l)}}
+ return{g,B,arms,legs}}
+function crStart(){crInit();let n=0;
+ for(let tries=0;n<28&&tries<900;tries++){let x,z;if(n<10){const a=Math.random()*6.283,r=26+Math.random()*80;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(HALF-120);z=(Math.random()*2-1)*(HALF-120)}
+  const r=Math.hypot(x,z);if(r<CH.Rr*1.45||r>CH.Rc-70)continue;const h=terrH(x,z);if(h<1.8||h>34||riverAt(x,z)<4)continue;
+  if(zc&&Math.hypot(x-zc.x,z-zc.z)<CH.ZR+60)continue;if(Math.hypot(x-P.x,z-P.z)<22)continue;
+  const o=mkBigCrab();o.g.scale.setScalar(.01);o.g.position.set(x,h,z);C.G.add(o.g);CRB.push(Object.assign(o,{x,z,a:Math.random()*6.283,ph:Math.random()*6.283,t:0,cd:0}));n++}
+ return n>0}
+function crClear(){for(const c of CRB)if(c.g.parent){addFx(new THREE.Vector3(c.x,c.g.position.y+2,c.z),0xff7a4a,3,.5);c.g.parent.remove(c.g)}CRB.length=0}
+function crTick(dt){const E=C.ev.cr;E.t+=dt;const beat=C.t*2.083*6.283;
+ for(const c of CRB){c.t+=dt;c.cd-=dt;const dx=P.x-c.x,dz=P.z-c.z,d=Math.hypot(dx,dz)||1,chase=d<48&&stormOn();let h;
+  if(chase)h=Math.atan2(dz,dx);else{c.a+=Math.sin(c.t*.7+c.ph)*dt*.9;h=c.a}
+  if(!chase||d>3.4){const sp=chase?4.6:2.4,nx=c.x+Math.cos(h)*sp*dt,nz=c.z+Math.sin(h)*sp*dt,r=Math.hypot(nx,nz);
+   if(r>CH.Rr*1.4&&r<CH.Rc-60&&terrH(nx,nz)>1.3&&riverAt(nx,nz)>3){c.x=nx;c.z=nz}else c.a+=Math.PI*(.6+Math.random()*.8)}
+  const gh=terrH(c.x,c.z),bob=Math.abs(Math.sin(beat*.5+c.ph))*.55;c.g.position.set(c.x,gh+bob,c.z);c.g.rotation.y=-h;
+  c.g.scale.setScalar(2.6*Math.max(.01,Math.min(1,c.t/1.5,(EVC.crabT-E.t)/1.2)));
+  c.B.rotation.y=Math.sin(beat*.5+c.ph)*.35;c.B.rotation.z=Math.sin(beat*.5+c.ph*1.7)*.08;
+  c.arms[0].rotation.z=.7+Math.sin(beat+c.ph)*.8;c.arms[1].rotation.z=-(.7+Math.sin(beat+c.ph+Math.PI)*.8);
+  for(let i=0;i<c.legs.length;i++)c.legs[i].rotation.z=-.5+Math.sin(beat*2+i*1.1+c.ph)*.3;
+  if(stormOn()&&d<4.4&&P.y<gh+4&&c.cd<=0){c.cd=1;BH(2,'a giant crab');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xff7a4a,1.8,.35);try{SX.crabClick&&SX.crabClick()}catch(e){}}}
+ if(Math.random()<dt*2){try{SX.crabClick&&SX.crabClick()}catch(e){}}
+ if(E.t>=EVC.crabT){crClear();C.ev.cr=null}}
+/* ---------- sharknado: five shark-filled tornados that fire land sharks at you ---------- */
+function skInit(){if(C.skG)return;C.skG={body:new THREE.SphereGeometry(1,10,8),fin:new THREE.ConeGeometry(.32,.8,4),tail:new THREE.ConeGeometry(.4,1.1,4),eye:new THREE.SphereGeometry(.08,5,4),jaw:new THREE.BoxGeometry(.6,.06,.4)};DISP.push(...Object.values(C.skG));
+ C.skM={bd:new THREE.MeshLambertMaterial({color:0x5b7a90,flatShading:true}),bl:new THREE.MeshLambertMaterial({color:0xe3ebef,flatShading:true}),ey:new THREE.MeshBasicMaterial({color:0x0a0a0a}),tt:new THREE.MeshBasicMaterial({color:0xffffff})}}
+function mkShark(sc){skInit();const g=new THREE.Group(),b=new THREE.Mesh(C.skG.body,C.skM.bd);b.scale.set(1.9,.62,.62);g.add(b);
+ const bl=new THREE.Mesh(C.skG.body,C.skM.bl);bl.scale.set(1.7,.4,.56);bl.position.y=-.2;g.add(bl);
+ const df=new THREE.Mesh(C.skG.fin,C.skM.bd);df.position.set(-.1,.72,0);g.add(df);
+ const tl=new THREE.Mesh(C.skG.tail,C.skM.bd);tl.position.set(-2,.1,0);tl.rotation.z=Math.PI/2;g.add(tl);
+ const tf=new THREE.Mesh(C.skG.fin,C.skM.bd);tf.position.set(-1.9,.5,0);g.add(tf);
+ for(const sz of[-1,1]){const e=new THREE.Mesh(C.skG.eye,C.skM.ey);e.position.set(1.35,.2,sz*.34);g.add(e)}
+ const jw=new THREE.Mesh(C.skG.jaw,C.skM.tt);jw.position.set(1.5,-.12,0);g.add(jw);g.scale.setScalar(sc||1);return g}
+function skLaunch(T,d){const sy=terrH(T.x,T.z)+24+Math.random()*18,sx=T.x+(Math.random()-.5)*6,sz=T.z+(Math.random()-.5)*6,tf=Math.max(1.3,Math.min(3.4,d/40)),
+ tx=P.x+(P.vx||0)*tf*.5+(Math.random()-.5)*5,tz=P.z+(P.vz||0)*tf*.5+(Math.random()-.5)*5,ty=terrH(tx,tz),GR=24,g=mkShark(1.25);g.position.set(sx,sy,sz);C.G.add(g);
+ SK.push({g,x:sx,y:sy,z:sz,vx:(tx-sx)/tf,vz:(tz-sz)/tf,vy:((ty-sy)+.5*GR*tf*tf)/tf,st:0,t:0,tf,cd:0,life:0});
+ if(d<160)try{SX.sharkLaunch&&SX.sharkLaunch()}catch(e){}}
+function skUpdate(s,dt){s.t+=dt;s.cd-=dt;
+ if(s.st===0){s.x+=s.vx*dt;s.z+=s.vz*dt;s.vy-=24*dt;s.y+=s.vy*dt;const gh=terrH(s.x,s.z),hs=Math.hypot(s.vx,s.vz);s.g.position.set(s.x,s.y,s.z);s.g.rotation.set(0,-Math.atan2(s.vz,s.vx),Math.atan2(s.vy,hs));
+  if((s.y<=gh+.3&&s.t>.3)||s.t>s.tf+.6){if(gh<WATER+.2)return false;s.st=1;s.y=gh;s.life=6.5+Math.random()*2.5;addFx(new THREE.Vector3(s.x,gh+.8,s.z),0xdfe6ea,2.2,.4);
+   if(stormOn()&&Math.hypot(P.x-s.x,P.z-s.z)<2.8&&P.y<gh+3&&s.cd<=0){s.cd=1.1;BH(3,'a flying shark');try{SX.sharkBite&&SX.sharkBite()}catch(e){}}}
+  return true}
+ s.life-=dt;if(s.life<=0){addFx(new THREE.Vector3(s.x,s.y+.8,s.z),0xdfe6ea,1.6,.35);return false}
+ const dx=P.x-s.x,dz=P.z-s.z,d=Math.hypot(dx,dz)||1,live=stormOn(),hx=dx/d,hz=dz/d;
+ if(live&&d>1.5){const nx=s.x+hx*5.8*dt,nz=s.z+hz*5.8*dt;if(terrH(nx,nz)<WATER+.3)return false;s.x=nx;s.z=nz}
+ const gh=terrH(s.x,s.z);s.y=gh+Math.abs(Math.sin(s.t*10))*.35;s.g.position.set(s.x,s.y,s.z);s.g.rotation.set(0,-Math.atan2(hz,hx),Math.sin(s.t*14)*.22);
+ if(live&&d<2.1&&P.y<gh+3&&s.cd<=0){s.cd=.9;BH(2,'a land shark');addFx(new THREE.Vector3(P.x,P.y+.9,P.z),0xff4455,1.6,.3);try{SX.sharkBite&&SX.sharkBite()}catch(e){}}
+ return true}
+function snTick(dt){if(!C)return;
+ for(let i=TOR.length-1;i>=0;i--){const T=TOR[i];if(!T.sn)continue;T.life-=dt;if(T.life<=0){if(T.g.parent)T.g.parent.remove(T.g);try{dispose(T.g)}catch(e){}TOR.splice(i,1)}}
+ const live=CH.state==='run'&&!HP.dead&&running;
+ if(!live&&SK.length){for(const q of SK)if(q.g.parent)q.g.parent.remove(q.g);SK.length=0}
+ for(const T of TOR){if(!T.sn)continue;const d=Math.hypot(T.x-P.x,T.z-P.z);
+  if(d<650)for(const o of T.sks){o.a+=dt*o.w;const rr=5+13*Math.pow(o.h/60,1.5);o.m.position.set(Math.cos(o.a)*rr,o.h,Math.sin(o.a)*rr);o.m.rotation.set(0,-(o.a+1.5708),Math.sin(T.t*3+o.h)*.3)}
+  if(!live||T.t<4||T.life<4)continue;T.cd-=dt;if(T.cd<=0&&d<170&&SK.length<40){T.cd=.9+Math.random()*1.1;skLaunch(T,d)}}
+ for(let i=SK.length-1;i>=0;i--){if(!skUpdate(SK[i],dt)){const q=SK[i];if(q.g.parent)q.g.parent.remove(q.g);SK.splice(i,1)}}}
 /* ---------- monsters: spawn rate and cap double every minute survived ---------- */
 X.chaosMobs=function(dt,count,spawnFn){if(C)C.spawnFn=spawnFn;if(CH.state!=='run'||HP.dead||!running)return;
  const mins=Math.floor((performance.now()-CH.t0)/60000),mult=Math.pow(2,mins),cap=Math.min(80,10*mult),rate=.25*mult;
@@ -5282,7 +5366,7 @@ X.chaosMobs=function(dt,count,spawnFn){if(C)C.spawnFn=spawnFn;if(CH.state!=='run
 const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._ch1){X._ch1=1;console.error('[chaos]',e)}}};
 function tick(dt){if(!C||!isChaos()||!WG){tHud(false);return}
  dockTick(dt);
- slowMobs();if(CH.state==='run'&&!HP.dead&&running){const mx=maxHP();if(HP.v>0&&HP.v<mx)HP.v=Math.min(mx,HP.v+dt*((performance.now()/1000-HP.hurtT>8)?(1/15-1/60):1/15))}shardTick(dt);blueTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);evtTick(dt);
+ slowMobs();if(CH.state==='run'&&!HP.dead&&running){const mx=maxHP();if(HP.v>0&&HP.v<mx)HP.v=Math.min(mx,HP.v+dt*((performance.now()/1000-HP.hurtT>8)?(1/15-1/60):1/15))}shardTick(dt);blueTick(dt);disTick(dt);torTick(dt);torHit(dt);metTick(dt);lavaTick(dt);evtTick(dt);snTick(dt);
  C.t+=dt;const t=performance.now()/1000;CH.over=clamp(CH.over+Math.sign(CH.tgt-CH.over)*Math.min(Math.abs(CH.tgt-CH.over),dt/45),0,1);
  const ez=CH.over*CH.over*(3-2*CH.over),Lmax=CH.Pk+.3,level=CH.L0+(Lmax-CH.L0)*ez,cr=lavaR(level);CH.level=level;window.__lavaNow={t:performance.now(),key:CUR.key,x:0,z:0,r:cr-.4,y:level,Rr:CH.Rr};
  C.lake.position.y=level;C.lake.scale.setScalar(cr);C.lakeTex.offset.set(t*.012,t*.008);C.riverTex.offset.y=-t*(.02+.07*CH.over);
