@@ -5087,7 +5087,7 @@ function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
  else if(k==='blizzard'){if(C.ev.bz)return false;const cl=clSpawn('bz');if(!cl.length)return false;C.ev.bz={t:0,hit:0,sn:0,cold:0,ov:0,cl,s:performance.now()};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.blizT;banner('BLIZZARD','#cfe8ff');toast('Blizzard clouds are drifting over the island. Keep out from under them, or warm up near the lava.')}
  else if(k==='sandstorm'){if(C.ev.sd)return false;const cl=clSpawn('sd');if(!cl.length)return false;C.ev.sd={t:0,hit:0,sn:0,ov:0,cl,s:performance.now(),a:Math.random()*6.283,w:Math.random()*50};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.sandT;banner('SANDSTORM','#e0b070');toast('Dust clouds are drifting over the island. Do not get caught under one!')}
  else if(k==='crabrave'){if(C.ev.cr)return false;if(!crStart())return false;C.ev.cr={t:0};DIS.cur={k,n:DNAME[k]};DIS.end=now+EVC.crabT;banner('CRAB RAVE','#ff6a4a');toast('The giant crabs are throwing a rave! Dodge their claws.');crAudio()}
- else if(k==='sharknado'){let nt=0;for(let q=0;q<5;q++)if(torSpawn(1))nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('SHARKNADO','#7fc4ff');toast('Five sharknados are hunting you! Land sharks are flying your way. Keep moving!')}
+ else if(k==='sharknado'){if(TOR.some(t=>t.sn))return false;let nt=0;for(let q=0;q<5;q++)if(torSpawn(1))nt++;if(!nt)return false;DIS.cur={k,n:DNAME[k]};DIS.end=now+8;banner('SHARKNADO','#7fc4ff');toast('Five sharknados are hunting you! Land sharks are flying your way. Keep moving!')}
  else{C.lf={t:0,dur:22};lpLast=null;DIS.cur={k,n:DNAME[k]};DIS.end=now+22;banner('THE FLOOR IS LAVA','#ff5a2a');toast('Keep moving! Lava follows your steps, and standing still burns.')}
  DIS.count++;return true}
 function endDis(){const E=X.events;if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')&&E.active())E.stop();if(DIS.cur.k==='meteor')C.met=null;if(DIS.cur.k==='lavafloor')C.lf=null}DIS.cur=null}
@@ -5103,7 +5103,7 @@ function torPick(far){for(let k=0;k<260;k++){const x=(Math.random()*2-1)*(HALF-1
   if(far){let ok=true;for(const t of TOR)if(Math.hypot(t.x-x,t.z-z)<120){ok=false;break}if(!ok)continue}
   return{x,z}}return far?torPick(false):null}
 function torSpawn(sn){const p=sn?(torPick(false)||torPick(true)):torPick(true);if(!p)return false;const g=X.events.mkTornado();g.scale.setScalar(.01);g.position.set(p.x,terrH(p.x,p.z),p.z);C.G.add(g);
- const T={g,u:g.userData,x:p.x,z:p.z,a:Math.random()*6.283,t:0,w:Math.random()*100,sn:sn?1:0,life:sn?EVC.sharkT:0,cd:2,sks:[]};
+ const T={g,u:g.userData,x:p.x,z:p.z,a:Math.random()*6.283,t:0,w:Math.random()*100,sn:sn?1:0,life:sn?Infinity:0,cd:2,sks:[]};
  if(sn)for(let i=0;i<5;i++){const m=mkShark(2.1);g.add(m);T.sks.push({m,h:6+Math.random()*44,a:Math.random()*6.283,w:1.1+Math.random()*.8})}
  TOR.push(T);return true}
 function torTick(dt){for(const T of TOR){T.t+=dt;T.a+=(Math.sin(T.t*.31+T.w)*.45+Math.sin(T.t*.083+T.w*2)*.25)*dt;
@@ -5259,7 +5259,7 @@ function clMove(list,dt,f){let under=false;const ff=Math.max(.05,f),tn2=performa
  for(const c of list){c.a+=Math.sin(tn2*.3+c.w)*.4*dt;const nx=c.x+Math.cos(c.a)*4*dt,nz=c.z+Math.sin(c.a)*4*dt;if(Math.hypot(nx,nz)>CH.Rc-50)c.a=Math.atan2(-c.z,-c.x);else{c.x=nx;c.z=nz}
   clPlace(c);c.g.scale.setScalar(ff);if(!under&&Math.hypot(P.x-c.x,P.z-c.z)<c.R*ff)under=true}return under}
 function clFade(type,f){const M=C.clT[type];M.sp.opacity=CLC[type].po*f;M.cu.opacity=CLC[type].cuo*f}
-const evF=(t,T)=>Math.max(0,Math.min(1,t/2,(T-t)/2.5));
+const evF=t=>Math.max(0,Math.min(1,t/2));
 function evEnd(k){const e=C.ev&&C.ev[k];if(!e)return;if(e.cl)clRemove(e.cl);C.ev[k]=null}
 function fxUpdate(){const E=C.ev;let best=null,bs=-1;for(const k of['ac','bz','sd'])if(E[k]&&E[k].ov>.02&&E[k].s>bs){bs=E[k].s;best=k}
  if(!best){if(FXD)FXD.style.opacity=0;return}
@@ -5271,21 +5271,21 @@ function acTick(dt){const A=C.ev.ac;A.t+=dt;A.hit-=dt;A.sn-=dt;const f=evF(A.t,E
  A.ov+=((u?(sh?.25:.55):0)-A.ov)*Math.min(1,dt*3);
  if(u&&A.sn<=0){A.sn=.5+Math.random()*.5;try{SX.campCrackle&&SX.campCrackle();SX.leafRustle&&SX.leafRustle()}catch(e){}}
  if(u&&!sh&&A.hit<=0){A.hit=1;BH(1,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Step out from under the cloud.')}}
- if(A.t>=EVC.acidT)evEnd('ac')}
+ }
 function bzWarm(){if(Math.hypot(P.x,P.z)<CH.Rr*1.2||riverAt(P.x,P.z)<7)return true;for(const p of LP)if(Math.hypot(P.x-p.x,P.z-p.z)<4)return true;return false}
 function bzTick(dt){const B=C.ev.bz;B.t+=dt;B.hit-=dt;B.sn-=dt;const f=evF(B.t,EVC.blizT);clFade('bz',f);const u=clMove(B.cl,dt,f)&&stormOn();
  if(u&&!bzWarm())B.cold=Math.min(8,B.cold+dt);else B.cold=Math.max(0,B.cold-dt*(u?4:2));
  B.ov+=((u?.4+.5*Math.min(1,B.cold/6):0)-B.ov)*Math.min(1,dt*3);
  if(u&&B.sn<=0){B.sn=1.6+Math.random();try{SX.windGust&&SX.windGust()}catch(e){}}
  if(u&&B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(1,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Leave the cloud, or get close to the volcano or a lava river.')}}
- if(B.t>=EVC.blizT)evEnd('bz')}
+ }
 function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t*.4+D.w)*.5*dt;const f=evF(D.t,EVC.sandT);clFade('sd',f);const u=clMove(D.cl,dt,f)&&stormOn(),sh=u&&sheltered();
  D.ov+=((u?(sh?.25:.55):0)-D.ov)*Math.min(1,dt*3);
  if(u&&D.sn<=0){D.sn=1+Math.random()*.8;try{SX.windGust&&SX.windGust()}catch(e){}}
  if(u&&!sh){const sp=5*dt,nx=P.x+Math.cos(D.a)*sp,nz=P.z+Math.sin(D.a)*sp,r=Math.hypot(nx,nz);
   if(terrH(nx,nz)>WATER+.3&&r>CH.Rr*1.1&&r<CH.Rc-30&&riverAt(nx,nz)>2){P.x=nx;P.z=nz}else D.a+=Math.PI*(.5+Math.random()*.4);
   if(D.hit<=0){D.hit=1.5;BH(1,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Step out from under the cloud.')}}}
- if(D.t>=EVC.sandT)evEnd('sd')}
+ }
 /* ---------- crab rave: giant dancing crabs everywhere, and crabrave.mp3 takes over the music for good ---------- */
 const omp=window.musicPlay;if(omp)window.musicPlay=function(){if(CR.on)return;return omp.apply(this,arguments)};
 function crAudio(){if(CR.on)return;CR.on=true;try{if(typeof bgm!=='undefined'&&bgm)bgm.pause()}catch(e){}
