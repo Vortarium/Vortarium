@@ -2584,7 +2584,7 @@ function update(dt){
  nwT+=dt;if(nwT>.3){nwT=0;updateHeader(false);const B=cave?{name:'Cave'}:biomeObj(P.x,P.z);$('biomeLbl').textContent=B.name+'  ·  '+clockStr()+(cave?'':'  ·  '+WNAME[WEATHER.type])}
  saveT+=dt;if(saveT>6){saveT=0;save()}
  {const ph=!(running&&!locked&&!invOpen&&!SEA.open&&!busy);if(ph!==update._ph){update._ph=ph;$('pause').hidden=ph}}}
-function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);frameN++;update(dt);renderer.shadowMap.needsUpdate=!LDQ()&&(frameN%(PIX.avg>22?8:4))===0;renderer.render(scene,camera);
+function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);frameN++;update(dt);renderer.shadowMap.needsUpdate=!LDQ()&&(frameN%(PIX.avg>30?16:PIX.avg>22?10:5))===0;renderer.render(scene,camera);
  if(frameN>40){PIX.t+=dt;PIX.n++;if(PIX.t>1.2){const avg=PIX.t/PIX.n*1000;PIX.t=0;PIX.n=0;PIX.avg=avg;let np=PIX.cur;if(avg>20&&PIX.cur>PIX.min+.001)np=Math.max(PIX.min,PIX.cur-.15);else if(avg>24&&PIX.dd>.6)PIX.dd=Math.max(.6,PIX.dd-.06);else if(avg<14){if(PIX.dd<1)PIX.dd=Math.min(1,PIX.dd+.04);else if(PIX.cur<PIX.max)np=Math.min(PIX.max,PIX.cur+.1)}if(Math.abs(np-PIX.cur)>.001){PIX.cur=np;renderer.setPixelRatio(np)}}}
 
  if(invOpen&&PV.mounted){const t=performance.now()/1000;if(PV.av){PV.av.group.rotation.y+=dt*.6;animAvatar(PV.av,dt,t,0,0,true,0,0)}PV.r.render(PV.scene,PV.cam)}}
@@ -2618,8 +2618,8 @@ const WT=[{n:'Common',m:1,v:100000},{n:'Uncommon',m:1.5,v:1000000},{n:'Rare',m:2
 const TSH=['#a9b4c2','#8fd0a8','#7fb2ee','#cf9bf5'];
 const NN={pistol:'Pistol',pepper:'Pepperbox',musket:'Musket',rifle:'Rifle',blunder:'Blunderbuss',xbow:'Crossbow',bow:'Longbow',harpoon:'Harpoon Gun',cannon:'Cannon'};
 ['Barnacle','Salty','Coral','Anchor','Bosun\'s','Cutthroat','Gull','Hurricane','Jolly','Kelp','Lagoon','Mariner\'s','Nautilus','Octopus','Plunder','Quicksilver','Rum Runner\'s','Scurvy','Urchin','Voyager','Whaler\'s','Yardarm','Zephyr','Black Flag','Blood Moon','Bone','Crimson Tide','Davy Jones\'','Dead Man\'s','Fathom','Ghost Ship','Grog','Iron Hook','Judgement','Kraken\'s','Lantern','Mutineer\'s','Night Watch','Pearl','Rogue Wave','Sea Witch','Skull','Storm Surge','Treasure','Tidal','Undertow','Vengeance','Widowmaker','Siren\'s','Sunken','Typhoon','Wreckage'].forEach((p,i)=>{const k=Object.keys(NN)[i%9];WBASE.push([p+' '+NN[k],k,0,'w'+(100+i)])});
-/* every gun rolls its own rarity, damage (1-30) and fire rate (slowest 1 shot/s), fixed by its id */
-const WR=[{d:[1,8],c:[.55,1]},{d:[6,14],c:[.4,.9]},{d:[12,22],c:[.25,.8]},{d:[20,30],c:[.12,.7]}];
+/* every gun rolls its own rarity, damage (1-30) and shot cooldown c (seconds between shots, max 1). Better guns hit harder but fire SLOWER; weak guns fire fast. */
+const WR=[{d:[1,8],c:[.15,.4]},{d:[6,14],c:[.3,.6]},{d:[12,22],c:[.5,.8]},{d:[20,30],c:[.7,1]}];
 const WEAPONS=[];let wn=16;
 WBASE.forEach(b=>{const k=WKIND[b[1]],id=b[3]||('w'+(wn++)),r=armRng(armHash(id+'#gun')),tr=r(),t=tr<.32?0:tr<.62?1:tr<.86?2:3,R=WR[t],d=R.d[0]+Math.floor(r()*(R.d[1]-R.d[0]+1)),cd=Math.round((R.c[0]+r()*(R.c[1]-R.c[0]))*100)/100;
  WEAPONS.push({id,name:b[0],kind:b[1],kn:k.n,dmg:d,tier:t,cd,v:Math.round(150*Math.pow(1.32,d)*(1+(1/cd-1)*.15)),sh:TSH[t]})});
@@ -2832,7 +2832,7 @@ function worldShock(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/
  m.position.set(sx,e.gy+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);X.WSW.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:3+Math.floor(Math.random()*6)})}
 function wswTick(dt){for(let i=X.WSW.length-1;i>=0;i--){const q=X.WSW[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;const gy=topAt(q.x,q.z);q.m.position.set(q.x,gy+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
   const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
-  if(!q.hit&&!HP.dead&&Math.abs(al)<1.3&&Math.abs(lat)<18.2&&P.y<gy+1.3){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
+  if(!q.hit&&!HP.dead&&(Math.abs(al)<.7||(al+30*dt>.7&&al<-.7))&&Math.abs(lat)<17&&P.y<topAt(P.x,P.z)+.5){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
   if(q.t>2.4){scene.remove(q.m);q.m.material.dispose();q.m.geometry.dispose();X.WSW.splice(i,1)}}}
 function throwRock(e,spread){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+2.2*sc,e.z),a=Math.atan2(P.x-e.x,P.z-e.z)+spread,dist=Math.hypot(P.x-e.x,P.z-e.z),t=Math.max(.6,dist/18),v=new THREE.Vector3(Math.sin(a)*dist/t,(P.y+1-o.y)/t+.5*14*t,Math.cos(a)*dist/t);
  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.4,0),new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true}));m.position.copy(o);scene.add(m);X.EP.push({m,v,life:3,g:14,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'});SX.spearThrow&&SX.spearThrow()}
@@ -3694,7 +3694,7 @@ const fauna=[];X.fauna=fauna;
 const M=c=>new THREE.MeshLambertMaterial({color:c});
 function inst(geo,mat,pts,yo){const m=new THREE.InstancedMesh(geo,mat,pts.length),d=new THREE.Object3D();pts.forEach((p,i)=>{d.position.set(p[0],p[2]+(yo||0),p[1]);d.rotation.y=p[3]||0;d.updateMatrix();m.setMatrixAt(i,d.matrix)});WG.add(m);DISP.push(geo);return m}
 function pts(rnd,n,test){n=Math.round(n*Math.min(DF,3));const a=[];for(let t=0;t<n*30&&a.length<n;t++){const x=(rnd()*2-1)*(HALF-30),z=(rnd()*2-1)*(HALF-30),h=terrH(x,z);if(test(h,biomeObj(x,z),x,z))a.push([x,z,h,rnd()*6.28])}return a}
-function critter(x,z,col,s,kind){const g=X.mkCritter(kind,col,s);g.position.set(x,terrH(x,z),z);WG.add(g);fauna.push({g,x,z,a:Math.random()*6.28,t:Math.random()*4,kind,sp:kind==='crab'?1.2:2,hp:({deer:5,fox:3,boar:4,goat:3,turtle:5})[kind]||2,mv:false})}
+function critter(x,z,col,s,kind){const g=X.mkCritter(kind,col,s);g.traverse(o=>{if(o.isMesh)o.castShadow=false});g.position.set(x,terrH(x,z),z);WG.add(g);fauna.push({g,x,z,a:Math.random()*6.28,t:Math.random()*4,kind,sp:kind==='crab'?1.2:2,hp:({deer:5,fox:3,boar:4,goat:3,turtle:5})[kind]||2,mv:false})}
 /* every animal type: k = kind, c = colour, s = scale, n = how many per island, t = where it may spawn. The last four (boar, goat, turtle, duck) drop 1-3 raw meat. */
 const SPN=[
  {k:'rabbit',c:0xcfc3b0,s:1,n:18,t:(h,B)=>h>.8&&!B.sandy},
@@ -3719,7 +3719,11 @@ window.loadIsland=function(info){fauna.length=0;X.fCap=0;if(info.special){baseLo
  X.fCap=fauna.length}catch(e){console.error('flora',e)}};
 const baseU=update;
 window.update=function(dt){baseU(dt);if(CAVE.on)return;const now=performance.now()/1000;const dead=[];
- for(const f of fauna){const dp=Math.hypot(P.x-f.x,P.z-f.z);f.t-=dt;f.ramCd=(f.ramCd||0)-dt;f.panic=Math.max(0,(f.panic||0)-dt);
+ const fR=X.faunaR||110;
+ for(const f of fauna){const dp=Math.hypot(P.x-f.x,P.z-f.z);
+  /* performance: animals far from the player are taken out of the scene and not simulated at all (they pop back in when you get near) */
+  if(dp>fR){if(!f._cull){f._cull=1;if(f.g.parent)f.g.parent.remove(f.g)}continue}else if(f._cull&&dp<fR-12){f._cull=0;if(WG)WG.add(f.g)}else if(f._cull)continue;
+  f.t-=dt;f.ramCd=(f.ramCd||0)-dt;f.panic=Math.max(0,(f.panic||0)-dt);
   const spd={rabbit:9,deer:10.5,fox:6.5,crab:2.6,boar:8,goat:9,turtle:1.4,duck:7}[f.kind]||2,wsp={rabbit:1.6,deer:2.2,fox:2,crab:1,boar:1.8,goat:2,turtle:.5,duck:1.2}[f.kind]||1.5;let sp=wsp,mv=false;
   if(f.kind==='deer'&&f.aggr===undefined)f.aggr=Math.random()<.3;
   if(f.state==='paw'){f.pt-=dt;f.a=Math.atan2(P.x-f.x,P.z-f.z);if(f.pt<=0){f.state='ram';f.rt=2.4}}
@@ -3913,7 +3917,7 @@ document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset)return;
 /* ---------- ranks with sections ---------- */
 X.tabs=X.tabs||{};
 X.tabs.ranks=()=>{setTimeout(async()=>{const el=$q('ranksBox');if(!el)return;if(!FB){el.innerHTML='<div class="rkSec"><small>Sign in to see leaderboards.</small></div>';return}
- const secs=[['networth','Wealth','Richest pirates by total net worth',IC.coin,v=>fmt(v)],['gems','Treasure','Largest gem collections',IC.gem,v=>(v||0).toLocaleString()],['chestsOpened','Exploration','Most chests opened',IC.anchor,v=>(v||0).toLocaleString()]];let h='';
+ const secs=[['networth','Wealth','Richest pirates by total net worth',IC.coin,v=>fmt(v)],['gems','Treasure','Largest gem collections',IC.gem,v=>(v||0).toLocaleString()]];let h='';
  for(const s of secs){try{const r=await FB.topPlayers(s[0],10);h+='<div class="rkSec"><h3>'+s[3]+s[1]+'</h3><small>'+s[2]+'</small>'+r.map((p,i)=>'<div class="rkRow'+(i<3?' p'+(i+1):'')+'"><span>'+(i+1)+'. '+esc(p.nickname)+'</span><b>'+s[4](p[s[0]])+'</b></div>').join('')+'</div>'}catch(e){h+='<div class="rkSec"><h3>'+s[1]+'</h3><small>Could not load.</small></div>'}}
  el.innerHTML=h},0);return'<div id="ranksBox">Loading…</div>'};
 /* ---------- fishing rod + held item in first person ---------- */
@@ -3939,7 +3943,7 @@ X.mkCritter=function(kind,col,s){const g=new THREE.Group(),legs=[],u=g.userData;
  else if(kind==='turtle'){S1(.38,mc,0,.26,0,1.1,.55,1.3);S1(.3,dk,0,.34,0,1,.5,1.2);for(let i=0;i<5;i++)S1(.06,mc,(i%2?.12:-.12),.5,-.25+i*.14,1,.5,1);S1(.1,M('#8aa86a'),0,.22,.58,1,.9,1.3);S1(.025,M('#111'),.05,.26,.68);S1(.025,M('#111'),-.05,.26,.68);leg(-.34,.22,.12,.06,M('#8aa86a'));leg(.34,.22,.12,.06,M('#8aa86a'));leg(-.3,-.25,.12,.06,M('#8aa86a'));leg(.3,-.25,.12,.06,M('#8aa86a'))}
  else if(kind==='duck'){S1(.2,mc,0,.3,0,.9,.8,1.4);S1(.1,M('#2f6f4a'),0,.55,.28);const bl=new THREE.Mesh(new THREE.ConeGeometry(.035,.14,6),M('#f0a020'));bl.position.set(0,.52,.42);bl.rotation.x=Math.PI/2;g.add(bl);S1(.02,M('#111'),.05,.58,.36);S1(.02,M('#111'),-.05,.58,.36);for(const sx of[-1,1])S1(.12,dk,sx*.15,.33,-.02,.3,.7,1.2);const tl=new THREE.Mesh(new THREE.ConeGeometry(.07,.16,5),dk);tl.position.set(0,.36,-.32);tl.rotation.x=-1.9;g.add(tl);leg(-.07,0,.16,.02,M('#f0a020'));leg(.07,0,.16,.02,M('#f0a020'))}
  g.scale.setScalar(s);return g};
-function faunaTick(dt,t){const F=X.fauna;if(!F||CAVE.on)return;for(const f of F){const ud=f.g.userData,px=f.px==null?f.x:f.px,pz=f.pz==null?f.z:f.pz,sp=Math.hypot(f.x-px,f.z-pz)/Math.max(dt,.001);f.px=f.x;f.pz=f.z;f.ph=(f.ph||0)+Math.min(sp,6)*dt*(f.kind==='rabbit'?5:3);
+function faunaTick(dt,t){const F=X.fauna;if(!F||CAVE.on)return;for(const f of F){if(f._cull)continue;const ud=f.g.userData,px=f.px==null?f.x:f.px,pz=f.pz==null?f.z:f.pz,sp=Math.hypot(f.x-px,f.z-pz)/Math.max(dt,.001);f.px=f.x;f.pz=f.z;f.ph=(f.ph||0)+Math.min(sp,6)*dt*(f.kind==='rabbit'?5:3);
  if(ud.legs)ud.legs.forEach((l,i)=>{l.rotation.x=sp>.1?Math.sin(f.ph+(i%2?Math.PI:0)+(i>1?Math.PI/2:0))*.7:0});
  if(f.kind==='rabbit'&&sp>.1)f.g.position.y+=Math.abs(Math.sin(f.ph*.9))*.25;if(f.kind==='crab'&&sp>.1)f.g.rotation.y=f.a+Math.PI/2;
  if(f.kind==='crab'&&Math.random()<dt*.15&&Math.hypot(f.x-P.x,f.z-P.z)<14)SX.crabClick()}
@@ -5737,7 +5741,7 @@ X.arenaShock=function(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=d
 function swTick(dt){for(let i=F.sw.length-1;i>=0;i--){const q=F.sw[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;q.m.position.set(q.x,A.fl+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
   if(Math.random()<dt*120)addFx(new THREE.Vector3(q.x+(Math.random()-.5)*35*q.uz,A.fl+.6,q.z-(Math.random()-.5)*35*q.ux),0xb89a6a,2.4,.4);
   const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
-  if(!q.hit&&!HP.dead&&Math.abs(al)<1.3&&Math.abs(lat)<18.2&&P.y<A.fl+1.3){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
+  if(!q.hit&&!HP.dead&&(Math.abs(al)<.7||(al+30*dt>.7&&al<-.7))&&Math.abs(lat)<17&&P.y<A.fl+.5){q.hit=1;hurt(q.dmg,'a boss shockwave');P.vy=7;P.grounded=false;SX.bossSlam&&SX.bossSlam()}
   if(q.t>2.4||Math.hypot(q.x,q.z)>36){scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose();F.sw.splice(i,1)}}}
 function wipe(){F.q.length=0;clearExtra(true);clearTraps();clearShock();for(const e of F.mobs){scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()})}F.mobs.length=0;
  for(const e of X.EN.slice()){if(e.arena){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(e.g.parent)e.g.parent.remove(e.g)}}
@@ -7174,5 +7178,172 @@ ES.tick=function(dt){if(!ready())return;watch();if(off())return;const n=now();
 const lo=window.loadIsland;window.loadIsland=function(){try{unwatch();ES.key=null}catch(e){}return lo.apply(this,arguments)};
 const pu=window.update;window.update=function(dt){pu(dt);try{ES.tick(dt)}catch(e){if(!ES._e){ES._e=1;console.error('[enemy sync]',e)}}};
 window.addEventListener('beforeunload',()=>{try{FB&&FB.eliveDel&&FB.eliveDel()}catch(e){}});
+})();
+</script>
+<script>
+/* ===== WILD HORSES, FALLEN APPLES, TAMING + RIDING =====
+   - 1% of the animals that spawn on an island are wild horses instead
+   - fallen apples lie under trees: pick them up (Q with the hand tool), eat (+1 HP) or cook at a campfire (+2 HP)
+   - H next to a wild horse feeds it an apple; after 5-10 apples it is yours (one horse per player, 10 HP, 1.5-4x speed)
+   - H next to your horse mounts it, H again dismounts; you can open chests and shoot while riding
+   - your horse shows on the minimap and the world map and can be killed by enemies */
+(function(){'use strict';const X=window.PX;
+const WILD=[],APL=[];let MY=null,riding=false,lastLand=null,lastHurtMsg=0,hudEl=null;
+const HCOL=[[0x8a5a2b,0x2a1a10],[0x3b2a1e,0x111111],[0xf0ece2,0xd8d2c4],[0xb5733a,0xe8d9a8],[0x1c1c1f,0x0a0a0a],[0xc9a46a,0xf1e4c0],[0x6b4a2f,0x3a2616]];
+const now=()=>performance.now()/1000;
+ITEMS.apple=ITEMS.apple||{n:'Fallen Apple',v:2};ITEMS.cooked_apple=ITEMS.cooked_apple||{n:'Cooked Apple',v:6};
+{const st=document.createElement('style');st.textContent='#horseHud{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);padding:7px 16px;border-radius:10px;background:#000a;color:#fff;font:700 13px sans-serif;letter-spacing:.5px;z-index:20;pointer-events:none;display:none;border:1px solid #ffffff30}';document.head.appendChild(st)}
+/* ---------- horse model (faces +Z, feet at y=0) ---------- */
+function mkHorse(col,man){const g=new THREE.Group(),B=new THREE.Group(),legs=[];g.add(B);
+ const mc=new THREE.MeshLambertMaterial({color:col,flatShading:true}),mm=new THREE.MeshLambertMaterial({color:man,flatShading:true}),dk=new THREE.MeshLambertMaterial({color:0x1a1410,flatShading:true});
+ const box=(w,h,d,m,x,y,z,p)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=false;(p||B).add(o);return o};
+ box(.64,.72,1.5,mc,0,1.18,0);box(.62,.78,.55,mc,0,1.22,.5);
+ const neck=new THREE.Group();neck.position.set(0,1.45,.75);neck.rotation.x=.7;B.add(neck);box(.26,.9,.3,mc,0,.45,0,neck);box(.07,.86,.1,mm,0,.46,-.17,neck);
+ const head=new THREE.Group();head.position.set(0,.9,0);head.rotation.x=.55;neck.add(head);box(.24,.3,.62,mc,0,0,.26,head);box(.2,.2,.2,dk,0,-.06,.6,head);
+ for(const sx of[-1,1]){box(.06,.15,.06,mc,sx*.08,.2,-.02,head);box(.04,.05,.04,dk,sx*.13,.06,.32,head)}
+ const tail=box(.1,.75,.14,mm,0,1.12,-.84);tail.rotation.x=-.35;
+ for(const sx of[-1,1])for(const sz of[.55,-.55]){const pv=new THREE.Group();pv.position.set(sx*.2,.85,sz);B.add(pv);box(.15,.85,.15,mc,0,-.42,0,pv);box(.17,.12,.17,dk,0,-.82,0,pv);legs.push(pv)}
+ g.userData={legs,head,tail};return g}
+const dist=(o)=>Math.hypot(P.x-o.x,P.z-o.z);
+const turn=(g,a,dt,k)=>{let d=a-g.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));g.rotation.y+=d*Math.min(1,dt*k)};
+const gait=(o,sp,dt)=>{o.ph=(o.ph||0)+Math.min(sp,12)*dt*1.4;const L=o.g.userData.legs,amp=.65*Math.min(1,sp/3);for(let i=0;i<L.length;i++)L[i].rotation.x=sp>.3?Math.sin(o.ph+(i%2?Math.PI:0)+(i>1?Math.PI/2:0))*amp:0;
+ o.g.userData.tail.rotation.x=-.35+Math.sin(now()*3+(o.x||0))*.12};
+/* ---------- wild horses ---------- */
+function spawnWild(x,z){const cp=HCOL[Math.floor(Math.random()*HCOL.length)],g=mkHorse(cp[0],cp[1]);g.position.set(x,terrH(x,z),z);WG.add(g);
+ WILD.push({g,x,z,a:Math.random()*6.28,t:Math.random()*3,mv:false,ph:0,fed:0,need:5+Math.floor(Math.random()*6),calm:0,col:cp[0],man:cp[1]})}
+function wildFromFauna(info){const F=X.fauna;if(!F||!F.length)return;const rnd=mulberry(info.seed^0x40125E),pick=[];for(let i=0;i<F.length;i++)if(rnd()<.01)pick.push(i);
+ for(let k=pick.length-1;k>=0;k--){const f=F[pick[k]];if(f.g&&f.g.parent)f.g.parent.remove(f.g);F.splice(pick[k],1);X.fCap=Math.max(0,(X.fCap||0)-1);spawnWild(f.x,f.z)}}
+{const oc=X.critter;if(oc)X.critter=function(x,z,col,s,kind){if(!CAVE.on&&WILD.length<5&&Math.random()<.01){spawnWild(x,z);return}return oc.apply(this,arguments)}}
+function nearWild(r){let b=null,bd=r;for(const w of WILD){const d=dist(w);if(d<bd){bd=d;b=w}}return b}
+/* ---------- fallen apples ---------- */
+const APG=new THREE.SphereGeometry(.14,8,6),APM=new THREE.MeshLambertMaterial({color:0xc8282a,flatShading:true});
+function buildApples(info){APL.length=0;if(CAVE.on)return;const trees=[];
+ for(const arr of CG.values())for(const c of arr)if(c.eid&&c.kind!==2&&!c.cut&&c.h>=2&&String(c.eid).indexOf('cv')!==0)trees.push(c);
+ const rnd=mulberry(info.seed^0xA991E);for(let i=trees.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1)),t=trees[i];trees[i]=trees[j];trees[j]=t}
+ let made=0;for(const c of trees){if(made>=70)break;const B=biomeObj(c.x,c.z);if(B&&(B.cold||B.sandy))continue;if(rnd()>.45)continue;
+  const n=1+Math.floor(rnd()*3);for(let k=0;k<n;k++){const a=rnd()*6.283,r=(c.r||.6)+.7+rnd()*1.8,x=c.x+Math.cos(a)*r,z=c.z+Math.sin(a)*r,h=terrH(x,z);if(h<WATER+.4)continue;
+   const m=new THREE.Mesh(APG,APM);m.position.set(x,h+.13,z);WG.add(m);APL.push({m,x,z,t:0});made++}}}
+function pickApple(a){if(a.t>0)return;a.t=now()+420+Math.random()*180;a.m.visible=false;S.items=S.items||{};S.items.apple=(S.items.apple||0)+1;SX.pickup&&SX.pickup();toast('+1 Fallen Apple');save();updateHeader(true)}
+/* ---------- your horse ---------- */
+function buildMine(){if(MY&&MY.g&&MY.g.parent)MY.g.parent.remove(MY.g);MY=null;const h=S.horse;if(!h||h.isl!==CUR.key||(CUR.info&&CUR.info.special))return;
+ const g=mkHorse(h.col,h.man);g.position.set(h.x,terrH(h.x,h.z),h.z);g.rotation.y=h.a||0;WG.add(g);MY={g,x:h.x,z:h.z,a:h.a||0,hp:h.hp,m:h.m,ph:0,regT:0,hcd:0}}
+function tame(w){if(w.g.parent)w.g.parent.remove(w.g);const i=WILD.indexOf(w);if(i>=0)WILD.splice(i,1);
+ const m=Math.round((1.5+Math.random()*2.5)*10)/10;S.horse={isl:CUR.key,x:w.x,z:w.z,a:w.g.rotation.y,hp:10,m,col:w.col,man:w.man};buildMine();
+ addFx(new THREE.Vector3(w.x,terrH(w.x,w.z)+2,w.z),0xff7a9a,4,.8);SX.shopBuy&&SX.shopBuy();toast('You tamed the horse! Speed ×'+m+'. Press H next to it to mount.');save(true);updateHeader(true)}
+function feed(w){S.items=S.items||{};if(S.horse){toast('You already have a horse.');return}
+ if(!(S.items.apple>0)){toast('The wild horse wants fallen apples. Bring 5 to 10 of them.');return}
+ S.items.apple--;w.fed++;w.calm=25;SX.pickup&&SX.pickup();SX.deerSnort&&SX.deerSnort();
+ if(w.fed>=w.need)tame(w);else{toast('The horse munches the apple ('+w.fed+' fed). It still looks wary.');save();updateHeader(true)}}
+function mount(){if(!MY||swimMode||CAVE.on)return;riding=true;P.vx*=.3;P.vz*=.3;window.__horseMul=MY.m;window.__horseSit=.7;MY.g.position.set(P.x,P.y,P.z);SX.deerSnort&&SX.deerSnort();toast('Mounted · speed ×'+MY.m+' · H to dismount')}
+function dismount(msg){if(!riding)return;riding=false;window.__horseMul=1;window.__horseSit=0;
+ if(MY){const sd=P.face+Math.PI/2;let x=P.x+Math.sin(sd)*1.4,z=P.z+Math.cos(sd)*1.4;if(terrH(x,z)<WATER+.4){x=P.x;z=P.z}MY.x=x;MY.z=z;MY.a=P.face;MY.g.position.set(x,terrH(x,z),z)}
+ if(msg)toast(msg)}
+function hitHorse(n){if(!MY||MY.hp<=0)return;MY.hp=Math.max(0,MY.hp-n);MY.regT=20;SX.animalHit&&SX.animalHit();addFx(new THREE.Vector3(MY.x,MY.g.position.y+1.4,MY.z),0xff4455,1.6,.3);if(S.horse)S.horse.hp=MY.hp;
+ if(MY.hp<=0){killHorse();return}const t=now();if(t-lastHurtMsg>6){lastHurtMsg=t;toast('Your horse is hurt! '+Math.ceil(MY.hp)+'/10 HP')}}
+function killHorse(){if(riding)dismount();const g=MY.g,x=MY.x,z=MY.z;MY=null;S.horse=null;if(X.deathFx)X.deathFx(g,x,z,1);else if(g.parent)g.parent.remove(g);toast('Your horse was killed.');save(true)}
+{const oh=window.hurt;window.hurt=function(n,src){const r=oh.apply(this,arguments);try{if(riding&&MY&&/barbarian|boss|zombie|skeleton|spider|warlord|champion|overlord|chief|arrow|bullet|bolt|crab|shark|dragon|ghost|pirate|warband|bandit|guard|slam|tower/i.test(String(src||'')))hitHorse(Number(n)>=8?2:1)}catch(e){}return r}}
+function horseKey(){if(CAVE.on)return;if(riding){dismount();return}
+ if(MY&&MY.g.visible&&dist(MY)<4.5){mount();return}
+ const w=nearWild(4.5);if(w){feed(w);return}
+ if(MY)toast('Your horse is far away. Look for the H marker on the map.')}
+document.addEventListener('keydown',e=>{if(e.code!=='KeyH'||e.repeat||(e.target&&e.target.tagName==='INPUT'))return;if(!running||invOpen||busy||SEA.open)return;horseKey()});
+/* ---------- interaction prompts ---------- */
+{const oft=window.findTarget;window.findTarget=function(){const r=oft.apply(this,arguments);if(r||CAVE.on)return r;
+ let best=null,bd=2.6*2.6;for(const a of APL){if(a.t>0)continue;const dx=a.x-P.x,dz=a.z-P.z,d=dx*dx+dz*dz;if(d<bd){bd=d;best=a}}
+ if(best){if(tool===1)return{key:'Q',text:'Pick up fallen apple',act:()=>pickApple(best)};return{key:'1',text:'Switch to hand to pick up apples'}}
+ if(riding&&MY)return{key:'H',text:'Dismount'};
+ if(MY&&MY.g.visible&&dist(MY)<4.5)return{key:'H',text:'Mount your horse (×'+MY.m+' speed)'};
+ const w=nearWild(4.5);if(w){if(S.horse)return{key:'H',lock:1,text:'Wild horse (you already have a horse)'};
+  return((S.items&&S.items.apple)|0)>0?{key:'H',text:'Feed an apple to the wild horse ('+w.fed+' fed)'}:{key:'H',lock:1,text:'Wild horse · bring 5-10 fallen apples to tame it'}}
+ return r}}
+/* ---------- minimap + world map ---------- */
+X.horseMap=()=>MY&&MY.g.visible?{x:MY.x,z:MY.z}:null;
+{const dm=window.drawMini;window.drawMini=function(){dm.apply(this,arguments);try{if(CAVE.on||!MAPINFO.canvas||!MY||!MY.g.visible||riding)return;const c=mini.getContext('2d'),k=98/MAPINFO.R,px=(MY.x-P.x)*k,pz=(MY.z-P.z)*k;if(px*px+pz*pz>96*96)return;
+ c.save();c.beginPath();c.arc(100,100,98,0,7);c.clip();c.translate(100,100);c.rotate(P.yaw);c.translate(px,pz);c.rotate(-P.yaw);c.fillStyle='#8a5a2b';c.strokeStyle='#fff';c.lineWidth=1.5;c.beginPath();c.arc(0,0,5.5,0,7);c.fill();c.stroke();c.fillStyle='#fff';c.font='bold 8px sans-serif';c.textAlign='center';c.fillText('H',0,3);c.restore()}catch(e){}}}
+/* ---------- apples in the inventory: eat raw (+1 HP) or cook at a campfire (+2 HP) ---------- */
+if(X.tabs&&X.tabs.fish){const bf=X.tabs.fish;X.tabs.fish=function(){let h=bf();S.items=S.items||{};const r=S.items.apple||0,c=S.items.cooked_apple||0;
+ if(r||c){h+='<div class="secH">Apples</div>';
+  if(r)h+='<div class="xrow"><span>Fallen Apple ×'+r+' · heals 1 HP</span><span><button class="xb" data-aeat="1">Eat</button><button class="xb" data-acook="1">Cook 1</button><button class="xb" data-acook="all">Cook all</button></span></div>';
+  if(c)h+='<div class="xrow"><span>Cooked Apple ×'+c+' · heals 2 HP</span><button class="xb" data-aeatc="1">Eat</button></div>'}
+ return h}}
+document.getElementById('invBody').addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset)return;S.items=S.items||{};
+ if(t.dataset.aeat){if(!(S.items.apple>0)||HP.dead)return;S.items.apple--;HP.v=Math.min(maxHP(),HP.v+1);toast('Crunchy! +1 HP');save();updateHeader(true);renderInv()}
+ else if(t.dataset.acook){if(!(X.nearFire&&X.nearFire())){toast('Stand near a lit campfire to cook');return}
+  const n=t.dataset.acook==='all'?(S.items.apple||0):Math.min(1,S.items.apple||0);if(!n)return;S.items.apple-=n;S.items.cooked_apple=(S.items.cooked_apple||0)+n;toast('Cooked '+n+' apple'+(n>1?'s':''));save();updateHeader(true);renderInv()}
+ else if(t.dataset.aeatc){if(!(S.items.cooked_apple>0)||HP.dead)return;S.items.cooked_apple--;HP.v=Math.min(maxHP(),HP.v+2);toast('Warm and sweet! +2 HP');save();updateHeader(true);renderInv()}});
+/* ---------- island load + per-frame ---------- */
+{const lo=window.loadIsland;window.loadIsland=function(info){
+ try{riding=false;window.__horseMul=1;window.__horseSit=0;for(const w of WILD)if(w.g.parent)w.g.parent.remove(w.g);WILD.length=0;APL.length=0;if(MY&&MY.g.parent)MY.g.parent.remove(MY.g);MY=null;lastLand=null}catch(e){}
+ const r=lo.apply(this,arguments);
+ try{if(!info.special){wildFromFauna(info);buildApples(info)}buildMine()}catch(e){console.error('[horse]',e)}
+ return r}}
+function hudTick(){if(!hudEl){hudEl=document.createElement('div');hudEl.id='horseHud';document.body.appendChild(hudEl)}
+ if(riding&&MY){hudEl.style.display='block';const h='Horse · ♥ '+Math.ceil(MY.hp)+' / 10 · speed ×'+MY.m+' · H to dismount';if(hudEl.dataset.h!==h){hudEl.dataset.h=h;hudEl.textContent=h}}else hudEl.style.display='none'}
+function tick(dt){const t=now();
+ if(CAVE.on||(CUR.info&&CUR.info.special)){if(riding)dismount();if(MY)MY.g.visible=false;for(const w of WILD)w.g.visible=false;hudTick();return}
+ if(MY)MY.g.visible=true;for(const w of WILD)w.g.visible=true;
+ for(const a of APL)if(a.t>0&&t>a.t){a.t=0;a.m.visible=true}
+ /* wild horses */
+ for(const w of WILD){const dp=Math.hypot(P.x-w.x,P.z-w.z);w.t-=dt;w.calm=Math.max(0,w.calm-dt);let sp=0,mv=false;
+  if(w.calm>0){w.a=Math.atan2(P.x-w.x,P.z-w.z)}
+  else if(dp<5.5){w.a=Math.atan2(w.x-P.x,w.z-P.z)+Math.sin(t*2+w.x)*.3;sp=6;mv=true}
+  else{if(w.t<=0){w.t=2+Math.random()*4;w.a+=(Math.random()-.5)*2;w.mv=Math.random()<.5}mv=w.mv;sp=1.4}
+  if(mv){const nx=w.x+Math.sin(w.a)*sp*dt,nz=w.z+Math.cos(w.a)*sp*dt,h=terrH(nx,nz);if(h>WATER+.5&&Math.abs(h-terrH(w.x,w.z))<.8&&Math.abs(nx)<HALF-30&&Math.abs(nz)<HALF-30){w.x=nx;w.z=nz}else w.a+=2}
+  gait(w,mv?sp:0,dt);w.g.position.set(w.x,terrH(w.x,w.z),w.z);turn(w.g,w.a,dt,6)}
+ /* your horse */
+ if(MY){
+  if(riding){
+   if(HP.dead){dismount()}
+   else if(swimMode>0){const lx=lastLand?lastLand.x:P.x,lz=lastLand?lastLand.z:P.z;dismount("Horses can't swim. You slide off.");MY.x=lx;MY.z=lz;MY.g.position.set(lx,terrH(lx,lz),lz)}
+   else{if(terrH(P.x,P.z)>WATER+.3)lastLand={x:P.x,z:P.z};MY.x=P.x;MY.z=P.z;MY.a=P.face;MY.g.position.set(P.x,P.y,P.z);turn(MY.g,P.face,dt,12);gait(MY,Math.hypot(P.vx,P.vz),dt)}}
+  if(MY&&!riding){gait(MY,0,dt);MY.g.userData.head.rotation.x=.55+Math.sin(t*1.3)*.06;
+   MY.hcd-=dt;if(MY.hcd<=0){let dmg=0;const chk=e=>{if(!e||e.hp<=0||e.arena||e.dead)return;if(Math.hypot(e.x-MY.x,e.z-MY.z)<(e.boss?3.4:2.4))dmg+=e.boss?2:1};
+    for(const e of(X.EN||[]))chk(e);for(const e of(X.NM||[]))chk(e);if(dmg){hitHorse(Math.min(3,dmg));if(MY)MY.hcd=1.2}}}
+  if(MY){if(MY.hp<10){MY.regT-=dt;if(MY.regT<=0){MY.hp=Math.min(10,MY.hp+1);MY.regT=30}}
+   if(S.horse){S.horse.x=MY.x;S.horse.z=MY.z;S.horse.a=MY.a;S.horse.isl=CUR.key;S.horse.hp=MY.hp}}}
+ hudTick()}
+{const pu=window.update;window.update=function(dt){if(!riding){window.__horseMul=1;window.__horseSit=0}pu(dt);try{tick(dt)}catch(e){if(!X._hz){X._hz=1;console.error('[horse]',e)}}}}
+})();
+</script>
+
+<script>
+/* ===== PERFORMANCE PASS =====
+   1. All CSS backdrop-filter blurs are removed. They sat on the HUD over the live 3D canvas, so the browser re-blurred the area behind
+      them every single frame no matter what resolution the game ran at (this is why Low Definition mode barely helped).
+   2. Far-away animals are removed from the scene and not simulated (radius shrinks in Low Definition mode or when the fps is low).
+   3. Animals, horses and apples no longer cast shadows; shadows refresh less often when the game is slow.
+   4. Very slow machines: shadows switch themselves off after a few seconds of sustained lag.
+   5. Low Definition mode also stops the full-screen CSS weather animations.
+   Debug from the console:  PX.perf()  prints draw calls / triangles / object counts. */
+(function(){'use strict';const X=window.PX;
+{const st=document.createElement('style');st.id='perfCss';st.textContent=':root{--panel:rgba(11,23,37,.88)}*,*::before,*::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}body.ld .stormFx{animation:none!important}body.ld #uw{display:none}';document.head.appendChild(st)}
+let slow=0,warned=false;
+function tune(){const ld=!!(X.gfx&&X.gfx.ld);document.body.classList.toggle('ld',ld);
+ const avg=PIX.avg||16;X.faunaR=ld?60:(avg>30?65:avg>24?85:110);
+ if(!ld&&avg>34&&PIX.cur<=PIX.min+.02)slow++;else slow=Math.max(0,slow-1);
+ if(slow>=4&&sun&&sun.castShadow){sun.castShadow=false;if(!warned){warned=true;try{toast('Game is running slowly: shadows turned off. Low definition mode (Settings) gives more speed.')}catch(e){}}}}
+setInterval(()=>{try{tune()}catch(e){}},1000);
+X.perf=function(){let meshes=0,vis=0,inst=0;scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)vis++;if(o.isInstancedMesh)inst++}});const i=renderer.info;
+ const r={drawCalls:i.render.calls,triangles:i.render.triangles,geometries:i.memory.geometries,textures:i.memory.textures,meshesInScene:meshes,visibleMeshes:vis,instancedMeshes:inst,fauna:(X.fauna||[]).length,faunaActive:(X.fauna||[]).filter(f=>!f._cull).length,avgFrameMs:Math.round((PIX.avg||0)*10)/10,pixelRatio:PIX.cur};console.table(r);return r};
+})();
+</script>
+
+<script>
+/* ===== WEAPON HOVER TOOLTIP: hover a weapon in the inventory or a weapon recipe in Craft to see its stats ===== */
+(function(){'use strict';const X=window.PX;
+{const st=document.createElement('style');st.textContent='#wpnTip{position:fixed;z-index:99999;pointer-events:none;display:none;min-width:200px;background:rgba(10,16,26,.97);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:10px 14px;color:#e8eef5;box-shadow:0 8px 24px rgba(0,0,0,.55);font-size:13px}#wpnTip .wtn{font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:700}#wpnTip b.wtt{display:block;font-size:15px;margin:2px 0 6px}#wpnTip .wtr{display:flex;justify-content:space-between;gap:18px;padding:2px 0;border-top:1px solid rgba(255,255,255,.07)}#wpnTip .wtr b{font-variant-numeric:tabular-nums}#wpnTip .wth{margin-top:6px;opacity:.6;font-size:11px}';document.head.appendChild(st)}
+const tip=document.createElement('div');tip.id='wpnTip';document.body.appendChild(tip);
+function wid(el){if(!el||!el.closest)return null;const c=el.closest('[data-wsel]');if(c)return c.dataset.wsel;
+ const r=el.closest('.rcp');if(r){const b=r.querySelector('button[data-craft^="wpn_"]');if(b)return b.dataset.craft.slice(4)}return null}
+function html(w){const T=armTotals(),dm=Math.max(1,w.dmg+T.dm),cd=Math.min(1,Math.max(.05,w.cd/armFr())),own=(S.wpn&&S.wpn[w.id])||0,R=RAR[Math.min(3,w.tier)];
+ const row=(l,v)=>'<div class="wtr"><span>'+l+'</span><b>'+v+'</b></div>';
+ return '<div class="wtn" style="color:'+R.c+'">'+R.n+' '+esc(w.kn||'weapon')+'</div><b class="wtt">'+esc(w.name)+'</b>'+
+  row('Damage',dm+(T.dm?' <small style="opacity:.6">('+w.dmg+(T.dm>0?'+':'')+T.dm+')</small>':''))+row('Fire rate',(1/cd).toFixed(2)+'/s')+row('Reload',cd.toFixed(2)+'s')+row('Damage / second',(dm/cd).toFixed(1))+row('Sell value',fmt(w.v))+(own?row('You own',own):'')+
+  '<div class="wth">Stronger guns hit harder but fire slower.</div>'}
+document.addEventListener('mousemove',e=>{let id=null;try{id=wid(e.target)}catch(_){}
+ if(!id||!X.WEAPONS){tip.style.display='none';return}const w=X.WEAPONS.find(q=>q.id===id);if(!w){tip.style.display='none';return}
+ try{tip.innerHTML=html(w)}catch(_){tip.style.display='none';return}tip.style.display='block';
+ const r=tip.getBoundingClientRect();let x=e.clientX+16,y=e.clientY+16;if(x+r.width>innerWidth-8)x=e.clientX-r.width-16;if(y+r.height>innerHeight-8)y=innerHeight-r.height-8;tip.style.left=Math.max(8,x)+'px';tip.style.top=Math.max(8,y)+'px'},true);
+document.addEventListener('mouseleave',()=>{tip.style.display='none'});
 })();
 </script>
