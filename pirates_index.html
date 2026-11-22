@@ -2814,7 +2814,7 @@ function mkEnemy(x,z,o){o=Object.assign({},o);const s=o.scale||1,boss=!!o.boss;o
  g.position.set(x,terrH(x,z),z);WG.add(g);
  const e=Object.assign({g,av,x,z,hx:x,hz:z,hp:o.hp,max:o.hp,cd:0,state:'guard',t:Math.random()*2,gy:terrH(x,z),ph:0,spd:0,face:Math.random()*6.28,ranged,patrol:null,hit:0,atk:0,fled:0,speed:3},o);
  if(!e.boss&&!e.vet&&((Math.sin(x*12.9898+z*78.233)*43758.5453)%1+1)%1<.22){e.vet=1;e.dmg=Math.round((e.dmg||3)*1.5);e.scale=(e.scale||1)*1.12;e.g.scale.multiplyScalar(1.12)}e.speed=(e.speed||3)*2;X.EN.push(e);return e}
-function killEnemy(e){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(X.deathFx)X.deathFx(e.g,e.x,e.z,e.scale||1);else X.corpses.push({g:e.g,t:0,s:e.scale||1});addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xffd166,2,.5);SX.enemyDie&&SX.enemyDie();
+function killEnemy(e){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(e.boss)for(const q of X.EN.slice())if(q.by===e)killEnemy(q);if(X.deathFx)X.deathFx(e.g,e.x,e.z,e.scale||1);else X.corpses.push({g:e.g,t:0,s:e.scale||1});addFx(new THREE.Vector3(e.x,e.g.position.y+1,e.z),0xffd166,2,.5);SX.enemyDie&&SX.enemyDie();
  if(!e.arena){giveLoot(e.boss?'Boss Loot':'Barbarian Loot',e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5));toast(e.boss?'Boss defeated!':'Barbarian down')}}
 function alertAllies(e){for(const a of X.EN){if(a===e||a.state!=='guard'&&a.state!=='return')continue;if(Math.hypot(a.x-e.x,a.z-e.z)<14){a.state='alert';a.t=0}}}
 function hurtEnemy(e,dmg){if(e.pp&&X.es){X.es.dmg(e,dmg);e.hit=.18;SX.enemyHit&&SX.enemyHit();return}e.hp-=dmg;e.hit=.18;SX.enemyHit&&SX.enemyHit();if(e.hp<=0){killEnemy(e);return}if(e.state==='guard'||e.state==='return'||e.state==='heal'){e.state='alert';e.t=0;alertAllies(e)}}
@@ -5743,7 +5743,7 @@ function lavaTick(dt){if(!F.lava)return;F.lava.tex.offset.set(performance.now()/
 const BVN=['Shock Warlord','Warcaller','Earthbreaker','Meteor Caller'];
 function summonB(e){let have=0;for(const x of X.EN)if(x.arena&&!x.boss)have++;const cap=F.mode==='captain'?64:F.mode==='buccaneer'?52:44;if(have>=cap)return;
  const rdn=F.rd||1,n=Math.min(cap-have,2+Math.floor(rdn/3)+(F.mode==='captain'?3:F.mode==='buccaneer'?1:0)+(e.enr?2:0));
- for(let k=0;k<n;k++){const a=Math.random()*6.283,x=e.x+Math.cos(a)*3,z=e.z+Math.sin(a)*3,m=X.mkEnemy(x,z,{hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM),dmg:3+Math.floor(Math.min(F.rd,12)/2),speed:1.5,tier:F.mode==='captain'?2:1,kind:pickR(['sword','axe','club','spear']),arena:1});m.speed=5.6*F.spdM;m.rk=pickR(['bow','gun']);addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6)}
+ for(let k=0;k<n;k++){const a=Math.random()*6.283,x=e.x+Math.cos(a)*3,z=e.z+Math.sin(a)*3,m=X.mkEnemy(x,z,{hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM),dmg:3+Math.floor(Math.min(F.rd,12)/2),speed:1.5,tier:F.mode==='captain'?2:1,kind:pickR(['sword','axe','club','spear']),arena:1,by:e});m.speed=5.6*F.spdM;m.rk=pickR(['bow','gun']);addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6)}
  toast(e.name+' calls for reinforcements!')}
 function bossTick(e,dt,now){if(e.hp<=0)return;
  /* enraged like the dragons: below 50% HP faster attacks, below 25% faster still, and 1.5x damage */
@@ -5767,7 +5767,7 @@ function bossTick(e,dt,now){if(e.hp<=0)return;
 function extraTick(dt,now){
  F.qT-=dt;if(F.qT<=0&&F.q.length){F.qT=.25;drainQ(3)}
  blTick(dt);rgTick(dt);
- let gc=0;for(const e of F.mobs){if(e.gc)gc++;if(e.giant){e.sumT-=dt;if(e.sumT<=0){e.sumT=5;if(F.mobs.length<90){const n=ri(1,3);for(let k=0;k<n;k++){const a=Math.random()*6.283;mkMob('spider',e.x+Math.cos(a)*2.6,e.z+Math.sin(a)*2.6,F.rd)}addFx(new THREE.Vector3(e.x,A.fl+1.5,e.z),0x9aff6a,3,.5)}}}}
+ let gc=0;for(const e of F.mobs){if(e.gc)gc++;if(e.giant){e.sumT-=dt;if(e.sumT<=0){e.sumT=5;if(F.mobs.length<90){const n=ri(1,3);for(let k=0;k<n;k++){const a=Math.random()*6.283,sm=mkMob('spider',e.x+Math.cos(a)*2.6,e.z+Math.sin(a)*2.6,F.rd);if(sm)sm.by=e}addFx(new THREE.Vector3(e.x,A.fl+1.5,e.z),0x9aff6a,3,.5)}}}}
  if(gc){F.shT-=dt;if(F.shT<=0){F.shT=2.2;try{X.shake(.4,.6)}catch(er){}}
   F.blT-=dt;if(F.blT<=0){F.blT=.75/Math.pow(gc,.6);const near=Math.random()<.55,a=Math.random()*6.283,r=near?Math.random()*9:Math.sqrt(Math.random())*26,cx=near?P.x:0,cz=near?P.z:0;boulder(cx+Math.cos(a)*r,cz+Math.sin(a)*r,{dmg:5,rad:2.6,delay:1.1})}}
  for(const e of X.EN)if(e.arena&&e.boss)bossTick(e,dt,now);
@@ -5823,7 +5823,7 @@ function mkMob(ty,x,z,rd,o){const B=X.TY[ty]||CUS[ty],g=B.mk();g.position.set(x,
  const hp=Math.max(1,Math.round(B.hp*((o&&o.hpx)||1)*F.hpM));
  const e={g,ty,T:B,x,z,hp,max:hp,dmg:Math.max(1,Math.round(B.dmg*(1+rd*.06))),sp:({zombie:4,skeleton:5,spider:6,crab:5.2}[ty]||5)*F.spdM*((o&&o.spx)||1),sc:(o&&o.sc)||1,giant:o&&o.giant?1:0,gc:o&&o.gc?1:0,sumT:5,cd:1+Math.random(),ph:Math.random()*6,face:0,off:(Math.random()<.5?-1:1)*(.6+Math.random()*1.6),ob:Math.random()<.5?-1:1,dash:0,dashCd:1+Math.random()*2,stT:0,st:'orbit',orbT:1+Math.random()*1.2,hit:0};
  F.mobs.push(e);addFx(new THREE.Vector3(x,A.fl+1,z),0xaa66ff,2.5,.6);return e}
-function killMob(e){const i=F.mobs.indexOf(e);if(i>=0)F.mobs.splice(i,1);if(window.PX.deathFx)window.PX.deathFx(e.g,e.x,e.z,e.sc||1,{gy:A.fl,dispose:1});else{scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()})}addFx(new THREE.Vector3(e.x,A.fl+1,e.z),0xaaff99,2,.5);SX.enemyDie&&SX.enemyDie()}
+function killMob(e){const i=F.mobs.indexOf(e);if(i>=0)F.mobs.splice(i,1);if(e.giant)for(const q of F.mobs.slice())if(q.by===e)killMob(q);if(window.PX.deathFx)window.PX.deathFx(e.g,e.x,e.z,e.sc||1,{gy:A.fl,dispose:1});else{scene.remove(e.g);e.g.traverse(o=>{if(o.geometry)o.geometry.dispose()})}addFx(new THREE.Vector3(e.x,A.fl+1,e.z),0xaaff99,2,.5);SX.enemyDie&&SX.enemyDie()}
 function stepM(e,dx,dz,sp,dt){const d=Math.hypot(dx,dz)||1;let nx=e.x+dx/d*sp*dt,nz=e.z+dz/d*sp*dt;
  for(const o of F.mobs){if(o===e)continue;const ox=nx-o.x,oz=nz-o.z,dd=Math.hypot(ox,oz);if(dd>.001&&dd<1.6){nx+=ox/dd*(1.6-dd)*.5;nz+=oz/dd*(1.6-dd)*.5}}
  const r=Math.hypot(nx,nz),RM=F.rmax||31;if(r>RM){nx*=RM/r;nz*=RM/r}
@@ -7610,6 +7610,25 @@ function boltTick(dt){for(let i=SP.length-1;i>=0;i--){const b=SP[i],p=b.m.positi
   else if(!done&&X.horseHitP&&X.horseHitP(p,1)){addFx(p.clone(),b.col,2.4,.3);done=true}
   if(!done){const gy=b.ctx==='arena'?X.arena.fl:terrH(p.x,p.z);if(p.y<gy+.05){addFx(p.clone(),b.col,2,.3);done=true}}
   if(done){scene.remove(b.m);SP.splice(i,1)}}}
+/* ---------- glider bombs: fall, explode (8 HP right underneath), shake the screen and leave a short fireball ---------- */
+const BM=[],FBL=[];
+function dropBomb(e,T){const m=new THREE.Group();const b=new THREE.Mesh(SPH,L(0x26262c));b.scale.set(.3,.3,.3);m.add(b);const c=new THREE.Mesh(CYL(.06,.08,.12,6),L(0x6a4a2a));c.position.y=.3;m.add(c);const f=new THREE.Mesh(SPH,B(0xffa030));f.scale.setScalar(.09);f.position.y=.4;m.add(f);
+ const band=new THREE.Mesh(CYL(.31,.31,.05,8),L(0x8a1f1f));m.add(band);m.position.set(e.x,e.y-.5,e.z);scene.add(m);
+ BM.push({m,vx:e.vx*.8,vy:-1,vz:e.vz*.8,ctx:e.ctx,T,t:0,tr:0,spin:(rnd()-.5)*6});snd('gliderScreech',e.x,e.z)}
+function bombBoom(x,y,z,ctx,T){
+ const dp=Math.hypot(x-P.x,z-P.z);if(dp<70&&X.shake)X.shake(Math.max(.2,1.0-dp/60),.65);snd('bossSlam',x,z);
+ if(!HP.dead&&T){const d=Math.hypot(T.x-x,T.z-z),dy=Math.abs((T.y+1)-y);if(d<2&&dy<3.5)X.hit(T,8,'a glider bomb');else if(d<4&&dy<4)X.hit(T,3,'a glider bomb')}
+ const g=new THREE.Group(),m1=new THREE.MeshBasicMaterial({color:0xff7a22,transparent:true,opacity:.9,depthWrite:false}),m2=new THREE.MeshBasicMaterial({color:0xffe070,transparent:true,opacity:.95,depthWrite:false});
+ const o=new THREE.Mesh(SPH,m1),i=new THREE.Mesh(SPH,m2);g.add(o,i);g.position.set(x,y+.4,z);scene.add(g);FBL.push({g,o,i,m1,m2,t:0,life:1.3,x,y,z,ctx,T,tk:.2});
+ for(let k=0;k<5;k++)addFx(new THREE.Vector3(x+(rnd()-.5)*2,y+.4+rnd()*1.2,z+(rnd()-.5)*2),k%2?0xff9a2a:0xffd070,3+rnd()*2,.5+rnd()*.3);addFx(new THREE.Vector3(x,y+.3,z),0x555555,4.5,.9)}
+function bombTick(dt){
+ for(let n=BM.length-1;n>=0;n--){const b=BM[n],p=b.m.position;b.t+=dt;b.vy-=22*dt;p.x+=b.vx*dt;p.y+=b.vy*dt;p.z+=b.vz*dt;b.m.rotation.x+=b.spin*dt;b.tr-=dt;if(b.tr<=0){b.tr=.05;addFx(p.clone(),0xffa030,.6,.2)}
+  const gy=gndOf(b,p.x,p.z);let hit=p.y<=gy+.2;
+  if(!hit&&!HP.dead&&b.T&&Math.hypot(b.T.x-p.x,b.T.z-p.z)<.9&&Math.abs((b.T.y+1)-p.y)<1.3)hit=true;
+  if(hit||b.t>8){if(hit)bombBoom(p.x,Math.max(p.y,gy),p.z,b.ctx,b.T);scene.remove(b.m);BM.splice(n,1)}}
+ for(let n=FBL.length-1;n>=0;n--){const f=FBL[n];f.t+=dt;const k=f.t/f.life,r=k<.25?.5+k/.25*1.9:2.4-(k-.25)*1.2;f.o.scale.setScalar(Math.max(.1,r));f.i.scale.setScalar(Math.max(.05,r*.55));f.m1.opacity=Math.max(0,.9*(1-k*k));f.m2.opacity=Math.max(0,.95*(1-k));f.g.position.y=f.y+.4+k*.5;
+  f.tk-=dt;if(f.tk<=0&&k<.8){f.tk=.5;if(!HP.dead&&f.T&&Math.hypot(f.T.x-f.x,f.T.z-f.z)<r+.5&&Math.abs((f.T.y+1)-(f.y+.8))<2.6)X.hit(f.T,1,'a bomb fireball')}
+  if(f.t>=f.life){scene.remove(f.g);f.m1.dispose();f.m2.dispose();FBL.splice(n,1)}}}
 function zone(x,z,ctx){if(ZN.length>=6)return;const gy=ctx==='arena'?X.arena.fl:terrH(x,z),R=5.2,g=new THREE.Group();
  const mat=(c,o)=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
  const disc=new THREE.Mesh(new THREE.CircleGeometry(R,40).rotateX(-PI/2),mat(0x7a2cff)),ring=new THREE.Mesh(new THREE.RingGeometry(R-.35,R,48).rotateX(-PI/2),mat(0xc58cff)),rune=new THREE.Mesh(new THREE.RingGeometry(R*.42,R*.5,6).rotateX(-PI/2),mat(0xc58cff));
@@ -7626,7 +7645,7 @@ function make(ty,x,z,ctx,o){o=o||{};const C=CF[ty],g=({glider:mkGlider,wyrm:mkWy
  const e={ty,C,g,ctx,x,z,y:0,hp,max:hp,dmg:Math.max(1,Math.round(C.dmg*(o.dmgx||1))),spd:(o.spd||1)*(ty==='wyrm'?2:1),cd:1+rnd()*2,t:rnd()*9,ph:rnd()*6,face:rnd()*6.283,alive:true,drop:o.drop!==false,cave:ctx==='cave'};
  e.y=gndOf(e,x,z);({glider:initGlider,wyrm:initWyrm,witch:initWitch})[ty](e,o);g.position.set(e.x,e.y,e.z);parOf(e).add(g);MM.push(e);return e}
 function rm(e,burn){const i=MM.indexOf(e);if(i>=0)MM.splice(i,1);e.alive=false;if(e.g.parent)e.g.parent.remove(e.g);if(burn)addFx(new THREE.Vector3(e.x,e.y+1,e.z),0xb06bff,2,.5)}
-function clearAll(){for(const e of MM.slice())rm(e);for(const p of PT)scene.remove(p.m);PT.length=0;for(const b of SP)scene.remove(b.m);SP.length=0;for(let i=ZN.length-1;i>=0;i--)rmZone(i)}
+function clearAll(){for(const b of BM)scene.remove(b.m);BM.length=0;for(const f of FBL)scene.remove(f.g);FBL.length=0;for(const e of MM.slice())rm(e);for(const p of PT)scene.remove(p.m);PT.length=0;for(const b of SP)scene.remove(b.m);SP.length=0;for(let i=ZN.length-1;i>=0;i--)rmZone(i)}
 function killMM(e){const i=MM.indexOf(e);if(i<0)return;MM.splice(i,1);e.alive=false;
  const o=e.ctx==='cave'?{gy:caveFloor(e.x,e.z),parent:CAVE.group}:e.ctx==='arena'?{gy:X.arena.fl}:{};
  const px=e.ty==='wyrm'&&e.hx!=null?e.hx:e.x,pz=e.ty==='wyrm'&&e.hz!=null?e.hz:e.z;
@@ -7653,12 +7672,17 @@ function gliderTick(e,dt,T){const ar=e.ctx==='arena',gy=ar?X.arena.fl:Math.max(t
   if(!ar){e.cx+=(P.x-e.cx)*Math.min(1,dt*.12);e.cz+=(P.z-e.cz)*Math.min(1,dt*.12)}
   e.ang+=e.dir*dt*sp0/e.rad;const ox=e.cx+Math.cos(e.ang)*e.rad,oz=e.cz+Math.sin(e.ang)*e.rad,oy=(ar?X.arena.fl:Math.max(terrH(ox,oz),WATER))+e.alt+Math.sin(e.t*.7)*2;
   ax=ox-e.x;ay=oy-e.y;az=oz-e.z;e.cd-=dt;
-  if(e.cd<=0&&!HP.dead&&Math.hypot(tx-e.x,tz-e.z)<(ar?60:46)&&e.y>ty+(ar?4:8)){e.st='dive';e.sT=0;e.hitDone=0;e.ax=tx;e.ay=ty;e.az=tz;snd('gliderScreech',e.x,e.z)}
+  if(e.cd<=0&&!HP.dead&&Math.hypot(tx-e.x,tz-e.z)<(ar?60:46)&&e.y>ty+(ar?4:8)){if(rnd()<.5){e.st='dive';e.sT=0;e.hitDone=0;e.ax=tx;e.ay=ty;e.az=tz}else{e.st='bomb';e.sT=0;e.bombs=1+(rnd()<.4?1:0);e.bT=0}snd('gliderScreech',e.x,e.z)}
  }else if(e.st==='dive'){
   sp=(ar?19:23)*e.spd;e.sT+=dt;if(e.sT<.75){e.ax=tx+(P.vx||0)*.25;e.ay=ty;e.az=tz+(P.vz||0)*.25}
   ax=e.ax-e.x;ay=e.ay-e.y;az=e.az-e.z;
   if(!e.hitDone&&!HP.dead&&Math.hypot(tx-e.x,ty-e.y,tz-e.z)<1.7){e.hitDone=1;X.hit(T,e.dmg,e.C.n);addFx(new THREE.Vector3(tx,ty,tz),0xff4455,2.2,.3);SX.swing&&SX.swing();e.st='climb';e.sT=0}
   else if(e.sT>3||e.y<gy+1.1||(e.sT>.75&&Math.hypot(e.ax-e.x,e.ay-e.y,e.az-e.z)<1.6)){e.st='climb';e.sT=0}
+ }else if(e.st==='bomb'){
+  sp=(ar?12:14)*e.spd;e.sT+=dt;e.bT-=dt;const tf=Math.sqrt(2*Math.max(1,e.y-T.y)/22),lx=tx+(P.vx||0)*tf,lz=tz+(P.vz||0)*tf;
+  ax=lx-e.x;az=lz-e.z;ay=(gy+Math.min(e.alt,Math.max(10,e.y-gy)))-e.y;
+  if(e.bombs>0&&e.bT<=0&&e.sT>.5&&!HP.dead&&Math.hypot(e.x+e.vx*tf*.8-lx,e.z+e.vz*tf*.8-lz)<3.4){dropBomb(e,T);e.bombs--;e.bT=.55}
+  if((e.bombs<=0&&e.bT<=0)||e.sT>6){e.st='climb';e.sT=0}
  }else{
   sp=14*e.spd;const hv=Math.hypot(e.vx,e.vz)||1;ax=e.vx/hv*20;az=e.vz/hv*20;ay=16;e.sT+=dt;
   if(e.y>gy+e.alt*.9||e.sT>3.2){e.st='roam';e.cd=(ar?2.2:4)+rnd()*3}}
@@ -7746,7 +7770,7 @@ function caveSpawnOne(){const cd=CAVE.data,N=CAVE.N,dng=CAVE.idx!==0;
   make('wyrm',p[0],p[1],'cave',{dmgx:dng?1.7:1.2});return true}return false}
 
 /* ---------- main tick ---------- */
-function tick(dt){dt=Math.min(dt,.05);ptTick(dt);zoneTick(dt);boltTick(dt);stTick(dt);if(!running)return;
+function tick(dt){dt=Math.min(dt,.05);ptTick(dt);zoneTick(dt);boltTick(dt);bombTick(dt);stTick(dt);if(!running)return;
  const cave=CAVE.on,inA=CUR.key==='1,2'&&!!(X.arenaOn&&X.arenaOn());
  if(cave){if(CAVE.data&&!(CUR.info&&CUR.info.special)){const cap=CAVE.idx!==0?7:4;
    if(!caveInit){caveInit=true;for(let i=0;i<(CAVE.idx!==0?5:3);i++)caveSpawnOne();csT=3}
