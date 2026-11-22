@@ -480,7 +480,7 @@ body.sceneOn #menu{background:linear-gradient(90deg,rgba(3,9,16,.74),rgba(3,9,16
      <div><kbd>Q</kbd><kbd>E</kbd><kbd>V</kbd><kbd>M</kbd></div><span>Open / dig &middot; inventory &middot; camera &middot; music</span>
      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>Hand &middot; pistol &middot; shovel</span>
      <div><kbd>4-0</kbd></div><span>Hold 5s to light a beacon &middot; tap to warp</span>
-     <div><kbd>H</kbd></div><span>Horse: feed apples &middot; mount &middot; dismount</span>
+     <div><kbd>H</kbd></div><span>Horse: feed apples &middot; mount &middot; dismount &middot; <kbd>K</kbd> apple heals your horse +1</span>
     </div>
    </div>
   </div>
@@ -2818,9 +2818,10 @@ function killEnemy(e){const i=X.EN.indexOf(e);if(i>=0)X.EN.splice(i,1);if(X.deat
  if(!e.arena){giveLoot(e.boss?'Boss Loot':'Barbarian Loot',e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5));toast(e.boss?'Boss defeated!':'Barbarian down')}}
 function alertAllies(e){for(const a of X.EN){if(a===e||a.state!=='guard'&&a.state!=='return')continue;if(Math.hypot(a.x-e.x,a.z-e.z)<14){a.state='alert';a.t=0}}}
 function hurtEnemy(e,dmg){if(e.pp&&X.es){X.es.dmg(e,dmg);e.hit=.18;SX.enemyHit&&SX.enemyHit();return}e.hp-=dmg;e.hit=.18;SX.enemyHit&&SX.enemyHit();if(e.hp<=0){killEnemy(e);return}if(e.state==='guard'||e.state==='return'||e.state==='heal'){e.state='alert';e.t=0;alertAllies(e)}}
-function shootAt(e){const kk=e.rk||kk,sc=e.scale||1,o=new THREE.Vector3(e.x,e.g.position.y+1.4*sc,e.z),tg=new THREE.Vector3(P.x+(Math.random()-.5)*1.1,P.y+1.1,P.z+(Math.random()-.5)*1.1),dir=tg.sub(o).normalize();
+X.tgt=X.tgt||(()=>P);X.hit=X.hit||((T,a,b)=>hurt(a,b));X._T=null;
+function shootAt(e){const kk=e.rk||kk,sc=e.scale||1,o=new THREE.Vector3(e.x,e.g.position.y+1.4*sc,e.z),tg=new THREE.Vector3((X._T||P).x+(Math.random()-.5)*1.1,(X._T||P).y+1.1,(X._T||P).z+(Math.random()-.5)*1.1),dir=tg.sub(o).normalize();
  const m=new THREE.Mesh(kk==='gun'?bulGeo||new THREE.SphereGeometry(.06,6,5):new THREE.CylinderGeometry(.018,.018,.9,5).rotateX(Math.PI/2),new THREE.MeshBasicMaterial({color:kk==='gun'?0xffd070:0xd8c08a}));m.position.copy(o);m.lookAt(o.clone().add(dir));scene.add(m);X.EP.push({m,v:dir.multiplyScalar(kk==='gun'?42:30),life:2.2,dmg:e.boss?Math.max(1,Math.round(e.dmg*.35)):(kk==='gun'&&e.arena?1+Math.floor(Math.random()*2):1+Math.floor(Math.random()*6)),by:kk==='gun'?'a barbarian gunner':'a barbarian archer'});kk==='gun'?(SX.gun&&SX.gun()):(SX.bowShot&&SX.bowShot())}
-function throwAt(e){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+1.5*sc,e.z),tg=new THREE.Vector3(P.x,P.y+1,P.z),dd=tg.clone().sub(o),dist=Math.hypot(dd.x,dd.z),t=Math.max(.5,dist/20),v=new THREE.Vector3(dd.x/t,dd.y/t+.5*16*t,dd.z/t);
+function throwAt(e){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+1.5*sc,e.z),tg=new THREE.Vector3((X._T||P).x,(X._T||P).y+1,(X._T||P).z),dd=tg.clone().sub(o),dist=Math.hypot(dd.x,dd.z),t=Math.max(.5,dist/20),v=new THREE.Vector3(dd.x/t,dd.y/t+.5*16*t,dd.z/t);
  const gr=new THREE.Group(),wm=weaponMesh(e.kind==='spear'?'spear':'axe');wm.rotation.x=-Math.PI/2;wm.scale.setScalar(1.1);gr.add(wm);gr.position.copy(o);gr.lookAt(o.clone().add(v));scene.add(gr);X.EP.push({m:gr,v,life:3,g:16,spin:e.kind!=='spear',dmg:e.boss?Math.max(2,e.dmg):1+Math.floor(Math.random()*6),by:'a thrown '+(e.kind==='spear'?'spear':'axe')});SX.spearThrow&&SX.spearThrow()}
 let RKG=null,RKM=null;
 function rockRing(e){if(!RKG){RKG=new THREE.DodecahedronGeometry(.55,0);RKM=new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true})}
@@ -2828,7 +2829,7 @@ function rockRing(e){if(!RKG){RKG=new THREE.DodecahedronGeometry(.55,0);RKM=new 
  SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,e.gy+.4,e.z),0xb89a6a,6,.7)}
 X.rockRing=rockRing;
 X.WSW=[];
-function worldShock(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,sx=e.x+ux*2.5,sz=e.z+uz*2.5,m=new THREE.Mesh(new THREE.BoxGeometry(35,.45,1.4),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
+function worldShock(e){const dx=(X._T||P).x-e.x,dz=(X._T||P).z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,sx=e.x+ux*2.5,sz=e.z+uz*2.5,m=new THREE.Mesh(new THREE.BoxGeometry(35,.45,1.4),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
  m.position.set(sx,e.gy+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);X.WSW.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:3+Math.floor(Math.random()*6)})}
 function wswTick(dt){for(let i=X.WSW.length-1;i>=0;i--){const q=X.WSW[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;const gy=topAt(q.x,q.z);q.m.position.set(q.x,gy+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
   const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
@@ -2838,7 +2839,7 @@ function throwRock(e,spread){const sc=e.scale||1,o=new THREE.Vector3(e.x,e.gy+2.
  const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.4,0),new THREE.MeshLambertMaterial({color:0x6a665e,flatShading:true}));m.position.copy(o);scene.add(m);X.EP.push({m,v,life:3,g:14,spin:1,dmg:Math.max(3,Math.round(e.dmg*.8)),by:'a boulder'});SX.spearThrow&&SX.spearThrow()}
 /* ---- nav grid + A* so barbarians use stairs and walk around walls ---- */
 function buildNav(cx,cz,R){const cs=1.5,n=Math.ceil(R*2/cs),x0=cx-R,z0=cz-R,h=new Float32Array(n*n);for(let j=0;j<n;j++)for(let i=0;i<n;i++)h[j*n+i]=topAt(x0+(i+.5)*cs,z0+(j+.5)*cs);return{x0,z0,n,cs,h}}
-function navStep(e,now){const nv=e.nav;if(!nv)return null;const ci=Math.floor((e.x-nv.x0)/nv.cs),cj=Math.floor((e.z-nv.z0)/nv.cs),ti=Math.floor((P.x-nv.x0)/nv.cs),tj=Math.floor((P.z-nv.z0)/nv.cs),n=nv.n;
+function navStep(e,now){const nv=e.nav;if(!nv)return null;const ci=Math.floor((e.x-nv.x0)/nv.cs),cj=Math.floor((e.z-nv.z0)/nv.cs),ti=Math.floor(((X._T||P).x-nv.x0)/nv.cs),tj=Math.floor(((X._T||P).z-nv.z0)/nv.cs),n=nv.n;
  if(ci<0||cj<0||ci>=n||cj>=n||ti<-3||tj<-3||ti>n+2||tj>n+2)return null;
  if(!e.path||now>(e.pathT||0)){e.pathT=now+.5+Math.random()*.2;e.path=astar(nv,ci,cj,Math.max(0,Math.min(n-1,ti)),Math.max(0,Math.min(n-1,tj)));e.pi=1}
  const p=e.path;if(!p||p.length<2)return null;while(e.pi<p.length-1){const wx=nv.x0+(p[e.pi][0]+.5)*nv.cs,wz=nv.z0+(p[e.pi][1]+.5)*nv.cs;if(Math.hypot(wx-e.x,wz-e.z)<.8)e.pi++;else break}
@@ -2859,7 +2860,7 @@ function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now
   if(p.life<=0){scene.remove(p.m);X.EP.splice(i,1)}}
  if(X.WSW.length)wswTick(dt);
  if(!X.EN.length||CAVE.on||HP.dead)return;
- for(const e of X.EN){const sc=e.scale||1,dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);
+ for(const e of X.EN){const sc=e.scale||1,TT0=X.tgt(e,(e.boss?32:16)*(e.ranged?1.25:1)),dx=TT0.x-e.x,dz=TT0.z-e.z,d=Math.hypot(dx,dz);X._T=TT0.horse?TT0:null;
   if(d>110){e.g.visible=false;continue}e.g.visible=true;
   const ag=(e.boss?32:16)*(e.ranged?1.25:1),reach=1.7*sc+.4,hd=Math.hypot(e.hx-e.x,e.hz-e.z);let mv=0,run=0,want=null;e.t+=dt;e.hit=Math.max(0,e.hit-dt);
   if(e.arena&&e.rk){if(!e.rw){const arm=e.av.arms[1].el;e.mm=arm.children[arm.children.length-1];const wm=e.rk==='gun'?toolMesh('pistol'):weaponMesh('bow');wm.position.y=-.295;if(e.rk==='bow')wm.rotation.y=Math.PI/2;wm.visible=false;arm.add(wm);e.rw=wm}
@@ -2870,26 +2871,26 @@ function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now
     if(!e.patrol&&e.t>2.5+Math.random()*3){e.t=0;const a=Math.random()*6.28,r=1.5+Math.random()*3;e.patrol={x:e.hx+Math.cos(a)*r,z:e.hz+Math.sin(a)*r}}
     if(e.patrol){const px=e.patrol.x-e.x,pz=e.patrol.z-e.z;if(Math.hypot(px,pz)<.5){e.patrol=null;e.t=0}else{mv=moveE(e,px,pz,e.speed*.35,dt);want=Math.atan2(px,pz)}}else e.face+=Math.sin(t*.7+e.hx)*dt*.6;break;
    case 'alert':want=Math.atan2(dx,dz);if(e.t<.02)SX.roar&&SX.roar();if(e.t>.6){e.state=e.ranged?'range':'charge';e.t=0}break;
-   case 'charge':{want=Math.atan2(dx,dz);if(d>ag*2.4||hd>48){e.state='return';e.t=0;break}
+   case 'charge':{want=Math.atan2(dx,dz);if(!e.arena&&(d>ag*2.4||hd>48)){e.state='return';e.t=0;break}
     if(e.boss){if(now>(e.bcd||0)){const r=Math.random();e.bcd=now+3.2+Math.random()*2.8;
       if(d>16&&r<.65){e.state='gslam';e.t=0;e.fired=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}
       else if(d<10&&r<.3){e.state='slam';e.t=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}
       else if(d>5&&d<16&&r<.55){e.state='leap';e.t=0;e.hitL=0;e.lx=dx;e.lz=dz;SX.roar&&SX.roar();break}
       else if(d<28&&r<.9){e.state='rocks';e.t=0;e.fired=0;break}}}
     else if(e.boss&&now>(e.bcd||0)&&d<22){const r=Math.random();e.bcd=now+4+Math.random()*3;if(r<.35&&d<10){e.state='slam';e.t=0;SX.bossRoar&&SX.bossRoar();addFx(new THREE.Vector3(e.x,e.gy+.2,e.z),0xff8844,4,.9);break}else if(r<.65&&d>5){e.state='leap';e.t=0;e.hitL=0;e.lx=dx;e.lz=dz;SX.roar&&SX.roar();break}else if(d>6){e.state='rocks';e.t=0;e.fired=0;break}}
-    if(e.arena&&e.rk&&d>8&&now>(e.rcd||0)&&Math.abs(P.y-e.gy)<4){e.rcd=now+(e.rk==='gun'?2.2:1.5);e.atk=.35;shootAt(e)}
-    if(e.boss&&d>6&&now>(e.bbcd||0)&&Math.abs(P.y-e.gy)<4){e.bbcd=now+2.2+Math.random();e.atk=.35;const ork=e.rk;e.rk='gun';try{shootAt(e)}finally{e.rk=ork}}
-    if(e.thrower&&d>5&&d<17&&now>(e.cd2||0)&&Math.abs(P.y-e.gy)<4){e.cd2=now+3+Math.random()*2;e.atk=.35;throwAt(e)}
-    let tx=P.x,tz=P.z;if(e.nav&&d>2){const w=navStep(e,now);if(w){tx=w[0];tz=w[1]}}
-    const sameLvl=Math.abs(P.y-e.gy)<1.8;
+    if(e.arena&&e.rk&&d>8&&now>(e.rcd||0)&&Math.abs(TT0.y-e.gy)<4){e.rcd=now+(e.rk==='gun'?2.2:1.5);e.atk=.35;shootAt(e)}
+    if(e.boss&&d>6&&now>(e.bbcd||0)&&Math.abs(TT0.y-e.gy)<4){e.bbcd=now+2.2+Math.random();e.atk=.35;const ork=e.rk;e.rk='gun';try{shootAt(e)}finally{e.rk=ork}}
+    if(e.thrower&&d>5&&d<17&&now>(e.cd2||0)&&Math.abs(TT0.y-e.gy)<4){e.cd2=now+3+Math.random()*2;e.atk=.35;throwAt(e)}
+    let tx=TT0.x,tz=TT0.z;if(e.nav&&d>2){const w=navStep(e,now);if(w){tx=w[0];tz=w[1]}}
+    const sameLvl=Math.abs(TT0.y-e.gy)<1.8;
     if(d>reach||!sameLvl){mv=moveE(e,tx-e.x,tz-e.z,e.speed*1.25*(e.arena&&e.rk&&d>13?.6:1),dt);run=1;want=Math.atan2(tx-e.x,tz-e.z)}else{e.state='windup';e.t=0;e.atk=0}break}
-   case 'slam':want=Math.atan2(dx,dz);if(e.t>.9){addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();if(d<7.5&&P.y<e.gy+1.4&&!HP.dead)hurt(Math.round(e.dmg*1.6),'a boss slam');e.state='recover';e.t=-.4}break;
-   case 'leap':{const ld=Math.hypot(e.lx,e.lz)||1;mv=moveE(e,e.lx/ld,e.lz/ld,17*(e.slow||1),dt);run=1;if(!e.hitL&&d<reach+.6&&!HP.dead){e.hitL=1;hurt(Math.round(e.dmg*1.2),'a boss charge')}if(e.t>.6){e.state='recover';e.t=-.2}break}
+   case 'slam':want=Math.atan2(dx,dz);if(e.t>.9){addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();if(d<7.5&&TT0.y<e.gy+1.4&&!HP.dead)X.hit(TT0,Math.round(e.dmg*1.6),'a boss slam');e.state='recover';e.t=-.4}break;
+   case 'leap':{const ld=Math.hypot(e.lx,e.lz)||1;mv=moveE(e,e.lx/ld,e.lz/ld,17*(e.slow||1),dt);run=1;if(!e.hitL&&d<reach+.6&&!HP.dead){e.hitL=1;X.hit(TT0,Math.round(e.dmg*1.2),'a boss charge')}if(e.t>.6){e.state='recover';e.t=-.2}break}
    case 'rocks':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.6){e.fired=1;rockRing(e)}if(e.t>1.2){e.state='recover';e.t=-.1}break;
    case 'gslam':want=Math.atan2(dx,dz);if(!e.fired&&e.t>.9){e.fired=1;addFx(new THREE.Vector3(e.x,e.gy+.3,e.z),0xffaa55,7,.8);SX.bossSlam&&SX.bossSlam();if(e.arena)X.arenaShock&&X.arenaShock(e);else worldShock(e)}if(e.t>1.4){e.state='recover';e.t=-.1}break;
-   case 'windup':want=Math.atan2(dx,dz);if(e.t>(e.boss?.6:.38)){if(d<reach+.5&&!HP.dead){hurt(e.boss?e.dmg:1+Math.floor(Math.random()*6),e.boss?'a boss':'a barbarian');SX.swing&&SX.swing()}e.state='recover';e.t=0}break;
+   case 'windup':want=Math.atan2(dx,dz);if(e.t>(e.boss?.6:.38)){if(d<reach+.5&&!HP.dead){X.hit(TT0,e.boss?e.dmg:1+Math.floor(Math.random()*6),e.boss?'a boss':'a barbarian');SX.swing&&SX.swing()}e.state='recover';e.t=0}break;
    case 'recover':if(e.t<.35)mv=moveE(e,-dx,-dz,e.speed*.5,dt);if(e.t>.6){e.state=d>ag*2.4?'return':'charge';e.t=0}break;
-   case 'range':{want=Math.atan2(dx,dz);if(d>ag*2){e.state='return';break}
+   case 'range':{want=Math.atan2(dx,dz);if(!e.arena&&d>ag*2){e.state='return';break}
     if(d<6)mv=moveE(e,-dx,-dz,e.speed,dt),run=1;else if(d>12)mv=moveE(e,dx,dz,e.speed,dt),run=1;else{const sx=Math.cos(t*.8+e.hx)*e.speed*.5;mv=moveE(e,-dz,dx,sx,dt)}
     if(now>e.cd&&d<26){e.cd=now+(e.kind==='gun'?2.2:1.6);e.atk=.35;shootAt(e)}break}
    case 'flee':{const fx=-dx,fz=-dz;mv=moveE(e,fx,fz,e.speed*1.4,dt);run=1;want=Math.atan2(fx,fz);if(e.t>3.5||d>30){e.state='heal';e.t=0}break}
@@ -2909,7 +2910,7 @@ function enemyTick(dt){if(!running)return;const now=performance.now()/1000,t=now
   if(e.atk>0){e.atk-=dt;R.sh.rotation.x=-1.45+(e.atk>.2?-.1:.2)}
   if(e.hit>0)e.g.position.y+=Math.sin(e.hit*40)*.03;
   if(e.state==='charge'||e.state==='windup'||e.state==='recover'||e.state==='range'){}
- }}
+ }X._T=null}
 X.meleeEnemies=function(range,dmg){for(const e of X.EN.slice()){const dx=e.x-P.x,dz=e.z-P.z;if(Math.hypot(dx,dz)<range+(e.scale||1)*.6){hurtEnemy(e,dmg)}}};
 const baseBH=bulletHit;
 window.bulletHit=function(p){for(const e of X.EN){if(Math.hypot(p.x-e.x,p.z-e.z)<.6*(e.scale||1)&&p.y>e.g.position.y&&p.y<e.g.position.y+2.4*(e.scale||1)){addFx(p.clone(),0xff4455,1.4,.2);hurtEnemy(e,PISTOL_DMG);return'wood'}}return baseBH(p)};
@@ -3847,13 +3848,13 @@ const bx2=exitCave;window.exitCave=function(){CEN.length=0;for(const p of CP)CAV
 function kill(e){const i=CEN.indexOf(e);if(i>=0)CEN.splice(i,1);if(window.PX.deathFx&&CAVE.group)window.PX.deathFx(e.g,e.g.position.x,e.g.position.z,e.s||1,{gy:e.g.position.y,parent:CAVE.group});else CAVE.group&&CAVE.group.remove(e.g);SX.enemyDie&&SX.enemyDie();giveLoot(e.boss?'Dungeon Boss Loot':'Guardian Loot',(e.boss?10+Math.floor(Math.random()*31):1+Math.floor(Math.random()*5))*(e.dng?3:2));toast(e.boss?'Dungeon boss defeated!':'Guardian down')}
 const bb=bulletHit;window.bulletHit=function(p){if(CAVE.on)for(const e of CEN)if(Math.hypot(p.x-e.x,p.z-e.z)<.6*e.s&&p.y>caveFloor(e.x,e.z)-.2&&p.y<caveFloor(e.x,e.z)+2.4*e.s){e.hp-=PISTOL_DMG;SX.enemyHit&&SX.enemyHit();addFx(p.clone(),0xff4455,1.4,.2);if(e.state==='idle')e.state='chase';if(e.hp<=0)kill(e);return'wood'}{const th=trapShot(p);if(th)return th}return bb(p)};
 const bu=update;window.update=function(dt){bu(dt);if(!CAVE.on||HP.dead||!running)return;const now=performance.now()/1000;
- for(let i=CP.length-1;i>=0;i--){const p=CP[i];p.life-=dt;p.m.position.addScaledVector(p.v,dt);if(Math.hypot(p.m.position.x-P.x,p.m.position.z-P.z)<.6&&Math.abs(p.m.position.y-(P.y+1))<1.1){hurt(p.dmg,'a guardian');p.life=0}else if(caveSolid(p.m.position.x,p.m.position.z))p.life=0;if(p.life<=0){CAVE.group&&CAVE.group.remove(p.m);CP.splice(i,1)}}
+ for(let i=CP.length-1;i>=0;i--){const p=CP[i];p.life-=dt;p.m.position.addScaledVector(p.v,dt);if(Math.hypot(p.m.position.x-P.x,p.m.position.z-P.z)<.6&&Math.abs(p.m.position.y-(P.y+1))<1.1){hurt(p.dmg,'a guardian');p.life=0}else if(X.horseHitP&&X.horseHitP(p.m.position,p.dmg)){p.life=0}else if(caveSolid(p.m.position.x,p.m.position.z))p.life=0;if(p.life<=0){CAVE.group&&CAVE.group.remove(p.m);CP.splice(i,1)}}
  for(const tr of CTRP){if(tr.dead)continue;tr.cd=Math.max(0,tr.cd-dt);if(tr.cd<=0&&Math.hypot(P.x-tr.x,P.z-tr.z)<1.35&&Math.abs(P.y-tr.fy)<2){tr.cd=1.8;hurt(tr.dmg,tr.name);addFx(new THREE.Vector3(tr.x,tr.fy+.5,tr.z),0xff5544,1.8,.35)}}
- for(const e of CEN){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz),rng=e.kind==='bow'||e.kind==='gun',ag=e.boss?26:16;let mv=0;
+ for(const e of CEN){const TT0=X.tgt(e,e.boss?26:16),dx=TT0.x-e.x,dz=TT0.z-e.z,d=Math.hypot(dx,dz),rng=e.kind==='bow'||e.kind==='gun',ag=e.boss?26:16;let mv=0;
   const step=(ax,az,sp)=>{const nx=e.x+ax/(Math.hypot(ax,az)||1)*sp*dt,nz=e.z+az/(Math.hypot(ax,az)||1)*sp*dt;if(caveH(nx,nz)<50){e.x=nx;e.z=nz;mv=sp}else if(caveH(nx,e.z)<50){e.x=nx;mv=sp}else if(caveH(e.x,nz)<50){e.z=nz;mv=sp}};
   if(e.state==='idle'&&d<ag){e.state='chase'}else if(e.state!=='idle'&&d>ag*2.2)e.state='idle';
-  if(e.state==='chase'){if(rng){if(d<6)step(-dx,-dz,e.speed);else if(d>11)step(dx,dz,e.speed*1.1);else step(-dz,dx,e.speed*.5*Math.sin(now+e.hx));if(now>e.cd&&d<24){e.cd=now+(e.kind==='gun'?1.6:2);const m=new THREE.Mesh(cpG,cpM);m.position.set(e.x,caveFloor(e.x,e.z)+1.4*e.s,e.z);CAVE.group.add(m);const dir=new THREE.Vector3(P.x-e.x,0,P.z-e.z).normalize();dir.y=((P.y+1)-1.4*e.s)/Math.max(d,1);CP.push({m,v:dir.multiplyScalar(e.kind==='gun'?30:22),life:2,dmg:e.boss?Math.max(1,e.dmg-1):Math.max(1,Math.round((1+Math.floor(Math.random()*6))*(e.dm||1)))});e.atk=.3;e.kind==='gun'?SX.gun&&SX.gun():SX.bowShot&&SX.bowShot()}}
-   else{if(d>1.4*e.s)step(dx,dz,e.speed*1.15);if(d<1.9*e.s&&now>e.cd){e.cd=now+1.2;e.atk=.4;hurt(e.boss?Math.round(e.dmg):Math.max(1,Math.round((1+Math.floor(Math.random()*6))*(e.dm||1))),e.boss?'a dungeon boss':'a guardian');SX.swing&&SX.swing()}}}
+  if(e.state==='chase'){if(rng){if(d<6)step(-dx,-dz,e.speed);else if(d>11)step(dx,dz,e.speed*1.1);else step(-dz,dx,e.speed*.5*Math.sin(now+e.hx));if(now>e.cd&&d<24){e.cd=now+(e.kind==='gun'?1.6:2);const m=new THREE.Mesh(cpG,cpM);m.position.set(e.x,caveFloor(e.x,e.z)+1.4*e.s,e.z);CAVE.group.add(m);const dir=new THREE.Vector3(TT0.x-e.x,0,TT0.z-e.z).normalize();dir.y=((TT0.y+1)-1.4*e.s)/Math.max(d,1);CP.push({m,v:dir.multiplyScalar(e.kind==='gun'?30:22),life:2,dmg:e.boss?Math.max(1,e.dmg-1):Math.max(1,Math.round((1+Math.floor(Math.random()*6))*(e.dm||1)))});e.atk=.3;e.kind==='gun'?SX.gun&&SX.gun():SX.bowShot&&SX.bowShot()}}
+   else{if(d>1.4*e.s)step(dx,dz,e.speed*1.15);if(d<1.9*e.s&&now>e.cd){e.cd=now+1.2;e.atk=.4;X.hit(TT0,e.boss?Math.round(e.dmg):Math.max(1,Math.round((1+Math.floor(Math.random()*6))*(e.dm||1))),e.boss?'a dungeon boss':'a guardian');SX.swing&&SX.swing()}}}
   e.spd+=(mv-e.spd)*Math.min(1,dt*10);e.ph+=Math.min(e.spd,9)*dt*1.5;e.g.position.set(e.x,caveFloor(e.x,e.z),e.z);e.g.rotation.y=Math.atan2(dx,dz);
   try{animAvatar(e.av,dt,now+e.hx,e.spd,mv>4?1:0,true,0,e.ph,{tool:e.ranged?'pistol':'hand'})}catch(er){}
   if(e.atk>0){e.av.arms[1].sh.rotation.x=-1.6;e.atk-=dt}}caveSpawn(dt)};
@@ -4166,16 +4167,16 @@ function nmTick(dt){if(!running||CAVE.on||HP.dead){if(CAVE.on&&NM.length)for(con
  const blood=WEATHER.type==='blood',chRun=CUR.key==='3,2'&&X.chaos&&X.chaos.CH.state==='run',nt=night()||blood||chRun;X.nmOn=nt;
  if(CUR.key==='3,2'){if(X.chaosMobs)X.chaosMobs(dt,NM.length,spawn)}
  else if(nt){watchN();buildSlots();spT-=dt;if(spT<=0){spT=blood?.2:.6;slotSpawn()}}
- for(const e of NM.slice()){let dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);const dP=d;
+ for(const e of NM.slice()){const TT0=X.tgt(e,70);let dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);const dP=d;if(TT0.horse){dx=TT0.x-e.x;dz=TT0.z-e.z;d=Math.hypot(dx,dz)}
   if(!nt&&Math.random()<dt*.8){remove(e,true);continue}
   if(dP>70){remove(e);continue}
   const T=e.T,u=e.g.userData;
   if(e.pp){const pm=X.es?X.es.esNM(e,dt):0;e.ph+=dt*T.spd*2.2*pm;e.g.position.set(e.x,terrH(e.x,e.z),e.z);e.g.rotation.y=e.face;
    if(e.ty==='spider'){u.legs.forEach((l,i)=>{l.rotation.z=Math.sin(e.ph+i*1.3)*.25*(pm?1:.1)})}else{const sw=Math.sin(e.ph)*.7*(pm?1:0);u.lg.rotation.x=sw;u.rg.rotation.x=-sw;if(e.ty==='zombie'){u.la.rotation.x=-1.35+Math.sin(e.ph*.5)*.15;u.ra.rotation.x=-1.35-Math.sin(e.ph*.5)*.15}}
    continue}
-  let rt=null;if(X.es&&X.es.nearRemote){rt=X.es.nearRemote(e.x,e.z,Math.min(dP-1.5,40));if(rt){dx=rt.x-e.x;dz=rt.z-e.z;d=rt.d}}
+  let rt=null;if(!TT0.horse&&X.es&&X.es.nearRemote){rt=X.es.nearRemote(e.x,e.z,Math.min(dP-1.5,40));if(rt){dx=rt.x-e.x;dz=rt.z-e.z;d=rt.d}}
   let mv=0,want=Math.atan2(dx,dz),sp=T.spd;
-  if(e.ty==='skeleton'){if(d>14)mv=1;else if(d<7){mv=-1;sp*=.8}else e.ph+=0;if(d<22&&e.ty==='skeleton'&&performance.now()/1000>e.cd){e.cd=performance.now()/1000+2.2+Math.random();arrow(e,rt);if(rt&&Math.random()<.6)rhit(rt.uid,3,'a skeleton archer')}}
+  if(e.ty==='skeleton'){if(d>14)mv=1;else if(d<7){mv=-1;sp*=.8}else e.ph+=0;if(d<22&&e.ty==='skeleton'&&performance.now()/1000>e.cd){e.cd=performance.now()/1000+2.2+Math.random();X._T=TT0.horse?TT0:null;arrow(e,rt);X._T=null;if(rt&&Math.random()<.6)rhit(rt.uid,3,'a skeleton archer')}}
   else if(e.ty==='spider'){mv=d>1.3?1:0;if(d<5&&d>2)sp*=1.35}
   else mv=d>1.3?1:0;
   if(mv){const ang=want+(mv<0?Math.PI:0)+(e.ty==='spider'?Math.sin(performance.now()/300+e.ph)*.5:0),nx=e.x+Math.sin(ang)*sp*dt,nz=e.z+Math.cos(ang)*sp*dt,nh=terrH(nx,nz),oh=terrH(e.x,e.z);
@@ -4185,7 +4186,7 @@ function nmTick(dt){if(!running||CAVE.on||HP.dead){if(CAVE.on&&NM.length)for(con
   if(e.ty==='spider'){u.legs.forEach((l,i)=>{l.rotation.z=Math.sin(e.ph+i*1.3)*.25*(mv?1:.1)});}
   else{const sw=Math.sin(e.ph)*.7*(mv?1:0);u.lg.rotation.x=sw;u.rg.rotation.x=-sw;if(e.ty==='zombie'){u.la.rotation.x=-1.35+Math.sin(e.ph*.5)*.15;u.ra.rotation.x=-1.35-Math.sin(e.ph*.5)*.15}}
   const now=performance.now()/1000;
-  if(e.ty!=='skeleton'&&d<(1.5+(e.ty==='spider'?.3:.2))*(e.scl||1)&&now>e.cd&&(rt||!HP.dead)){e.cd=now+(e.ty==='spider'?.9:1.3);if(rt)rhit(rt.uid,1+Math.floor(Math.random()*3),T.n);else if(e.mine||e.ar){X.big=1;try{hurt(2*(1+Math.floor(Math.random()*2)),T.n)}finally{X.big=0}}else hurt(1+Math.floor(Math.random()*3),T.n);SX.swing&&SX.swing()}
+  if(e.ty!=='skeleton'&&d<(1.5+(e.ty==='spider'?.3:.2))*(e.scl||1)&&now>e.cd&&(rt||TT0.horse||!HP.dead)){e.cd=now+(e.ty==='spider'?.9:1.3);if(TT0.horse)X.hit(TT0,e.mine||e.ar?2:1,T.n);else if(rt)rhit(rt.uid,1+Math.floor(Math.random()*3),T.n);else if(e.mine||e.ar){X.big=1;try{hurt(2*(1+Math.floor(Math.random()*2)),T.n)}finally{X.big=0}}else hurt(1+Math.floor(Math.random()*3),T.n);SX.swing&&SX.swing()}
   }}
 const pbh=bulletHit;window.bulletHit=function(p){if(!CAVE.on)for(const e of NM){const T=e.T,r=(e.ty==='spider'?.75:.5)*(e.scl||1);if(Math.hypot(p.x-e.x,p.z-e.z)<r&&p.y>e.g.position.y-.05&&p.y<e.g.position.y+T.h){addFx(p.clone(),0x66cc55,1.2,.2);SX.enemyHit&&SX.enemyHit();if(e.pp){X.es&&X.es.dmg(e,PISTOL_DMG);return'wood'}e.hp-=PISTOL_DMG;if(e.hp<=0)die(e);return'wood'}}return pbh(p)};
 const rhit=(u,dm,n)=>{try{if(FB&&FB.sendHit)FB.sendHit(u,dm,n).catch(()=>{})}catch(er){}};
@@ -4922,7 +4923,7 @@ function start(k,o){if(EV.k||!NAMES[k])return false;o=o||{};EV.k=k;EV.t=0;EV.cha
  else{EV.dur=EV.chaos?22:30;banner('EARTHQUAKE','#d8b080');toast('The ground is shaking. Watch for falling rubble!')}
  return true}
 function clean(o){o.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose()}})}
-function stop(quiet){if(!EV.k)return;if(EV.g){scene.remove(EV.g);clean(EV.g);EV.g=null}
+function stop(quiet){EV.carry=0;if(!EV.k)return;if(EV.g){scene.remove(EV.g);clean(EV.g);EV.g=null}
  for(const r of EV.rocks)scene.remove(r.m);EV.rocks.length=0;const had=EV.rw!=null;EV.k=null;
  if(had)X.fixW=EV.rw;else if(!quiet&&!isSp())try{window.rollWeather()}catch(e){}
  EV.rw=null}
@@ -4940,7 +4941,10 @@ function tick(dt){
    if(d<24){const f=(1-d/24)*7*dt;P.x+=dx/d*f;P.z+=dz/d*f}
    EV.tm-=dt;if(d<9&&EV.tm<=0){EV.tm=.7;hurt(dmg(.1),'a tornado');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,2,.4)}}}
  else if(k==='tsunami'){EV.s+=52*dt;const g=EV.g;g.position.set(EV.dx*EV.s,0,EV.dz*EV.s);
-  if(!EV.hit&&running&&!HP.dead&&!CAVE.on){const ds=P.x*EV.dx+P.z*EV.dz;if(ds<EV.s+4&&ds>EV.s-64&&P.y<WATER+20){EV.hit=1;if(EV.chaos)BH(10,'the tsunami');else hurt(dmg(.3),'the tsunami');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcff6ff,5,.6);try{SX.splash&&SX.splash()}catch(e){}P.x+=EV.dx*10;P.z+=EV.dz*10;toast('The wave slams into you. Higher ground next time!')}}}
+  if(!EV.hit&&running&&!HP.dead&&!CAVE.on){const ds=P.x*EV.dx+P.z*EV.dz;if(ds<EV.s+4&&ds>EV.s-64&&P.y<WATER+20){EV.hit=1;if(EV.chaos)BH(20,'the tsunami');else hurt(dmg(.3),'the tsunami');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcff6ff,5,.6);try{SX.splash&&SX.splash()}catch(e){}if(EV.chaos){EV.carry=1;toast('The wave has you! It will drag you until the land pushes you out.')}else{P.x+=EV.dx*10;P.z+=EV.dz*10;toast('The wave slams into you. Higher ground next time!')}}}
+  if(EV.carry){if(!running||HP.dead||CAVE.on)EV.carry=0;else{const sp=52*dt,nx=P.x+EV.dx*sp,nz=P.z+EV.dz*sp,th=terrH(nx,nz);
+   if(th>WATER+6||Math.abs(nx)>HALF-8||Math.abs(nz)>HALF-8){EV.carry=0;P.vy=0;P.y=Math.max(P.y,th+.3);toast('The land pushed you out of the wave.')}
+   else{P.x=nx;P.z=nz;P.y=Math.max(th,WATER)+1.2;P.vx=P.vz=0;P.vy=0;P.grounded=false}}}}
  else{const I=fade;
   EV.tm-=dt;if(EV.tm<=0&&I>.5&&running&&!CAVE.on){EV.tm=EV.chaos?.22:.45;if(!rockG){rockG=new THREE.DodecahedronGeometry(.7,0);rockM=new THREE.MeshLambertMaterial({color:0x5a4a40,flatShading:true})}
    for(let q=0,nq=EV.chaos?2:1;q<nq;q++){const r=Math.random()<(EV.chaos?.35:.5)?(EV.chaos?5:4):(EV.chaos?26:14),a=Math.random()*6.283,x=P.x+Math.cos(a)*Math.random()*r,z=P.z+Math.sin(a)*Math.random()*r,h=terrH(x,z),m=new THREE.Mesh(rockG,rockM);if(EV.chaos)m.scale.setScalar(1.9);m.position.set(x,h+40,z);scene.add(m);EV.rocks.push({m,x,z,h,y:h+40,vy:0})}}
@@ -5182,7 +5186,7 @@ function slowMobs(){const a=X.NM;if(!a)return;for(const e of a){if(e.chs)continu
    tornado (permanent, wanders, pulls + slings you) · earthquake · tsunami · meteor shower · the floor is lava */
 const TOR=[],MET=[],LP=[],FL={t:0,d:1,vx:0,vz:0,imm:0},MOB={acc:0};let lpLast=null,bag=[];
 const BH=(d,by)=>{X.big=1;try{hurt(d,by)}finally{X.big=0}};
-const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno','geyser','gas','surge','acid','blizzard','sandstorm','crabrave','sharknado'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA',geyser:'MAGMA GEYSERS',gas:'TOXIC GAS',surge:'MONSTER SURGE',acid:'ACID RAIN',blizzard:'BLIZZARD',sandstorm:'SANDSTORM',crabrave:'CRAB RAVE',sharknado:'SHARKNADO'};
+const DKINDS=['tornado','quake','tsunami','meteor','lavafloor','dragons','lavarise','lightning','arachno','geyser','gas','surge','acid','blizzard','sandstorm','sharknado'],DNAME={tornado:'TORNADOS',quake:'EARTHQUAKE',tsunami:'TSUNAMI',meteor:'METEOR SHOWER',lavafloor:'THE FLOOR IS LAVA',dragons:'DRAGONS',lavarise:'LAVA RISE',lightning:'LIGHTNING STORM',arachno:'ARACHNOPHOBIA',geyser:'MAGMA GEYSERS',gas:'TOXIC GAS',surge:'MONSTER SURGE',acid:'ACID RAIN',blizzard:'BLIZZARD',sandstorm:'SANDSTORM',crabrave:'CRAB RAVE',sharknado:'SHARKNADO'};
 function nextKind(){if(!bag.length){bag=DKINDS.slice();for(let i=bag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=bag[i];bag[i]=bag[j];bag[j]=t}}return bag.pop()}
 function resetArrays(){SK.length=0;CRB.length=0;SHL.length=0;if(FXD)FXD.style.opacity=0;TOR.length=0;MET.length=0;LP.length=0;lpLast=null;bag=[];FL.t=0;FL.imm=0;MOB.acc=0}
 function dispose(o){o.traverse(c=>{if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose()}})}
@@ -5213,6 +5217,7 @@ function startDis(k,now){const E=X.events;if(!C.ev)C.ev={};
 function endDis(){const E=X.events;if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')&&E.active())E.stop();if(DIS.cur.k==='meteor')C.met=null;if(DIS.cur.k==='lavafloor')C.lf=null}DIS.cur=null}
 function disTick(dt){if(!C||!isChaos())return;const E=X.events,now=performance.now()/1000;
  if(CH.state==='run'&&!HP.dead){
+  if(!C.ev)C.ev={};if(!C.ev.cr){C.crT=(C.crT||0)-dt;if(C.crT<=0){C.crT=2;if(crStart()){C.ev.cr={t:0};crAudio();banner('CRAB RAVE','#ff6a4a');toast('The giant crabs are throwing a rave for the whole event! Dodge their claws.')}}}
   if(DIS.cur){if((DIS.cur.k==='quake'||DIS.cur.k==='tsunami')){if(E.active())DIS.end=now+E.remain();else endDis()}else if(now>=DIS.end)endDis()}
   if(DIS.next&&now>=DIS.next){DIS.next=now+20;if(CH.pu&&CH.pu.skip){CH.pu.skip=0;banner('DISASTER CANCELLED','#6ab8ff');toast('Your blue gem calmed the island. This disaster never came.')}else for(let q=0,ok=false;q<14&&!ok;q++)ok=startDis(nextKind(),now)}}
  else if(DIS.cur)endDis()}
@@ -5242,14 +5247,14 @@ function torHit(dt){if(!running||HP.dead||CAVE.on||CH.state!=='run'){FL.t=0;retu
  if(FL.t>0){FL.t-=dt;const k=Math.max(0,FL.t/FL.d),m=.35+.65*k;P.vx=FL.vx*m;P.vz=FL.vz*m}
  FL.imm-=dt;if(!TOR.length)return;
  let T=null,bd=1e9;for(const q of TOR){const d=Math.hypot(q.x-P.x,q.z-P.z);if(d<bd){bd=d;T=q}}
- C.tdT=(C.tdT||0)-dt;if(T&&T.t>=3&&bd<11&&C.tdT<=0&&P.y<terrH(P.x,P.z)+16){C.tdT=.4;BH(2,'a tornado');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,2,.3)}
+ C.tdT=(C.tdT||0)-dt;if(T&&T.t>=3&&bd<11&&C.tdT<=0&&P.y<terrH(P.x,P.z)+16){C.tdT=.4;BH(4,'a tornado');addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,2,.3)}
  if(FL.imm>0)return;
- const R=80;if(!T||bd>=R||T.t<3)return;const d=bd||1,dx=T.x-P.x,dz=T.z-P.z;
+ const R=160;if(!T||bd>=R||T.t<3)return;const d=bd||1,dx=T.x-P.x,dz=T.z-P.z;
  /* slow tug at the edge, a hard grip up close */
  const f=(1.4+5.5*Math.pow(1-d/R,2)+(d<30?13*Math.pow(1-d/30,1.6):0))*dt;
  P.x+=dx/d*f-dz/d*f*.35;P.z+=dz/d*f+dx/d*f*.35;
- if(d<40&&!C.tw){C.tw=1;toast('The tornado is pulling you in. Run!')}if(d>60)C.tw=0;
- if(d<6.5){BH(6,'a tornado');const fd=flingDir(T);FL.vx=Math.cos(fd.a)*fd.sp;FL.vz=Math.sin(fd.a)*fd.sp;FL.d=FL.t=1.9;FL.imm=6;P.vy=25;P.grounded=false;P.y+=.6;
+ if(d<80&&!C.tw){C.tw=1;toast('The tornado is pulling you in. Run!')}if(d>120)C.tw=0;
+ if(d<6.5){BH(12,'a tornado');const fd=flingDir(T);FL.vx=Math.cos(fd.a)*fd.sp;FL.vz=Math.sin(fd.a)*fd.sp;FL.d=FL.t=1.9;FL.imm=6;P.vy=25;P.grounded=false;P.y+=.6;
   addFx(new THREE.Vector3(P.x,P.y+1,P.z),0xcfc8c0,4,.6);toast('The tornado flings you across the island!');C.tw=0;try{X.shake&&X.shake(1,.5)}catch(e){}}}
 /* ---------- meteor shower: lots of boulders at random spots across the whole island ---------- */
 function metInit(){if(C.metG)return;C.metG=new THREE.DodecahedronGeometry(1,0);C.metMk=new THREE.RingGeometry(1.7,2.5,28).rotateX(-Math.PI/2);DISP.push(C.metG,C.metMk);
@@ -5289,7 +5294,7 @@ function lavaTick(dt){if(!C)return;const LIFE=11;
  if(!LP.length)return;lpInit();C.lb-=dt;
  if(P.y<terrH(P.x,P.z)+1.5&&C.lb<=0){for(const p of LP){if(p.t>1.5&&Math.hypot(P.x-p.x,P.z-p.z)<1.5){C.lb=.5;BH(3,'molten ground');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4);break}}}}
 /* ---------- extra disasters: dragons, lava rise, lightning storm, arachnophobia (each runs on its own timer) ---------- */
-const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:15,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48,geyserT:25,gasT:30,surgeT:20,acidT:25,blizT:30,sandT:30,crabT:40,sharkT:45};
+const EVC={dragons:5,dragonHp:450,dragonT:40,lavaT:30,lavaUp:30,lavaDown:10,lightT:60,lightEvery:.1,spiderT:40,spiderSize:3,spiderSpeed:1.1,spitEvery:2,spitN:3,spitCap:48,geyserT:25,gasT:30,surgeT:20,acidT:25,blizT:30,sandT:30,crabT:1e9,sharkT:45};
 function evDragons(){const E=C.ev;if(E.dr)return;E.dr={t:0};
  const DSP=[[0,0],[-1,-1],[1,-1],[-1,1],[1,1]];for(let k=0;k<EVC.dragons;k++){const cx=DSP[k%5][0]*CH.Rc*.55,cz=DSP[k%5][1]*CH.Rc*.55;
   try{const d=X.dragonSpawn({i:100+k,cx,cz,R:60+Math.random()*50,alt:44+Math.random()*16,dir:k%2?1:-1,v:Math.floor(Math.random()*6),hp:EVC.dragonHp,max:EVC.dragonHp,evt:1});d.cd=3+Math.random()*4}catch(e){console.error('[chaos dragons]',e)}}}
@@ -5331,7 +5336,7 @@ function gySpawn(){gyInit();if(GY.length>90)return;let x=0,z=0,h=0,ok=false;cons
  for(let k=0;k<14&&!ok;k++){if(near){const a=Math.random()*6.283,r=3+Math.random()*24;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(CH.Rc-40);z=(Math.random()*2-1)*(CH.Rc-40)}
   const r2=Math.hypot(x,z);h=terrH(x,z);ok=r2<CH.Rc-30&&r2>CH.Rr*.95&&h>1.2}
  if(!ok)return;const k=new THREE.Mesh(C.metMk,C.metMM);k.position.set(x,h+.18,z);k.scale.setScalar(1.8);C.G.add(k);GY.push({k,m:null,x,z,h,t:0})}
-function gyTick(dt){const E=C.ev.gy;E.t+=dt;E.acc+=dt*3;let n=0;while(E.acc>=1&&n++<4){E.acc-=1;gySpawn()}if(E.t>=EVC.geyserT)C.ev.gy=null}
+function gyTick(dt){const E=C.ev.gy;E.t+=dt;E.acc+=dt*6;let n=0;while(E.acc>=1&&n++<8){E.acc-=1;gySpawn()}if(E.t>=EVC.geyserT)C.ev.gy=null}
 function gyUpdate(dt){for(let i=GY.length-1;i>=0;i--){const q=GY[i];q.t+=dt;
   if(q.t<1.5){q.k.scale.setScalar(1.8*(.9+.12*Math.sin(q.t*16)));continue}
   if(!q.m){C.G.remove(q.k);const m=new THREE.Mesh(C.gyG,C.gyM.clone());m.position.set(q.x,q.h,q.z);C.G.add(m);q.m=m;addFx(new THREE.Vector3(q.x,q.h+1.5,q.z),0xff8a2a,5,.7);try{SX.stoneHit&&SX.stoneHit()}catch(e){}
@@ -5368,16 +5373,16 @@ const stormOn=()=>running&&!HP.dead&&!CAVE.on;
 const CLC={ac:{c:0x6fae3a,cu:0x8cff3a,cuo:.16,po:.62},bz:{c:0xe4eefa,cu:0xdfeeff,cuo:.14,po:.6},sd:{c:0xb98a4c,cu:0xe0b070,cuo:.14,po:.6}};
 function clInit(){if(C.clT)return;C.clT={};for(const k in CLC){const o=CLC[k];C.clT[k]={sp:new THREE.SpriteMaterial({map:C.smokeT,color:o.c,transparent:true,depthWrite:false,opacity:0,fog:false}),cu:new THREE.MeshBasicMaterial({color:o.cu,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,fog:false})}}}
 function clPick(list,near){for(let k=0;k<300;k++){let x,z;if(near){const a=Math.random()*6.283,r=32+Math.random()*55;x=P.x+Math.cos(a)*r;z=P.z+Math.sin(a)*r}else{x=(Math.random()*2-1)*(CH.Rc-60);z=(Math.random()*2-1)*(CH.Rc-60)}
-  if(Math.hypot(x,z)>CH.Rc-50)continue;let ok=true;for(const c of list)if(Math.hypot(c.x-x,c.z-z)<45){ok=false;break}if(ok)return{x,z}}return null}
+  if(Math.hypot(x,z)>CH.Rc-50)continue;let ok=true;for(const c of list)if(Math.hypot(c.x-x,c.z-z)<90){ok=false;break}if(ok)return{x,z}}return null}
 function clPlace(c){c.g.position.set(c.x,Math.max(terrH(c.x,c.z),WATER)+55,c.z)}
-function clMake(type,list,near){const p=clPick(list,near);if(!p)return;const R=26+Math.random()*10,M=C.clT[type],g=new THREE.Group();
+function clMake(type,list,near){const p=clPick(list,near);if(!p)return;const R=(26+Math.random()*10)*2,M=C.clT[type],g=new THREE.Group();
  for(let i=0;i<16;i++){const sp=new THREE.Sprite(M.sp),sz=R*(.9+Math.random()*.8);sp.scale.set(sz,sz*.55,1);const a=Math.random()*6.283,r=Math.sqrt(Math.random())*R*.85;sp.position.set(Math.cos(a)*r,(Math.random()-.5)*6,Math.sin(a)*r);g.add(sp)}
  const geo=new THREE.CylinderGeometry(R,R,70,28,1,true).translate(0,-35,0);g.add(new THREE.Mesh(geo,M.cu));
  const c={g,geo,x:p.x,z:p.z,R,a:Math.random()*6.283,w:Math.random()*50};list.push(c);C.G.add(g);clPlace(c)}
 function clSpawn(type){clInit();const list=[];for(let i=0;i<6;i++)clMake(type,list,i<2);return list}
 function clRemove(list){for(const c of list){if(c.g.parent)c.g.parent.remove(c.g);if(c.geo)c.geo.dispose()}list.length=0}
 function clMove(list,dt,f){let under=false;const ff=Math.max(.05,f),tn2=performance.now()/1000;
- for(const c of list){c.a+=Math.sin(tn2*.3+c.w)*.4*dt;const nx=c.x+Math.cos(c.a)*4*dt,nz=c.z+Math.sin(c.a)*4*dt;if(Math.hypot(nx,nz)>CH.Rc-50)c.a=Math.atan2(-c.z,-c.x);else{c.x=nx;c.z=nz}
+ for(const c of list){c.a+=Math.sin(tn2*.3+c.w)*.4*dt;const nx=c.x+Math.cos(c.a)*8*dt,nz=c.z+Math.sin(c.a)*8*dt;if(Math.hypot(nx,nz)>CH.Rc-50)c.a=Math.atan2(-c.z,-c.x);else{c.x=nx;c.z=nz}
   clPlace(c);c.g.scale.setScalar(ff);if(!under&&Math.hypot(P.x-c.x,P.z-c.z)<c.R*ff)under=true}return under}
 function clFade(type,f){const M=C.clT[type];M.sp.opacity=CLC[type].po*f;M.cu.opacity=CLC[type].cuo*f}
 const evF=t=>Math.max(0,Math.min(1,t/2));
@@ -5391,29 +5396,29 @@ function fxUpdate(){const E=C.ev;let best=null,bs=-1;for(const k of['ac','bz','s
 function acTick(dt){const A=C.ev.ac;A.t+=dt;A.hit-=dt;A.sn-=dt;const f=evF(A.t,EVC.acidT);clFade('ac',f);const u=clMove(A.cl,dt,f)&&stormOn(),sh=u&&sheltered();
  A.ov+=((u?(sh?.25:.55):0)-A.ov)*Math.min(1,dt*3);
  if(u&&A.sn<=0){A.sn=.5+Math.random()*.5;try{SX.campCrackle&&SX.campCrackle();SX.leafRustle&&SX.leafRustle()}catch(e){}}
- if(u&&!sh&&A.hit<=0){A.hit=1;BH(1,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Step out from under the cloud.')}}
+ if(u&&!sh&&A.hit<=0){A.hit=1;BH(2,'acid rain');addFx(new THREE.Vector3(P.x,P.y+1.6,P.z),0x9aff3a,1.6,.35);if(!A.w){A.w=1;toast('The acid is burning you! Step out from under the cloud.')}}
  }
 function bzWarm(){if(Math.hypot(P.x,P.z)<CH.Rr*1.2||riverAt(P.x,P.z)<7)return true;for(const p of LP)if(Math.hypot(P.x-p.x,P.z-p.z)<4)return true;return false}
 function bzTick(dt){const B=C.ev.bz;B.t+=dt;B.hit-=dt;B.sn-=dt;const f=evF(B.t,EVC.blizT);clFade('bz',f);const u=clMove(B.cl,dt,f)&&stormOn();
  if(u&&!bzWarm())B.cold=Math.min(8,B.cold+dt);else B.cold=Math.max(0,B.cold-dt*(u?4:2));
  B.ov+=((u?.4+.5*Math.min(1,B.cold/6):0)-B.ov)*Math.min(1,dt*3);
  if(u&&B.sn<=0){B.sn=1.6+Math.random();try{SX.windGust&&SX.windGust()}catch(e){}}
- if(u&&B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(1,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Leave the cloud, or get close to the volcano or a lava river.')}}
+ if(u&&B.cold>2.5&&B.hit<=0){B.hit=1.2;BH(2,'the blizzard');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xcfe8ff,1.8,.4);if(!B.w){B.w=1;toast('You are freezing! Leave the cloud, or get close to the volcano or a lava river.')}}
  }
 function sdTick(dt){const D=C.ev.sd;D.t+=dt;D.hit-=dt;D.sn-=dt;D.a+=Math.sin(D.t*.4+D.w)*.5*dt;const f=evF(D.t,EVC.sandT);clFade('sd',f);const u=clMove(D.cl,dt,f)&&stormOn(),sh=u&&sheltered();
  D.ov+=((u?(sh?.25:.55):0)-D.ov)*Math.min(1,dt*3);
  if(u&&D.sn<=0){D.sn=1+Math.random()*.8;try{SX.windGust&&SX.windGust()}catch(e){}}
  if(u&&!sh){const sp=5*dt,nx=P.x+Math.cos(D.a)*sp,nz=P.z+Math.sin(D.a)*sp,r=Math.hypot(nx,nz);
   if(terrH(nx,nz)>WATER+.3&&r>CH.Rr*1.1&&r<CH.Rc-30&&riverAt(nx,nz)>2){P.x=nx;P.z=nz}else D.a+=Math.PI*(.5+Math.random()*.4);
-  if(D.hit<=0){D.hit=1.5;BH(1,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Step out from under the cloud.')}}}
+  if(D.hit<=0){D.hit=1.5;BH(2,'the sandstorm');addFx(new THREE.Vector3(P.x,P.y+1.4,P.z),0xe0b070,1.6,.35);if(!D.w){D.w=1;toast('The sand is tearing at you! Step out from under the cloud.')}}}
  }
 /* ---------- crab rave: giant dancing crabs everywhere, and crabrave.mp3 takes over the music for good ---------- */
 const omp=window.musicPlay;if(omp)window.musicPlay=function(){if(CR.on)return;return omp.apply(this,arguments)};
 function crAudio(){if(CR.on)return;CR.on=true;try{if(typeof bgm!=='undefined'&&bgm)bgm.pause()}catch(e){}
- if(!CR.au){const a=new Audio('crabrave.mp3');a.loop=false;a.volume=.7;a.preload='auto';a.addEventListener('error',()=>{CR.on=false;try{musicPlay()}catch(e){}});
+ if(!CR.au){const a=new Audio('crabrave.mp3');a.loop=true;a.volume=.7;a.preload='auto';a.addEventListener('error',()=>{CR.on=false;try{musicPlay()}catch(e){}});
   /* the song plays once: when it ends the normal music comes back, and a later crab rave starts it again from the top */
   a.addEventListener('ended',()=>{if(CR.fade)return;CR.on=false;try{a.currentTime=0}catch(e){}try{musicPlay()}catch(e){}});CR.au=a}
- try{CR.au.loop=false;CR.au.currentTime=0;CR.au.volume=.7}catch(e){}
+ try{CR.au.loop=true;CR.au.currentTime=0;CR.au.volume=.7}catch(e){}
  const pr=CR.au.play();if(pr&&pr.catch)pr.catch(()=>{const f=()=>{if(CR.on)CR.au.play().catch(()=>{});window.removeEventListener('pointerdown',f,true);window.removeEventListener('keydown',f,true)};window.addEventListener('pointerdown',f,true);window.addEventListener('keydown',f,true)})}
 function crFade(){if(CR.fade||!CR.au||!CR.on)return;CR.fade=true;const t0=performance.now(),v0=CR.au.volume;
  const iv=setInterval(()=>{const k=Math.min(1,(performance.now()-t0)/3000);try{CR.au.volume=Math.max(0,v0*(1-k))}catch(e){}
@@ -5662,7 +5667,7 @@ const MD=e=>{let b=1+Math.floor(Math.random()*3);if(e.ty==='crab')b+=2;if((e.sc|
 /* ---------- boulders, shock rings, lava ring ---------- */
 F.bl=[];F.rg=[];F.lava=null;F.lvT=0;F.blT=1;F.shT=1;F.trEvery=5;F.rmax=31;F.ai=false;F.spR=[24,29];F.bcnt=0;F.dcount=0;F.qa=0;F.qT=0;F.rd=1;F.R=null;
 let _bg=null,_rg=null,_rig=null;
-function boulder(x,z,o){o=o||{};if(F.bl.length>40)return;if(!_bg){_bg=new THREE.DodecahedronGeometry(1,0);_rg=new THREE.RingGeometry(.55,1,28).rotateX(-Math.PI/2)}
+function boulder(x,z,o){o=o||{};if(F.bl.length>(o.storm?170:40))return;if(!_bg){_bg=new THREE.DodecahedronGeometry(1,0);_rg=new THREE.RingGeometry(.55,1,28).rotateX(-Math.PI/2)}
  const fire=!!o.fire,rad=o.rad||2.6,s=o.s||1.1,
  m=new THREE.Mesh(_bg,new THREE.MeshLambertMaterial({color:fire?0x3a2018:0x5a4a40,emissive:fire?0x8a2a08:0,flatShading:true})),
  k=new THREE.Mesh(_rg,new THREE.MeshBasicMaterial({color:fire?0xff4a1a:0xffb040,transparent:true,opacity:.6,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}));
@@ -5671,32 +5676,43 @@ function blTick(dt){for(let i=F.bl.length-1;i>=0;i--){const b=F.bl[i];b.t+=dt;co
  if(f>=1){addFx(new THREE.Vector3(b.x,A.fl+1,b.z),0xa8895a,b.rad*1.6,.6);addFx(new THREE.Vector3(b.x,A.fl+1.6,b.z),0xffd08a,b.rad,.4);try{X.shake(Math.max(0,.5-Math.hypot(P.x-b.x,P.z-b.z)/60),.35)}catch(er){}
   if(!HP.dead&&Math.hypot(P.x-b.x,P.z-b.z)<b.rad&&P.y<A.fl+2.6)hurt(b.dmg,'a falling boulder');
   scene.remove(b.m);scene.remove(b.k);b.m.material.dispose();b.k.material.dispose();F.bl.splice(i,1)}}}
-function ring(x,z){if(!_rig)_rig=new THREE.RingGeometry(.9,1,56).rotateX(-Math.PI/2);const m=new THREE.Mesh(_rig,new THREE.MeshBasicMaterial({color:0xffa050,transparent:true,opacity:.85,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}));m.position.set(x,A.fl+.2,z);scene.add(m);F.rg.push({m,x,z,r:1,hit:0})}
+function ring(x,z,dm){if(!_rig)_rig=new THREE.RingGeometry(.9,1,56).rotateX(-Math.PI/2);const m=new THREE.Mesh(_rig,new THREE.MeshBasicMaterial({color:0xffa050,transparent:true,opacity:.85,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-6,polygonOffsetUnits:-6}));m.position.set(x,A.fl+.2,z);scene.add(m);F.rg.push({m,x,z,r:1,hit:0,dm:dm||1})}
 function rgTick(dt){for(let i=F.rg.length-1;i>=0;i--){const q=F.rg[i];q.r+=dt*15;q.m.scale.set(q.r,1,q.r);q.m.material.opacity=Math.max(0,.85*(1-q.r/26));
- if(!q.hit&&!HP.dead&&Math.abs(Math.hypot(P.x-q.x,P.z-q.z)-q.r)<1.7&&P.y<A.fl+1.25){q.hit=1;hurt(6,'an earth shatter');P.vy=6;P.grounded=false}
+ if(!q.hit&&!HP.dead&&Math.abs(Math.hypot(P.x-q.x,P.z-q.z)-q.r)<1.7&&P.y<A.fl+1.25){q.hit=1;hurt(Math.round(6*(q.dm||1)),'an earth shatter');P.vy=6;P.grounded=false}
  if(q.r>26){scene.remove(q.m);q.m.material.dispose();F.rg.splice(i,1)}}}
 function lavaTex(){const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');g.fillStyle='#b32a05';g.fillRect(0,0,256,256);
  for(let i=0;i<220;i++){const x=Math.random()*256,y=Math.random()*256,r=5+Math.random()*20,gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,Math.random()<.5?'rgba(255,220,90,.9)':'rgba(255,130,25,.85)');gr.addColorStop(1,'rgba(255,90,10,0)');g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,7);g.fill()}
  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(6,6);return t}
 function mkLava(){const geo=new THREE.RingGeometry(26.6,32.6,96,1).rotateX(-Math.PI/2),tex=lavaTex(),m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-5,polygonOffsetUnits:-5}));m.position.y=A.fl+.07;scene.add(m);F.lava={m,tex,geo}}
-function clearExtra(all){for(const b of F.bl){scene.remove(b.m);scene.remove(b.k);b.m.material.dispose();b.k.material.dispose()}F.bl.length=0;
+function clearExtra(all){F.mq=null;for(const b of F.bl){scene.remove(b.m);scene.remove(b.k);b.m.material.dispose();b.k.material.dispose()}F.bl.length=0;
  for(const q of F.rg){scene.remove(q.m);q.m.material.dispose()}F.rg.length=0;
  if(all&&F.lava){scene.remove(F.lava.m);F.lava.geo.dispose();F.lava.tex.dispose();F.lava.m.material.dispose();F.lava=null}}
 function lavaTick(dt){if(!F.lava)return;F.lava.tex.offset.set(performance.now()/1000*.012,performance.now()/1000*.008);
  const r=Math.hypot(P.x,P.z);F.lvT-=dt;if(!HP.dead&&r>26.5&&r<33.2&&P.y<A.fl+1.2&&F.lvT<=0){F.lvT=.4;hurt(4,'the lava ring');addFx(new THREE.Vector3(P.x,P.y+.4,P.z),0xff7a22,2,.4)}}
 /* ---------- boss variants ---------- */
 const BVN=['Shock Warlord','Warcaller','Earthbreaker','Meteor Caller'];
-function summonB(e){let n=0;for(const x of X.EN)if(x.arena&&!x.boss)n++;if(n>36)return;
- for(let k=0;k<2;k++){const a=Math.random()*6.283,x=e.x+Math.cos(a)*3,z=e.z+Math.sin(a)*3,m=X.mkEnemy(x,z,{hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM),dmg:3+Math.floor(Math.min(F.rd,12)/2),speed:1.5,tier:F.mode==='captain'?2:1,kind:pickR(['sword','axe','club','spear']),arena:1});m.speed=5.6*F.spdM;m.rk=pickR(['bow','gun']);addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6)}
+function summonB(e){let have=0;for(const x of X.EN)if(x.arena&&!x.boss)have++;const cap=F.mode==='captain'?64:F.mode==='buccaneer'?52:44;if(have>=cap)return;
+ const rdn=F.rd||1,n=Math.min(cap-have,2+Math.floor(rdn/3)+(F.mode==='captain'?3:F.mode==='buccaneer'?1:0)+(e.enr?2:0));
+ for(let k=0;k<n;k++){const a=Math.random()*6.283,x=e.x+Math.cos(a)*3,z=e.z+Math.sin(a)*3,m=X.mkEnemy(x,z,{hp:Math.round((30+Math.floor(Math.random()*21))*F.hpM),dmg:3+Math.floor(Math.min(F.rd,12)/2),speed:1.5,tier:F.mode==='captain'?2:1,kind:pickR(['sword','axe','club','spear']),arena:1});m.speed=5.6*F.spdM;m.rk=pickR(['bow','gun']);addFx(new THREE.Vector3(x,A.fl+1,z),0xff7a30,2.5,.6)}
  toast(e.name+' calls for reinforcements!')}
-function bossTick(e,dt,now){if(!e.bv||e.hp<=0)return;const en=e.hp<e.max*.4;
- if(en&&!e.enr){e.enr=1;e.speed*=1.25;addFx(new THREE.Vector3(e.x,A.fl+2,e.z),0xff3a20,6,.9);toast(e.name+' is enraged!');SX.bossRoar&&SX.bossRoar()}
- const cdm=(en?.65:1)*(F.mode==='captain'?.8:1);e.bT=e.bT||{};
+function bossTick(e,dt,now){if(e.hp<=0)return;
+ /* enraged like the dragons: below 50% HP faster attacks, below 25% faster still, and 1.5x damage */
+ const rt=e.hp<=e.max*.25?3:e.hp<e.max*.5?2:1;
+ if(rt>1&&!e.enr){e.enr=1;e.speed*=1.25;e.dmg=Math.round(e.dmg*1.5);addFx(new THREE.Vector3(e.x,A.fl+2,e.z),0xff3a20,6,.9);toast(e.name+' is enraged!');banner(e.name.toUpperCase()+' IS ENRAGED','#ff4a2a');SX.bossRoar&&SX.bossRoar()}
+ if(e.enr){e.enrFx=(e.enrFx||0)-dt;if(e.enrFx<=0){e.enrFx=.4;addFx(new THREE.Vector3(e.x,A.fl+4.2,e.z),0xff3a20,2.4,.5)}}
+ const em=e.enr?1.5:1,cdm=(1/rt)*(F.mode==='captain'?.8:1),nov=F.mode==='novice',rdn=F.rd||1;
+ /* reinforcements: more of them the later the round and the harder the trial, quicker when enraged */
+ if(e.rsT==null)e.rsT=now+8+Math.random()*4;
+ if(now>=e.rsT){e.rsT=now+Math.max(5,(F.mode==='captain'?9:F.mode==='buccaneer'?12:16)/(1+rdn/12))*(e.enr?.7:1);summonB(e);SX.bossRoar&&SX.bossRoar()}
+ /* trials 2 and 3: a meteor storm of 100 boulders across the whole field */
+ if(!nov){if(e.mtT==null)e.mtT=now+14+Math.random()*8;
+  if(now>=e.mtT&&!F.mq){e.mtT=now+24*cdm;F.mq={n:100,acc:0,em};banner('METEOR STORM','#ff6a2a');toast(e.name+' calls down a meteor storm!');SX.bossRoar&&SX.bossRoar()}}
+ if(!e.bv)return;e.bT=e.bT||{};
  for(const v of e.bv){if(e.bT[v]==null)e.bT[v]=now+3+Math.random()*3;if(now<e.bT[v])continue;
   if(v===0){e.bT[v]=now+7*cdm;if(X.arenaShock)X.arenaShock(e);SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,A.fl+.3,e.z),0xffaa55,6,.8)}
   else if(v===1){e.bT[v]=now+10*cdm;summonB(e);SX.bossRoar&&SX.bossRoar()}
-  else if(v===2){e.bT[v]=now+8*cdm;ring(e.x,e.z);SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,A.fl+.3,e.z),0xffaa55,7,.8)}
-  else{e.bT[v]=now+6*cdm;const n=F.mode==='captain'?4:3;for(let k=0;k<n;k++)boulder(P.x+(k?(Math.random()-.5)*14:0),P.z+(k?(Math.random()-.5)*14:0),{dmg:7,rad:3.2,delay:1.4,fire:1,s:1.5});SX.bossRoar&&SX.bossRoar()}}}
+  else if(v===2){e.bT[v]=now+8*cdm;ring(e.x,e.z,em);SX.bossSlam&&SX.bossSlam();addFx(new THREE.Vector3(e.x,A.fl+.3,e.z),0xffaa55,7,.8)}
+  else{e.bT[v]=now+6*cdm;const n=F.mode==='captain'?4:3;for(let k=0;k<n;k++)boulder(P.x+(k?(Math.random()-.5)*14:0),P.z+(k?(Math.random()-.5)*14:0),{dmg:Math.round(7*em),rad:3.2,delay:1.4,fire:1,s:1.5});SX.bossRoar&&SX.bossRoar()}}}
 /* ---------- per-frame trial logic ---------- */
 function extraTick(dt,now){
  F.qT-=dt;if(F.qT<=0&&F.q.length){F.qT=.25;drainQ(3)}
@@ -5704,7 +5720,8 @@ function extraTick(dt,now){
  let gc=0;for(const e of F.mobs){if(e.gc)gc++;if(e.giant){e.sumT-=dt;if(e.sumT<=0){e.sumT=5;if(F.mobs.length<90){const n=ri(1,3);for(let k=0;k<n;k++){const a=Math.random()*6.283;mkMob('spider',e.x+Math.cos(a)*2.6,e.z+Math.sin(a)*2.6,F.rd)}addFx(new THREE.Vector3(e.x,A.fl+1.5,e.z),0x9aff6a,3,.5)}}}}
  if(gc){F.shT-=dt;if(F.shT<=0){F.shT=2.2;try{X.shake(.4,.6)}catch(er){}}
   F.blT-=dt;if(F.blT<=0){F.blT=.75/Math.pow(gc,.6);const near=Math.random()<.55,a=Math.random()*6.283,r=near?Math.random()*9:Math.sqrt(Math.random())*26,cx=near?P.x:0,cz=near?P.z:0;boulder(cx+Math.cos(a)*r,cz+Math.sin(a)*r,{dmg:5,rad:2.6,delay:1.1})}}
- if(F.mode!=='novice')for(const e of X.EN)if(e.arena&&e.boss)bossTick(e,dt,now);
+ for(const e of X.EN)if(e.arena&&e.boss)bossTick(e,dt,now);
+ if(F.mq){const q=F.mq;q.acc+=dt*16;let k=0;while(q.acc>=1&&q.n>0&&k++<6){q.acc-=1;q.n--;const a=Math.random()*6.283,r=Math.sqrt(Math.random())*(F.rmax||31);boulder(Math.cos(a)*r,Math.sin(a)*r,{dmg:Math.round(5*q.em),rad:2.6,delay:1+Math.random()*.9,fire:1,s:1.2,storm:1})}if(q.n<=0)F.mq=null}
  if(F.ai)for(const e of X.EN){if(!e.arena)continue;if(e.rcd>now+1)e.rcd=now+1;if(e.bcd>now+2.4)e.bcd=now+2.4}}
 /* ---------- keep fighters on the sand and spectators in the stands ---------- */
 function sep(){if(CUR.key!==AK||!running||HP.dead||busy)return;const r=Math.hypot(P.x,P.z);
@@ -5740,7 +5757,7 @@ function trapTick(dt){F.trT-=dt;if(F.trT<=0){F.trT=F.trEvery||5;spawnTrap()}
 function clearShock(){for(const q of F.sw){scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()}F.sw.length=0}
 X.arenaShock=function(e){const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,sx=e.x+ux*2.5,sz=e.z+uz*2.5,
  m=new THREE.Mesh(new THREE.BoxGeometry(35,.45,1.4),new THREE.MeshBasicMaterial({color:0xffb060,transparent:true,opacity:.9,depthWrite:false}));
- m.position.set(sx,A.fl+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);F.sw.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:e.boss?3+Math.floor(Math.random()*6):Math.max(2,Math.round(e.dmg*1.2))})};
+ m.position.set(sx,A.fl+.3,sz);m.rotation.y=Math.atan2(ux,uz);scene.add(m);F.sw.push({m,x:sx,z:sz,ux,uz,t:0,hit:0,dmg:e.boss?Math.round((3+Math.floor(Math.random()*6))*(e.enr?1.5:1)):Math.max(2,Math.round(e.dmg*1.2))})};
 function swTick(dt){for(let i=F.sw.length-1;i>=0;i--){const q=F.sw[i];q.t+=dt;q.x+=q.ux*30*dt;q.z+=q.uz*30*dt;q.m.position.set(q.x,A.fl+.3,q.z);q.m.material.opacity=.9*Math.max(0,1-q.t/2.4);
   if(Math.random()<dt*120)addFx(new THREE.Vector3(q.x+(Math.random()-.5)*35*q.uz,A.fl+.6,q.z-(Math.random()-.5)*35*q.ux),0xb89a6a,2.4,.4);
   const rx=P.x-q.x,rz=P.z-q.z,al=rx*q.ux+rz*q.uz,lat=-rx*q.uz+rz*q.ux;
@@ -5827,7 +5844,7 @@ function tick(dt){
  if(F.st==='intro'){F.t-=dt;if(F.t<=0)startRound()}
  else if(F.st==='fight'){
   trapTick(dt);swTick(dt);extraTick(dt,now);
-  for(const e of X.EN){if(!e.arena)continue;e.fled=1;e.hx=P.x;e.hz=P.z;if(e.state==='guard'||e.state==='return'||e.state==='heal'||(e.state==='alert'&&e.t>1.2)){e.state=e.ranged?'range':'charge';e.t=0}}
+  for(const e of X.EN){if(!e.arena)continue;e.fled=1;e.hx=P.x;e.hz=P.z;if(e.state==='guard'||e.state==='return'||e.state==='heal'||e.state==='flee'||(e.state==='alert'&&e.t>.6)){e.state=e.ranged?'range':'charge';e.t=0}}
   for(const e of F.mobs.slice())aiMob(e,dt,now);
   if(!alive())roundClear()}
  else if(F.st==='clear'){F.t-=dt;if(F.t<=0){if(F.round>=F.total){victory();return}F.round++;F.st='intro';F.t=2.5;banner('ROUND '+F.round,'#ffe29a')}}
@@ -7187,11 +7204,15 @@ window.addEventListener('beforeunload',()=>{try{FB&&FB.eliveDel&&FB.eliveDel()}c
 /* ===== WILD HORSES, FALLEN APPLES, TAMING + RIDING =====
    - 1% of the animals that spawn on an island are wild horses instead
    - fallen apples lie under trees: pick them up (Q with the hand tool), eat (+1 HP) or cook at a campfire (+2 HP)
-   - H next to a wild horse feeds it an apple; after 5-10 apples it is yours (one horse per player, 10 HP, 1.5-4x speed)
+   - H next to a wild horse feeds it an apple; after 5-10 apples it is yours (one horse per player, 10 HP, random 1.1-3x speed)
    - H next to your horse mounts it, H again dismounts; you can open chests and shoot while riding
+   - horses have NO natural regen: K feeds your horse an apple (+1 HP), nothing else heals it
+   - ride onto your ship / open the sea chart / warp and the horse sails along; ride into caves and it follows you in
+   - mobs (barbarians, night mobs, cave guardians) automatically target your horse over you when it is in their range;
+     while you ride, every mob hit lands on the horse instead of you until it dies
    - your horse shows on the minimap and the world map and can be killed by enemies */
 (function(){'use strict';const X=window.PX;
-const WILD=[],APL=[];let MY=null,riding=false,lastLand=null,lastHurtMsg=0,hudEl=null;
+const WILD=[],APL=[];let MY=null,riding=false,lastLand=null,lastHurtMsg=0,hudEl=null,carry=false,carryT=0;
 const HCOL=[[0x8a5a2b,0x2a1a10],[0x3b2a1e,0x111111],[0xf0ece2,0xd8d2c4],[0xb5733a,0xe8d9a8],[0x1c1c1f,0x0a0a0a],[0xc9a46a,0xf1e4c0],[0x6b4a2f,0x3a2616]];
 const now=()=>performance.now()/1000;
 ITEMS.apple=ITEMS.apple||{n:'Fallen Apple',v:2};ITEMS.cooked_apple=ITEMS.cooked_apple||{n:'Cooked Apple',v:6};
@@ -7229,33 +7250,56 @@ function buildApples(info){APL.length=0;if(CAVE.on)return;const trees=[];
 function pickApple(a){if(a.t>0)return;a.t=now()+420+Math.random()*180;a.m.visible=false;S.items=S.items||{};S.items.apple=(S.items.apple||0)+1;SX.pickup&&SX.pickup();toast('+1 Fallen Apple');save();updateHeader(true)}
 /* ---------- your horse ---------- */
 function buildMine(){if(MY&&MY.g&&MY.g.parent)MY.g.parent.remove(MY.g);MY=null;const h=S.horse;if(!h||h.isl!==CUR.key||(CUR.info&&CUR.info.special))return;
- const g=mkHorse(h.col,h.man);g.position.set(h.x,terrH(h.x,h.z),h.z);g.rotation.y=h.a||0;WG.add(g);MY={g,x:h.x,z:h.z,a:h.a||0,hp:h.hp,m:h.m,ph:0,regT:0,hcd:0}}
+ const g=mkHorse(h.col,h.man);g.position.set(h.x,terrH(h.x,h.z),h.z);g.rotation.y=h.a||0;WG.add(g);h.m=Math.min(3,Math.max(1.1,Number(h.m)||1.1));MY={g,x:h.x,z:h.z,a:h.a||0,hp:h.hp,m:h.m,ph:0,inv:0,cave:false}}
 function tame(w){if(w.g.parent)w.g.parent.remove(w.g);const i=WILD.indexOf(w);if(i>=0)WILD.splice(i,1);
- const m=Math.round((1.5+Math.random()*2.5)*10)/10;S.horse={isl:CUR.key,x:w.x,z:w.z,a:w.g.rotation.y,hp:10,m,col:w.col,man:w.man};buildMine();
+ const m=Math.round((1.1+Math.random()*1.9)*10)/10;S.horse={isl:CUR.key,x:w.x,z:w.z,a:w.g.rotation.y,hp:10,m,col:w.col,man:w.man};buildMine();
  addFx(new THREE.Vector3(w.x,terrH(w.x,w.z)+2,w.z),0xff7a9a,4,.8);SX.shopBuy&&SX.shopBuy();toast('You tamed the horse! Speed ×'+m+'. Press H next to it to mount.');save(true);updateHeader(true)}
 function feed(w){S.items=S.items||{};if(S.horse){toast('You already have a horse.');return}
  if(!(S.items.apple>0)){toast('The wild horse wants fallen apples. Bring 5 to 10 of them.');return}
  S.items.apple--;w.fed++;w.calm=25;SX.pickup&&SX.pickup();SX.deerSnort&&SX.deerSnort();
  if(w.fed>=w.need)tame(w);else{toast('The horse munches the apple ('+w.fed+' fed). It still looks wary.');save();updateHeader(true)}}
-function mount(){if(!MY||swimMode||CAVE.on)return;riding=true;P.vx*=.3;P.vz*=.3;window.__horseMul=MY.m;window.__horseSit=.7;MY.g.position.set(P.x,P.y,P.z);SX.deerSnort&&SX.deerSnort();toast('Mounted · speed ×'+MY.m+' · H to dismount')}
+function mount(){if(!MY||swimMode)return;riding=true;P.vx*=.3;P.vz*=.3;window.__horseMul=MY.m;window.__horseSit=.7;MY.g.position.set(P.x,P.y,P.z);SX.deerSnort&&SX.deerSnort();toast('Mounted · speed ×'+MY.m+' · H to dismount')}
 function dismount(msg){if(!riding)return;riding=false;window.__horseMul=1;window.__horseSit=0;
- if(MY){const sd=P.face+Math.PI/2;let x=P.x+Math.sin(sd)*1.4,z=P.z+Math.cos(sd)*1.4;if(terrH(x,z)<WATER+.4){x=P.x;z=P.z}MY.x=x;MY.z=z;MY.a=P.face;MY.g.position.set(x,terrH(x,z),z)}
+ if(MY){const sd=P.face+Math.PI/2;let x=P.x+Math.sin(sd)*1.4,z=P.z+Math.cos(sd)*1.4;
+  if(CAVE.on){if(caveSolid(x,z)){x=P.x;z=P.z}MY.x=x;MY.z=z;MY.a=P.face;MY.g.position.set(x,caveFloor(x,z),z)}
+  else{if(terrH(x,z)<WATER+.4){x=P.x;z=P.z}MY.x=x;MY.z=z;MY.a=P.face;MY.g.position.set(x,terrH(x,z),z)}}
  if(msg)toast(msg)}
-function hitHorse(n){if(!MY||MY.hp<=0)return;MY.hp=Math.max(0,MY.hp-n);MY.regT=20;SX.animalHit&&SX.animalHit();addFx(new THREE.Vector3(MY.x,MY.g.position.y+1.4,MY.z),0xff4455,1.6,.3);if(S.horse)S.horse.hp=MY.hp;
+function hitHorse(n){if(!MY||MY.hp<=0)return;const t0=now();if(t0<(MY.inv||0))return;MY.inv=t0+.35;MY.hp=Math.max(0,MY.hp-n);SX.animalHit&&SX.animalHit();addFx(new THREE.Vector3(MY.x,MY.g.position.y+1.4,MY.z),0xff4455,1.6,.3);if(S.horse)S.horse.hp=MY.hp;
  if(MY.hp<=0){killHorse();return}const t=now();if(t-lastHurtMsg>6){lastHurtMsg=t;toast('Your horse is hurt! '+Math.ceil(MY.hp)+'/10 HP')}}
-function killHorse(){if(riding)dismount();const g=MY.g,x=MY.x,z=MY.z;MY=null;S.horse=null;if(X.deathFx)X.deathFx(g,x,z,1);else if(g.parent)g.parent.remove(g);toast('Your horse was killed.');save(true)}
-{const oh=window.hurt;window.hurt=function(n,src){const r=oh.apply(this,arguments);try{if(riding&&MY&&/barbarian|boss|zombie|skeleton|spider|warlord|champion|overlord|chief|arrow|bullet|bolt|crab|shark|dragon|ghost|pirate|warband|bandit|guard|slam|tower/i.test(String(src||'')))hitHorse(Number(n)>=8?2:1)}catch(e){}return r}}
-function horseKey(){if(CAVE.on)return;if(riding){dismount();return}
+function killHorse(){if(riding)dismount();const g=MY.g,x=MY.x,z=MY.z;MY=null;S.horse=null;if(X.deathFx)X.deathFx(g,x,z,1,CAVE.on?{gy:caveFloor(x,z),parent:CAVE.group}:undefined);else if(g.parent)g.parent.remove(g);toast('Your horse was killed.');save(true)}
+{const oh=window.hurt;window.hurt=function(n,src){try{if(riding&&MY&&MY.hp>0&&/barbarian|boss|zombie|skeleton|spider|warlord|champion|overlord|chief|arrow|bullet|bolt|crab|shark|dragon|ghost|pirate|warband|bandit|guard|slam|tower|boulder|thrown|dungeon|archer|gunner|mob/i.test(String(src||''))){hitHorse(Number(n)>=8?2:1);return}}catch(e){}return oh.apply(this,arguments)}}
+/* ---------- mob targeting: the horse draws aggro away from you ---------- */
+{const TH={x:0,y:0,z:0,horse:true},TPL={x:0,y:0,z:0,horse:false};
+ X.tgt=function(e,ag){TPL.x=P.x;TPL.y=P.y;TPL.z=P.z;
+  if(MY&&MY.hp>0&&(CAVE.on?MY.cave:(MY.g.visible&&!(CUR.info&&CUR.info.special)))){
+   const hx=riding?P.x:MY.x,hz=riding?P.z:MY.z;
+   if(Math.hypot(e.x-hx,e.z-hz)<(ag||20)){TH.x=hx;TH.z=hz;TH.y=riding?P.y:(CAVE.on?caveFloor(hx,hz):topAt(hx,hz));return TH}}
+  return TPL};
+ X.hit=function(T,n,src){if(T&&T.horse){hitHorse(Number(n)>=8?2:1);return}return hurt(n,src)};
+ /* projectiles that reach a standing (not ridden) horse */
+ X.horseHitP=function(pos,dmg){if(!MY||MY.hp<=0||riding||(CAVE.on&&!MY.cave)||!MY.g.visible)return false;
+  if(Math.hypot(pos.x-MY.x,pos.z-MY.z)<1.1&&pos.y>MY.g.position.y&&pos.y<MY.g.position.y+2.3){hitHorse(Number(dmg)>=8?2:1);return true}return false}}
+/* ---------- K: feed your horse an apple, +1 HP (the only way it heals) ---------- */
+function healHorse(){if(!MY||MY.hp<=0)return;if(CAVE.on&&!MY.cave)return;
+ if(!riding&&(!MY.g.visible||dist(MY)>4.5)){toast('Get next to your horse to feed it.');return}
+ S.items=S.items||{};if(MY.hp>=10){toast('Your horse is already at full health.');return}
+ if(!(S.items.apple>0)){toast('You need a fallen apple to heal your horse.');return}
+ S.items.apple--;MY.hp=Math.min(10,MY.hp+1);if(S.horse)S.horse.hp=MY.hp;SX.pickup&&SX.pickup();SX.deerSnort&&SX.deerSnort();
+ addFx(new THREE.Vector3(MY.x,MY.g.position.y+1.6,MY.z),0x66ff88,1.6,.4);toast('Your horse munches the apple · '+Math.ceil(MY.hp)+'/10 HP');save();updateHeader(true)}
+function horseKey(){if(riding){dismount();return}
+ if(CAVE.on){if(MY&&MY.cave&&dist(MY)<4.5)mount();else if(MY)toast('Your horse is waiting outside. Ride it into a cave to bring it along.');return}
  if(MY&&MY.g.visible&&dist(MY)<4.5){mount();return}
  const w=nearWild(4.5);if(w){feed(w);return}
  if(MY)toast('Your horse is far away. Look for the H marker on the map.')}
-document.addEventListener('keydown',e=>{if(e.code!=='KeyH'||e.repeat||(e.target&&e.target.tagName==='INPUT'))return;if(!running||invOpen||busy||SEA.open)return;horseKey()});
+document.addEventListener('keydown',e=>{if((e.code!=='KeyH'&&e.code!=='KeyK')||e.repeat||(e.target&&e.target.tagName==='INPUT'))return;if(!running||invOpen||busy||SEA.open)return;if(e.code==='KeyK')healHorse();else horseKey()});
 /* ---------- interaction prompts ---------- */
-{const oft=window.findTarget;window.findTarget=function(){const r=oft.apply(this,arguments);if(r||CAVE.on)return r;
+{const oft=window.findTarget;window.findTarget=function(){const r=oft.apply(this,arguments);if(r)return r;
+ const kh=MY&&MY.hp<10&&((S.items&&S.items.apple)|0)>0?' · K: apple +1 HP':'';
+ if(CAVE.on){if(riding&&MY)return{key:'H',text:'Dismount'+kh};if(MY&&MY.cave&&dist(MY)<4.5)return{key:'H',text:'Mount your horse (×'+MY.m+' speed)'+kh};return r}
  let best=null,bd=2.6*2.6;for(const a of APL){if(a.t>0)continue;const dx=a.x-P.x,dz=a.z-P.z,d=dx*dx+dz*dz;if(d<bd){bd=d;best=a}}
  if(best){if(tool===1)return{key:'Q',text:'Pick up fallen apple',act:()=>pickApple(best)};return{key:'1',text:'Switch to hand to pick up apples'}}
- if(riding&&MY)return{key:'H',text:'Dismount'};
- if(MY&&MY.g.visible&&dist(MY)<4.5)return{key:'H',text:'Mount your horse (×'+MY.m+' speed)'};
+ if(riding&&MY)return{key:'H',text:'Dismount'+kh};
+ if(MY&&MY.g.visible&&dist(MY)<4.5)return{key:'H',text:'Mount your horse (×'+MY.m+' speed)'+kh};
  const w=nearWild(4.5);if(w){if(S.horse)return{key:'H',lock:1,text:'Wild horse (you already have a horse)'};
   return((S.items&&S.items.apple)|0)>0?{key:'H',text:'Feed an apple to the wild horse ('+w.fed+' fed)'}:{key:'H',lock:1,text:'Wild horse · bring 5-10 fallen apples to tame it'}}
  return r}}
@@ -7276,14 +7320,30 @@ document.getElementById('invBody').addEventListener('click',e=>{const t=e.target
  else if(t.dataset.aeatc){if(!(S.items.cooked_apple>0)||HP.dead)return;S.items.cooked_apple--;HP.v=Math.min(maxHP(),HP.v+2);toast('Warm and sweet! +2 HP');save();updateHeader(true);renderInv()}});
 /* ---------- island load + per-frame ---------- */
 {const lo=window.loadIsland;window.loadIsland=function(info){
+ const wasRiding=!!(riding&&MY&&S.horse&&MY.hp>0),toSpecial=!!(info&&info.special);
+ try{if(wasRiding&&toSpecial&&lastLand){S.horse.x=lastLand.x;S.horse.z=lastLand.z}}catch(e){}
  try{riding=false;window.__horseMul=1;window.__horseSit=0;for(const w of WILD)if(w.g.parent)w.g.parent.remove(w.g);WILD.length=0;APL.length=0;if(MY&&MY.g.parent)MY.g.parent.remove(MY.g);MY=null;lastLand=null}catch(e){}
+ carry=wasRiding&&!toSpecial;carryT=0;
  const r=lo.apply(this,arguments);
  try{if(!info.special){wildFromFauna(info);buildApples(info)}buildMine()}catch(e){console.error('[horse]',e)}
  return r}}
+{const ec=window.enterCave;window.enterCave=function(){const was=!!(riding&&MY);const r=ec.apply(this,arguments);
+ try{if(CAVE.on&&was&&MY){MY.cave=true;scene.add(MY.g);MY.x=P.x;MY.z=P.z;const m=CAVE.mouths&&CAVE.mouths[CAVE.idx];if(S.horse&&m){S.horse.x=m.ox;S.horse.z=m.oz}toast('Your horse follows you into the cave.')}}catch(e){console.error('[horse]',e)}return r}}
+{const xc=window.exitCave;window.exitCave=function(){const r=xc.apply(this,arguments);
+ try{if(MY&&MY.cave){MY.cave=false;WG.add(MY.g);let x=P.x,z=P.z;if(!riding){const a=P.face+Math.PI/2;x+=Math.sin(a)*1.6;z+=Math.cos(a)*1.6;if(terrH(x,z)<WATER+.4){x=P.x;z=P.z}}MY.x=x;MY.z=z;MY.g.position.set(x,terrH(x,z),z);if(S.horse){S.horse.x=x;S.horse.z=z}}}catch(e){console.error('[horse]',e)}return r}}
 function hudTick(){if(!hudEl){hudEl=document.createElement('div');hudEl.id='horseHud';document.body.appendChild(hudEl)}
- if(riding&&MY){hudEl.style.display='block';const h='Horse · ♥ '+Math.ceil(MY.hp)+' / 10 · speed ×'+MY.m+' · H to dismount';if(hudEl.dataset.h!==h){hudEl.dataset.h=h;hudEl.textContent=h}}else hudEl.style.display='none'}
+ if(riding&&MY){hudEl.style.display='block';const h='Horse · ♥ '+Math.ceil(MY.hp)+' / 10 · speed ×'+MY.m+' · H dismount · K apple +1 HP';if(hudEl.dataset.h!==h){hudEl.dataset.h=h;hudEl.textContent=h}}else hudEl.style.display='none'}
 function tick(dt){const t=now();
- if(CAVE.on||(CUR.info&&CUR.info.special)){if(riding)dismount();if(MY)MY.g.visible=false;for(const w of WILD)w.g.visible=false;hudTick();return}
+ if(CUR.info&&CUR.info.special){if(riding)dismount();if(MY)MY.g.visible=false;for(const w of WILD)w.g.visible=false;hudTick();return}
+ if(CAVE.on){for(const w of WILD)w.g.visible=false;
+  if(MY&&MY.cave){MY.g.visible=true;if(HP.dead&&riding)dismount();
+   if(riding){MY.x=P.x;MY.z=P.z;MY.a=P.face;MY.g.position.set(P.x,P.y,P.z);turn(MY.g,P.face,dt,12);gait(MY,Math.hypot(P.vx,P.vz),dt)}
+   else{gait(MY,0,dt);MY.g.userData.head.rotation.x=.55+Math.sin(t*1.3)*.06;MY.g.position.set(MY.x,caveFloor(MY.x,MY.z),MY.z)}}
+  else if(MY)MY.g.visible=false;
+  hudTick();return}
+ /* the horse that was ridden onto the ship / through a warp arrives with you */
+ if(carry&&!busy&&S.horse){carryT+=dt;
+  if(swimMode>0&&carryT<5){}else{carry=false;S.horse.isl=CUR.key;const sw=swimMode>0&&typeof spawn!=='undefined'?spawn:P;S.horse.x=sw.x;S.horse.z=sw.z;S.horse.a=P.face||0;buildMine();if(MY){if(swimMode>0){MY.g.position.set(MY.x,terrH(MY.x,MY.z),MY.z)}else{MY.x=P.x;MY.z=P.z;mount();toast('Your horse sails with you.')}}save(true)}}
  if(MY)MY.g.visible=true;for(const w of WILD)w.g.visible=true;
  for(const a of APL)if(a.t>0&&t>a.t){a.t=0;a.m.visible=true}
  /* wild horses */
@@ -7300,13 +7360,18 @@ function tick(dt){const t=now();
    else if(swimMode>0){const lx=lastLand?lastLand.x:P.x,lz=lastLand?lastLand.z:P.z;dismount("Horses can't swim. You slide off.");MY.x=lx;MY.z=lz;MY.g.position.set(lx,terrH(lx,lz),lz)}
    else{if(terrH(P.x,P.z)>WATER+.3)lastLand={x:P.x,z:P.z};MY.x=P.x;MY.z=P.z;MY.a=P.face;MY.g.position.set(P.x,P.y,P.z);turn(MY.g,P.face,dt,12);gait(MY,Math.hypot(P.vx,P.vz),dt)}}
   if(MY&&!riding){gait(MY,0,dt);MY.g.userData.head.rotation.x=.55+Math.sin(t*1.3)*.06;
-   MY.hcd-=dt;if(MY.hcd<=0){let dmg=0;const chk=e=>{if(!e||e.hp<=0||e.arena||e.dead)return;if(Math.hypot(e.x-MY.x,e.z-MY.z)<(e.boss?3.4:2.4))dmg+=e.boss?2:1};
-    for(const e of(X.EN||[]))chk(e);for(const e of(X.NM||[]))chk(e);if(dmg){hitHorse(Math.min(3,dmg));if(MY)MY.hcd=1.2}}}
-  if(MY){if(MY.hp<10){MY.regT-=dt;if(MY.regT<=0){MY.hp=Math.min(10,MY.hp+1);MY.regT=30}}
+   }
+  if(MY){if(!riding&&X.EP&&X.EP.length){for(const p of X.EP){if(p.life>0&&X.horseHitP(p.m.position,p.dmg))p.life=0}}
    if(S.horse){S.horse.x=MY.x;S.horse.z=MY.z;S.horse.a=MY.a;S.horse.isl=CUR.key;S.horse.hp=MY.hp}}}
  hudTick()}
 {const pu=window.update;window.update=function(dt){if(!riding){window.__horseMul=1;window.__horseSit=0}pu(dt);try{tick(dt)}catch(e){if(!X._hz){X._hz=1;console.error('[horse]',e)}}}}
 })();
+</script>
+
+<script>
+/* ===== DAMAGE COOLDOWN: after you take a hit from an enemy or a disaster, nothing can hurt you again for 500 ms ===== */
+(function(){'use strict';let until=0;const hh=window.hurt;
+window.hurt=function(){const t=performance.now();if(t<until)return;const v=HP.v,r=hh.apply(this,arguments);if(HP.v<v)until=t+500;return r}})();
 </script>
 
 <script>
