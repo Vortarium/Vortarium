@@ -968,7 +968,7 @@ function cosURL(it){const key='c_'+it.id;if(iconCache[key])return iconCache[key]
 Object.assign(IC,{
 hand:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V5.5a1.5 1.5 0 0 1 3 0V13M17 13v-2.5a1.5 1.5 0 0 1 3 0V15c0 4-3 7-7 7h-1c-3 0-4.5-1.5-6-4l-2.5-4a1.5 1.5 0 0 1 2.5-1.6L8 15"/></svg>',
 pistol:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M2.5 8h15.5l2 1.5V12H12l-1 2h-1.2l-.6 5H5.5l1-6.5L2.5 11z"/><path d="M13 12v2.2"/></svg>',
-shovel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M20 4 11.5 12.5"/><path d="M17.5 1.8l4.7 4.7"/><path d="M11.5 12.5 14 15c.8 3-1 5.5-4 5.5s-5.5-1.5-5.5-4S8 12.5 11.5 12.5z"/></svg>'});
+shovel:'<svg viewBox="0 0 48 48" width="1em" height="1em"><g transform="rotate(40 24 24)"><rect x="21.8" y="9" width="4.4" height="27" rx="2.2" fill="#a8743c" stroke="#4a2f14" stroke-width="1.8"/><path d="M23.2 12V33" stroke="#d6ad6c" stroke-width="1.2" stroke-linecap="round" opacity=".85"/><path d="M17.5 11V7.8Q17.5 4.5 20.8 4.5H27.2Q30.5 4.5 30.5 7.8V11" fill="none" stroke="#4a2f14" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.5 11V7.8Q17.5 4.5 20.8 4.5H27.2Q30.5 4.5 30.5 7.8V11" fill="none" stroke="#a8743c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.4 34H27.6L28.6 39H19.4Z" fill="#8a96a3" stroke="#37465a" stroke-width="1.6" stroke-linejoin="round"/><path d="M19.4 38.6H28.6Q33.4 40.6 32 44.6Q29 47.4 24 47.4Q19 47.4 16 44.6Q14.6 40.6 19.4 38.6Z" fill="#cdd7e0" stroke="#37465a" stroke-width="2" stroke-linejoin="round"/><path d="M24 39.5V45.5" stroke="#8a96a3" stroke-width="1.5" stroke-linecap="round"/><path d="M19.8 41.2Q18.6 43.6 20.6 45.4" stroke="#fff" stroke-opacity=".85" stroke-width="1.8" stroke-linecap="round" fill="none"/></g></svg>'});
 /* ============================ AVATAR (articulated, smooth-shaded) ============================ */
 const geoC={},matC={};
 function geo(k,f){return geoC[k]||(geoC[k]=f())}
@@ -1612,13 +1612,13 @@ function genCave(isl,idx){const N=CAVE.N,r=mulberry(hash2(isl.seed,idx,777)||5);
   cand++;if(r()<.3)chs.push([x,y,10+Math.floor(r()*41)])}
  const pr=rooms[rooms.length-1];let pc=[pr[0],pr[1]];if(g[pc[1]*N+pc[0]]){pc=[ex,ey]}return{g,ex,ey,chs,rooms,arches:arches.filter(a=>!g[a[1]*N+a[0]]),portal:pc}}
 function placeCaves(info){
- const rnd=mulberry(info.seed^0x5ca1e);CAVE.mouths=[];CAVE.cdata=[];let n=0,tries=0;const want=Math.max(2,(2+(rnd()<.45?1:0))*Math.ceil(DF/1.5));
+ const rnd=mulberry(info.seed^0x5ca1e);CAVE.mouths=[];CAVE.cdata=[];let n=0,tries=0;const want=Math.max(2,(2+(rnd()<.45?1:0))*Math.ceil(DF/1.5));const fxr=CUR&&CUR.rec?(CUR.rec.fx=CUR.rec.fx||{}):null,sv=fxr&&Array.isArray(fxr.c)&&fxr.c.length?fxr.c.filter(q=>q&&isFinite(q.x)&&isFinite(q.z)):null;if(fxr&&!sv)fxr.c=[];
  // Cave entrances used to require a fairly narrow hillside-slope range. Most
  // generated islands do not have enough terrain in that range, so the loop
  // could finish with zero caves. Accept level-to-moderate ground as well.
- while(n<want&&tries<60000*DF){tries++;const x=(rnd()*2-1)*(HALF-60),z=(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(h<WATER+.5||h>60)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>12)continue;if(!clearOf(x,z,3))continue;
-  if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<75))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue;
-  const gx=terrH(x+2,z)-terrH(x-2,z),gz=terrH(x,z+2)-terrH(x,z-2),face=Math.atan2(-gx,-gz);// faces downhill
+ while(sv?n<sv.length:(n<want&&tries<60000*DF)){tries++;const sq=sv?sv[n]:null,x=sq?sq.x:(rnd()*2-1)*(HALF-60),z=sq?sq.z:(rnd()*2-1)*(HALF-60),h=terrH(x,z);if(!sq){if(h<WATER+.5||h>60)continue;const sl=Math.abs(terrH(x+2,z)-h)+Math.abs(terrH(x,z+2)-h);if(sl>12)continue;if(!clearOf(x,z,3))continue;
+  if(CAVE.mouths.some(m=>Math.hypot(m.x-x,m.z-z)<75))continue;if(Math.hypot(x-spawn.x,z-spawn.z)<50)continue}
+  const gx=terrH(x+2,z)-terrH(x-2,z),gz=terrH(x,z+2)-terrH(x,z-2),face=(sq&&isFinite(sq.f))?sq.f:Math.atan2(-gx,-gz);// faces downhill
   const g=new THREE.Group();g.position.set(x,h,z);g.rotation.y=face;WG.add(g);
   const rm=new THREE.MeshLambertMaterial({color:0x6a6a70,flatShading:true}),blk=new THREE.MeshBasicMaterial({color:0x020204});
   const pil=(px,s)=>{const m=new THREE.Mesh(new THREE.DodecahedronGeometry(1,0),rm);m.scale.set(1.1,2.3,1.1);m.position.set(px,1.9,0);m.rotation.set(.1,px,.1);m.castShadow=true;g.add(m);DISP.push(m.geometry);const q=new THREE.Mesh(m.geometry,rm);q.scale.set(.9,1.4,.9);q.position.set(px*1.15,.4,.6);g.add(q)};
@@ -1627,7 +1627,7 @@ function placeCaves(info){
   const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkT,color:0x8a6aff,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:.5}));gl.scale.set(4,4,1);gl.position.set(0,2.2,.3);g.add(gl);
   const px1=x+Math.sin(face)*(-1.9)*1+Math.cos(face)*1.9,pz1=z+Math.cos(face)*(-1.9)*1-Math.sin(face)*1.9;
   addC(x+Math.cos(face)*1.9,z-Math.sin(face)*1.9,1.1,5,'w','rock');addC(x-Math.cos(face)*1.9,z+Math.sin(face)*1.9,1.1,5,'w','rock');
-  const cd=genCave(info,n);CAVE.cdata.push(cd);CAVE.mouths.push({x,z,y:h,face,idx:n,ox:x+Math.sin(face)*3.5,oz:z+Math.cos(face)*3.5});n++}
+  const cd=genCave(info,n);CAVE.cdata.push(cd);CAVE.mouths.push({x,z,y:h,face,idx:n,ox:x+Math.sin(face)*3.5,oz:z+Math.cos(face)*3.5});if(fxr&&!sq){fxr.c.push({x,z,f:face});(window.PX=window.PX||{})._bsDirty=1}n++}
  return CAVE.cdata.reduce((a,c)=>a+c.chs.length,0)}
 function enterCave(idx){
  // Validate the generated layout before changing the surface-world state.
@@ -1749,7 +1749,7 @@ function placeBoat(info){
   for(let r=HALF+6;r>(info.special?24:100);r-=1.5){const x=ca*r,z=sa*r;if(Math.abs(x)>HALF-10||Math.abs(z)>HALF-10)continue;if(bH(x,z)>.45){rl=r;break}}if(rl<0)continue;
   const rc=rl+14,tx=-sa,tz=ca;let ok=0,sc=0;for(const lat of[-13,-6,0,6,13]){const x=ca*rc+tx*lat,z=sa*rc+tz*lat;if(Math.abs(x)>HALF-8||Math.abs(z)>HALF-8){ok-=99;break}const h=bH(x,z);sc+=h;if(h>WATER-1.9)ok--}
   const score=ok*100-sc;if(!best||score>best.score)best={a,rl,rc,score};if(ok===0)break}
- if(!best)best={a:a0,rl:HALF*.7,rc:HALF*.7+14,score:0};const a=best.a,ca=Math.cos(a),sa=Math.sin(a),A=a+Math.PI/2,deckY=WATER+2.3,rc=best.rc,rl=best.rl;
+ if(!best)best={a:a0,rl:HALF*.7,rc:HALF*.7+14,score:0};{const fx=CUR&&CUR.rec?(CUR.rec.fx=CUR.rec.fx||{}):null;if(fx){if(fx.b&&isFinite(fx.b.a)&&isFinite(fx.b.rc)&&isFinite(fx.b.rl))best=fx.b;else{fx.b={a:best.a,rl:best.rl,rc:best.rc};(window.PX=window.PX||{})._bsDirty=1}}}const a=best.a,ca=Math.cos(a),sa=Math.sin(a),A=a+Math.PI/2,deckY=WATER+2.3,rc=best.rc,rl=best.rl;
  BOAT={x:ca*rc,z:sa*rc,A,ca:Math.cos(A),sa:Math.sin(A),deckY};
  const ship=buildShip();ship.position.set(BOAT.x,deckY,BOAT.z);ship.rotation.y=-A;WG.add(ship);BOAT.group=ship;
  const so=(lx,lz,hx,hz,y0,y1)=>{const p=shipW(lx,lz);return addOB(p[0],p[1],A,hx,hz,deckY+y0,deckY+y1,'wood')};
@@ -1767,7 +1767,7 @@ function placeBoat(info){
  [-1.7,1.7].forEach(s=>{const r=new THREE.Mesh(new THREE.BoxGeometry(len,.06,.06),new THREE.MeshStandardMaterial({color:0x8a7550}));r.position.set(cx-sa*s*-1*1,(lowY+deckY)/2+.95,cz+ca*s*0);r.rotation.copy(pl.rotation);r.position.set(cx+(-sa)*s,(lowY+deckY)/2+.95,cz+ca*s);WG.add(r)});
  const wp=shipW(-10.4,0);BOAT.wheel={x:wp[0],z:wp[1],y:deckY+1.5};const sp=shipW(-4.6,.8);BOAT.spawn={x:sp[0],z:sp[1],y:deckY+.15};
  BOAT.dockX=ca*(lowR-3);BOAT.dockZ=sa*(lowR-3)}
-function updateBoat(t){if(!BOAT||!BOAT.group)return;const g=BOAT.group;g.position.y=BOAT.deckY+Math.sin(t*.9)*.03;const f=g.userData.flag;if(f){const p=f.geometry.attributes.position,b=g.userData.flagBase;for(let i=0;i<p.count;i++){const x=b[i*3]+1.6;p.setZ(i,Math.sin(x*2.2-t*5)*.28*(x/3.2))}p.needsUpdate=true}
+function updateBoat(t){if(!BOAT||!BOAT.group)return;const g=BOAT.group;g.position.y=BOAT.deckY;const f=g.userData.flag;if(f){const p=f.geometry.attributes.position,b=g.userData.flagBase;for(let i=0;i<p.count;i++){const x=b[i*3]+1.6;p.setZ(i,Math.sin(x*2.2-t*5)*.28*(x/3.2))}p.needsUpdate=true}
  const w=g.userData.wheel;if(w)w.rotation.x=Math.sin(t*.4)*.15}
 /* ============================ PRECIPITATION + WILDLIFE ============================ */
 const PU={uC:{value:new THREE.Vector3()},uT:{value:0},rI:{value:0},sI:{value:0},uLen:{value:.9},uWind:{value:new THREE.Vector2(2,1)},uGround:{value:-999},uSize:{value:.3},uCol:{value:new THREE.Color(.7,.78,.9)}};
@@ -2411,7 +2411,7 @@ document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{invTab=b.dat
 
 /* ============================ HOTBAR / WAYPOINTS ============================ */
 IC.multitool='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4.5 20 16.5 8"/><path d="M11 4.5c5 0 8.500 3.500 8.500 8.500"/><path d="M13 7l4 4"/></svg>';
-IC.rod='<svg viewBox="0 0 48 48" width="1em" height="1em"><path d="M6 43 36 9" stroke="#4a2f14" stroke-width="5.2" stroke-linecap="round"/><path d="M6 43 36 9" stroke="#a8743c" stroke-width="3" stroke-linecap="round"/><path d="M6 43 14 34" stroke="#4a2f14" stroke-width="7" stroke-linecap="round"/><path d="M6 43 14 34" stroke="#d6ad6c" stroke-width="4.800" stroke-linecap="round"/><path d="M9.500 39 11.500 41M11.500 36.800 13.500 38.800" stroke="#9a7440" stroke-width="1.200" stroke-linecap="round"/><circle cx="17.500" cy="31.500" r="4.600" fill="#b7c3ce" stroke="#37465a" stroke-width="2"/><circle cx="17.500" cy="31.500" r="1.500" fill="#37465a"/><path d="M36 9Q45 11 40 21.500" stroke="#eaf2f7" stroke-width="1.500" stroke-linecap="round" fill="none"/><path d="M35.500 26a4.500 4.500 0 0 1 9 0z" fill="#e5483d" stroke="#6b1d18" stroke-width="1.500"/><path d="M35.500 26a4.500 4.500 0 0 0 9 0z" fill="#f4f1ea" stroke="#6b1d18" stroke-width="1.500"/><path d="M40 30.500V38Q40 42.500 36.500 42" stroke="#cdd7e0" stroke-width="1.800" stroke-linecap="round" fill="none"/></svg>';
+IC.rod='<svg viewBox="0 0 48 48" width="1em" height="1em"><path d="M6.5 42.5 29.5 14.5Q35.5 7.5 41 8.2" stroke="#3f2a12" stroke-width="4.6" stroke-linecap="round" fill="none"/><path d="M6.5 42.5 29.5 14.5Q35.5 7.5 41 8.2" stroke="#c28a4a" stroke-width="2.6" stroke-linecap="round" fill="none"/><path d="M12 36 30 14.2Q35 8.8 39.5 9" stroke="#f0cf94" stroke-width="0.9" stroke-linecap="round" fill="none" opacity=".85"/><path d="M6.5 42.5 15.4 31.6" stroke="#4a2f14" stroke-width="7.6" stroke-linecap="round"/><path d="M6.5 42.5 15.4 31.6" stroke="#dcb579" stroke-width="5.2" stroke-linecap="round"/><path d="M9.2 39.6 11.4 41.2M11.2 37.2 13.4 38.8M13.2 34.8 15.4 36.4" stroke="#8a6232" stroke-width="1.2" stroke-linecap="round"/><path d="M17.2 30 20.2 32.5" stroke="#22262d" stroke-width="3.4" stroke-linecap="round"/><circle cx="22.6" cy="35.4" r="5.2" fill="#aeb9c4" stroke="#2b3442" stroke-width="2"/><circle cx="22.6" cy="35.4" r="3.1" fill="#dfe6ec" stroke="#56667a" stroke-width="1"/><circle cx="22.6" cy="35.4" r="1.2" fill="#2b3442"/><path d="M27.6 35.4H30.6" stroke="#2b3442" stroke-width="1.8" stroke-linecap="round"/><circle cx="31.4" cy="35.4" r="1.7" fill="#d9483b" stroke="#6b1d18" stroke-width="1"/><circle cx="24.6" cy="23.7" r="1.7" fill="none" stroke="#dfe6ec" stroke-width="1.3"/><circle cx="29.2" cy="18.1" r="1.4" fill="none" stroke="#dfe6ec" stroke-width="1.2"/><circle cx="34.8" cy="11.6" r="1.2" fill="none" stroke="#dfe6ec" stroke-width="1.1"/><circle cx="41.5" cy="8.4" r="1.6" fill="none" stroke="#dfe6ec" stroke-width="1.3"/><path d="M42.8 9.2Q46.4 17 40.4 25.6" stroke="#eef4f8" stroke-width="1.3" stroke-linecap="round" fill="none"/><path d="M35.6 31a4.8 4.8 0 0 1 9.6 0z" fill="#e5483d" stroke="#6b1d18" stroke-width="1.5"/><path d="M35.6 31a4.8 4.8 0 0 0 9.6 0z" fill="#f4f1ea" stroke="#6b1d18" stroke-width="1.5"/><path d="M40.4 25.8V26.6" stroke="#6b1d18" stroke-width="1.4" stroke-linecap="round"/><path d="M40.4 35.8V41Q40.4 45.4 36.6 44.4" stroke="#cdd7e0" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>';
 function buildHotbar(){const bar=$('wpbar');bar.innerHTML='';
  [[1,'hand'],[2,'pistol'],[3,'shovel'],[4,'multitool'],[5,'rod']].forEach(a=>{const e=document.createElement('div');e.className='wp tool';e.id='slot'+a[0];e.innerHTML='<i class="num">'+a[0]+'</i>'+IC[a[1]];bar.appendChild(e)});
  const sep=document.createElement('div');sep.className='sep';bar.appendChild(sep);
@@ -2528,7 +2528,7 @@ function update(dt){
  const cave=CAVE.on,gT=cave?0:terrH(P.x,P.z),depth=cave?0:WATER-gT;
  swimMode=0;if(!cave&&P.y<WATER+.6){if(onRaft())swimMode=0;else if(depth>1.35)swimMode=(shift&&len>0)?2:1;else if(shift&&len>0&&depth>.7&&P.y<WATER+.3)swimMode=2}
  const sprint=act&&shift&&len>0&&!swimMode;
- let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1)*(window.__horseMul||1)*armSpd()*(window.__wSlow||1)*(CUR&&CUR.key===HOME&&!CAVE.on?.5:1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
+ let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1)*(window.__horseMul||1)*armSpd()*(window.__wSlow||1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
  if(act){const tx=(-sinY*ky+cosY*kx)*sp,tz=(-cosY*ky-sinY*kx)*sp,a=Math.min(1,(P.grounded||swimMode?12:3)*dt);P.vx+=(tx-P.vx)*a;P.vz+=(tz-P.vz)*a;
   if(keys.Space&&P.grounded&&!swimMode){P.vy=9.2;P.grounded=false;SX.jump(surfaceNow())}}
  else{P.vx*=.8;P.vz*=.8}
@@ -2657,6 +2657,7 @@ const all=[];sea.forEach(n=>pre.forEach(p=>all.push([p+' '+n,'sea'])));fre.forEa
 all.sort((a,b)=>hashStr(a[0])-hashStr(b[0]));all.forEach(a=>add(a[0],a[1]));
 FISH.forEach((f,k)=>{f.v=Math.round(4*Math.pow(1.03,k)*(1+k/10));f.o=1+Math.round(Math.pow(k,1.6)/3)});})();
 X.FISH=FISH;
+window.fishHeal=function(id){const f=FISH_BY[id];if(!f)return 0;const n=FISH.length;return Math.max(8,Math.min(80,8+Math.round(72*f.i/Math.max(1,n-1))))};
 function pickFish(w){const p=FISH.filter(f=>f.w===w||Math.random()<.15);let t=0;for(const f of p)t+=1/f.o;let r=Math.random()*t;for(const f of p){r-=1/f.o;if(r<=0)return f}return p[0]}
 /* ---------- fishing state machine ---------- */
 const fs={st:'idle',t:0,wait:0,bob:null,w:'sea'};
@@ -2692,7 +2693,7 @@ window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||tool!==5||!running||!l
 
 /* ---------- cooking / eating ---------- */
 function cook(id){if(!(S.fish[id]>0))return;if(!(X.nearFire&&X.nearFire())){toast('Stand near a lit campfire to cook');return}S.fish[id]--;S.cooked[id]=(S.cooked[id]||0)+1;toast('Cooked '+FISH_BY[id].name);save()}
-function eat(id){if(!(S.cooked[id]>0))return;S.cooked[id]--;HP.v=Math.min(maxHP(),HP.v+3+FISH_BY[id].i/20);toast('Yum!');save()}
+function eat(id){if(!(S.cooked[id]>0))return;S.cooked[id]--;const hl=fishHeal(id);HP.v=Math.min(maxHP(),HP.v+hl);toast('Yum! +'+hl+' HP');save()}
 /* ---------- journal tracking ---------- */
 let snap={};
 const TH=[1,3,5,10,25,50,100,250,500,1000];
@@ -2746,7 +2747,7 @@ X.wCanvas=wCanvas;
 const wsg=n=>n>0?'+'+n:''+n;
 function wCell(w,n){return '<div class="cell cos wep r'+w.tier+(S.curW===w.id?' eq':'')+'" data-wsel="'+w.id+'"><div class="ico"><img alt="" src="'+wURL(w)+'"></div><b>'+esc(w.name)+'</b><div class="rn" style="color:'+RAR[w.tier].c+'">'+WT[w.tier].n+(n>1?' ×'+n:'')+'</div><div class="wst">Damage '+w.dmg+' · '+(1/w.cd).toFixed(1)+'/s</div></div>'}
 X.wCells=()=>{applyW();const own=WEAPONS.filter(w=>(S.wpn[w.id]||0)>0),cur=S.curW&&W_BY[S.curW],T=armTotals(),cd=Math.min(1,Math.max(.05,(cur?cur.cd:.24)/armFr()));
- let h='<div class="secH">Weapons</div><div class="sum"><span>Equipped<b>'+(cur?esc(cur.name):'Hand')+'</b></span><span>Damage<b>'+PISTOL_DMG+'</b></span><span>Fire rate<b>'+(1/cd).toFixed(1)+'/s</b></span></div><p class="ahint" style="margin:0 0 8px">Base '+(cur?cur.dmg:1)+' damage, armor '+wsg(T.dm)+' damage and '+wsg(T.fr)+'% fire rate. Minimum damage is 1 and the slowest fire rate is 1 shot per second. Click a weapon to equip it, click it again to go back to your hand.</p>';
+ let h='<div class="secH">Weapons</div><div class="sum"><span>Equipped<b>'+(cur?esc(cur.name):'Hand')+'</b></span><span>Damage<b>'+PISTOL_DMG+'</b></span><span>Fire rate<b>'+(1/cd).toFixed(1)+'/s</b></span><span>DPS<b>'+(PISTOL_DMG/cd).toFixed(1)+'</b></span></div><p class="ahint" style="margin:0 0 8px">Base '+(cur?cur.dmg:1)+' damage, armor '+wsg(T.dm)+' damage and '+wsg(T.fr)+'% fire rate. Minimum damage is 1 and the slowest fire rate is 1 shot per second. Click a weapon to equip it, click it again to go back to your hand.</p>';
  h+=own.length?'<div class="grid">'+own.map(w=>wCell(w,S.wpn[w.id])).join('')+'</div>':'<p class="ahint">You have no weapons yet. Craft them under Craft, Weapons, or find them in chests.</p>';return h};
 X.tabs.journal=()=>{const j=journalStats();let h='<div class="sum"><span>Completion<b>'+j.pct.toFixed(1)+'%</b></span></div><div class="pb"><i style="width:'+j.pct+'%"></i></div><div class="secH">Gems (1/3/5/10/25/50/100/250/500/1000)</div>';
  for(const g of GEMS){const n=S.found['g'+g.id]||0;h+='<div class="xrow"><span>'+esc(n?g.name:'???')+' · '+n+'</span><span>'+j.lv(n)+'/10</span></div>'}
@@ -3165,9 +3166,9 @@ function foodArt(kind,i,cooked){const key=kind+(i|0)+(cooked?'c':'r');if(artC[ke
  return artC[key]=c.toDataURL()}
 const GC_HI=[[500000,3],[15000,2],[1000,1]];
 function gemTier(v){for(const q of GC_HI)if(v>=q[0])return q[1];return 0}
-function healOf(t,id){if(t==='i')return id==='cooked_meat'?8:0;if(t==='k'){const f=FISH_BY[id];return f?3+f.i/20:0}return 0}
+function healOf(t,id){if(t==='i')return id==='cooked_meat'?8:0;if(t==='k'){const f=FISH_BY[id];return f?fishHeal(id):0}return 0}
 function rarOf(t,id){if(t==='c'){const q=COS_BY_ID[id];return q?q.tier:0}if(t==='w'){const q=W().find(z=>z.id===id);return q?q.tier:0}if(t==='g'){const g=GEM_BY_ID[id];return g?gemTier(g.value):0}
- if(t==='k'||t==='i'){const h=healOf(t,id);return h>=12?3:h>=9?2:h>=6?1:0}return 0}
+ if(t==='k'||t==='i'){const h=healOf(t,id);return h>=55?3:h>=32?2:h>=8?1:0}return 0}
 function artOf(t,id){try{if(t==='g'&&GEM_BY_ID[id])return'<img alt="" src="'+gemURL(GEM_BY_ID[id])+'">';
   if(t==='c'&&COS_BY_ID[id])return'<img alt="" src="'+cosURL(COS_BY_ID[id])+'">';
   if(t==='w')return'<img alt="" src="'+thumb('w',id,rarOf('w',id))+'">';
@@ -3177,7 +3178,7 @@ function artOf(t,id){try{if(t==='g'&&GEM_BY_ID[id])return'<img alt="" src="'+gem
  return X.iconFor?X.iconFor(t==='m'?'plat_pillar_wood':id):''}
 function catOf(t){return t==='g'?'Gem':t==='c'?'Armor':t==='w'?'Weapon':t==='k'||t==='f'?'Fish':t==='i'?'Item':'Material'}
 function statOf(t,id){const v=(info(t,id)||{}).v||0;
- if(t==='w'){const w=W().find(q=>q.id===id);if(w)return'Damage '+w.dmg+'<br>Fire rate '+(1/w.cd).toFixed(1)+'/s<br>'+RAR[w.tier].n+' '+(w.kn||'weapon')+'<br>Sell value '+fmt(v)}
+ if(t==='w'){const w=W().find(q=>q.id===id);if(w)return'Damage '+w.dmg+'<br>Fire rate '+(1/w.cd).toFixed(1)+'/s<br>DPS '+(w.dmg/Math.min(1,Math.max(.05,w.cd))).toFixed(1)+'<br>'+RAR[w.tier].n+' '+(w.kn||'weapon')+'<br>Sell value '+fmt(v)}
  if(t==='c'){const it=COS_BY_ID[id];const st=armStat(it);return cap(it.slot)+' &middot; '+RAR[it.tier].n+'<br>Health '+armSg(st.hp)+'<br>Damage '+armSg(st.dm)+'<br>Speed '+armSg(st.sp)+'%<br>Defense '+armSg(st.df)+'%<br>Fire rate '+armSg(st.fr)+'%<br>Sell value '+fmt(it.value)}
  if(t==='g')return'Gem &middot; '+RAR[gemTier(v)].n+'<br>Sell value '+fmt(v);
  if(t==='k'||(t==='i'&&id==='cooked_meat')){const h=healOf(t,id);return'Cooked food<br>Heals '+(Math.round(h*10)/10)+' HP<br>Sell value '+fmt(v)}
@@ -7319,7 +7320,7 @@ window.addEventListener('keydown',e=>{
  if(e.code==='Escape'&&HB.wp){HB.wp=0;paintHB()}
 },true);
 window.addEventListener('keyup',e=>{if(!running||HB.legacy||!/^Digit[1-5]$/.test(e.code)||homeIsl())return;const d=WSLOTS[+e.code[5]-1],h=holds[d];if(!h)return;delete holds[d];e.stopImmediatePropagation();if(!h.fired&&!invOpen&&!busy){HB.wpT=performance.now();tapWp(d)}},true);
-function healFor(k){const t=kType(k),id=kId(k);if(t==='d'){const f=FISH_BY[id];return 3+(f?f.i/20:0)}if(t==='i')return id==='cooked_meat'?8:id==='cooked_apple'?2:id==='apple'?1:0;return 0}
+function healFor(k){const t=kType(k),id=kId(k);if(t==='d'){return fishHeal(id)}if(t==='i')return id==='cooked_meat'?8:id==='cooked_apple'?2:id==='apple'?1:0;return 0}
 function eatKey(k){const h=healFor(k);if(!(h>0)||!(cnt(k)>0)||HP.dead)return;if(HP.v>=maxHP()){toast('You are already at full health');return}setCnt(k,cnt(k)-1);HP.v=Math.min(maxHP(),HP.v+h);toast('Yum! +'+(Math.round(h*10)/10)+' HP');try{SX.pickup&&SX.pickup()}catch(e){}save();lastSig='';reconcile(true);try{updateHeader(true)}catch(e){}if(invOpen)renderInv()}
 /* ---------- tools: harvesting (pickaxe mines, axe chops) ---------- */
 window.harvTick=function(dt){
@@ -7397,8 +7398,8 @@ X.tipHTML=function(el){const d=el.dataset;
  if(d.sel){const c=COS_BY_ID[d.sel];return c?armCard(c):''}
  if(d.wtip){const w=wList().find(x=>x.id===d.wtip);if(!w)return '';const T=armTotals(),own=(S.wpn&&S.wpn[w.id])||0;
   const ed=Math.max(1,w.dmg+T.dm),er=1/Math.min(1,Math.max(.05,w.cd/armFr()));
-  let h='<div class="acn" style="color:'+RAR[w.tier].c+'">'+RAR[w.tier].n+' Weapon</div><b class="acname">'+esc2(w.name)+'</b>'+trow('Damage',w.dmg)+trow('Fire rate',(1/w.cd).toFixed(1)+'/s');
-  if(T.dm||T.fr)h+=trow('With your armor',ed+' dmg · '+er.toFixed(1)+'/s',(ed>w.dmg||er>1/w.cd)?'p':'n');
+  let h='<div class="acn" style="color:'+RAR[w.tier].c+'">'+RAR[w.tier].n+' Weapon</div><b class="acname">'+esc2(w.name)+'</b>'+trow('Damage',w.dmg)+trow('Fire rate',(1/w.cd).toFixed(1)+'/s')+trow('DPS',(w.dmg/Math.min(1,Math.max(.05,w.cd))).toFixed(1),'p');
+  if(T.dm||T.fr){h+=trow('With your armor',ed+' dmg · '+er.toFixed(1)+'/s',(ed>w.dmg||er>1/w.cd)?'p':'n');h+=trow('DPS with armor',(ed*er).toFixed(1),(ed*er>=w.dmg/Math.min(1,Math.max(.05,w.cd)))?'p':'n')}
   h+=trow('Owned','×'+own)+(w.v?trow('Worth',fmt(w.v)+' each'):'');if(S.curW===w.id)h+='<div class="as"><span style="color:#f2c14e">Equipped</span></div>';return h}
  if(d.gtip){const g=GEM_BY_ID[d.gtip];if(!g)return '';const n=S.gems[g.id]||0,kind=g.kind==='crystal'?'Crystal':g.kind==='chunk'?'Mineral':'Gem';
   return '<div class="acn"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+g.color+';border:1px solid #fff5;margin-right:6px"></span>'+kind+'</div><b class="acname">'+esc2(g.name)+'</b>'+(g.id==='token'?trow('Use','Special token'):trow('Worth',fmt(g.value)+' each'))+trow('Owned','×'+n.toLocaleString())+(g.id==='token'?'':trow('Stack worth',fmt(g.value*n),'p'))}
@@ -8347,7 +8348,7 @@ function wyrmTick(e,dt,T){const gyAt=(x,z)=>gndOf(e,x,z);e.t+=dt;
  const px=Math.cos(e.dir),pz=-Math.sin(e.dir),h0=e.pts[0];h0[0]=e.hx;h0[1]=e.hy;h0[2]=e.hz;h0[3]=.8;h0[4]=1;
  for(let k=1;k<=SEGN;k++){const s=e.hist[Math.max(0,e.hist.length-1-k*3)],w=Math.sin(e.t*8-k*.9)*.09,wx=s[0]+px*w,wz=s[2]+pz*w,m=u.segs[k-1],q=e.pts[k];
   m.position.set(wx-e.hx,s[1]-e.hy,wz-e.hz);q[0]=wx;q[1]=s[1];q[2]=wz;q[3]=Math.max(.3,.55-.03*k);q[4]=1}
- if(bt>=3.9){e.st='dig';e.cd=MMCD;e.x=e.hx;e.z=e.hz;e.g.visible=false;e.hist.length=0;for(const q of e.pts)q[4]=0}}
+ if(bt>=3.9){e.st='dig';e.cd=5+rnd()*5;e.x=e.hx;e.z=e.hz;e.g.visible=false;e.hist.length=0;for(const q of e.pts)q[4]=0}}
 
 /* ---------- witches ---------- */
 function initWitch(e,o){e.castT=0;e.kind='slow';e.cd=2+rnd()*2}
@@ -8440,4 +8441,80 @@ const _u=window.update;window.update=function(dt){_u.apply(this,arguments);try{a
  for(const c of chests){const v=Math.hypot(c.x-P.x,c.z-P.z)<R;if(c.group&&c.group.visible!==v)c.group.visible=v;if(c.spark&&c.spark.visible!==v)c.spark.visible=v}
  for(const q of spots){const v=Math.hypot(q.x-P.x,q.z-P.z)<R;if(q.mound&&q.mound.visible!==v)q.mound.visible=v;if(q.spark&&q.spark.visible!==v)q.spark.visible=v}
 }catch(e){}}})();
+</script>
+
+<script>
+/* ===== held 3D models: shovel, pickaxe, axe, foods (first person) + upgraded fishing rod ===== */
+(function(){'use strict';
+const X=window.PX=window.PX||{};
+const FOODI={meat:['meat',0],cooked_meat:['meat',1],apple:['apple',0],cooked_apple:['apple',1]};
+const tor=(R,t,m,x,y,z,arc)=>{const o=new THREE.Mesh(new THREE.TorusGeometry(R,t,8,18,arc||Math.PI*2),m);o.position.set(x,y,z);return o};
+const ns=g=>{g.traverse(o=>{if(o.isMesh)o.castShadow=false});return g};
+function mkArm(){const skinM=M(S.avatar.skin,{r:.6}),tn=S.eq&&S.eq.tunic?COS_BY_ID[S.eq.tunic]:null,slM=M(tn?tn.c1:'#cdbf9f',{r:.88});const g=new THREE.Group();const fa=cyl(.05,.042,.5,slM,0,0,0);fa.rotation.x=Math.PI/2;fa.position.z=.15;g.add(fa);g.add(sph(.052,skinM,0,0,-.12,1,.9,1.15));return ns(g)}
+function toolArm(rx,ry){const a=mkArm();a.rotation.set(rx,ry,0);const t=new THREE.Group();t.position.set(0,0,-.12);t.rotation.x=.9;a.add(t);a.userData.r=[rx,ry,0];return[a,t]}
+const wood=()=>M('#7a5330',{r:.75}),steel=()=>M('#b6bec7',{r:.28,m:.8}),iron=()=>M('#59626d',{r:.4,m:.7});
+function mkShovel(){const[a,t]=toolArm(.2,-.12),wd=wood(),mt=steel(),dk=iron();
+ t.add(cyl(.017,.015,.8,wd,0,.1,0,10));t.add(box(.09,.018,.02,wd,0,.5,0));t.add(tor(.045,.009,wd,0,.5,0,Math.PI));
+ t.add(cyl(.027,.02,.11,mt,0,-.27,0,10));t.add(box(.14,.09,.014,mt,0,-.37,0));
+ const tip=cone(.07,.15,mt,0,-.48,0);tip.rotation.z=Math.PI;tip.scale.set(1,1,.2);t.add(tip);t.add(box(.02,.28,.012,dk,0,-.35,.011));
+ return ns(a)}
+function mkPick(){const[a,t]=toolArm(.2,-.12),wd=wood(),mt=steel(),dk=iron();
+ t.add(cyl(.018,.015,.8,wd,0,.1,0,10));t.add(box(.06,.075,.06,dk,0,.47,0));
+ for(const s of[-1,1]){const c1=cone(.03,.17,mt,s*.115,.455,0);c1.rotation.z=-s*(Math.PI/2+.28);t.add(c1);const c2=cone(.019,.12,mt,s*.235,.39,0);c2.rotation.z=-s*(Math.PI/2+.75);t.add(c2)}
+ return ns(a)}
+function mkAxe(){const[a,t]=toolArm(.2,-.12),wd=wood(),mt=steel(),dk=iron();
+ t.add(cyl(.018,.015,.8,wd,0,.1,0,10));t.add(cyl(.028,.028,.1,dk,0,.43,0,10));
+ const bit=new THREE.Mesh(new THREE.CylinderGeometry(.095,.095,.034,3),mt);bit.rotation.z=Math.PI/2;bit.position.set(0,.43,-.09);t.add(bit);
+ t.add(box(.008,.165,.01,M('#e8eef3',{r:.2,m:.9}),0,.43,-.138));t.add(box(.045,.065,.05,dk,0,.43,.05));
+ return ns(a)}
+function foodArm(){const a=mkArm();a.rotation.set(.25,-.25,0);a.userData.r=[.25,-.25,0];return a}
+function mkFish(id,cooked){const f=FISH_BY[id],i=f?f.i:0,hue=(i*47)%360,a=foodArm(),g=new THREE.Group();
+ const body=M(cooked?'#c98a3e':'hsl('+hue+',48%,62%)',{r:.5}),dk=M(cooked?'#8a5a22':'hsl('+hue+',48%,40%)',{r:.6}),bel=M(cooked?'#e0b070':'hsl('+hue+',40%,82%)',{r:.55});
+ g.add(sph(.05,body,0,0,0,.8,1,2.8));g.add(sph(.045,bel,0,-.02,-.005,.72,.65,2.5));
+ const tl=cone(.06,.1,dk,0,0,.2);tl.rotation.x=-Math.PI/2;tl.scale.set(.2,1,1);g.add(tl);
+ const fin=cone(.03,.075,dk,0,.055,.0);fin.scale.set(.25,1,1.4);g.add(fin);
+ for(const s of[-1,1]){const pf=box(.05,.006,.03,dk,s*.045,-.02,-.03);pf.rotation.z=s*.4;g.add(pf);g.add(sph(.012,M(cooked?'#e8e0d0':'#fff',{r:.4}),s*.03,.012,-.1));g.add(sph(.006,M('#111'),s*.036,.012,-.104))}
+ if(cooked)for(const z of[-.07,-.02,.04,.09]){const b=box(.075,.006,.014,M('#4a2a0e',{r:.8}),0,.043,z);g.add(b)}
+ g.position.set(.0,.055,-.25);g.rotation.set(-.3,.45,.2);a.add(g);return ns(a)}
+function mkMeat(cooked){const a=foodArm(),g=new THREE.Group(),mc=M(cooked?'#a8602c':'#d65a64',{r:.55}),hl=M(cooked?'#c98446':'#f19aa0',{r:.5}),bn=M('#f2ead8',{r:.6});
+ g.add(sph(.07,mc,0,0,-.02,1,1.05,1.3));g.add(sph(.035,hl,-.02,.04,-.06,1,.7,1));
+ const b=cyl(.014,.014,.14,bn,0,0,.12,8);b.rotation.x=Math.PI/2;g.add(b);g.add(sph(.02,bn,.013,0,.19));g.add(sph(.02,bn,-.013,0,.19));
+ if(cooked)for(const x of[-.03,.0,.03]){g.add(box(.008,.012,.09,M('#4a2508',{r:.8}),x,.062,-.03))}
+ g.position.set(0,.07,-.2);g.rotation.set(-.5,.4,.1);a.add(g);return ns(a)}
+function mkApple(cooked){const a=foodArm(),g=new THREE.Group(),mc=M(cooked?'#b9692a':'#d63a3a',{r:.4}),dk=M(cooked?'#74390f':'#8f1f1f',{r:.6});
+ g.add(sph(.075,mc,0,0,0,1,.92,1));g.add(sph(.03,dk,0,.066,0,1,.4,1));g.add(cyl(.005,.005,.045,M('#4a3015'),0,.085,0,6));
+ if(!cooked){const lf=sph(.022,M('#4ea04a',{r:.6}),.026,.095,0,1.7,.3,.9);lf.rotation.z=.4;g.add(lf);g.add(sph(.012,M('#f3a0a0',{r:.3}),-.03,.03,-.065))}
+ else for(const p of[[.04,.02,-.06],[-.045,-.01,-.055],[.0,.04,-.07]])g.add(sph(.012,dk,p[0],p[1],p[2]));
+ g.position.set(0,.085,-.2);a.add(g);return ns(a)}
+function build(key){if(key==='shovel')return mkShovel();if(key==='pickaxe')return mkPick();if(key==='axe')return mkAxe();
+ const t=key[0],id=key.slice(2);if(t==='f'||t==='d')return mkFish(id,t==='d');const fi=FOODI[id];return fi[0]==='meat'?mkMeat(!!fi[1]):mkApple(!!fi[1])}
+function selFood(){const H=X.hb2;if(!H||H.legacy||H.wp||!S||!S.inv2||!S.inv2.s)return null;const e=S.inv2.s[H.sel];if(!e||!e.k)return null;const t=e.k[0],id=e.k.slice(2);
+ if((t==='f'||t==='d')&&FISH_BY[id])return t+':'+id;if(t==='i'&&FOODI[id])return 'i:'+id;return null}
+/* ---- upgraded fishing rod (same tip point so casting and the line are unchanged) ---- */
+function upgradeRod(){const rod=VM.rod,tip=VM.tip;if(!rod||rod.userData.up)return;rod.userData.up=1;[...rod.children].forEach(c=>{if(c!==tip)rod.remove(c)});
+ const cork=M('#d9b377',{r:.9}),cd=M('#6b4423',{r:.8}),blk=M('#22252b',{r:.35,m:.5}),sil=M('#cfd8e0',{r:.25,m:.85}),bl=M('#b87a3c',{r:.45}),red=M('#c0392b',{r:.6});
+ const zc=o=>{o.rotation.x=Math.PI/2;return o};
+ rod.add(zc(cyl(.022,.02,.22,cork,0,0,.04,12)));[-.04,.0,.04,.08,.12].forEach(z=>rod.add(tor(.0215,.0028,cd,0,0,z)));
+ rod.add(zc(cyl(.024,.024,.03,blk,0,0,.16,12)));rod.add(zc(cyl(.018,.018,.1,blk,0,0,-.1,12)));
+ const rb=cyl(.032,.032,.04,blk,.03,-.05,-.1,14);rb.rotation.z=Math.PI/2;rod.add(rb);const sp=cyl(.028,.028,.01,sil,.052,-.05,-.1,14);sp.rotation.z=Math.PI/2;rod.add(sp);
+ rod.add(box(.012,.03,.03,blk,.015,-.025,-.1));rod.add(box(.008,.035,.008,sil,.062,-.05,-.1));rod.add(sph(.01,red,.062,-.068,-.1));
+ rod.add(zc(cyl(.0115,.0066,1.22,bl,0,0,-.69,10)));
+ [-.2,-.6,-1.0].forEach(z=>{const r=.0115-.0049*((-z-.08)/1.22);rod.add(tor(r+.0015,.0025,red,0,0,z))});
+ [[.011,-.28],[.009,-.52],[.0075,-.76],[.006,-1.0],[.005,-1.24]].forEach(g=>{const r=.0115-.0049*((-g[1]-.08)/1.22);rod.add(tor(g[0],.0016,sil,0,-(r+g[0]),g[1]))});
+ rod.add(tor(.005,.0015,sil,0,0,-1.3));
+ const arm=mkArm();arm.position.set(0,-.012,.14);rod.add(arm);ns(rod)}
+const bIVM=window.initViewModels;
+window.initViewModels=function(){bIVM.apply(this,arguments);try{if(VM){VM.xs={};VM.xcur=null;VM.xhid=false;upgradeRod()}}catch(e){console.error('held models',e)}};
+let lastDig=0;
+function heldModels(dt){if(!VM||!VM.root||!VM.xs)return;
+ let key=null;const homeOn=VM.home&&Object.values(VM.home).some(m=>m&&m.visible);
+ if(!P.third&&!homeOn){if(tool===3)key='shovel';else if(tool===4)key='pickaxe';else if(tool===6)key='axe';else if(tool===1)key=selFood()}
+ if(key!==VM.xcur){const o=VM.xs[VM.xcur];if(o)o.visible=false;VM.xcur=key;if(key&&!VM.xs[key]){const m=build(key);m.visible=false;VM.root.add(m);VM.xs[key]=m}}
+ const m=key&&VM.xs[key];
+ if(m){m.visible=true;VM.m.forEach(x=>x&&(x.visible=false));VM.xhid=true;const t=performance.now()/1000,r=m.userData.r,dig=digT>lastDig,tl=key==='shovel'||key==='pickaxe'||key==='axe';
+  m.rotation.set(r[0]+(tl?-vmKick*.5-(dig?(.5+.5*Math.sin(t*10))*.45:0):Math.sin(t*1.7)*.02),r[1]+(tl?(dig?Math.sin(t*10)*.05:0):Math.sin(t*1.1)*.03),Math.sin(t*1.3)*.012)}
+ else if(VM.xhid){VM.xhid=false;try{setTool(tool,true)}catch(e){}}
+ lastDig=digT}
+const bU=window.update;window.update=function(dt){bU.apply(this,arguments);try{heldModels(dt)}catch(e){if(!X._he){X._he=1;console.error(e)}}};
+})();
 </script>
