@@ -5805,7 +5805,7 @@ function startRound(){F.st='fight';const R=F.list[F.round-1],rd=R.rd||F.round,no
  const first=[];for(let i=0;i<(R.boss||0);i++)first.push('boss');for(let i=0;i<(R.dragon||0);i++)first.push('dr');
  F.q=first.concat(jobs);F.R=R;F.rd=rd;F.qT=.25;drainQ(nov?999:16);
  banner(R.dragon?(R.dragon>1?'THE DRAGONS':'THE DRAGON'):'FIGHT!','#ff8a5a')}
-function roundClear(){clearTraps();clearShock();clearExtra(false);if(F.round>=F.total){F.st='clear';F.t=2.5;return}F.st='clear';F.t=8;banner('ROUND '+F.round+' CLEARED','#7affb0');toast('Catch your breath: 8 seconds until the next round. Heal up.')}
+function roundClear(){clearTraps();clearShock();clearExtra(false);if(F.round>=F.total){F.st='clear';F.t=2.5;return}F.st='clear';F.t=8;banner('ROUND '+F.round+' CLEARED','#7affb0');toast('Catch your breath: 8 seconds until the next round.')}
 async function victory(){const M=MODES[F.mode],key=M.key||'arW',w=S[key]|0,nov=F.mode==='novice',n=nov?1000+100*w:M.base+M.step*w,k=nov?Math.max(0,4-w):0,r=rollChances(n,false),cos=[];
  for(let i=0;i<k;i++){const c=randCos();if(c)cos.push(c)}applyLoot(r.gained,cos);S[key]=w+1;save();updateHeader(true);
  const title=(nov?'Champion’s Reward: ':M.n+' Reward: ')+n+' rewards'+(nov?(k?' + '+k+' armor piece'+(k>1?'s':''):' (no more armor pieces)'):'');
@@ -5819,7 +5819,7 @@ function tick(dt){
  if(CUR.key!==AK){end('left');return}
  if(HP.dead){end('dead');return}
  const now=performance.now()/1000;F.hb-=dt;if(F.hb<=0){F.hb=5;live(1)}
- const mx=maxHP();if(HP.v<mx&&now-HP.hurtT>8)HP.v=Math.min(mx,HP.v+dt*(1/15-1/60));
+ const mx=maxHP();
  lavaTick(dt);
  if(F.st==='intro'){F.t-=dt;if(F.t<=0)startRound()}
  else if(F.st==='fight'){
@@ -5827,7 +5827,7 @@ function tick(dt){
   for(const e of X.EN){if(!e.arena)continue;e.fled=1;e.hx=P.x;e.hz=P.z;if(e.state==='guard'||e.state==='return'||e.state==='heal'||(e.state==='alert'&&e.t>1.2)){e.state=e.ranged?'range':'charge';e.t=0}}
   for(const e of F.mobs.slice())aiMob(e,dt,now);
   if(!alive())roundClear()}
- else if(F.st==='clear'){F.t-=dt;if(F.round<F.total&&HP.v<mx)HP.v=Math.min(mx,HP.v+dt*1.2);if(F.t<=0){if(F.round>=F.total){victory();return}F.round++;F.st='intro';F.t=2.5;banner('ROUND '+F.round,'#ffe29a')}}
+ else if(F.st==='clear'){F.t-=dt;if(F.t<=0){if(F.round>=F.total){victory();return}F.round++;F.st='intro';F.t=2.5;banner('ROUND '+F.round,'#ffe29a')}}
  const h=hud();h.style.display='block';h.textContent=(F.mode!=='novice'?MODES[F.mode].n.replace('Trial of the ','').toUpperCase()+'  ·  ':'')+'ROUND '+F.round+' / '+F.total+(F.st==='fight'?'  ·  '+alive()+' LEFT':F.st==='clear'?(F.round<F.total?'  ·  NEXT ROUND IN '+Math.ceil(F.t):'  ·  CLEARED'):'')}
 /* ---------- begin ---------- */
 X.arenaBegin=async function(mode){mode=MODES[mode]?mode:'novice';if(F.on||busy)return;if(X.arenaBusy()){toast('A champion is already on the sand.');return}
