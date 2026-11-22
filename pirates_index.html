@@ -7600,10 +7600,10 @@ function stTick(dt){if(HP.dead){if(ST.slow>0)endSt('slow');if(ST.weak>0)endSt('w
 
 /* ---------- witch spells: bolts (slow / weak) and curse zones ---------- */
 const SP=[],ZN=[];
-function bolt(e,kind){const T=X.tgt(e,30),col=kind==='slow'?0x4aa8ff:0xff7a3a,o=new THREE.Vector3(e.x+Math.sin(e.face)*.5,e.y+1.9,e.z+Math.cos(e.face)*.5),d0=Math.hypot(T.x-e.x,T.z-e.z),ld=T.horse?0:d0/22*.6;
+function bolt(e,kind){const T=X.tgt(e,110),col=kind==='slow'?0x4aa8ff:0xff7a3a,o=new THREE.Vector3(e.x+Math.sin(e.face)*.5,e.y+1.9,e.z+Math.cos(e.face)*.5),d0=Math.hypot(T.x-e.x,T.z-e.z),ld=T.horse?0:d0/48*.6;
  const tg=new THREE.Vector3(T.x+(P.vx||0)*ld,T.y+1.0,T.z+(P.vz||0)*ld),dir=tg.sub(o).normalize();
  const m=new THREE.Mesh(SPH,B(col));m.scale.setScalar(.2);m.position.copy(o);const h=new THREE.Mesh(SPH,HM(col));h.scale.setScalar(2);m.add(h);scene.add(m);
- SP.push({m,v:dir.multiplyScalar(21),life:2.6,kind,col,ctx:e.ctx,tr:0})}
+ SP.push({m,v:dir.multiplyScalar(48),life:3,kind,col,ctx:e.ctx,tr:0})}
 function boltTick(dt){for(let i=SP.length-1;i>=0;i--){const b=SP[i],p=b.m.position;b.life-=dt;p.addScaledVector(b.v,dt);b.tr-=dt;if(b.tr<=0){b.tr=.04;addFx(p.clone(),b.col,.9,.3)}
   let done=b.life<=0;
   if(!done&&!HP.dead&&Math.hypot(p.x-P.x,p.z-P.z)<.85&&Math.abs(p.y-(P.y+1))<1.1){setSt(b.kind,5+rnd()*5);addFx(p.clone(),b.col,3,.4);snd('curseHit');done=true}
@@ -7719,13 +7719,13 @@ function initWitch(e,o){e.castT=0;e.kind='slow';e.cd=2+rnd()*2}
 function stepW(e,ang,sp,dt){const nx=e.x+Math.sin(ang)*sp*dt,nz=e.z+Math.cos(ang)*sp*dt;
  if(e.ctx==='arena'){let x=nx,z=nz;const r=Math.hypot(x,z);if(r>27){x*=27/r;z*=27/r}try{const q=pushOut(x,z,X.arena.fl+.2,true);x=q[0];z=q[1]}catch(er){}e.x=x;e.z=z;return}
  const nh=terrH(nx,nz),oh=terrH(e.x,e.z);if(nh>WATER+.35&&nh-oh<1.1){e.x=nx;e.z=nz}}
-function witchFire(e){if(e.kind==='curse'){const T=X.tgt(e,30);zone(T.x,T.z,e.ctx)}else bolt(e,e.kind);snd('witchCast',e.x,e.z)}
+function witchFire(e){if(e.kind==='curse'){const T=X.tgt(e,110);zone(T.x,T.z,e.ctx)}else bolt(e,e.kind);snd('witchCast',e.x,e.z)}
 const KCOL={slow:0x4aa8ff,weak:0xff7a3a,curse:0xb06bff};
 function witchTick(e,dt,T,d){const u=e.g.userData,ar=e.ctx==='arena',now=performance.now()/1000;let mv=0;
  e.face+=nang(Math.atan2(T.x-e.x,T.z-e.z)-e.face)*Math.min(1,dt*8);
  if(e.castT>0){e.castT-=dt;if(e.castT<=0){witchFire(e);e.cd=((ar?3.6:5)+rnd()*2.6)/Math.max(.7,e.spd)}}
- else{e.cd-=dt;if(!HP.dead){if(d>5.5)mv=1;else if(d<3)mv=-.6}
-  if(e.cd<=0&&d<20&&d>1.5&&!HP.dead){e.castT=.85;const r=rnd();e.kind=r<.34?'slow':r<.68?'weak':'curse';if(rnd()<.5)snd('witchCackle',e.x,e.z)}}
+ else{e.cd-=dt;if(!HP.dead){if(d>(ar?40:70))mv=1;else if(d<(ar?14:25))mv=-.6}
+  if(e.cd<=0&&d<100&&d>1.5&&!HP.dead){e.castT=.85;const r=rnd();e.kind=r<.34?'slow':r<.68?'weak':'curse';if(rnd()<.5)snd('witchCackle',e.x,e.z)}}
  if(mv){const sp=(ar?4:4.8)*e.spd*Math.abs(mv);stepW(e,e.face+(mv<0?PI:0),sp,dt);e.ph+=dt*sp*2}
  e.y=gndOf(e,e.x,e.z);e.g.position.set(e.x,e.y,e.z);e.g.rotation.y=e.face;
  const c=e.castT>0;u.la.rotation.x=-.5+Math.sin(e.ph)*.25*(mv?1:.15);u.ra.rotation.x=c?-2.4+Math.sin(now*30)*.05:-.45-Math.sin(e.ph)*.25*(mv?1:.15);
@@ -7737,7 +7737,7 @@ let spT=3,caveInit=false,csT=3;
 function worldSpawn(){const blood=WEATHER.type==='blood',cap={glider:blood?7:4,wyrm:blood?9:5,witch:blood?6:3},cnt={glider:0,wyrm:0,witch:0};
  for(const e of MM)if(e.ctx==='world')cnt[e.ty]++;const opts=['glider','wyrm','witch'].filter(k=>cnt[k]<cap[k]);if(!opts.length)return;
  const ty=opts[Math.floor(rnd()*opts.length)];
- for(let k=0;k<14;k++){const a=rnd()*6.283,d=ty==='glider'?55+rnd()*25:ty==='wyrm'?24+rnd()*22:28+rnd()*18,x=P.x+Math.sin(a)*d,z=P.z+Math.cos(a)*d;
+ for(let k=0;k<14;k++){const a=rnd()*6.283,d=ty==='glider'?55+rnd()*25:ty==='wyrm'?24+rnd()*22:55+rnd()*30,x=P.x+Math.sin(a)*d,z=P.z+Math.cos(a)*d;
   if(Math.abs(x)>HALF-70||Math.abs(z)>HALF-70)continue;const h=terrH(x,z);
   if(ty!=='glider'&&(h<WATER+1.2||(X.isSpawnBlocked&&X.isSpawnBlocked(x,z))))continue;
   make(ty,x,z,'world',{y:Math.max(h,WATER)+30+rnd()*10});return}}
@@ -7757,7 +7757,7 @@ function tick(dt){dt=Math.min(dt,.05);ptTick(dt);zoneTick(dt);boltTick(dt);stTic
  for(const e of MM.slice()){
   if(e.ctx==='cave'?!cave:e.ctx==='arena'?!inA:cave){rm(e);continue}
   if(e.ctx==='world'&&Math.hypot(e.x-P.x,e.z-P.z)>135){rm(e);continue}
-  const T=X.tgt(e,e.ty==='wyrm'?14:40),d=Math.hypot(T.x-e.x,T.z-e.z);
+  const T=X.tgt(e,e.ty==='wyrm'?14:e.ty==='witch'?110:40),d=Math.hypot(T.x-e.x,T.z-e.z);
   if(e.ty==='glider')gliderTick(e,dt,T);else if(e.ty==='wyrm')wyrmTick(e,dt,T);else witchTick(e,dt,T,d)}}
 
 /* ---------- hooks ---------- */
