@@ -8314,12 +8314,14 @@ function wyrmTick(e,dt,T){const gyAt=(x,z)=>gndOf(e,x,z);e.t+=dt;
  if(e.st==='dig'){
   e.cd-=dt;let want=Math.atan2(dx,dz)+Math.sin(e.t*2.6+e.ph)*.5*(d>10?1:.4);e.ang+=nang(want-e.ang)*Math.min(1,dt*4);
   const sp=(d>25?18:13)*e.spd;
-  if(d>2.2){const nx=e.x+Math.sin(e.ang)*sp*dt,nz=e.z+Math.cos(e.ang)*sp*dt;if(passable(e,nx,nz)){e.x=nx;e.z=nz}else e.ang+=1.2*(rnd()<.5?-1:1)}
+  if(e.ctx==='arena'){const r0=Math.hypot(e.x,e.z);if(r0>26.5){e.x*=26.5/r0;e.z*=26.5/r0}}
+  if(d>2.2){const nx=e.x+Math.sin(e.ang)*sp*dt,nz=e.z+Math.cos(e.ang)*sp*dt;if(passable(e,nx,nz)){e.x=nx;e.z=nz}else if(e.ctx==='arena'){/* at the wall: slide along the edge toward the player instead of grinding into it */const r=Math.hypot(e.x,e.z)||1;let tx=-e.z/r,tz=e.x/r;if(tx*dx+tz*dz<0){tx=-tx;tz=-tz}let sx=e.x+tx*sp*dt,sz=e.z+tz*sp*dt;const r2=Math.hypot(sx,sz);if(r2>26){sx*=26/r2;sz*=26/r2}e.x=sx;e.z=sz;e.ang=Math.atan2(tx,tz)}else e.ang+=1.2*(rnd()<.5?-1:1)}
   e.y=gyAt(e.x,e.z);e.hx=e.x;e.hz=e.z;e.hy=e.y-2.3;
   e.pT-=dt;if(e.pT<=0){e.pT=.045;dirt(e.x,e.y+.05,e.z,2,e.ctx,.8)}
   e.trT=(e.trT||0)-dt;if(e.trT<=0){e.trT=.2;(e.tr||(e.tr=[])).push({x:e.x,z:e.z,t:e.t});if(e.tr.length>36)e.tr.shift()}
   e.sT-=dt;if(e.sT<=0){e.sT=.9+rnd()*.6;snd('wyrmDig',e.x,e.z)}
   const reach=!HP.dead&&T.y<gyAt(T.x,T.z)+3&&(e.ctx!=='world'||terrH(T.x,T.z)>WATER+.2);
+  if(reach&&d<4.2&&(e.t-(e.nearT||-99))>2.2){/* walking up to a wyrm forces it to jump or spit dirt, whatever its cooldown */e.nearT=e.t;if(rnd()<.55||e.cd<=0){startBurst(e,T);return}e.hx=e.x;e.hy=e.y+.7;e.hz=e.z;dirt(e.x,e.y+.1,e.z,12,e.ctx,1);snd('wyrmBurst',e.x,e.z);for(let k=0;k<3;k++)dirtPellet(e,T);return}
   if(e.cd<=0&&d<13&&d>1.2&&reach)startBurst(e,T);
   else if(reach&&e.ctx!=='arena'&&e.tr&&e.tr.length&&(e.t-(e.lurchT||-99))>4){
    /* stepping on the soil path a wyrm leaves behind forces it to lurch out of the ground right where you stand */
