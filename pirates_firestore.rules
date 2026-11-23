@@ -186,6 +186,39 @@ service cloud.firestore {
         && request.resource.data.t is number;
       allow update, delete: if false;
     }
+    // Colosseum duel queue: you manage your own entry; another queued player may only pair with you (sets m/opp once).
+    match /pvpq/{uid} {
+      allow read: if signedIn();
+      allow create: if isOwner(uid)
+        && request.resource.data.nick is string && request.resource.data.nick.size() <= 16
+        && request.resource.data.t is number;
+      allow update: if signedIn() && (isOwner(uid)
+        || (!('m' in resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['m', 'opp'])));
+      allow delete: if isOwner(uid);
+    }
+    // Colosseum duel match record: created when two players pair up; either duelist can report the result.
+    match /pvp/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.players.size() == 2
+        && request.auth.uid in request.resource.data.players;
+      allow update: if signedIn() && request.auth.uid in resource.data.players
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['st', 'win', 't']);
+      allow delete: if signedIn() && request.auth.uid in resource.data.players;
+    }
+    // Pantheons: custom practice fights shared by a 4-letter code (document id). Anyone signed in reads; only the owner edits.
+    match /pantheons/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && code.matches('[A-Z][A-Z][A-Z][A-Z]')
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.d is string && request.resource.data.d.size() < 30000
+        && request.resource.data.nick is string && request.resource.data.nick.size() <= 16;
+      allow update: if signedIn() && resource.data.owner == request.auth.uid
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.d is string && request.resource.data.d.size() < 30000;
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+    }
     // Online roster + sleep votes (heartbeat every ~15s, one doc per player).
     match /online/{uid} {
       allow read: if signedIn();
