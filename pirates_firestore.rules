@@ -212,11 +212,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && code.matches('[A-Z][A-Z][A-Z][A-Z]')
         && request.resource.data.owner == request.auth.uid
-        && request.resource.data.d is string && request.resource.data.d.size() < 30000
+        && request.resource.data.d is string && request.resource.data.d.size() < 100000
         && request.resource.data.nick is string && request.resource.data.nick.size() <= 16;
       allow update: if signedIn() && resource.data.owner == request.auth.uid
         && request.resource.data.owner == request.auth.uid
-        && request.resource.data.d is string && request.resource.data.d.size() < 30000;
+        && request.resource.data.d is string && request.resource.data.d.size() < 100000;
       allow delete: if signedIn() && resource.data.owner == request.auth.uid;
     }
     // Online roster + sleep votes (heartbeat every ~15s, one doc per player).
