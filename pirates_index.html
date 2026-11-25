@@ -1253,12 +1253,13 @@ const ARCH=[null,
  {n:'Frostfang Reach',b:[3,11,14]},{n:'Sunscorch Atoll',b:[2,16,10]},{n:'Mirewood Hold',b:[4,13,1]},{n:'Emerald Spire',b:[6,15,0]},{n:'Blossom Cay',b:[8,17,0]},
  {n:'Ashen Bluff',b:[5,7,12]},{n:'Amber Landing',b:[9,1,7]},{n:'Crystal Key',b:[14,11,16]},{n:'Golden Savanna',b:[10,5,2]},{n:'Glow Isle',b:[13,17,4]}];
 const ALLKEYS=['0,0'];for(let i=1;i<=10;i++)ALLKEYS.push(i+',1');
-const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3',maze:'4,2'};
+const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3',maze:'4,2',myst:'5,2'};
 const SPDEF={
  '1,2':{tag:'arena',name:'Colosseum Isle',size:320,bio:[2],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:94},blurb:'A small island of sand and sea, crowned by one colossal arena. Fight ten rounds for glory, or watch from the stands.'},
  '2,2':{tag:'home',name:'Home Island',size:320,bio:[0],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'Your own peaceful creative island. Set the time, the weather and who may visit.'},
  '3,2':{tag:'chaos',name:'Chaos Island',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis, dragons, lightning and more while you hunt volcanic crystals.'},
  '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'},
+ '5,2':{tag:'myst',name:'Murder Mystery Cay',size:1100,bio:[1],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:370},blurb:'Event island. A storm-lashed village, a body at dawn and twenty-four suspects. Search for clues, question everyone, then tell the Mayor exactly how it happened.'},
  '4,2':{tag:'maze',name:'The Maze',size:2700,bio:[8],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:1090},blurb:'Event island. A vast autumn field with a towering straw maze. Pick easy, medium or hard, find the one true path before the clock runs out and claim the crystal.'}};
 for(const k in SPDEF)ALLKEYS.push(k);
 function islandInfo(gx,gy){let key=gx+','+gy;if(!ALLKEYS.includes(key)){key=HOME;gx=0;gy=0}if(islCache[key])return islCache[key];
@@ -2012,7 +2013,7 @@ function islandPct(key){const rec=S.isl[key];if(!rec||!rec.disc||!rec.n)return 0
 /* ============================ SEA CHART ============================ */
 const SEA={open:false,pan:{x:0,y:0},zoom:1,sel:null,hover:null,drag:null,cache:{},t:0};
 const SP=215;
-function isl2px(gx,gy){if(gx===0)return[0,0];if(gx===4&&gy===2){const a=-2.1,R=SP*4.6;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===2){const a=(gx-1)/3*Math.PI*2-Math.PI/2+.52,R=SP*4.2;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===3){const h=isl2px(2,2);return[h[0]+SP*.95,h[1]-SP*.5]}const a=(gx-1)/10*Math.PI*2-Math.PI/2,R=SP*3.2;return[Math.cos(a)*R,Math.sin(a)*R]}
+function isl2px(gx,gy){if(gx===0)return[0,0];if(gx===4&&gy===2){const a=-2.1,R=SP*4.6;return[Math.cos(a)*R,Math.sin(a)*R]}if(gx===5&&gy===2){const a=0,R=SP*4.6;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===2){const a=(gx-1)/3*Math.PI*2-Math.PI/2+.52,R=SP*4.2;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===3){const h=isl2px(2,2);return[h[0]+SP*.95,h[1]-SP*.5]}const a=(gx-1)/10*Math.PI*2-Math.PI/2,R=SP*3.2;return[Math.cos(a)*R,Math.sin(a)*R]}
 function blobPts(info){if(SEA.cache[info.key])return SEA.cache[info.key];const r=mulberry(info.seed^0x31),pts=[],n=22,ph=r()*6,f1=2+Math.floor(r()*3);for(let i=0;i<n;i++){const a=i/n*Math.PI*2,rad=1+.2*Math.sin(a*f1+ph)+.12*Math.sin(a*5+ph*2)+(r()-.5)*.1;pts.push([Math.cos(a)*rad,Math.sin(a)*rad*.86])}
  const blobs=[];for(let i=0;i<7;i++)blobs.push({x:(r()-.5)*1.1,y:(r()-.5)*.9,r:.35+r()*.4,b:info.bio[i%info.bio.length]});return SEA.cache[info.key]={pts,blobs}}
 function seaPath(c,pts,cx,cy,R){c.beginPath();pts.forEach((p,i)=>{const x=cx+p[0]*R,y=cy+p[1]*R;i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath()}
@@ -3128,7 +3129,7 @@ X.nearFire=()=>{for(const id in B){const b=B[id];if(b.d.type==='campfire'&&Date.
 const online=()=>!!(FB&&UID);
 const bk=()=>CAVE.on&&CAVE.group?'cave:'+CUR.key+':'+CAVE.idx:CUR.key==='2,2'?'2,2:'+((window.PX&&window.PX.hvUid)||UID||'local'):CUR.key;
 function lb(){S.lb=S.lb||{};return S.lb[bk()]||(S.lb[bk()]=[])}
-function bset(d){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return Promise.resolve()}if(online())return FB.buildSet(d);const a=lb(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);syncBuilds(a);save();return Promise.resolve()}
+function bset(d){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on this island.');return Promise.resolve()}if(online())return FB.buildSet(d);const a=lb(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);syncBuilds(a);save();return Promise.resolve()}
 function bdel(id){if(online())return FB.buildDel(id);S.lb[bk()]=lb().filter(x=>x.id!==id);syncBuilds(S.lb[bk()]);save();return Promise.resolve()}
 function watchIsl(){if(bk()===lastKey&&(online()||lastOnline===false))return;lastKey=bk();lastOnline=online();if(unsubB){try{unsubB()}catch(e){}unsubB=null}for(const id in B){B[id].g.parent&&B[id].g.parent.remove(B[id].g);for(const o of(B[id].obs||[B[id].ob])){const i=OB.indexOf(o);if(i>=0)OB.splice(i,1)}delete B[id]}
  if(!online()){try{syncBuilds(lb())}catch(e){console.error(e)}return}
@@ -3136,7 +3137,7 @@ function watchIsl(){if(bk()===lastKey&&(online()||lastOnline===false))return;las
 let lastOnline=null;
 function nearest(f){let best=null,bd=4;for(const id in B){const b=B[id];if(f&&!f(b.d))continue;const d=Math.hypot(P.x-b.d.x,P.z-b.d.z);if(d<bd){bd=d;best=b}}return best}
 let placing=null;
-function place(type){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return}if(CAVE.on){toast('Cannot build in caves');return}if(!(S.items[type]>0)){placing=null;return}
+function place(type){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on this island.');return}if(CAVE.on){toast('Cannot build in caves');return}if(!(S.items[type]>0)){placing=null;return}
  const x=P.x-Math.sin(P.yaw)*3,z=P.z-Math.cos(P.yaw)*3,raft=type.startsWith('raft'),th=terrH(x,z);
  if(raft&&th>WATER-.4){toast('Rafts go on water');return}if(!raft&&th<WATER+.3){toast('Place on land');return}
  const d={id:(UID||'local')+'_'+Date.now(),isl:bk(),owner:UID||'local',type,x,z,y:raft?WATER:th,ry:P.yaw,t:Date.now()};if(type==='campfire'||type==='torch')d.lit=Date.now();
@@ -3622,7 +3623,7 @@ const hbNm=t=>t.startsWith('nat_')?(NAT.find(a=>a[0]===t)||[0,t])[1]:(ITEMS[t]?I
 function hbPose(){const a=hbAim(60);if(!a)return null;const type=PL.type;let x=a.x,z=a.z,ry=PL.rot;const plat=/^plat_|^pwall$/.test(type),sn=PL.snap;
  if(sn){if(plat&&sn===4){const pc=type==='pwall'?'wall':type.split('_')[1];ry=Math.round(ry/(Math.PI/2))*(Math.PI/2);if(pc==='wall'||pc==='arch'){if(Math.abs(Math.cos(ry))>.5){x=Math.round(x/4)*4;z=Math.round((z-2)/4)*4+2}else{z=Math.round(z/4)*4;x=Math.round((x-2)/4)*4+2}}else{x=Math.round(x/4)*4;z=Math.round(z/4)*4}}else{x=Math.round(x/sn)*sn;z=Math.round(z/sn)*sn}}
  const y=Math.max(terrH(x,z),stackY(x,z),WATER)+PL.lift;return{x,z,y,ry,ok:Math.abs(x)<HALF-4&&Math.abs(z)<HALF-4}}
-function hbPlace(){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return}if(hbVisitor()&&!HS().perm.build){hbVdeny();return}if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
+function hbPlace(){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on this island.');return}if(hbVisitor()&&!HS().perm.build){hbVdeny();return}if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
  if(type==='pwall'||type==='deco_banner')d.col=paintIdx;if(type==='campfire'||type==='torch')d.lit=Date.now();SX.place&&SX.place();bset(d).catch(e=>toast('Build failed: '+((e&&(e.code||e.message))||'error')))}
 let hg=null,hgKey='',hl=null,ring=null,ringK='';
 function hbVis(){const home=hbOn()&&running&&!invOpen&&!busy&&!HP.dead&&!OV.kind&&!SEA.open&&locked;
@@ -7533,7 +7534,7 @@ function reconcile(force){if(!S||!S.made||typeof GEMS==='undefined')return;const
 function slotsUsed(){const L=lay();return L.s.filter(Boolean).length}
 function roomFor(k){const L=lay();for(let i=0;i<NS;i++){const e=L.s[i];if(!e||(e.k===k&&e.n<CAP))return true}return false}
 /* ---------- dropping ---------- */
-function dropItems(map,auto){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){if(!auto)toast('Nothing can be dropped on The Maze.');return}const gems={},cos={},xt={fish:{},cooked:{},items:{},mats:{},wpn:{}};let any=false,names=[];
+function dropItems(map,auto){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){if(!auto)toast('Nothing can be dropped on this island.');return}const gems={},cos={},xt={fish:{},cooked:{},items:{},mats:{},wpn:{}};let any=false,names=[];
  for(const k in map){const n=map[k];if(!(n>0))continue;const t=kType(k),id=kId(k);setCnt(k,cnt(k)-n);any=true;names.push(n+' '+info(k).name);
   if(t==='g')gems[id]=n;else if(t==='c')cos[id]=n;else if(t==='w')xt.wpn[id]=n;else if(t==='f')xt.fish[id]=n;else if(t==='d')xt.cooked[id]=n;else if(t==='i')xt.items[id]=n;else if(t==='m')xt.mats[id]=n}
  if(!any)return;
@@ -9036,7 +9037,7 @@ async function finish(win){if(MZ.busy)return;MZ.busy=1;const m=MODES[MZ.mode]||M
  MZ.busy=0}
 const oso=window.openSea;window.openSea=function(){if(isMaze()&&MZ.state==='run'){toast('The gate is locked behind you. The only way out is the crystal.');return}return oso.apply(this,arguments)};
 const otw=window.tapWp;window.tapWp=function(d){if(isMaze()&&MZ.state==='run'){toast('No warping out of the maze.');return}return otw.apply(this,arguments)};
-const otg=window.toggleWp;window.toggleWp=function(d){if(isMaze()&&!(S.wp&&S.wp[d])){toast('Nothing can be placed on The Maze.');return}return otg.apply(this,arguments)};
+const otg=window.toggleWp;window.toggleWp=function(d){if(isMaze()&&!(S.wp&&S.wp[d])){toast('Nothing can be placed on this island.');return}return otg.apply(this,arguments)};
 
 /* ---------- per-frame ---------- */
 const nearNpc=()=>{if(!MZ.G)return null;for(const k of['npc1','npc2']){const n=MZ[k];if(n&&Math.hypot(P.x-n.x,P.z-n.z)<4.8)return k}return null};
@@ -9079,5 +9080,536 @@ const ol=window.loadIsland;window.loadIsland=function(info){
  return r};
 const osg=window.startGame;window.startGame=function(){try{if(MZ.relog&&isMaze()){S.pos={x:-5,z:ZS+26,isl:CUR.key};MZ.relog=false;setTimeout(()=>{try{toast('You left the maze mid-run. The round was forfeited.');save(true)}catch(e){}},1500)}}catch(e){}return osg.apply(this,arguments)};
 X.maze=MZ;
+})();
+</script>
+
+<script>
+/* ===== MURDER MYSTERY CAY: randomized whodunit event island ===== */
+(function(){'use strict';const X=window.PX=window.PX||{};
+const isMy=()=>!!(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='myst');
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
+const FLAT=1.8,LR=430,GZ=285,GY=FLAT;
+let C=null;const ST={state:'idle',dlg:null,cs:false,seen:false,found:0,notes:[],nkeys:{},ans:[],busy:0};
+const rr=(r,a)=>a[Math.floor(r()*a.length)];
+const shuf=(r,a)=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const dist=(ax,az,bx,bz)=>Math.hypot(ax-bx,az-bz);
+/* ---------- names, jobs, colours ---------- */
+const FNM=['Edmund','Silas','Barnaby','Thaddeus','Osric','Cornelius','Jasper','Alaric','Percival','Hollis','Marcus','Tobias','Rowan','Ambrose','Leopold','Gideon','Fletcher','Ignatius','Lucian','Wendell','Dunstan','Ezra','Caspian','Montague','Reginald','Alfred','Nigel','Oswin','Rupert','Cecil'];
+const FNF=['Beatrice','Ottoline','Marigold','Cordelia','Philippa','Winifred','Evangeline','Prudence','Rosalind','Imogen','Henrietta','Clementine','Odette','Tamsin','Verity','Agatha','Lavinia','Millicent','Seraphina','Dorothea','Eleanor','Gwendolyn','Hester','Isolde','Juniper','Mabel','Nell','Rhoda','Sybil','Tabitha'];
+const LNM=['Ashdown','Blackwood','Carrow','Dunmore','Everhart','Fairweather','Gallowglass','Hartley','Ironside','Kettleby','Lockwood','Marlowe','Nettleton','Oakenshaw','Pennywhistle','Quillfeather','Ravenscroft','Stormwell','Thornbury','Underhill','Vanderwick','Whitlock','Yarrow','Applegate','Bramblethorn','Cobblestone','Digby','Fenwick','Grimsby','Holloway','Jessop','Kingsley','Lovelace','Mudge','Northcott','Pickering','Rookwood','Sallow','Tidewell','Wetherby'];
+const JOBS=[{j:'innkeeper',w:'tavern'},{j:'barmaid',w:'tavern'},{j:'bard',w:'tavern'},{j:'baker',w:'bakery'},{j:'blacksmith',w:'smithy'},{j:'priest',w:'chapel'},{j:'gravedigger',w:'chapel'},{j:'doctor',w:'clinic'},{j:'herbalist',w:'clinic'},{j:'shopkeeper',w:'store'},{j:'merchant',w:'store'},{j:'butcher',w:'butcher'},{j:'tailor',w:'tailor'},{j:'librarian',w:'library'},{j:'teacher',w:'library'},{j:'fisherman',w:'boathouse'},{j:'sailor',w:'boathouse'},{j:'boatwright',w:'boathouse'},{j:'farmer',w:'farm'},{j:'stable hand',w:'farm'},{j:'lighthouse keeper',w:'lighthouse'},{j:'guard',w:'gate'},{j:'painter',w:'plaza'},{j:'carpenter',w:'plaza'}];
+const FLAV={innkeeper:'I keep the beds warm and the ale cold.',barmaid:'I pour the drinks and hear everything.',bard:'I sing for my supper, and I notice who tips well.',baker:'Bread at dawn, every day.',blacksmith:'Iron and fire, that is my trade.',priest:'I tend the chapel and the souls of the Cay.',gravedigger:'Quiet work, and the dead never complain.',doctor:'I mend what can be mended.',herbalist:'Herbs and tinctures, that is my corner of the clinic.',shopkeeper:'If you need it, I probably stock it.',merchant:'I trade between the islands, when the weather lets me.',butcher:'Honest meat, honest prices.',tailor:'Needle and thread, and a good eye for fit.',librarian:'I keep the records of every soul on the Cay.',teacher:'I teach the village children their letters.',fisherman:'The sea feeds us, if you respect it.',sailor:'Home from the waves for a while.',boatwright:'I build and mend the boats.',farmer:'Early mornings and honest dirt.',['stable hand']:'I look after the animals at the farm.',['lighthouse keeper']:'I keep the lamp lit so ships do not wreck.',guard:'I watch the gate and the road.',painter:'I paint the village as I see it.',carpenter:'Anything made of wood, I can make or mend.'};
+const COL=[['red','#b3261e'],['blue','#2a4fa8'],['green','#2f7a3a'],['yellow','#d9b020'],['purple','#6a3a9a'],['orange','#d9741f'],['black','#222226'],['white','#e8e4d8'],['brown','#6b4423'],['teal','#1f8a8a'],['pink','#d9788f'],['grey','#7a7e86'],['maroon','#6a1e2a'],['olive','#6b7a2a']];
+const TIMES=[{s:'9:00 PM',w:'nine'},{s:'10:00 PM',w:'ten'},{s:'11:00 PM',w:'eleven'},{s:'12:00 AM',w:'twelve'},{s:'1:00 AM',w:'one'},{s:'2:00 AM',w:'two'},{s:'3:00 AM',w:'three'}];
+const WEAP=[{id:'dagger',n:'a dagger',doc:'a narrow, deep stab wound, made by a slim blade',res:'a slit in the table and a flecked rag, as if a thin blade was wiped clean',src:'smithy',srcT:'An empty slot on the smithy\'s weapon rack, where a dagger should hang.'},
+{id:'candlestick',n:'a brass candlestick',doc:'a heavy blow to the skull, with a small round dent',res:'wax drippings on the boards and a round dent in the floor',src:'chapel',srcT:'One of the altar\'s brass candlesticks is missing from the chapel, leaving only a wax ring.'},
+{id:'hammer',n:'a blacksmith\'s hammer',doc:'a crushing blow, flat and wide',res:'grey iron smudges and a wide dent in the wall',src:'smithy',srcT:'A hammer is missing from the smithy\'s tool wall; its outline is clear in the soot.'},
+{id:'poison',n:'a vial of poison',doc:'foam at the lips and no wounds at all: poison',res:'two mugs on the table, one with a sour green residue',src:'clinic',srcT:'A gap on the clinic shelf where a green vial used to stand.'},
+{id:'rope',n:'a length of rope',doc:'rope burns and bruising around the neck',res:'frayed rope fibres scattered on the floor',src:'boathouse',srcT:'The boathouse rope coil has been cut short with a clean slice.'},
+{id:'axe',n:'a woodcutter\'s axe',doc:'a single deep, heavy cut',res:'a deep gouge in the doorframe and wood chips',src:'farm',srcT:'The chopping block at the farm has no axe in it, only a fresh notch.'},
+{id:'poker',n:'an iron fire poker',doc:'a blow from a long iron bar',res:'black soot streaks along the wall',src:'tavern',srcT:'The tavern fireplace stand is missing its poker.'}];
+const METH=[{id:'note',n:'Lured them with a forged note',indoor:0},{id:'window',n:'Climbed in through a window',indoor:1},{id:'key',n:'Used a stolen spare key',indoor:1},{id:'ambush',n:'Hid and ambushed them',indoor:1},{id:'drink',n:'Spiked their drink',indoor:0},{id:'follow',n:'Followed them from the tavern',indoor:0}];
+const MOT=[{id:'debt',n:'Money: the victim was owed a huge debt'},{id:'jealous',n:'Jealousy over a secret romance'},{id:'revenge',n:'Revenge for an old ruin'},{id:'blackmail',n:'The victim was blackmailing the killer'},{id:'inherit',n:'Inheritance: the killer is named in the will'},{id:'rival',n:'Business rivalry'}];
+const LEFT=[{id:'button',n:'a brass button',miss:'a coat with a missing brass button'},{id:'cloth',n:'a torn strip of cloth',miss:'a torn sleeve'},{id:'pipe',n:'a clay pipe',miss:'no sign of their clay pipe, which they always carry'},{id:'glove',n:'a leather glove',miss:'only one glove today'},{id:'ring',n:'a silver ring',miss:'a bare finger where a silver ring used to be'},{id:'quill',n:'a feather quill',miss:'no feather quill behind their ear for once'},{id:'ribbon',n:'a red ribbon',miss:'no red ribbon, which they usually wear'}];
+const HIDE=[{id:'well',n:'the old well in the plaza'},{id:'hay',n:'the haystack at the farm'},{id:'barrels',n:'the barrels behind the tavern'},{id:'crypt',n:'the graveyard crypt'},{id:'dock',n:'under the boathouse dock'},{id:'wood',n:'the bakery woodpile'}];
+const DUMP=[{id:'fountain',n:'the plaza fountain'},{id:'chapelb',n:'the back of the chapel'},{id:'harbor',n:'the harbor steps'},{id:'smithyr',n:'the road outside the smithy'}];
+/* ---------- the case ---------- */
+function genCase(seed){const r=mulberry(seed),c={seed,r,B:[],by:{},cott:[],npcs:[],clues:[],pstat:[],out:{}};
+ /* layout: shops on the main roads near the plaza, cottages further out, specials on fixed edge zones with random mirroring */
+ const mainZ=[-232,-194,-156,-118,-80,80,118,156,194,232],ewX=[84,128,172,216],plots=[];
+ for(const s of[-1,1]){for(const z of mainZ)plots.push({kind:'m',s,x:0,z,face:s<0?'E':'W'});for(const x of ewX)for(const sg of[-1,1])plots.push({kind:'e',s:sg,x:x*s,z:0,face:sg<0?'S':'N'})}
+ const SZ={tavern:[22,15],bakery:[14,11],smithy:[15,11],chapel:[14,24],clinic:[15,11],store:[15,11],library:[17,12],butcher:[13,10],tailor:[13,10],cottage:[11,9],boathouse:[18,12],farm:[16,14],lighthouse:[9,9]};
+ const shops=['tavern','store','bakery','smithy','tailor','butcher','clinic','library'];
+ const near=shuf(r,plots.filter(p=>Math.hypot(p.kind==='m'?10:p.x,p.kind==='m'?p.z:10)<175)),far=shuf(r,plots.filter(p=>Math.hypot(p.kind==='m'?10:p.x,p.kind==='m'?p.z:10)>=175));
+ const used=[];const take=(arr)=>{for(const p of arr)if(!used.includes(p)){used.push(p);return p}return null};
+ const types=shops.concat(['cottage','cottage','cottage','cottage','cottage','cottage']);
+ types.forEach((t,i)=>{const p=i<shops.length?(take(near)||take(far)):(take(far)||take(near)),sz=SZ[t],w=sz[0],d=sz[1];
+  let x=p.x,z=p.z;if(p.kind==='m'){x=p.s*(10+d/2);z=p.z}else{z=p.s*(10+d/2)}
+  const b={type:t,x,z,w,d,face:p.face,anch:[],th:0};c.B.push(b)});
+ const cm=r()<.5?1:-1,bm=r()<.5?1:-1;
+ c.B.push({type:'chapel',x:cm*205,z:-195,w:14,d:24,face:'S',anch:[]});c.B.push({type:'farm',x:-cm*215,z:-175,w:16,d:14,face:'S',anch:[]});
+ c.B.push({type:'boathouse',x:bm*322,z:95,w:18,d:12,face:bm>0?'E':'W',anch:[]});c.B.push({type:'lighthouse',x:0,z:-338,w:9,d:9,face:'S',anch:[]});
+ c.cm=cm;c.bm=bm;
+ c.B.forEach(b=>{b.th=b.face==='S'?0:b.face==='N'?Math.PI:b.face==='E'?Math.PI/2:-Math.PI/2;if(b.type==='cottage')c.cott.push(b);else c.by[b.type]=b;
+  const sw=b.face==='E'||b.face==='W';b.hx=(sw?b.d:b.w)/2;b.hz=(sw?b.w:b.d)/2});
+ /* people */
+ const names=new Set(),mk=(g)=>{for(;;){const n=rr(r,g==='f'?FNF:FNM)+' '+rr(r,LNM);if(!names.has(n)){names.add(n);return n}}};
+ const jobs=shuf(r,JOBS);c.npcs=jobs.map((jb,i)=>{const g=r()<.5?'f':'m',nm=mk(g);return{id:i,name:nm,first:nm.split(' ')[0],last:nm.split(' ')[1],job:jb.j,wt:jb.w,g,h:rr(r,['tall','short','average']),col:null,home:c.cott[i%c.cott.length],lines:{intro:[],victim:[],alibi:[],seen:[],gossip:[]},extra:[],role:'none',trait:rr(r,['nervous','gruff','cheerful','shy','proud']),spot:null,patrol:null,r:mulberry(seed*7+i*131)}});
+ const cols=shuf(r,COL);c.npcs.forEach((n,i)=>n.col=cols[i%cols.length]);
+ const mayorG=r()<.5?'f':'m',mn=mk(mayorG);c.mayor={id:'mayor',name:mn,first:mn.split(' ')[0],last:mn.split(' ')[1],job:'mayor',g:mayorG,h:'average',col:COL[7],lines:{},extra:[],role:'mayor',r:mulberry(seed+99)};
+ const pool=c.npcs.slice(),pk=()=>pool.splice(Math.floor(r()*pool.length),1)[0];
+ const V=pk(),M=pk(),A=r()<.62?pk():null,W=pk(),F=pk(),H1=pk(),H2=pk(),N1=pk(),N2=pk();
+ V.role='victim';M.role='murderer';if(A)A.role='accomplice';W.role='witness';c.V=V;c.M=M;c.A=A;c.W=W;c.F=F;c.H1=H1;c.H2=H2;c.N1=N1;c.N2=N2;
+ /* make the killer's tunic colour + height a unique pair so the witness description is decisive */
+ c.npcs.forEach(n=>{if(n!==M&&n.col===M.col&&n.h===M.h)n.h=n.h==='tall'?'short':'tall'});
+ c.npcs.filter(n=>n!==M&&n.col===M.col).forEach((n,i)=>{if(i===0&&n.h===M.h)n.h='average'});
+ /* names for places */
+ const own=(t)=>c.npcs.find(n=>n.wt===t&&n.job!=='barmaid'&&n.job!=='bard');
+ const tn=rr(r,['The Drowned Rat','The Gilded Anchor','The Rusty Lantern','The Salted Gull','The Black Kettle']);
+ const bname={tavern:tn,bakery:(own('bakery')||V).last+'\'s Bakery',smithy:(own('smithy')||V).last+'\'s Forge',chapel:'St. '+rr(r,['Brigid','Aldric','Maren','Tobias'])+'\'s Chapel',clinic:'Dr. '+(own('clinic')||V).last+'\'s Clinic',store:(own('store')||V).last+'\'s General Store',butcher:(own('butcher')||V).last+'\'s Meats',tailor:(own('tailor')||V).last+'\'s Tailoring',library:'the Village Library',boathouse:'the Boathouse',farm:(own('farm')||V).last+' Farm',lighthouse:'the Cay Lighthouse'};
+ c.B.forEach(b=>{b.name=b.type==='cottage'?'':bname[b.type]});
+ c.cott.forEach(b=>{const res=c.npcs.find(n=>n.home===b);b.name=(res?res.last:'Old')+' Cottage';b.res=res});
+ c.npcs.forEach(n=>{n.workB=c.by[n.wt]||null});
+ c.bname=t=>c.by[t]?c.by[t].name:t;
+ /* the facts */
+ const T=rr(r,TIMES),WP=rr(r,WEAP),LT=rr(r,LEFT),MT=rr(r,MOT);
+ const vHome=V.home,Lopts=[{b:V.workB||vHome},{b:vHome},{b:c.by.tavern},{b:c.by.store},{b:c.by.library},{b:c.by.bakery},{b:c.by.smithy},{b:c.by.clinic},{b:c.by.butcher},{b:c.by.tailor},{b:c.by.boathouse},{b:c.by.farm},{b:c.by.lighthouse}].filter(o=>o.b);
+ const L=Lopts[Math.floor(r()*Lopts.length)].b;
+ const DU=rr(r,DUMP.filter(d=>!(d.id==='chapelb'&&L===c.by.chapel)));
+ const HD=rr(r,HIDE.filter(h=>!(h.id==='dock'&&DU.id==='harbor')&&!(h.id==='crypt'&&DU.id==='chapelb')));
+ let ME;{const ok=METH.filter(m=>WP.id==='poison'?m.id==='drink':(m.id!=='drink'&&!(m.indoor&&L.type==='lighthouse')));ME=rr(r,ok)}
+ const f=c.f={time:T,weapon:WP,loc:L,dump:DU,hide:HD,left:LT,meth:ME,mot:MT,acc:A,wit:W,cul:M};
+ /* ---- clue helpers ---- */
+ const prop=(where,label,text,fact,model,opt)=>{c.clues.push(Object.assign({id:'p'+c.clues.length,kind:'prop',where,label,text,fact,model:model||'paper'},opt||{}))};
+ const say=(n,topic,text,fact)=>{n.lines[topic].push({t:text,f:fact})};
+ const extra=(n,q,a,fact)=>{n.extra.push({q,a,f:fact,id:n.id+'_'+n.extra.length})};
+ const vn=V.name,mn2=M.name,Ln=L.type==='cottage'?L.name:L.name;
+ /* TIME */
+ prop({b:L,k:'floor'},'a smashed pocket watch','A pocket watch lies smashed on the floor. Its hands froze at '+T.s+'.','time','watch');
+ say(W,'seen','The chapel bell had just struck '+T.w+' when I heard the scream.','time');
+ say(N1,'seen','Around '+T.s+' I heard a muffled argument from '+Ln+'. Then silence.','time');
+ prop({b:c.by.tavern,k:'table'},'a stopped tavern clock','The tavern clock is stopped at '+rr(r,TIMES.filter(t=>t!==T)).s+'. A note taped to it says: "Broken for weeks. Ignore." (A dead end.)','herring','watch');
+ /* WEAPON */
+ const doc=c.npcs.find(n=>n.job==='doctor');if(doc&&doc!==V)extra(doc,'What killed '+V.first+'?','I examined the body. '+cap(WP.doc)+'.','weapon');else{say(c.npcs.find(n=>n!==V&&n!==M&&n.wt==='clinic')||N2,'gossip','The doctor looked at the body this morning and told me: '+WP.doc+'.','weapon')}
+ prop({b:L,k:'floor'},'strange marks','You find '+WP.res+'.','weapon','mark');
+ prop({b:c.by[WP.src],k:'table'},'something missing',WP.srcT,'weapon','hook');
+ prop({out:HD.id,k:'hide'},'a bundle of rags','You unwrap the rags: '+WP.n+', still stained. Someone hid it here.','hiding','weapon:'+WP.id);
+ /* METHOD */
+ const md=ME.id;
+ if(md==='note'){prop({b:V.home,k:'table'},'a charred scrap of paper','Half-burnt paper in an elegant hand: "...come alone to '+Ln+' at '+T.s+'. Tell no one." A forged invitation.','method','paper');say(N2,'gossip',vn+' showed me an odd note last evening and said they had to meet someone in secret.','method')}
+ else if(md==='window'){prop({b:L,k:'floor'},'a broken window latch','The window latch is snapped and there are muddy bootprints beneath it. Someone climbed in.','method','latch');say(N1,'gossip','I heard a window rattle near '+Ln+' that night. I thought it was the wind.','method')}
+ else if(md==='key'){prop({b:L,k:'floor'},'an empty key hook','The key hook by the door holds no spare key, yet the lock is not forced.','method','hook');const sm=c.npcs.find(n=>n.job==='blacksmith');say(sm&&sm!==V&&sm!==M?sm:N2,'gossip','Someone paid me to cut a spare key for '+Ln+' last week. I did not ask why.','method')}
+ else if(md==='ambush'){prop({b:L,k:'floor'},'scuffed floor behind the door','A stool is tucked behind the door and the floor is scuffed, as if someone waited there in the dark.','method','mark');say(W,'seen','The door was standing ajar when I passed, as though someone was waiting behind it.','method')}
+ else if(md==='drink'){prop({b:L,k:'table'},vn+'\'s mug','Dregs of a green, bitter liquid cling to the mug. A second, clean mug sits beside it.','method','mug');const ib=c.npcs.find(n=>n.job==='innkeeper');say(ib&&ib!==V&&ib!==M?ib:N2,'gossip',vn+' ordered a drink, then someone paid for a second round and carried a mug over.','method')}
+ else{prop({b:c.by.tavern,k:'table'},'an unfinished meal','Cold stew and a second stool pulled close to the table. Someone sat here, then left in a hurry.','method','mug');const ib=c.npcs.find(n=>n.job==='innkeeper');say(ib&&ib!==V&&ib!==M?ib:N2,'gossip',vn+' left alone and someone slipped out right behind them.','method')}
+ /* HELPER */
+ if(A){prop({b:L,k:'floor'},'two sets of footprints','Two different sets of prints cross the floor: one heavy, one lighter.','helper','foot');say(W,'seen','I saw two shadows, not one.','helper');say(A,'alibi','I... was just taking a walk. Alone. Why do you ask?','helper');say(A,'gossip','I do not know anything! Please, leave me be.','helper')}
+ else{prop({b:L,k:'floor'},'a single trail of footprints','Just one set of boot prints crosses the floor.','helper','foot');say(W,'seen','Only one figure, I am sure of it. They were alone.','helper')}
+ /* WITNESS */
+ say(N1,'gossip','I saw '+W.name+' out very late that night. They looked scared.','witness');
+ prop({b:W.home,k:'table'},'a torn diary page','"I saw something terrible last night. If they find out I was there, I am finished. I must stay silent." The writer\'s name is torn away.','witness','paper');
+ /* LEFT BEHIND */
+ prop({b:L,k:'floor'},'something small on the floor','Half under the furniture you find '+LT.n+'.','trace','item:'+LT.id);
+ say(F,'gossip',mn2+' has been oddly out of sorts since yesterday: I noticed '+LT.miss+'.','trace');
+ /* PLACE */
+ prop({b:L,k:'floor'},'a pool of blood','A large pool of blood, already dark. The struggle happened right here, in '+Ln+', not where the body was left.','place','blood');
+ prop({out:DU.id,k:'hide'},'drag marks','Heel marks and blood spots in the dirt lead away from here, back toward '+Ln+'.','place','mark');
+ say(N1,'seen','I saw '+vn+' walk into '+Ln+' that evening and never come out.','place');
+ /* HIDING */
+ say(N2,'seen','Before dawn I saw someone fumbling around '+HD.n+'. I did not stop to ask.','hiding');
+ /* MOTIVE (two documents + gossip) */
+ const mp={debt:['a ledger','The ledger has '+mn2+'\'s name circled: "owes 800 gold, overdue."','a pile of notices at '+mn2+'\'s home','Final demand notices addressed to '+mn2+', signed by '+vn+'.'],
+ jealous:['a bundle of letters','Love letters in '+vn+'\'s drawer, signed with '+mn2+'\'s initial, ending badly.','a smashed locket','A locket with '+vn+'\'s portrait is smashed, in '+mn2+'\'s home.'],
+ revenge:['an old news clipping','A yellowed clipping: '+vn+'\'s false testimony ruined '+mn2+'\'s family years ago.','a burnt-edged letter','"Someone will pay for what was done," in '+mn2+'\'s handwriting.'],
+ blackmail:['an unsent letter','"Pay up or the village learns your secret, '+mn2+'," written in '+vn+'\'s hand.','a locked strongbox','Inside '+mn2+'\'s strongbox: money set aside for '+vn+', and a note: "Last payment."'],
+ inherit:['a copy of a will','A will leaving '+vn+'\'s estate to '+mn2+', signed only last week.','a letter to a lawyer','In '+mn2+'\'s home: a letter asking how fast an estate can pass.'],
+ rival:['a pair of ledgers','Two ledgers show '+vn+' stole most of '+mn2+'\'s customers this year.','a furious draft letter','A threatening draft, in '+mn2+'\'s hand, about "ruining '+vn+'\'s business."']}[MT.id];
+ prop({b:V.home,k:'table'},mp[0],mp[1],'motive','paper');prop({b:M.home,k:'table'},mp[2],mp[3],'motive','paper');
+ say(N2,'gossip',{debt:mn2+' has been gambling and owes half the village.',jealous:'I heard '+vn+' and '+mn2+' quarreling about a secret romance.',revenge:mn2+' never forgave '+vn+' for what happened years ago.',blackmail:vn+' liked to know everyone\'s secrets. And to profit from them.',inherit:'Everyone knows '+vn+' had no family. The estate has to go to someone.',rival:vn+' and '+mn2+' fought over customers all year.'}[MT.id],'motive');
+ /* CULPRIT: colour, height, alibi, behaviour */
+ say(W,'seen','The figure was '+(M.h==='tall'?'tall':M.h==='short'?'short':'of average height')+', wearing a '+M.col[0]+' cloak.','culprit');
+ const apl=rr(r,['the tavern','the plaza','the library','the bakery']);
+ say(M,'alibi','I was at '+apl+' all night with '+F.name+'. Ask them.','culprit');
+ say(F,'alibi','I spent the night at '+apl+'. And no, '+M.first+' was not with me, whatever they claim.','culprit');
+ /* red herrings */
+ const hm=rr(r,MOT.filter(m=>m!==MT));say(H1,'gossip','Between us, '+vn+' and I never got along. But murder? Never.','herring');
+ prop({b:H1.home,k:'table'},'a bundle of letters','Heated letters from '+H1.name+' to '+vn+' about an old argument. Nothing murderous, just bitter.','herring','paper');
+ say(H2,'seen','I was burying something in my garden before dawn. Nothing to do with the murder, I swear!','herring');
+ prop({b:c.by.butcher,k:'floor'},'blood on the chopping block','Fresh blood on the butcher\'s block. Routine work, nothing more.','herring','blood');
+ prop({b:c.by.boathouse,k:'table'},'a fishing knife','A scaled knife with fish blood. Honest work.','herring','tool');
+ /* alibis and small talk for everyone else */
+ c.npcs.forEach(n=>{
+  if(!n.lines.alibi.length){const mode=r();n.lines.alibi.push({t:mode<.4?'I was at home asleep by ten. The storm kept me up, though.':mode<.7?'I was at '+(c.by.tavern.name)+' until closing.':'I was finishing work at '+(n.workB?n.workB.name:'home')+' until late.',f:'alibi'})}
+  if(!n.lines.seen.length)n.lines.seen.push({t:rr(r,['Only the thunder and the wind. Nothing else.','A dog was barking near the harbor, that is all.','I saw the lantern light moving near the chapel, but that is the priest\'s habit.','Nothing, thank goodness. I bolted my door.']),f:'x'});
+  if(!n.lines.gossip.length)n.lines.gossip.push({t:rr(r,['Everyone seems on edge. People are lying, or afraid.','Look at who is nervous. Fear shows on the face.','I hear '+rr(r,c.npcs).name+' has been gambling again.','I would not trust a word anyone says today.']),f:'x'});
+  const rel=rr(r,['friend','rival','neutral','debtor']);n.lines.victim.push({t:rel==='friend'?vn+' was a dear friend. I cannot believe someone would do this.':rel==='rival'?'I will not pretend we got along. But murder? No.':rel==='debtor'?vn+' lent me money once. I paid it back, I swear!':vn+' kept mostly to themselves. A quiet '+V.job+'.',f:'x'});
+  n.lines.intro.push({t:'I am '+n.name+', the village '+n.job+'. '+(FLAV[n.job]||''),f:'x'})});
+ c.mayor.lines.intro=[{t:'I am Mayor '+mn+'.',f:'x'}];
+ /* wound up: hidden spot / dump for blood trails */
+ c.facts=f;return c}
+X.genCase=genCase;X.myst=()=>({C,ST});
+
+/* ---------- terrain: gentle, almost flat island, a little hillier toward the shore ---------- */
+function mystH(x,z){const r=Math.hypot(x,z),cr=LR+22*nW(x*.006+3,z*.006+9)+8*nD(x*.02,z*.02),lm=ss(0,1,(cr-r)/60);if(lm<=0)return-9;
+ const dm=Math.pow(Math.pow(Math.abs(x),6)+Math.pow(Math.abs(z),6),1/6),nz=ss(250,330,dm),h=FLAT+nz*(.7*nD(x*.012,z*.012)+.25*nD(x*.05,z*.05));return h*lm+(-9)*(1-lm)}
+const osp=X.spH;X.spH=function(tag){if(tag==='myst')return mystH;return osp.apply(this,arguments)};
+const obt=window.buildTerrainTiles;window.buildTerrainTiles=function(pos,col,tw,nr){
+ if(isMy())try{const n=pos.length/3,PAL=[[.2,.34,.19],[.24,.4,.2],[.3,.36,.18],[.18,.3,.2],[.34,.4,.22]];
+  for(let k=0;k<n;k++){const x=pos[k*3],h=pos[k*3+1],z=pos[k*3+2];if(h<1.3)continue;const w=ss(1.3,1.9,h)*.65,a=(nW(x*.018+2,z*.018-7)*.5+.5)*4.99,i0=Math.min(4,Math.floor(a)),i1=Math.min(4,i0+1),f=a-i0,p0=PAL[i0],p1=PAL[i1];
+   col[k*3]+=(p0[0]+(p1[0]-p0[0])*f-col[k*3])*w;col[k*3+1]+=(p0[1]+(p1[1]-p0[1])*f-col[k*3+1])*w;col[k*3+2]+=(p0[2]+(p1[2]-p0[2])*f-col[k*3+2])*w}}catch(e){console.error('[myst paint]',e)}
+ return obt.apply(this,arguments)};
+const ofs=window.findSpawn;window.findSpawn=function(info){const r=ofs.apply(this,arguments);if(isMy()){let zl=null;for(let z=HALF-6;z>0;z-=1.5)if(terrH(0,z)>.9){zl=z;break}spawn={x:0,z:(zl==null?LR-50:zl)-16}}return r};
+const opb=window.placeBoat;window.placeBoat=function(info){try{if(isMy()&&CUR.rec){let zl=null;for(let z=HALF-12;z>GZ+40;z-=1.5){if(terrH(0,z)>.45){zl=z;break}}if(zl==null||!isFinite(zl))zl=LR-45;zl=Math.max(zl,GZ+60);const fx=CUR.rec.fx=CUR.rec.fx||{};fx.b={a:Math.PI/2,rl:zl,rc:zl+14};fx.mmv=1}}catch(e){console.error('[myst boat]',e)}return opb.apply(this,arguments)};
+/* ---------- wall collision (axis aligned rects, spatial hash) ---------- */
+let WG2=new Map();
+function addRect(x0,x1,z0,z1){const o={x0:x0-.9,x1:x1+.9,z0:z0-.9,z1:z1+.9};for(let cx=Math.floor(o.x0/24);cx<=Math.floor(o.x1/24);cx++)for(let cz=Math.floor(o.z0/24);cz<=Math.floor(o.z1/24);cz++){const k=cx+','+cz;let a=WG2.get(k);if(!a)WG2.set(k,a=[]);a.push({x0:x0,x1:x1,z0:z0,z1:z1})}}
+const opo=window.pushOut;window.pushOut=function(nx,nz,py,ig){const r=opo.apply(this,arguments);if(!isMy()||!WG2.size)return r;let x=r[0],z=r[1];const rad=.55;
+ for(let it=0;it<3;it++){let mv=false;const a=WG2.get(Math.floor(x/24)+','+Math.floor(z/24));if(!a)break;
+  for(const o of a){const qx=Math.max(o.x0,Math.min(o.x1,x)),qz=Math.max(o.z0,Math.min(o.z1,z)),dx=x-qx,dz=z-qz,d2=dx*dx+dz*dz;
+   if(d2<rad*rad){if(d2>1e-8){const d=Math.sqrt(d2);x=qx+dx/d*rad;z=qz+dz/d*rad}else{const l=x-o.x0,rg=o.x1-x,t=z-o.z0,b=o.z1-z,m=Math.min(l,rg,t,b);if(m===l)x=o.x0-rad;else if(m===rg)x=o.x1+rad;else if(m===t)z=o.z0-rad;else z=o.z1+rad}mv=true}}
+  if(!mv)break}
+ r[0]=x;r[1]=z;return r};
+/* ---------- instanced kit ---------- */
+function Kit(){this.L={b:[],c:[],s:[],k:[],g:[],e:[],d:[]}}
+Kit.prototype.add=function(t,x,y,z,sx,sy,sz,col,ry,rx,rz){this.L[t].push([x,y,z,sx,sy,sz,col,ry||0,rx||0,rz||0])};
+function gableGeo(){const v=[],T=(a,b,c)=>v.push(...a,...b,...c);
+ T([-.5,-.5,.5],[.5,-.5,.5],[.5,.5,0]);T([-.5,-.5,.5],[.5,.5,0],[-.5,.5,0]);T([.5,-.5,-.5],[-.5,-.5,-.5],[-.5,.5,0]);T([.5,-.5,-.5],[-.5,.5,0],[.5,.5,0]);
+ T([-.5,-.5,-.5],[-.5,-.5,.5],[-.5,.5,0]);T([.5,-.5,.5],[.5,-.5,-.5],[.5,.5,0]);
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.computeVertexNormals();return g}
+Kit.prototype.flush=function(G){const self=this,d=new THREE.Object3D();d.rotation.order='YXZ';const col=new THREE.Color();
+ const mk=(t,geo,mat)=>{const a=self.L[t];if(!a.length){geo.dispose();return}const im=new THREE.InstancedMesh(geo,mat,a.length);
+  a.forEach((o,i)=>{d.position.set(o[0],o[1],o[2]);d.rotation.set(o[8],o[7],o[9]);d.scale.set(o[3],o[4],o[5]);d.updateMatrix();im.setMatrixAt(i,d.matrix);col.set(o[6]);im.setColorAt(i,col)});
+  im.instanceMatrix.needsUpdate=true;im.instanceColor.needsUpdate=true;im.frustumCulled=false;G.add(im);DISP.push(geo)};
+ const lm=()=>new THREE.MeshLambertMaterial({flatShading:true});
+ mk('b',new THREE.BoxGeometry(1,1,1),lm());mk('c',new THREE.CylinderGeometry(.5,.5,1,10),lm());mk('s',new THREE.SphereGeometry(.5,9,7),lm());mk('k',new THREE.ConeGeometry(.5,1,9),lm());
+ mk('g',gableGeo(),new THREE.MeshLambertMaterial({flatShading:true,side:THREE.DoubleSide}));
+ mk('e',new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({fog:true}));
+ mk('d',new THREE.CircleGeometry(.5,14).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}))};
+/* ---------- world build ---------- */
+const INT=[];let NPCS=[],PROPS=[],K=null,BODY=null;
+function rot(b,lx,lz){const c=Math.cos(b.th),s=Math.sin(b.th);return[b.x+lx*c+lz*s,b.z-lx*s+lz*c]}
+function buildWorld(c){const r=c.r,G=new THREE.Group();WG.add(G);C.G=G;K=new Kit();WG2=new Map();PROPS=[];INT.length=0;
+ const sw=b=>b.face==='E'||b.face==='W',pal=['#8a6a4a','#7a5a3e','#9a7a58','#6e5a48','#8f7550'],roofs=['#6a2e26','#4a3a30','#3a4a5a','#5a3a2a','#2e4a3a','#6a5a3a'];
+ const lbox=(b,lx,lz,sx,sz,y0,y1,col,solid)=>{const[x,z]=rot(b,lx,lz);K.add('b',x,GY+(y0+y1)/2,z,sx,y1-y0,sz,col,b.th);if(solid){const hx=(sw(b)?sz:sx)/2,hz=(sw(b)?sx:sz)/2;addRect(x-hx,x+hx,z-hz,z+hz)}};
+ const item=(b,t,lx,ly,lz,sx,sy,sz,col,ry)=>{const[x,z]=rot(b,lx,lz);K.add(t,x,GY+ly,z,sx,sy,sz,col,(ry||0)+b.th)};
+ const glow=(b,lx,ly,lz,sx,sy,sz,col)=>{const[x,z]=rot(b,lx,lz);K.add('e',x,GY+ly,z,sx,sy,sz,col,b.th)};
+ const circ=(b,lx,lz,rd,h)=>{const[x,z]=rot(b,lx,lz);addC(x,z,rd,h||1,'w','wood')};
+ const anch=(b,k,lx,lz,y)=>{const[x,z]=rot(b,lx,lz);b.anch.push({x,z,y:GY+y,k,u:0})};
+ /* furniture */
+ const table=(b,lx,lz,w,d,col)=>{w=w||2;d=d||1.2;item(b,'b',lx,.95,lz,w,.1,d,col||'#6a4a2c');for(const sx of[-1,1])for(const sz of[-1,1])item(b,'b',lx+sx*(w/2-.1),.5,lz+sz*(d/2-.1),.12,.9,.12,'#4a321c');circ(b,lx,lz,Math.max(w,d)/2,1);anch(b,'table',lx,lz,1.0)};
+ const chair=(b,lx,lz,ry)=>{item(b,'b',lx,.55,lz,.5,.08,.5,'#5a3e24',ry);item(b,'b',lx,.95,lz-.22*Math.cos(ry||0),.5,.8,.08,'#5a3e24',ry);for(const a of[-1,1])for(const e of[-1,1])item(b,'b',lx+a*.2,.28,lz+e*.2,.07,.5,.07,'#3a2814')};
+ const barrel=(b,lx,lz,col)=>{item(b,'c',lx,.55,lz,1,1.1,1,col||'#6a4524');item(b,'c',lx,.8,lz,1.04,.08,1.04,'#2a2a2e');item(b,'c',lx,.3,lz,1.04,.08,1.04,'#2a2a2e');circ(b,lx,lz,.55,1.1)};
+ const crate=(b,lx,lz,s,col)=>{s=s||.9;item(b,'b',lx,s/2+.05,lz,s,s,s,col||'#8a6a3a');circ(b,lx,lz,s*.6,s)};
+ const bed=(b,lx,lz,col,ry)=>{item(b,'b',lx,.35,lz,1.1,.4,2.1,'#5a3e24',ry);item(b,'b',lx,.62,lz,1,.2,1.9,col||'#a8a090',ry);item(b,'b',lx,.78,lz-.7,.7,.15,.4,'#e8e4d8',ry);circ(b,lx,lz-.5,.8,.7);circ(b,lx,lz+.5,.8,.7);anch(b,'bed',lx,lz,.85)};
+ const shelf=(b,lx,lz,w,side)=>{const ry=side?Math.PI/2:0;item(b,'b',lx,1.15,lz,w,2.2,.55,'#5a3e24',ry);const bc=['#8a2a2a','#2a4a7a','#2a6a3a','#8a6a1a','#5a2a6a','#6a4a2a'],n=Math.floor(w/.32);for(let row=0;row<4;row++)for(let i=0;i<n;i++){if(c.r()<.8){const dx=(i-(n-1)/2)*.32;item(b,'b',lx+(side?0:dx),.4+row*.5,lz+(side?dx:0),.3,.38,.22,bc[Math.floor(c.r()*6)],ry)}}const m=Math.max(1,Math.floor(w/1.4));for(let i=0;i<m;i++){const o=(i-(m-1)/2)*1.4;circ(b,lx+(side?0:o),lz+(side?o:0),.8,2)}};
+ const counter=(b,lx,lz,w,col)=>{item(b,'b',lx,.6,lz,w,1.2,.9,col||'#5a3e24');item(b,'b',lx,1.25,lz,w+.1,.1,1.0,'#3a2814');for(let i=0;i<Math.floor(w/1.6);i++)circ(b,lx+(i-(Math.floor(w/1.6)-1)/2)*1.6,lz,.8,1.2);anch(b,'table',lx,lz,1.3)};
+ const rug=(b,lx,lz,w,d,col)=>item(b,'b',lx,.12,lz,w,.03,d,col);
+ const lamp=(b,lx,ly,lz)=>{item(b,'b',lx,ly-.1,lz,.12,.24,.12,'#2a2a2e');glow(b,lx,ly+.1,lz,.12,.16,.12,'#ffd27a')};
+ const books=(b,lx,ly,lz,n)=>{for(let i=0;i<n;i++)item(b,'b',lx+(c.r()-.5)*.5,ly+i*.07,lz+(c.r()-.5)*.3,.28,.06,.2,['#8a2a2a','#2a4a7a','#2a6a3a','#8a6a1a'][i%4],c.r()*3)};
+ const papers=(b,lx,ly,lz,n)=>{for(let i=0;i<n;i++)item(b,'b',lx+(c.r()-.5)*.6,ly+i*.012,lz+(c.r()-.5)*.4,.3,.01,.4,'#e8dfc8',c.r()*3)};
+ const mug=(b,lx,ly,lz)=>item(b,'c',lx,ly,lz,.14,.16,.14,'#8a7a62');
+ const hearth=(b,lx,lz,ry)=>{item(b,'b',lx,1.1,lz,1.8,2.2,.9,'#6a6a6e',ry);glow(b,lx,.55,lz+(ry?0:.3),.8,.6,.2,'#ff8a2a');circ(b,lx,lz,1,2)};
+ /* walls, floor, roof, windows, per building */
+ c.B.forEach((b,bi)=>{const w=b.w,d=b.d,wc=b.type==='chapel'?'#a8a49a':b.type==='smithy'?'#6e6a66':b.type==='lighthouse'?'#d8d4cc':pal[Math.floor(r()*pal.length)],H=b.type==='chapel'?6:4.4,ft=b.type==='tavern'?'#6a4a2c':'#7a5a3a';
+  b.H=H;b.rc=roofs[Math.floor(r()*roofs.length)];
+  lbox(b,0,0,w,d,-1.6,.1,ft,false);
+  lbox(b,0,-d/2+.25,w,.5,-.5,H,wc,true);lbox(b,-w/2+.25,0,.5,d,-.5,H,wc,true);lbox(b,w/2-.25,0,.5,d,-.5,H,wc,true);
+  const gw=1.7;lbox(b,-(w/2+gw)/2,d/2-.25,w/2-gw,.5,-.5,H,wc,true);lbox(b,(w/2+gw)/2,d/2-.25,w/2-gw,.5,-.5,H,wc,true);lbox(b,0,d/2-.25,gw*2,.5,2.8,H,wc,false);
+  item(b,'b',0,.07,d/2+1.4,3.4,.14,1.6,'#8a8a8e');glow(b,-gw-.7,2.6,d/2+.15,.22,.34,.22,'#ffc864');glow(b,gw+.7,2.6,d/2+.15,.22,.34,.22,'#ffc864');
+  for(let i=-1;i<=1;i+=2){glow(b,i*(w/2-2.6),2.2,d/2+.02,1.1,.9,.1,'#e8b64a');glow(b,i*(w/2-2.6),2.2,-d/2-.02,1.1,.9,.1,'#e8b64a')}
+  glow(b,-w/2-.02,2.2,0,.1,.9,1.1,'#e8b64a');glow(b,w/2+.02,2.2,0,.1,.9,1.1,'#e8b64a');
+  if(b.type!=='lighthouse'){const rh=b.type==='chapel'?4:2.6;item(b,'g',0,H+rh/2-.3,0,w+1.8,rh,d+1.8,b.rc,0);item(b,'b',w/4,H+rh+.2,-d/4,.8,1.6,.8,'#5a5a5e')}
+  else{item(b,'c',0,H+11,0,7,22,7,'#e8e4dc');for(let i=0;i<4;i++)item(b,'c',0,H+3+i*5.5,0,7.1,2.2,7.1,'#b3261e');glow(b,0,H+23,0,4.2,2.6,4.2,'#fff0b0');item(b,'k',0,H+26.3,0,5.4,3.4,5.4,'#3a3a40');addC(...rot(b,0,0),3.6,30,'w','stone')}
+  /* doorstep lantern post collision */
+ });
+ /* ---------- interiors ---------- */
+ const scat=(b,n,fn)=>{for(let i=0;i<n;i++){const lx=(c.r()-.5)*(b.w-3),lz=-b.d/2+1.6+c.r()*(b.d-5);fn(lx,lz)}};
+ c.B.forEach(b=>{const w=b.w,d=b.d,t=b.type;b.floorAnch=()=>({x:0,z:0});
+  for(let i=0;i<5;i++){const lx=(c.r()-.5)*(w-4),lz=-d/2+1.8+c.r()*(d-6);anch(b,'floor',lx,lz,.12)}
+  if(t==='tavern'){counter(b,0,-d/2+2.2,w*.55,'#5a3a1e');for(let i=-3;i<=3;i++)item(b,'c',i*1.4,1.5,-d/2+1.8,.18,.34,.18,'#8aa86a');for(let i=0;i<3;i++){const tx=-w/2+3.6+i*5.6,tz=1.2;table(b,tx,tz,2,1.3);chair(b,tx-1.4,tz,Math.PI/2);chair(b,tx+1.4,tz,-Math.PI/2);chair(b,tx,tz-1.2,0);chair(b,tx,tz+1.2,Math.PI);mug(b,tx,1.1,tz);mug(b,tx+.4,1.1,tz+.2)}
+   hearth(b,w/2-1.2,-d/2+1.2,0);for(let i=0;i<5;i++)barrel(b,-w/2+1+i*1.1,-d/2+1.1);shelf(b,-w/2+.6,-1,3,1);lamp(b,0,3.2,0);lamp(b,-w/3,3.2,2);lamp(b,w/3,3.2,2);rug(b,0,2.2,6,3,'#7a2a2a');papers(b,-3,1.01,1.2,3)}
+  else if(t==='bakery'){counter(b,0,0,5,'#8a6a3a');for(let i=0;i<4;i++)item(b,'s',-1.8+i*1.2,1.45,0,.55,.3,.4,'#d8a85a');item(b,'b',w/2-1.8,.9,-d/2+1.5,2.4,1.8,1.6,'#6a5a52');glow(b,w/2-1.8,.8,-d/2+2.4,1,.5,.1,'#ff7a2a');shelf(b,-w/2+.6,-1,3,1);table(b,-w/2+2.5,-d/2+2,1.8,1.1);crate(b,w/2-1.2,d/2-2,.8,'#c8a86a');for(let i=0;i<3;i++)item(b,'c',-w/2+1+i*.5,.35,d/2-1.4,.4,.6,.4,'#e8c880');lamp(b,0,3.2,-1);papers(b,-w/2+2.5,1.01,-d/2+2,2)}
+  else if(t==='smithy'){item(b,'b',-w/2+2.2,.7,-d/2+2,1.8,1.4,1,'#3a3a40');item(b,'b',-w/2+2.2,1.5,-d/2+2,2.2,.3,1.4,'#2a2a30');circ(b,-w/2+2.2,-d/2+2,1.2,1.5);item(b,'b',w/2-2.4,.9,-d/2+2,2.6,1.8,2,'#5a5a5e');glow(b,w/2-2.4,1.3,-d/2+2.9,1.4,.6,.2,'#ff6a1a');circ(b,w/2-2.4,-d/2+2,1.6,1.8);
+   shelf(b,0,-d/2+.6,5,0);table(b,-1,1,2.4,1.2,'#4a3a2a');item(b,'b',-1,1.15,1,.5,.4,.3,'#6a6a70');crate(b,w/2-1.2,d/2-2.2,.9,'#6a5a3a');barrel(b,-w/2+1,d/2-2);lamp(b,0,3.4,0);for(let i=0;i<6;i++)item(b,'b',-2.5+i*1,2.3,-d/2+.7,.1,.7,.05,'#8a8a90')}
+  else if(t==='chapel'){for(let i=0;i<5;i++)for(const s of[-1,1]){item(b,'b',s*2.4,.5,2+i*2.6,3,.15,.7,'#6a4a2c');item(b,'b',s*2.4,.9,2+i*2.6+.3,3,.8,.08,'#6a4a2c');circ(b,s*2.4,2+i*2.6,1.5,.8)}
+   item(b,'b',0,.7,-d/2+2.2,3,1.2,1.2,'#b8b4aa');for(const s of[-1,1]){item(b,'c',s*1.2,1.7,-d/2+2.2,.2,.5,.2,'#d8b050');glow(b,s*1.2,2.05,-d/2+2.2,.1,.2,.1,'#ffe090')}circ(b,0,-d/2+2.2,1.7,1.3);anch(b,'table',0,-d/2+2.2,1.3);
+   shelf(b,-w/2+.7,-3,3,1);glow(b,0,3.8,-d/2+.6,2.5,1.8,.1,'#7a9aff');lamp(b,-3,3.4,3);lamp(b,3,3.4,3);rug(b,0,.4,2,d-5,'#7a2a2a')}
+  else if(t==='clinic'){for(let i=0;i<2;i++){bed(b,-w/2+2+i*3,-d/2+2.4,'#e8e4d8',0)}table(b,w/2-2.6,-d/2+2,2.6,1.2,'#6a5a4a');shelf(b,0,-d/2+.6,5,0);for(let i=0;i<8;i++)item(b,'c',-2+i*.55,1.4,-d/2+.9,.14,.3,.14,['#2f8a4a','#8a2a2a','#2a4a8a'][i%3]);papers(b,w/2-2.6,1.01,-d/2+2,4);books(b,w/2-3.2,1.01,-d/2+2.2,4);crate(b,-w/2+1,d/2-2,.8,'#c8c0a8');lamp(b,0,3.4,0);table(b,-1,1.5,1.6,1.1,'#d8d4c8')}
+  else if(t==='store'){shelf(b,0,-d/2+.6,6,0);shelf(b,-w/2+.7,-1,4,1);shelf(b,w/2-.7,-1,4,1);counter(b,0,1.2,4,'#6a4a2a');for(let i=0;i<4;i++)crate(b,-3.5+i*2.4,-1.8,.9,['#8a6a3a','#7a5a2a','#9a7a4a','#6a4a2a'][i]);for(let i=0;i<4;i++)barrel(b,w/2-1.2,-d/2+1.5+i*1.1);papers(b,0,1.31,1.2,3);lamp(b,0,3.4,0);items(b)}
+  else if(t==='butcher'){counter(b,0,0,4.5,'#7a2a2a');item(b,'b',-w/2+1.2,1.1,-1,1.6,.9,1.6,'#6a4a2a');for(let i=0;i<4;i++){item(b,'b',-2.4+i*1.6,2.9,-d/2+1.2,.1,.8,.1,'#4a4a4e');item(b,'s',-2.4+i*1.6,2.2,-d/2+1.2,.4,.7,.35,'#a85a5a')}barrel(b,w/2-1,-d/2+1);crate(b,w/2-1.4,d/2-2,.9,'#8a6a3a');lamp(b,0,3.4,0);shelf(b,w/2-.6,-1,3,1)}
+  else if(t==='tailor'){for(let i=0;i<3;i++){item(b,'c',-3+i*3,1.0,-1,.3,1.8,.3,'#6a5a4a');item(b,'s',-3+i*3,1.95,-1,.4,.6,.4,'#d8b890');item(b,'b',-3+i*3,1.3,-1,.9,1,.5,['#a83a3a','#3a5aa8','#3aa85a'][i]);circ(b,-3+i*3,-1,.5,2)}table(b,w/2-2.2,-d/2+2,2.6,1.3,'#6a4a2a');for(let i=0;i<5;i++)item(b,'b',-w/2+1+i*.5,.5,-d/2+1,.45,1,.45,['#b3261e','#2a4fa8','#2f7a3a','#d9b020','#6a3a9a'][i]);shelf(b,0,-d/2+.6,4,0);lamp(b,0,3.4,0);papers(b,w/2-2.2,1.01,-d/2+2,3)}
+  else if(t==='library'){for(let i=0;i<4;i++)shelf(b,-w/2+2+i*3.4,-d/2+.6,3,0);shelf(b,-w/2+.7,0,4,1);shelf(b,w/2-.7,0,4,1);for(let i=0;i<2;i++){table(b,-3+i*5,1.5,2.4,1.3);chair(b,-3+i*5,.2,0);chair(b,-3+i*5,2.8,Math.PI);books(b,-3+i*5,1.01,1.5,5);papers(b,-3+i*5+.6,1.01,1.3,3);lamp(b,-3+i*5,1.2,1.5)}table(b,w/2-2.6,-d/2+3,2.6,1.3,'#4a3a28');books(b,w/2-2.6,1.01,-d/2+3,6);rug(b,0,1.5,7,4,'#2a4a6a')}
+  else if(t==='boathouse'){for(const s of[-1,1]){item(b,'b',s*3,.4,-1,2,.7,6,'#6a4a2c');item(b,'b',s*3,.9,-1,1.6,.3,5.4,'#8a6a3a')}circ(b,-3,-1,1.4,.8);circ(b,3,-1,1.4,.8);for(let i=0;i<5;i++)barrel(b,-w/2+1,-d/2+1.2+i*1.2,'#5a4a3a');item(b,'b',0,2.6,-d/2+.7,6,.1,.05,'#6a4a2c');for(let i=0;i<4;i++)item(b,'k',-2.4+i*1.6,1.4,-d/2+.5,.5,.9,.1,'#8aa0b8');table(b,w/2-2,-d/2+2,2.2,1.2,'#4a3a2a');crate(b,w/2-1.3,d/2-2,.9,'#7a5a3a');lamp(b,0,3.4,0)}
+  else if(t==='farm'){for(let i=0;i<5;i++)item(b,'s',-w/2+2.5+i*1.9,.9,-d/2+2.2,1.8,1.6,1.6,'#d8c070');for(let i=0;i<3;i++)crate(b,w/2-1.4,-d/2+1.4+i*1.1,.9,'#8a6a3a');for(let i=0;i<4;i++)item(b,'b',-w/2+1,1.2,1+i*1.4,.15,2,.15,'#6a4a2a');table(b,w/2-2.4,d/2-2.4,2,1.2,'#5a3e24');barrel(b,w/2-1,0);item(b,'b',0,2.1,-d/2+.8,.15,.7,.15,'#8a8a90');lamp(b,0,3.4,0)}
+  else if(t==='lighthouse'){item(b,'b',0,1.2,-2.2,2,2.4,2,'#a8a49a');table(b,2,1.6,2,1.2,'#4a3a2a');chair(b,.6,1.6,Math.PI/2);bed(b,-2.8,-1.6,'#8a8070',0);books(b,2,1.01,1.6,4);papers(b,2.3,1.01,1.6,3);lamp(b,2,1.2,1.6)}
+  else{/* cottage */bed(b,-w/2+1.4,-d/2+2.1,rr(r,['#8a8070','#7a6a8a','#6a7a8a']),0);table(b,w/2-2.6,.4,2.2,1.3);chair(b,w/2-2.6-1.5,.4,Math.PI/2);chair(b,w/2-2.6,.4+1.1,Math.PI);hearth(b,w/2-1.2,-d/2+1.2,0);shelf(b,-w/2+.7,.5,3,1);rug(b,0,1,4,3,rr(r,['#7a2a2a','#2a4a6a','#4a6a2a']));books(b,w/2-2.6,1.01,.4,4);papers(b,w/2-2.2,1.01,.2,3);mug(b,w/2-2.9,1.1,.5);lamp(b,w/2-2.6,1.2,.4);barrel(b,-w/2+1,d/2-1.4);table(b,-w/2+2.8,d/2-2.4,1.6,1.1,'#5a3e24');if(r()<.6)bed(b,-w/2+1.4,d/2-5,'#8a7a6a',0)}
+ });
+ function items(b){for(let i=0;i<10;i++)item(b,'b',-5+i,2.3,-b.d/2+.9,.35,.3,.3,['#b3261e','#2a4fa8','#d9b020','#2f7a3a'][i%4])}
+ /* ---------- roads, plaza, gate, fences, outdoor features ---------- */
+ const road=(x0,z0,x1,z1,wd,col)=>{const dx=x1-x0,dz=z1-z0,l=Math.hypot(dx,dz);K.add('b',(x0+x1)/2,GY+.045,(z0+z1)/2,wd,.09,l,col,Math.atan2(dx,dz))};
+ road(0,-300,0,GZ+8,10,'#7d6f5c');road(-300,0,300,0,9,'#7d6f5c');K.add('d',0,GY+.06,0,58,1,58,'#8f8576');K.add('d',0,GY+.07,0,40,1,40,'#9a9080');
+ c.B.forEach(b=>{const[dx,dz]=rot(b,0,b.d/2+2.4);let tx=dx,tz=dz;if(b.face==='E'||b.face==='W'){tz=dz;tx=Math.abs(dx)>14?(dx>0?5:-5):dx;if(Math.abs(dx)<=14)tx=0}else{tx=dx;tz=Math.abs(dz)>14?(dz>0?4:-4):0}
+  if(b.type==='boathouse'){road(dx,dz,dx,0,3,'#8a7a62')}else if(b.type==='chapel'||b.type==='farm'){road(dx,dz,dx,0,3.2,'#8a7a62')}else if(b.type==='lighthouse'){road(dx,dz,0,-300,3.2,'#8a7a62')}else{road(dx,dz,tx,tz,3.2,'#8a7a62')}});
+ /* gate */
+ const gx=[-7,7];gx.forEach(x=>{K.add('b',x,GY+3.5,GZ,1.6,7,1.6,'#4a3220');K.add('c',x,GY+7.4,GZ,1.4,.8,1.4,'#3a2814');K.add('e',x,GY+6,GZ+.9,.3,.5,.3,'#ffc864');addC(x,GZ,.9,7,'w','wood')});K.add('b',0,GY+7,GZ,16,.9,1.2,'#4a3220');K.add('b',0,GY+6.1,GZ,14,.3,.3,'#3a2814');
+ {const cv=document.createElement('canvas');cv.width=512;cv.height=96;const g=cv.getContext('2d');g.fillStyle='#2a1a0c';g.fillRect(0,0,512,96);g.strokeStyle='#c8941e';g.lineWidth=6;g.strokeRect(5,5,502,86);g.fillStyle='#ffd27a';g.font='700 34px Cinzel,Georgia,serif';g.textAlign='center';g.textBaseline='middle';g.fillText('MURDER MYSTERY CAY',256,50);
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(13,2.4),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),fog:false}));sg.position.set(0,GY+8.5,GZ+.75);G.add(sg);DISP.push(sg.geometry)}
+ for(const s of[-1,1])for(let i=0;i<14;i++){const x=s*(10+i*4.4);K.add('b',x,GY+.9,GZ,.28,1.8,.28,'#5a4028');if(i<13){K.add('b',x+s*2.2,GY+1.4,GZ,4.4,.16,.1,'#6a4a2c');K.add('b',x+s*2.2,GY+.8,GZ,4.4,.16,.1,'#6a4a2c')}if(i%4===0)K.add('e',x,GY+2,GZ,.2,.3,.2,'#ffc864');if(i<12)addRect(x-.3,x+.3,GZ-.3,GZ+.3)}
+ for(let i=0;i<6;i++){const x=(i<3?-1:1)*(80+(i%3)*50);}
+ /* plaza: fountain, well, stalls, notice board, benches, lamps */
+ K.add('c',0,GY+.4,0,7,.8,7,'#8a8a90');K.add('c',0,GY+.5,0,5.6,.7,5.6,'#3a6a8a');K.add('c',0,GY+1.4,0,1.2,2.4,1.2,'#9a9aa0');K.add('s',0,GY+2.8,0,1.6,1.1,1.6,'#9a9aa0');addC(0,0,3.6,1.2,'w','stone');
+ c.out.fountain={x:0,z:6.5};const wx=15,wz=-11;K.add('c',wx,GY+.55,wz,2.6,1.1,2.6,'#7a7a80');K.add('c',wx,GY+.6,wz,1.8,1.1,1.8,'#101820');for(const s of[-1,1])K.add('b',wx+s*1.1,GY+1.8,wz,.15,2.4,.15,'#4a3220');K.add('b',wx,GY+3,wz,2.8,.2,1.6,'#4a3220');K.add('g',wx,GY+3.5,wz,3.2,.8,2.0,'#5a3a2a',0);addC(wx,wz,1.5,1.2,'w','stone');c.out.well={x:wx,z:wz+2.2};
+ for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4,sx=Math.cos(a)*19,sz=Math.sin(a)*19;K.add('b',sx,GY+1,sz,3,.2,1.8,'#6a4a2c');for(const e of[-1,1])for(const f of[-1,1])K.add('b',sx+e*1.4,GY+.5,sz+f*.8,.1,1,.1,'#4a3220');K.add('b',sx,GY+2.5,sz,3.6,.12,2.4,['#a83a3a','#3a5aa8','#c8a02a','#3a8a5a'][i],0);for(const e of[-1,1])for(const f of[-1,1])K.add('b',sx+e*1.7,GY+1.7,sz+f*1.1,.1,1.5,.1,'#4a3220');for(let j=0;j<4;j++)K.add('s',sx-1+j*.7,GY+1.2,sz,.4,.3,.4,['#d84a2a','#d8b030','#7ab040','#c87a30'][j]);addC(sx,sz,1.8,1.2,'w','wood')}
+ K.add('b',0,GY+1.6,-24,.2,3.2,.2,'#4a3220');K.add('b',0,GY+3,-24,3.2,1.8,.2,'#6a4a2c');K.add('b',-.6,GY+3,-23.88,.8,.5,.02,'#e8dfc8');K.add('b',.6,GY+3.2,-23.88,.8,.5,.02,'#e8dfc8');
+ for(let i=0;i<8;i++){const a=i*Math.PI/4+.4,bx=Math.cos(a)*10.5,bz=Math.sin(a)*10.5;K.add('b',bx,GY+.5,bz,1.8,.12,.5,'#5a3e24',-a+Math.PI/2);}
+ for(let z=-270;z<=GZ-10;z+=38){if(Math.abs(z)<30)continue;for(const s of[-1,1]){K.add('b',s*7,GY+2.2,z,.14,4.4,.14,'#2a2a2e');K.add('e',s*7,GY+4.5,z,.3,.4,.3,'#ffd27a')}}
+ /* graveyard + crypt beside the chapel */
+ {const ch=c.by.chapel,gxc=ch.x+(ch.x>0?24:-24),gzc=ch.z;for(let i=0;i<18;i++){const x=gxc+(i%6-2.5)*3.6,z=gzc+(Math.floor(i/6)-1)*4.5+(c.r()-.5);K.add('b',x,GY+.7,z,.9,1.4,.25,'#8a8a90',c.r()*.2-.1);K.add('b',x,GY+.0,z+.8,.9,.1,1.6,'#4a5a3a');addC(x,z,.5,1.2,'w','stone')}
+  K.add('b',gxc,GY+1.5,gzc-8.5,6,3,4,'#6a6a70');K.add('b',gxc,GY+1.2,gzc-6.4,1.6,2.2,.2,'#1a1a1e');K.add('g',gxc,GY+3.3,gzc-8.5,6.6,1.2,4.6,'#4a4a50',0);addRect(gxc-3,gxc+3,gzc-10.5,gzc-6.5);c.out.crypt={x:gxc,z:gzc-5.4};
+  for(let i=-6;i<=6;i++){K.add('b',gxc+i*3,GY+.8,gzc+8,.14,1.6,.14,'#2a2a2e');K.add('b',gxc+i*3,GY+.8,gzc-12,.14,1.6,.14,'#2a2a2e')}}
+ /* behind tavern: barrels (hiding spot) ; bakery woodpile ; smithy street ; chapel back ; harbor steps */
+ {const t=c.by.tavern,[bx,bz]=rot(t,0,-t.d/2-2.6);for(let i=0;i<5;i++){const[x,z]=rot(t,-4+i*2,-t.d/2-2.4);K.add('c',x,GY+.55,z,1,1.1,1,'#6a4524');K.add('c',x,GY+.8,z,1.04,.08,1.04,'#2a2a2e');addC(x,z,.55,1.1,'w','wood')}c.out.barrels={x:bx,z:bz};
+  const bk=c.by.bakery,[kx,kz]=rot(bk,bk.w/2+1.6,-bk.d/4);for(let i=0;i<9;i++){const cx=kx+(i%3-1)*.5,cz=kz+((i/3)|0)*0+0;K.add('c',cx,GY+.3+(Math.floor(i/3))*.55,cz+(i%3)*.15,.5,2.2,.5,'#7a5a32',0,0,Math.PI/2)}c.out.wood={x:kx,z:kz+1.2};
+  const sm=c.by.smithy,[sx,sz]=rot(sm,0,sm.d/2+6);c.out.smithyr={x:sx,z:sz};const chp=c.by.chapel,[cbx,cbz]=rot(chp,0,-chp.d/2-3.4);c.out.chapelb={x:cbx,z:cbz}}
+ /* boathouse dock + pier + moored boats */
+ {const bh=c.by.boathouse,sg=c.bm,px0=bh.x+sg*(bh.d/2+1);for(let i=0;i<22;i++)K.add('b',px0+sg*(i*1.8),GY+.15,bh.z,1.7,.18,3.6,i%2?'#7a5a3a':'#6a4a2c');for(let i=0;i<12;i++)for(const s of[-1,1])K.add('b',px0+sg*(i*3.6),GY-.6,bh.z+s*1.7,.3,2.6,.3,'#3a2814');
+  c.out.dock={x:px0+sg*10,z:bh.z+1.2};c.out.harbor={x:px0+sg*3,z:bh.z-2.4};
+  for(const s of[-1,1]){const bx=px0+sg*(14),bz=bh.z+s*5.2;K.add('b',bx,GY-.2,bz,6,.9,2.2,'#6a4a2c',0);K.add('b',bx,GY+.4,bz,5.2,.3,1.6,'#8a6a3a',0);K.add('b',bx,GY+3,bz,.18,5.4,.18,'#5a3e24');K.add('b',bx+.9,GY+2.8,bz,.08,3.4,2.2,'#e8e4d8')}}
+ /* farm: fields, haystacks (hiding spot), pen */
+ {const fm=c.by.farm,fx=fm.x,fz=fm.z+22;for(let i=0;i<9;i++)K.add('b',fx-20+i*5,GY+.07,fz,3.4,.14,26,i%2?'#6a8a3a':'#8a7a3a');
+  for(let i=0;i<5;i++){const x=fx+22+(i%3)*5.2,z=fm.z-4+((i/3)|0)*5;K.add('s',x,GY+1.5,z,4,3,4,'#c8aa4a');K.add('k',x,GY+3,z,3.6,2.2,3.6,'#d8bc5a');addC(x,z,2,3,'w','wood');if(i===0)c.out.hay={x:x-2.4,z:z+1.6}}
+  for(let i=0;i<14;i++){const x=fx-18+i*2.6;K.add('b',x,GY+.7,fm.z-14,.2,1.4,.2,'#5a4028');K.add('b',x,GY+.7,fm.z+6,.2,1.4,.2,'#5a4028')}
+  for(let i=0;i<3;i++){K.add('s',fx-12+i*2.4,GY+.6,fm.z-10,1.1,.9,1.3,'#e8e4d8');K.add('s',fx-12+i*2.4,GY+.95,fm.z-9.5,.5,.45,.5,'#e8e4d8')}}
+ /* dump site for the body */
+ const dm=c.f.dump,dpos=c.out[dm.id];c.bodyPos={x:dpos.x,z:dpos.z};
+ /* ---------- scattered props: flowers, rocks, crates, lamps, trees ---------- */
+ const inB=(x,z,m)=>c.B.some(b=>Math.abs(x-b.x)<b.hx+m&&Math.abs(z-b.z)<b.hz+m);
+ const onRoad=(x,z)=>(Math.abs(x)<9&&z<GZ+10&&z>-305)||(Math.abs(z)<9&&Math.abs(x)<305)||Math.hypot(x,z)<30;
+ const grassy=(x,z)=>terrH(x,z)>1.3&&Math.hypot(x,z)<LR-55;
+ for(let i=0;i<700;i++){const x=(r()*2-1)*(LR-40),z=(r()*2-1)*(LR-40);if(!grassy(x,z)||inB(x,z,2)||onRoad(x,z))continue;const q=r(),y=terrH(x,z);
+  if(q<.55)K.add('s',x,y+.18,z,.35,.3,.35,['#e8d84a','#e86a8a','#a88ae8','#ffffff','#e89a3a'][Math.floor(r()*5)]);else if(q<.8)K.add('s',x,y+.25,z,.9+r()*.8,.6,.8+r()*.6,'#7a7a7e');else if(q<.9){K.add('b',x,y+.45,z,.9,.9,.9,'#8a6a3a',r()*3);addC(x,z,.6,.9,'w','wood')}else{K.add('c',x,y+.5,z,.9,1,.9,'#6a4524');addC(x,z,.5,1,'w','wood')}}
+ const trunks=[];for(let i=0,n=0;i<2400&&n<520;i++){const x=(r()*2-1)*(LR-30),z=(r()*2-1)*(LR-30),dm2=Math.hypot(x,z);if(dm2>LR-48||terrH(x,z)<1.2)continue;if(inB(x,z,10)||onRoad(x,z)||(Math.abs(x)<14&&z>200))continue;
+  if(Math.abs(x)<300&&Math.abs(z)<300&&Math.hypot(x,z)<250&&r()<.82)continue;if(Math.abs(x-c.by.farm.x)<40&&Math.abs(z-c.by.farm.z-12)<40)continue;if(Math.hypot(x-(c.bm*340),z-95)<30)continue;n++;
+  const y=terrH(x,z),pine=r()<.6,h=7+r()*6;K.add('c',x,y+h/2,z,.9,h,.9,'#4a3220');
+  if(pine){for(let k=0;k<4;k++)K.add('k',x,y+h*.55+k*h*.17,z,5.2-k*1.1,h*.34,5.2-k*1.1,['#1f4a2a','#25502e','#1a4024'][k%3])}else{K.add('s',x,y+h+1.4,z,6.2+r()*2,5+r()*1.5,6.2+r()*2,['#2f5a2a','#3a6a2e','#4a5a2a','#6a4a1e'][Math.floor(r()*4)]);K.add('s',x+1.6,y+h,z+.8,4,3.4,4,'#3a5a2a')}
+  addC(x,z,.9,h,'w','wood')}
+ /* ---------- blood: pool where it happened, a drag trail to the body, a thinner trail to the weapon's hiding place, plus harmless spatter (butcher, boathouse) ---------- */
+ const L=c.f.loc,bl='#5a0808',bl2='#7a0c0c';const[lx,lz]=rot(L,(r()-.5)*(L.w-5),-L.d/2+2.6);c.lpos={x:lx,z:lz};
+ K.add('d',lx,GY+.15,lz,2.4,1,1.8,bl,r()*3);K.add('d',lx+.8,GY+.15,lz-.4,1.2,1,1,bl2,r()*3);K.add('d',lx-.9,GY+.15,lz+.6,.8,1,.7,bl,r()*3);for(let i=0;i<7;i++)K.add('d',lx+(r()-.5)*3.5,GY+.15,lz+(r()-.5)*3,.15+r()*.3,1,.15+r()*.3,bl2);
+ const [ldx,ldz]=rot(L,0,L.d/2+2);const trail=(x0,z0,x1,z1,step,sz,col)=>{const l=Math.hypot(x1-x0,z1-z0),n=Math.floor(l/step);for(let i=0;i<=n;i++){const t=i/n,x=x0+(x1-x0)*t+(r()-.5)*1.2,z=z0+(z1-z0)*t+(r()-.5)*1.2;K.add('d',x,GY+.12,z,sz*(.7+r()*.6),1,sz*(.7+r()*.6),col,r()*3)}};
+ trail(lx,lz,ldx,ldz,1.2,.5,bl);trail(ldx,ldz,c.bodyPos.x,c.bodyPos.z,3.2,.45,bl);{const ang=Math.atan2(c.bodyPos.x-ldx,c.bodyPos.z-ldz),l=Math.hypot(c.bodyPos.x-ldx,c.bodyPos.z-ldz);for(const s of[-.5,.5])K.add('b',ldx+(c.bodyPos.x-ldx)/2+Math.cos(ang)*s,GY+.1,ldz+(c.bodyPos.z-ldz)/2-Math.sin(ang)*s,.18,.04,l,'#3a2a1a',ang)}
+ const hp=c.out[c.f.hide.id];trail(ldx,ldz,hp.x,hp.z,6,.28,bl2);
+ {const bt=c.by.butcher;for(let i=0;i<6;i++){const[x,z]=rot(bt,(r()-.5)*(bt.w-3),-bt.d/2+2+r()*(bt.d-5));K.add('d',x,GY+.14,z,.5+r()*.8,1,.5+r()*.7,bl,r()*3)}const bh=c.by.boathouse;for(let i=0;i<4;i++){const[x,z]=rot(bh,(r()-.5)*(bh.w-3),-bh.d/2+2+r()*(bh.d-5));K.add('d',x,GY+.14,z,.4+r()*.5,1,.4+r()*.5,'#6a2a2a',r()*3)}}
+ /* tape around the body */
+ {const bp=c.bodyPos;for(const sx of[-1,1])for(const sz of[-1,1]){K.add('b',bp.x+sx*2.4,GY+.7,bp.z+sz*2.4,.12,1.4,.12,'#3a2a1a')}for(const s of[-1,1]){K.add('b',bp.x+s*2.4,GY+1.1,bp.z,.03,.08,4.8,'#e8c820');K.add('b',bp.x,GY+1.1,bp.z+s*2.4,4.8,.08,.03,'#e8c820')}K.add('d',bp.x,GY+.14,bp.z,3,1,2.2,bl,0);K.add('d',bp.x+1,GY+.14,bp.z+.8,1.2,1,1,bl2,1)}
+ K.flush(G);C.items=[];
+ /* ---------- clue props ---------- */
+ const used=new Set();
+ c.clues.forEach(cl=>{let x,z,y;const wh=cl.where;
+  if(wh.b){const b=wh.b,want=wh.k==='table'?'table':'floor';let a=b.anch.filter(q=>q.k===want&&!q.u);if(!a.length)a=b.anch.filter(q=>!q.u);const q=a[Math.floor(r()*a.length)]||b.anch[0];q.u=1;x=q.x+(r()-.5)*.4;z=q.z+(r()-.5)*.3;y=q.y}
+  else{const o=c.out[wh.out];x=o.x+(r()-.5)*.8;z=o.z+(r()-.5)*.8;y=terrH(x,z)}
+  const g=mkModel(cl.model,r);g.position.set(x,y+.02,z);G.add(g);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkW,color:0xfff0b0,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false,opacity:.75}));sp.scale.set(.9,.9,1);sp.position.set(x,y+.45,z);G.add(sp);
+  cl.x=x;cl.z=z;cl.y=y;cl.g=g;cl.sp=sp;C.items.push({type:'prop',cl,x,z})});
+ return c}
+/* ---------- clue prop models (small groups of boxes) ---------- */
+const GB=new THREE.BoxGeometry(1,1,1),GCY=new THREE.CylinderGeometry(.5,.5,1,10),GSP=new THREE.SphereGeometry(.5,8,6);const MATS={};
+const mat=c=>MATS[c]||(MATS[c]=new THREE.MeshLambertMaterial({color:c,flatShading:true}));
+function mkModel(name,r){const g=new THREE.Group(),bx=(sx,sy,sz,col,x,y,z,ry,rx,rz)=>{const m=new THREE.Mesh(GB,mat(col));m.scale.set(sx,sy,sz);m.position.set(x,y,z);m.rotation.set(rx||0,ry||0,rz||0);g.add(m);return m},cy=(sx,sy,sz,col,x,y,z,rx,rz)=>{const m=new THREE.Mesh(GCY,mat(col));m.scale.set(sx,sy,sz);m.position.set(x,y,z);m.rotation.set(rx||0,0,rz||0);g.add(m);return m};
+ const n=name.split(':'),k=n[0],id=n[1];
+ if(k==='paper'){bx(.55,.02,.4,'#e8dfc8',0,.02,0,r()*3);for(let i=0;i<3;i++)bx(.4,.005,.02,'#3a3a3e',0,.035,-.1+i*.1,0)}
+ else if(k==='watch'){cy(.3,.06,.3,'#d8b050',0,.04,0);cy(.22,.07,.22,'#e8e4d8',0,.045,0);bx(.02,.01,.1,'#2a2a2e',0,.09,0)}
+ else if(k==='mark'){bx(.8,.01,.06,'#2a1a10',0,.02,0,.5);bx(.7,.01,.06,'#2a1a10',.1,.02,.1,-.6);bx(.3,.01,.3,'#4a2a20',.1,.015,0,0.2)}
+ else if(k==='hook'){bx(.4,.5,.04,'#4a3a2a',0,.5,0);cy(.04,.2,.04,'#8a8a90',0,.45,.06,1.2)}
+ else if(k==='latch'){bx(.5,.35,.06,'#6a4a2a',0,.4,0);bx(.3,.05,.04,'#8a8a90',0,.5,.05);bx(.5,.01,.2,'#3a2a1a',0,.01,.2)}
+ else if(k==='mug'){cy(.16,.18,.16,'#8a7a62',0,.1,0);bx(.06,.1,.03,'#8a7a62',.1,.1,0)}
+ else if(k==='foot'){for(let i=0;i<4;i++){bx(.1,.01,.22,'#2a2018',(i%2?.15:-.15),.012,-.4+i*.28,.1)}}
+ else if(k==='blood'){bx(.7,.01,.5,'#5a0808',0,.012,0,.3)}
+ else if(k==='tool'){bx(.05,.04,.4,'#9a9aa0',0,.05,0,.3);bx(.07,.05,.14,'#4a3220',0,.05,.24,.3)}
+ else if(k==='weapon'){const m={dagger:()=>{bx(.06,.03,.5,'#aaaab0',0,.05,0);bx(.14,.04,.05,'#6a4a22',0,.05,.28);bx(.06,.01,.18,'#7a0c0c',0,.07,-.1)},candlestick:()=>{cy(.12,.5,.12,'#d8b050',0,.28,0,0,0);cy(.28,.05,.28,'#d8b050',0,.04,0);bx(.08,.01,.1,'#7a0c0c',.1,.06,0)},hammer:()=>{bx(.06,.04,.6,'#6a4a2a',0,.05,0);bx(.22,.16,.16,'#6a6a70',0,.08,-.3);bx(.1,.01,.1,'#7a0c0c',.05,.17,-.3)},poison:()=>{cy(.14,.24,.14,'#2f8a3a',0,.13,0);cy(.06,.1,.06,'#e8e4d8',0,.3,0)},rope:()=>{for(let i=0;i<4;i++){const t=new THREE.Mesh(new THREE.TorusGeometry(.2+i*.04,.03,5,12),mat('#b89a62'));t.rotation.x=Math.PI/2;t.position.y=.04+i*.03;g.add(t)}},axe:()=>{bx(.06,.05,.9,'#6a4a2a',0,.05,0);bx(.08,.3,.22,'#8a8a90',0,.1,-.4);bx(.06,.01,.06,'#7a0c0c',0,.26,-.4)},poker:()=>{cy(.04,.9,.04,'#3a3a40',0,.05,0,Math.PI/2,0);bx(.08,.08,.2,'#3a3a40',.2,.05,.4)}}[id];(m||(()=>bx(.3,.05,.3,'#7a0c0c',0,.03,0)))()}
+ else if(k==='item'){({button:()=>cy(.14,.03,.14,'#d8b050',0,.03,0),cloth:()=>bx(.4,.01,.18,'#7a2a4a',0,.02,0,.4),pipe:()=>{bx(.3,.04,.05,'#8a6a3a',0,.04,0,.3);cy(.1,.1,.1,'#8a6a3a',.15,.08,-.03)},glove:()=>{bx(.22,.03,.3,'#4a2a14',0,.03,0,.3);for(let i=0;i<4;i++)bx(.04,.03,.14,'#4a2a14',-.08+i*.055,.03,-.2,.3)},ring:()=>{const t=new THREE.Mesh(new THREE.TorusGeometry(.07,.02,6,12),mat('#d8d8e0'));t.rotation.x=Math.PI/2;t.position.y=.03;g.add(t)},quill:()=>{bx(.03,.01,.5,'#e8e4d8',0,.03,0,.5);bx(.1,.01,.25,'#d8d4c8',0,.03,.1,.5)},ribbon:()=>{bx(.5,.01,.1,'#b3261e',0,.02,0,.3)}}[id]||(()=>bx(.2,.03,.2,'#b3261e',0,.03,0)))()}
+ else bx(.4,.05,.3,'#8a6a3a',0,.03,0);
+ return g}
+
+/* ---------- NPCs ---------- */
+let INJ=false;
+function injectCos(){if(INJ)return;INJ=true;const dk=(h,f)=>{const n=parseInt(h.slice(1),16);const r=Math.round(((n>>16)&255)*f),g=Math.round(((n>>8)&255)*f),b=Math.round((n&255)*f);return'#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1)};
+ COL.forEach(cl=>{COS_BY_ID['mm_t_'+cl[0]]={id:'mm_t_'+cl[0],slot:'tunic',style:'shirt',c1:cl[1],c2:dk(cl[1],.7)}});
+ ['#4a4338','#3a3f4a','#5a4a32','#2f3a2f','#4a3a3a'].forEach((c,i)=>{COS_BY_ID['mm_p_'+i]={id:'mm_p_'+i,slot:'pants',style:'plain',c1:c,c2:c}})}
+function addMouth(av){const hd=av.head;if(hd.userData.mm)return hd.userData.mm;const m=new THREE.Mesh(new THREE.BoxGeometry(.05,.011,.012),new THREE.MeshBasicMaterial({color:0x5a1e1e}));m.position.set(0,-.072,.108);hd.add(m);hd.userData.mm=m;return m}
+function mkLabel(text){const cv=document.createElement('canvas');cv.width=320;cv.height=64;const g=cv.getContext('2d');g.fillStyle='#000a';g.fillRect(0,12,320,40);g.fillStyle='#ffe9b0';g.font='700 26px Cinzel,Georgia,serif';g.textAlign='center';g.textBaseline='middle';g.fillText(text,160,33);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthWrite:false,fog:false}));s.scale.set(4.6,.92,1);return s}
+function mkNpc(n,mayor){injectCos();const r=n.r,hats=COS.filter(c=>c.slot==='hat'),boots=COS.filter(c=>c.slot==='boots');
+ const cfg=Object.assign(AVDEF(),{skin:SKINS[Math.floor(r()*SKINS.length)],hair:HAIRS[Math.floor(r()*5)],hairStyle:n.g==='f'?rr(r,['long','braid','wavy','ponytail']):rr(r,['short','short','wavy','bald','mohawk']),gender:n.g,build:rr(r,['slim','avg','broad']),eye:EYES[Math.floor(r()*EYES.length)],beard:n.g==='m'?rr(r,['none','none','stubble','mustache','goatee','full']):'none',acc:[]});
+ const hat=mayor?(hats.slice().sort((a,b)=>(b.tier||0)-(a.tier||0))[0]||{}).id:(r()<.5&&hats.length?rr(r,hats).id:null);
+ const eq={hat:hat||null,tunic:'mm_t_'+n.col[0],pants:'mm_p_'+Math.floor(r()*5),boots:boots.length?rr(r,boots).id:null};
+ let av;try{av=buildAvatar(cfg,eq)}catch(e){console.error('[myst av]',e);av=buildAvatar(AVDEF(),{})}
+ const g=av.group,sc=n.h==='tall'?1.12:n.h==='short'?.9:1;g.scale.setScalar(sc*1.02);n.sc=sc;C.G.add(g);
+ const lab=mkLabel(n.name);lab.position.set(0,2.55,0);g.add(lab);lab.visible=false;
+ n.obj={g,av,x:0,z:0,ph:0,mm:addMouth(av),talk:false,lab,tx:0,tz:0};return n.obj}
+function putNpc(n,x,z,face){const o=n.obj;o.x=x;o.z=z;o.g.position.set(x,terrH(x,z),z);o.g.rotation.y=face==null?Math.random()*6.28:face;if(!n.patrol)addC(x,z,.5,2,'w','wood')}
+function placeNpcs(c){const r=c.r;injectCos();NPCS=[];
+ const jit=(v,a)=>v+(r()-.5)*a,door=b=>rot(b,jit(0,3),b.d/2+3.2),inside=b=>{const a=b.anch.filter(q=>q.k==='floor');const q=a[Math.floor(r()*a.length)]||{x:b.x,z:b.z};return[q.x+(r()-.5)*.8,q.z+(r()-.5)*.8]};
+ c.npcs.forEach(n=>{if(n===c.V)return;mkNpc(n,false);NPCS.push(n)});
+ const used=new Set([c.W,c.N2,c.N1,c.M]);if(c.A)used.add(c.A);else used.add(c.H2);
+ const free=NPCS.filter(n=>!used.has(n)&&n.wt!=='gate').slice(0,5);free.forEach(n=>used.add(n));
+ NPCS.forEach(n=>{if(used.has(n))return;let p;const roll=r(),wb=n.workB;
+  if(n.wt==='gate')p=[(r()<.5?-1:1)*11,GZ-4];else if(n.wt==='plaza'||!wb){const a=r()*6.28,d=15+r()*9;p=[Math.cos(a)*d,Math.sin(a)*d]}
+  else if(roll<.6)p=inside(wb);else if(roll<.78)p=door(wb);else if(roll<.9)p=inside(c.by.tavern);else{const a=r()*6.28,d=14+r()*9;p=[Math.cos(a)*d,Math.sin(a)*d]}
+  putNpc(n,p[0],p[1])});
+ /* patrols for a few free-roaming people */
+ free.forEach((n,i)=>{const a0=r()*6.28,rad=18+r()*8,pts=[];for(let k=0;k<3;k++)pts.push([Math.cos(a0+k*2.1)*rad,Math.sin(a0+k*2.1)*rad]);n.patrol={pts,i:0};putNpc(n,pts[0][0],pts[0][1])});
+ /* scene casts */
+ const W=c.W,N2=c.N2,bx=Math.cos(.4)*9.2,bz=Math.sin(.4)*9.2;putNpc(W,bx,bz,Math.atan2(1.8,0));putNpc(N2,bx+1.9,bz,Math.atan2(-1.9,0));
+ if(c.A){const h=c.out[c.f.hide.id];putNpc(c.A,h.x+2.6,h.z+1.4,Math.atan2(-2.6,-1.4))}else{const[hx,hz]=rot(c.H2.home,0,-c.H2.home.d/2-2.6);putNpc(c.H2,hx,hz,0)}
+ putNpc(c.N1,c.bodyPos.x+3.2,c.bodyPos.z+1.8,Math.atan2(-3.2,-1.8));
+ putNpc(c.M,c.out.well.x-2.8,c.out.well.z+1.2,Math.atan2(2.8,-1.2));
+ /* mayor + body */
+ mkNpc(c.mayor,true);const m=c.mayor.obj;m.x=3;m.z=GZ+13;m.g.position.set(3,terrH(3,GZ+13),GZ+13);m.g.rotation.y=0;addC(3,GZ+13,.5,2,'w','wood');
+ mkNpc(c.V,false);const bo=c.V.obj;bo.g.rotation.order='YXZ';bo.g.rotation.set(-Math.PI/2,Math.random()*6.28,0);bo.g.position.set(c.bodyPos.x,terrH(c.bodyPos.x,c.bodyPos.z)+.32,c.bodyPos.z);bo.x=c.bodyPos.x;bo.z=c.bodyPos.z;bo.lab.visible=false;bo.dead=true}
+/* ---------- UI ---------- */
+const UI={};
+function el(tag,css,par){const e=document.createElement(tag);e.style.cssText=css||'';(par||document.body).appendChild(e);return e}
+const FL={time:'When it happened',weapon:'The weapon',place:'Where it happened',motive:'The motive',method:'How they got to the victim',helper:'Who helped',witness:'Who saw something',hiding:'Where the weapon was hidden',trace:'What was left behind',culprit:'Who did it'};
+const CHIP={time:'Time',weapon:'Weapon',place:'Place',motive:'Motive',method:'Method',helper:'Accomplice',witness:'Witness',hiding:'Hiding spot',trace:'Evidence',culprit:'Suspect',herring:'Lead',alibi:'Alibi'};
+function hudUpdate(){if(!UI.hud)UI.hud=el('div','position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:21;pointer-events:none;background:#12100ecc;color:#e8d9b0;border:1px solid #8a7a4a;border-radius:10px;padding:5px 14px;font:700 12px Cinzel,Georgia,serif;letter-spacing:1.5px;white-space:nowrap;display:none');
+ const on=isMy()&&C&&(ST.state==='invest'||ST.state==='done')&&!ST.cs;UI.hud.style.display=on?'block':'none';if(on)UI.hud.textContent='MURDER MYSTERY · '+C.V.name+' · CLUES '+ST.found+' · N NOTEBOOK'}
+function setHint(t){if(!UI.hint)UI.hint=el('div','position:fixed;bottom:23%;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;background:#000b;color:#ffe9b0;border:1px solid #8a7a4a;border-radius:8px;padding:7px 14px;font:600 13px Inter,sans-serif;display:none');
+ if(t){UI.hint.textContent=t;UI.hint.style.display='block'}else UI.hint.style.display='none'}
+function closeDlg(){if(UI.dlg){UI.dlg.remove();UI.dlg=null}if(ST.typeT){clearInterval(ST.typeT);ST.typeT=null}if(ST.dlg&&ST.dlg.n)ST.dlg.n.hold=false;ST.dlg=null;ST.talking=null;try{renderer.domElement.requestPointerLock()}catch(e){}}
+function typeInto(e,text,n){if(ST.typeT)clearInterval(ST.typeT);let i=0;e.textContent='';ST.talking=n||null;ST.typeT=setInterval(()=>{i+=2;e.textContent=text.slice(0,i);if(i>=text.length){clearInterval(ST.typeT);ST.typeT=null;ST.talking=null}},22)}
+function showDlg(o){document.exitPointerLock&&document.exitPointerLock();if(!UI.dlg)UI.dlg=el('div','position:fixed;left:50%;bottom:4%;transform:translateX(-50%);width:min(760px,94vw);z-index:56;font:14px Inter,sans-serif;color:#fff');
+ const d=UI.dlg;d.innerHTML='';const box=el('div','background:#14100cf0;border:2px solid #8a7a4a;border-radius:14px;padding:16px 20px;box-shadow:0 10px 40px #000',d);
+ const nm=el('div','letter-spacing:2px;font:700 12px Cinzel,Georgia,serif;color:#e0c070;margin-bottom:6px',box);nm.textContent=o.title+(o.sub?'  ·  '+o.sub:'');
+ const tx=el('div','line-height:1.55;margin-bottom:12px;color:#f2e6c8;min-height:44px;white-space:pre-wrap',box);typeInto(tx,o.text,o.n);
+ const ob=el('div','display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow:auto',box);
+ o.opts.forEach(q=>{const b=el('button','background:#2a2014;color:#ffe4a8;border:1px solid #7a6a3a;border-radius:8px;padding:8px 12px;font:600 13px Inter,sans-serif;cursor:pointer;text-align:left',ob);b.textContent=q.t;b.onmouseenter=()=>b.style.background='#46341a';b.onmouseleave=()=>b.style.background='#2a2014';b.onclick=()=>{try{SX.click&&SX.click()}catch(e){}q.fn()}})}
+function addNote(id,title,text,cats){if(ST.nkeys[id])return;ST.nkeys[id]=1;ST.notes.push({id,title,text,cats:cats||[]});try{toast('Notebook updated (N)')}catch(e){}}
+function noteDone(f){return ST.notes.some(n=>n.cats.includes(f))}
+function openNotebook(){if(ST.cs||!C)return;document.exitPointerLock&&document.exitPointerLock();if(UI.nb)UI.nb.remove();const ov=UI.nb=el('div','position:fixed;inset:0;background:#000b;z-index:58;display:flex;align-items:center;justify-content:center;font:14px Inter,sans-serif;color:#fff');
+ const bx=el('div','background:#e8dcc0;color:#2a2014;border:3px solid #5a4020;border-radius:12px;width:min(820px,94vw);max-height:88vh;overflow:auto;padding:18px 22px;box-shadow:0 10px 50px #000',ov);
+ const h=el('div','font:700 20px Cinzel,Georgia,serif;margin-bottom:4px',bx);h.textContent='Case Notebook: the death of '+C.V.name+', '+C.V.job;
+ const sub=el('div','font-size:12px;margin-bottom:10px;color:#5a4a30',bx);sub.textContent='The Mayor will ask you about each of these. Clues you find tick them off.';
+ const grid=el('div','display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;margin-bottom:12px',bx);Object.keys(FL).forEach(k=>{const d=el('div','font-size:13px',grid);d.textContent=(noteDone(k)?'☑ ':'☐ ')+FL[k]});
+ const body=el('div','border-top:2px solid #5a4020;padding-top:10px',bx);if(!ST.notes.length){const e=el('div','color:#6a5a40',body);e.textContent='Nothing yet. Examine objects and talk to people (Q).'}
+ ST.notes.slice().reverse().forEach(n=>{const d=el('div','margin-bottom:10px;padding:8px 10px;background:#f4ecd8;border-left:4px solid #8a5a1a;border-radius:4px',body);const t=el('div','font:700 13px Inter,sans-serif',d);t.textContent=n.title;n.cats.forEach(k=>{const c=el('span','margin-left:8px;font:700 10px Inter,sans-serif;background:#5a4020;color:#f4ecd8;border-radius:8px;padding:1px 7px;vertical-align:middle',t);c.textContent=CHIP[k]||'Note'});const x=el('div','font-size:13px;margin-top:3px;line-height:1.45',d);x.textContent=n.text});
+ const cl=el('button','margin-top:6px;background:#5a4020;color:#f4ecd8;border:0;border-radius:8px;padding:8px 16px;font:700 13px Inter,sans-serif;cursor:pointer',bx);cl.textContent='Close (N)';cl.onclick=closeNotebook}
+function closeNotebook(){if(UI.nb){UI.nb.remove();UI.nb=null;try{renderer.domElement.requestPointerLock()}catch(e){}}}
+/* ---------- examining things and talking ---------- */
+function examine(cl){cl.seen=true;if(cl.sp)cl.sp.visible=false;if(cl.fact!=='x'&&!cl.counted){cl.counted=true;ST.found++}
+ addNote(cl.id,cap(cl.label),cl.text,[cl.fact]);showDlg({title:cap(cl.label),text:cl.text,opts:[{t:'Done.',fn:closeDlg}]})}
+function examineBody(){const V=C.V,t='You kneel beside '+V.name+', the village '+V.job+'. They are cold and still. A dark trail of blood and heel marks leads away across the ground. Whatever happened, it did not happen on this spot.';addNote('body','The body of '+V.name,t,[]);showDlg({title:'The body',text:t,opts:[{t:'Done.',fn:closeDlg}]})}
+const PRE={nervous:'(fidgets) ',gruff:'(grunts) ',cheerful:'(smiles weakly) ',shy:'(avoids your eyes) ',proud:'(stands tall) '};
+function ask(n,topic){const ls=n.lines[topic]||[],txt=(PRE[n.trait]||'')+ls.map(l=>l.t).join(' ');
+ ls.forEach((l,i)=>{if(l.f&&l.f!=='x')addNote(n.id+topic+i,n.name+' ('+n.job+')',l.t,[l.f])});npcMenu(n,txt)}
+function npcMenu(n,text){const V=C.V,o=[];o.push({t:'Who are you?',fn:()=>ask(n,'intro')});o.push({t:'What can you tell me about '+V.first+'?',fn:()=>ask(n,'victim')});o.push({t:'Where were you last night?',fn:()=>ask(n,'alibi')});o.push({t:'Did you see or hear anything unusual?',fn:()=>ask(n,'seen')});o.push({t:'Has anyone been acting strangely?',fn:()=>ask(n,'gossip')});
+ n.extra.forEach(q=>o.push({t:q.q,fn:()=>{if(q.f)addNote(q.id,n.name+' ('+n.job+')',q.a,[q.f]);npcMenu(n,(PRE[n.trait]||'')+q.a)}}));o.push({t:'Goodbye.',fn:closeDlg});
+ showDlg({title:n.name,sub:cap(n.job),text:text||(n.trait==='nervous'?'(glances around) Yes? What do you want?':n.trait==='gruff'?'What is it?':n.trait==='cheerful'?'Hello there, Captain. Terrible times, terrible times.':n.trait==='shy'?'Oh... hello.':'Yes? Make it quick.'),opts:o,n})}
+function talkTo(n){ST.dlg={n};n.hold=true;const o=n.obj;if(o){const dx=P.x-o.x,dz=P.z-o.z;o.g.rotation.y=Math.atan2(dx,dz)}npcMenu(n)}
+/* ---------- the Mayor's questions ---------- */
+function mayorMenu(text){const V=C.V,o=[];if(ST.state==='quiz'&&!arguments[1]){startQuiz();return}
+ if(ST.state==='done'){o.push({t:'Thank you, Mayor.',fn:closeDlg});showDlg({title:C.mayor.name,sub:'Mayor',text:text||'The case is closed. If you wish to investigate a new murder, leave the Cay and return, and I will tell you of another.',opts:o,n:C.mayor});return}
+ o.push({t:'Tell me about the case.',fn:()=>mayorMenu(V.name+', our '+V.job+', was found dead at dawn near '+C.f.dump.n+'. That is all we know. Not when, not how, not who. Question everyone, search every corner, and keep your notebook (N) up to date.')});
+ o.push({t:'I am ready to tell you what happened.',fn:()=>mayorMenu('You will be asked ten questions, one chance at each. Nine about how it happened and one about who did it. Are you certain you are ready?',true)});
+ if(arguments[1]){o.length=0;o.push({t:'Yes, I am ready.',fn:()=>{closeDlg();startQuiz()}});o.push({t:'Not yet.',fn:()=>mayorMenu('Take your time. But hurry, Captain.')})}
+ else o.push({t:'Not yet.',fn:closeDlg});
+ showDlg({title:C.mayor.name,sub:'Mayor',text:text||'Captain. Have you learned anything?',opts:o,n:C.mayor})}
+function buildQuiz(c){const f=c.f,r=mulberry(c.seed^0x51),V=c.V,vn=V.name;const pick=(correct,pool,k)=>{const o=[correct];for(const p of shuf(r,pool)){if(o.length>=4)break;if(!o.includes(p))o.push(p)}return shuf(r,o).map(v=>({id:v,t:v}))};
+ const npcOpts=(extraNone)=>{const a=c.npcs.filter(n=>n!==V).map(n=>({id:'n'+n.id,t:n.name+' ('+n.job+')'}));if(extraNone)a.unshift({id:'none',t:'Nobody: the killer acted alone'});return a};
+ const bn=c.B.filter(b=>b.type!=='cottage').map(b=>cap(b.name)).concat(c.cott.map(b=>b.name));
+ return[{q:'What time was '+vn+' killed?',o:pick(f.time.s,TIMES.map(t=>t.s)),ok:f.time.s},{q:'What was the murder weapon?',o:pick(cap(f.weapon.n),WEAP.map(w=>cap(w.n))),ok:cap(f.weapon.n)},
+ {q:'Where did the murder itself take place? (Not where the body was left.)',o:pick(cap(f.loc.name),bn),ok:cap(f.loc.name)},{q:'What was the killer\'s motive?',o:pick(f.mot.n,MOT.map(m=>m.n)),ok:f.mot.n},
+ {q:'How did the killer get to '+V.first+'?',o:pick(f.meth.n,METH.map(m=>m.n)),ok:f.meth.n},{q:'Who helped the killer?',o:npcOpts(true),ok:f.acc?'n'+f.acc.id:'none',list:true},
+ {q:'Who witnessed something that night?',o:npcOpts(false),ok:'n'+f.wit.id,list:true},{q:'Where did the killer hide the weapon?',o:pick(cap(f.hide.n),HIDE.map(h=>cap(h.n))),ok:cap(f.hide.n)},
+ {q:'What did the killer leave behind at the scene?',o:pick(cap(f.left.n),LEFT.map(l=>cap(l.n))),ok:cap(f.left.n)},{q:'And finally: who killed '+vn+'?',o:npcOpts(false),ok:'n'+f.cul.id,list:true}]}
+function startQuiz(){ST.state='quiz';ST.qz=buildQuiz(C);ST.ans=[];askQ(0)}
+function askQ(i){const q=ST.qz[i],o=q.o.map(a=>({t:a.t,fn:()=>{ST.ans[i]=a;if(i+1<ST.qz.length)askQ(i+1);else finishQuiz()}}));
+ showDlg({title:C.mayor.name,sub:'Question '+(i+1)+' of '+ST.qz.length,text:q.q,opts:o,n:C.mayor})}
+function claim(n,label){const r=rollChances(n,false);applyLoot(r.gained,[]);showLoot(label+': '+n+' gems',r.gained,[]);save();updateHeader(true);try{if(invOpen)renderInv()}catch(e){}}
+function finishQuiz(){const f=C.f,res=ST.qz.map((q,i)=>({ok:ST.ans[i].id===q.ok,q,a:ST.ans[i]}));const cul=res[9].ok,all=res.every(r=>r.ok),wrong=res.filter(r=>!r.ok).length,rw=all?1000:cul?250:0;
+ const nm=id=>{if(id==='none')return'Nobody';const n=C.npcs[+id.slice(1)];return n.name+' ('+n.job+')'};
+ const story=C.M.name+' ('+C.M.job+') killed '+C.V.name+' at '+f.time.s+' in '+f.loc.name+', using '+f.weapon.n+'. Motive: '+f.mot.n.toLowerCase()+'. Method: '+f.meth.n.toLowerCase()+'. '+(f.acc?f.acc.name+' helped. ':'No one helped. ')+f.wit.name+' saw something. The weapon was hidden at '+f.hide.n+', and the killer left behind '+f.left.n+'. The body was moved to '+f.dump.n+'.';
+ ST.state='done';ST.result={rw,wrong,cul};
+ const lines=res.map((r,i)=>(r.ok?'✔ ':'✘ ')+'Q'+(i+1)+': '+(r.q.list?nm(r.a.id):r.a.t)+(r.ok?'':'   →   '+(r.q.list?nm(r.q.ok):r.q.ok))).join('\n');
+ const head=all?'Flawless. Every detail was correct.':cul?'You named the killer, but '+wrong+' detail'+(wrong>1?'s were':' was')+' wrong.':'You named the wrong person. The real killer walks free.';
+ closeDlg();fixSky(.38,'cloud');
+ showDlg({title:C.mayor.name,sub:'The verdict',text:head+'\n\n'+lines+'\n\nWhat really happened: '+story+'\n\n'+(rw?'Reward: '+rw+' gems.':'No reward this time.')+' Leave the Cay and return for a new case.',opts:[{t:'Close the case.',fn:closeDlg}],n:C.mayor});
+ if(rw)claim(rw,all?'Case solved perfectly':'Killer caught');banner(all?'CASE SOLVED':cul?'KILLER CAUGHT':'CASE FAILED',all?'#ffe08a':cul?'#cfe8a0':'#ff8a6a');ST.final=1}
+function fixSky(t,w){try{X.fixSky(t,w)}catch(e){}}
+/* ---------- cinematics ---------- */
+const CS={on:false,shots:[],i:-1,t:0,cur:null,skippable:false,onEnd:null,len:0,pb:false};
+function bars(on){if(!UI.bt){UI.bt=el('div','position:fixed;left:0;right:0;top:0;height:12vh;background:#000;z-index:60;transform:translateY(-100%);transition:transform .6s;pointer-events:none');UI.bb=el('div','position:fixed;left:0;right:0;bottom:0;height:12vh;background:#000;z-index:60;transform:translateY(100%);transition:transform .6s;pointer-events:none')}
+ UI.bt.style.transform=on?'translateY(0)':'translateY(-100%)';UI.bb.style.transform=on?'translateY(0)':'translateY(100%)'}
+function cover(on,ms){if(!UI.cv)UI.cv=el('div','position:fixed;inset:0;background:#000;z-index:62;opacity:0;pointer-events:none');UI.cv.style.transition='opacity '+(ms||600)+'ms';UI.cv.style.opacity=on?'1':'0'}
+function sub(name,text){if(!UI.sub){UI.sub=el('div','position:fixed;left:50%;bottom:14vh;transform:translateX(-50%);width:min(820px,90vw);z-index:61;text-align:center;pointer-events:none;text-shadow:0 2px 6px #000;display:none');UI.sn=el('div','font:700 13px Cinzel,Georgia,serif;color:#e0c070;letter-spacing:2px;margin-bottom:4px',UI.sub);UI.st=el('div','font:600 19px Inter,sans-serif;color:#fff;line-height:1.4',UI.sub)}
+ if(text){UI.sub.style.display='block';UI.sn.textContent=name||'';UI.st.textContent=text}else UI.sub.style.display='none'}
+function titleCard(txt,small){if(!UI.tc)UI.tc=el('div','position:fixed;inset:0;z-index:63;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 1.2s;text-align:center');UI.tc.innerHTML='';if(txt){const a=el('div','font:700 clamp(28px,5vw,58px) Cinzel,Georgia,serif;color:#e8d9b0;letter-spacing:6px;text-shadow:0 4px 24px #000',UI.tc);a.textContent=txt;if(small){const b=el('div','font:600 16px Inter,sans-serif;color:#cdbf9a;margin-top:10px;letter-spacing:3px',UI.tc);b.textContent=small}}UI.tc.style.opacity=txt?'1':'0'}
+function skipBtn(on){if(!UI.sk){UI.sk=el('button','position:fixed;right:24px;bottom:15vh;z-index:63;background:#000a;color:#fff;border:1px solid #aaa;border-radius:8px;padding:8px 14px;font:700 13px Inter,sans-serif;cursor:pointer;display:none');UI.sk.textContent='Skip ▶  (Esc)';UI.sk.onclick=()=>csSkip()}UI.sk.style.display=on?'block':'none'}
+function csStart(shots,o){CS.on=true;ST.cs=true;CS.shots=shots;CS.i=-1;CS.skippable=!!o.skippable;CS.onEnd=o.onEnd||null;CS.pb=busy;busy=true;setHint(null);closeDlg();closeNotebook();bars(true);skipBtn(CS.skippable);csNext()}
+function csNext(){CS.i++;if(CS.i>=CS.shots.length){csEnd();return}const s=CS.shots[CS.i];CS.t=0;CS.cur=s;if(s.on)try{s.on()}catch(e){console.error(e)}
+ CS.len=(s.text||'').length;if(s.dur==null)s.dur=Math.max(2.2,CS.len/32+1.6);else if(s.text)s.dur=Math.max(s.dur,CS.len/32+1.2);
+ if(s.text)sub(s.who==='player'?(S.name||'Captain'):s.who&&s.who.name||'',s.text);else sub('','');titleCard(s.title||'',s.small)}
+function csEnd(){if(!CS.on)return;CS.on=false;ST.cs=false;busy=CS.pb;CS.cur=null;bars(false);sub('','');titleCard('');skipBtn(false);try{P.av.group.visible=P.third;if(VM)VM.root.visible=!P.third}catch(e){}if(CS.onEnd){const f=CS.onEnd;CS.onEnd=null;f()}}
+function csSkip(){if(CS.on&&CS.skippable)csEnd()}
+function csTick(dt){if(!CS.on)return;CS.t+=dt;const s=CS.cur;if(!s)return;P.vx=P.vz=0;HP.inv=Date.now()+6000;try{P.av.group.visible=true;if(VM)VM.root.visible=false}catch(e){}
+ const talking=s.text&&CS.t<CS.len/40+.2;ST.csTalk=talking?s.who:null;if(CS.t>=s.dur)csNext()}
+function csAdvance(){if(!CS.on)return;const s=CS.cur;if(s&&s.text&&CS.t<CS.len/40){CS.t=CS.len/40+.25;return}csNext()}
+let RH=false;function hookRender(){if(RH||typeof renderer==='undefined'||!renderer||!renderer.render)return;RH=true;const orr=renderer.render.bind(renderer);renderer.render=function(sc,cam){
+ if(CS.on&&cam===camera&&CS.cur){const s=CS.cur,k=Math.min(1,CS.t/s.dur),e=k*k*(3-2*k),lp=(a,b)=>a.map((v,i)=>v+((b||a)[i]-v)*e),p=typeof s.p0==='function'?s.p0(e):lp(s.p0,s.p1),l=lp(s.l0,s.l1),sh=Math.sin(CS.t*1.7)*.012;
+  const sp=camera.position.clone(),sq=camera.quaternion.clone(),sf=camera.fov,f=(s.fov0||55)+((s.fov1||s.fov0||55)-(s.fov0||55))*e;
+  camera.position.set(p[0]+sh,p[1]+sh*.6,p[2]);camera.lookAt(l[0],l[1],l[2]);if(Math.abs(camera.fov-f)>.01){camera.fov=f;camera.updateProjectionMatrix()}
+  const r=orr(sc,cam);camera.position.copy(sp);camera.quaternion.copy(sq);if(camera.fov!==sf){camera.fov=sf;camera.updateProjectionMatrix()}return r}
+ return orr(sc,cam)};}
+window.addEventListener('keydown',e=>{if(!CS.on)return;if(e.code==='Escape'){e.stopImmediatePropagation();e.preventDefault();csSkip();return}if(e.code==='Space'||e.code==='Enter'){e.stopImmediatePropagation();e.preventDefault();csAdvance()}},true);
+window.addEventListener('mousedown',e=>{if(CS.on&&e.button===0&&!(e.target&&e.target.tagName==='BUTTON')){e.stopImmediatePropagation();csAdvance()}},true);
+/* shot helpers */
+const HY=n=>GY+1.62*(n.sc||1);
+function faceT(n,tx,tz){const o=n.obj;if(o)o.g.rotation.y=Math.atan2(tx-o.x,tz-o.z)}
+function closeShot(spk,oth,d,side,dur,text,drift,fov){const s=spk.obj,o=oth?(oth.obj||oth):{x:s.x,z:s.z+5};let dx=o.x-s.x,dz=o.z-s.z;const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;const px=-dz,pz=dx,y=HY(spk)+.12;
+ return{p0:[s.x+dx*d+px*side,y,s.z+dz*d+pz*side],p1:[s.x+dx*(d-(drift||.5))+px*side*.7,y+.04,s.z+dz*(d-(drift||.5))+pz*side*.7],l0:[s.x,HY(spk),s.z],l1:[s.x,HY(spk),s.z],dur:dur,who:spk,text:text,fov0:fov||40,fov1:(fov||40)-4}}
+function wideShot(a,b,dur,text,who,high){const ax=a.obj.x,az=a.obj.z,bx=b.obj.x,bz=b.obj.z,mx=(ax+bx)/2,mz=(az+bz)/2;let dx=bx-ax,dz=bz-az;const l=Math.hypot(dx,dz)||1;dx/=l;dz/=l;const px=-dz,pz=dx;
+ return{p0:[mx+px*8,GY+(high?5.2:3.2),mz+pz*8],p1:[mx+px*6.4+dx*1.5,GY+(high?4.6:3),mz+pz*6.4+dz*1.5],l0:[mx,GY+2.7,mz],l1:[mx,GY+2.7,mz],dur:dur,who:who,text:text,fov0:50,fov1:46}}
+function mouthTick(dt,t){const list=NPCS.concat(C&&C.mayor?[C.mayor]:[]);for(const n of list){const o=n.obj;if(!o)continue;const sp=(ST.talking===n)||(ST.csTalk===n);o.mm.scale.y=sp?1+Math.abs(Math.sin(t*16+o.ph*3))*2.4:1}
+ try{const pm=addMouth(P.av);pm.scale.y=ST.csTalk==='player'?1+Math.abs(Math.sin(t*16))*2.4:1}catch(e){}}
+/* ---- opening cinematic ---- */
+function startIntro(){if(ST.introDone)return;ST.introDone=true;const c=C,m=c.mayor,V=c.V,mx=3,mz=GZ+13,px=3.5,pz=GZ+21,pn=S.name||'Captain',M0=m.obj;
+ const gy=GY+1.7,tele=()=>{P.x=px;P.z=pz;P.y=topAt(px,pz)+.2;P.yaw=0;P.vx=P.vz=P.vy=0;P.grounded=true;faceT(m,px,pz)};
+ fixSky(.93,'heavy');HP.inv=Date.now()+90000;const seen=!!ST.seen;
+ const sh=[{p0:[46,64,440],p1:[16,26,340],l0:[0,4,160],l1:[3,6,GZ+8],dur:7,fov0:60,fov1:52,title:'MURDER MYSTERY CAY',small:'The village remembers everything.'},
+ {p0:[9,4.6,pz+17],p1:[6.5,3.8,pz+9],l0:[mx,gy,mz],l1:[mx,gy,mz],dur:null,who:m,text:'Captain! Thank the heavens. The ferryman said a ship had landed. We have been praying for someone like you.',fov0:52,fov1:44,on:tele},
+ closeShot(m,{obj:{x:px,z:pz}},2.9,.7,null,'I am Mayor '+m.name+'. Last night, in this very storm, someone in our village was murdered. '+V.name+', our '+V.job+'.',.8,38),
+ {p0:[mx+1.6,gy+.1,mz-.9],p1:[mx+1.1,gy+.05,mz-.4],l0:[px,gy,pz],l1:[px,gy,pz],dur:null,who:'player',text:'Murdered? Tell me everything you know.',fov0:42,fov1:38},
+ {p0:[mx-1.4,GY+.9,mz+2.2],p1:[mx-.8,GY+1.4,mz+1.8],l0:[mx,GY+2.6,mz],l1:[mx,GY+2.4,mz],dur:null,who:m,text:'That is the trouble. We do not know when, or how, or why. The body was left where the whole village would find it. And the killer... is still among us.',fov0:60,fov1:50},
+ {p0:t=>{const a=-.9+t*1.9;return[mx+Math.sin(a)*7+.5,GY+3.2+t*.8,mz+Math.cos(a)*7+.5]},l0:[mx+.2,gy,mz+3.6],l1:[mx+.2,gy,mz+3.6],dur:null,who:m,text:'Talk to everyone. Search every house, every alley. Everyone is lying, or afraid. And when you know it all, come and find me. I shall ask you ten questions. Do not be wrong, Captain.',fov0:46,fov1:42}];
+ csStart(sh,{skippable:seen,onEnd:()=>{tele();ST.introDone=true;try{localStorage.setItem('mmSeen','1')}catch(e){}ST.seen=true;endIntro()}})}
+function endIntro(){const c=C;cover(true,500);setTimeout(()=>{fixSky(.3,'rain');titleCard('The next morning...','Find out who killed '+c.V.name);setTimeout(()=>{cover(false,1400);titleCard('');ST.state='invest';HP.inv=Date.now()+3000;banner('FIND THE KILLER','#e8d9b0');toast('Examine clues and talk to people with Q. Press N for your notebook.')},2200)},600)}
+/* ---- proximity scenes ---- */
+function buildScenes(c){const f=c.f,W=c.W,N2=c.N2,Ln=f.loc.name;c.scenes=[];const add=(id,n,r,mk)=>c.scenes.push({id,n,r,mk,done:false});
+ add('w',W,16,()=>{faceT(W,N2.obj.x,N2.obj.z);faceT(N2,W.obj.x,W.obj.z);addNote('sc_w','Overheard: '+W.name,W.name+' was nervously telling a friend about a '+(c.M.h==='tall'?'tall':c.M.h==='short'?'short':'average-height')+' figure in a '+c.M.col[0]+' cloak near '+Ln+' just after '+f.time.w+' o\'clock that night, and was afraid to tell the mayor.',['witness','culprit','time']);
+  return[wideShot(W,N2,3.4,null,null,false),closeShot(N2,W,2.6,.6,null,'You look dreadful, '+W.first+'. You have not slept, have you?',.5,42),closeShot(W,N2,2.6,-.6,null,'I cannot stop shaking. Last night, just after '+f.time.w+' o\'clock, I saw something near '+Ln+'. A '+(c.M.h==='tall'?'tall':c.M.h==='short'?'short':'ordinary')+' figure in a '+c.M.col[0]+' cloak, carrying something wrapped.',.6,38),closeShot(N2,W,2.6,.6,null,'You must tell the mayor!',.4,40),closeShot(W,N2,2.4,-.6,null,'And be next? No. Please, say nothing. Not a word.',.7,36)]});
+ if(c.A)add('a',c.A,15,()=>{const A=c.A,h=f.hide;addNote('sc_a','Overheard: '+A.name,A.name+' was muttering fearfully near '+h.n+' about "keeping watch" and "never thought it would go this far".',['helper','hiding']);
+  const sx=A.obj.x,sz=A.obj.z;return[{p0:[sx+9,GY+2.4,sz+9],p1:[sx+6,GY+2.2,sz+6.5],l0:[sx,GY+1.4,sz],l1:[sx,GY+1.4,sz],dur:3.2,who:null,fov0:50,fov1:44},closeShot(A,{obj:{x:sx+4,z:sz+4}},2.3,.5,null,'Nobody will ever find it here... nobody.',.5,38),closeShot(A,{obj:{x:sx-4,z:sz+4}},2.3,-.5,null,'I only kept watch. I never thought it would go this far. Please, let them never learn that I helped.',.7,34)]});
+ else add('h',c.H2,15,()=>{const H=c.H2;addNote('sc_h','Overheard: '+H.name,H.name+' was burying a bundle of letters behind their house, muttering about a secret nobody must find. It looked guilty, but nothing connected it to the murder.',[]);
+  const sx=H.obj.x,sz=H.obj.z;return[{p0:[sx+8,GY+2.4,sz+8],p1:[sx+5.5,GY+2.2,sz+6],l0:[sx,GY+1.4,sz],l1:[sx,GY+1.4,sz],dur:3,who:null,fov0:50,fov1:44},closeShot(H,{obj:{x:sx+4,z:sz+4}},2.3,.5,null,'If anyone finds these letters, my life here is over.',.5,38),closeShot(H,{obj:{x:sx-4,z:sz+4}},2.3,-.5,null,'It has nothing to do with the murder. But it would look so bad.',.7,34)]});
+ add('g',c.N1,16,()=>{const N=c.N1,V=c.V,hint={debt:V.first+' said someone owed them a fortune and refused to pay.',jealous:V.first+' told me they had broken someone\'s heart, and feared the consequences.',revenge:V.first+' said an old wrong would come back to haunt them.',blackmail:V.first+' knew a secret that gave them a hold over somebody. I begged them to stop.',inherit:V.first+' had just changed their will, and told no one why.',rival:V.first+'\'s business had made them dangerous enemies.'}[f.mot.id];
+  addNote('sc_g','Overheard: '+N.name+' mourning '+V.name,N.name+' was weeping by the body. '+hint,['motive']);faceT(N,c.bodyPos.x,c.bodyPos.z);
+  return[{p0:[N.obj.x+8,GY+3.6,N.obj.z+7],p1:[N.obj.x+5.5,GY+2.6,N.obj.z+5],l0:[c.bodyPos.x,GY+.5,c.bodyPos.z],l1:[N.obj.x,GY+1.5,N.obj.z],dur:3.2,who:null,fov0:55,fov1:46},closeShot(N,{obj:{x:c.bodyPos.x,z:c.bodyPos.z}},2.4,.5,null,V.first+'... why? Only yesterday they told me they were afraid of someone.',.5,38),closeShot(N,{obj:{x:c.bodyPos.x,z:c.bodyPos.z}},2.4,-.5,null,hint,.7,34)]});
+ add('m',c.M,14,()=>{const M=c.M;addNote('sc_m','Seen: '+M.name,M.name+' was scrubbing '+M.col[0]+' sleeves at the well, acting unnaturally calm.',['culprit']);const sx=M.obj.x,sz=M.obj.z;
+  return[{p0:[sx-7,GY+1.4,sz-5],p1:[sx-4.5,GY+1.5,sz-3.5],l0:[sx,GY+1.4,sz],l1:[sx,GY+1.2,sz],dur:3,who:null,fov0:50,fov1:42},closeShot(M,{obj:{x:sx-3,z:sz+3}},2.2,.4,null,'Terrible business. Just terrible. I am only washing the soot from my sleeves.',.5,36),{p0:[sx+.8,GY+1.4,sz+1.8],p1:[sx+.4,GY+1.1,sz+1.2],l0:[sx,GY+1.2,sz+.2],l1:[sx,GY+1.1,sz+.2],dur:2.6,who:null,fov0:36,fov1:30}]})}
+function sceneCheck(){if(ST.state!=='invest'||ST.cs||ST.dlg||UI.nb)return;for(const s of C.scenes){if(s.done||!s.n.obj)continue;if(dist(P.x,P.z,s.n.obj.x,s.n.obj.z)<s.r){s.done=true;const sh=s.mk();csStart(sh,{skippable:true,onEnd:()=>{}});return}}}
+/* ---------- per frame ---------- */
+function nearest(){let best=null,bd=99;for(const n of NPCS.concat([C.mayor])){const o=n.obj;if(!o)continue;const d=dist(P.x,P.z,o.x,o.z);if(d<4.6&&d<bd){bd=d;best={type:'npc',n,label:n.name}}}
+ {const d=dist(P.x,P.z,C.bodyPos.x,C.bodyPos.z);if(d<3.4&&d<bd){bd=d;best={type:'body',label:'the body'}}}
+ for(const it of C.items){const d=dist(P.x,P.z,it.x,it.z);if(d<2.7&&d<bd){bd=d;best={type:'prop',cl:it.cl,label:it.cl.label}}}return best}
+function npcTick(dt,t){for(const n of NPCS){const o=n.obj;if(!o)continue;const dp=dist(P.x,P.z,o.x,o.z);o.lab.visible=dp<22&&!ST.cs;let spd=0;
+  if(n.patrol&&!n.hold&&dp>5&&!ST.cs){const pt=n.patrol.pts[n.patrol.i],dx=pt[0]-o.x,dz=pt[1]-o.z,l=Math.hypot(dx,dz);if(l<1.2)n.patrol.i=(n.patrol.i+1)%n.patrol.pts.length;else{spd=1.5;o.x+=dx/l*spd*dt;o.z+=dz/l*spd*dt;o.g.position.set(o.x,terrH(o.x,o.z),o.z);let a=Math.atan2(dx,dz)-o.g.rotation.y;a=Math.atan2(Math.sin(a),Math.cos(a));o.g.rotation.y+=a*Math.min(1,dt*5)}}
+  else if(dp<8&&!ST.cs){let a=Math.atan2(P.x-o.x,P.z-o.z)-o.g.rotation.y;a=Math.atan2(Math.sin(a),Math.cos(a));o.g.rotation.y+=a*Math.min(1,dt*3)}
+  o.ph+=dt*spd*2.3;try{animAvatar(o.av,dt,t,spd,0,true,0,o.ph,{swim:0,tool:'hand',dig:0})}catch(e){}}
+ const m=C.mayor.obj;if(m){m.lab.visible=dist(P.x,P.z,m.x,m.z)<22&&!ST.cs;try{animAvatar(m.av,dt,t,0,0,true,0,0,{swim:0,tool:'hand',dig:0})}catch(e){}}}
+function sparkTick(t){for(const cl of C.clues){if(cl.sp&&cl.sp.visible){const d=dist(P.x,P.z,cl.x,cl.z);cl.sp.material.opacity=d<30?.35+.4*Math.sin(t*2.4+cl.x):0;cl.sp.scale.setScalar(.7+.25*Math.sin(t*2.4+cl.z))}}}
+function tick(dt){hookRender();if(!isMy()||!C||!C.G)return;const t=performance.now()/1000;csTick(dt);mouthTick(dt,t);npcTick(dt,t);sparkTick(t);hudUpdate();
+ if(!running)return;if(ST.state==='intro'&&!ST.introDone&&!HP.dead&&!busy)startIntro();
+ if(ST.state==='invest'||ST.state==='done'||ST.state==='quiz'){sceneCheck();const nn=!ST.dlg&&!ST.cs&&!UI.nb&&!busy&&!HP.dead?nearest():null;setHint(nn?'Press Q to '+(nn.type==='npc'?'talk to '+nn.label:'examine '+nn.label):null)}else setHint(null)}
+const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._mme){X._mme=1;console.error('[myst]',e)}}};
+window.addEventListener('keydown',e=>{if(!isMy()||!C||!C.G||e.repeat)return;
+ if(e.code==='Escape'&&(UI.dlg||UI.nb)&&!CS.on&&ST.state!=='quiz'){if(UI.nb)closeNotebook();else closeDlg();return}
+ if(!running||ST.cs||HP.dead)return;
+ if(e.code==='KeyN'&&(ST.state==='invest'||ST.state==='done'||ST.state==='quiz')&&!UI.dlg){e.stopImmediatePropagation();e.preventDefault();if(UI.nb)closeNotebook();else if(!invOpen&&locked)openNotebook();return}
+ if(e.code==='KeyQ'&&locked&&!invOpen&&!busy&&!ST.dlg&&!UI.nb&&(ST.state==='invest'||ST.state==='done'||ST.state==='quiz')){const nn=nearest();if(!nn)return;e.stopImmediatePropagation();e.preventDefault();
+  if(nn.type==='prop')examine(nn.cl);else if(nn.type==='body')examineBody();else if(nn.n===C.mayor){ST.dlg={n:C.mayor};C.mayor.hold=true;mayorMenu()}else talkTo(nn.n)}},true);
+/* no weapons, no building, no dropping here */
+window.addEventListener('mousedown',e=>{if(isMy()&&e.button===0&&locked&&tool===2){e.stopImmediatePropagation();e.preventDefault();try{toast('No weapons on Murder Mystery Cay.');SX.deny&&SX.deny()}catch(er){}}},true);
+const onb=X.mzNoBuild;X.mzNoBuild=()=>(onb?onb():false)||isMy();
+/* ---------- island load ---------- */
+const ol=window.loadIsland;window.loadIsland=function(info){
+ hookRender();
+ WG2=new Map();C=null;NPCS=[];if(UI.dlg){UI.dlg.remove();UI.dlg=null}if(UI.nb){UI.nb.remove();UI.nb=null}if(CS.on){CS.on=false;busy=CS.pb}bars(false);sub('','');titleCard('');skipBtn(false);cover(false,1);setHint(null);if(UI.hud)UI.hud.style.display='none';
+ Object.assign(ST,{state:'idle',dlg:null,cs:false,found:0,notes:[],nkeys:{},ans:[],qz:null,introDone:false,final:0,talking:null,csTalk:null});try{ST.seen=localStorage.getItem('mmSeen')==='1'}catch(e){ST.seen=false}
+ const my=!!(info&&info.special&&info.special.tag==='myst');
+ const r=ol.apply(this,arguments);
+ if(my)try{C=genCase((Math.random()*2147483647)|0);buildWorld(C);placeNpcs(C);buildScenes(C);ST.state='intro';fixSky(.93,'heavy')}catch(e){console.error('[myst build]',e);C=null}
+ return r};
+X.mm={C:()=>C,ST,genCase,buildQuiz};
 })();
 </script>
