@@ -1253,12 +1253,13 @@ const ARCH=[null,
  {n:'Frostfang Reach',b:[3,11,14]},{n:'Sunscorch Atoll',b:[2,16,10]},{n:'Mirewood Hold',b:[4,13,1]},{n:'Emerald Spire',b:[6,15,0]},{n:'Blossom Cay',b:[8,17,0]},
  {n:'Ashen Bluff',b:[5,7,12]},{n:'Amber Landing',b:[9,1,7]},{n:'Crystal Key',b:[14,11,16]},{n:'Golden Savanna',b:[10,5,2]},{n:'Glow Isle',b:[13,17,4]}];
 const ALLKEYS=['0,0'];for(let i=1;i<=10;i++)ALLKEYS.push(i+',1');
-const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3'};
+const SPK={arena:'1,2',home:'2,2',chaos:'3,2',comm:'2,3',maze:'4,2'};
 const SPDEF={
  '1,2':{tag:'arena',name:'Colosseum Isle',size:320,bio:[2],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:94},blurb:'A small island of sand and sea, crowned by one colossal arena. Fight ten rounds for glory, or watch from the stands.'},
  '2,2':{tag:'home',name:'Home Island',size:320,bio:[0],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'Your own peaceful creative island. Set the time, the weather and who may visit.'},
  '3,2':{tag:'chaos',name:'Chaos Island',size:1300,bio:[12],boatA:Math.PI/2,spawn:{x:0,z:480},blurb:'Event island. Six minutes of lava, tornados, tsunamis, dragons, lightning and more while you hunt volcanic crystals.'},
- '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'}};
+ '2,3':{tag:'comm',name:'Community Island',size:240,bio:[16],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:0},blurb:'A stone plaza of idols, one for every home you can visit.'},
+ '4,2':{tag:'maze',name:'The Maze',size:2700,bio:[8],noScatter:1,boatA:Math.PI/2,spawn:{x:0,z:1090},blurb:'Event island. A vast autumn field with a towering straw maze. Pick easy, medium or hard, find the one true path before the clock runs out and claim the crystal.'}};
 for(const k in SPDEF)ALLKEYS.push(k);
 function islandInfo(gx,gy){let key=gx+','+gy;if(!ALLKEYS.includes(key)){key=HOME;gx=0;gy=0}if(islCache[key])return islCache[key];
  const seed=(hash2(gx,gy,12345)||1),r=mulberry(seed);let name=ISL_A[Math.floor(r()*ISL_A.length)]+' '+ISL_B[Math.floor(r()*ISL_B.length)];const q=r();if(q<.12)name='Port '+ISL_A[Math.floor(r()*ISL_A.length)];else if(q<.2)name='The '+ISL_A[Math.floor(r()*ISL_A.length)]+' '+ISL_B[Math.floor(r()*ISL_B.length)];
@@ -2011,7 +2012,7 @@ function islandPct(key){const rec=S.isl[key];if(!rec||!rec.disc||!rec.n)return 0
 /* ============================ SEA CHART ============================ */
 const SEA={open:false,pan:{x:0,y:0},zoom:1,sel:null,hover:null,drag:null,cache:{},t:0};
 const SP=215;
-function isl2px(gx,gy){if(gx===0)return[0,0];if(gy===2){const a=(gx-1)/3*Math.PI*2-Math.PI/2+.52,R=SP*4.2;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===3){const h=isl2px(2,2);return[h[0]+SP*.95,h[1]-SP*.5]}const a=(gx-1)/10*Math.PI*2-Math.PI/2,R=SP*3.2;return[Math.cos(a)*R,Math.sin(a)*R]}
+function isl2px(gx,gy){if(gx===0)return[0,0];if(gx===4&&gy===2){const a=-2.1,R=SP*4.6;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===2){const a=(gx-1)/3*Math.PI*2-Math.PI/2+.52,R=SP*4.2;return[Math.cos(a)*R,Math.sin(a)*R]}if(gy===3){const h=isl2px(2,2);return[h[0]+SP*.95,h[1]-SP*.5]}const a=(gx-1)/10*Math.PI*2-Math.PI/2,R=SP*3.2;return[Math.cos(a)*R,Math.sin(a)*R]}
 function blobPts(info){if(SEA.cache[info.key])return SEA.cache[info.key];const r=mulberry(info.seed^0x31),pts=[],n=22,ph=r()*6,f1=2+Math.floor(r()*3);for(let i=0;i<n;i++){const a=i/n*Math.PI*2,rad=1+.2*Math.sin(a*f1+ph)+.12*Math.sin(a*5+ph*2)+(r()-.5)*.1;pts.push([Math.cos(a)*rad,Math.sin(a)*rad*.86])}
  const blobs=[];for(let i=0;i<7;i++)blobs.push({x:(r()-.5)*1.1,y:(r()-.5)*.9,r:.35+r()*.4,b:info.bio[i%info.bio.length]});return SEA.cache[info.key]={pts,blobs}}
 function seaPath(c,pts,cx,cy,R){c.beginPath();pts.forEach((p,i)=>{const x=cx+p[0]*R,y=cy+p[1]*R;i?c.lineTo(x,y):c.moveTo(x,y)});c.closePath()}
@@ -2154,7 +2155,7 @@ function bulletHit(p){
  if(CAVE.on){if(caveH(p.x,p.z)>=50||p.y>9||p.y<0)return'rock'}
  else{const th=terrH(p.x,p.z);if(p.y<WATER&&th<WATER)return'water';if(p.y<th){const B=biomeObj(p.x,p.z);return B.gt[2]>.5?'rock':'dirt'}}
  let hit=null;nearC(p.x,p.z,c=>{if(hit)return;const s=surfAt(c,p.x,p.z);if(s!==null&&p.y<s&&p.y>c.y-.6)hit=c.t==='rock'?'rock':'wood'});if(hit)return hit;
- for(const o of OB){const s=obSurf(o,p.x,p.z);if(s!==null&&p.y<s+.12&&p.y>Math.min(o.y0,o.y1)-.6)return'wood'}return null}
+ for(const o of OB){const s=obSurf(o,p.x,p.z);if(s!==null&&p.y<s+.12&&p.y>(o.sol?heightAt(p.x,p.z)-.6:Math.min(o.y0,o.y1)-.6))return o.sol&&o.t==='rock'?'rock':'wood'}return null}
 function updateBullets(dt){for(let i=bullets.length-1;i>=0;i--){const b=bullets[i];b.life-=dt;let hit=null;const n=Math.max(1,Math.ceil(b.v.length()*dt/.7)),h=dt/n;
   for(let k=0;k<n&&!hit;k++){b.v.y-=4*h;b.m.position.addScaledVector(b.v,h);hit=bulletHit(b.m.position)}
   if(hit){SX.clunk(hit);addFx(b.m.position.clone(),hit==='water'?0x9ad8ff:hit==='rock'?0xfff2c0:0xc8a070,hit==='water'?1.8:1.1,.25);scene.remove(b.m);bullets.splice(i,1)}
@@ -2546,7 +2547,7 @@ function update(dt){
  const cave=CAVE.on,gT=cave?0:terrH(P.x,P.z),depth=cave?0:WATER-gT;
  swimMode=0;if(!cave&&P.y<WATER+.6){if(onRaft())swimMode=0;else if(depth>1.35)swimMode=(shift&&len>0)?2:1;else if(shift&&len>0&&depth>.7&&P.y<WATER+.3)swimMode=2}
  const sprint=act&&shift&&len>0&&!swimMode;
- let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1)*(window.__horseMul||1)*armSpd()*(window.__wSlow||1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
+ let sp=(swimMode===2?4.6:swimMode===1?3:(sprint?9.5:6))*(window.__chSpd||1)*(window.__horseMul||1)*(window.__mzSpd||1)*armSpd()*(window.__wSlow||1);if(!swimMode&&depth>.3)sp*=onRaft()?1.9:.78;
  if(act){const tx=(-sinY*ky+cosY*kx)*sp,tz=(-cosY*ky-sinY*kx)*sp,a=Math.min(1,(P.grounded||swimMode?12:3)*dt);P.vx+=(tx-P.vx)*a;P.vz+=(tz-P.vz)*a;
   if(keys.Space&&P.grounded&&!swimMode){P.vy=9.2;P.grounded=false;SX.jump(surfaceNow())}}
  else{P.vx*=.8;P.vz*=.8}
@@ -3127,7 +3128,7 @@ X.nearFire=()=>{for(const id in B){const b=B[id];if(b.d.type==='campfire'&&Date.
 const online=()=>!!(FB&&UID);
 const bk=()=>CAVE.on&&CAVE.group?'cave:'+CUR.key+':'+CAVE.idx:CUR.key==='2,2'?'2,2:'+((window.PX&&window.PX.hvUid)||UID||'local'):CUR.key;
 function lb(){S.lb=S.lb||{};return S.lb[bk()]||(S.lb[bk()]=[])}
-function bset(d){if(online())return FB.buildSet(d);const a=lb(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);syncBuilds(a);save();return Promise.resolve()}
+function bset(d){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return Promise.resolve()}if(online())return FB.buildSet(d);const a=lb(),i=a.findIndex(x=>x.id===d.id);if(i>=0)a[i]=d;else a.push(d);syncBuilds(a);save();return Promise.resolve()}
 function bdel(id){if(online())return FB.buildDel(id);S.lb[bk()]=lb().filter(x=>x.id!==id);syncBuilds(S.lb[bk()]);save();return Promise.resolve()}
 function watchIsl(){if(bk()===lastKey&&(online()||lastOnline===false))return;lastKey=bk();lastOnline=online();if(unsubB){try{unsubB()}catch(e){}unsubB=null}for(const id in B){B[id].g.parent&&B[id].g.parent.remove(B[id].g);for(const o of(B[id].obs||[B[id].ob])){const i=OB.indexOf(o);if(i>=0)OB.splice(i,1)}delete B[id]}
  if(!online()){try{syncBuilds(lb())}catch(e){console.error(e)}return}
@@ -3135,7 +3136,7 @@ function watchIsl(){if(bk()===lastKey&&(online()||lastOnline===false))return;las
 let lastOnline=null;
 function nearest(f){let best=null,bd=4;for(const id in B){const b=B[id];if(f&&!f(b.d))continue;const d=Math.hypot(P.x-b.d.x,P.z-b.d.z);if(d<bd){bd=d;best=b}}return best}
 let placing=null;
-function place(type){if(CAVE.on){toast('Cannot build in caves');return}if(!(S.items[type]>0)){placing=null;return}
+function place(type){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return}if(CAVE.on){toast('Cannot build in caves');return}if(!(S.items[type]>0)){placing=null;return}
  const x=P.x-Math.sin(P.yaw)*3,z=P.z-Math.cos(P.yaw)*3,raft=type.startsWith('raft'),th=terrH(x,z);
  if(raft&&th>WATER-.4){toast('Rafts go on water');return}if(!raft&&th<WATER+.3){toast('Place on land');return}
  const d={id:(UID||'local')+'_'+Date.now(),isl:bk(),owner:UID||'local',type,x,z,y:raft?WATER:th,ry:P.yaw,t:Date.now()};if(type==='campfire'||type==='torch')d.lit=Date.now();
@@ -3621,7 +3622,7 @@ const hbNm=t=>t.startsWith('nat_')?(NAT.find(a=>a[0]===t)||[0,t])[1]:(ITEMS[t]?I
 function hbPose(){const a=hbAim(60);if(!a)return null;const type=PL.type;let x=a.x,z=a.z,ry=PL.rot;const plat=/^plat_|^pwall$/.test(type),sn=PL.snap;
  if(sn){if(plat&&sn===4){const pc=type==='pwall'?'wall':type.split('_')[1];ry=Math.round(ry/(Math.PI/2))*(Math.PI/2);if(pc==='wall'||pc==='arch'){if(Math.abs(Math.cos(ry))>.5){x=Math.round(x/4)*4;z=Math.round((z-2)/4)*4+2}else{z=Math.round(z/4)*4;x=Math.round((x-2)/4)*4+2}}else{x=Math.round(x/4)*4;z=Math.round(z/4)*4}}else{x=Math.round(x/sn)*sn;z=Math.round(z/sn)*sn}}
  const y=Math.max(terrH(x,z),stackY(x,z),WATER)+PL.lift;return{x,z,y,ry,ok:Math.abs(x)<HALF-4&&Math.abs(z)<HALF-4}}
-function hbPlace(){if(hbVisitor()&&!HS().perm.build){hbVdeny();return}if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
+function hbPlace(){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){toast('Nothing can be placed on The Maze.');return}if(hbVisitor()&&!HS().perm.build){hbVdeny();return}if(!PL.type||performance.now()<PL.cd)return;const p=hbPose();if(!p||!p.ok){SX.deny&&SX.deny();return}PL.cd=performance.now()+140;const type=PL.type,d={id:(UID||'local')+'_'+Date.now()+'_'+((Math.random()*1e4)|0),isl:bk(),owner:UID||'local',type,x:p.x,z:p.z,y:p.y,ry:p.ry,t:Date.now(),hp:hpMax(type),free:1};
  if(type==='pwall'||type==='deco_banner')d.col=paintIdx;if(type==='campfire'||type==='torch')d.lit=Date.now();SX.place&&SX.place();bset(d).catch(e=>toast('Build failed: '+((e&&(e.code||e.message))||'error')))}
 let hg=null,hgKey='',hl=null,ring=null,ringK='';
 function hbVis(){const home=hbOn()&&running&&!invOpen&&!busy&&!HP.dead&&!OV.kind&&!SEA.open&&locked;
@@ -4891,10 +4892,10 @@ function buildArena(){
  const nich=[],oc=[];for(let j=0;j<48;j++){const a=(j+.5)/48*PI2;if(inGate(a,62.9))continue;nich.push({x:ca_(a)*62.82,y:A.top+.4,z:sa_(a)*62.82,ry:tanRot(a),sx:.9,sy:1,sz:1,c:0x2a2218});oc.push({x:ca_(a)*62.88,y:T+19.5,z:sa_(a)*62.88,ry:tanRot(a),sx:1.1,sy:2,sz:.3,c:0x241c14})}
  inst(G,aG,white,nich);inst(G,box,white,oc);
  /* wall colliders (ring), gate gap left open */
- for(let i=0;i<N;i++){const a=i/N*PI2,x=ca_(a)*R,z=sa_(a)*R;if(z>0&&Math.abs(x)<4.6)continue;addOB(x,z,a+Math.PI/2,PI2*R/N/2+.25,1.7,60,60,'rock')}
+ for(let i=0;i<N;i++){const a=i/N*PI2,x=ca_(a)*R,z=sa_(a)*R;if(z>0&&Math.abs(x)<4.6)continue;addOB(x,z,a+Math.PI/2,PI2*R/N/2+.25,1.7,60,60,'rock').sol=1}
  /* ===== gate: towers with battlements, flags, flanking columns, lintel, sign, doors ===== */
  const merT=[],fl=[];
- for(const s of[-1,1]){mesh(box,0xc3ae82,s*8,T+12,64.8,6.8,24,7);mesh(box,0x9a845a,s*8,T+24.6,64.8,7.6,1.4,7.8);
+ for(const s of[-1,1]){addOB(s*8,64.8,0,3.4,3.5,T+24.6,T+24.6,'rock').sol=1;addC(s*5.15,66.9,.6,9.4,'w','rock');mesh(box,0xc3ae82,s*8,T+12,64.8,6.8,24,7);mesh(box,0x9a845a,s*8,T+24.6,64.8,7.6,1.4,7.8);
   for(const[dx,dz]of[[-3,-3.2],[0,-3.2],[3,-3.2],[-3,3.2],[0,3.2],[3,3.2],[-3.4,0],[3.4,0]])merT.push({x:s*8+dx,y:T+26.0,z:64.8+dz,sx:1.3,sy:1.3,sz:1.2,c:STONE});
   for(const lv of[8,14,19.5])fl.push({x:s*8,y:T+lv,z:68.46,sx:.6,sy:2.4,sz:.3,c:0x241c14});
   mesh(cylU,0x4a3320,s*8,T+29.5,64.8,.09,5,.09);const fg=mesh(box,s>0?0x8e2424:0x24406e,s*8+1.2,T+30.4,64.8,2.2,1.3,.06);fg.userData.f=1;
@@ -4908,7 +4909,7 @@ function buildArena(){
   for(let k=0;k<5;k++){const b=new THREE.Mesh(box,mat(0x2a2a30));b.scale.set(4.6,.18,.6);b.position.set(-s*2.3,1.2+k*1.8,0);piv.add(b)}
   for(let k=0;k<3;k++){const b=new THREE.Mesh(sphU,mat(GOLD));b.scale.set(.18,.18,.18);b.position.set(-s*(.7+k*1.5),4.5,.32);piv.add(b)}G.add(piv);return piv};
  A.leafL=mkLeaf(-1);A.leafR=mkLeaf(1);
- A.doorOB=addOB(0,65.5,0,4.7,.5,A.GY+9,A.GY+9,'wood');
+ A.doorOB=addOB(0,65.5,0,4.7,.5,A.GY+9,A.GY+9,'wood');A.doorOB.sol=1;
  /* gate approach: torches, braziers, statues on plinths, cypress trees */
  for(const s of[-1,1]){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3.4,6),mat(0x4a3320));pole.position.set(s*5.6,A.GY+1.7,69.2);G.add(pole);DISP.push(pole.geometry);flame(s*5.6,A.GY+4,69.2)}
  const ap={ped:[],body:[],head:[],tr:[],cone:[],pot:[]};
@@ -4933,7 +4934,7 @@ function buildArena(){
  const posts=[],pBall=[];for(let i=0;i<120;i++){const a=i/120*PI2;posts.push({x:ca_(a)*34.8,y:A.pod+.75,z:sa_(a)*34.8,sx:.14,sy:1.5,sz:.14,c:0x3a2a1a});pBall.push({x:ca_(a)*34.8,y:A.pod+1.58,z:sa_(a)*34.8,sx:.13,sy:.13,sz:.13,c:GOLD})}
  inst(G,box,white,posts);inst(G,sphU,white,pBall);
  for(const hh of[A.pod+1.45,A.pod+.8]){const tg=new THREE.TorusGeometry(34.8,.06,6,160);DISP.push(tg);const t=new THREE.Mesh(tg,mat(0x6a4a2a));t.rotation.x=Math.PI/2;t.position.y=hh;G.add(t)}
- for(let i=0;i<96;i++){const a=i/96*PI2;addOB(ca_(a)*34.75,sa_(a)*34.75,a+Math.PI/2,PI2*34.75/96/2+.2,.25,A.pod+4,A.pod+4,'wood');addOB(ca_(a)*33.2,sa_(a)*33.2,a+Math.PI/2,PI2*33.2/96/2+.2,.25,A.pod+4,A.pod+4,'wood')}
+ for(let i=0;i<96;i++){const a=i/96*PI2;addOB(ca_(a)*34.75,sa_(a)*34.75,a+Math.PI/2,PI2*34.75/96/2+.2,.25,A.pod+4,A.pod+4,'wood').sol=1;addOB(ca_(a)*33.2,sa_(a)*33.2,a+Math.PI/2,PI2*33.2/96/2+.2,.25,A.pod+4,A.pod+4,'wood').sol=1}
  /* ===== arena floor ===== */
  const fg=new THREE.CircleGeometry(33.3,96).rotateX(-Math.PI/2);DISP.push(fg);const fm=new THREE.Mesh(fg,new THREE.MeshLambertMaterial({map:floorTex(),polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}));fm.position.y=T+.02;G.add(fm);
  /* ===== seats: stone benches with cushions, 16 stairway aisles, imperial box on the north side ===== */
@@ -4949,7 +4950,7 @@ function buildArena(){
  inst(G,box,white,seatB);inst(G,box,white,seatC);inst(G,box,white,carpet);
  /* imperial box: gilded pavilion over the north stands (rows 2-5), with throne and tapestry */
  {const sy0=A.pod+A.rowH*6+.3,px=0,pz=-42.3;mesh(box,0xb09a6c,px,(sy0+A.pod+1)/2,pz,15,sy0-A.pod-1,7.8);mesh(box,0x5a1a6a,px,sy0+.03,pz+.2,4,.06,7);mesh(box,GOLD,px,sy0+.02,pz+3.9,15.2,.14,.3);
-  addOB(px,pz,0,7.5,3.9,sy0,sy0,'wood');
+  addOB(px,pz,0,7.5,3.9,sy0,sy0,'wood').sol=1;
   for(const sx of[-1,1])for(const sz of[-1,1]){const x=sx*7,z=pz+sz*3.6;mesh(cylU,GOLD,x,sy0+2.7,z,.5,5.4,.5);mesh(box,0xb09a6c,x,sy0+.3,z,1.3,.6,1.3);mesh(box,0xe6d9b4,x,sy0+5.55,z,1.3,.5,1.3);addC(x,z,.6,6.4,'w','rock')}
   mesh(box,0x7a1818,px,sy0+5.9,pz,16.4,.6,8.6);mesh(box,GOLD,px,sy0+5.5,pz,16.6,.25,8.8);mesh(box,GOLD,px,sy0+6.3,pz,12,.2,6);
   for(let k=-7;k<=7;k++)mesh(box,k%2?GOLD:0x8e2424,px+k*1.1,sy0+5.25,pz+4.4,.9,.5,.08);
@@ -4960,7 +4961,7 @@ function buildArena(){
  /* ===== rim colonnade, banners, braziers, walkway rings ===== */
  const cB=[],cS=[],cC=[],arc2=[],fri=[],bn=[],bnT=[];const CN=48,CR=61.4;
  const colOK=i=>{const a=i/CN*PI2;return!(sa_(a)>0&&Math.abs(ca_(a)*CR)<9)};
- for(let i=0;i<CN;i++){if(!colOK(i))continue;const a=i/CN*PI2,x=ca_(a)*CR,z=sa_(a)*CR,ry=tanRot(a);cB.push({x,y:A.top+.18,z,ry,sx:1.1,sy:.35,sz:1.1,c:0xb9a478});cS.push({x,y:A.top+2.35,z,ry,sx:.38,sy:4,sz:.38,c:CREAM});cC.push({x,y:A.top+4.55,z,ry,sx:1.0,sy:.4,sz:1.0,c:0xd9c9a0});addC(x,z,.45,5,'w','rock');
+ for(let i=0;i<CN;i++){if(!colOK(i))continue;const a=i/CN*PI2,x=ca_(a)*CR,z=sa_(a)*CR,ry=tanRot(a);addC(x,z,.55,5.2,'w','rock');cB.push({x,y:A.top+.18,z,ry,sx:1.1,sy:.35,sz:1.1,c:0xb9a478});cS.push({x,y:A.top+2.35,z,ry,sx:.38,sy:4,sz:.38,c:CREAM});cC.push({x,y:A.top+4.55,z,ry,sx:1.0,sy:.4,sz:1.0,c:0xd9c9a0});addC(x,z,.45,5,'w','rock');
   if(colOK((i+1)%CN)){const am=(i+.5)/CN*PI2,len=PI2*CR/CN;arc2.push({x:ca_(am)*CR,y:A.top+5.05,z:sa_(am)*CR,ry:tanRot(am),sx:len,sy:.6,sz:1.1,c:0xcdb98e});fri.push({x:ca_(am)*CR,y:A.top+5.42,z:sa_(am)*CR,ry:tanRot(am),sx:len,sy:.2,sz:.95,c:i%2?GOLD:0x8e2424});
    if(i%2===0){const bx=ca_(am)*(CR-.62),bz=sa_(am)*(CR-.62);bn.push({x:bx,y:A.top+3.3,z:bz,ry:tanRot(am),sx:1.5,sy:3.2,sz:.06,c:(i>>1)%2?0x24406e:0x8e2424});bnT.push({x:bx,y:A.top+4.82,z:bz,ry:tanRot(am),sx:1.7,sy:.18,sz:.12,c:GOLD})}
    if(i%4===1){const bx=ca_(am)*(CR-2.6),bz=sa_(am)*(CR-2.6);mesh(cylU,0x4a3320,bx,A.top+1.1,bz,.12,2.2,.12);mesh(cylU,0x5a4a3a,bx,A.top+2.3,bz,.55,.32,.55);flame(bx,A.top+2.8,bz,1);addC(bx,bz,.5,2.6,'w','wood')}}}
@@ -6197,7 +6198,7 @@ function araTick(b,dt,now){
  b.ph+=dt*(5.4+sp0)*.6*mv;b.mvS+=(mv-b.mvS)*Math.min(1,dt*8);
  araPose(M,{x:b.x,z:b.z,yaw:b.yaw,h:b.h,jy:b.jy,ph:b.ph,mv:b.mvS,tuck:b.tuck,kick:b.kk,kl:b.kl,pitch:b.pitch,col:b.col},A.fl);
  b.hs.length=0;
- if(!b.dying){const g=M.g,c=Math.cos(b.yaw),s=Math.sin(b.yaw),put=(lx,ly,lz,r,head)=>b.hs.push({p:new THREE.Vector3(g.position.x+lx*c+lz*s,g.position.y+ly,g.position.z-lx*s+lz*c),r,head});put(0,0,2.4,3.4);put(0,-.25,4.8,2.4,true);put(0,.9,-3.9,5);put(0,.6,-.6,3.6)}}
+ if(!b.dying){const g=M.g,c=Math.cos(b.yaw),s=Math.sin(b.yaw),put=(lx,ly,lz,r,head)=>b.hs.push({p:new THREE.Vector3(g.position.x+lx*c+lz*s,g.position.y+ly,g.position.z-lx*s+lz*c),r,head});put(0,0,2.4,3.4);put(0,-.25,4.8,2.4,true);put(0,.9,-3.9,5);put(0,.6,-.6,3.6);for(const L of M.U.legs){const sg=(a,q)=>{for(let k=0;k<=3;k++){const u=k/3;put(a.x+(q.x-a.x)*u,a.y+(q.y-a.y)*u,a.z+(q.z-a.z)*u,.95,false)}};sg(L.hip,L.K);sg(L.K,L.F)}}}
 /* ---------- Wyrm Overlord AI ---------- */
 function wyPos(){for(let k=0;k<8;k++){const a=Math.random()*6.283,r=9+Math.random()*18,x=Math.cos(a)*r,z=Math.sin(a)*r;if(Math.hypot(x-P.x,z-P.z)>7)return[x,z]}return[20,10]}
 const rkG=()=>mbg('rkg',()=>new THREE.DodecahedronGeometry(1,0)),rkM=()=>mbg('rkm',()=>new THREE.MeshLambertMaterial({color:0x7a6548,flatShading:true}));
@@ -7532,7 +7533,7 @@ function reconcile(force){if(!S||!S.made||typeof GEMS==='undefined')return;const
 function slotsUsed(){const L=lay();return L.s.filter(Boolean).length}
 function roomFor(k){const L=lay();for(let i=0;i<NS;i++){const e=L.s[i];if(!e||(e.k===k&&e.n<CAP))return true}return false}
 /* ---------- dropping ---------- */
-function dropItems(map,auto){const gems={},cos={},xt={fish:{},cooked:{},items:{},mats:{},wpn:{}};let any=false,names=[];
+function dropItems(map,auto){if(window.PX&&PX.mzNoBuild&&PX.mzNoBuild()){if(!auto)toast('Nothing can be dropped on The Maze.');return}const gems={},cos={},xt={fish:{},cooked:{},items:{},mats:{},wpn:{}};let any=false,names=[];
  for(const k in map){const n=map[k];if(!(n>0))continue;const t=kType(k),id=kId(k);setCnt(k,cnt(k)-n);any=true;names.push(n+' '+info(k).name);
   if(t==='g')gems[id]=n;else if(t==='c')cos[id]=n;else if(t==='w')xt.wpn[id]=n;else if(t==='f')xt.fish[id]=n;else if(t==='d')xt.cooked[id]=n;else if(t==='i')xt.items[id]=n;else if(t==='m')xt.mats[id]=n}
  if(!any)return;
@@ -8809,5 +8810,274 @@ function ensure(){try{if(typeof S==='undefined'||!S)return;
  for(const sl in(S.eq||{})){const k=S.eq[sl];if(k&&k.indexOf('~')>0&&!Object.prototype.hasOwnProperty.call(COS_BY_ID,k))void COS_BY_ID[k]}
  const X=window.PX;if(X&&X.wVariant){for(const k in(S.wpn||{}))if(k.indexOf('~')>0&&!X.WEAPONS.some(w=>w.id===k))X.wVariant(k);if(S.curW&&S.curW.indexOf('~')>0&&!X.WEAPONS.some(w=>w.id===S.curW))X.wVariant(S.curW)}}catch(e){}}
 ensure();setInterval(ensure,1000);
+})();
+</script>
+
+<script>
+/* ===== THE MAZE: autumn event island. Straw-bale maze (one true path, many dead ends), Maze Master, 3 difficulties with timers/fog/weather, crystal prize ===== */
+(function(){'use strict';const X=window.PX=window.PX||{};
+const ss=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
+const isMaze=()=>!!(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='maze');
+X.mzNoBuild=()=>isMaze();
+/* ---------- layout: N x N cells -> (2N+1) wide tile grid, S units per tile, a 6-row chamber north of the maze for the crystal ---------- */
+const N=65,S=14,WH=105,CHR=6,GW=2*N+1,GH=CHR+2*N+1,A=1130,ZS=A-120,Z0=ZS-GH*S,X0=-GW*S/2,HX=GW*S/2,ZN=Z0,FLAT=1.8,FH=1.9;
+const MODES={easy:{n:'Easy',dur:1200,rw:250,tod:.735,w:'clear',fog:null},medium:{n:'Medium',dur:1200,rw:500,tod:.735,w:'cloud',fog:[8,92]},hard:{n:'Hard',dur:1200,rw:1000,tod:.93,w:'heavy',fog:[2,44]}};
+const MZ={state:'idle',mode:null,L:null,G:null,R:null,t:0,t0:0,busy:0,gateT:0,flames:[],geos:[],stat:0,ride:false,rh:null,nt:0};
+const tx=i=>X0+(i+.5)*S,tz=j=>Z0+(j+.5)*S;
+const mm=s=>Math.floor(s/60)+':'+String(Math.max(0,Math.floor(s%60))).padStart(2,'0');
+
+/* ---------- maze generator: growing tree (mostly random picks = lots of dead ends, still one single path between any two cells) ---------- */
+function genMaze(seed){const r=mulberry(seed),vis=new Uint8Array(N*N),open=new Uint8Array(N*N),sx=Math.floor(N/2),list=[(N-1)*N+sx];vis[list[0]]=1;
+ const D=[[0,-1,1,4],[1,0,2,8],[0,1,4,1],[-1,0,8,2]];
+ while(list.length){const idx=r()<.1?list.length-1:Math.floor(r()*list.length),c=list[idx],cx=c%N,cy=(c/N)|0,nb=[];
+  for(const d of D){const x=cx+d[0],y=cy+d[1];if(x>=0&&y>=0&&x<N&&y<N&&!vis[y*N+x])nb.push([x,y,d])}
+  if(!nb.length){list[idx]=list[list.length-1];list.pop();continue}
+  const q=nb[Math.floor(r()*nb.length)];open[c]|=q[2][2];open[q[1]*N+q[0]]|=q[2][3];vis[q[1]*N+q[0]]=1;list.push(q[1]*N+q[0])}
+ /* BFS from the start cell, exit = farthest top-row cell in the middle 64% so the crystal chamber stays well inside the island */
+ const dist=new Int32Array(N*N).fill(-1),q=[(N-1)*N+sx];dist[q[0]]=0;
+ for(let i=0;i<q.length;i++){const c=q[i],cx=c%N,cy=(c/N)|0;for(const d of D){if(open[c]&d[2]){const k=(cy+d[1])*N+cx+d[0];if(dist[k]<0){dist[k]=dist[c]+1;q.push(k)}}}}
+ let ex=sx,best=-1;for(let x=Math.round(N*.18);x<=Math.round(N*.82);x++)if(dist[x]>best){best=dist[x];ex=x}
+ const solid=new Uint8Array(GW*GH).fill(1),T=(i,j)=>j*GW+i;
+ for(let cy=0;cy<N;cy++)for(let cx=0;cx<N;cx++){const i=2*cx+1,j=CHR+2*cy+1,o=open[cy*N+cx];solid[T(i,j)]=0;if(o&2)solid[T(i+1,j)]=0;if(o&4)solid[T(i,j+1)]=0}
+ const gi=2*sx+1,ei=2*ex+1,cc=Math.max(4,Math.min(GW-5,ei));
+ solid[T(gi,GH-1)]=0;solid[T(ei,CHR)]=0;
+ for(let j=1;j<CHR;j++)for(let i=cc-3;i<=cc+3;i++)solid[T(i,j)]=0;
+ return{solid,gi,ei,cc,seed,pathLen:best}}
+function solidAt(i,j){const L=MZ.L;if(!L||i<0||j<0||i>=GW||j>=GH)return false;if(i===L.gi&&j===GH-1)return MZ.state!=='open';return L.solid[j*GW+i]===1}
+
+/* ---------- collision: wrap pushOut so the straw walls are solid for the player and enemies (grid lookup, no per-wall list) ---------- */
+const opo=window.pushOut;window.pushOut=function(nx,nz,py,ig){const r=opo.apply(this,arguments);if(!MZ.L||!isMaze())return r;let x=r[0],z=r[1];
+ if(x<X0-3||x>X0+GW*S+3||z<Z0-3||z>Z0+GH*S+3)return r;const rad=.6;
+ for(let it=0;it<3;it++){let moved=false;const ci=Math.floor((x-X0)/S),cj=Math.floor((z-Z0)/S);
+  for(let j=cj-1;j<=cj+1;j++)for(let i=ci-1;i<=ci+1;i++){if(!solidAt(i,j))continue;const x0=X0+i*S,x1=x0+S,z0=Z0+j*S,z1=z0+S,qx=Math.max(x0,Math.min(x1,x)),qz=Math.max(z0,Math.min(z1,z)),dx=x-qx,dz=z-qz,d2=dx*dx+dz*dz;
+   if(d2<rad*rad){if(d2>1e-8){const d=Math.sqrt(d2);x=qx+dx/d*rad;z=qz+dz/d*rad}else{const l=x-x0,rr=x1-x,t=z-z0,b=z1-z,m=Math.min(l,rr,t,b);if(m===l)x=x0-rad;else if(m===rr)x=x1+rad;else if(m===t)z=z0-rad;else z=z1+rad}moved=true}}
+  if(!moved)break}
+ r[0]=x;r[1]=z;return r};
+
+/* ---------- terrain: flat circular autumn island, big enough for the maze plus a long field up to the dock ---------- */
+function mazeH(){return(x,z)=>{const ax=Math.abs(x),az=Math.abs(z),dm=Math.pow(Math.pow(ax,8)+Math.pow(az,8),1/8),cr=A+30*nW(x*.004+11,z*.004+5)+10*nD(x*.013,z*.013),lm=ss(0,1,(cr-dm)/55);if(lm<=0)return-9;
+ const dx=Math.max(0,Math.abs(x)-HX-10),dz=Math.max(z-(ZS+30),(ZN-12)-z,0),nzw=ss(0,1,Math.hypot(dx,dz)/60);
+ const h=FLAT+nzw*(.9*nD(x*.011+3,z*.011)+.35*nD(x*.045,z*.045)+.12*nD(x*.17,z*.17));
+ return h*lm+(-9)*(1-lm)}}
+const osp=X.spH;X.spH=function(tag){if(tag==='maze')return mazeH();return osp.apply(this,arguments)};
+const osw=window.setWorld;window.setWorld=function(big,sz){const r=osw.apply(this,arguments);if(CUR&&CUR.info&&CUR.info.special&&CUR.info.special.tag==='maze'){SEG=Math.round(sz/4);STEP=WORLD/SEG;N1=SEG+1}return r};
+const obt=window.buildTerrainTiles;window.buildTerrainTiles=function(pos,col,tw,nr){
+ if(isMaze())try{const n=pos.length/3,PAL=[[.8,.52,.14],[.72,.32,.1],[.56,.22,.09],[.66,.56,.2],[.82,.64,.22]],gx=tx(MZ.L?MZ.L.gi:2*Math.floor(N/2)+1);
+  for(let k=0;k<n;k++){const x=pos[k*3],h=pos[k*3+1],z=pos[k*3+2];if(h<1.3)continue;
+   const w=ss(1.3,1.9,h),a=(nW(x*.013+5,z*.013-3)*.5+.5)*4.99,b=nD(x*.05,z*.05)*.5+.5,i0=Math.min(4,Math.floor(a)),i1=Math.min(4,i0+1),f=a-i0,p0=PAL[i0],p1=PAL[i1];
+   let R=p0[0]+(p1[0]-p0[0])*f,G=p0[1]+(p1[1]-p0[1])*f,B=p0[2]+(p1[2]-p0[2])*f;const sp=b>.72?.35:0;R+=(.9-R)*sp*.4;G+=(.38-G)*sp;B+=(.1-B)*sp;
+   let cr=col[k*3]+(R-col[k*3])*.7*w,cg=col[k*3+1]+(G-col[k*3+1])*.7*w,cb=col[k*3+2]+(B-col[k*3+2])*.7*w;
+   const rd=(1-ss(4,9,Math.abs(x-gx)))*(z>ZS-2?1:0),pl=1-ss(18,32,Math.hypot(x-gx,z-(ZS+22))),dm=Math.max(rd*.9,pl*.8)*w;
+   if(dm>0){cr+=(.5-cr)*dm;cg+=(.38-cg)*dm;cb+=(.23-cb)*dm}
+   col[k*3]=cr;col[k*3+1]=cg;col[k*3+2]=cb}}catch(e){console.error('[maze paint]',e)}
+ return obt.apply(this,arguments)};
+/* docks: always on the south shore in line with the gate, in the water, never closer to the maze than the plaza */
+const opb=window.placeBoat;window.placeBoat=function(info){
+ try{if(isMaze()&&CUR.rec){let zl=null;for(let z=HALF-12;z>ZS+40;z-=1.5){const h=terrH(0,z);if(h>.45){zl=z;break}}
+  if(zl==null||!isFinite(zl))zl=A-30;zl=Math.max(zl,ZS+60);const fx=CUR.rec.fx=CUR.rec.fx||{};fx.b={a:Math.PI/2,rl:zl,rc:zl+14};fx.mzv=3}}catch(e){console.error('[maze boat]',e)}
+ return opb.apply(this,arguments)};
+const ofs=window.findSpawn;window.findSpawn=function(info){const r=ofs.apply(this,arguments);if(isMaze()){let zl=null;for(let z=HALF-6;z>0;z-=1.5)if(terrH(0,z)>.9){zl=z;break}spawn={x:0,z:(zl==null?HALF*.8:zl)-16}}return r};
+
+/* ---------- textures + geometry helpers ---------- */
+let STRAW=null;
+function strawTex(){if(STRAW)return STRAW;const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d'),r=mulberry(4242);
+ g.fillStyle='#d9b04c';g.fillRect(0,0,256,256);
+ for(let i=0;i<5200;i++){const x=r()*256,y=r()*256,l=8+r()*26,a=(r()-.5)*.35,t=r();g.strokeStyle=t<.35?'rgba(252,226,128,.55)':t<.7?'rgba(172,126,42,.5)':'rgba(120,80,25,.35)';g.lineWidth=.8+r()*1.3;g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke()}
+ for(let row=0;row<2;row++){const y0=row*128,gr=g.createLinearGradient(0,y0,0,y0+128);gr.addColorStop(0,'rgba(60,35,10,.6)');gr.addColorStop(.14,'rgba(60,35,10,0)');gr.addColorStop(.86,'rgba(60,35,10,0)');gr.addColorStop(1,'rgba(60,35,10,.6)');g.fillStyle=gr;g.fillRect(0,y0,256,128);
+  g.strokeStyle='rgba(70,45,18,.8)';g.lineWidth=3;const off=row?64:0;for(let k=0;k<2;k++){for(const q of[32,96]){const x=(off+k*128+q)%256;g.beginPath();g.moveTo(x,y0);g.lineTo(x,y0+128);g.stroke()}}
+  g.strokeStyle='rgba(55,32,10,.6)';g.lineWidth=2.5;for(let k=0;k<2;k++){const x=(off+k*128)%256;g.beginPath();g.moveTo(x,y0);g.lineTo(x,y0+128);g.stroke()}}
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;try{t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy())}catch(e){}t.needsUpdate=true;return STRAW=t}
+const mkB=()=>({p:[],n:[],u:[],i:[],c:[]});
+function quad(b,v,nr,u0,v0,u1,v1,col){const k=b.p.length/3;for(let q=0;q<4;q++){b.p.push(v[q*3],v[q*3+1],v[q*3+2]);b.n.push(nr[0],nr[1],nr[2]);if(col)b.c.push(col[0],col[1],col[2])}b.u.push(u0,v0,u1,v0,u1,v1,u0,v1);b.i.push(k,k+1,k+2,k,k+2,k+3)}
+function toGeo(b){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(b.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(b.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(b.u,2));if(b.c.length)g.setAttribute('color',new THREE.Float32BufferAttribute(b.c,3));g.setIndex(b.i);g.computeBoundingSphere();return g}
+/* box faces with world-scaled UVs (u: one repeat per 14 units, v: one repeat per 14 units of height) */
+function boxF(b,x0,x1,y0,y1,z0,z1,o,col){o=o||{};const U=(x1-x0)/14,UZ=(z1-z0)/14,V0=y0/14,V1=y1/14;
+ if(!o.noN)quad(b,[x1,y0,z0,x0,y0,z0,x0,y1,z0,x1,y1,z0],[0,0,-1],0,V0,U,V1,col);
+ if(!o.noS)quad(b,[x0,y0,z1,x1,y0,z1,x1,y1,z1,x0,y1,z1],[0,0,1],0,V0,U,V1,col);
+ if(!o.noW)quad(b,[x0,y0,z0,x0,y0,z1,x0,y1,z1,x0,y1,z0],[-1,0,0],0,V0,UZ,V1,col);
+ if(!o.noE)quad(b,[x1,y0,z1,x1,y0,z0,x1,y1,z0,x1,y1,z1],[1,0,0],0,V0,UZ,V1,col);
+ if(!o.noT)quad(b,[x0,y1,z1,x1,y1,z1,x1,y1,z0,x0,y1,z0],[0,1,0],0,0,U,UZ,col);
+ if(!o.noB)quad(b,[x0,y0,z0,x1,y0,z0,x1,y0,z1,x0,y0,z1],[0,-1,0],0,0,U,UZ,col)}
+function imesh(G,geo,mat,items,dispose){const im=new THREE.InstancedMesh(geo,mat,items.length),d=new THREE.Object3D(),c=new THREE.Color();
+ items.forEach((o,i)=>{d.position.set(o.x,o.y,o.z);d.rotation.set(o.rx||0,o.ry||0,o.rz||0);d.scale.set(o.sx||1,o.sy||1,o.sz||1);d.updateMatrix();im.setMatrixAt(i,d.matrix);if(o.c!=null){c.set(o.c);im.setColorAt(i,c)}});
+ im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;im.frustumCulled=false;G.add(im);DISP.push(geo);return im}
+
+/* ---------- maze meshes (rebuilt every time the Maze Master regenerates the maze) ---------- */
+function disposeMaze(){if(MZ.R){if(MZ.R.parent)MZ.R.parent.remove(MZ.R);MZ.R.traverse(o=>{if(o.isInstancedMesh)o.dispose();else if(o.geometry&&!o.userData.keep)o.geometry.dispose()});MZ.R=null}}
+function buildMaze(){disposeMaze();const L=MZ.L,R=new THREE.Group();MZ.G.add(R);MZ.R=R;
+ const wallB=mkB(),topB=mkB(),woodB=mkB(),floorB=mkB(),sol=(i,j)=>i>=0&&j>=0&&i<GW&&j<GH&&L.solid[j*GW+i]===1,pathTiles=[];
+ const jit=mulberry(L.seed^0x77),FC=[[.64,.48,.24],[.58,.43,.22],[.69,.53,.29]];
+ for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){const x0=X0+i*S,x1=x0+S,z0=Z0+j*S,z1=z0+S;
+  if(L.solid[j*GW+i]){const nN=!sol(i,j-1),nS=!sol(i,j+1),nW2=!sol(i-1,j),nE=!sol(i+1,j);
+   boxF(wallB,x0,x1,0,WH,z0,z1,{noN:!nN,noS:!nS,noW:!nW2,noE:!nE,noT:1,noB:1});
+   quad(topB,[x0,WH,z1,x1,WH,z1,x1,WH,z0,x0,WH,z0],[0,1,0],0,0,1,1,[.92,.78,.4])}
+  else{const ch=j<CHR,c=ch?[.74,.66,.48]:FC[Math.floor(jit()*3)],q=jit()*.06-.03;pathTiles.push({x:tx(i),z:tz(j)});
+   quad(floorB,[x0,FH,z1,x1,FH,z1,x1,FH,z0,x0,FH,z0],[0,1,0],0,0,1,1,[c[0]+q,c[1]+q,c[2]+q*.5])}}
+ /* gates: wooden frame + straw lintel over the opening. Front gate faces the dock, the exit gate faces the maze. */
+ const gate=(i,j)=>{const x0=X0+i*S,x1=x0+S,z0=Z0+j*S,z1=z0+S;
+  boxF(wallB,x0,x1,50,WH,z0,z1,{noW:1,noE:1,noT:1});quad(topB,[x0,WH,z1,x1,WH,z1,x1,WH,z0,x0,WH,z0],[0,1,0],0,0,1,1,[.92,.78,.4]);
+  boxF(woodB,x0+.2,x0+1.9,0,50,z0-.5,z1+.5,null);boxF(woodB,x1-1.9,x1-.2,0,50,z0-.5,z1+.5,null);boxF(woodB,x0+.2,x1-.2,44,50,z0-.7,z1+.7,null)};
+ gate(L.gi,GH-1);gate(L.ei,CHR);
+ const wm=new THREE.MeshLambertMaterial({map:strawTex()}),tm=new THREE.MeshLambertMaterial({vertexColors:true}),wdm=new THREE.MeshLambertMaterial({color:0x5b3b1f}),fm=new THREE.MeshLambertMaterial({vertexColors:true,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+ for(const [b,m] of[[wallB,wm],[topB,tm],[woodB,wdm],[floorB,fm]]){const g=toGeo(b),me=new THREE.Mesh(g,m);me.frustumCulled=false;R.add(me)}
+ /* fallen leaves on the corridors */
+ const lr=mulberry(L.seed^0x1ea5),lc=['#d9741f','#b8361a','#e8a52b','#8e4a1a','#c8571a','#efc13a'],leaves=[];
+ for(let k=0;k<6500&&pathTiles.length;k++){const p=pathTiles[Math.floor(lr()*pathTiles.length)];leaves.push({x:p.x+(lr()-.5)*S*.92,y:FH+.05,z:p.z+(lr()-.5)*S*.92,rx:-Math.PI/2,rz:lr()*6.28,sx:.7+lr()*.8,sy:.5+lr()*.6,sz:1,c:lc[Math.floor(lr()*lc.length)]})}
+ const lg=new THREE.PlaneGeometry(1,1),lmat=new THREE.MeshLambertMaterial({side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}),im=imesh(R,lg,lmat,leaves);im.userData.keep=1;
+ /* pebble trail (easy: every second, medium: every 15 seconds, hard: none) */
+ {const pg=new THREE.IcosahedronGeometry(1,0);DISP.push(pg);const pm=new THREE.InstancedMesh(pg,new THREE.MeshLambertMaterial({color:0xcfd3d8,emissive:0x2a3036,flatShading:true}),1800);pm.count=0;pm.frustumCulled=false;pm.userData.keep=1;R.add(pm);MZ.peb=pm;MZ.pebN=0;MZ.pebLast=null}
+ /* exit: crystal, Maze Master and torches move to the new chamber */
+ const xc=tx(L.cc),zc=tz(3);MZ.cx=xc;MZ.cz=zc;MZ.cy=terrH(xc,zc)+4.4;if(MZ.crystal)MZ.crystal.position.set(xc,MZ.cy,zc);
+ if(MZ.npc2){const n=MZ.npc2;n.x=xc+8;n.z=zc+2;n.gy.position.set(n.x,terrH(n.x,n.z),n.z);if(!n.c)n.c=addC(n.x,n.z,.55,2.2,'w','wood');else{removeC(n.c);n.c.x=n.x;n.c.z=n.z;n.c.y=heightAt(n.x,n.z);const k=Math.floor(n.x/CS)+','+Math.floor(n.z/CS);let a=CG.get(k);if(!a){a=[];CG.set(k,a)}a.push(n.c)}}
+ if(MZ.tEnd){MZ.tEnd.forEach((f,i)=>{const s=i?1:-1;f.position.set(xc+s*13,terrH(xc,zc)+3.4,zc+8);f.userData.pole.position.set(xc+s*13,terrH(xc,zc)+1.5,zc+8)})}
+ if(MZ.exitSign){MZ.exitSign.position.set(tx(L.ei),70,tz(CHR)+S/2+.3)}}
+
+/* ---------- static scenery: front gate doors, plaza, Maze Master, autumn trees, pumpkins, hay, falling leaves ---------- */
+function makeNpc(x,z,face){const pick=(sl,t)=>{try{const a=COS.filter(c=>c.slot===sl&&c.tier===t&&!c.crafted);return a.length?a[0].id:null}catch(e){return null}};
+ const cfg=Object.assign(AVDEF(),{skin:SKINS[1]||SKINS[0],hair:'#6b3a1c',hairStyle:'short',gender:'m',build:'broad',eye:EYES[0],acc:[]});
+ let av;try{av=buildAvatar(cfg,{hat:pick('hat',2),tunic:pick('tunic',3),pants:pick('pants',2),boots:pick('boots',2)})}catch(e){av=buildAvatar(AVDEF(),{})}
+ const g=av.group;g.scale.setScalar(1.18);g.position.set(x,terrH(x,z),z);g.rotation.y=face;MZ.G.add(g);
+ const cv=document.createElement('canvas');cv.width=256;cv.height=64;const c2=cv.getContext('2d');c2.fillStyle='#ffc25a';c2.font='700 32px Cinzel,Georgia,serif';c2.textAlign='center';c2.textBaseline='middle';c2.fillText('Maze Master',128,32);
+ const lab=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthWrite:false,fog:false}));lab.scale.set(4.4,1.1,1);lab.position.set(0,2.75,0);g.add(lab);
+ const c=addC(x,z,.55,2.2,'w','wood');return{x,z,av,gy:g,c}}
+function signTex(txt,w,h,fs){const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.fillStyle='#2a1708';g.fillRect(0,0,w,h);g.strokeStyle='#d99a2b';g.lineWidth=8;g.strokeRect(6,6,w-12,h-12);g.fillStyle='#ffd27a';g.font='700 '+fs+'px Cinzel,Georgia,serif';g.textAlign='center';g.textBaseline='middle';g.fillText(txt,w/2,h/2+4);return new THREE.CanvasTexture(c)}
+function addTorch(x,z){const th=terrH(x,z),pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3,6),new THREE.MeshLambertMaterial({color:0x3a2412}));pole.position.set(x,th+1.5,z);MZ.G.add(pole);DISP.push(pole.geometry);
+ const fl=new THREE.Mesh(new THREE.ConeGeometry(.42,1.1,6),new THREE.MeshBasicMaterial({color:0xff9a2a}));fl.position.set(x,th+3.4,z);fl.userData.pole=pole;MZ.G.add(fl);DISP.push(fl.geometry);MZ.flames.push(fl);return fl}
+/* static that replaces the map while you are inside the maze */
+const NZC=document.createElement('canvas');NZC.width=NZC.height=64;const NZX=NZC.getContext('2d'),NZD=NZX.createImageData(64,64);
+function nzRefresh(){const d=NZD.data;for(let i=0;i<d.length;i+=4){const v=50+Math.random()*200|0;d[i]=v;d[i+1]=v;d[i+2]=Math.min(255,v+10);d[i+3]=255}NZX.putImageData(NZD,0,0)}
+nzRefresh();
+const odm=window.drawMini;window.drawMini=function(){const r=odm.apply(this,arguments);try{if(MZ.stat>.01&&isMaze()){const c=mini.getContext('2d');c.save();c.beginPath();c.arc(100,100,98,0,7);c.clip();c.imageSmoothingEnabled=false;c.globalAlpha=Math.min(1,MZ.stat);c.drawImage(NZC,0,0,200,200);c.restore()}}catch(e){}return r};
+function wmOverlay(){let el=document.getElementById('mzStatic');const wm=document.getElementById('wmap'),show=MZ.stat>.01&&isMaze()&&wm&&!wm.hidden&&wm.style.display!=='none';
+ if(!show){if(el)el.style.display='none';return}
+ if(!el){el=document.createElement('canvas');el.id='mzStatic';el.width=96;el.height=54;el.style.cssText='position:fixed;inset:0;width:100%;height:100%;z-index:47;pointer-events:none;image-rendering:pixelated';document.body.appendChild(el)}
+ el.style.display='block';el.style.opacity=Math.min(1,MZ.stat);el.getContext('2d').drawImage(NZC,0,0,96,54)}
+function dropRide(){window.__mzSpd=1}
+function buildStatic(){const G=MZ.G,L=MZ.L,gx=tx(L.gi),gz=tz(GH-1),r=mulberry(0x4a7e11),wood=new THREE.MeshLambertMaterial({color:0x4a2c16});
+ /* gate doors (swing outward when the Maze Master opens the gates) */
+ const mkDoor=(sx)=>{const piv=new THREE.Group(),dg=new THREE.BoxGeometry(5.5,40,1.1);DISP.push(dg);const d=new THREE.Mesh(dg,wood);d.position.set(sx*2.75,20,0);piv.add(d);
+  const bg=new THREE.BoxGeometry(5.5,.6,1.3);DISP.push(bg);for(const y of[8,20,32]){const bd=new THREE.Mesh(bg,new THREE.MeshLambertMaterial({color:0x1d140c}));bd.position.set(sx*2.75,y,0);piv.add(bd)}
+  piv.position.set(gx+sx*(S/2-1.8)*-1,terrH(gx,gz)-.1,gz+S/2-1);G.add(piv);return piv};
+ MZ.dL=mkDoor(1);MZ.dR=mkDoor(-1);
+ const sg=new THREE.Mesh(new THREE.PlaneGeometry(36,9),new THREE.MeshBasicMaterial({map:signTex('THE MAZE',512,128,70),fog:false}));sg.position.set(gx,70,gz+S/2+.3);G.add(sg);DISP.push(sg.geometry);
+ const es=new THREE.Mesh(new THREE.PlaneGeometry(12,4),new THREE.MeshBasicMaterial({map:signTex('EXIT',384,128,70),fog:false}));G.add(es);DISP.push(es.geometry);MZ.exitSign=es;
+ /* Maze Master + torches at the front gate */
+ MZ.npc1=makeNpc(gx+10,ZS+14,0);addTorch(gx-9,ZS+8);addTorch(gx+22,ZS+10);
+ MZ.npc2=makeNpc(0,0,Math.PI);
+ MZ.tEnd=[addTorch(0,0),addTorch(0,0)];
+ /* the prize crystal, floating at the end of the maze */
+ const cg=new THREE.Group(),oct=new THREE.Mesh(new THREE.OctahedronGeometry(2.1,0),new THREE.MeshBasicMaterial({color:0xb4f2ff}));oct.scale.y=1.65;cg.add(oct);
+ const wf=new THREE.Mesh(new THREE.OctahedronGeometry(2.7,0),new THREE.MeshBasicMaterial({color:0xffffff,wireframe:true,transparent:true,opacity:.65,fog:false}));wf.scale.y=1.65;cg.add(wf);
+ const hl=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkW,color:0x9fe8ff,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,fog:false}));hl.scale.set(18,18,1);cg.add(hl);
+ const lt=new THREE.PointLight(0x9fe8ff,2.2,70,1.4);cg.add(lt);G.add(cg);DISP.push(oct.geometry,wf.geometry);MZ.crystal=cg;MZ.oct=oct;MZ.wf=wf;
+ /* autumn trees on the open field (never inside or beside the maze, never on the road or the plaza) */
+ const trunks=[],blobs=[],TC=['#5a3b22','#4a2f1b','#6a4527'],BC=['#e0742a','#c8461f','#e8a22e','#b8561f','#d9611c','#f0b030','#a83a18'];
+ let tries=0;while(trunks.length<950&&tries++<12000){const x=(r()*2-1)*(A-80),z=(r()*2-1)*(A-80);
+  if(Math.abs(x)<HX+36&&z>ZN-36&&z<ZS+36)continue;if(Math.abs(x-gx)<22&&z>ZS-5)continue;if(Math.hypot(x-gx,z-(ZS+22))<36)continue;if(terrH(x,z)<1.2)continue;
+  const s=.85+r()*.9,h=5+4*s;trunks.push({x,y:terrH(x,z)-.2,z,sx:.7*s,sy:h,sz:.7*s,c:TC[Math.floor(r()*3)]});
+  for(let k=0;k<3;k++){const a=r()*6.28,o=k?1.7*s:0,bs=(k?3.8:5)*s*(.9+r()*.3);blobs.push({x:x+Math.cos(a)*o,y:terrH(x,z)+h*.8+k*1.4*s,z:z+Math.sin(a)*o,sx:bs,sy:bs*.82,sz:bs,ry:r()*6.28,c:BC[Math.floor(r()*BC.length)]})}
+  addC(x,z,.9*s,h,'w','wood')}
+ imesh(G,new THREE.CylinderGeometry(.9,1.15,1,7).translate(0,.5,0),new THREE.MeshLambertMaterial({flatShading:true}),trunks);
+ imesh(G,new THREE.IcosahedronGeometry(1,1),new THREE.MeshLambertMaterial({flatShading:true}),blobs);
+ /* pumpkins and hay bales around the plaza, the road and the field */
+ const pk=[],hay=[],PC=['#e8751a','#d9650f','#f08a2a','#c9570c'];
+ for(let k=0;k<110;k++){let x,z;if(k<70){const a=r()*6.28,d=7+r()*30;x=gx+Math.cos(a)*d;z=ZS+22+Math.sin(a)*d*.8}else{x=gx+(r()<.5?-1:1)*(8+r()*10);z=ZS+40+r()*Math.max(10,A-ZS-80)}
+  if(Math.hypot(x-(gx+10),z-(ZS+14))<4||Math.abs(x-gx)<4.5&&z<ZS+44&&z>ZS-2)continue;if(terrH(x,z)<1.2||Math.hypot(x-gx,z-spawn.z)<10)continue;const s=.8+r()*1.1;pk.push({x,y:terrH(x,z)+.55*s,z,sx:s*1.15,sy:s*.85,sz:s*1.15,ry:r()*6.28,c:PC[Math.floor(r()*4)]});addC(x,z,s*1.05,s*1.2,'w','wood')}
+ for(let k=0;k<46;k++){const a=r()*6.28,d=12+r()*60,x=gx+Math.cos(a)*d,z=ZS+26+Math.sin(a)*d*.8;if(Math.abs(x-gx)<5&&z<ZS+44)continue;if(terrH(x,z)<1.2||z>ZS+120)continue;
+  hay.push({x,y:terrH(x,z)+.75,z,rx:0,rz:Math.PI/2,ry:r()*6.28,sx:1,sy:1,sz:1,c:['#d6b25a','#c9a24a','#e0bd66'][k%3]});addC(x,z,1.35,1.5,'w','wood')}
+ imesh(G,new THREE.SphereGeometry(1,12,9),new THREE.MeshLambertMaterial({flatShading:true}),pk);
+ const hg=new THREE.CylinderGeometry(1.35,1.35,1.5,14);imesh(G,hg,new THREE.MeshLambertMaterial({}),hay.map(o=>({x:o.x,y:o.y,z:o.z,rx:Math.PI/2,ry:0,rz:o.ry,c:o.c})));
+ /* torch posts line the road from the dock to the gate */
+ for(let z=ZS+40;z<A-30;z+=34)for(const s of[-1,1]){const x=gx+s*7.5;if(terrH(x,z)<1.2)continue;addTorch(x,z)}
+ /* falling leaves around the player */
+ const lg=new THREE.PlaneGeometry(.55,.4),lm=new THREE.MeshLambertMaterial({side:THREE.DoubleSide}),lc=['#d9741f','#b8361a','#e8a52b','#c8571a','#efc13a'],NL=90,im=new THREE.InstancedMesh(lg,lm,NL),col=new THREE.Color();
+ MZ.fl=[];for(let i=0;i<NL;i++){MZ.fl.push({ox:(r()-.5)*70,oz:(r()-.5)*70,y:r()*16,s:.5+r()*.9,p:r()*6.28,rt:1+r()*3});col.set(lc[i%lc.length]);im.setColorAt(i,col)}
+ im.frustumCulled=false;im.instanceColor.needsUpdate=true;G.add(im);DISP.push(lg);MZ.leaves=im;
+ /* a warm light that follows the player in Hard mode so the night is dark, not blind */
+ MZ.pl=new THREE.PointLight(0xffc880,0,48,1.5);MZ.pl.castShadow=false;scene.add(MZ.pl)}
+function build(){const G=new THREE.Group();WG.add(G);MZ.G=G;MZ.flames=[];MZ.state='idle';MZ.mode=null;MZ.busy=0;MZ.gateT=0;MZ.t=0;
+ if(MZ.pl){scene.remove(MZ.pl);MZ.pl=null}
+ buildStatic();buildMaze();hudShow(false)}
+
+/* ---------- sky, fog and the Maze Master's dialog ---------- */
+function applySky(mode){const m=mode?MODES[mode]:MODES.easy;try{X.fixSky(m.tod,m.w)}catch(e){}}
+const ous=window.updateSky;window.updateSky=function(dt,t){ous.apply(this,arguments);try{if(isMaze()&&MZ.mode&&MZ.state!=='idle'&&!CAVE.on){const m=MODES[MZ.mode];if(m.fog&&scene.fog){scene.fog.near=m.fog[0];scene.fog.far=m.fog[1]}}}catch(e){}};
+let ov=null,hint=null,hud=null;
+function closeDlg(){if(ov){ov.remove();ov=null}try{renderer.domElement.requestPointerLock()}catch(e){}}
+function dropPebble(x,z){const pm=MZ.peb;if(!pm||MZ.pebN>=1800)return;const d=new THREE.Object3D();d.position.set(x,FH+.1,z);d.rotation.set(Math.random()*3,Math.random()*6,Math.random()*3);d.scale.set(.5,.34,.5);d.updateMatrix();pm.setMatrixAt(MZ.pebN++,d.matrix);pm.count=MZ.pebN;pm.instanceMatrix.needsUpdate=true;MZ.pebLast={x,z}}
+function dlg(who,text,opts){document.exitPointerLock&&document.exitPointerLock();
+ if(!ov){ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:#000a;z-index:55;display:flex;align-items:center;justify-content:center;color:#fff;font:14px Inter,sans-serif';document.body.appendChild(ov)}
+ ov.innerHTML='<div style="background:#1c120a;border:2px solid #c8791f;border-radius:14px;padding:20px 22px;max-width:min(560px,92vw);box-shadow:0 10px 40px #000"><div style="letter-spacing:3px;font:700 12px Cinzel,serif;color:#ffb24a;margin-bottom:8px">'+who+'</div><div style="line-height:1.55;margin-bottom:16px;color:#f6e2c0">'+text+'</div><div class="mzB" style="display:flex;flex-direction:column;gap:8px"></div></div>';
+ const b=ov.querySelector('.mzB');opts.forEach(o=>{const e=document.createElement('button');e.textContent=o.t;e.style.cssText='background:#2e1c0c;color:#ffd9a0;border:1px solid #a8681a;border-radius:8px;padding:9px 12px;font:600 13px Inter,sans-serif;cursor:pointer;text-align:left';e.onmouseenter=()=>e.style.background='#4a2d12';e.onmouseleave=()=>e.style.background='#2e1c0c';e.onclick=()=>{try{SX.click&&SX.click()}catch(er){}o.fn()};b.appendChild(e)})}
+function setHint(t){if(!hint){hint=document.createElement('div');hint.style.cssText='position:fixed;bottom:22%;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;background:#000a;color:#ffe9b0;border:1px solid #a8681a;border-radius:8px;padding:7px 14px;font:600 13px Inter,sans-serif;display:none';document.body.appendChild(hint)}
+ if(t){hint.textContent=t;hint.style.display='block'}else hint.style.display='none'}
+function hudShow(v){if(!hud){hud=document.createElement('div');hud.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:21;pointer-events:none;display:none;background:#1a0f06cc;color:#ffc25a;border:1px solid #a8681a;border-radius:10px;padding:6px 16px;font:700 14px Cinzel,Georgia,serif;letter-spacing:2px;white-space:nowrap'}
+ if(!hud.parentNode)document.body.appendChild(hud);hud.style.display=v?'block':'none'}
+function talkFront(){
+ const st=MZ.state;if(st==='run'||MZ.busy)return;
+ const o=k=>{const m=MODES[k];return{t:m.n+'  ·  '+mm(m.dur)+'  ·  '+m.rw+' gems',fn:()=>{closeDlg();startMode(k)}}};
+ const opts=[o('easy'),o('medium'),o('hard')];if(st==='open')opts.push({t:'Close the gates.',fn:()=>{closeDlg();closeGates()}});opts.push({t:'Not yet.',fn:closeDlg});
+ dlg('THE MAZE MASTER','Welcome to <b>The Maze</b>. These straw walls stand five times taller than your ship and there is exactly <b>one</b> way through, buried among countless dead ends. Reach the crystal at the far end and touch it: it sends you back here with your prize. Every time I open the gates the maze is built fresh.<br><br><b>Easy</b>: 20 minutes at sunset, you drop a pebble every second to mark your trail, a chest of 250 gems.<br><b>Medium</b>: 20 minutes, cloud and fog, a pebble every 15 seconds, 500 gems.<br><b>Hard</b>: 20 minutes, thick fog, night and a thunderstorm, no pebbles, 1000 gems. Keep your tools stowed when the lightning comes.<br><br>The clock starts when you step through the gate, and the gate locks behind you. Once the gate locks you run <b>three times faster</b>, but your map and minimap dissolve into static until you are back outside. Run out of time and you leave with nothing. Nothing can be placed or dropped here. Choose your trial.',opts)}
+function talkEnd(){dlg('THE MAZE MASTER','You found the way. Touch the crystal and I will send you back to the start with your prize.',[{t:'Thank you.',fn:closeDlg}])}
+function startMode(k){MZ.mode=k;MZ.L=genMaze((Math.random()*2147483647)|0);buildMaze();MZ.state='open';MZ.gateT=Math.min(MZ.gateT,.2);applySky(k);
+ banner('THE GATES OPEN','#ffc25a');try{SX.doorCreak&&SX.doorCreak()}catch(e){}
+ toast(MODES[k].n+': the maze is built. Step inside when you are ready. The clock starts at the gate.')}
+function closeGates(){dropRide();MZ.state='idle';MZ.mode=null;applySky(null);toast('The gates swing shut.')}
+
+/* ---------- run flow: gate locks, timer, crystal prize, timeout ---------- */
+function clearRun(){try{if(S&&S.mzRun){delete S.mzRun;save(true)}}catch(e){}}
+function startRun(){MZ.state='run';MZ.pt=0;try{S.mzRun=1;save(true)}catch(e){}MZ.t0=performance.now();hudShow(true);try{warp=null}catch(e){}
+ banner('THE GATE SLAMS SHUT','#ffb040');toast('You are locked in. Find the crystal before the clock runs out.');try{SX.doorCreak&&SX.doorCreak()}catch(e){}}
+function startSpot(){const gx=tx(MZ.L.gi);return{x:gx-5,z:ZS+26}}
+function claim(m){const r=rollChances(m.rw,false);applyLoot(r.gained,[]);showLoot('Maze Reward ('+m.n+'): chest of '+m.rw+' gems',r.gained,[]);save();updateHeader(true);try{if(invOpen)renderInv()}catch(e){}}
+async function finish(win){if(MZ.busy)return;MZ.busy=1;const m=MODES[MZ.mode]||MODES.easy;hudShow(false);
+ busy=true;try{await fadeTo(1,700);MZ.state='idle';dropRide();clearRun();const sp=startSpot();P.x=sp.x;P.z=sp.z;P.y=topAt(sp.x,sp.z)+.3;P.yaw=0;P.vx=P.vz=P.vy=0;P.grounded=true;MZ.mode=null;applySky(null);await fadeTo(0,800)}finally{busy=false}
+ if(win){banner('MAZE COMPLETE · '+m.n.toUpperCase(),'#fff0a0');claim(m)}else{banner("TIME'S UP",'#ff9a4a');toast('The maze keeps its prize this time. Speak to the Maze Master to try again.')}
+ MZ.busy=0}
+const oso=window.openSea;window.openSea=function(){if(isMaze()&&MZ.state==='run'){toast('The gate is locked behind you. The only way out is the crystal.');return}return oso.apply(this,arguments)};
+const otw=window.tapWp;window.tapWp=function(d){if(isMaze()&&MZ.state==='run'){toast('No warping out of the maze.');return}return otw.apply(this,arguments)};
+const otg=window.toggleWp;window.toggleWp=function(d){if(isMaze()&&!(S.wp&&S.wp[d])){toast('Nothing can be placed on The Maze.');return}return otg.apply(this,arguments)};
+
+/* ---------- per-frame ---------- */
+const nearNpc=()=>{if(!MZ.G)return null;for(const k of['npc1','npc2']){const n=MZ[k];if(n&&Math.hypot(P.x-n.x,P.z-n.z)<4.8)return k}return null};
+function tick(dt){if(!isMaze()||!MZ.G||!MZ.L)return;MZ.t+=dt;const t=MZ.t;
+ MZ.gateT+=((MZ.state==='open'?1:0)-MZ.gateT)*Math.min(1,dt*2.4);if(MZ.dL){MZ.dL.rotation.y=-1.5*MZ.gateT;MZ.dR.rotation.y=1.5*MZ.gateT}
+ MZ.flames.forEach((f,i)=>f.scale.set(1+Math.sin(t*9+i)*.12,1+Math.sin(t*13+i*2)*.18,1+Math.sin(t*9+i)*.12));
+ if(MZ.crystal){MZ.crystal.position.y=MZ.cy+Math.sin(t*1.6)*.45;MZ.oct.rotation.y=t*1.1;MZ.wf.rotation.y=-t*.8}
+ for(const k of['npc1','npc2']){const n=MZ[k];if(!n)continue;try{animAvatar(n.av,dt,t,0,0,true,0,0,{swim:0,tool:'hand',dig:0})}catch(e){}const dx=P.x-n.x,dz=P.z-n.z;if(Math.hypot(dx,dz)<22){const g=n.gy;let d=Math.atan2(dx,dz)-g.rotation.y;d=Math.atan2(Math.sin(d),Math.cos(d));g.rotation.y+=d*Math.min(1,dt*4)}}
+ if(MZ.leaves){const d=new THREE.Object3D();MZ.fl.forEach((l,i)=>{l.y-=dt*(1+l.s);if(l.y<0){l.y=14+Math.random()*6;l.ox=(Math.random()-.5)*70;l.oz=(Math.random()-.5)*70}
+  d.position.set(P.x+l.ox+Math.sin(t*.8+l.p)*3,P.y-1.4+l.y,P.z+l.oz+Math.cos(t*.7+l.p)*3);d.rotation.set(t*l.rt+l.p,t*l.rt*.7,l.p);d.scale.setScalar(l.s);d.updateMatrix();MZ.leaves.setMatrixAt(i,d.matrix)});MZ.leaves.instanceMatrix.needsUpdate=true}
+ /* rental horse, static fade, map overlay */
+ /* triple running speed while inside the maze */
+ window.__mzSpd=MZ.state==='run'?3:1;
+ {const tg=MZ.state==='run'?1:0;MZ.stat+=(tg-MZ.stat)*Math.min(1,dt*(tg?.5:8));if(MZ.stat<.004)MZ.stat=0;if(MZ.stat>0){MZ.nt-=dt;if(MZ.nt<=0){MZ.nt=.07;nzRefresh()}const cl=document.getElementById('coordLbl');if(cl&&MZ.stat>.3)cl.textContent='X ??   Y ??   Z ??'}wmOverlay()}
+ if(MZ.pl){MZ.pl.intensity=(MZ.mode==='hard'&&MZ.state!=='idle')?1.7:0;MZ.pl.position.set(P.x,P.y+2.4,P.z)}
+ if(!running)return;
+ if(!HP.dead&&!MZ.busy&&MZ.state!=='run'&&MZ.state!=='open'&&Math.abs(P.x)<HX&&P.z>ZN&&P.z<ZS){const sp=startSpot();P.x=sp.x;P.z=sp.z;P.y=topAt(sp.x,sp.z)+.3;P.vx=P.vz=P.vy=0;P.yaw=0;P.grounded=true;toast('You were moved out of the maze. Speak to the Maze Master to enter.');try{save(true)}catch(e){}}
+ if(MZ.state==='run'&&MZ.mode!=='hard'&&!MZ.busy&&!HP.dead){MZ.pt+=dt;if(MZ.pt>=(MZ.mode==='easy'?1:15)){MZ.pt=0;const l=MZ.pebLast;if(!l||Math.hypot(P.x-l.x,P.z-l.z)>.8)dropPebble(P.x,P.z)}}
+ if(MZ.state==='open'&&!HP.dead&&!MZ.busy){if(P.z<Z0+(GH-1)*S-.5&&P.z>Z0&&Math.abs(P.x)<HX)startRun()}
+ else if(MZ.state==='run'&&!MZ.busy){
+  if(HP.dead){dropRide();clearRun();MZ.state='idle';MZ.mode=null;hudShow(false);applySky(null)}
+  else{const m=MODES[MZ.mode],left=m.dur-(performance.now()-MZ.t0)/1000;
+   if(hud){const s='THE MAZE · '+m.n.toUpperCase()+'    TIME LEFT '+mm(Math.ceil(left));if(hud.textContent!==s)hud.textContent=s;hud.style.color=left<=60?'#ff6a44':'#ffc25a'}
+   if(left<=0)finish(false);else if(Math.hypot(P.x-MZ.cx,P.z-MZ.cz)<3.6)finish(true)}}
+ const nn=!ov&&!HP.dead&&!busy?nearNpc():null; setHint(nn&&MZ.state!=='run'||nn==='npc2'?'Press Q to speak with the Maze Master':null)}
+const pu=window.update;window.update=function(dt){pu(dt);try{tick(dt)}catch(e){if(!X._mz1){X._mz1=1;console.error('[maze]',e)}}};
+window.addEventListener('keydown',e=>{if(e.code!=='KeyQ'||!running||!locked||invOpen||busy||HP.dead||!MZ.G||!isMaze())return;const k=nearNpc();if(!k)return;e.stopImmediatePropagation();e.preventDefault();if(k==='npc1')talkFront();else talkEnd()},true);
+
+/* ---------- island load: generate the first maze before the terrain builds, then dress the island and set the sunset ---------- */
+const ol=window.loadIsland;window.loadIsland=function(info){
+ if(ov){ov.remove();ov=null}window.__mzSpd=1;MZ.ride=false;MZ.stat=0;wmOverlay();hudShow(false);setHint(null);MZ.G=null;MZ.state='idle';MZ.mode=null;MZ.busy=0;MZ.R=null;MZ.crystal=null;MZ.npc1=MZ.npc2=null;MZ.dL=MZ.dR=null;MZ.leaves=null;MZ.exitSign=null;
+ if(MZ.pl){try{scene.remove(MZ.pl)}catch(e){}MZ.pl=null}
+ const mz=!!(info&&info.special&&info.special.tag==='maze');if(mz)MZ.L=genMaze((Math.random()*2147483647)|0);
+ /* the dock position is cached per island save: drop any boat spot saved for an older layout so the ship is re-placed on the south shore */
+ if(mz)try{const rec=S&&S.isl&&S.isl[info.key];if(rec&&rec.fx&&rec.fx.mzv!==3){delete rec.fx.b;rec.fx.mzv=3}}catch(e){}
+ /* closed the tab / quit mid-run: the round is forfeited and you come back outside the gates */
+ MZ.relog=false;try{if(S&&S.mzRun){delete S.mzRun;if(mz&&S.pos&&S.pos.isl===info.key){S.pos={x:-5,z:ZS+26,isl:info.key};MZ.relog=true}}}catch(e){}
+ const r=ol.apply(this,arguments);
+ if(mz)try{build();applySky(null)}catch(e){console.error('[maze build]',e)}
+ return r};
+const osg=window.startGame;window.startGame=function(){try{if(MZ.relog&&isMaze()){S.pos={x:-5,z:ZS+26,isl:CUR.key};MZ.relog=false;setTimeout(()=>{try{toast('You left the maze mid-run. The round was forfeited.');save(true)}catch(e){}},1500)}}catch(e){}return osg.apply(this,arguments)};
+X.maze=MZ;
 })();
 </script>
